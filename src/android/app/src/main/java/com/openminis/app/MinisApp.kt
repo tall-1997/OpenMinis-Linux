@@ -497,8 +497,9 @@ class MinisApp : Application(), ImageLoaderFactory {
             return
         }
 
-        // Load assets first so DEFAULT_CONTENT is the shipped persona, then
-        // force-overwrite SOUL.md once for 1.36.13 (even if the user edited it).
+        // Load assets first so DEFAULT_CONTENT is the shipped persona.
+        // Do not force-overwrite SOUL.md. The 1.36.13 one-shot already ran on
+        // devices that installed it; a missing flag must not wipe an older persona.
         com.openminis.app.agent.SoulStore.loadDefaultFromAssets(this)
         com.openminis.app.agent.SoulStore.forceOverwriteOnce(this)
         com.openminis.app.agent.SoulStore.ensureExists(this)

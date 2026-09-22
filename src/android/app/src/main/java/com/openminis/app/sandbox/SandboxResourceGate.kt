@@ -1,8 +1,8 @@
 package com.openminis.app.sandbox
 
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withTimeout
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -18,6 +18,9 @@ object SandboxResourceGate {
      */
     val aptMutex = Mutex()
     private val named = ConcurrentHashMap<String, Mutex>()
+
+    /** How long a new apt command waits for [aptMutex]. The install itself is not capped. */
+    const val APT_WAIT_MS = 5 * 60 * 1000L
 
     fun isApkBuild(command: String): Boolean {
         val c = command.lowercase()
@@ -41,32 +44,50 @@ object SandboxResourceGate {
 
     /**
      * Wrap a command with resource locks to serialize conflicting operations.
-     * 
+     *
      * APK builds and package managers (apt/dpkg/sdkmanager/minis-dev-setup)
      * are serialized to prevent dpkg lock conflicts. Shell commands that don't
      * touch package state run concurrently.
-     * 
-     * Lock timeout: apt/dpkg commands have a 5-minute timeout. If the lock
-     * cannot be acquired within that time, the operation fails with a clear
-     * error message instead of hanging indefinitely.
+     *
+     * The apt wait is capped at [aptWaitMs]. The command that already holds
+     * the lock is not cancelled: `minis-dev-setup-full` is documented at
+     * 10–20 minutes, and a timeout around [Mutex.withLock] both aborted that
+     * install and dropped the host lock while the guest apt was still running.
      */
-    suspend fun <T> withCommandLock(command: String, block: suspend () -> T): T {
+    suspend fun <T> withCommandLock(
+        command: String,
+        aptWaitMs: Long = APT_WAIT_MS,
+        block: suspend () -> T,
+    ): T {
         return when {
+            // Package manager wins when a line matches both (apt-get install gradle).
+            isPackageManager(command) -> withAptLock(aptWaitMs, block)
             isApkBuild(command) -> apkLock.withLock { block() }
-            isPackageManager(command) -> {
-                try {
-                    withTimeout(5 * 60 * 1000L) { // 5 minutes
-                        aptMutex.withLock { block() }
-                    }
-                } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
-                    throw RuntimeException(
-                        "apt/dpkg is busy for 5+ minutes (likely minis-dev-setup or long apt-get). " +
-                        "Command aborted to prevent deadlock. Kill the apt process and retry.", e
-                    )
-                }
-            }
             else -> block()
         }
+    }
+
+    private suspend fun <T> withAptLock(waitMs: Long, block: suspend () -> T): T {
+        if (!awaitAptLock(waitMs)) {
+            throw RuntimeException(
+                "apt/dpkg is busy for 5+ minutes (another install is running). Retry later.",
+            )
+        }
+        try {
+            return block()
+        } finally {
+            aptMutex.unlock()
+        }
+    }
+
+    /** tryLock so a timeout cannot leave the mutex held or cancel the holder. */
+    private suspend fun awaitAptLock(waitMs: Long): Boolean {
+        val deadline = System.currentTimeMillis() + waitMs.coerceAtLeast(0L)
+        while (!aptMutex.tryLock()) {
+            if (System.currentTimeMillis() >= deadline) return false
+            delay(50)
+        }
+        return true
     }
 
     suspend fun <T> withNamedLock(name: String, block: suspend () -> T): T {

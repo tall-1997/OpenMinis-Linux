@@ -60,6 +60,9 @@ class PersistentShell(
     /** [diag] Read back the mount this shell was started with (frozen at boot). */
     fun debugBindMount(linuxPath: String): String? = sessionBindMounts[linuxPath]
 
+    /** Copy of the binds this process was started with. */
+    fun bindSnapshot(): Map<String, String> = sessionBindMounts.toMap()
+
     private class CommandCallback(
         val marker: String,
         val output: StringBuilder = StringBuilder(),

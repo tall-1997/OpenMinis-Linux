@@ -114,7 +114,9 @@ object ExecutionCoordinator {
 
             val (rawOutput, exitCode) = shell.executeCommand(
                 command = command,
-                timeout = timeout,
+                // Setup scripts are documented at 10-20 minutes. The default
+                // 10-minute cap kills them mid-apt and leaves dpkg half-configured.
+                timeout = maxOf(timeout, ShellTimeoutPolicy.minimumMs(command)),
                 lineCallback = lineCallback,
             )
 
@@ -173,7 +175,7 @@ object ExecutionCoordinator {
 
             // Shell is dead or missing — clean up and create fresh
             if (recheck != null) {
-                Log.w(TAG, "[$sessionId] Shell died unexpectedly, recreating")
+                Log.w(TAG, "[$sessionId] Shell ${if (recheck.isAlive) "mounts stale" else "died"}, recreating")
                 recheck.stop()
             }
 
@@ -190,19 +192,10 @@ object ExecutionCoordinator {
     fun sessionBindMounts(sessionId: String): Map<String, String> = buildSessionBindMounts(sessionId)
 
     private fun shellMountsStale(shell: PersistentShell, sessionId: String): Boolean {
-        for (subdir in SessionWorkspace.SESSION_SUBDIRS) {
-            val expected = SessionWorkspace.hostDir(appContext.filesDir, sessionId, subdir).absolutePath
-            val actual = shell.debugBindMount("/var/minis/$subdir") ?: return true
-            if (actual != expected) return true
-        }
-        val shared = PRootKernel.shellSharedStorageBinds(appContext)
-        if (shell.debugBindMount(SharedStorageBindPlan.SDCARD) != shared[SharedStorageBindPlan.SDCARD]) {
-            return true
-        }
-        if (shell.debugBindMount(SharedStorageBindPlan.EMULATED) != shared[SharedStorageBindPlan.EMULATED]) {
-            return true
-        }
-        return false
+        // Compare the whole argv, not only /sdcard. A user mount named sdcard,
+        // a new /var/minis/mounts entry, or a filed-session hostDir change is
+        // otherwise stuck on the shell that already started.
+        return shell.bindSnapshot() != buildSessionBindMounts(sessionId, publish = false)
     }
 
     /**
@@ -210,7 +203,7 @@ object ExecutionCoordinator {
      * - Session-level: workspace, attachments, offloads, browser → per-session dirs
      * - Global: memory, skills, shared → shared dirs across all sessions
      */
-    private fun buildSessionBindMounts(sessionId: String): Map<String, String> {
+    private fun buildSessionBindMounts(sessionId: String, publish: Boolean = true): Map<String, String> {
         val filesDir = appContext.filesDir
         val mounts = linkedMapOf<String, String>()
 
@@ -225,10 +218,12 @@ object ExecutionCoordinator {
         // project folder; memory stays per-session.
         val owner = ownerSessionId(sessionId)
         SessionWorkspace.SESSION_SUBDIRS.forEach { subdir ->
-            val hostDir = SessionWorkspace.hostDir(filesDir, owner, subdir).also { it.mkdirs() }
+            val hostDir = SessionWorkspace.hostDir(filesDir, owner, subdir).also {
+                if (publish) it.mkdirs()
+            }
             val linuxPath = "/var/minis/$subdir"
             mounts[linuxPath] = hostDir.absolutePath
-            PRootKernel.addBindMount(linuxPath, hostDir.absolutePath)
+            if (publish) PRootKernel.addBindMount(linuxPath, hostDir.absolutePath)
         }
 
         Log.w(TAG, "[diag] buildSessionBindMounts sessionId=$sessionId " +
@@ -246,10 +241,12 @@ object ExecutionCoordinator {
         // below.
         val globalBase = File(filesDir, SessionWorkspace.GLOBAL_DIR)
         SessionWorkspace.GLOBAL_BIND_SUBDIRS.forEach { subdir ->
-            val hostDir = File(globalBase, subdir).also { it.mkdirs() }
+            val hostDir = File(globalBase, subdir).also {
+                if (publish) it.mkdirs()
+            }
             val linuxPath = "/var/minis/$subdir"
             mounts[linuxPath] = hostDir.absolutePath
-            PRootKernel.addBindMount(linuxPath, hostDir.absolutePath)
+            if (publish) PRootKernel.addBindMount(linuxPath, hostDir.absolutePath)
         }
 
         // T277: user-mounted external folders (SAF-picked trees). PersistentShell
@@ -269,7 +266,7 @@ object ExecutionCoordinator {
         // Shared storage is not a MountedFoldersStore entry. Without this,
         // shell_execute and the interactive PTY never see /sdcard even when
         // All Files Access is granted (PRootKernel.bindMounts is a different map).
-        for ((linuxPath, host) in PRootKernel.shellSharedStorageBinds(appContext)) {
+        for ((linuxPath, host) in PRootKernel.shellSharedStorageBinds(appContext, publish)) {
             if (linuxPath == SharedStorageBindPlan.MOUNTS_SDCARD && linuxPath in mounts) continue
             mounts[linuxPath] = host
         }

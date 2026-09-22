@@ -53,12 +53,13 @@ object ReadImageTool {
                 "/var/minis/" + java.net.URLDecoder.decode(rawPath.removePrefix("minis://"), "UTF-8")
             } else rawPath
 
-            val file = (
-                if (sessionId != null && context != null) {
-                    PRootKernel.resolveSessionHostPath(sessionId, path, context)
-                } else null
-            ) ?: PRootKernel.resolveHostPath(path)
-                ?: return ToolExecutionResult("Error: Cannot resolve path: $path", false, toolTitle = toolTitle)
+            val file = if (sessionId != null && context != null) {
+                // A null here is the session jail. Falling back to the global
+                // bind map would reopen the other session's file.
+                PRootKernel.resolveSessionHostPath(sessionId, path, context)
+            } else {
+                PRootKernel.resolveHostPath(path)
+            } ?: return ToolExecutionResult("Error: Cannot resolve path: $path", false, toolTitle = toolTitle)
 
             if (!file.exists()) {
                 return ToolExecutionResult("Error: File not found: $path", false, toolTitle = toolTitle)

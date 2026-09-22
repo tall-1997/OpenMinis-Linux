@@ -2,8 +2,10 @@
 # Order: acquire global lock → then fuser-check → then delete stale dpkg
 # locks → then dpkg --configure -a. Reversing any step races.
 #
-# flock is tried first (util-linux). PRoot may no-op fcntl; fall back to
-# POSIX mkdir which is atomic without depending on flock semantics.
+# The exclusion is POSIX mkdir. flock is taken as well when it exists, but
+# a flock timeout must not fall through into a second protocol: the holder
+# is still running apt. PRoot may also report flock success without excluding
+# anyone, so mkdir is not optional.
 
 MINIS_APT_LOCKFILE="${MINIS_APT_LOCKFILE:-/var/lock/sandbox-apt.lock}"
 MINIS_APT_LOCKDIR="${MINIS_APT_LOCKDIR:-/var/lock/sandbox-apt.d}"
@@ -29,13 +31,6 @@ minis_clear_stale_dpkg_locks() {
 minis_acquire_apt_lock() {
     _timeout="${1:-180}"
     mkdir -p /var/lock /tmp /var/tmp 2>/dev/null || true
-    if command -v flock >/dev/null 2>&1; then
-        exec 9>"$MINIS_APT_LOCKFILE" 2>/dev/null || true
-        if flock -w "$_timeout" 9 2>/dev/null; then
-            minis_clear_stale_dpkg_locks
-            return 0
-        fi
-    fi
     _waited=0
     while ! mkdir "$MINIS_APT_LOCKDIR" 2>/dev/null; do
         sleep 1
@@ -45,15 +40,27 @@ minis_acquire_apt_lock() {
             return 1
         fi
         if [ -d "$MINIS_APT_LOCKDIR" ]; then
-            _mtime=$(stat -c %Y "$MINIS_APT_LOCKDIR" 2>/dev/null || echo 0)
+            _pid=$(cat "$MINIS_APT_LOCKDIR/pid" 2>/dev/null || true)
+            if [ -n "$_pid" ] && kill -0 "$_pid" 2>/dev/null; then
+                continue
+            fi
+            _mtime=$(stat -c %Y "$MINIS_APT_LOCKDIR/pid" 2>/dev/null || stat -c %Y "$MINIS_APT_LOCKDIR" 2>/dev/null || echo 0)
             _now=$(date +%s 2>/dev/null || echo 0)
             _age=$(( _now - _mtime ))
-            if [ "$_age" -gt 1800 ]; then
-                echo "minis-apt-lock: stale mkdir lock (${_age}s), removing" >&2
-                rmdir "$MINIS_APT_LOCKDIR" 2>/dev/null || true
+            # Dead pid: steal now. Missing pid: the holder may still be
+            # writing it, so only steal a lock that has been empty for a bit.
+            # Do not steal a live install just because the directory is old.
+            if [ -n "$_pid" ] || [ "$_age" -gt 30 ]; then
+                echo "minis-apt-lock: stale lock (pid=${_pid:-none} age=${_age}s), removing" >&2
+                rm -rf "$MINIS_APT_LOCKDIR" 2>/dev/null || true
             fi
         fi
     done
+    echo $$ > "$MINIS_APT_LOCKDIR/pid" 2>/dev/null || true
+    if command -v flock >/dev/null 2>&1; then
+        exec 9>"$MINIS_APT_LOCKFILE" 2>/dev/null || true
+        flock -n 9 2>/dev/null || true
+    fi
     minis_clear_stale_dpkg_locks
     return 0
 }
@@ -61,6 +68,11 @@ minis_acquire_apt_lock() {
 minis_release_apt_lock() {
     flock -u 9 2>/dev/null || true
     exec 9>&- 2>/dev/null || true
-    rmdir "$MINIS_APT_LOCKDIR" 2>/dev/null || true
+    # Only drop a lock this process holds. An EXIT trap after a failed
+    # re-acquire must not rm another apt's lock directory.
+    _pid=$(cat "$MINIS_APT_LOCKDIR/pid" 2>/dev/null || true)
+    if [ "$_pid" = "$$" ]; then
+        rm -rf "$MINIS_APT_LOCKDIR" 2>/dev/null || true
+    fi
     return 0
 }

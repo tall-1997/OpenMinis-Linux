@@ -338,28 +338,26 @@ lang: "auto"
 """
 
     /**
-     * 1.36.13 only: overwrite SOUL.md with the shipped default regardless of
-     * user edits. Flagged in SharedPreferences so it never runs again.
+     * Mark the 1.36.13 one-shot as done without touching an existing file.
+     *
+     * That build overwrote SOUL.md even when the user had edited it, and set
+     * [FORCE_OVERWRITE_KEY]. A device that skipped that build still has no
+     * flag. Treating the missing flag as "overwrite now" deletes a persona
+     * written on 1.36.12 or earlier the first time 1.36.22 launches.
+     * [upgradeStaleDefault] still replaces the known shipped starter.
      */
     fun forceOverwriteOnce(context: Context) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         if (prefs.getBoolean(FORCE_OVERWRITE_KEY, false)) return
-        val file = fileLocation(context)
-        try {
-            file.parentFile?.mkdirs()
-            val tmp = File(file.parentFile, "${file.name}.force")
-            tmp.writeText(DEFAULT_CONTENT)
-            if (!tmp.renameTo(file)) {
-                file.writeText(DEFAULT_CONTENT)
-                tmp.delete()
-            }
-            prefs.edit().putBoolean(FORCE_OVERWRITE_KEY, true).apply()
-            AppLogger.info(TAG, "force-overwrote SOUL.md once (${DEFAULT_CONTENT.length} bytes)")
-            refreshCache(context)
-        } catch (t: Throwable) {
-            AppLogger.warning(TAG, "forceOverwriteOnce failed: ${t.message}")
-        }
+        prefs.edit().putBoolean(FORCE_OVERWRITE_KEY, true).apply()
+        AppLogger.info(TAG, "skipped force-overwrite of SOUL.md; upgrade keeps the user file")
     }
+
+    /** True only for the original shipped starter, never for a user edit. */
+    internal fun shouldReplaceSoulOnUpgrade(existing: String?): Boolean =
+        existing != null && existing == OLD_DEFAULT_STARTER
+
+    internal fun oldDefaultStarterForTest(): String = OLD_DEFAULT_STARTER
 
     /**
      * Create SOUL.md with [DEFAULT_CONTENT] iff it does not exist yet.

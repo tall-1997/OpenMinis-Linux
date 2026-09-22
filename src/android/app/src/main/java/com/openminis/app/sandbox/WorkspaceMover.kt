@@ -23,14 +23,14 @@ import java.io.File
  *
  * ## The protocol
  *
- * Copy to `<dest>.staging`, verify byte counts, then delete the source and
- * rename the staging dir into place. The `.staging` suffix is the on-disk
- * marker for "a move was interrupted" — [recoverInterrupted] picks it up.
+ * Copy to `<dest>.staging`, verify byte counts, rename staging into place, then
+ * delete the source. An empty destination is removed first; renameTo will not
+ * replace one. The `.staging` suffix marks an interrupted move for [recoverInterrupted].
  *
  * Ordering matters: the source is only deleted after the staging copy is
  * complete, so an interruption at any point leaves at least one intact tree
- * and a `.staging` sibling to resume from. Nothing is ever deleted before a
- * verified replacement exists.
+ * and a `.staging` sibling to resume from. Only an empty placeholder is
+ * removed before the verified copy is in place.
  *
  * ## Scope
  *
@@ -192,6 +192,7 @@ object WorkspaceMover {
      */
     private fun copyTreeVerified(src: File, dst: File): Long {
         val parent = dst.parentFile ?: error("no parent for $dst")
+        clearEmptyDestination(dst)
         val staging = File(parent, dst.name + STAGING_SUFFIX)
         if (staging.exists()) staging.deleteRecursively()
 
@@ -234,22 +235,34 @@ object WorkspaceMover {
             )
         }
 
-        if (!src.deleteRecursively()) {
-            staging.deleteRecursively()
-            throw IllegalStateException("could not clear source ${src.absolutePath}")
-        }
+        // ensureProjectDirs leaves an empty destination. renameTo will not
+        // replace it, and deleting the source first hides the only copy behind
+        // that failed rename. Clear the placeholder, rename, then drop source.
+        clearEmptyDestination(dst)
         if (!staging.renameTo(dst)) {
-            // Rename into place failed. The source is already gone, so the
-            // staging copy is now the only copy — restore it to the source
-            // path rather than leaving the data under a .staging name.
-            if (!staging.renameTo(src)) {
-                throw IllegalStateException(
-                    "staging rename failed and source restore failed for ${src.absolutePath}",
-                )
-            }
+            staging.deleteRecursively()
             throw IllegalStateException("could not move ${src.name} into place")
         }
+        if (!src.deleteRecursively()) {
+            AppLogger.warning(TAG, "moved ${src.name} but could not delete source ${src.absolutePath}")
+        }
         return bytes
+    }
+
+    /** renameTo fails when the destination exists. Only an empty directory is cleared. */
+    private fun clearEmptyDestination(dst: File) {
+        if (!dst.exists()) return
+        if (!dst.isDirectory) {
+            throw IllegalStateException("move destination is a file: ${dst.absolutePath}")
+        }
+        val kids = dst.listFiles()
+            ?: throw IllegalStateException("cannot list move destination: ${dst.absolutePath}")
+        if (kids.isNotEmpty()) {
+            throw IllegalStateException("move destination is not empty: ${dst.absolutePath}")
+        }
+        if (!dst.delete()) {
+            throw IllegalStateException("cannot remove empty move destination: ${dst.absolutePath}")
+        }
     }
 
     private fun copyTree(src: File, dst: File): Long {
@@ -302,10 +315,15 @@ object WorkspaceMover {
                 .forEach { staging ->
                     val real = File(staging.parentFile, staging.name.removeSuffix(STAGING_SUFFIX))
                     if (real.exists()) {
-                        AppLogger.warning(
-                            TAG,
-                            "ambiguous staging tree (both exist): ${staging.absolutePath}",
-                        )
+                        val placeholder = real.isDirectory && real.listFiles()?.isEmpty() == true
+                        if (placeholder && real.delete() && staging.renameTo(real)) {
+                            AppLogger.info(TAG, "recovered staging tree over empty placeholder -> ${real.absolutePath}")
+                        } else {
+                            AppLogger.warning(
+                                TAG,
+                                "ambiguous staging tree (both exist): ${staging.absolutePath}",
+                            )
+                        }
                     } else if (staging.renameTo(real)) {
                         AppLogger.info(TAG, "recovered staging tree -> ${real.absolutePath}")
                     } else {

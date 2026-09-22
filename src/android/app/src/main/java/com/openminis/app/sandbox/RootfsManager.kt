@@ -54,9 +54,30 @@ class RootfsManager private constructor(private val context: Context) {
     private val distroFile: File get() = File(rootfsDir, ".distro")
 
     val isInstalled: Boolean
-        get() = rootfsDir.exists() && archFile.exists() &&
-                archFile.readText().trim() == ARCH &&
-                distroFile.exists() && distroFile.readText().trim() == DISTRO
+        get() {
+            adoptLegacyDistroMarker()
+            return rootfsDir.exists() && archFile.exists() &&
+                    archFile.readText().trim() == ARCH &&
+                    distroFile.exists() && distroFile.readText().trim() == DISTRO
+        }
+
+    /**
+     * Builds before the distro marker only wrote `.arch`. [installIfNeeded]
+     * treats "not installed" as a partial extract and deletes the whole tree,
+     * which on upgrade wipes `/root`, apt state and anything the user installed.
+     * A matching arch plus a real guest (`usr/bin` or `bin`) is an old Ubuntu
+     * rootfs, not a partial extract — stamp the marker and keep it.
+     */
+    private fun adoptLegacyDistroMarker() {
+        if (!rootfsDir.isDirectory || !archFile.isFile || distroFile.exists()) return
+        val archMatches = runCatching { archFile.readText().trim() == ARCH }.getOrDefault(false)
+        val guest = File(rootfsDir, "usr/bin").isDirectory || File(rootfsDir, "bin").isDirectory
+        if (!RootfsUpgradePolicy.shouldAdoptMissingDistroMarker(archMatches, guestTreePresent = guest)) return
+        runCatching {
+            distroFile.writeText(DISTRO)
+            Log.i(TAG, "stamped missing .distro on existing Ubuntu rootfs; not reinstalling")
+        }
+    }
 
     /**
      * Observable install progress. UI layers (OnboardingScreen,
@@ -1253,15 +1274,24 @@ class RootfsManager private constructor(private val context: Context) {
         Log.i(TAG, "[net-seed] essentials exit=${r.exitCode}")
         
         // Node.js: try once, but don't block boot
-        val node = File(rootfsDir, "usr/bin/node").takeIf { it.exists() }
-            ?: File(rootfsDir, "usr/bin/nodejs")
+        val nodeBin = File(rootfsDir, "usr/bin/node")
+        val nodejsBin = File(rootfsDir, "usr/bin/nodejs")
         val nodeAttempted = File(rootfsDir, "var/lib/minis/node-seed.attempted")
-        if (!node.exists() && !nodeAttempted.exists()) {
-            nodeAttempted.parentFile?.mkdirs()
-            nodeAttempted.writeText("1\n")
+        if (!nodeBin.exists() && !nodejsBin.exists() && !nodeAttempted.exists()) {
             Log.i(TAG, "[net-seed] attempting nodejs npm (best-effort)")
             val nr = runAptInstallInGuest(listOf("nodejs", "npm"))
-            Log.i(TAG, "[net-seed] nodejs exit=${nr.exitCode}")
+            val present = nodeBin.exists() || nodejsBin.exists()
+            Log.i(TAG, "[net-seed] nodejs exit=${nr.exitCode} present=$present")
+            // Stamp only after the attempt finishes. Writing the marker first
+            // made a killed process or a transient apt failure permanent:
+            // later launches saw the marker and never retried, so an upgrade
+            // that hit a busy apt lock never got node.
+            if (RootfsUpgradePolicy.shouldStampNodeSeed(nr.exitCode, nr.output, present)) {
+                nodeAttempted.parentFile?.mkdirs()
+                nodeAttempted.writeText("1\n")
+            } else {
+                Log.w(TAG, "[net-seed] nodejs not installed; will retry next launch")
+            }
         }
     }
 
@@ -1680,5 +1710,22 @@ class RootfsManager private constructor(private val context: Context) {
                 }
             }
         }
+    }
+}
+
+/**
+ * Upgrade decisions that must not depend on Android so a unit test can pin them.
+ * A missing distro marker on a real guest tree is a pre-marker Ubuntu install,
+ * not a partial extract. A node seed marker written before apt returns turns a
+ * one-shot network/lock failure into a permanent missing runtime.
+ */
+internal object RootfsUpgradePolicy {
+    fun shouldAdoptMissingDistroMarker(archMatches: Boolean, guestTreePresent: Boolean): Boolean =
+        archMatches && guestTreePresent
+
+    fun shouldStampNodeSeed(exitCode: Int, output: String, binaryPresent: Boolean): Boolean {
+        if (binaryPresent || exitCode == 0) return true
+        return output.contains("Unable to locate package") ||
+            output.contains("has no installation candidate")
     }
 }

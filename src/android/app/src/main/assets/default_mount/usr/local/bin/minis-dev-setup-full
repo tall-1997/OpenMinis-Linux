@@ -24,11 +24,13 @@ if [ -f /usr/local/lib/minis/apt-lock.sh ]; then
     echo "ERROR: apt locked for 30min, aborting" >&2
     exit 1
   fi
-  trap 'minis_release_apt_lock' EXIT INT TERM
+  trap 'minis_release_apt_lock' EXIT
 fi
 
-# Graceful SIGTERM
-trap 'echo "Received SIGTERM, cleaning up..."; minis_release_apt_lock 2>/dev/null; exit 143' TERM
+# EXIT releases the lock. A signal that only releases and returns lets the
+# next apt-get run without the lock.
+trap 'echo "Received SIGTERM, cleaning up..."; exit 143' TERM
+trap 'echo "minis-dev-setup-full: interrupted"; exit 130' INT
 
 echo "Updating package lists..."
 apt-get update || true

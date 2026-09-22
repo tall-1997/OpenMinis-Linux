@@ -1,3 +1,45 @@
+# OpenMinis-Linux 1.36.23-linux
+
+- versionCode **76**
+- applicationId `com.openminis.linux`
+- 启动器名称：**Minis Ultra**
+- GitHub：[`tall-1997/OpenMinis-Linux`](https://github.com/tall-1997/OpenMinis-Linux)
+- APK：`minis-ultra-com.openminis.linux.apk`
+
+## 本版（1.36.23-linux，2026-09-23）
+
+相对 1.36.22-linux。这一版修的是从更低版本升上来会丢数据、装不上包，或把一次失败记成永久状态的问题。
+
+### 升级不覆盖已有数据
+
+跳过 1.36.13、直接升到当前版的设备没有 `force_overwrite_1_36_13`。以前第一次启动会把 `SOUL.md` 整文件换成出厂人格，用户改过的人设回不来。现在只补标记，不改已有文件。仍是出厂四行模板的，继续由原来的模板升级替换。
+
+技能开关以前只写在 `skills.db` 的 `is_enabled`。新逻辑把空的偏好集合当成「用户没关过」，启动时会把关掉的技能全部重新打开。第一次升级会把数据库里已关闭的 id 抄进偏好，之后才套用「默认开启」。
+
+旧版 Ubuntu 根文件系统只写了 `.arch`，没有 `.distro`。当前版把「没装过」理解成半成品，会删掉整个 `ubuntu-rootfs`，包括 `/root` 和已经装好的软件包。架构匹配且 `usr/bin` 或 `bin` 还在时，补上 `ubuntu-noble` 标记，不再重装。空目录加一个 `.arch` 仍视为半成品。
+
+`node-seed.attempted` 以前写在 `apt` 返回之前。升级后第一次安装如果撞上锁或网络失败，标记已经在了，以后再也不会重试。现在只有安装成功，或者仓库里确实没有这个包，才写标记。
+
+### 安装、锁和超时
+
+apt 互斥不再包住整次安装。等待锁最多 5 分钟；已经拿到锁的 `minis-dev-setup-full` 不会在第 5 分钟被取消，也不会在客户机 apt 还在跑时把宿主锁放掉。同时匹配构建和包管理的命令按包管理加锁。
+
+客户机锁改成先用 `mkdir` 占目录，再写 pid。活着的持有者不会因为目录太旧被清掉。释放时只删自己的锁，失败后的 EXIT 陷阱不会拆掉别人的锁。`flock` 超时不再落进第二套协议。拿不到锁时安装脚本以退出码 1 结束，不再报空成功。
+
+`minis-dev-setup` 和 `minis-dev-setup-full` 在 TERM/INT 时放开锁再退出。`minis-dev-setup-full`、`minis-android-sdk-setup`、`minis-self-build` 的超时下限是 30 分钟，默认 10 分钟的 shell 上限不再把长安装掐在中途。这个下限只加长，不缩短用户自己设的更长超时。
+
+### 工作区、下载和命令
+
+空目标目录上的 `renameTo` 失败时，不再把私有文件留在看起来是空的项目目录里。中断的搬移会在下次启动接着做。原子写不再先删目标再改名：改名失败时旧文件还在。
+
+应用内更新遇到 HTTP 416 时，只有分片长度和发布包大小一致才当成下完。更短的分片会丢掉并报失败，不会装成一个残缺 APK。改名失败时先确认目标文件已经写出来。
+
+会话路径被拒绝后，读图和模型调用不再回退到全局绑定目录。权限模式读的是生效值：本会话已经允许全部时，`security.permissionMode` 报 `ALLOW_ALL`。
+
+命令超时会杀掉本机 `Process`，而不是只清回调。自编译在任务体开始前就登记活动状态；登记失败也会打开闸门，避免界面一直停在「正在编译」、下次再点没有反应。从 Activity 打开媒体或分享时，不再无条件加 `FLAG_ACTIVITY_NEW_TASK`，避免把正在使用的界面送回桌面。
+
+---
+
 # OpenMinis-Linux 1.36.22-linux
 
 - versionCode **75**

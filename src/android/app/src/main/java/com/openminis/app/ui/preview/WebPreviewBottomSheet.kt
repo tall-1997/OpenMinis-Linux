@@ -478,7 +478,9 @@ internal fun openExternalFromSheet(context: android.content.Context, url: String
             Intent(Intent.ACTION_VIEW).apply {
                 setDataAndType(contentUri, mime)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                if (context !is android.app.Activity) {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
             }
         }.getOrNull()
     } else {

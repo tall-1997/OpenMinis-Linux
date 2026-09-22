@@ -441,7 +441,7 @@ internal suspend fun shareImage(context: Context, model: Any) {
     // the button did nothing, and a missing FLAG_ACTIVITY_NEW_TASK threw
     // AndroidRuntimeException when LocalContext resolved to a non-Activity
     // (Dialog inside an inner ContextWrapper). Toast on every failure path,
-    // and stamp NEW_TASK on both the inner intent and the chooser.
+    // and stamp NEW_TASK only when the context is not an Activity.
     try {
         val bmp = loadBitmap(context, model) ?: run {
             withContext(Dispatchers.Main) {
@@ -464,10 +464,14 @@ internal suspend fun shareImage(context: Context, model: Any) {
                 type = "image/png"
                 putExtra(Intent.EXTRA_STREAM, uri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                if (context !is android.app.Activity) {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
             }
             val chooser = Intent.createChooser(intent, context.getString(R.string.image_share_chooser_title)).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                if (context !is android.app.Activity) {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
             }
             withContext(Dispatchers.Main) {
                 context.startActivity(chooser)

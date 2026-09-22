@@ -24,11 +24,13 @@ if [ -f /usr/local/lib/minis/apt-lock.sh ]; then
     echo "WARNING: apt busy, skipping seed" >&2
     exit 0
   fi
-  trap 'minis_release_apt_lock' EXIT INT TERM
+  trap 'minis_release_apt_lock' EXIT
 fi
 
-# Handle SIGTERM for graceful shutdown
+# EXIT releases the lock. INT/TERM must exit, or the next apt command
+# continues after the lock was dropped.
 trap 'echo "minis-dev-setup: received SIGTERM, exiting"; exit 143' TERM
+trap 'echo "minis-dev-setup: interrupted"; exit 130' INT
 
 echo "Updating package lists..."
 # Never disable TLS verification. If the injected CA bundle cannot verify the
@@ -45,7 +47,7 @@ if ! apt-get update; then
   if [ -f /usr/local/lib/minis/apt-lock.sh ]; then
     # shellcheck source=/dev/null
     . /usr/local/lib/minis/apt-lock.sh
-    minis_acquire_apt_lock 60 || true
+    minis_acquire_apt_lock 60 || { echo "WARNING: apt busy after mirror switch, skipping seed" >&2; exit 0; }
   fi
   apt-get update || true
 fi

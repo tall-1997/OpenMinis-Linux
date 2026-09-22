@@ -188,11 +188,11 @@ class ModelUseOffloadHandler(
         }
 
         // System prompt: --system takes precedence over --system-file
-        val explicitSystem = args.get("system") ?: args.get("system-file")?.let { readLinuxPath(it) }
+        val explicitSystem = args.get("system") ?: args.get("system-file")?.let { readLinuxPath(it, request.sessionId) }
 
         // Parse input messages: --input <path> | stdin
         val inputText = when {
-            args.get("input") != null -> readLinuxPath(args.get("input")!!)
+            args.get("input") != null -> readLinuxPath(args.get("input")!!, request.sessionId)
                 ?: return NativeOffloadResult(
                     2,
                     "minis-model-use run: cannot read --input '${args.get("input")}'\n",
@@ -200,7 +200,7 @@ class ModelUseOffloadHandler(
             else -> ""
         }
         val parsed = try {
-            parseMessages(inputText)
+            parseMessages(inputText, request.sessionId)
         } catch (e: ImageInputError) {
             return NativeOffloadResult(
                 2,
@@ -413,7 +413,6 @@ class ModelUseOffloadHandler(
             // sessionId is null or the path isn't a session-scoped /var/minis
             // subdir. Guaranteed absolute here (relative --output rejected above).
             val hostFile = sessionScopedHostFile(outputPath, sessionId)
-                ?: PRootKernel.resolveHostPath(outputPath)
                 ?: return NativeOffloadResult(
                     2,
                     "minis-model-use run: cannot resolve --output '$outputPath'\n",
@@ -443,7 +442,6 @@ class ModelUseOffloadHandler(
             // [T-android-model-use-session-scoped-write] Auto-save to the caller
             // session's attachments dir, not the global (last-writer-wins) mount.
             val attachDir = sessionScopedHostFile("/var/minis/attachments", sessionId)
-                ?: PRootKernel.resolveHostPath("/var/minis/attachments")
             if (attachDir != null) {
                 attachDir.mkdirs()
                 for ((idx, media) in response.mediaAttachments.withIndex()) {
@@ -1082,7 +1080,6 @@ class ModelUseOffloadHandler(
 
         if (outputPath != null) {
             val hostFile = sessionScopedHostFile(outputPath, sessionId)
-                ?: PRootKernel.resolveHostPath(outputPath)
             if (hostFile == null) {
                 out.put("output_error", "Could not resolve --output '$outputPath'")
                 inlineTextIfPossible(result.data, out)
@@ -1331,7 +1328,6 @@ class ModelUseOffloadHandler(
             // global resolver as fallback. --output is absolute here (relative
             // rejected in cmdRun before the API call).
             val hostFile = sessionScopedHostFile(outputPath, sessionId)
-                ?: PRootKernel.resolveHostPath(outputPath)
                 ?: return NativeOffloadResult(
                     2,
                     "minis-model-use run: cannot resolve --output '$outputPath'\n",
@@ -1355,7 +1351,6 @@ class ModelUseOffloadHandler(
             // [T-android-model-use-session-scoped-write] Auto-save to the caller
             // session's attachments dir, not the global (last-writer-wins) mount.
             val attachDir = sessionScopedHostFile("/var/minis/attachments", sessionId)
-                ?: PRootKernel.resolveHostPath("/var/minis/attachments")
             if (attachDir != null) {
                 attachDir.mkdirs()
                 for ((idx, media) in response.mediaAttachments.withIndex()) {
@@ -1399,23 +1394,20 @@ class ModelUseOffloadHandler(
      *
      * Session-scoped subdirs are attachments/offloads/workspace/browser (see
      * buildSessionBindMounts). For those, host dir = filesDir/minis-sessions/
-     * <sid>/<sub>/<rest>. Returns null when [sessionId] is null (caller then
-     * falls back to the global resolveHostPath and logs the degrade) or the path
-     * isn't a session-scoped `/var/minis/<sub>` path.
+     * A set [sessionId] goes through the session jail. Null means refused;
+     * callers must not retry via the global bind map.
      */
     private fun sessionScopedHostFile(linuxPath: String, sessionId: String?): File? {
-        if (sessionId == null) return null
-        val m = Regex("^/var/minis/(attachments|offloads|workspace|browser)(/.*)?$").find(linuxPath)
-            ?: return null
-        val sub = m.groupValues[1]
-        val rest = m.groupValues[2].removePrefix("/")
-        val base = SessionWorkspace.hostDir(context.filesDir, sessionId, sub)
-        return if (rest.isEmpty()) base else File(base, rest)
+        if (!sessionId.isNullOrBlank()) {
+            // Jail included. Callers must not fall back to resolveHostPath:
+            // a null is the refusal, not a missing session subdir.
+            return PRootKernel.resolveSessionHostPath(sessionId, linuxPath, context)
+        }
+        return PRootKernel.resolveHostPath(linuxPath)
     }
 
     private fun sessionScopedHostBytes(linuxPath: String, sessionId: String?): ByteArray {
         val host = sessionScopedHostFile(linuxPath, sessionId)
-            ?: PRootKernel.resolveHostPath(linuxPath)
             ?: throw IllegalArgumentException("Could not resolve file part '$linuxPath'")
         if (!host.isFile) {
             throw IllegalArgumentException("File part '$linuxPath' is not a file (${host.absolutePath})")
@@ -1640,8 +1632,14 @@ class ModelUseOffloadHandler(
         return true
     }
 
-    private fun readLinuxPath(linuxPath: String): String? {
-        val hostFile: File = PRootKernel.resolveHostPath(linuxPath) ?: return null
+    private fun readLinuxPath(linuxPath: String, sessionId: String? = null): String? {
+        val hostFile: File = (
+            if (!sessionId.isNullOrBlank()) {
+                PRootKernel.resolveSessionHostPath(sessionId, linuxPath, context)
+            } else {
+                PRootKernel.resolveHostPath(linuxPath)
+            }
+            ) ?: return null
         if (!hostFile.exists() || !hostFile.isFile) return null
         return try { hostFile.readText() } catch (_: Throwable) { null }
     }
@@ -1677,7 +1675,7 @@ class ModelUseOffloadHandler(
      * - `[{"role":"...","content":"..."}, ...]` — array of messages
      * - Plain text → wrapped as a single user message
      */
-    private fun parseMessages(text: String): List<ParsedMessage> {
+    private fun parseMessages(text: String, sessionId: String? = null): List<ParsedMessage> {
         val trimmed = text.trim()
         if (trimmed.isEmpty()) return emptyList()
         try {
@@ -1685,10 +1683,10 @@ class ModelUseOffloadHandler(
                 val obj = JSONObject(trimmed)
                 val arr = obj.optJSONArray("messages")
                     ?: return listOf(ParsedMessage("user", trimmed, emptyList()))
-                return parseMessageArray(arr)
+                return parseMessageArray(arr, sessionId)
             }
             if (trimmed.startsWith("[")) {
-                return parseMessageArray(JSONArray(trimmed))
+                return parseMessageArray(JSONArray(trimmed), sessionId)
             }
         } catch (e: ImageInputError) {
             // Deliberate hard errors from block parsing must NOT be swallowed
@@ -1704,7 +1702,7 @@ class ModelUseOffloadHandler(
         return listOf(ParsedMessage("user", trimmed, emptyList()))
     }
 
-    private fun parseMessageArray(arr: JSONArray): List<ParsedMessage> {
+    private fun parseMessageArray(arr: JSONArray, sessionId: String? = null): List<ParsedMessage> {
         val out = mutableListOf<ParsedMessage>()
         for (i in 0 until arr.length()) {
             val m = arr.optJSONObject(i) ?: continue
@@ -1725,7 +1723,7 @@ class ModelUseOffloadHandler(
                             val url = imgObj.optString("url", "").takeIf { it.isNotEmpty() }
                                 ?: continue
                             try {
-                                imgs.add(resolveImageUrl(url))
+                                imgs.add(resolveImageUrl(url, sessionId))
                             } catch (e: ImageInputError) {
                                 // Don't silently drop — surface to the agent so it
                                 // can correct the URL or fall back to text.
@@ -1783,7 +1781,7 @@ class ModelUseOffloadHandler(
      * non-zero with a descriptive message instead of silently feeding
      * the model an image-less request (the prior failure mode).
      */
-    private fun resolveImageUrl(url: String): LLMMessage.ImagePart {
+    private fun resolveImageUrl(url: String, sessionId: String? = null): LLMMessage.ImagePart {
         // data:<mime>;base64,<base64>
         if (url.startsWith("data:")) {
             val rest = url.substring(5)
@@ -1822,8 +1820,13 @@ class ModelUseOffloadHandler(
                     "/var/minis/<scope>/<path>, or an absolute Linux path."
             )
         }
-        val hostFile: File = PRootKernel.resolveHostPath(linuxPath)
-            ?: File(linuxPath).takeIf { it.exists() && it.isFile }
+        val hostFile: File = (
+            if (!sessionId.isNullOrBlank()) {
+                PRootKernel.resolveSessionHostPath(sessionId, linuxPath, context)
+            } else {
+                PRootKernel.resolveHostPath(linuxPath)
+            }
+            ) ?: File(linuxPath).takeIf { it.exists() && it.isFile }
             ?: throw ImageInputError("Image file not found at '$url'.")
         if (!hostFile.exists() || !hostFile.isFile) {
             throw ImageInputError("Image file not found at '$url' (resolved to ${hostFile.absolutePath}).")

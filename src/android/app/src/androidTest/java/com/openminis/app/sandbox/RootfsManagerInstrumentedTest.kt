@@ -67,10 +67,20 @@ class RootfsManagerInstrumentedTest {
     }
 
     @Test
-    fun isInstalledWhenRootfsAndArchPresent() {
+    fun isInstalledWhenRootfsArchAndDistroPresent() {
         manager.rootfsDir.mkdirs()
         File(manager.rootfsDir, ".arch").writeText("aarch64")
+        File(manager.rootfsDir, ".distro").writeText("ubuntu-noble")
         assertTrue(manager.isInstalled)
+    }
+
+    @Test
+    fun legacyUbuntuTreeWithoutDistroMarkerIsKept() {
+        manager.rootfsDir.mkdirs()
+        File(manager.rootfsDir, ".arch").writeText("aarch64")
+        File(manager.rootfsDir, "usr/bin").mkdirs()
+        assertTrue(manager.isInstalled)
+        assertEquals("ubuntu-noble", File(manager.rootfsDir, ".distro").readText().trim())
     }
 
     // ==================== installIfNeeded ====================

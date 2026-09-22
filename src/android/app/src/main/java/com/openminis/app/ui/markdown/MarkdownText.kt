@@ -725,10 +725,14 @@ private fun openMediaExternally(context: Context, file: File, mime: String) {
     val intent = Intent(Intent.ACTION_VIEW).apply {
         setDataAndType(uri, mime)
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (context !is android.app.Activity) {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
     }
     val chooser = Intent.createChooser(intent, file.name).apply {
-        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (context !is android.app.Activity) {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
     }
     try { context.startActivity(chooser) } catch (_: Throwable) { /* no handler */ }
 }

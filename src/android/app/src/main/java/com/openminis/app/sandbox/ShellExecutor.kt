@@ -138,12 +138,15 @@ object ShellExecutor {
         val output = StringBuilder()
         var exitCode = -1
 
+        // Keep the Process in a local. withTimeout cancels the block and runs
+        // its finally before the catch, so clearing currentProcess there made
+        // destroyForcibly a no-op and left the timed-out proot alive.
+        var started: Process? = null
         try {
+            val process = processBuilder.start()
+            started = process
+            currentProcess = process
             withTimeout(timeout) {
-                val process = processBuilder.start()
-                currentProcess = process
-
-                try {
                     // Read raw chars to preserve \r for TerminalSanitizer CR-folding.
                     // readLine() would consume \r as line terminator, losing progress overwrites.
                     InputStreamReader(process.inputStream, StandardCharsets.UTF_8).use { reader ->
@@ -171,22 +174,22 @@ object ShellExecutor {
                     }
 
                     exitCode = process.waitFor()
-                } finally {
-                    currentProcess = null
-                }
             }
         } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
             Log.w(TAG, "Command timed out after ${timeout}ms: $command")
-            currentProcess?.destroyForcibly()
-            currentProcess = null
+            started?.destroyForcibly()
             output.appendLine("\n[Command timed out after ${timeout / 1000}s]")
             exitCode = 124 // Standard timeout exit code
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            started?.destroyForcibly()
+            throw e
         } catch (e: Exception) {
             Log.e(TAG, "Command failed: $command", e)
-            currentProcess?.destroyForcibly()
-            currentProcess = null
+            started?.destroyForcibly()
             output.appendLine("\n[Error: ${e.message}]")
             exitCode = -1
+        } finally {
+            if (currentProcess === started) currentProcess = null
         }
 
         val durationMs = System.currentTimeMillis() - startTime

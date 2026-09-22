@@ -20,6 +20,8 @@ import com.openminis.app.data.repository.EnvVarRepository
 import com.openminis.app.data.repository.ProviderRepository
 import com.openminis.app.data.model.ThinkingLevel
 import com.openminis.app.security.SecurityGateHolder
+import com.openminis.app.security.effectivePermissionMode
+import com.openminis.app.service.ApprovalGate
 import com.openminis.app.ui.chat.ChatViewModelStore
 import com.openminis.app.util.IsoTime
 import kotlinx.coroutines.runBlocking
@@ -90,11 +92,18 @@ internal object ConfigBuiltins {
             ReadOnlyField(
                 path = "security.permissionMode",
                 displayName = "Permission mode",
-                description = "Current SecurityGate mode: ALLOW_ALL, ASK, DENY_ALL, READ_ONLY, or PLAN. " +
+                description = "Effective SecurityGate mode: ALLOW_ALL, ASK, DENY_ALL, READ_ONLY, or PLAN. " +
+                    "Session allow-all is reported as ALLOW_ALL. " +
                     "Reads pass unless the mode is DENY_ALL. Shell and writes follow this mode plus any saved rules. " +
                     "Change it in Settings → Permissions; this field is not writable.",
                 valueSchema = ConfigSchema.Str(),
-                reader = { ConfigValue.Str(SecurityGateHolder.gate.getPermissionMode().name) },
+                reader = {
+                    val mode = effectivePermissionMode(
+                        SecurityGateHolder.gate.getPermissionMode(),
+                        ApprovalGate.isSessionAllowAll(),
+                    )
+                    ConfigValue.Str(mode.name)
+                },
             )
         )
     }

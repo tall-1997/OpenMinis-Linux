@@ -103,6 +103,16 @@ object SessionWorkspace {
         if (folderId != null && subdir in SHARED_SUBDIRS) {
             val projectRoot = projectBase(filesDir, folderId)
             val shared = File(projectRoot, subdir)
+            if (hasEntries(shared)) return shared
+            val privateDir = File(base(filesDir, ownerSessionId(sessionId)), subdir)
+            if (hasEntries(privateDir)) {
+                AppLogger.warning(
+                    "SessionWorkspace",
+                    "project subdir '$subdir' empty for folder=$folderId " +
+                        "session=$sessionId — using private copy",
+                )
+                return privateDir
+            }
             if (shared.isDirectory()) return shared
             if (projectRoot.isDirectory()) {
                 AppLogger.warning(
@@ -114,6 +124,9 @@ object SessionWorkspace {
         }
         return File(base(filesDir, ownerSessionId(sessionId)), subdir)
     }
+
+    private fun hasEntries(dir: File): Boolean =
+        dir.isDirectory && dir.listFiles()?.isNotEmpty() == true
 
     /**
      * Resolve a `/var/minis/<subdir>/...` path to the same host file the shell

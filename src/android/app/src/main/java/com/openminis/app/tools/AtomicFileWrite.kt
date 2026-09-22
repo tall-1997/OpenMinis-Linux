@@ -53,6 +53,9 @@ object AtomicFileWrite {
     private const val TAG = "AtomicFileWrite"
     private const val TEMP_SUFFIX = ".minis-tmp"
 
+    /** Unit tests set this so a failed replace can be forced on every OS. */
+    internal var failReplaceForTest = false
+
     /**
      * One lock per canonical path. The map is unbounded in theory; in practice
      * a session touches at most a few hundred distinct files, and an entry
@@ -78,6 +81,21 @@ object AtomicFileWrite {
             return writeLocked(file, content, append)
         } finally {
             lock.unlock()
+        }
+    }
+
+    /**
+     * Move [tmp] onto [file] without deleting [file] first. A failed rename
+     * copies over the destination; if that also fails the previous bytes stay.
+     */
+    private fun replaceSibling(tmp: File, file: File): Boolean {
+        if (failReplaceForTest) return false
+        if (tmp.renameTo(file)) return true
+        return try {
+            tmp.copyTo(file, overwrite = true)
+            file.isFile && file.length() == tmp.length()
+        } catch (e: IOException) {
+            false
         }
     }
 
@@ -115,16 +133,15 @@ object AtomicFileWrite {
                 tmp.delete()
                 return null
             }
-            if (file.exists() && !file.delete()) {
-                AppLogger.error(TAG, "could not clear ${file.name} before rename")
+            // Do not delete [file] before the new bytes are in place.
+            // renameTo fails when the destination exists on some hosts; deleting
+            // first then failing the rename discarded the only copy.
+            if (!replaceSibling(tmp, file)) {
+                AppLogger.error(TAG, "replace ${tmp.name} -> ${file.name} failed; previous bytes kept")
                 tmp.delete()
                 return null
             }
-            if (!tmp.renameTo(file)) {
-                AppLogger.error(TAG, "rename ${tmp.name} -> ${file.name} failed")
-                tmp.delete()
-                return null
-            }
+            if (tmp.exists()) tmp.delete()
             return verify(file, written, content, appended = false)
         } catch (e: IOException) {
             AppLogger.error(TAG, "write failed for ${file.name}: ${e.message}")

@@ -137,7 +137,7 @@ object UpdateDownloadManager {
                 }
                 val node = pickFastestNode(apkUrl)
                 _state.value = _state.value.copy(probing = false, activeNode = node)
-                downloadWithResume(node, partFile, finalFile)
+                downloadWithResume(node, partFile, finalFile, expectedSizeBytes)
                 publishDownloaded(appCtx, finalFile, versionName)
             } catch (e: Exception) {
                 AppLogger.error(TAG, "download failed: ${e.javaClass.simpleName}: ${e.message}")
@@ -245,7 +245,7 @@ object UpdateDownloadManager {
      * Range, then atomically rename to [finalFile]. Progress reported to
      * [state] throttled to ~[PROGRESS_NOTIFY_MIN_MS].
      */
-    private fun downloadWithResume(url: String, partFile: File, finalFile: File) {
+    private fun downloadWithResume(url: String, partFile: File, finalFile: File, expectedSizeBytes: Long = -1L) {
         val existing = if (partFile.exists()) partFile.length() else 0L
         val reqBuilder = Request.Builder().url(url)
         if (existing > 0) reqBuilder.header("Range", "bytes=$existing-")
@@ -264,13 +264,23 @@ object UpdateDownloadManager {
                 }
                 206 -> { /* honored, resume from existing */ }
                 416 -> {
-                    // Range not satisfiable — we likely already have the whole file.
-                    if (existing > 0) {
+                    // Range not satisfiable. That means the part is complete only
+                    // when its length matches the published asset. A shorter part
+                    // (mirror rejected Range) must not be installed as the APK.
+                    val sizeOk = expectedSizeBytes <= 0L || existing == expectedSizeBytes
+                    if (existing > 0 && sizeOk) {
                         AppLogger.info(TAG, "416: treating existing .part as complete")
-                        partFile.renameTo(finalFile)
+                        promotePart(partFile, finalFile)
                         return
                     }
-                    throw IllegalStateException("HTTP 416 with empty local file")
+                    if (existing > 0) {
+                        AppLogger.warning(
+                            TAG,
+                            "416 but part $existing != expected $expectedSizeBytes; discarding part",
+                        )
+                        partFile.delete()
+                    }
+                    throw IllegalStateException("HTTP 416 with incomplete local file")
                 }
                 else -> throw IllegalStateException("HTTP ${resp.code}")
             }
@@ -306,11 +316,22 @@ object UpdateDownloadManager {
             _state.value = _state.value.copy(progress = 1f, downloadedBytes = total)
         }
 
-        if (finalFile.exists()) finalFile.delete()
+        promotePart(partFile, finalFile)
+    }
+
+    private fun promotePart(partFile: File, finalFile: File) {
+        if (finalFile.exists() && !finalFile.delete()) {
+            throw IllegalStateException("cannot replace ${finalFile.name}")
+        }
         if (!partFile.renameTo(finalFile)) {
             // renameTo can fail across filesystems; copy+delete as fallback.
             partFile.copyTo(finalFile, overwrite = true)
-            partFile.delete()
+            if (!partFile.delete()) {
+                AppLogger.warning(TAG, "installed ${finalFile.name} but leftover part remains")
+            }
+        }
+        if (!finalFile.isFile || finalFile.length() <= 0L) {
+            throw IllegalStateException("download did not produce ${finalFile.name}")
         }
     }
 

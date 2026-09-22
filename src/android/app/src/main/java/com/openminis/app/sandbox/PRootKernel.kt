@@ -368,9 +368,10 @@ object PRootKernel {
      * that argv, so a grant that only updated the kernel map left `/sdcard`
      * as an empty rootfs directory inside `shell_execute`.
      */
-    fun shellSharedStorageBinds(context: Context): Map<String, String> {
+    fun shellSharedStorageBinds(context: Context, publish: Boolean = true): Map<String, String> {
         val userNamed = mountedFoldersStore?.entries?.value?.any { it.name == "sdcard" } == true
         val plan = sharedStoragePlan(context, userNamed)
+        if (!publish) return plan
         syncSharedStorageBindMounts(plan, userNamed)
         if (plan.isNotEmpty()) materializeSharedStorageTargets(context, plan.keys)
         return plan

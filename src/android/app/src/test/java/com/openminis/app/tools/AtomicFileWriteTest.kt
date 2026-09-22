@@ -114,17 +114,17 @@ class AtomicFileWriteTest {
 
     @Test
     fun readModifyWriteReturnsNullWhenWriteCannotLand() {
-        val dir = tmp.newFolder("ro")
-        val f = File(dir, "locked.txt")
+        val f = File(tmp.root, "locked.txt")
         AtomicFileWrite.write(f, "orig")
-        // Make the parent read-only so the temp+rename path cannot complete.
-        dir.setWritable(false)
+        // A failed replace must not delete the destination first. OS read-only
+        // bits are not reliable here (Windows ignores them), so force the miss.
+        AtomicFileWrite.failReplaceForTest = true
         try {
             val out = AtomicFileWrite.readModifyWrite(f) { it + "!" }
             assertNull("a failed write must not look like success", out)
             assertEquals("original content must survive a failed write", "orig", f.readText())
         } finally {
-            dir.setWritable(true)
+            AtomicFileWrite.failReplaceForTest = false
         }
     }
 

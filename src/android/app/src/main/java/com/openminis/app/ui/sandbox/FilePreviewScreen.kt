@@ -1106,9 +1106,16 @@ private fun openExternally(context: Context, item: FileItem, mime: String) {
         val intent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(uri, mime)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (context !is android.app.Activity) {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
         }
-        context.startActivity(Intent.createChooser(intent, "Open with…"))
+        val chooser = Intent.createChooser(intent, "Open with…").apply {
+            if (context !is android.app.Activity) {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+        }
+        context.startActivity(chooser)
     } catch (e: Exception) {
         AppLogger.warning("FilePreview", "openExternally failed: ${e.message}")
         Toast.makeText(context, "No app available to open this file.", Toast.LENGTH_SHORT).show()

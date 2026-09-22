@@ -653,7 +653,9 @@ private fun shareMediaFile(context: android.content.Context, file: File, mime: S
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
     val chooser = Intent.createChooser(intent, file.name).apply {
-        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (context !is android.app.Activity) {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
     }
     try { context.startActivity(chooser) } catch (_: Throwable) {}
 }

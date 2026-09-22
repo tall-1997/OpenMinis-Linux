@@ -10,9 +10,9 @@ Android arm64 上的私人 AI Agent。把 Claude、GPT、Gemini 和兼容中转�
 
 ## 下载
 
-当前版本 **1.36.22-linux**（versionCode 75）。
+当前版本 **1.36.23-linux**（versionCode 76）。
 
-- 发行包：[1.36.22-linux](https://github.com/tall-1997/OpenMinis-Linux/releases/tag/1.36.22-linux) → `minis-ultra-com.openminis.linux.apk`
+- 发行包：[1.36.23-linux](https://github.com/tall-1997/OpenMinis-Linux/releases/tag/1.36.23-linux) → `minis-ultra-com.openminis.linux.apk`
 - 滚动构建：[android-latest](https://github.com/tall-1997/OpenMinis-Linux/releases/tag/android-latest)（`main` 每次成功构建覆盖）
 
 侧载前允许「安装未知应用」。debug 签名不能覆盖另一张证书装上的版本，见 [docs/SIGNING.md](docs/SIGNING.md)。

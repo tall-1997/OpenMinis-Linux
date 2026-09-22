@@ -231,8 +231,30 @@ class SkillRepository(private val context: Context) {
     // [skill-default-enabled] The user's EXPLICIT disables, persisted outside
     // the DB so a startup refresh can re-assert "enabled unless the user said
     // otherwise" even if a DB row carries a stale disabled flag.
+    // First launch after upgrade copies is_enabled=0 into this set so those
+    // older explicit disables are not treated as stale.
+    private val seededFromDbKey = "seeded_from_db"
     private val disabledPrefs by lazy {
         context.getSharedPreferences("skill_user_disabled", Context.MODE_PRIVATE)
+    }
+
+    private fun seedDisabledFromDbIfNeeded() {
+        if (disabledPrefs.getBoolean(seededFromDbKey, false)) return
+        val seeded = SkillEnableMigration.merge(userDisabledIds(), disabledIdsInDb())
+        disabledPrefs.edit()
+            .putStringSet("ids", seeded)
+            .putBoolean(seededFromDbKey, true)
+            .apply()
+        Log.i(TAG, "seeded ${seeded.size} user-disabled skill id(s) from the pre-prefs database")
+    }
+
+    private fun disabledIdsInDb(): Set<String> {
+        val ids = mutableSetOf<String>()
+        val cursor = db.rawQuery("SELECT id FROM skills WHERE is_enabled=0", null)
+        cursor.use {
+            while (it.moveToNext()) ids.add(it.getString(0))
+        }
+        return ids
     }
 
     private fun userDisabledIds(): MutableSet<String> =
@@ -259,6 +281,9 @@ class SkillRepository(private val context: Context) {
         runCatching { installBundledSkills() }.onFailure {
             Log.e(TAG, "startup refresh bundled install failed: ${it.message}", it)
         }
+        // Older builds stored "user turned this off" only in is_enabled.
+        // An empty prefs set would otherwise re-enable every one of them.
+        seedDisabledFromDbIfNeeded()
         val disabled = userDisabledIds()
         val changes = mutableListOf<Pair<String, Boolean>>()
         _skills.value.forEach { skill ->
@@ -2080,3 +2105,9 @@ sdkmanager --sdk_root="${'$'}{ANDROID_SDK_ROOT:-/opt/android-sdk}" \
 - `file /opt/android-sdk/cmake/3.22.1/bin/cmake` 必须是 ARM aarch64
 - `file /opt/android-sdk/ndk/*/toolchains/llvm/prebuilt/linux-aarch64/bin/clang` 存在且为 ARM aarch64
 """.trimIndent()
+
+internal object SkillEnableMigration {
+    /** Union prefs with DB disables. Null is not used; callers always persist the result once. */
+    fun merge(prefsIds: Set<String>, dbDisabledIds: Set<String>): Set<String> =
+        prefsIds + dbDisabledIds
+}

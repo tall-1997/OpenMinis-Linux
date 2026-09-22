@@ -15,10 +15,9 @@ package com.openminis.app.sandbox
  *   - long-running services (daemons, watch mode) are either cancelled by the
  *     user or preempted by the coordinator's wait-queue
  *
- * **Not wired yet** — this file publishes the policy so the next pass can
- * adopt it at the call site without churning the dirty [ExecutionCoordinator]
- * further. Callers pick a timeout by running the raw command line through
- * [ShellTimeoutPolicy.forCommand] and passing the result down.
+ * The shortening tiers in [forCommand] are not applied: a slow `find`
+ * must not die at 60s. [minimumMs] only raises the budget for setup
+ * scripts that the default 10-minute shell cap kills mid-apt.
  */
 object ShellTimeoutPolicy {
     /** Default (baseline) timeout matching the existing call-site default. */
@@ -81,12 +80,27 @@ object ShellTimeoutPolicy {
     )
 
     /**
+     * Floor for commands that outlive the default shell cap. Zero means
+     * "do not raise". Never used to shorten a caller-supplied timeout.
+     */
+    fun minimumMs(command: String): Long {
+        val lower = command.lowercase()
+        return when {
+            "minis-dev-setup-full" in lower -> LONG_RUNNING_TIMEOUT_MS
+            "minis-android-sdk-setup" in lower -> LONG_RUNNING_TIMEOUT_MS
+            "minis-self-build" in lower -> LONG_RUNNING_TIMEOUT_MS
+            else -> 0L
+        }
+    }
+
+    /**
      * Return a recommended timeout (ms) for [command]. Takes the first
      * non-whitespace token and consults the classifier tables above. Unknown
      * commands fall through to [DEFAULT_TIMEOUT_MS] so behavior stays
      * conservative for anything unrecognized.
      */
     fun forCommand(command: String): Long {
+
         val trimmed = command.trim()
         if (trimmed.isEmpty()) return DEFAULT_TIMEOUT_MS
         val lower = trimmed.lowercase()

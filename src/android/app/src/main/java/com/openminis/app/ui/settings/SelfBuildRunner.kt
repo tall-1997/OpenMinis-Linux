@@ -12,6 +12,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -37,8 +38,10 @@ object SelfBuildRunner {
         val app = context.applicationContext
         val runningText = app.getString(R.string.check_update_self_build_running)
         _state.value = State(running = true, message = runningText)
+        val gate = CompletableDeferred<Unit>()
         val launched = scope.launch {
             try {
+                gate.await()
                 val result = ExecutionCoordinator.execute(
                     "self-build",
                     "sh /usr/local/bin/minis-self-build",
@@ -76,9 +79,16 @@ object SelfBuildRunner {
             }
         }
         job = launched
-        // Overlay Stop fans out through this canceller. Leaving Settings must
-        // not cancel the job; only this callback (or process death) should.
-        SessionActivityTracker.setActive("self-build") { launched.cancel() }
+        // Register the overlay before the body can finish. On Dispatchers.IO a
+        // fast failure used to call setInactive before setActive, which left
+        // the overlay stuck on a job that had already ended.
+        try {
+            SessionActivityTracker.setActive("self-build") { launched.cancel() }
+        } finally {
+            // Always open the gate. If registration throws, awaiting it forever
+            // leaves running=true and the next Start is a no-op.
+            gate.complete(Unit)
+        }
         AgentForegroundService.startService(app, 1, "self-build")
     }
 }
