@@ -2,11 +2,11 @@
 
 **Minis Ultra** 是本仓库的 Android 应用：Agent 加 Ubuntu 24.04 PRoot 沙箱，带 Linux 工具链、主机 `su` 直通和 POSIX 共享存储挂载。包名独立，可以和官方 OpenMinis **并排安装**。
 
-启动器名称是 **Minis Ultra**，`applicationId` 为 `com.openminis.linux`。当前版本 **1.36.23-linux**（versionCode 76）。
+启动器名称是 **Minis Ultra**，`applicationId` 为 `com.openminis.linux`。当前版本 **1.36.24-linux**（versionCode 77）。
 
 滚动 APK：GitHub Releases 标签 `android-latest`，文件名 `minis-ultra-com.openminis.linux.apk`。关于页 / 检查更新走 fork `tall-1997/OpenMinis-Linux`；滚动包用 release body 里的 `versionCode` / `versionName`（以及 APK `updated_at`）判断是否比本机新。
 
-正式发行包：[Releases `1.36.23-linux`](https://github.com/tall-1997/OpenMinis-Linux/releases/tag/1.36.23-linux)。1.36.23：从旧版升级不再清掉自定义人格、已关闭的技能和已装好的 Ubuntu 沙箱；长安装不再被 10 分钟超时掐掉。详见 [docs/RELEASE-NOTES.zh.md](docs/RELEASE-NOTES.zh.md)。
+正式发行包：[Releases `1.36.24-linux`](https://github.com/tall-1997/OpenMinis-Linux/releases/tag/1.36.24-linux)。1.36.24：手机时区变化时同步客户机 `/etc/localtime`，不再只改正在运行的 shell 的 `TZ`。详见 [docs/RELEASE-NOTES.zh.md](docs/RELEASE-NOTES.zh.md)。
 
 ## 沙箱当服务器
 

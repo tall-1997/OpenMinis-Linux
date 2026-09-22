@@ -1,3 +1,27 @@
+# OpenMinis-Linux 1.36.24-linux
+
+- versionCode **77**
+- applicationId `com.openminis.linux`
+- 启动器名称：**Minis Ultra**
+- GitHub：[`tall-1997/OpenMinis-Linux`](https://github.com/tall-1997/OpenMinis-Linux)
+- APK：`minis-ultra-com.openminis.linux.apk`
+
+## 本版（1.36.24-linux，2026-09-23）
+
+相对 1.36.23-linux。这一版修的是手机改时区后，客户机里不看 `TZ` 的程序仍停在启动时的时区。
+
+### 时区
+
+系统时区变化时，以前只更新新 shell 会继承的 `TZ`，并给已经在跑的 shell 执行 `export TZ=...`。客户机 `/etc/localtime` 和 `/etc/timezone` 仍指向开机时的时区。`date`、Python `datetime` 在环境里没有 `TZ` 时读这个链接，所以显示旧偏移。现在同一次广播会把链接改到手机当前时区。时区数据不在 rootfs 里时保持 UTC，不写一条指向不存在文件的链接。
+
+PRoot 还没启动时，这次广播仍然什么都不做。下次启动会按当时的手机时区写链接。
+
+### 说明
+
+`LINUX.md` 不再写成这个仓库还有 iOS 工程。本仓库没有 iOS 工程，Ubuntu 客户机只用于 Android。
+
+---
+
 # OpenMinis-Linux 1.36.23-linux
 
 - versionCode **76**

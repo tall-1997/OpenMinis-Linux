@@ -10,9 +10,9 @@ Android arm64 上的私人 AI Agent。把 Claude、GPT、Gemini 和兼容中转�
 
 ## 下载
 
-当前版本 **1.36.23-linux**（versionCode 76）。
+当前版本 **1.36.24-linux**（versionCode 77）。
 
-- 发行包：[1.36.23-linux](https://github.com/tall-1997/OpenMinis-Linux/releases/tag/1.36.23-linux) → `minis-ultra-com.openminis.linux.apk`
+- 发行包：[1.36.24-linux](https://github.com/tall-1997/OpenMinis-Linux/releases/tag/1.36.24-linux) → `minis-ultra-com.openminis.linux.apk`
 - 滚动构建：[android-latest](https://github.com/tall-1997/OpenMinis-Linux/releases/tag/android-latest)（`main` 每次成功构建覆盖）
 
 侧载前允许「安装未知应用」。debug 签名不能覆盖另一张证书装上的版本，见 [docs/SIGNING.md](docs/SIGNING.md)。
@@ -50,7 +50,7 @@ scripts/        rootfs 与开发脚本
 
 ## 更新日志
 
-本版修了从旧版升级时自定义人格、已关闭技能和已装 Ubuntu 沙箱被清掉，以及长安装被 10 分钟超时掐掉的问题。详细说明：[docs/RELEASE-NOTES.zh.md](docs/RELEASE-NOTES.zh.md)。
+本版修了手机改时区后，客户机 `/etc/localtime` 仍停在启动时区，`date` 和 Python 显示旧偏移的问题。详细说明：[docs/RELEASE-NOTES.zh.md](docs/RELEASE-NOTES.zh.md)。
 
 ## 许可
 
