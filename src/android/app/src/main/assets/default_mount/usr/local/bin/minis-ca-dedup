@@ -1,0 +1,41 @@
+#!/bin/sh
+# Dedup PEM certificates in the system bundle after update-ca-certificates.
+# Host-only CAs live in /usr/local/share/ca-certificates/minis-android and
+# are already concatenated; this only drops duplicate fingerprints so the
+# Mozilla set plus the Android extras do not appear twice.
+set -e
+BUNDLE="${1:-/etc/ssl/certs/ca-certificates.crt}"
+[ -r "$BUNDLE" ] || exit 0
+umask 022
+WORKDIR=$(mktemp -d) || exit 0
+trap 'rm -rf "$WORKDIR"' EXIT INT TERM
+
+awk -v dir="$WORKDIR" '
+  /-----BEGIN CERTIFICATE-----/ { n++; f=sprintf("%s/%04d.pem", dir, n) }
+  n { print > f }
+' "$BUNDLE"
+
+OUT="$WORKDIR/out"
+: > "$OUT"
+SEEN="$WORKDIR/seen"
+mkdir -p "$SEEN"
+
+for f in "$WORKDIR"/*.pem; do
+  [ -f "$f" ] || continue
+  if command -v openssl >/dev/null 2>&1; then
+    fp=$(openssl x509 -in "$f" -outform DER 2>/dev/null | sha256sum | awk '{print $1}')
+  else
+    fp=$(sed -e '/BEGIN CERTIFICATE/d' -e '/END CERTIFICATE/d' -e 's/[[:space:]]//g' "$f" \
+      | sha256sum | awk '{print $1}')
+  fi
+  [ -n "$fp" ] || continue
+  [ -e "$SEEN/$fp" ] && continue
+  : > "$SEEN/$fp"
+  cat "$f" >> "$OUT"
+done
+
+if [ -s "$OUT" ]; then
+  cat "$OUT" > "$BUNDLE"
+  chmod 644 "$BUNDLE" 2>/dev/null || true
+fi
+exit 0

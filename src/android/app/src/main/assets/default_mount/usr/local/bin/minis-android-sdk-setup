@@ -45,15 +45,17 @@ case "$HOST_ARCH" in
 esac
 
 curl_first() {
-  dest=$1
+  # POSIX sh has no function scope. A bare dest= here used to overwrite
+  # install_one_cmake's dest, so the tree was moved onto the tarball path.
+  _curl_dest=$1
   shift
   for url in "$@"; do
     [ -n "$url" ] || continue
     echo "  trying $url"
-    if curl -fL --retry 2 --retry-delay 1 --connect-timeout 20 -o "$dest" "$url"; then
+    if curl -fL --retry 2 --retry-delay 1 --connect-timeout 20 -o "$_curl_dest" "$url"; then
       return 0
     fi
-    rm -f "$dest"
+    rm -f "$_curl_dest"
   done
   return 1
 }
@@ -152,18 +154,18 @@ install_platform() {
 }
 
 cmake_post() {
-  dest=$1
-  if [ ! -x "$dest/bin/ninja" ]; then
+  _cmake_dest=$1
+  if [ ! -x "$_cmake_dest/bin/ninja" ]; then
     if command -v ninja >/dev/null 2>&1; then
-      ln -sf "$(command -v ninja)" "$dest/bin/ninja"
+      ln -sf "$(command -v ninja)" "$_cmake_dest/bin/ninja"
     else
       echo "ninja missing — AGP cmake builds need ninja-build (minis-dev-setup)" >&2
     fi
   fi
-  if [ ! -f "$dest/source.properties" ]; then
-    printf 'Pkg.UserSrc=false\nPkg.Revision=%s\n' "$CMAKE_VER" > "$dest/source.properties"
+  if [ ! -f "$_cmake_dest/source.properties" ]; then
+    printf 'Pkg.UserSrc=false\nPkg.Revision=%s\n' "$CMAKE_VER" > "$_cmake_dest/source.properties"
   fi
-  chmod +x "$dest/bin/"* 2>/dev/null || true
+  chmod +x "$_cmake_dest/bin/"* 2>/dev/null || true
 }
 
 install_one_cmake() {
@@ -262,6 +264,31 @@ warn_x86_ndk() {
   fi
 }
 
+
+extract_sdk_archive() {
+  _xa_archive=$1
+  _xa_out=$2
+  case "$_xa_archive" in
+    *.tar.xz|*.txz)
+      if ! command -v xz >/dev/null 2>&1; then
+        apt-get update -qq || true
+        apt-get install -y --no-install-recommends xz-utils
+      fi
+      tar -xJf "$_xa_archive" -C "$_xa_out"
+      ;;
+    *.tar.gz|*.tgz)
+      tar -xzf "$_xa_archive" -C "$_xa_out"
+      ;;
+    *.zip)
+      unzip -qo "$_xa_archive" -d "$_xa_out"
+      ;;
+    *)
+      echo "unrecognized NDK archive: $_xa_archive" >&2
+      return 1
+      ;;
+  esac
+}
+
 install_ndk() {
   if [ "${MINIS_SKIP_NDK:-0}" = "1" ]; then
     echo "MINIS_SKIP_NDK=1 — skipping NDK r28+"
@@ -284,31 +311,38 @@ install_ndk() {
     return 0
   fi
 
-  echo "Installing NDK ${NDK_TAG} linux-aarch64 (~1GB). Set MINIS_SKIP_NDK=1 to skip."
-  echo "Source: lzhiyong/termux-ndk (Google NDK host tools are x86_64)."
-  zip="/tmp/minis-ndk-$$.zip"
+  echo "Installing NDK ${NDK_TAG} linux-aarch64. Set MINIS_SKIP_NDK=1 to skip."
+  echo "Source: lzhiyong/termux-ndk tag android-ndk (Google NDK host tools are x86_64)."
+  archive="/tmp/minis-ndk-$$"
   set +e
   if [ -n "${MINIS_NDK_URL:-}" ]; then
-    curl_first "$zip" "$MINIS_NDK_URL"
+    case "${MINIS_NDK_URL%%\?*}" in
+      *.tar.xz|*.txz) archive="${archive}.tar.xz" ;;
+      *.tar.gz|*.tgz) archive="${archive}.tar.gz" ;;
+      *.zip) archive="${archive}.zip" ;;
+      *) archive="${archive}.bin" ;;
+    esac
+    curl_first "$archive" "$MINIS_NDK_URL"
     cr=$?
   else
-    curl_first "$zip" \
-      $(github_urls "https://github.com/lzhiyong/termux-ndk/releases/download/${NDK_TAG}/android-ndk-${NDK_TAG}-aarch64.zip") \
-      $(github_urls "https://github.com/lzhiyong/termux-ndk/releases/download/${NDK_TAG}/android-ndk-${NDK_TAG}-linux-aarch64.zip") \
-      $(github_urls "https://github.com/lzhiyong/termux-ndk/releases/download/r28c/android-ndk-r28c-aarch64.zip") \
-      $(github_urls "https://github.com/lzhiyong/termux-ndk/releases/download/r28b/android-ndk-r28b-aarch64.zip") \
-      $(github_urls "https://github.com/lzhiyong/termux-ndk/releases/download/r28/android-ndk-r28-aarch64.zip")
+    # Published asset is tag "android-ndk", file android-ndk-<rev>-aarch64.tar.xz.
+    # releases/download/r29/android-ndk-r29-aarch64.zip is 404.
+    archive="${archive}.tar.xz"
+    ndk_file="android-ndk-${NDK_TAG}-aarch64.tar.xz"
+    curl_first "$archive" \
+      $(github_urls "https://github.com/lzhiyong/termux-ndk/releases/download/android-ndk/${ndk_file}")
     cr=$?
   fi
   set -e
   if [ "$cr" -ne 0 ]; then
-    echo "NDK aarch64 download failed. Bind-mount an aarch64 NDK or set MINIS_NDK_URL." >&2
-    echo "Do NOT: sdkmanager \"ndk;28.…\" — that package is linux-x86_64." >&2
+    echo "NDK aarch64 download failed." >&2
+    echo "Expected https://github.com/lzhiyong/termux-ndk/releases/download/android-ndk/android-ndk-${NDK_TAG}-aarch64.tar.xz" >&2
+    echo "Bind-mount an aarch64 NDK or set MINIS_NDK_URL. Do NOT sdkmanager \"ndk;…\" (that package is linux-x86_64)." >&2
     return 1
   fi
   stage="/tmp/minis-ndk-$$"
   mkdir -p "$stage"
-  unzip -qo "$zip" -d "$stage"
+  extract_sdk_archive "$archive" "$stage"
   inner=""
   if ndk_clang_ok "$stage"; then
     inner=$stage
@@ -318,8 +352,8 @@ install_ndk() {
     done
   fi
   if [ -z "$inner" ]; then
-    echo "NDK zip extracted but linux-aarch64 clang not found" >&2
-    rm -rf "$stage" "$zip"
+    echo "NDK archive extracted but linux-aarch64 clang not found" >&2
+    rm -rf "$stage" "$archive"
     return 1
   fi
   rev=""
@@ -331,7 +365,7 @@ install_ndk() {
   dest="$SDK_ROOT/ndk/$rev"
   rm -rf "$dest"
   mv "$inner" "$dest"
-  rm -rf "$stage" "$zip"
+  rm -rf "$stage" "$archive"
   export ANDROID_NDK_HOME=$dest
   export ANDROID_NDK_ROOT=$dest
   echo "NDK $rev -> $dest"

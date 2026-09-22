@@ -377,44 +377,124 @@ class RootfsManager private constructor(private val context: Context) {
      * symlinked at Android paths the guest cannot follow).
      */
     private fun injectHostCaBundle() {
-        val pem = StringBuilder()
+        ensureCaHookExecutable()
+        val androidPems = LinkedHashMap<String, String>()
         try {
             val ks = KeyStore.getInstance("AndroidCAStore")
             ks.load(null)
             val aliases = ks.aliases()
             while (aliases.hasMoreElements()) {
                 val cert = ks.getCertificate(aliases.nextElement()) as? X509Certificate ?: continue
-                appendPem(pem, cert)
+                val fp = try {
+                    CaBundle.fingerprintDer(cert.encoded)
+                } catch (_: Exception) {
+                    continue
+                }
+                if (fp in androidPems) continue
+                val block = StringBuilder()
+                appendPem(block, cert)
+                androidPems[fp] = block.toString()
             }
+            Log.i(TAG, "[CA] AndroidCAStore unique=${androidPems.size}")
         } catch (t: Throwable) {
             Log.w(TAG, "[CA] AndroidCAStore export failed: ${t.message}")
         }
         val guestCerts = File(rootfsDir, "etc/ssl/certs")
         guestCerts.mkdirs()
         var source = "AndroidCAStore"
-        if (pem.length < 2048) {
+        if (androidPems.size < 8) {
             for (dirPath in HOST_CA_DIRS) {
                 val dir = File(dirPath)
                 val extra = loadPemFromHostDir(dir) ?: continue
-                pem.setLength(0)
-                pem.append(extra)
+                var added = 0
+                for (block in CaBundle.parsePemBlocks(extra)) {
+                    val fp = CaBundle.fingerprintPem(block) ?: continue
+                    val pemBlock = if (block.endsWith("\n")) block else "$block\n"
+                    if (androidPems.putIfAbsent(fp, pemBlock) == null) added++
+                }
                 copyHostCaHashFiles(dir, guestCerts)
                 source = dirPath
-                Log.i(TAG, "[CA] AndroidCAStore insufficient (${pem.length} bytes); using filesystem $dirPath")
-                break
+                if (added > 0) {
+                    Log.i(TAG, "[CA] merged $added unique certs from $dirPath (total=${androidPems.size})")
+                }
+                if (androidPems.size >= 8) break
             }
         } else {
             for (dirPath in HOST_CA_DIRS) {
                 if (copyHostCaHashFiles(File(dirPath), guestCerts) > 0) break
             }
         }
+        if (androidPems.isEmpty()) {
+            Log.w(TAG, "[CA] host bundle empty; leaving guest certs (HTTPS may fall back to HTTP)")
+            return
+        }
+
+        val mozillaPems = CaBundle.loadPemsFromTree(
+            File(rootfsDir, "usr/share/ca-certificates"),
+            excludeDirNames = setOf("minis-android"),
+        )
+        val mozillaFp = HashSet<String>(mozillaPems.size)
+        for (block in mozillaPems) {
+            CaBundle.fingerprintPem(block)?.let { mozillaFp.add(it) }
+        }
+        val extraFps = if (mozillaFp.isEmpty()) {
+            androidPems.keys
+        } else {
+            androidPems.keys.filter { it !in mozillaFp }
+        }
+        val localDir = File(rootfsDir, "usr/local/share/ca-certificates/minis-android")
+        val shareDir = File(rootfsDir, "usr/share/ca-certificates/minis-android")
+        for (dir in listOf(localDir, shareDir)) {
+            try {
+                dir.deleteRecursively()
+            } catch (_: Exception) {
+            }
+            dir.mkdirs()
+            chmodWorld(dir, true)
+            dir.parentFile?.let { chmodWorld(it, true) }
+        }
+        var extrasWritten = 0
+        val confNames = ArrayList<String>()
+        for (fp in extraFps) {
+            val pemBlock = androidPems[fp] ?: continue
+            val name = "${fp.take(16)}.crt"
+            try {
+                val local = File(localDir, name)
+                local.writeText(pemBlock)
+                chmodWorld(local, false)
+                val share = File(shareDir, name)
+                share.writeText(pemBlock)
+                chmodWorld(share, false)
+                confNames += "minis-android/$name"
+                extrasWritten++
+            } catch (t: Throwable) {
+                Log.w(TAG, "[CA] failed to write $name: ${t.message}")
+            }
+        }
+        registerHostCaConf(confNames)
+        Log.i(TAG, "[CA] registered $extrasWritten host extras from $source (mozilla=${mozillaFp.size})")
+
+        val pem = StringBuilder()
+        val seen = LinkedHashSet<String>()
+        for (block in mozillaPems) {
+            val fp = CaBundle.fingerprintPem(block) ?: continue
+            if (!seen.add(fp)) continue
+            pem.append(block)
+            if (!block.endsWith("\n")) pem.append('\n')
+        }
+        for ((fp, block) in androidPems) {
+            if (!seen.add(fp)) continue
+            pem.append(block)
+            if (!block.endsWith("\n")) pem.append('\n')
+        }
         if (pem.length < 2048) {
-            Log.w(TAG, "[CA] host bundle too small (${pem.length}); leaving guest certs (HTTPS may fall back to HTTP)")
+            Log.w(TAG, "[CA] merged bundle too small (${pem.length}); leaving guest certs (HTTPS may fall back to HTTP)")
             return
         }
         val dest = File(guestCerts, "ca-certificates.crt")
         dest.writeText(pem.toString())
         chmodWorld(dest, false)
+        ensureCaHookExecutable()
         val copies = listOf(
             File(rootfsDir, "usr/lib/ssl/cert.pem"),
             File(rootfsDir, "etc/ssl/cert.pem"),
@@ -515,6 +595,39 @@ class RootfsManager private constructor(private val context: Context) {
                 } catch (t: Throwable) {
                     Log.w(TAG, "[CA] hash ${out.name} failed: ${t.message}")
                 }
+            }
+        }
+    }
+
+    /**
+     * Enable host-only certs in ca-certificates.conf so `update-ca-certificates`
+     * keeps them. Skipped when the package has not installed the conf yet;
+     * `/usr/local/share/ca-certificates` still covers that case.
+     */
+    private fun registerHostCaConf(relativePaths: List<String>) {
+        val conf = File(rootfsDir, "etc/ca-certificates.conf")
+        if (!conf.isFile) return
+        try {
+            conf.writeText(CaBundle.rewriteCaCertificatesConf(conf.readText(), relativePaths))
+            chmodWorld(conf, false)
+        } catch (t: Throwable) {
+            Log.w(TAG, "[CA] conf register failed: ${t.message}")
+        }
+    }
+
+    /** run-parts ignores a non-executable update.d hook. Os.chmod beats umask 0077. */
+    private fun ensureCaHookExecutable() {
+        for (rel in listOf(
+            "etc/ca-certificates/update.d/minis-dedup",
+            "usr/local/bin/minis-ca-dedup",
+        )) {
+            val f = File(rootfsDir, rel)
+            if (!f.isFile) continue
+            try {
+                android.system.Os.chmod(f.absolutePath, 493)
+            } catch (_: Throwable) {
+                f.setExecutable(true, false)
+                f.setReadable(true, false)
             }
         }
     }
@@ -732,6 +845,7 @@ class RootfsManager private constructor(private val context: Context) {
         var fileCount = 0
         try {
             fileCount = copyAssetDir(DEFAULT_MOUNT_ASSET, rootfsDir)
+            ensureCaHookExecutable()
             configureUbuntuGuest()
             injectHostCaBundle()
         } catch (t: Throwable) {
@@ -1283,19 +1397,7 @@ class RootfsManager private constructor(private val context: Context) {
         if (!prootBinary.exists()) return AptResult(-1, "")
         val pkgs = pkgNames.filter { DPKG_PKG_NAME.matches(it) }
         if (pkgs.isEmpty()) return AptResult(0, "")
-        val script = buildString {
-            append("export TMPDIR=/tmp TMP=/tmp TEMP=/tmp DEBIAN_FRONTEND=noninteractive ")
-            append("SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt ")
-            append("CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt; ")
-            append("mkdir -p /tmp /var/tmp /var/lock; ")
-            append("[ -f /usr/local/lib/minis/apt-lock.sh ] && . /usr/local/lib/minis/apt-lock.sh; ")
-            append("minis_acquire_apt_lock 120 || true; ")
-            append("DEBIAN_FRONTEND=noninteractive apt-get ")
-            append("-o Acquire::https::Verify-Peer=false ")
-            append("-o Acquire::https::Verify-Host=false update -qq || true; ")
-            append("DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-upgrade --no-install-recommends ")
-            append(pkgs.joinToString(" "))
-        }
+        val script = GuestAptScript.install(pkgs)
         val cmd = listOf(
             prootBinary.absolutePath, "-0", "--link2symlink", "--kill-on-exit",
             "-r", rootfsDir.absolutePath,

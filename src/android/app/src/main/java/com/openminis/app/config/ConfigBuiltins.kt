@@ -19,6 +19,7 @@ import com.openminis.app.data.repository.ChatRepository
 import com.openminis.app.data.repository.EnvVarRepository
 import com.openminis.app.data.repository.ProviderRepository
 import com.openminis.app.data.model.ThinkingLevel
+import com.openminis.app.security.SecurityGateHolder
 import com.openminis.app.ui.chat.ChatViewModelStore
 import com.openminis.app.util.IsoTime
 import kotlinx.coroutines.runBlocking
@@ -38,6 +39,7 @@ internal object ConfigBuiltins {
         chatRepo: ChatRepository,
     ) {
         registerSelfMeta(r)
+        registerSecurity(r)
         registerSession(r, providerRepo, chatRepo)
         registerAppearance(r, context)
         registerChat(r, context)
@@ -78,6 +80,24 @@ internal object ConfigBuiltins {
     }
 
     // -- Master switch surface (read-only via the registry; UI toggles it) --
+
+    /**
+     * Read-only view of the gate so `minis-config topic-help security` is not
+     * an empty topic. The mode itself is changed in Settings → Permissions.
+     */
+    private fun registerSecurity(r: ConfigRegistry) {
+        r.register(
+            ReadOnlyField(
+                path = "security.permissionMode",
+                displayName = "Permission mode",
+                description = "Current SecurityGate mode: ALLOW_ALL, ASK, DENY_ALL, READ_ONLY, or PLAN. " +
+                    "Reads pass unless the mode is DENY_ALL. Shell and writes follow this mode plus any saved rules. " +
+                    "Change it in Settings → Permissions; this field is not writable.",
+                valueSchema = ConfigSchema.Str(),
+                reader = { ConfigValue.Str(SecurityGateHolder.gate.getPermissionMode().name) },
+            )
+        )
+    }
 
     private fun registerSelfMeta(r: ConfigRegistry) {
         r.register(

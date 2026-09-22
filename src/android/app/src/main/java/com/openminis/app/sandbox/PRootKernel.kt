@@ -355,17 +355,59 @@ object PRootKernel {
      * Does not override a user mount already named `sdcard`.
      */
     private fun applySharedStorageBinds(context: Context, desired: MutableMap<String, String>) {
-        val extras = listOf("/sdcard", "/storage/emulated/0")
+        val userNamed = desired.keys.any { it.removePrefix(MOUNTS_LINUX_PREFIX) == "sdcard" }
+        val plan = sharedStoragePlan(context, userNamed)
+        syncSharedStorageBindMounts(plan, userNamed)
+        val mounted = plan[SharedStorageBindPlan.MOUNTS_SDCARD]
+        if (mounted != null) desired[SharedStorageBindPlan.MOUNTS_SDCARD] = mounted
+        if (plan.isNotEmpty()) materializeSharedStorageTargets(context, plan.keys)
+    }
+
+    /**
+     * Binds [PersistentShell] must pass on `-b`. [bindMounts] alone is not
+     * that argv, so a grant that only updated the kernel map left `/sdcard`
+     * as an empty rootfs directory inside `shell_execute`.
+     */
+    fun shellSharedStorageBinds(context: Context): Map<String, String> {
+        val userNamed = mountedFoldersStore?.entries?.value?.any { it.name == "sdcard" } == true
+        val plan = sharedStoragePlan(context, userNamed)
+        syncSharedStorageBindMounts(plan, userNamed)
+        if (plan.isNotEmpty()) materializeSharedStorageTargets(context, plan.keys)
+        return plan
+    }
+
+    private fun sharedStoragePlan(context: Context, userNamedSdcard: Boolean): Map<String, String> {
         val host = Environment.getExternalStorageDirectory()?.absolutePath
-        if (host.isNullOrBlank() || !hasSharedStorageAccess(context) || !File(host).canRead()) {
-            extras.forEach { bindMounts.remove(it) }
+        val granted = !host.isNullOrBlank() &&
+            hasSharedStorageAccess(context) &&
+            File(host).canRead()
+        return SharedStorageBindPlan.plan(if (granted) host else null, userNamedSdcard)
+    }
+
+    private fun syncSharedStorageBindMounts(plan: Map<String, String>, userNamedSdcard: Boolean) {
+        for (linux in listOf(SharedStorageBindPlan.SDCARD, SharedStorageBindPlan.EMULATED)) {
+            val host = plan[linux]
+            if (host == null) bindMounts.remove(linux) else bindMounts[linux] = host
+        }
+        val mounted = SharedStorageBindPlan.MOUNTS_SDCARD
+        if (mounted in plan) bindMounts[mounted] = plan.getValue(mounted)
+        else if (!userNamedSdcard) bindMounts.remove(mounted)
+    }
+
+    private fun materializeSharedStorageTargets(context: Context, linuxPaths: Collection<String>) {
+        materializeAbsoluteTargets(
+            context,
+            linuxPaths.filter { !it.startsWith(MOUNTS_LINUX_PREFIX) },
+        )
+        val rootfs = try {
+            RootfsManager.getInstance(context).rootfsDir
+        } catch (t: Throwable) {
+            Log.w(TAG, "materializeSharedStorageTargets: rootfs not yet available: ${t.message}")
             return
         }
-        extras.forEach { bindMounts[it] = host }
-        materializeAbsoluteTargets(context, extras)
-        val userNames = desired.keys.map { it.removePrefix(MOUNTS_LINUX_PREFIX) }.toSet()
-        if ("sdcard" !in userNames) {
-            desired["${MOUNTS_LINUX_PREFIX}sdcard"] = host
+        for (linux in linuxPaths) {
+            if (!linux.startsWith(MOUNTS_LINUX_PREFIX)) continue
+            File(rootfs, linux.removePrefix("/")).mkdirs()
         }
     }
 

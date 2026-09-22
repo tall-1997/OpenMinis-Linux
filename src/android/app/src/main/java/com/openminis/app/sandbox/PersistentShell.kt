@@ -66,6 +66,7 @@ class PersistentShell(
         val lineCallback: ((String) -> Unit)?,
         var onComplete: ((String, Int) -> Unit)? = null,
     ) {
+        val framer = MarkerFramer(marker)
         fun appendOutput(text: String) {
             val room = MAX_OUTPUT_CHARS - output.length
             if (room <= 0) return
@@ -191,6 +192,7 @@ class PersistentShell(
             outputTotal = 0
         }
         lastExitCode = null
+        utf8 = Utf8ChunkDecoder()
 
         val cmd = mutableListOf<String>()
         cmd.add(rootfsManager.prootBinary.absolutePath)
@@ -198,6 +200,8 @@ class PersistentShell(
         // T141: see PRootKernel.buildProotCommand for rationale — translates
         // hardlinks to symlinks so apk install of binutils/gcc works.
         cmd.add("--link2symlink")
+        // So destroyForcibly on timeout also reaps the guest command, not only proot.
+        cmd.add("--kill-on-exit")
         cmd.add("-r")
         cmd.add(rootfsManager.rootfsDir.absolutePath)
         cmd.add("-b"); cmd.add("/dev")
@@ -366,55 +370,48 @@ class PersistentShell(
     var lastExitCode: Int? = null
         private set
 
+    /** One decoder per process so a UTF-8 sequence split across reads survives. */
+    private var utf8 = Utf8ChunkDecoder()
+
+    private fun dispatchDecoded(text: String, endOfInput: Boolean = false) {
+        val cb = pendingCallback ?: return
+        if (text.isEmpty() && !endOfInput) return
+        val step = cb.framer.push(text, endOfInput)
+        if (step.output.isNotEmpty()) {
+            cb.appendOutput(step.output)
+            cb.lineCallback?.let { feedLines(step.output, it) }
+        }
+        if (step.completed && pendingCallback === cb) {
+            cb.onComplete?.invoke(cb.output.toString(), step.exitCode)
+            if (pendingCallback === cb) pendingCallback = null
+        }
+    }
+
     private fun readLoop(p: Process) {
+        val decoder = utf8
         try {
             val buffer = ByteArray(4096)
             val stream = p.inputStream
             while (true) {
                 val n = stream.read(buffer)
                 if (n < 0) break
-                val text = String(buffer, 0, n, StandardCharsets.UTF_8)
-                appendTail(text)
-
-                val cb = pendingCallback
-                if (cb != null) {
-                    // Check if this chunk contains the end marker
-                    val markerExitPattern = "__MINIS_DONE_${cb.marker}_EXIT_"
-                    val markerIdx = text.indexOf(markerExitPattern)
-
-                    if (markerIdx >= 0) {
-                        // Extract output before marker
-                        val beforeMarker = text.substring(0, markerIdx)
-                        cb.appendOutput(beforeMarker)
-                        if (cb.lineCallback != null) {
-                            feedLines(beforeMarker, cb.lineCallback)
-                        }
-
-                        // Extract exit code from marker line
-                        val afterMarker = text.substring(markerIdx)
-                        val exitCode = parseExitCode(afterMarker, cb.marker)
-
-                        // Signal completion
-                        cb.onComplete?.invoke(cb.output.toString(), exitCode)
-                        pendingCallback = null
-                    } else {
-                        cb.appendOutput(text)
-                        if (cb.lineCallback != null) {
-                            feedLines(text, cb.lineCallback)
-                        }
-                    }
-                }
-                // If no pending callback, discard (shell prompt noise etc.)
+                val text = decoder.decode(buffer, n)
+                if (text.isNotEmpty()) appendTail(text)
+                dispatchDecoded(text)
             }
+            val tail = decoder.finish()
+            if (tail.isNotEmpty()) appendTail(tail)
+            dispatchDecoded(tail, endOfInput = true)
         } catch (e: Exception) {
             Log.d(TAG, "Reader loop ended: ${e.message}")
         }
 
-        // Process exited
+        // Process exited. Only complete the callback this loop still owns —
+        // a timeout may already have cleared it and started a new shell.
         val cb = pendingCallback
-        if (cb != null) {
+        if (cb != null && pendingCallback === cb) {
             cb.onComplete?.invoke(cb.output.toString(), -1)
-            pendingCallback = null
+            if (pendingCallback === cb) pendingCallback = null
         }
 
         // [T-android-shell-death-diagnosability] Name the cause in the FILE
@@ -424,7 +421,6 @@ class PersistentShell(
         // a field log reads "started → exited" 25ms apart and is
         // unactionable — precisely the shape of the crDroid report.
         val exit = runCatching { p.waitFor() }.getOrNull()
-        lastExitCode = exit
         val tail = deathTail()
         com.openminis.app.logging.AppLogger.error(
             TAG,
@@ -432,8 +428,13 @@ class PersistentShell(
                 (if (tail.isNotEmpty()) " capture=${tail.take(1200)}" else " capture=(no output)"),
         )
 
-        process = null
-        stdinWriter = null
+        // A timeout may already have spawned the replacement shell. Do not
+        // clear that process just because this reader thread is exiting.
+        if (process === p) {
+            lastExitCode = exit
+            process = null
+            stdinWriter = null
+        }
         Log.i(TAG, "Persistent shell process exited")
     }
 
@@ -448,13 +449,6 @@ class PersistentShell(
                 callback(line)
             }
         }
-    }
-
-    private fun parseExitCode(text: String, marker: String): Int {
-        // Pattern: __MINIS_DONE_{marker}_EXIT_{code}__
-        val regex = Regex("__MINIS_DONE_${Regex.escape(marker)}_EXIT_(\\d+)__")
-        val match = regex.find(text)
-        return match?.groupValues?.get(1)?.toIntOrNull() ?: -1
     }
 
     /**
@@ -508,7 +502,9 @@ class PersistentShell(
                     pendingCallback = cb
 
                     cont.invokeOnCancellation {
-                        pendingCallback = null
+                        if (pendingCallback === cb) pendingCallback = null
+                        // Parent cancel has the same serialization bug as timeout.
+                        stop()
                     }
 
                     try {
@@ -524,8 +520,11 @@ class PersistentShell(
             }
 
             if (result == null) {
-                // Timeout — cancel pending, but don't kill the shell
-                pendingCallback = null
+                // The guest shell reads the next command only after the previous
+                // one exits. Leaving it alive makes the timeout a no-op and lets
+                // the old marker/output land on the next command.
+                Log.w(TAG, "command timed out after ${timeout / 1000}s; killing shell")
+                stop()
                 Pair("[Command timed out after ${timeout / 1000}s]", 124)
             } else {
                 result
@@ -574,14 +573,17 @@ class PersistentShell(
      * Stop the persistent shell.
      */
     fun stop() {
+        val p = process
+        val cb = pendingCallback
         try { stdinWriter?.close() } catch (_: Exception) {}
-        stdinWriter = null
-        process?.destroyForcibly()
-        process = null
-        pendingCallback?.let {
-            it.onComplete?.invoke(it.output.toString(), -1)
+        if (process === p) stdinWriter = null
+        p?.destroyForcibly()
+        runCatching { p?.waitFor(500, java.util.concurrent.TimeUnit.MILLISECONDS) }
+        if (process === p) process = null
+        if (cb != null && pendingCallback === cb) {
+            cb.onComplete?.invoke(cb.output.toString(), -1)
+            if (pendingCallback === cb) pendingCallback = null
         }
-        pendingCallback = null
         Log.i(TAG, "Persistent shell stopped")
     }
 }

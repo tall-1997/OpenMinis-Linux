@@ -35,6 +35,7 @@
 ## 待实现
 
 1. **正式签名密钥** — CI 仍是 debug-signed release，上架/覆盖旁路包会受影响。
+2. **Codex 式 `/goal` 追求目标** — 可行性与对齐规格见 [specs/codex-goal.md](specs/codex-goal.md)。未开工。
 
 ---
 

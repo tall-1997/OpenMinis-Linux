@@ -275,11 +275,12 @@ apt_update_ok() {
     export SSL_CERT_FILE="${SSL_CERT_FILE:-/etc/ssl/certs/ca-certificates.crt}"
     export CURL_CA_BUNDLE="${CURL_CA_BUNDLE:-$SSL_CERT_FILE}"
     _out="$(mktemp)"
-    _apt_opts="-o Acquire::https::Verify-Peer=false -o Acquire::https::Verify-Host=false"
+    # Verify TLS. A CA failure is handled by cmd_auto's HTTPS→HTTP rewrite,
+    # not by turning verification off.
     if [ -x "$APT_HELPER" ]; then
         timeout "$UPDATE_TIMEOUT" "$APT_HELPER" update > "$_out" 2>&1
     else
-        timeout "$UPDATE_TIMEOUT" apt-get $_apt_opts update > "$_out" 2>&1
+        timeout "$UPDATE_TIMEOUT" apt-get update > "$_out" 2>&1
     fi
     _rc=$?
     if [ $_rc = 0 ] && ! grep -qE '^Err:|^E: |^W: Some index files failed' "$_out"; then
@@ -304,8 +305,6 @@ apt_probe_uri() {
         -o Dir::Etc::sourceparts=- \
         -o APT::Get::List-Cleanup=0 \
         -o Acquire::Retries=0 \
-        -o Acquire::https::Verify-Peer=false \
-        -o Acquire::https::Verify-Host=false \
         update > "$_out" 2>&1
     _rc=$?
     if [ $_rc = 0 ] && ! grep -qE '^Err:|^E: |^W: Some index files failed' "$_out"; then
@@ -468,7 +467,7 @@ Usage:
   minis-mirror status               print current mirror + last probe state (JSON)
   minis-mirror probe [--json]       probe every mirror and rank by latency
 
-Mirrors: tuna ustc aliyun huawei tencent nju bfsu official
+Mirrors: tuna ustc sjtu aliyun huawei tencent nju bfsu official
 USAGE
 }
 

@@ -195,6 +195,13 @@ object ExecutionCoordinator {
             val actual = shell.debugBindMount("/var/minis/$subdir") ?: return true
             if (actual != expected) return true
         }
+        val shared = PRootKernel.shellSharedStorageBinds(appContext)
+        if (shell.debugBindMount(SharedStorageBindPlan.SDCARD) != shared[SharedStorageBindPlan.SDCARD]) {
+            return true
+        }
+        if (shell.debugBindMount(SharedStorageBindPlan.EMULATED) != shared[SharedStorageBindPlan.EMULATED]) {
+            return true
+        }
         return false
     }
 
@@ -256,6 +263,14 @@ object ExecutionCoordinator {
         PRootKernel.mountedFoldersStore?.entries?.value?.forEach { entry ->
             val host = entry.resolvedHostPath ?: return@forEach
             val linuxPath = "/var/minis/mounts/${entry.name}"
+            mounts[linuxPath] = host
+        }
+
+        // Shared storage is not a MountedFoldersStore entry. Without this,
+        // shell_execute and the interactive PTY never see /sdcard even when
+        // All Files Access is granted (PRootKernel.bindMounts is a different map).
+        for ((linuxPath, host) in PRootKernel.shellSharedStorageBinds(appContext)) {
+            if (linuxPath == SharedStorageBindPlan.MOUNTS_SDCARD && linuxPath in mounts) continue
             mounts[linuxPath] = host
         }
 

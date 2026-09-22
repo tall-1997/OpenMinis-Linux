@@ -31,7 +31,24 @@ fi
 trap 'echo "minis-dev-setup: received SIGTERM, exiting"; exit 143' TERM
 
 echo "Updating package lists..."
-apt-get -o Acquire::https::Verify-Peer=false update || apt-get update || true
+# Never disable TLS verification. If the injected CA bundle cannot verify the
+# current mirror, drop the apt lock and let minis-mirror walk its HTTPS→HTTP
+# chain, then retry once.
+if ! apt-get update; then
+  echo "apt-get update failed; trying minis-mirror auto" >&2
+  if type minis_release_apt_lock >/dev/null 2>&1; then
+    minis_release_apt_lock || true
+  fi
+  if command -v minis-mirror >/dev/null 2>&1; then
+    minis-mirror auto || true
+  fi
+  if [ -f /usr/local/lib/minis/apt-lock.sh ]; then
+    # shellcheck source=/dev/null
+    . /usr/local/lib/minis/apt-lock.sh
+    minis_acquire_apt_lock 60 || true
+  fi
+  apt-get update || true
+fi
 
 echo "Installing essential tools..."
 apt-get install -y --no-install-recommends \

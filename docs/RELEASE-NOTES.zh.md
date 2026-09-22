@@ -1,3 +1,43 @@
+# OpenMinis-Linux 1.36.22-linux
+
+- versionCode **75**
+- applicationId `com.openminis.linux`
+- 启动器名称：**Minis Ultra**
+- GitHub：[`tall-1997/OpenMinis-Linux`](https://github.com/tall-1997/OpenMinis-Linux)
+- APK：`minis-ultra-com.openminis.linux.apk`
+
+## 本版（1.36.22-linux，2026-09-22）
+
+相对 1.36.21-linux。修的是沙箱运行时仍能复现的问题，不是把历史版本说明再贴一遍。
+
+### 持久 shell
+
+一次 `read` 不再按字节边界解码。中文如果被切在字符中间，会留到下一块拼完，而不是变成替换字符。命令结束标记跨两次读取时也能认出来，下一条命令不会一直等。超时或取消会杀掉当前进程；以前只清回调，下一条命令会堵在没结束的那条后面。持久 shell 增加 `--kill-on-exit`，宿主退出时客户机 shell 一起结束。
+
+### 机内 SDK 与自编译
+
+下载 CMake 时，下载函数不再改写安装目录变量，解压结果能落到 SDK 的 cmake 目录。NDK 默认改用已发布的 `android-ndk` 标签和 `android-ndk-r29-aarch64.tar.xz`；旧地址是 404。压缩包支持 tar.xz、tar.gz、zip，缺 xz 时再装 xz-utils。设置页的实验性自编译改成进程级任务，离开页面不会取消，只有停止或进程结束才会停。找不到源码树时以非零退出。
+
+### 客户机证书
+
+主机多出来的 CA 写到 `/usr/local/share/ca-certificates/minis-android/`，并复制到 `/usr/share/ca-certificates/minis-android/`，同时在 `ca-certificates.conf` 里启用。这样 `update-ca-certificates` 或重装 `ca-certificates` 重建 bundle 时，主机证书还在。AndroidCAStore 按指纹去重；已经在 Mozilla 包里的证书不再写第二份。钩子 `minis-ca-dedup` 在更新后去掉仍然重复的块，并且设为可执行。下一轮注入扫描 Mozilla 目录时会跳过自己写的 `minis-android`，避免把主机证书当成系统证书删掉。
+
+### 软件源
+
+`minis-dev-setup`、`minis-mirror` 和主机侧重试安装都不再关闭 TLS 校验。`apt-get update` 失败时先放开锁，跑 `minis-mirror auto`（HTTPS 失败会改 HTTP 镜像），再试一次。`minis-mirror --help` 补上 sjtu。
+
+### 共享存储与前台服务
+
+授予所有文件访问后，会话 shell 会绑定 `/sdcard`、`/storage/emulated/0` 和 `/var/minis/mounts/sdcard`。以前只更新了另一份挂载表，`shell_execute` 看不见。权限变化后下一条命令重建 shell。用户自己挂的同名 `sdcard` 不会被覆盖。
+
+应用在后台时，前台服务启动被系统拒绝不再把调用方打崩。服务内部 `startForeground` 失败会停掉这次服务，避免系统再杀一次进程。
+
+### 配置
+
+`minis-config` 可以读到当前权限模式 `security.permissionMode`。这个字段只读，改模式仍在设置 → 权限。
+
+---
+
 # OpenMinis-Linux 1.36.21-linux
 
 - versionCode **74**

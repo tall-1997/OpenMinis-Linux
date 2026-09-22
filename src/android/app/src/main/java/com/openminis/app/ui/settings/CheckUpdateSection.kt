@@ -15,13 +15,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.outlined.SystemUpdate
-import com.openminis.app.sandbox.ExecutionCoordinator
-import com.openminis.app.service.AgentForegroundService
-import com.openminis.app.service.SessionActivityTracker
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.withContext
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
@@ -80,8 +73,7 @@ fun CheckUpdateSection() {
 
     var checking by remember { mutableStateOf(false) }
     var statusMessage by remember { mutableStateOf<String?>(null) }
-    var selfBuildStatus by remember { mutableStateOf<String?>(null) }
-    var selfBuilding by remember { mutableStateOf(false) }
+    val selfBuild by SelfBuildRunner.state.collectAsState()
     // When the GitHub API returns 403 / 451 we surface a dedicated row with a
     // tappable "Open GitHub Releases" link beneath the row, so users behind a
     // geo-block know what to do without hunting for the URL themselves.
@@ -277,9 +269,9 @@ fun CheckUpdateSection() {
             icon = Icons.Outlined.Build,
             iconColor = Color(0xFF5856D6),
             title = stringResource(R.string.check_update_self_build),
-            subtitle = selfBuildStatus ?: stringResource(R.string.check_update_self_build_sub),
+            subtitle = selfBuild.message ?: stringResource(R.string.check_update_self_build_sub),
             showDivider = false,
-            onClick = if (selfBuilding) null else {
+            onClick = if (selfBuild.running) null else {
                 { confirmSelfBuild = true }
             },
         )
@@ -291,45 +283,7 @@ fun CheckUpdateSection() {
                 confirmButton = {
                     MinisTextButton(onClick = {
                         confirmSelfBuild = false
-                        val running = context.getString(R.string.check_update_self_build_running)
-                        selfBuilding = true
-                        selfBuildStatus = running
-                        scope.launch(Dispatchers.IO) {
-                            try {
-                                SessionActivityTracker.setActive("self-build")
-                                AgentForegroundService.startService(context, 1, "self-build")
-                                val result = ExecutionCoordinator.execute(
-                                    "self-build",
-                                    "sh /usr/local/bin/minis-self-build",
-                                    timeout = 10_800_000L,
-                                )
-                                val tail = result.output
-                                    .trim()
-                                    .lines()
-                                    .takeLast(8)
-                                    .joinToString("\n")
-                                    .take(500)
-                                val shown = if (tail.isBlank()) "exit ${result.exitCode}" else tail
-                                withContext(Dispatchers.Main) {
-                                    selfBuildStatus = context.getString(
-                                        R.string.check_update_self_build_result,
-                                        shown,
-                                    )
-                                }
-                            } catch (e: CancellationException) {
-                                throw e
-                            } catch (t: Throwable) {
-                                withContext(Dispatchers.Main) {
-                                    selfBuildStatus = context.getString(
-                                        R.string.check_update_self_build_result,
-                                        "${t.javaClass.simpleName}: ${t.message ?: "failed"}",
-                                    )
-                                }
-                            } finally {
-                                SessionActivityTracker.setInactive("self-build")
-                                withContext(NonCancellable + Dispatchers.Main) { selfBuilding = false }
-                            }
-                        }
+                        SelfBuildRunner.start(context)
                     }) { Text(stringResource(R.string.check_update_self_build_run)) }
                 },
                 dismissButton = {

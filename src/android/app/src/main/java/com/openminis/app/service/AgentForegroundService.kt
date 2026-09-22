@@ -93,10 +93,19 @@ class AgentForegroundService : Service() {
                 putExtra(EXTRA_SESSION_COUNT, sessionCount)
                 putExtra(EXTRA_TOOL_STATUS, toolStatus)
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(intent)
+                } else {
+                    context.startService(intent)
+                }
+            } catch (e: IllegalStateException) {
+                // API 31+ ForegroundServiceStartNotAllowedException when the
+                // process is backgrounded. The job keeps running; the
+                // notification is best-effort and must not crash the caller.
+                Log.w(TAG, "startForegroundService not allowed: ${e.message}")
+            } catch (e: SecurityException) {
+                Log.w(TAG, "startForegroundService denied: ${e.message}")
             }
         }
 
@@ -301,14 +310,23 @@ class AgentForegroundService : Service() {
 
         val notification = buildNotification(sessionCount, toolStatus)
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(
-                NOTIFICATION_ID,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
-            )
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(
+                    NOTIFICATION_ID,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+                )
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+        } catch (e: Exception) {
+            // Missing POST_NOTIFICATIONS, a disallowed FGS type, or a
+            // background start that slipped past startForegroundService.
+            // stopSelf so the process is not killed for missing startForeground.
+            Log.w(TAG, "startForeground failed: ${e.message}")
+            stopSelf()
+            return START_NOT_STICKY
         }
 
         return START_STICKY
