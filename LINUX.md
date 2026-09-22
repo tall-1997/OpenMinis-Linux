@@ -49,7 +49,7 @@ Android 客户机是 Canonical **Ubuntu 24.04 (noble) arm64** 的 `ubuntu-base`�
 
 PRoot 会在客户机里**假装** uid 0。那不是主机 root。主机 root 只来自 `su` / `android-su` 卸载通道（Magisk / KernelSU）。
 
-iOS 仍使用 iSH + Alpine；Ubuntu 切换仅限 Android。
+本仓库没有 iOS 工程。Ubuntu 客户机只用于 Android。
 
 ## 工具链
 

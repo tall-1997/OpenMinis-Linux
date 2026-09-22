@@ -327,12 +327,15 @@ object ExecutionCoordinator {
      * - Exports the new TZ into every already-running [PersistentShell] via
      *   `export TZ=...` on stdin.
      * - Asks [TerminalSession] to do the same for every live interactive PTY.
+     * - Rewrites guest `/etc/localtime`. Processes that ignore `TZ` still read it.
      *
      * Safe to call before PRoot has booted — it's a no-op in that case.
      */
     suspend fun broadcastTimezoneChange() {
         if (!PRootKernel.isBooted) return
         val tz = PRootKernel.updateTimezone()
+        runCatching { PRootKernel.syncHostTimezoneFiles() }
+            .onFailure { Log.w(TAG, "syncHostTimezoneFiles failed: ${it.message}") }
         val tzMap = mapOf("TZ" to tz)
         for ((_, shell) in shells) {
             if (shell.isAlive) shell.applyEnvironment(tzMap)

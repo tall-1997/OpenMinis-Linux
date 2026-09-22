@@ -662,6 +662,16 @@ object PRootKernel {
     }
 
     /**
+     * Rewrite guest `/etc/localtime` after a timezone change. [updateTimezone]
+     * only updates the env var used by new shells; glibc `date` and Python
+     * fall back to the symlink, which otherwise stays on the zone from boot.
+     */
+    suspend fun syncHostTimezoneFiles() {
+        if (!::rootfsManager.isInitialized) return
+        rootfsManager.applyHostTimezone()
+    }
+
+    /**
      * Env-variable keys for HTTP proxy injection. All six are always set as a
      * block — even when no system proxy is configured the values are empty
      * strings, which (a) signals "no proxy" to curl/wget/pip/npm (they treat

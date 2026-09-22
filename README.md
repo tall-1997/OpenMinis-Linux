@@ -50,7 +50,7 @@ scripts/        rootfs 与开发脚本
 
 ## 更新日志
 
-本版修了沙箱输出截断、证书被 `update-ca-certificates` 清掉、apt 关闭 TLS 校验、`/sdcard` 没挂进会话 shell，以及前台服务启动失败会崩进程。详细说明：[docs/RELEASE-NOTES.zh.md](docs/RELEASE-NOTES.zh.md)。
+本版修了从旧版升级时自定义人格、已关闭技能和已装 Ubuntu 沙箱被清掉，以及长安装被 10 分钟超时掐掉的问题。详细说明：[docs/RELEASE-NOTES.zh.md](docs/RELEASE-NOTES.zh.md)。
 
 ## 许可
 
