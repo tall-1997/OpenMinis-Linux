@@ -43,6 +43,8 @@ object AgentTools {
         }
         add(browserUseDefinition())
         add(WebSearchTool.definition())
+        add(OcrTool.definition())
+        add(ScreenTimeTool.definition())
         add(WebFetchTool.definition())
         add(shellExecAliasDefinition())
         add(suExecDefinition())

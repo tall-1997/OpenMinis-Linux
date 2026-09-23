@@ -27,7 +27,12 @@ fun WebSearchSettingsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     var engine by remember { mutableStateOf(WebSearchSettings.engine(context)) }
     var searx by remember { mutableStateOf(WebSearchSettings.searxngUrl(context)) }
-    var bing by remember { mutableStateOf(WebSearchSettings.bingKey(context)) }
+    var keys by remember {
+        mutableStateOf(
+            WebSearchSettings.Engine.entries.filter { it.needsKey }
+                .associateWith { WebSearchSettings.apiKey(context, it) },
+        )
+    }
     var customUrl by remember { mutableStateOf(WebSearchSettings.customUrl(context)) }
     var customKey by remember { mutableStateOf(WebSearchSettings.customKey(context)) }
     var customHeader by remember { mutableStateOf(WebSearchSettings.customKeyHeader(context)) }
@@ -36,13 +41,7 @@ fun WebSearchSettingsScreen(onBack: () -> Unit) {
 
     BackHandler(enabled = detail != null) { detail = null }
 
-    val title = when (detail) {
-        null -> stringResource(R.string.settings_web_search)
-        WebSearchSettings.Engine.DDG -> stringResource(R.string.web_search_engine_ddg)
-        WebSearchSettings.Engine.SEARXNG -> stringResource(R.string.web_search_engine_searxng)
-        WebSearchSettings.Engine.BING -> stringResource(R.string.web_search_engine_bing)
-        WebSearchSettings.Engine.CUSTOM -> stringResource(R.string.web_search_engine_custom)
-    }
+    val title = detail?.let { engineLabel(it) } ?: stringResource(R.string.settings_web_search)
 
     SettingsScaffold(
         title = title,
@@ -60,46 +59,29 @@ fun WebSearchSettingsScreen(onBack: () -> Unit) {
                 header = stringResource(R.string.web_search_engine_header),
                 footer = stringResource(R.string.web_search_engine_footer),
             ) {
-                EngineNavRow(
-                    title = stringResource(R.string.web_search_engine_ddg),
-                    subtitle = stringResource(R.string.web_search_no_key_needed),
-                    selected = engine == WebSearchSettings.Engine.DDG,
-                    showDivider = true,
-                    onClick = { detail = WebSearchSettings.Engine.DDG },
-                )
-                EngineNavRow(
-                    title = stringResource(R.string.web_search_engine_searxng),
-                    subtitle = if (searx.isBlank()) {
-                        stringResource(R.string.web_search_not_configured)
-                    } else {
-                        searx
-                    },
-                    selected = engine == WebSearchSettings.Engine.SEARXNG,
-                    showDivider = true,
-                    onClick = { detail = WebSearchSettings.Engine.SEARXNG },
-                )
-                EngineNavRow(
-                    title = stringResource(R.string.web_search_engine_bing),
-                    subtitle = if (bing.isBlank()) {
-                        stringResource(R.string.web_search_not_configured)
-                    } else {
-                        stringResource(R.string.web_search_key_saved)
-                    },
-                    selected = engine == WebSearchSettings.Engine.BING,
-                    showDivider = true,
-                    onClick = { detail = WebSearchSettings.Engine.BING },
-                )
-                EngineNavRow(
-                    title = stringResource(R.string.web_search_engine_custom),
-                    subtitle = if (customUrl.isBlank()) {
-                        stringResource(R.string.web_search_not_configured)
-                    } else {
-                        customUrl
-                    },
-                    selected = engine == WebSearchSettings.Engine.CUSTOM,
-                    showDivider = false,
-                    onClick = { detail = WebSearchSettings.Engine.CUSTOM },
-                )
+                WebSearchSettings.Engine.entries.forEachIndexed { index, item ->
+                    val configured = when (item) {
+                        WebSearchSettings.Engine.DDG -> true
+                        WebSearchSettings.Engine.SEARXNG -> searx.isNotBlank()
+                        WebSearchSettings.Engine.CUSTOM -> customUrl.isNotBlank()
+                        else -> !keys[item].isNullOrBlank()
+                    }
+                    EngineNavRow(
+                        title = engineLabel(item),
+                        subtitle = if (configured) {
+                            if (item == WebSearchSettings.Engine.DDG) {
+                                stringResource(R.string.web_search_no_key_needed)
+                            } else {
+                                stringResource(R.string.web_search_configured)
+                            }
+                        } else {
+                            stringResource(R.string.web_search_not_configured)
+                        },
+                        selected = engine == item,
+                        showDivider = index < WebSearchSettings.Engine.entries.lastIndex,
+                        onClick = { detail = item },
+                    )
+                }
             }
 
             SettingsSection(footer = stringResource(R.string.web_search_fallback_footer)) {
@@ -137,13 +119,20 @@ fun WebSearchSettingsScreen(onBack: () -> Unit) {
                         searx = it
                         WebSearchSettings.setSearxngUrl(context, it)
                     }
-                    WebSearchSettings.Engine.BING -> CredentialField(
-                        label = stringResource(R.string.web_search_bing_key),
-                        value = bing,
-                        placeholder = "Ocp-Apim-Subscription-Key",
+                    WebSearchSettings.Engine.BING,
+                    WebSearchSettings.Engine.TAVILY,
+                    WebSearchSettings.Engine.BOCHA,
+                    WebSearchSettings.Engine.EXA,
+                    WebSearchSettings.Engine.BRAVE,
+                    WebSearchSettings.Engine.JINA,
+                    WebSearchSettings.Engine.ZHIPU,
+                    -> CredentialField(
+                        label = stringResource(R.string.web_search_api_key),
+                        value = keys[current].orEmpty(),
+                        placeholder = stringResource(R.string.web_search_api_key_placeholder),
                     ) {
-                        bing = it
-                        WebSearchSettings.setBingKey(context, it)
+                        keys = keys + (current to it)
+                        WebSearchSettings.setApiKey(context, current, it)
                     }
                     WebSearchSettings.Engine.CUSTOM -> {
                         CredentialField(
@@ -178,11 +167,26 @@ fun WebSearchSettingsScreen(onBack: () -> Unit) {
 }
 
 @Composable
+private fun engineLabel(engine: WebSearchSettings.Engine): String = when (engine) {
+    WebSearchSettings.Engine.DDG -> stringResource(R.string.web_search_engine_ddg)
+    WebSearchSettings.Engine.SEARXNG -> stringResource(R.string.web_search_engine_searxng)
+    WebSearchSettings.Engine.BING -> stringResource(R.string.web_search_engine_bing)
+    WebSearchSettings.Engine.TAVILY -> stringResource(R.string.web_search_engine_tavily)
+    WebSearchSettings.Engine.BOCHA -> stringResource(R.string.web_search_engine_bocha)
+    WebSearchSettings.Engine.EXA -> stringResource(R.string.web_search_engine_exa)
+    WebSearchSettings.Engine.BRAVE -> stringResource(R.string.web_search_engine_brave)
+    WebSearchSettings.Engine.JINA -> stringResource(R.string.web_search_engine_jina)
+    WebSearchSettings.Engine.ZHIPU -> stringResource(R.string.web_search_engine_zhipu)
+    WebSearchSettings.Engine.CUSTOM -> stringResource(R.string.web_search_engine_custom)
+}
+
+@Composable
 private fun engineDetailFooter(engine: WebSearchSettings.Engine): String = when (engine) {
     WebSearchSettings.Engine.DDG -> stringResource(R.string.web_search_ddg_detail)
     WebSearchSettings.Engine.SEARXNG -> stringResource(R.string.web_search_searxng_detail)
     WebSearchSettings.Engine.BING -> stringResource(R.string.web_search_bing_detail)
     WebSearchSettings.Engine.CUSTOM -> stringResource(R.string.web_search_custom_detail)
+    else -> stringResource(R.string.web_search_keyed_detail, engineLabel(engine))
 }
 
 @Composable

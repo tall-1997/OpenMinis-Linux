@@ -15,11 +15,23 @@ object WebSearchSettings {
     const val KEY_CUSTOM_URL = "custom_url"
     const val KEY_CUSTOM_KEY = "custom_key"
     const val KEY_CUSTOM_KEY_HEADER = "custom_key_header"
+    const val KEY_TAVILY = "tavily_key"
+    const val KEY_BOCHA = "bocha_key"
+    const val KEY_EXA = "exa_key"
+    const val KEY_BRAVE = "brave_key"
+    const val KEY_JINA = "jina_key"
+    const val KEY_ZHIPU = "zhipu_key"
 
-    enum class Engine(val id: String) {
+    enum class Engine(val id: String, val needsKey: Boolean = false) {
         DDG("ddg"),
         SEARXNG("searxng"),
-        BING("bing"),
+        BING("bing", needsKey = true),
+        TAVILY("tavily", needsKey = true),
+        BOCHA("bocha", needsKey = true),
+        EXA("exa", needsKey = true),
+        BRAVE("brave", needsKey = true),
+        JINA("jina", needsKey = true),
+        ZHIPU("zhipu", needsKey = true),
         CUSTOM("custom"),
         ;
 
@@ -29,8 +41,17 @@ object WebSearchSettings {
         }
     }
 
-    fun engine(context: Context): Engine =
-        Engine.fromId(prefs(context).getString(KEY_ENGINE, Engine.DDG.id))
+    fun engine(context: Context): Engine {
+        val raw = prefs(context).getString(KEY_ENGINE, null)
+        if (!raw.isNullOrBlank()) return Engine.fromId(raw)
+        return firstConfigured(context) ?: Engine.DDG
+    }
+
+    /** Keyed backends the user has already filled in, in enum order. */
+    fun configuredKeyed(context: Context): List<Engine> =
+        Engine.entries.filter { it.needsKey && apiKey(context, it).isNotEmpty() }
+
+    private fun firstConfigured(context: Context): Engine? = configuredKeyed(context).firstOrNull()
 
     fun setEngine(context: Context, engine: Engine) {
         prefs(context).edit().putString(KEY_ENGINE, engine.id).apply()
@@ -48,6 +69,34 @@ object WebSearchSettings {
 
     fun setBingKey(context: Context, key: String) {
         prefs(context).edit().putString(KEY_BING_KEY, key.trim()).apply()
+    }
+
+    fun apiKey(context: Context, engine: Engine): String {
+        val key = when (engine) {
+            Engine.BING -> KEY_BING_KEY
+            Engine.TAVILY -> KEY_TAVILY
+            Engine.BOCHA -> KEY_BOCHA
+            Engine.EXA -> KEY_EXA
+            Engine.BRAVE -> KEY_BRAVE
+            Engine.JINA -> KEY_JINA
+            Engine.ZHIPU -> KEY_ZHIPU
+            else -> return ""
+        }
+        return prefs(context).getString(key, "")?.trim().orEmpty()
+    }
+
+    fun setApiKey(context: Context, engine: Engine, value: String) {
+        val key = when (engine) {
+            Engine.BING -> KEY_BING_KEY
+            Engine.TAVILY -> KEY_TAVILY
+            Engine.BOCHA -> KEY_BOCHA
+            Engine.EXA -> KEY_EXA
+            Engine.BRAVE -> KEY_BRAVE
+            Engine.JINA -> KEY_JINA
+            Engine.ZHIPU -> KEY_ZHIPU
+            else -> return
+        }
+        prefs(context).edit().putString(key, value.trim()).apply()
     }
 
     fun customUrl(context: Context): String =

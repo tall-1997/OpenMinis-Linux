@@ -3,6 +3,7 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />
     <!-- T33: Check Update — needed to launch the system installer for the
          downloaded APK. The user must additionally grant "install unknown
          apps" for this package the first time they upgrade. -->

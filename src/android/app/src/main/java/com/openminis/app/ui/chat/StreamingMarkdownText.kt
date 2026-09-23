@@ -540,13 +540,18 @@ fun StreamingMarkdownText(
     /** MinisTextKit shard id (see [MarkdownBlock]). */
     shardId: TextShardId? = null,
 ) {
+    val shown = com.openminis.app.agent.DisplayRegex.apply(
+        androidx.compose.ui.platform.LocalContext.current,
+        content,
+        com.openminis.app.agent.DisplayRegex.Scope.ASSISTANT,
+    )
     if (shardId != null) {
         androidx.compose.runtime.CompositionLocalProvider(LocalShardId provides shardId) {
-            StreamingMarkdownTextBody(content, isStreaming, modifier)
+            StreamingMarkdownTextBody(shown, isStreaming, modifier)
         }
         return
     }
-    StreamingMarkdownTextBody(content, isStreaming, modifier)
+    StreamingMarkdownTextBody(shown, isStreaming, modifier)
 }
 
 @Composable

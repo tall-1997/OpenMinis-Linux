@@ -40,8 +40,8 @@ android {
         applicationId = "com.openminis.linux"
         minSdk = 26
         targetSdk = 35
-        versionCode = 78
-        versionName = "1.36.25-linux"
+        versionCode = 79
+        versionName = "1.36.26-linux"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -272,6 +272,7 @@ dependencies {
 
     // Core
     implementation("androidx.core:core-ktx:1.15.0")
+    implementation("com.google.mlkit:text-recognition-chinese:16.0.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     // ProcessLifecycleOwner — used by XAIOAuthManager to detect Custom

@@ -1,3 +1,17 @@
+# OpenMinis-Linux 1.36.26-linux
+
+- versionCode **79**
+- applicationId `com.openminis.linux`
+- 启动器名称：**Minis Ultra**
+- GitHub：[`tall-1997/OpenMinis-Linux`](https://github.com/tall-1997/OpenMinis-Linux)
+- APK：`minis-ultra-com.openminis.linux.apk`
+
+## 本版（1.36.26-linux，2026-09-23）
+
+相对 1.36.25-linux。搜索后端、世界书、显示正则、本地 OCR、屏幕使用时间和独立翻译页。详见 `docs/github-release-1.36.26-linux.md`。
+
+---
+
 # OpenMinis-Linux 1.36.24-linux
 
 - versionCode **77**

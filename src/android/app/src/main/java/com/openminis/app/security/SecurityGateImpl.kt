@@ -72,7 +72,7 @@ class SecurityGateImpl : SecurityGate {
             "file_read", "list_dir", "grep", "grep_source", "glob",
             "web_search", "web_fetch", "search_sessions", "read_session",
             "memory_get", "recall_memory", "read_image", "describe_image",
-            "code_graph", "browser_use",
+            "code_graph", "browser_use", "ocr_image", "get_screen_time",
         )
         val WRITE_TOOLS = setOf(
             "file_write", "file_edit", "multi_edit", "su_exec",
@@ -111,6 +111,8 @@ class SecurityGateImpl : SecurityGate {
             "list_dir", "grep", "grep_source", "glob" ->
                 GateCommand(name, toolArgs, Capability.FS, Reversibility.REVERSIBLE, "只读文件/目录操作，可逆")
             "web_search", "web_fetch" -> GateCommand(name, toolArgs, Capability.NET, Reversibility.REVERSIBLE, "只读网络")
+            "ocr_image" -> GateCommand(name, toolArgs, Capability.FS, Reversibility.REVERSIBLE, "只读图片文字")
+            "get_screen_time" -> GateCommand(name, toolArgs, Capability.SYSTEM, Reversibility.REVERSIBLE, "只读屏幕使用时间")
             "execute_code", "code_exec" ->
                 GateCommand(name, toolArgs, Capability.SYSTEM, Reversibility.REVERSIBLE, "沙箱代码执行")
             "spawn_agent", "run_subagent", "dispatch_agents", "wolfpack_run" ->

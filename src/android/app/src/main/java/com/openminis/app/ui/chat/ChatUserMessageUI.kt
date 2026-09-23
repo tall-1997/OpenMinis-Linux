@@ -231,7 +231,11 @@ internal fun UserMessageBubble(
                                 stableKey = "user:${message.id}",
                             ) {
                                 Text(
-                                    text = message.content,
+                                    text = com.openminis.app.agent.DisplayRegex.apply(
+                                        androidx.compose.ui.platform.LocalContext.current,
+                                        message.content,
+                                        com.openminis.app.agent.DisplayRegex.Scope.USER,
+                                    ),
                                     color = textColor,
                                     style = MaterialTheme.typography.bodyMedium.copy(fontSize = 16.5.sp),
                                     modifier = bubbleModifier

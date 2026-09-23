@@ -36,6 +36,7 @@ import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.FolderShared
 import androidx.compose.material.icons.outlined.FrontHand
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Palette
@@ -45,6 +46,7 @@ import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Terminal
+import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material.icons.automirrored.outlined.Assignment
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -118,6 +120,8 @@ fun SettingsScreen(
     // don't need to be retrofitted.
     onBackgroundClick: () -> Unit = {},
     onWebSearchClick: () -> Unit = {},
+    onCharacterExtrasClick: () -> Unit = {},
+    onTranslateClick: () -> Unit = {},
     onAboutClick: () -> Unit = {},
 ) {
     val context = LocalContext.current
@@ -217,6 +221,20 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_soul),
                     subtitle = stringResource(R.string.settings_soul_subtitle),
                     onClick = onSoulClick,
+                )
+                SettingsItem(
+                    icon = MenuBook,
+                    iconColor = Color(0xFFAF52DE),
+                    title = stringResource(R.string.settings_character_extras),
+                    subtitle = stringResource(R.string.settings_character_extras_subtitle),
+                    onClick = onCharacterExtrasClick,
+                )
+                SettingsItem(
+                    icon = Icons.Outlined.Translate,
+                    iconColor = Color(0xFF007AFF),
+                    title = stringResource(R.string.settings_translate),
+                    subtitle = stringResource(R.string.settings_translate_subtitle),
+                    onClick = onTranslateClick,
                 )
                 SettingsItem(
                     icon = Icons.Outlined.Psychology,

@@ -34,7 +34,7 @@ object WebSearchTool {
         description = "Search the public web and return titles, URLs, and snippets. " +
             "Use this for facts, docs, news, and package versions instead of opening a browser. " +
             "Follow up with browser_use only when you need to interact with a specific page. " +
-            "Uses Settings → Web search (DuckDuckGo by default; optional SearXNG or Bing). " +
+            "Uses Settings → Web search. First-class backends: Tavily, Bocha, Exa, Brave, Jina, Zhipu, Bing, SearXNG. " +
             "Falls back to DuckDuckGo, then suggest browser_use for a specific URL.",
         parameters = mapOf(
             "tool_title" to AgentToolParam(
@@ -60,8 +60,13 @@ object WebSearchTool {
             val preferred = context?.let { WebSearchSettings.engine(it) } ?: WebSearchSettings.Engine.DDG
             val allowFallback = context?.let { WebSearchSettings.fallbackEnabled(it) } ?: true
             val engines = mutableListOf(preferred)
-            if (allowFallback && preferred != WebSearchSettings.Engine.DDG) {
-                engines += WebSearchSettings.Engine.DDG
+            if (allowFallback && context != null) {
+                for (keyed in WebSearchSettings.configuredKeyed(context)) {
+                    if (keyed != preferred) engines += keyed
+                }
+                if (preferred != WebSearchSettings.Engine.DDG && WebSearchSettings.Engine.DDG !in engines) {
+                    engines += WebSearchSettings.Engine.DDG
+                }
             }
             var lastError: String? = null
             var used = preferred
@@ -115,20 +120,63 @@ object WebSearchTool {
                     val parsed = parseSearxJson(body, max)
                     Attempt(parsed, if (parsed.isEmpty()) "SearXNG returned no results" else null)
                 }
-                WebSearchSettings.Engine.BING -> {
-                    val key = context?.let { WebSearchSettings.bingKey(it) }.orEmpty()
-                    if (key.isEmpty()) return Attempt(emptyList(), "Bing API key is not configured")
-                    val body = fetchUrl(
-                        "https://api.bing.microsoft.com/v7.0/search?q=${enc(query)}&count=$max",
-                        extraHeaders = mapOf(
-                            "Ocp-Apim-Subscription-Key" to key,
-                            "Accept" to "application/json",
-                        ),
-                        context = context,
-                    ) ?: return Attempt(emptyList(), "empty response from Bing")
-                    val parsed = parseBingJson(body, max)
-                    Attempt(parsed, if (parsed.isEmpty()) "Bing returned no results" else null)
-                }
+                WebSearchSettings.Engine.BING -> keyedGet(
+                    engine, context,
+                    "https://api.bing.microsoft.com/v7.0/search?q=${enc(query)}&count=$max",
+                    headerName = "Ocp-Apim-Subscription-Key",
+                    max = max,
+                    parse = ::parseBingJson,
+                )
+                WebSearchSettings.Engine.TAVILY -> keyedPost(
+                    engine, context,
+                    url = "https://api.tavily.com/search",
+                    body = JSONObject()
+                        .put("query", query)
+                        .put("max_results", max)
+                        .put("search_depth", "basic"),
+                    keyField = "api_key",
+                    max = max,
+                )
+                WebSearchSettings.Engine.BOCHA -> keyedPost(
+                    engine, context,
+                    url = "https://api.bochaai.com/v1/web-search",
+                    body = JSONObject().put("query", query).put("count", max).put("summary", true),
+                    bearer = true,
+                    max = max,
+                )
+                WebSearchSettings.Engine.EXA -> keyedPost(
+                    engine, context,
+                    url = "https://api.exa.ai/search",
+                    body = JSONObject()
+                        .put("query", query)
+                        .put("numResults", max)
+                        .put("contents", JSONObject().put("text", JSONObject().put("maxCharacters", 400))),
+                    headerName = "x-api-key",
+                    max = max,
+                )
+                WebSearchSettings.Engine.BRAVE -> keyedGet(
+                    engine, context,
+                    "https://api.search.brave.com/res/v1/web/search?q=${enc(query)}&count=$max",
+                    headerName = "X-Subscription-Token",
+                    max = max,
+                    parse = { json, n -> parseGenericSearchJson(json, n) },
+                )
+                WebSearchSettings.Engine.JINA -> keyedGet(
+                    engine, context,
+                    "https://s.jina.ai/${enc(query)}",
+                    headerName = "Authorization",
+                    bearer = true,
+                    extra = mapOf("Accept" to "application/json"),
+                    max = max,
+                    parse = { json, n -> parseGenericSearchJson(json, n) },
+                )
+                WebSearchSettings.Engine.ZHIPU -> keyedPost(
+                    engine, context,
+                    url = "https://open.bigmodel.cn/api/paas/v4/web_search",
+                    body = JSONObject().put("search_query", query).put("count", max),
+                    bearer = true,
+                    max = max,
+                )
                 WebSearchSettings.Engine.CUSTOM -> {
                     val template = context?.let { WebSearchSettings.customUrl(it) }.orEmpty()
                     if (template.isEmpty()) return Attempt(emptyList(), "Custom search URL is not configured")
@@ -161,6 +209,52 @@ object WebSearchTool {
         } catch (e: Exception) {
             Attempt(emptyList(), e.message ?: engine.id)
         }
+    }
+
+    private fun keyedGet(
+        engine: WebSearchSettings.Engine,
+        context: Context?,
+        url: String,
+        headerName: String,
+        max: Int,
+        parse: (String, Int) -> List<Result>,
+        bearer: Boolean = false,
+        extra: Map<String, String> = emptyMap(),
+    ): Attempt {
+        val key = context?.let { WebSearchSettings.apiKey(it, engine) }.orEmpty()
+        if (key.isEmpty()) return Attempt(emptyList(), "${engine.id} API key is not configured")
+        val headers = linkedMapOf("Accept" to "application/json")
+        headers.putAll(extra)
+        headers[headerName] = if (bearer && !key.startsWith("Bearer ", ignoreCase = true)) "Bearer $key" else key
+        val body = fetchUrl(url, extraHeaders = headers, context = context)
+            ?: return Attempt(emptyList(), "empty response from ${engine.id}")
+        val parsed = parse(body, max)
+        return Attempt(parsed, if (parsed.isEmpty()) "${engine.id} returned no results" else null)
+    }
+
+    private fun keyedPost(
+        engine: WebSearchSettings.Engine,
+        context: Context?,
+        url: String,
+        body: JSONObject,
+        max: Int,
+        keyField: String? = null,
+        headerName: String? = null,
+        bearer: Boolean = false,
+    ): Attempt {
+        val key = context?.let { WebSearchSettings.apiKey(it, engine) }.orEmpty()
+        if (key.isEmpty()) return Attempt(emptyList(), "${engine.id} API key is not configured")
+        if (keyField != null) body.put(keyField, key)
+        val headers = linkedMapOf(
+            "Accept" to "application/json",
+            "Content-Type" to "application/json",
+        )
+        if (headerName != null) headers[headerName] = key
+        if (bearer) headers["Authorization"] = if (key.startsWith("Bearer ", ignoreCase = true)) key else "Bearer $key"
+        val raw = postJson(url, body.toString(), headers, context)
+            ?: return Attempt(emptyList(), "empty response from ${engine.id}")
+        val parsed = parseGenericSearchJson(raw, max)
+        return Attempt(parsed, if (parsed.isEmpty()) "${engine.id} returned no results" else null)
     }
 
     internal fun parseSearxJson(json: String, max: Int = MAX_RESULTS): List<Result> {
@@ -219,7 +313,20 @@ object WebSearchTool {
         val fromBing = parseBingJson(json, max)
         if (fromBing.isNotEmpty()) return fromBing
         val root = JSONObject(json)
-        for (key in arrayOf("items", "data", "organic", "organic_results", "results")) {
+        for (key in arrayOf(
+            "results", "items", "data", "organic", "organic_results",
+            "webPages", "web", "search_result",
+        )) {
+            val nested = root.optJSONObject(key)
+            if (nested != null) {
+                val inner = nested.optJSONArray("value")
+                    ?: nested.optJSONArray("results")
+                    ?: nested.optJSONArray("items")
+                if (inner != null) {
+                    val parsed = parseResultArray(inner, max)
+                    if (parsed.isNotEmpty()) return parsed
+                }
+            }
             val arr = root.optJSONArray(key) ?: continue
             val parsed = parseResultArray(arr, max)
             if (parsed.isNotEmpty()) return parsed
@@ -232,11 +339,14 @@ object WebSearchTool {
         for (i in 0 until arr.length()) {
             val o = arr.optJSONObject(i) ?: continue
             val url = o.optString("url").ifBlank { o.optString("link") }
-                .ifBlank { o.optString("href") }.trim()
+                .ifBlank { o.optString("href") }
+                .ifBlank { o.optString("displayUrl") }.trim()
             val title = o.optString("title").ifBlank { o.optString("name") }.trim()
             if (url.isBlank() || title.isBlank()) continue
             val snippet = o.optString("snippet").ifBlank { o.optString("content") }
-                .ifBlank { o.optString("description") }.trim()
+                .ifBlank { o.optString("description") }
+                .ifBlank { o.optString("summary") }
+                .ifBlank { o.optString("text") }.trim()
             out += Result(title, url, snippet)
             if (out.size >= max) break
         }
@@ -336,6 +446,33 @@ object WebSearchTool {
             extraHeaders.forEach { (k, v) -> setRequestProperty(k, v) }
         }
         return try {
+            val code = conn.responseCode
+            val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+            stream?.use { inp ->
+                BufferedReader(InputStreamReader(inp, StandardCharsets.UTF_8)).readText()
+            }
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    private fun postJson(
+        urlString: String,
+        json: String,
+        extraHeaders: Map<String, String>,
+        context: Context?,
+    ): String? {
+        val conn = (URL(urlString).openConnection() as HttpURLConnection).apply {
+            instanceFollowRedirects = true
+            connectTimeout = TIMEOUT_MS
+            readTimeout = TIMEOUT_MS
+            requestMethod = "POST"
+            doOutput = true
+            setRequestProperty("User-Agent", httpUserAgent(context))
+            extraHeaders.forEach { (k, v) -> setRequestProperty(k, v) }
+        }
+        return try {
+            conn.outputStream.use { it.write(json.toByteArray(StandardCharsets.UTF_8)) }
             val code = conn.responseCode
             val stream = if (code in 200..299) conn.inputStream else conn.errorStream
             stream?.use { inp ->

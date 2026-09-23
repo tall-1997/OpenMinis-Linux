@@ -9442,7 +9442,11 @@ class ChatViewModel(
             CronJobTool.NAME -> CronJobTool.execute(argsJson, context)
             SubAgentKind.SPAWN_AGENT, SubAgentKind.RUN_SUBAGENT ->
                 executeRunSubAgent(argsJson, toolId, toolBlocks, assistantId, currentText)
-            com.openminis.app.tools.WebSearchTool.NAME -> com.openminis.app.tools.WebSearchTool.execute(argsJson, context)
+            com.openminis.app.tools.WebSearchTool.NAME,
+            com.openminis.app.tools.OcrTool.NAME,
+            com.openminis.app.tools.ScreenTimeTool.NAME,
+            -> dispatchHostTool(canonical, argsJson, activeSessionId, context)
+                ?: ToolExecutionResult("unhandled host tool", false)
             com.openminis.app.tools.SessionLookupTool.SEARCH -> com.openminis.app.tools.SessionLookupTool.executeSearch(
                 argsJson, activeSessionId, context,
             )
@@ -10204,6 +10208,9 @@ class ChatViewModel(
         val identitySection = com.openminis.app.agent.SystemPromptBuilder.identitySection(
             context,
             providerInstanceId,
+        ) + com.openminis.app.agent.WorldBook.injection(
+            context,
+            recentWorldBookText(),
         )
         personaHistorySteering = identitySection.contains("Personality (from")
         // [T-memory-toggle-gates-injection-and-tools-android] Mirror the iOS

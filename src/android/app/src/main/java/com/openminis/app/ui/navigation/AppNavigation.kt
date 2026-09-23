@@ -136,6 +136,8 @@ object Routes {
     const val SKILL_FILE = "skill_file/{skillId}/{relativePath}"
     const val MINIS_SKILLS_BROWSER = "minis_skills_browser"
     const val WEB_SEARCH = "web_search"
+    const val CHARACTER_EXTRAS = "character_extras"
+    const val TRANSLATE = "translate"
     const val TOOL_LIMITS = "tool_limits"
 
     fun skillDetail(skillId: String) = "skill/$skillId"
@@ -613,6 +615,8 @@ fun AppNavigation(
                 onAppearanceClick = { navController.safeNavigate(Routes.APPEARANCE) },
                 onBackgroundClick = { navController.safeNavigate(Routes.BACKGROUND) },
                 onWebSearchClick = { navController.safeNavigate(Routes.WEB_SEARCH) },
+                onCharacterExtrasClick = { navController.safeNavigate(Routes.CHARACTER_EXTRAS) },
+                onTranslateClick = { navController.safeNavigate(Routes.TRANSLATE) },
 
                 onLogsClick = { navController.safeNavigate(Routes.LOGS) },
                 onAboutClick = { navController.safeNavigate(Routes.ABOUT) },
@@ -1411,6 +1415,18 @@ fun AppNavigation(
 
         composable(Routes.WEB_SEARCH) {
             com.openminis.app.ui.settings.WebSearchSettingsScreen(
+                onBack = { navController.safePopBackStack() },
+            )
+        }
+
+        composable(Routes.CHARACTER_EXTRAS) {
+            com.openminis.app.ui.settings.CharacterExtrasScreen(
+                onBack = { navController.safePopBackStack() },
+            )
+        }
+
+        composable(Routes.TRANSLATE) {
+            com.openminis.app.ui.settings.TranslateScreen(
                 onBack = { navController.safePopBackStack() },
             )
         }

@@ -158,6 +158,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        com.openminis.app.ui.HighRefreshRate.apply(this)
 
         // Register the crash-share "Save to..." launcher BEFORE the
         // safe-mode early-return below — ActivityResultLauncher must be
@@ -793,5 +794,10 @@ class MainActivity : ComponentActivity() {
             }
             else -> {}
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        com.openminis.app.ui.HighRefreshRate.apply(this)
     }
 }
