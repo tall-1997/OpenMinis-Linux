@@ -75,7 +75,7 @@ data class SoulMetadata(
         const val DISPLAY_EMOJI = "✨"
 
         val DEFAULT = SoulMetadata(
-            name = "minisultra",
+            name = "Minis Ultra",
             // Default emoji is intentionally empty — UI uses the fixed
             // [displayEmoji] sparkle and [SoulMDParser.serialize] no longer
             // writes the `emoji:` line. The field is kept on the struct only
@@ -325,7 +325,7 @@ object SoulStore {
     // runtime (should not happen in release builds). Byte-equal to the
     // pre-asset starter that shipped before [T-default-assets].
     private val EMBEDDED_DEFAULT: String = """---
-name: "minisultra"
+name: "Minis Ultra"
 style: ""
 lang: "auto"
 ---
@@ -377,7 +377,7 @@ lang: "auto"
 
     /**
      * [T-default-upgrade] Replace a SOUL.md that still holds the ORIGINAL
-     * shipped starter (pre-asset, "minisultra" 4-liner) with the current asset
+     * shipped starter (pre-asset, "Minis Ultra" 4-liner) with the current asset
      * default. Runs once per launch after [ensureExists].
      *
      * Contract:
@@ -431,15 +431,17 @@ lang: "auto"
             return
         }
         var next = current
-            .replace("name: \"Minis\"", "name: \"minisultra\"")
-            .replace("name: \"Minis Ultra\"", "name: \"minisultra\"")
-            .replace("Be Minis Ultra", "Be minisultra")
-            .replace("This app is Minis Ultra", "This app is minisultra")
+            .replace("name: \"minisultra\"", "name: \"Minis Ultra\"")
+            .replace("Be minisultra", "Be Minis Ultra")
+            .replace("This app is minisultra", "This app is Minis Ultra")
+        next = next.lineSequence().joinToString("\n") { line ->
+            if (line.trim() == "name: \"Minis\"") line.replace("name: \"Minis\"", "name: \"Minis Ultra\"") else line
+        }
         if (next == current) return
         try {
             file.writeText(next)
             refreshCache(context)
-            AppLogger.info(TAG, "renamed stock product in SOUL.md to minisultra")
+            AppLogger.info(TAG, "renamed stock product in SOUL.md to Minis Ultra")
         } catch (t: Throwable) {
             AppLogger.warning(TAG, "renameStockProduct write failed: ${t.message}")
         }
@@ -591,7 +593,7 @@ object SystemPromptBuilder {
     }
 
     private const val EMBEDDED_IDENTITY_TEMPLATE =
-        "You are {name}, the on-device agent in minisultra. The product name is minisultra. Do not call yourself Minis or OpenMinis. You run on an Android device with a fully functional Linux sandbox (Ubuntu 24.04 arm64 via PRoot, glibc). "
+        "You are {name}, the on-device agent in Minis Ultra. The product name is Minis Ultra. Do not call yourself Minis, minisultra, or OpenMinis. You run on an Android device with a fully functional Linux sandbox (Ubuntu 24.04 arm64 via PRoot, glibc). "
 
     /**
      * Render the identity sentence (template + name) and optionally
@@ -622,7 +624,7 @@ object SystemPromptBuilder {
         val file = SoulStore.load(context)
         val name = (file?.metadata?.name ?: SoulMetadata.DEFAULT.name)
             .trim()
-            .ifEmpty { "minisultra" }
+            .ifEmpty { "Minis Ultra" }
 
         val style = (file?.metadata?.style ?: "").trim()
         val resolved = PersonaPromptLibrary.resolve(context, providerInstanceId)

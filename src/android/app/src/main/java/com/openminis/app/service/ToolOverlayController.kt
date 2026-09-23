@@ -877,7 +877,7 @@ class ToolOverlayController(private val context: Context) {
      * show the tool kind ("Shell", "Browser", …).
      */
     private fun toolDisplayLabel(toolName: String?): String = when (toolName) {
-        null -> "minisultra"
+        null -> "Minis Ultra"
         "shell_execute" -> "Shell"
         "file_read" -> "File"
         "file_write" -> "Editor"

@@ -112,7 +112,7 @@ class ClipboardOffloadHandler(private val context: Context) : NativeOffloadHandl
         if (!isAppForeground() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             return backgroundError(args)
         }
-        val label = args.get("label") ?: "minisultra"
+        val label = args.get("label") ?: "Minis Ultra"
         cm.setPrimaryClip(ClipData.newPlainText(label, text))
         return NativeOffloadResult(
             0,

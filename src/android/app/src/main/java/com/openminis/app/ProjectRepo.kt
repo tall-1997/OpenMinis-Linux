@@ -1,7 +1,7 @@
 package com.openminis.app
 
 /**
- * Canonical public GitHub identity for this Linux fork (minisultra).
+ * Canonical public GitHub identity for this Linux fork (Minis Ultra).
  * About / updates / bug reports must point here — not the upstream
  * OpenMinis/OpenMinis iOS+Android monorepo.
  */

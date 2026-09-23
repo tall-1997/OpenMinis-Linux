@@ -2002,7 +2002,7 @@ description: Android SDK 在中国大陆的下载、镜像源与 aarch64 aapt2 �
 
 # Android SDK（中国大陆网络）
 
-本技能面向 **minisultra** 的 Ubuntu 24.04 arm64 PRoot 客户机，以及在中国大陆编译本仓库 APK 的开发者。
+本技能面向 **Minis Ultra** 的 Ubuntu 24.04 arm64 PRoot 客户机，以及在中国大陆编译本仓库 APK 的开发者。
 
 ## 先用内置工具，不要重装整套 Google SDK
 
