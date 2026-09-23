@@ -315,7 +315,9 @@ object NativeOffloadServer {
         // streams, which is indistinguishable from a crash and cost the agent a
         // whole diagnostic detour. Never let a failure be mute: synthesize a
         // body naming the tool and the code whenever a handler returns none.
-        val output = if (result.exitCode == 0 || result.output.isNotBlank()) {
+        // Named `body`, not `output`: `output` is the DataOutputStream below,
+        // and shadowing it here made every reply write resolve against a String.
+        val body = if (result.exitCode == 0 || result.output.isNotBlank()) {
             result.output
         } else {
             Log.w(TAG, "handler '$name' returned exit=${result.exitCode} with no output — synthesizing body")
@@ -326,7 +328,7 @@ object NativeOffloadServer {
                 .put("message", "The host handler failed without producing any output.")
                 .toString() + "\n"
         }
-        tmpHost.writeText(output)
+        tmpHost.writeText(body)
         val tmpGuest = "/tmp/${tmpHost.name}"
 
         // [T-android-offload-tmp-leak] Bound growth WITHIN a long-running
@@ -338,7 +340,7 @@ object NativeOffloadServer {
         // touched. Sampled rather than run per reply to keep the hot path cheap.
         if (seq % SWEEP_EVERY_N_REPLIES == 0L) sweepStaleReplies(all = false)
 
-        Log.d(TAG, "reply name='$name' exit=${result.exitCode} outBytes=${output.length} " +
+        Log.d(TAG, "reply name='$name' exit=${result.exitCode} outBytes=${body.length} " +
             "tmpGuest=$tmpGuest elapsed=${elapsedMs}ms")
 
         output.writeLEInt(MAGIC_RSP)
