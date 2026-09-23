@@ -72,6 +72,7 @@ class DeviceOffloadHandler(private val context: Context) : NativeOffloadHandler 
             .put("hardware", Build.HARDWARE.orFallback("unknown"))
             .put("supported_abis", runCatching { Build.SUPPORTED_ABIS.joinToString(", ") }.getOrDefault(""))
             .put("available_processors", runtime.availableProcessors())
+            .put("memory_source", "device")
             .put("total_memory_mb", mem.totalMem / (1024 * 1024))
             .put("free_memory_mb", mem.availMem / (1024 * 1024))
             .put("max_memory_mb", mem.totalMem / (1024 * 1024))

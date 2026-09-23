@@ -99,7 +99,7 @@ object SecurityGateHolder {
                 }
                 InterceptFeedback.publishDenied(canonical, decision.reason)
                 ToolExecutionResult(
-                    "SecurityGate denied: ${decision.reason}",
+                    "SecurityGate denied before start: ${decision.reason}. Command was not started.",
                     false,
                     toolTitle = canonical,
                 )

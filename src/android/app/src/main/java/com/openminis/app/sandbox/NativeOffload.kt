@@ -328,7 +328,10 @@ object NativeOffloadServer {
                 .put("message", "The host handler failed without producing any output.")
                 .toString() + "\n"
         }
-        tmpHost.writeText(body)
+        // proot rewrites the intercepted execve into `cat` of this file, so the
+        // guest's $? is cat's 0 unless the shell wrapper sees the real code.
+        // The wrapper strips this first line before the caller sees the body.
+        tmpHost.writeText("__MINIS_OFFLOAD_RC=${result.exitCode}__\n$body")
         val tmpGuest = "/tmp/${tmpHost.name}"
 
         // [T-android-offload-tmp-leak] Bound growth WITHIN a long-running

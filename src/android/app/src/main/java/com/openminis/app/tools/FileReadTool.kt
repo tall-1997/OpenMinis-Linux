@@ -66,8 +66,13 @@ object FileReadTool {
             }
 
             // T123: per-session resolver — see FileWriteTool for rationale.
-            val file = PRootKernel.resolveSessionHostPath(sessionId, path, context)
-                ?: return ToolExecutionResult("Error: Cannot resolve path: $path", false, toolTitle = toolTitle)
+            val file = identityFile(context, path)
+                ?: PRootKernel.resolveSessionHostPath(sessionId, path, context)
+                ?: return ToolExecutionResult(
+                    "Error: Cannot resolve path: $path${guestNamespaceHint(path)}",
+                    false,
+                    toolTitle = toolTitle,
+                )
 
             if (!file.exists()) {
                 return ToolExecutionResult("Error: File not found: $path${guestNamespaceHint(path)}", false, toolTitle = toolTitle)
@@ -180,11 +185,24 @@ object FileReadTool {
     }
 }
 
+internal fun identityFile(context: android.content.Context, path: String): java.io.File? {
+    val name = when (path.trim()) {
+        "/.arch" -> ".arch"
+        "/.distro" -> ".distro"
+        else -> return null
+    }
+    val root = com.openminis.app.sandbox.RootfsManager.getInstance(context).rootfsDir
+    val file = java.io.File(root, name)
+    return file.takeIf { it.isFile }
+}
+
 internal fun guestNamespaceHint(path: String): String {
     val p = path.trim()
-    val guestOnly = p == "/proc" || p.startsWith("/proc/") ||
+    val guestOnly = p == "/" || p == "/proc" || p.startsWith("/proc/") ||
         p == "/sys" || p.startsWith("/sys/") ||
-        p == "/dev" || p.startsWith("/dev/")
+        p == "/dev" || p.startsWith("/dev/") ||
+        p == "/etc" || p.startsWith("/etc/") ||
+        p == "/.arch" || p == "/.distro"
     if (!guestOnly) return ""
     return ". App-process file tools cannot see this guest path. Use shell_execute, for example `cat $p`."
 }

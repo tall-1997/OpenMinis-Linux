@@ -413,7 +413,10 @@ class PersistentShell(
         // a timeout may already have cleared it and started a new shell.
         val cb = pendingCallback
         if (cb != null && pendingCallback === cb) {
-            cb.onComplete?.invoke(cb.output.toString(), -1)
+            cb.onComplete?.invoke(
+                cb.output.toString() + "\n[shell died before the command finished; later clauses did not run]",
+                -1,
+            )
             if (pendingCallback === cb) pendingCallback = null
         }
 
@@ -471,9 +474,17 @@ class PersistentShell(
             appendLine("minis_offload_wrap() {")
             appendLine("  local name=\"\$1\"")
             appendLine("  shift")
-            appendLine("  local out rc")
-            appendLine("  out=\$(command \"\$name\" \"\$@\")")
+            appendLine("  local out rc first")
+            appendLine("  out=\$(command \"\$name\" \"\$@\" 2>&1)")
             appendLine("  rc=\$?")
+            appendLine("  first=\$(printf '%s\\n' \"\$out\" | head -n 1)")
+            appendLine("  case \"\$first\" in")
+            appendLine("    __MINIS_OFFLOAD_RC=*__)")
+            appendLine("      rc=\${first#__MINIS_OFFLOAD_RC=}")
+            appendLine("      rc=\${rc%__}")
+            appendLine("      out=\$(printf '%s\\n' \"\$out\" | tail -n +2)")
+            appendLine("      ;;")
+            appendLine("  esac")
             appendLine("  printf '%s\\n' \"\$out\"")
             appendLine("  case \"\$out\" in")
             appendLine("    *handler_timeout*) return 124 ;;")
@@ -530,6 +541,10 @@ class PersistentShell(
         // cannot itself fail with ENOENT in the very state it detects.
         val wrappedCommand = buildString {
             append(offloadExitPrelude())
+            // A previous command, or the user's own script, may have turned on
+            // `set -e`. That would abort the rest of a compound command and
+            // skip the done marker, so the caller sees a cut-off with no code.
+            append("set +e\n")
             append(command).append('\n')
             append("__minis_rc=\$?\n")
             append("if [ ! -d \"\$PWD\" ]; then cd /var/minis/workspace 2>/dev/null || cd / ; fi\n")
@@ -630,7 +645,10 @@ class PersistentShell(
         runCatching { p?.waitFor(500, java.util.concurrent.TimeUnit.MILLISECONDS) }
         if (process === p) process = null
         if (cb != null && pendingCallback === cb) {
-            cb.onComplete?.invoke(cb.output.toString(), -1)
+            cb.onComplete?.invoke(
+                cb.output.toString() + "\n[shell died before the command finished; later clauses did not run]",
+                -1,
+            )
             if (pendingCallback === cb) pendingCallback = null
         }
         Log.i(TAG, "Persistent shell stopped")

@@ -31,7 +31,7 @@ object ListDirTool {
         return try {
             val path = JSONObject(argsJson).optString("path", "/var/minis/workspace").ifBlank { "/var/minis/workspace" }
             val dir = PRootKernel.resolveSessionHostPath(sessionId, path, context)
-                ?: return ToolExecutionResult("Error: Cannot resolve path: $path", false, toolTitle = toolTitle)
+                ?: return ToolExecutionResult("Error: Cannot resolve path: $path${guestNamespaceHint(path)}", false, toolTitle = toolTitle)
             if (!dir.exists()) return ToolExecutionResult("Error: not found: $path${guestNamespaceHint(path)}", false, toolTitle = toolTitle)
             if (!dir.isDirectory) return ToolExecutionResult("Error: not a directory: $path", false, toolTitle = toolTitle)
             val kids = dir.listFiles()?.sortedBy { it.name.lowercase() } ?: emptyList()
