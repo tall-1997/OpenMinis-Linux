@@ -67,9 +67,19 @@ object SecurityGateHolder {
     }
 
     /**
+    /**
+     * @param callerSessionId the chat that is asking, so the isolation policies
+     *   can allow a session to touch its own tree while still refusing every
+     *   other one. Callers that do not know it may omit it — a null caller keeps
+     *   the deny-anything-private behaviour rather than widening access.
      * @return a failed result to short-circuit, or null to execute the tool.
      */
-    suspend fun intercept(context: Context, name: String, argsJson: String): ToolExecutionResult? {
+    suspend fun intercept(
+        context: Context,
+        name: String,
+        argsJson: String,
+        callerSessionId: String? = null,
+    ): ToolExecutionResult? {
         val canonical = ToolAliases.canonical(name)
         val cmd = gate.classify(canonical, argsJson)
         // Session allow-all is the same decision as global ALLOW_ALL. Applying
@@ -77,14 +87,15 @@ object SecurityGateHolder {
         // 允许" from swallowing the command with no dialog.
         val sessionAllowAll = ApprovalGate.isSessionAllowAll()
         val mode = effectivePermissionMode(gate.getPermissionMode(), sessionAllowAll)
-        val decision = gate.decide(cmd, mode)
+        val decision = gate.withCallerSession(callerSessionId) { gate.decide(cmd, mode) }
         gate.audit(cmd, decision, null)
         return when (decision) {
             is Decision.Allow -> null
             is Decision.Denied -> {
-                // Explicit deny rules still win. Anything else under session
-                // allow-all must not come back as a silent Denied.
-                if (sessionAllowAll && !decision.reason.startsWith("规则拒绝")) {
+                // Explicit deny rules still win, and so do the isolation
+                // boundaries: allow-all speeds up the user's own work, it does
+                // not hand one chat another chat's files.
+                if (sessionAllowAll && !decision.hard && !decision.reason.startsWith("规则拒绝")) {
                     return null
                 }
                 InterceptFeedback.publishDenied(canonical, decision.reason)

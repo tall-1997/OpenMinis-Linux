@@ -34,6 +34,37 @@ class SecurityGateImpl : SecurityGate {
         authorityProfile = profile
     }
 
+    /**
+     * Caller chat session for the decision in flight.
+     *
+     * ThreadLocal rather than a field: the offload IPC worker and the chat loop
+     * can classify concurrently, and a stale value would deny the caller's own
+     * tree (or worse, allow someone else's). [withCallerSession] is the only
+     * writer, so the value cannot outlive the call it belongs to.
+     */
+    private val callerSession = ThreadLocal<String?>()
+
+    /**
+     * Whether the guest `/sdcard` bind mount exists right now.
+     *
+     * Injected by the app because the gate has no Context, and
+     * `PRootKernel.shellSharedStorageBinds` is the single source of truth for
+     * that plan. Left null the /sdcard rule is skipped rather than guessed.
+     */
+    @Volatile
+    var sdcardMounted: (() -> Boolean)? = null
+
+    /** Run [block] with [sessionId] visible to the path policies inside it. */
+    fun <T> withCallerSession(sessionId: String?, block: () -> T): T {
+        val previous = callerSession.get()
+        callerSession.set(sessionId)
+        try {
+            return block()
+        } finally {
+            callerSession.set(previous)
+        }
+    }
+
     private val auditTrail = CopyOnWriteArrayList<AuditEntry>()
 
     companion object {
@@ -182,9 +213,21 @@ class SecurityGateImpl : SecurityGate {
             return Decision.Allow("协调工具自动放行")
         }
 
-        // Host su shares the app UID. Deny private trees before any mode can allow them.
-        if (cmd.toolName in SHELL_TOOLS || cmd.toolName == "shell_exec" || cmd.toolName == "su_exec") {
-            SuPathPolicy.denial(extractCommand(cmd), null)?.let { return Decision.Denied(it) }
+        // Host `su` shares the app UID, so mode 700 does not hide other chats
+        // or databases/minis.db. Guest paths are a separate matter: /data is the
+        // sandbox's own tree, and /sdcard only exists once shared storage has
+        // been bound. Both need the caller, which this method cannot see, so
+        // [withCallerSession] supplies it — a null caller keeps the old
+        // deny-anything-private behaviour instead of opening up.
+        if (cmd.toolName in SHELL_TOOLS) {
+            val command = extractCommand(cmd)
+            SuPathPolicy.denial(command, callerSession.get())
+                ?.let { return Decision.Denied(it, hard = true) }
+            // "Mounted" when nothing injected a provider: refusing commands that
+            // name a mount we were never told about would break the shell for a
+            // state this object cannot observe.
+            GuestMountPolicy.rejection(command, sdcardMounted?.invoke() ?: true)
+                ?.let { return Decision.Denied(it, hard = true) }
         }
 
         // [4] Mode-level block: DENY_ALL, READ_ONLY, PLAN.

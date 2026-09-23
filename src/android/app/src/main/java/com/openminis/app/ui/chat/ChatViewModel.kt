@@ -9345,7 +9345,9 @@ class ChatViewModel(
         // — they always fall through to shell_execute or the offload
         // bridge, which is now where checkPermission runs.
         val canonical = com.openminis.app.security.ToolAliases.canonical(name)
-        val gated = com.openminis.app.security.SecurityGateHolder.intercept(context, canonical, argsJson)
+        val gated = com.openminis.app.security.SecurityGateHolder.intercept(
+            context, canonical, argsJson, activeSessionId,
+        )
         if (gated != null) return gated
         val toolTitle = try { JSONObject(argsJson).optString("tool_title", canonical) } catch (_: Exception) { canonical }
 

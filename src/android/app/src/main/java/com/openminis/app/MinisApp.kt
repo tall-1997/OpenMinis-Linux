@@ -663,6 +663,15 @@ class MinisApp : Application(), ImageLoaderFactory {
         // regardless of scope; point the audit at app storage so the trail
         // survives a logcat flush. Only ids/actions are written, never bodies.
         com.openminis.app.sandbox.SessionAccessAudit.dir = filesDir.resolve("session-access")
+        // The gate has no Context, but its guest-path policy has to know whether
+        // /sdcard is really bind-mounted before refusing a command that names it.
+        // shellSharedStorageBinds is the single source of truth for that plan, so
+        // ask it instead of re-deriving the All Files Access state here.
+        com.openminis.app.security.SecurityGateHolder.gate.sdcardMounted = {
+            com.openminis.app.sandbox.PRootKernel
+                .shellSharedStorageBinds(this, publish = false)
+                .containsKey(com.openminis.app.sandbox.SharedStorageBindPlan.SDCARD)
+        }
         // [T-android-scheduled-tasks-full] minis-scheduled — create/list/run
         // timed AI tasks (new chat / follow-up / re-run), mirroring the in-app
         // Scheduled Tasks editor and the iOS Shortcuts intent set.
