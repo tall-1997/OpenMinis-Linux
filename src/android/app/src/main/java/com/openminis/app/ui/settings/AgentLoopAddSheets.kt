@@ -25,6 +25,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -86,7 +87,7 @@ fun AddAgentLoopModelsScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            CenterAlignedTopAppBar(
                 title = {
                     Text(
                         stringResource(R.string.agent_loop_section_add_models_title),
@@ -122,7 +123,7 @@ fun AddAgentLoopModelsScreen(
                         Text(stringResource(R.string.add_models_to_group_add_count, selectedIds.size))
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background,
                 ),
             )
@@ -175,7 +176,7 @@ fun AddAgentLoopGroupsScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            CenterAlignedTopAppBar(
                 title = {
                     Text(
                         stringResource(R.string.agent_loop_section_add_groups_title),
@@ -211,7 +212,7 @@ fun AddAgentLoopGroupsScreen(
                         Text(stringResource(R.string.add_models_to_group_add_count, selectedIds.size))
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background,
                 ),
             )

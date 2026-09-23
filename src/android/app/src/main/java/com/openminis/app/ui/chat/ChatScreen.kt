@@ -168,6 +168,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
+import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -2566,7 +2567,7 @@ fun ChatScreen(
         containerColor = ChatColors.background,
         contentWindowInsets = WindowInsets(0),
         topBar = {
-            TopAppBar(
+            CenterAlignedTopAppBar(
                 title = {
                     // iOS-style centered layout: "Minis Ultra" + group row + provider·model row
                     Box(
@@ -3174,7 +3175,7 @@ fun ChatScreen(
                     }
                 },
                 windowInsets = WindowInsets.statusBars,
-                colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
+                colors = androidx.compose.material3.TopAppBarDefaults.centerAlignedTopAppBarColors(
                     containerColor = ChatColors.background.copy(alpha = 0.92f),
                     scrolledContainerColor = ChatColors.background.copy(alpha = 0.92f),
                 ),

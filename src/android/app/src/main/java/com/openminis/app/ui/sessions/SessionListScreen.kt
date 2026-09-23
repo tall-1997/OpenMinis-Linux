@@ -120,6 +120,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.AlertDialog
 import androidx.compose.runtime.Composable
@@ -764,7 +765,7 @@ fun SessionListScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            CenterAlignedTopAppBar(
                 title = {
                     if (isSelecting) {
                         Text(
@@ -835,19 +836,6 @@ fun SessionListScreen(
                                 onDismissRequest = { showOverflowMenu = false },
                                 offset = DpOffset(0.dp, 0.dp),
                             ) {
-                                if (sessions.isNotEmpty()) {
-                                    DropdownMenuItem(
-                                        text = { Text(stringResource(R.string.sessionlist_select_action)) },
-                                        onClick = {
-                                            showOverflowMenu = false
-                                            viewModel.isSelecting.value = true
-                                        },
-                                        leadingIcon = {
-                                            Icon(Icons.Outlined.ChecklistRtl, contentDescription = null)
-                                        },
-                                    )
-                                    MinisMenuDivider()
-                                }
                                 DropdownMenuItem(
                                     text = { Text(stringResource(R.string.sessionlist_shell_terminal)) },
                                     onClick = {

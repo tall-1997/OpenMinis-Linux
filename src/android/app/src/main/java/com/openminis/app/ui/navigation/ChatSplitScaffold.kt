@@ -701,7 +701,7 @@ private fun NoConversationSelected(
         // own — the control must not appear to move when a session opens.
         Box(Modifier.fillMaxSize()) {
         if (onToggleSidebar != null) {
-            // Centred inside a band matching the SESSION LIST's TopAppBar (M3's
+            // Centred inside a band matching the SESSION LIST's CenterAlignedTopAppBar(M3's
             // default 64dp), not offset by an eyeballed padding: that is what
             // puts this button on the same baseline as the toolbar across the
             // seam, so it does not appear to jump when a session opens. The

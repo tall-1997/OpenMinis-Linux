@@ -17,6 +17,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -51,7 +52,7 @@ fun LongTextEditorDialog(
         Surface(modifier = Modifier.fillMaxSize()) {
             Scaffold(
                 topBar = {
-                    TopAppBar(
+                    CenterAlignedTopAppBar(
                         title = { Text(stringResource(R.string.composer_expand_editor)) },
                         navigationIcon = {
                             IconButton(onClick = onDismiss) {

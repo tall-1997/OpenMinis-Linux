@@ -117,7 +117,6 @@ fun ModelEntryDetailScreen(
         // iOS's semibold Save. No back arrow: Cancel and system back both
         // discard + pop.
         onBack = null,
-        centerTitle = true,
         navigation = {
             MinisTextButton(
                 onClick = onBack,

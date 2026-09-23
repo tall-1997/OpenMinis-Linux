@@ -51,6 +51,7 @@ import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -158,7 +159,7 @@ fun ModelGroupsScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            CenterAlignedTopAppBar(
                 title = { Text(stringResource(R.string.model_groups_model_groups)) },
                 actions = {
                     IconButton(onClick = { showNewGroupDialog = true }) {
@@ -300,15 +301,6 @@ fun ModelGroupsScreen(
                             instances = config.instances,
                             selectedId = config.defaultPrimaryGroupId,
                             onSelect = { providerRepository.defaultPrimaryGroupId = it },
-                        )
-                        SectionDivider()
-                        SlotPickerField(
-                            label = stringResource(R.string.model_groups_translation),
-                            groups = groups,
-                            entries = config.modelEntries,
-                            instances = config.instances,
-                            selectedId = config.defaultTranslationModelId,
-                            onSelect = { providerRepository.defaultTranslationModelId = it },
                         )
                         SectionDivider()
                         SlotPickerField(

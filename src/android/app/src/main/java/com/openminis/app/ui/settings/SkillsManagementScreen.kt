@@ -66,6 +66,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -671,7 +672,7 @@ fun SkillDetailScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            CenterAlignedTopAppBar(
                 title = { Text(skill.name) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
@@ -1178,7 +1179,7 @@ fun SkillFileViewerScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            CenterAlignedTopAppBar(
                 title = { Text(fileName) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {

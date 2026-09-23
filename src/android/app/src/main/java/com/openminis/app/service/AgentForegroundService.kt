@@ -685,9 +685,20 @@ class AgentForegroundService : Service() {
      */
     private fun refreshOngoingNotification() {
         try {
+            // [T-systemui-freeze-fix] Throttle notification updates to prevent
+            // MIUI Dynamic Island inflate loop from triggering SystemUI ANR/OOM.
+            // Only update if the status text changed AND at least 5 seconds elapsed.
+            val currentText = SessionActivityTracker.currentToolStatus.value
+            val now = SystemClock.elapsedRealtime()
+            if (currentText == lastNotificationText && now - lastNotificationTimeMs < 5_000L) {
+                return
+            }
+            lastNotificationText = currentText
+            lastNotificationTimeMs = now
+
             val notification = buildNotification(
                 SessionActivityTracker.activeSessions.value.size,
-                SessionActivityTracker.currentToolStatus.value,
+                currentText,
             )
             // Keep the FGS contract: updating id 9001 via notify() can
             // demote the service on Android 14+ OEMs. startForeground
@@ -744,13 +755,28 @@ class AgentForegroundService : Service() {
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val manager = getSystemService(NotificationManager::class.java)
+            // [T-systemui-freeze-fix] One-time migration: delete the old
+            // IMPORTANCE_LOW channel if it exists, so we can recreate it at
+            // IMPORTANCE_MIN. Channel importance can only be downgraded by
+            // deletion + recreation; the user-facing effect is zero because
+            // FGS notifications always show in the status bar regardless of
+            // importance, and IMPORTANCE_MIN just prevents the channel from
+            // being pulled into MIUI's Dynamic Island inflate loop.
+            val existing = manager.getNotificationChannel(CHANNEL_ID)
+            if (existing != null && existing.importance > NotificationManager.IMPORTANCE_MIN) {
+                manager.deleteNotificationChannel(CHANNEL_ID)
+                Log.i(TAG, "Migrated agent_status channel from IMPORTANCE_LOW to IMPORTANCE_MIN")
+            }
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 getString(R.string.bg_service_channel_name),
-                NotificationManager.IMPORTANCE_LOW,
+                NotificationManager.IMPORTANCE_MIN,
             ).apply {
                 description = getString(R.string.bg_service_channel_description)
                 setShowBadge(false)
+                setSound(null, null)
+                lockscreenVisibility = Notification.VISIBILITY_SECRET
             }
             // [T-bg-overlay phase 2 fix] Higher-importance channel for the
             // SYSTEM_ALERT_WINDOW permission nudge. IMPORTANCE_DEFAULT
@@ -764,7 +790,6 @@ class AgentForegroundService : Service() {
                 description = getString(R.string.bg_overlay_nudge_channel_description)
                 setShowBadge(true)
             }
-            val manager = getSystemService(NotificationManager::class.java)
             manager.createNotificationChannel(channel)
             manager.createNotificationChannel(nudgeChannel)
         }
@@ -782,6 +807,15 @@ class AgentForegroundService : Service() {
 
     /** Last observed Live-Updates-active flag, for edge-triggered notify. */
     private var lastDynamicIslandActive: Boolean? = null
+
+    /**
+     * [T-systemui-freeze-fix] Notify throttle for the agent_status FGS
+     * notification. High-frequency updates (tool progress, APK install) can
+     * trigger MIUI's Dynamic Island inflate loop and cause SystemUI ANR/OOM.
+     * Only update if the text changed AND at least 5 seconds have elapsed.
+     */
+    private var lastNotificationText: String? = null
+    private var lastNotificationTimeMs: Long = 0L
 
     private fun maybePostOverlayPermissionNudge() {
         if (overlayNudgePosted) return

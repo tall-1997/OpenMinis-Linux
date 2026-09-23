@@ -93,10 +93,6 @@ fun SettingsScaffold(
     // edit screens. When null, the slot falls back to the back arrow iff
     // onBack is set, so every existing caller renders unchanged.
     navigation: @Composable (() -> Unit)? = null,
-    // [T-android-modeldetail-savecancel-ios-parity] Center the title
-    // (CenterAlignedTopAppBar) for iOS-modal-style edit screens. Default
-    // keeps the start-aligned TopAppBar.
-    centerTitle: Boolean = false,
     floatingActionButton: @Composable (() -> Unit)? = null,
     scrollable: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
@@ -117,25 +113,14 @@ fun SettingsScaffold(
                     }
                 }
             }
-            if (centerTitle) {
-                CenterAlignedTopAppBar(
-                    title = titleSlot,
-                    navigationIcon = navigationSlot,
-                    actions = { actions?.invoke() },
-                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.background,
-                    ),
-                )
-            } else {
-                TopAppBar(
-                    title = titleSlot,
-                    navigationIcon = navigationSlot,
-                    actions = { actions?.invoke() },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.background,
-                    ),
-                )
-            }
+            CenterAlignedTopAppBar(
+                title = titleSlot,
+                navigationIcon = navigationSlot,
+                actions = { actions?.invoke() },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                ),
+            )
         },
         floatingActionButton = { floatingActionButton?.invoke() },
         containerColor = MaterialTheme.colorScheme.background,

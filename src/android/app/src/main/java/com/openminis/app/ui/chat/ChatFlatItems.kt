@@ -484,7 +484,8 @@ internal fun buildFlatChatItems(
                                 isLastBlockOfMessage = isLastText && message.isStreaming,
                                 messageIsStreaming = message.isStreaming && isLastText,
                                 messageMarkdown = joinedMarkdown,
-                                showTranslate = !message.isStreaming && block.content.isNotBlank(),
+                                showTranslate = !message.isStreaming && block.content.isNotBlank() && 
+                                    (!showProcessSummary || isLastText),
                                 segmentText = block.content,
                             )))
                         } else {
@@ -498,7 +499,8 @@ internal fun buildFlatChatItems(
                                     isLastBlockOfMessage = isLastText && isLastFragOfText,
                                     messageIsStreaming = message.isStreaming && isLastText,
                                     messageMarkdown = joinedMarkdown,
-                                    showTranslate = isLastFragOfText && !message.isStreaming && block.content.isNotBlank(),
+                                    showTranslate = isLastFragOfText && !message.isStreaming && block.content.isNotBlank() &&
+                                        (!showProcessSummary || isLastText),
                                     segmentText = if (isLastFragOfText) block.content else "",
                                 )))
                             }

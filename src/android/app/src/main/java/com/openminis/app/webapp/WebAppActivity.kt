@@ -44,6 +44,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -220,7 +221,7 @@ class WebAppActivity : ComponentActivity() {
             MaterialTheme {
                 Scaffold(
                     topBar = {
-                        TopAppBar(title = { Text(stringResource(R.string.webapp_activity_label)) })
+                        CenterAlignedTopAppBar(title = { Text(stringResource(R.string.webapp_activity_label)) })
                     },
                 ) { padding ->
                     Box(
