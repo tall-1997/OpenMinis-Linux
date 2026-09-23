@@ -4248,6 +4248,12 @@ fun ChatScreen(
                                             shardId = "mdblock:${item.parentBlockId}:${item.blockIndex}",
                                         ),
                                     )
+                                    if (item.isLastBlockOfMessage && !item.messageIsStreaming && item.rawText.isNotBlank()) {
+                                        AssistantTranslateButton(
+                                            source = item.messageMarkdown.ifBlank { item.rawText },
+                                            onTranslated = { viewModel.replaceAssistantOutput(item.messageId, it) },
+                                        )
+                                    }
                                 }
                             }
                             is FlatChatItem.AssistantProcessSummary -> ProcessSummaryBar(

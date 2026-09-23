@@ -46,10 +46,11 @@ object MemoryTools {
             })
             put("scope", JSONObject().apply {
                 put("type", "string")
-                put("description", "Memory scope to search: 'daily' for daily logs only, 'all' for daily logs + GLOBAL.md.")
+                put("description", "Memory scope: 'daily' for daily logs, 'all' for daily logs + GLOBAL.md, 'evolution' for self-evolution proposals (accept/reject those with the evolution tool).")
                 put("enum", JSONArray().apply {
                     put("daily")
                     put("all")
+                    put("evolution")
                 })
             })
             put("keywords", JSONObject().apply {
@@ -60,7 +61,7 @@ object MemoryTools {
 
         return JSONObject().apply {
             put("name", "memory_get")
-            put("description", "Retrieve memories from persistent storage. Supports keyword-based fuzzy search across memory files. Returns matching lines with surrounding context. Use this to recall previous knowledge, user preferences, or past notes.")
+            put("description", "Retrieve memories. scope=evolution returns self-evolution proposals so you can see learned behavior without opening Settings. Accept or reject a proposal with the evolution tool. Other scopes search daily logs and GLOBAL.md.")
             put("input_schema", JSONObject().apply {
                 put("type", "object")
                 put("properties", properties)
@@ -128,6 +129,17 @@ object MemoryTools {
             val scope = obj.optString("scope", "all")
             val toolTitle = obj.optString("tool_title", "memory_get")
 
+            if (scope == "evolution") {
+                val engine = com.openminis.app.evolution.EvolutionHooks.engine
+                val body = if (engine == null) {
+                    "Evolution engine is not available."
+                } else {
+                    val proposals = engine.store.proposals.value
+                    val pending = proposals.count { it.status.name == "PENDING" }
+                    "enabled: ${engine.prefs.isEnabled}\nproposals: ${proposals.size}\npending: $pending\nUse the evolution tool to list, accept, or reject."
+                }
+                return ToolResult(body, true, toolTitle)
+            }
             val result = repository.getMemory(keywords, scope)
             ToolResult(result, true, toolTitle)
         } catch (e: Exception) {

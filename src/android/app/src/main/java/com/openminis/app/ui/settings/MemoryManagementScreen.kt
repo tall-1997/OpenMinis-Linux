@@ -61,6 +61,7 @@ fun MemoryManagementScreen(
     memoryRepository: MemoryRepository,
     onBack: () -> Unit,
     onFileClick: (fileName: String, isGlobal: Boolean) -> Unit = { _, _ -> },
+    onEvolutionClick: () -> Unit = {},
 ) {
     var files by remember { mutableStateOf<List<MemoryRepository.MemoryFileInfo>>(emptyList()) }
     var deleteFileName by remember { mutableStateOf<String?>(null) }
@@ -94,6 +95,17 @@ fun MemoryManagementScreen(
                     globalMemoryOn = newValue
                     com.openminis.app.data.MemoryGlobalPrefs.setGlobalEnabled(context, newValue)
                 },
+                showDivider = false,
+            )
+        }
+        SettingsSection(
+            header = stringResource(R.string.memory_evolution_header),
+            footer = stringResource(R.string.memory_evolution_footer),
+        ) {
+            SettingsRow(
+                title = stringResource(R.string.settings_evolution),
+                subtitle = stringResource(R.string.memory_evolution_open),
+                onClick = onEvolutionClick,
                 showDivider = false,
             )
         }

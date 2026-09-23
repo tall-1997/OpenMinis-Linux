@@ -34,7 +34,6 @@ fun CharacterExtrasScreen(onBack: () -> Unit) {
     var content by remember { mutableStateOf("") }
     var pattern by remember { mutableStateOf("") }
     var replacement by remember { mutableStateOf("") }
-    var highRefresh by remember { mutableStateOf(HighRefreshRate.enabled(context)) }
     var pendingRemove by remember { mutableStateOf<(() -> Unit)?>(null) }
 
     BackHandler(onBack = onBack)
@@ -148,19 +147,6 @@ fun CharacterExtrasScreen(onBack: () -> Unit) {
                     },
                 )
             }
-        }
-        SettingsSection(footer = stringResource(R.string.high_refresh_footer)) {
-            SettingsSwitchRow(
-                title = stringResource(R.string.high_refresh_title),
-                subtitle = stringResource(R.string.high_refresh_sub),
-                checked = highRefresh,
-                onCheckedChange = { on ->
-                    highRefresh = on
-                    HighRefreshRate.setEnabled(context, on)
-                    (context as? Activity)?.let { HighRefreshRate.apply(it) }
-                },
-                showDivider = false,
-            )
         }
     }
 }

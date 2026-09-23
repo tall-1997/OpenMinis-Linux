@@ -86,6 +86,7 @@ fun MCPIntegrationsScreen(
     // [T-mcp-review-fixes-android] FIX 1: tapping a row opens the form in EDIT
     // mode (matches iOS). null = the sheet is for adding a new server.
     var editServer by remember { mutableStateOf<MCPRepository.MCPServerConfig?>(null) }
+    var toolsServer by remember { mutableStateOf<MCPRepository.MCPServerConfig?>(null) }
     var deleteId by remember { mutableStateOf<String?>(null) }
 
     SettingsScaffold(
@@ -97,6 +98,30 @@ fun MCPIntegrationsScreen(
             }
         },
     ) {
+        SettingsSection(
+            header = stringResource(R.string.mcp_section_presets),
+            footer = stringResource(R.string.mcp_section_presets_footer),
+        ) {
+            com.openminis.app.plugins.PluginCatalog.MCP_PRESETS.forEachIndexed { index, preset ->
+                val on = servers.any { preset.matches(it) }
+                SettingsSwitchRow(
+                    title = preset.name,
+                    subtitle = preset.description,
+                    checked = on,
+                    onCheckedChange = { checked ->
+                        if (checked) {
+                            preset.url?.let { url ->
+                                com.openminis.app.tools.FetchUrlGuard.blockedReason(url)?.let { return@SettingsSwitchRow }
+                            }
+                            mcpRepository.add(preset.toServer())
+                        } else {
+                            mcpRepository.delete(preset.id)
+                        }
+                    },
+                    showDivider = index < com.openminis.app.plugins.PluginCatalog.MCP_PRESETS.lastIndex,
+                )
+            }
+        }
         SettingsSection(
             header = stringResource(R.string.mcp_section_servers),
             footer = stringResource(R.string.mcp_section_footer),
@@ -136,7 +161,7 @@ fun MCPIntegrationsScreen(
                         showDivider = index < servers.size - 1,
                         // FIX 1: plain tap opens the edit form (was delete-confirm).
                         // Delete stays reachable from inside the edit sheet.
-                        onClick = { editServer = server },
+                        onClick = { toolsServer = server },
                         trailing = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
@@ -170,6 +195,17 @@ fun MCPIntegrationsScreen(
     }
 
     // FIX 1: edit sheet — same form, pre-filled, with a Delete affordance.
+    toolsServer?.let { server ->
+        MCPToolsSheet(
+            server = server,
+            onDismiss = { toolsServer = null },
+            onManage = {
+                toolsServer = null
+                editServer = server
+            },
+        )
+    }
+
     editServer?.let { server ->
         MCPAddSheet(
             mcpRepository = mcpRepository,

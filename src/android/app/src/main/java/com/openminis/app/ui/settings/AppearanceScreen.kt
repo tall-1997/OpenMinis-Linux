@@ -268,6 +268,7 @@ fun AppearanceScreen(
     var launchSession by remember { mutableIntStateOf(prefs.getInt(KEY_LAUNCH_SESSION, 0)) }
     var returnKeyBehavior by remember { mutableIntStateOf(prefs.getInt(KEY_RETURN_KEY_BEHAVIOR, 0)) }
     var keepScreenAwake by remember { mutableStateOf(prefs.getBoolean(KEY_KEEP_SCREEN_AWAKE, false)) }
+    var highRefresh by remember { mutableStateOf(com.openminis.app.ui.HighRefreshRate.enabled(context)) }
     var toolPreview by remember { mutableStateOf(prefs.getBoolean(KEY_TOOL_PREVIEW, true)) }
     var showFloatingToolBar by remember { mutableStateOf(prefs.getBoolean(KEY_SHOW_FLOATING_TOOL_BAR, true)) }
     var showCompletedToolCards by remember { mutableStateOf(prefs.getBoolean(KEY_SHOW_COMPLETED_TOOL_CARDS, false)) }
@@ -423,6 +424,25 @@ fun AppearanceScreen(
                 onCheckedChange = {
                     keepScreenAwake = it
                     prefs.edit().putBoolean(KEY_KEEP_SCREEN_AWAKE, it).apply()
+                },
+                showDivider = false,
+            )
+        }
+
+        SettingsSection(
+            header = stringResource(R.string.high_refresh_title),
+            footer = stringResource(R.string.high_refresh_footer),
+        ) {
+            SettingsSwitchRow(
+                icon = Icons.Outlined.Bolt,
+                iconColor = tileGreen,
+                title = stringResource(R.string.high_refresh_title),
+                subtitle = stringResource(R.string.high_refresh_sub),
+                checked = highRefresh,
+                onCheckedChange = {
+                    highRefresh = it
+                    com.openminis.app.ui.HighRefreshRate.setEnabled(context, it)
+                    (context as? android.app.Activity)?.let { com.openminis.app.ui.HighRefreshRate.apply(it) }
                 },
                 showDivider = false,
             )

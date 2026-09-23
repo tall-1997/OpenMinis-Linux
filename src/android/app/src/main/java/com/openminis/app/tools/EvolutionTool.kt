@@ -37,7 +37,7 @@ object EvolutionTool {
             "beliefs, skill patches). action=status|list|show|accept|reject|defer|rollback|harvest. " +
             "status summarizes what is pending; list shows proposals; show prints one in full; " +
             "accept/reject/defer/rollback decide one by id; harvest triggers an idle pass. " +
-            "Everything is a no-op while evolution is disabled in Settings.",
+            "This is the memory-side self-update tool: call it when the user asks you to remember a behavior change, or after memory_get scope=evolution. Disabled until Settings → Memory → Evolution is on.",
         parameters = mapOf(
             "tool_title" to AgentToolParam(
                 "string",
@@ -97,8 +97,7 @@ object EvolutionTool {
 
         if (!prefs.isEnabled) {
             return ToolExecutionResult(
-                "Evolution is disabled in Settings, so nothing was done. Ask the user to enable it " +
-                    "(Settings -> Evolution) if they want this action to run.",
+                "Evolution is off. Ask the user to enable it under Settings → Memory → Evolution.",
                 false,
                 toolTitle = toolTitle,
             )

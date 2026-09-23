@@ -2135,6 +2135,36 @@ class ChatViewModel(
         )
     }
 
+    /** Replace an assistant bubble's visible text with a translation. Tool cards stay. */
+    fun replaceAssistantOutput(messageId: String, translated: String) {
+        val text = translated.trim()
+        if (text.isEmpty()) return
+        val cur = _messages.value
+        val idx = cur.indexOfFirst { it.id == messageId }
+        if (idx < 0) return
+        val msg = cur[idx]
+        val lastTextId = msg.toolBlocks.lastOrNull { it.kind == "text" }?.id
+        val newBlocks = if (lastTextId == null) {
+            msg.toolBlocks + AssistantBlock(id = "tr-${msg.id}", kind = "text", content = text)
+        } else {
+            msg.toolBlocks.map { block ->
+                if (block.kind != "text") block
+                else if (block.id == lastTextId) block.copy(content = text)
+                else block.copy(content = "")
+            }
+        }
+        val updated = msg.copy(content = text, toolBlocks = newBlocks)
+        _messages.value = cur.toMutableList().also { it[idx] = updated }
+        viewModelScope.launch {
+            val parts = org.json.JSONArray()
+                .put(org.json.JSONObject().put("type", "text").put("value", text))
+                .toString()
+            msg.sourceDbIds.forEach { id ->
+                runCatching { chatRepository.dao.updateMessageParts(id, parts) }
+            }
+        }
+    }
+
     /**
      * Fold the current session history into a single summary stored in
      * `compact_markers`. Mirrors iOS `compactAll()` + Phase-B semantics:
@@ -10250,7 +10280,7 @@ class ChatViewModel(
 Memory system (currently ENABLED):
 - This chat has its own memory at /var/minis/memory/. Other chats cannot see it. Deleting this chat deletes that directory.
 - memory_write writes to today's daily log (YYYY-MM-DD.md) in THIS chat's workspace — use it for session notes, key facts, project context, things learned, and action items.
-- /var/minis/memory/GLOBAL.md is THIS chat's standing notes (deleted with the chat). Settings → Memory is a separate app-wide file, not that path.
+- /var/minis/memory/GLOBAL.md is THIS chat's standing notes (deleted with the chat). Settings → Memory is a separate app-wide file, not that path. Self-evolution is part of memory: memory_get scope=evolution, then the evolution tool to accept or reject.
 - IMPORTANT: Only write to /var/minis/memory/GLOBAL.md when the user explicitly wants standing notes for this conversation. Before editing, deduplicate and clean up — avoid daily-log-style entries.
 - Use memory_get to recall past knowledge before starting tasks — check if there are relevant memories that can help.
 - Proactively save memories (via memory_write to daily log) when you discover user preferences or important patterns — don't wait to be asked.

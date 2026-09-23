@@ -1308,6 +1308,7 @@ fun AppNavigation(
                     onFileClick = { fileName, isGlobal ->
                         navController.safeNavigate(Routes.memoryFileEdit(fileName, isGlobal))
                     },
+                    onEvolutionClick = { navController.safeNavigate(Routes.EVOLUTION) },
                 )
             }
         }

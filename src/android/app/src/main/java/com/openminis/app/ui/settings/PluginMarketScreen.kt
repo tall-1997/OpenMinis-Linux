@@ -74,41 +74,6 @@ fun PluginMarketScreen(
         }
 
         SettingsSection(
-            header = stringResource(R.string.plugin_market_section_mcp),
-            footer = stringResource(R.string.plugin_market_footer_mcp),
-        ) {
-            PluginCatalog.MCP_PRESETS.forEachIndexed { index, preset ->
-                val on = servers.any { it.id == preset.id || it.url == preset.url }
-                SettingsSwitchRow(
-                    title = preset.name,
-                    subtitle = preset.description,
-                    checked = on,
-                    onCheckedChange = { checked ->
-                        val repo = mcpRepository ?: return@SettingsSwitchRow
-                        if (checked) {
-                            FetchUrlGuard.blockedReason(preset.url)?.let {
-                                status = it
-                                return@SettingsSwitchRow
-                            }
-                            repo.add(
-                                MCPRepository.MCPServerConfig(
-                                    id = preset.id,
-                                    note = preset.name,
-                                    enabled = true,
-                                    url = preset.url,
-                                ),
-                            )
-                        } else {
-                            repo.delete(preset.id)
-                        }
-                    },
-                    enabled = mcpRepository != null,
-                    showDivider = index < PluginCatalog.MCP_PRESETS.lastIndex,
-                )
-            }
-        }
-
-        SettingsSection(
             header = stringResource(R.string.plugin_market_section_online),
             footer = stringResource(R.string.plugin_market_footer_online),
         ) {

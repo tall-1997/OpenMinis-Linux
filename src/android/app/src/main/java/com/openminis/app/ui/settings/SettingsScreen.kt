@@ -125,17 +125,6 @@ fun SettingsScreen(
     onAboutClick: () -> Unit = {},
 ) {
     val context = LocalContext.current
-    var evolutionEnabled by remember { mutableStateOf(false) }
-    val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                evolutionEnabled = EvolutionPrefs(context).isEnabled
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
     var showFeedbackSheet by remember { mutableStateOf(false) }
     Scaffold(
         topBar = {
@@ -223,36 +212,13 @@ fun SettingsScreen(
                     onClick = onSoulClick,
                 )
                 SettingsItem(
-                    icon = Icons.Outlined.MenuBook,
-                    iconColor = Color(0xFFAF52DE),
-                    title = stringResource(R.string.settings_character_extras),
-                    subtitle = stringResource(R.string.settings_character_extras_subtitle),
-                    onClick = onCharacterExtrasClick,
-                )
-                SettingsItem(
-                    icon = Icons.Outlined.Translate,
-                    iconColor = Color(0xFF007AFF),
-                    title = stringResource(R.string.settings_translate),
-                    subtitle = stringResource(R.string.settings_translate_subtitle),
-                    onClick = onTranslateClick,
-                )
-                SettingsItem(
                     icon = Icons.Outlined.Psychology,
                     iconColor = Color(0xFF5856D6),
                     title = stringResource(R.string.settings_memory),
                     subtitle = stringResource(R.string.settings_memory_subtitle),
                     onClick = onMemoryClick,
                 )
-                SettingsItem(
-                    icon = Icons.Outlined.Bolt,
-                    iconColor = Color(0xFFAF52DE),
-                    title = stringResource(R.string.settings_evolution),
-                    subtitle = stringResource(
-                        R.string.settings_evolution_subtitle,
-                        stringResource(if (evolutionEnabled) R.string.settings_evolution_state_on else R.string.settings_evolution_state_off),
-                    ),
-                    onClick = onEvolutionClick,
-                )
+                // Evolution lives inside Memory. Translation lives on the message bubble.
                 // [T-mcp-integration-android] MCP Integrations — directly below Memory.
                 // [T-android-mcp-icon-distinct] Dashboard (2x2 block grid) instead of
                 // Extension so MCP no longer shares the Skills row's puzzle-piece icon —

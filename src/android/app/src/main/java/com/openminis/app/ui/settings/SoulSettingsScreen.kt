@@ -511,6 +511,8 @@ fun SoulSettingsScreen(
             }
         }
 
+        PersonaWorldBookSection()
+
         SettingsSection {
             Row(
                 modifier = Modifier
