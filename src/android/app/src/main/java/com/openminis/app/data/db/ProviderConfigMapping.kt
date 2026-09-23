@@ -46,6 +46,7 @@ object ProviderConfigMetaKeys {
     const val VOICE_OUTPUT_GROUP_ID = "voice_output_group_id"
     // [T-android-vision-group / GH#182] Vision Group pointer (per-device meta KV).
     const val VISION_GROUP_ID = "vision_group_id"
+    const val DEFAULT_TRANSLATION_MODEL_ID = "default_translation_model_id"
     const val JSON_SYNC_HASH = "json_sync_hash"
 }
 
@@ -182,6 +183,9 @@ fun ProviderConfig.toSnapshot(
     visionGroupId?.let {
         metaRows.add(ProviderConfigMetaEntity(ProviderConfigMetaKeys.VISION_GROUP_ID, it))
     }
+    defaultTranslationModelId?.let {
+        metaRows.add(ProviderConfigMetaEntity(ProviderConfigMetaKeys.DEFAULT_TRANSLATION_MODEL_ID, it))
+    }
     jsonSyncHash?.let {
         metaRows.add(ProviderConfigMetaEntity(ProviderConfigMetaKeys.JSON_SYNC_HASH, it))
     }
@@ -277,6 +281,7 @@ fun ProviderConfigSnapshot.toProviderConfig(jsonForBlobs: Json): ProviderConfig 
         voiceInputGroupId = metaMap[ProviderConfigMetaKeys.VOICE_INPUT_GROUP_ID],
         voiceOutputGroupId = metaMap[ProviderConfigMetaKeys.VOICE_OUTPUT_GROUP_ID],
         visionGroupId = metaMap[ProviderConfigMetaKeys.VISION_GROUP_ID],
+        defaultTranslationModelId = metaMap[ProviderConfigMetaKeys.DEFAULT_TRANSLATION_MODEL_ID],
         agentLoopModelEntryIds = entryLoopIds,
         agentLoopGroupIds = groupLoopIds,
     )

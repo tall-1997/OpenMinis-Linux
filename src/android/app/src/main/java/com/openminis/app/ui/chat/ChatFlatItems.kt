@@ -119,6 +119,8 @@ internal sealed class FlatChatItem {
         val messageIsStreaming: Boolean,
         /** Joined raw markdown of the parent message, used by Copy Markdown. */
         val messageMarkdown: String,
+        val showTranslate: Boolean = false,
+        val segmentText: String = "",
     ) : FlatChatItem() {
         override val key = "mdblock:$messageId:$parentBlockId:$blockIndex"
         override val contentType = "mdblock"
@@ -133,7 +135,9 @@ internal sealed class FlatChatItem {
                 isLastBlockOfMessage == other.isLastBlockOfMessage &&
                 messageIsStreaming == other.messageIsStreaming &&
                 rawText.length == other.rawText.length &&
-                messageMarkdown.length == other.messageMarkdown.length
+                messageMarkdown.length == other.messageMarkdown.length &&
+                showTranslate == other.showTranslate &&
+                segmentText.length == other.segmentText.length
         }
         override fun hashCode(): Int {
             var h = messageId.hashCode()
@@ -143,6 +147,8 @@ internal sealed class FlatChatItem {
             h = h * 31 + messageIsStreaming.hashCode()
             h = h * 31 + rawText.length
             h = h * 31 + messageMarkdown.length
+            h = h * 31 + if (showTranslate) 1 else 0
+            h = h * 31 + segmentText.length
             return h
         }
     }
@@ -313,6 +319,8 @@ internal fun buildFlatChatItems(
                 isLastBlockOfMessage = item.isLastBlockOfMessage,
                 messageIsStreaming = item.messageIsStreaming,
                 messageMarkdown = item.messageMarkdown,
+                showTranslate = item.showTranslate,
+                segmentText = item.segmentText,
             )
             is FlatChatItem.AssistantThinking -> item.copy(messageId = "${item.messageId}#$n")
             is FlatChatItem.AssistantProcessSummary -> item.copy(messageId = "${item.messageId}#$n")
@@ -476,6 +484,8 @@ internal fun buildFlatChatItems(
                                 isLastBlockOfMessage = isLastText && message.isStreaming,
                                 messageIsStreaming = message.isStreaming && isLastText,
                                 messageMarkdown = joinedMarkdown,
+                                showTranslate = !message.isStreaming && block.content.isNotBlank(),
+                                segmentText = block.content,
                             )))
                         } else {
                             fragments.forEachIndexed { fragIdx, raw ->
@@ -488,6 +498,8 @@ internal fun buildFlatChatItems(
                                     isLastBlockOfMessage = isLastText && isLastFragOfText,
                                     messageIsStreaming = message.isStreaming && isLastText,
                                     messageMarkdown = joinedMarkdown,
+                                    showTranslate = isLastFragOfText && !message.isStreaming && block.content.isNotBlank(),
+                                    segmentText = if (isLastFragOfText) block.content else "",
                                 )))
                             }
                         }

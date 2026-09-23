@@ -1389,11 +1389,20 @@
     <string name="model_group_detail_unlimited">Unlimited</string>
     <string name="model_group_detail_context_limit_unavailable">Group members did not declare a context window — cannot apply a limit. Add a model or check model metadata first.</string>
     <string name="model_group_detail_context_limit_runtime_capped">Current member max ctx=%1$s; saved %2$s will be clipped at runtime. The saved value is preserved and re-applies if you add a higher-context model.</string>
+    <string name="model_groups_defaults">Defaults</string>
+    <string name="model_groups_default_primary">Default primary</string>
+    <string name="model_groups_translation">Translation</string>
+    <string name="model_groups_slot_groups">Groups</string>
+    <string name="model_groups_slot_models">Models</string>
+    <string name="composer_expand_editor">Expand editor</string>
+    <string name="translate_action">Translate</string>
+    <string name="translate_using_model">Using %1$s</string>
+    <string name="translate_set_in_defaults">Choose a translation model in Settings → Model groups → Defaults.</string>
     <string name="model_groups_model_groups">Model Groups</string>
     <string name="model_groups_new_group">New Group</string>
     <string name="model_groups_no_model_groups">No model groups</string>
     <string name="model_groups_groups_let_you_combine_models_for_fallba">Groups let you combine models for fallback or load balancing.</string>
-    <string name="model_groups_primary_is_used_for_main_agent_tasks_sub">Primary is used for main Agent tasks. Sub is used for lightweight tasks like title generation. If Sub is not set, it inherits from Primary.</string>
+    <string name="model_groups_primary_is_used_for_main_agent_tasks_sub">Primary is the default model for new chats. Translation is used by the translate button on assistant replies. Each slot can be a group or a single model.</string>
     <string name="model_groups_group_name">Group name</string>
     <string name="model_groups_create">Create</string>
     <string name="model_groups_none">None</string>

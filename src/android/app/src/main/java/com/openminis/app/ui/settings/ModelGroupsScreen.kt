@@ -287,46 +287,53 @@ fun ModelGroupsScreen(
                     Spacer(modifier = Modifier.height(SectionDesign.SectionTopGap))
                 }
                 item("defaults_section_header") {
-                    SectionHeader(text = "Defaults")
+                    SectionHeader(text = stringResource(R.string.model_groups_defaults))
                 }
                 item("defaults_section_card") {
                     SectionCard {
-                        GroupDropdown(
-                            label = "Default Primary",
+                        // Default Sub is not shown. Sub-agents use MultiAgentSettings;
+                        // defaultSubGroupId remains stored for title-generation fallback.
+                        SlotPickerField(
+                            label = stringResource(R.string.model_groups_default_primary),
                             groups = groups,
+                            entries = config.modelEntries,
+                            instances = config.instances,
                             selectedId = config.defaultPrimaryGroupId,
                             onSelect = { providerRepository.defaultPrimaryGroupId = it },
                         )
                         SectionDivider()
-                        GroupDropdown(
-                            label = "Default Sub",
+                        SlotPickerField(
+                            label = stringResource(R.string.model_groups_translation),
                             groups = groups,
-                            selectedId = config.defaultSubGroupId,
-                            onSelect = { providerRepository.defaultSubGroupId = it },
+                            entries = config.modelEntries,
+                            instances = config.instances,
+                            selectedId = config.defaultTranslationModelId,
+                            onSelect = { providerRepository.defaultTranslationModelId = it },
                         )
-                        // [T-android-provider-voice] Voice group bindings —
-                        // mirrors iOS voiceInputGroupId / voiceOutputGroupId.
                         SectionDivider()
-                        GroupDropdown(
+                        SlotPickerField(
                             label = stringResource(R.string.model_groups_voice_input),
                             groups = groups,
+                            entries = config.modelEntries,
+                            instances = config.instances,
                             selectedId = config.voiceInputGroupId,
                             onSelect = { providerRepository.voiceInputGroupId = it },
                         )
                         SectionDivider()
-                        GroupDropdown(
+                        SlotPickerField(
                             label = stringResource(R.string.model_groups_voice_output),
                             groups = groups,
+                            entries = config.modelEntries,
+                            instances = config.instances,
                             selectedId = config.voiceOutputGroupId,
                             onSelect = { providerRepository.voiceOutputGroupId = it },
                         )
-                        // [T-android-vision-group / GH#182] Vision Group — the
-                        // group whose vision-capable members read images for a
-                        // main model that cannot natively see them.
                         SectionDivider()
-                        GroupDropdown(
+                        SlotPickerField(
                             label = stringResource(R.string.model_groups_vision),
                             groups = groups,
+                            entries = config.modelEntries,
+                            instances = config.instances,
                             selectedId = config.visionGroupId,
                             onSelect = { providerRepository.visionGroupId = it },
                         )

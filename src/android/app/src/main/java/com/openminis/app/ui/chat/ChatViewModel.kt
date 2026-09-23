@@ -2165,6 +2165,43 @@ class ChatViewModel(
         }
     }
 
+    /** Replace one assistant text block. Other segments and tool cards stay. */
+    fun replaceAssistantTextBlock(messageId: String, blockId: String, translated: String) {
+        val text = translated.trim()
+        if (text.isEmpty()) return
+        val cur = _messages.value
+        val idx = cur.indexOfFirst { it.id == messageId }
+        if (idx < 0) return
+        val msg = cur[idx]
+        val old = msg.toolBlocks.find { it.id == blockId }?.content
+        val newBlocks = msg.toolBlocks.map { block ->
+            if (block.id == blockId && block.kind == "text") block.copy(content = text) else block
+        }
+        val joined = newBlocks.filter { it.kind == "text" }.joinToString("\n\n") { it.content }.ifBlank { text }
+        val updated = msg.copy(content = joined, toolBlocks = newBlocks)
+        _messages.value = cur.toMutableList().also { it[idx] = updated }
+        val dbIds = msg.sourceDbIds
+        if (dbIds.isEmpty() || old == null) return
+        viewModelScope.launch {
+            for (id in dbIds) {
+                runCatching {
+                    val raw = chatRepository.dao.messagePartsJson(id) ?: return@runCatching
+                    val parts = org.json.JSONArray(raw)
+                    var replaced = false
+                    for (i in 0 until parts.length()) {
+                        val part = parts.optJSONObject(i) ?: continue
+                        if (part.optString("type") == "text" && part.optString("value") == old) {
+                            part.put("value", text)
+                            replaced = true
+                            break
+                        }
+                    }
+                    if (replaced) chatRepository.dao.updateMessageParts(id, parts.toString())
+                }
+            }
+        }
+    }
+
     /**
      * Fold the current session history into a single summary stored in
      * `compact_markers`. Mirrors iOS `compactAll()` + Phase-B semantics:
@@ -3860,15 +3897,7 @@ class ChatViewModel(
                             return@collect
                         }
                     }
-                    val effectiveGroupId = initialGroupId ?: providerRepository.defaultPrimaryGroupId
-                    var resolved = false
-                    if (effectiveGroupId != null) {
-                        resolved = resolveProviderFromGroup(effectiveGroupId)
-                        if (resolved) {
-                            _selectedGroupId.value = effectiveGroupId
-                        }
-                    }
-                    if (!resolved) {
+                    if (!applyDefaultPrimarySlot(initialGroupId, applyGroupDefaults = false)) {
                         // [T-newchat-default-model-fallback-android] Same
                         // new-chat fallback chain as the draft branch in
                         // loadSession: last-used → newest-provider/newest-text.
@@ -4088,19 +4117,7 @@ class ChatViewModel(
                 // Draft session: just set up provider using default group or first entry
                 _sessionTitle.value = "New Chat"
                 _sessionCategory.value = null
-                val effectiveGroupId = initialGroupId ?: providerRepository.defaultPrimaryGroupId
-                var resolved = false
-                if (effectiveGroupId != null) {
-                    resolved = resolveProviderFromGroup(effectiveGroupId)
-                    if (resolved) {
-                        _selectedGroupId.value = effectiveGroupId
-                        // T312: pull group session defaults onto the new draft.
-                        // ensureSession will persist the override once the
-                        // first message is sent and the DB row materialises.
-                        applyGroupSessionDefaults(effectiveGroupId)
-                    }
-                }
-                if (!resolved) {
+                if (!applyDefaultPrimarySlot(initialGroupId, applyGroupDefaults = true)) {
                     // [T-newchat-default-model-fallback-android] No default
                     // group (or it had no usable model) → last-used model, then
                     // newest-provider/newest-text-model. Was firstOrNull().
@@ -4731,6 +4748,46 @@ class ChatViewModel(
         )
     }
 
+    /**
+     * Apply a single model entry pin (`entry:` slot or a restored binding).
+     * Does not set a group id — the pin is the model, not a group.
+     */
+    private fun applyPinnedModelEntry(entryId: String): Boolean {
+        val entry = providerRepository.config.value.modelEntries.find { it.id == entryId } ?: return false
+        val instance = providerRepository.instance(entry.providerInstanceId) ?: return false
+        if (!providerRepository.hasAnyCredential(instance)) return false
+        val apiKey = providerRepository.usableApiKey(instance) ?: ""
+        currentModel = entry.model
+        _modelName.value = entry.model.displayName
+        _providerName.value = instance.label.ifEmpty { entry.model.provider }
+        _selectedGroupId.value = null
+        _selectedGroupName.value = ""
+        _activeEntryId.value = entry.id
+        currentProvider = ProviderFactory.create(instance, apiKey, entry.model, context)
+        return true
+    }
+
+    /**
+     * New-chat model: an `entry:` default pin, otherwise the selected or default group.
+     * Group ids that are entry pins are not passed to group lookup.
+     */
+    private fun applyDefaultPrimarySlot(initialGroupId: String?, applyGroupDefaults: Boolean): Boolean {
+        if (initialGroupId == null) {
+            val pinned = com.openminis.app.data.model.ModelSlotRef.entryId(providerRepository.defaultPrimaryGroupId)
+            if (pinned != null) return applyPinnedModelEntry(pinned)
+        }
+        val effectiveGroupId = initialGroupId ?: providerRepository.defaultPrimaryGroupId?.takeUnless {
+            com.openminis.app.data.model.ModelSlotRef.isEntry(it)
+        }
+        if (effectiveGroupId == null) return false
+        val resolved = resolveProviderFromGroup(effectiveGroupId)
+        if (resolved) {
+            _selectedGroupId.value = effectiveGroupId
+            if (applyGroupDefaults) applyGroupSessionDefaults(effectiveGroupId)
+        }
+        return resolved
+    }
+
     /** Restore provider state from a JSON binding string. Returns true if successfully resolved. */
     private fun restoreFromBinding(bindingJson: String?): Boolean {
         bindingJson ?: return false
@@ -4746,20 +4803,7 @@ class ChatViewModel(
                 }
                 "entry" -> {
                     val entryId = obj.optString("entryId").takeIf { it.isNotEmpty() } ?: return false
-                    val entry = providerRepository.config.value.modelEntries.find { it.id == entryId } ?: return false
-                    val instance = providerRepository.instance(entry.providerInstanceId) ?: return false
-                    // [T-android-group-resolve-skip-uncredentialed] An explicit
-                    // entry pin on an OAuth provider must restore too.
-                    if (!providerRepository.hasAnyCredential(instance)) return false
-                    val apiKey = providerRepository.usableApiKey(instance) ?: ""
-                    currentModel = entry.model
-                    _modelName.value = entry.model.displayName
-                    _providerName.value = instance.label.ifEmpty { entry.model.provider }
-                    _selectedGroupId.value = null
-                    _selectedGroupName.value = ""
-                    _activeEntryId.value = entry.id
-                    currentProvider = ProviderFactory.create(instance, apiKey, entry.model, context)
-                    true
+                    applyPinnedModelEntry(entryId)
                 }
                 else -> false
             }

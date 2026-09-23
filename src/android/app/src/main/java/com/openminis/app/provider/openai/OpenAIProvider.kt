@@ -287,6 +287,9 @@ class OpenAIProvider private constructor(
      */
     var imagePathOverride: String? = null
 
+    /** Optional video `mode` (std/pro/…). Null means omit until the provider says it is required. */
+    var videoMode: String? = null
+
     // MARK: - Chat passthrough [T-android-model-use-passthrough-mode / GH#72]
 
     /**
@@ -1988,10 +1991,15 @@ class OpenAIProvider private constructor(
      * OpenAI Videos API (`POST /videos` + poll + `/content`) and common
      * OpenAI-compatible relay shapes (`/video/generations`, sync `data[].url`).
      */
-    override suspend fun generateVideo(prompt: String): LLMResponse = withContext(Dispatchers.IO) {
-        ProviderKeyGate.withPermit(callGateKey) {
-            generateVideoLocked(prompt.trim())
+    override suspend fun generateVideo(prompt: String): LLMResponse = try {
+        withContext(Dispatchers.IO) {
+            ProviderKeyGate.withPermit(callGateKey) {
+                generateVideoLocked(prompt.trim())
+            }
         }
+    } finally {
+        // Per-call. A later video request must not inherit std/pro from this one.
+        videoMode = null
     }
 
     private suspend fun generateVideoLocked(prompt: String): LLMResponse {
@@ -2006,13 +2014,18 @@ class OpenAIProvider private constructor(
             VendorMediaKind.MINIMAX -> return generateMinimaxVideo(prompt, token)
             else -> Unit
         }
-        val paths = listOf("/videos", "/video/generations", "/videos/generations")
+        val abs = absoluteEndpointOverride?.takeIf { it.startsWith("/") }
+        val paths = if (abs != null) listOf(abs) else listOf("/videos", "/video/generations", "/videos/generations")
         var lastError: LLMError? = null
         for (path in paths) {
-            val url = "$basePath$path"
+            val url = if (path.startsWith("/")) hostRootURL(path) ?: "$basePath$path" else "$basePath$path"
+            var modeToSend = videoMode?.trim()?.takeIf { it.isNotEmpty() }
+            var triedDefaultMode = false
+            while (true) {
             val body = org.json.JSONObject()
                 .put("model", model.id)
                 .put("prompt", prompt)
+            if (modeToSend != null) body.put("mode", modeToSend)
             val req = Request.Builder()
                 .url(url)
                 .post(body.toString().toRequestBody("application/json".toMediaType()))
@@ -2030,10 +2043,19 @@ class OpenAIProvider private constructor(
             response.close()
             if (code == 404 || code == 405) {
                 lastError = mapHttpError(code, bytes.decodeToString())
-                continue
+                break
             }
             if (code !in 200..299) {
-                throw mapHttpError(code, bytes.decodeToString(), null)
+                val errText = bytes.decodeToString()
+                if (!triedDefaultMode && modeToSend == null &&
+                    errText.contains("mode", ignoreCase = true) &&
+                    errText.contains("required", ignoreCase = true)
+                ) {
+                    triedDefaultMode = true
+                    modeToSend = "std"
+                    continue
+                }
+                throw mapHttpError(code, errText, null)
             }
             if (looksLikeMp4(bytes)) {
                 return LLMResponse("", "end_turn", null, listOf(videoAtt(bytes)))
@@ -2045,6 +2067,7 @@ class OpenAIProvider private constructor(
                 throw LLMError.ProviderError("Video create: not JSON (${contentType.take(40)})")
             }
             return resolveVideoJob(json, token, path)
+            }
         }
         throw lastError ?: LLMError.ProviderError("No video endpoint on this provider")
     }

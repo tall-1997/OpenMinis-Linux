@@ -378,6 +378,16 @@ class ModelUseOffloadHandler(
         )
         if (imageRouted != null) return attachCallFeedback(imageRouted, callWarnings, appliedExtras)
 
+        val videoRouted = tryVideoGenerationRoute(
+            entry = entry,
+            provider = provider,
+            inputJson = inputText,
+            fallbackPromptMessages = nonSystem,
+            outputPath = outputPath,
+            sessionId = request.sessionId,
+        )
+        if (videoRouted != null) return attachCallFeedback(videoRouted, callWarnings, appliedExtras)
+
         val response = try {
             runBlocking {
                 provider.sendMessage(
@@ -1149,6 +1159,66 @@ class ModelUseOffloadHandler(
     }
 
     /**
+     * Honor a video endpoint or a video-only model. A custom absolute path that
+     * is not an image path must not be rewritten onto /images/generations.
+     */
+    private fun tryVideoGenerationRoute(
+        entry: ModelEntry,
+        provider: com.openminis.app.provider.LLMProvider,
+        inputJson: String,
+        fallbackPromptMessages: List<ParsedMessage>,
+        outputPath: String?,
+        sessionId: String?,
+    ): NativeOffloadResult? {
+        val openAI = provider as? com.openminis.app.provider.openai.OpenAIProvider ?: return null
+        val outputs = entry.model.outputModalities.orEmpty()
+        val custom = openAI.absoluteEndpointOverride
+        val videoEndpoint = custom != null && custom.contains("video", ignoreCase = true)
+        val videoOnly = "video" in outputs && "text" !in outputs
+        if (!videoEndpoint && !videoOnly) return null
+        val obj = try {
+            org.json.JSONObject(inputJson)
+        } catch (_: Exception) {
+            org.json.JSONObject()
+        }
+        val prompt = obj.safeOptString("prompt", "").ifEmpty {
+            fallbackPromptMessages.lastOrNull { it.role == "user" }?.content.orEmpty()
+        }.trim()
+        if (prompt.isEmpty()) return null
+        openAI.videoMode = obj.safeOptString("mode", "").trim().ifEmpty { null }
+        val response = try {
+            runBlocking { openAI.generateVideo(prompt) }
+        } catch (e: Throwable) {
+            Log.w(TAG, "[ModelUseRoute] video endpoint failed: ${e.message}", e)
+            return NativeOffloadResult(
+                1,
+                org.json.JSONObject()
+                    .put("error", "video_generation_failed")
+                    .put("message", e.message ?: "video_generation_failed")
+                    .put("video_endpoint", custom ?: "/videos")
+                    .toString() + "\n",
+            )
+        }
+        val att = response.mediaAttachments.firstOrNull { it.data.isNotEmpty() }
+        if (outputPath != null && att != null) {
+            val hostFile = sessionScopedHostFile(outputPath, sessionId)
+                ?: return NativeOffloadResult(2, "minis-model-use run: cannot resolve --output '$outputPath'\n")
+            hostFile.parentFile?.mkdirs()
+            hostFile.writeBytes(att.data)
+            logModelUseWrite(outputPath, hostFile, sessionId)
+        }
+        return NativeOffloadResult(
+            0,
+            org.json.JSONObject()
+                .put("text", response.text)
+                .put("video_endpoint", custom ?: "/videos")
+                .put("mode", openAI.videoMode ?: "std")
+                .apply { if (outputPath != null) put("output", outputPath) }
+                .toString() + "\n",
+        )
+    }
+
+    /**
      * [T-android-image-endpoint-mode] Attempt image-output routing through
      * /v1/images/generations. Returns a completed [NativeOffloadResult] when
      * the image path produced output, or null to fall through to the normal
@@ -1194,6 +1264,16 @@ class ModelUseOffloadHandler(
         openAI.imageExtraBody = passthrough.body
         openAI.imagePathOverride = passthrough.path
         openAI.imageExtraHeaders = passthrough.headers
+        val absolutePath = openAI.absoluteEndpointOverride
+            ?: passthrough.path?.takeIf { it.startsWith("/") }
+        if (absolutePath != null && !absolutePath.contains("/images/")) {
+            openAI.absoluteEndpointOverride = absolutePath
+            Log.i(TAG, "[ModelUseRoute] custom endpoint $absolutePath is not an image path — not rewriting to /images/generations")
+            return null
+        }
+        if (absolutePath != null && absolutePath.contains("/images/")) {
+            openAI.absoluteEndpointOverride = absolutePath
+        }
         if (passthrough.body.isNotEmpty() || passthrough.path != null || passthrough.headers.isNotEmpty()) {
             Log.i(
                 TAG,
@@ -1958,6 +2038,8 @@ Input format (OpenAI Chat Completions JSON — the ONLY input format):
     endpoint       "/abs/path" starting with "/" replaces the ENTIRE path on
                    the provider's own base URL host (credentials never leave
                    the host); body is still auto-converted, response parsed.
+                   A non-image path is not rewritten to /images/generations.
+                   A path containing "video" is sent as a video generation.
 
 Passthrough mode (raw escape hatch; response is NOT parsed):
   For endpoints/formats our schema doesn't model (video gen, TTS,

@@ -1,3 +1,10 @@
+# OpenMinis-Linux 1.36.34-linux
+
+- versionCode **87**
+- 长文避开键盘、启动图标保留 R 角、分段翻译和翻译模型入口、自定义图片/视频路径。详见 `docs/github-release-1.36.34-linux.md`。
+
+---
+
 # OpenMinis-Linux 1.36.28-linux
 
 - versionCode **81**

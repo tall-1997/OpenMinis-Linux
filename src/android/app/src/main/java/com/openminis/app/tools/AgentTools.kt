@@ -163,7 +163,7 @@ Each task prompt MUST be self-contained with ## Task / ## Expected result / ## C
     private fun shellExecuteDefinition(): AgentToolDefinition = AgentToolDefinition(
         name = "shell_execute",
         description = "Execute a command in an isolated Linux process (Ubuntu 24.04 arm64 via PRoot). " +
-            "The command runs via /bin/sh -c with stdout and stderr merged. " +
+            "The command runs in GNU bash (/bin/bash), not BusyBox ash. Heredocs and bash syntax work. stdout and stderr are merged. " +
             "Each invocation spawns a fresh process — there is no shared terminal session. " +
             "Default timeout is 15 minutes.",
         parameters = mapOf(

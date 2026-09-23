@@ -104,11 +104,13 @@ internal suspend fun ChatViewModel.executeGenerateVideoTool(
     current: LLMProvider?,
     activeSessionId: String,
 ): ToolExecutionResult {
-    val prompt = try {
-        JSONObject(argsJson).optString("prompt", "").trim()
+    val args = try {
+        JSONObject(argsJson)
     } catch (_: Exception) {
-        ""
+        JSONObject()
     }
+    val prompt = args.optString("prompt", "").trim()
+    val mode = args.optString("mode", "").trim().ifEmpty { null }
     if (prompt.isEmpty()) {
         return ToolExecutionResult("prompt is required", false, toolTitle = ProductMediaTools.GENERATE_VIDEO)
     }
@@ -118,6 +120,9 @@ internal suspend fun ChatViewModel.executeGenerateVideoTool(
             "Add an OpenAI-compatible video model (Sora / Veo / Kling) and enable Video Output.",
         )
     return try {
+        if (provider is com.openminis.app.provider.openai.OpenAIProvider) {
+            provider.videoMode = mode
+        }
         val response = provider.generateVideo(prompt)
         val att = response.mediaAttachments.firstOrNull {
             it.type == LLMMediaAttachment.MediaType.VIDEO && it.data.isNotEmpty()

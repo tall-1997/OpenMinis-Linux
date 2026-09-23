@@ -124,6 +124,7 @@ import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.CloseFullscreen
 import androidx.compose.material.icons.filled.Info
@@ -764,6 +765,7 @@ fun ChatScreen(
     var inputFieldValue by remember {
         mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(""))
     }
+    var showExpandedEditor by remember { mutableStateOf(false) }
     // T217-2: suppress IME commits arriving briefly after send. clearFocus
     // triggers finishComposingText, which makes voice/Pinyin IMEs commit
     // their pending candidate back through onValueChange even after we
@@ -4225,6 +4227,14 @@ fun ChatScreen(
                                             shardId = "text:${item.block.id}",
                                         ),
                                     )
+                                    if (!item.isStreaming && item.block.content.isNotBlank()) {
+                                        AssistantTranslateButton(
+                                            source = item.block.content,
+                                            onTranslated = {
+                                                viewModel.replaceAssistantTextBlock(item.messageId, item.block.id, it)
+                                            },
+                                        )
+                                    }
                                 }
                             }
                             is FlatChatItem.AssistantMarkdownBlock -> BoundsTrackedBlock(
@@ -4248,10 +4258,12 @@ fun ChatScreen(
                                             shardId = "mdblock:${item.parentBlockId}:${item.blockIndex}",
                                         ),
                                     )
-                                    if (item.isLastBlockOfMessage && !item.messageIsStreaming && item.rawText.isNotBlank()) {
+                                    if (item.showTranslate) {
                                         AssistantTranslateButton(
-                                            source = item.messageMarkdown.ifBlank { item.rawText },
-                                            onTranslated = { viewModel.replaceAssistantOutput(item.messageId, it) },
+                                            source = item.segmentText.ifBlank { item.rawText },
+                                            onTranslated = {
+                                                viewModel.replaceAssistantTextBlock(item.messageId, item.parentBlockId, it)
+                                            },
                                         )
                                     }
                                 }
@@ -5956,7 +5968,7 @@ fun ChatScreen(
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .heightIn(min = 25.dp)
+                                .heightIn(min = 25.dp, max = if (WindowInsets.ime.getBottom(LocalDensity.current) > 0) 120.dp else 220.dp)
                                 .focusRequester(inputFocusRequester)
                                 .onFocusChanged {
                                     // [T-android-composer-placeholder-rotation]
@@ -6247,6 +6259,30 @@ fun ChatScreen(
                                     },
                                 )
                             }
+                        }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        if (showExpandedEditor) {
+                            LongTextEditorDialog(
+                                text = inputText,
+                                onTextChange = { next ->
+                                    viewModel.setInputText(next)
+                                    inputFieldValue = androidx.compose.ui.text.input.TextFieldValue(
+                                        text = next,
+                                        selection = androidx.compose.ui.text.TextRange(next.length),
+                                    )
+                                },
+                                onDismiss = { showExpandedEditor = false },
+                            )
+                        }
+                        InputCircleButton(onClick = { showExpandedEditor = true }) {
+                            Icon(
+                                Icons.Filled.OpenInFull,
+                                contentDescription = stringResource(R.string.composer_expand_editor),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(18.dp),
+                            )
                         }
 
                         Spacer(modifier = Modifier.width(8.dp))

@@ -1592,13 +1592,51 @@ class ProviderRepository(private val context: Context) {
      *  tool exposure for main models that cannot natively see images. */
     fun hasVisionGroupConfigured(): Boolean {
         val gid = _config.value.visionGroupId ?: return false
+        val pinned = com.openminis.app.data.model.ModelSlotRef.entryId(gid)
+        if (pinned != null) {
+            val entry = _config.value.modelEntries.find { it.id == pinned } ?: return false
+            val inst = _config.value.instances.find { it.id == entry.providerInstanceId } ?: return false
+            return inst.isEnabled && entry.model.hasImageInput
+        }
         return _config.value.modelGroups.any { it.id == gid }
     }
 
-    /** Bound Vision group's display name, or null. */
-    fun visionGroupName(): String? {
-        val gid = _config.value.visionGroupId ?: return null
-        return _config.value.modelGroups.find { it.id == gid }?.name
+    /** Bound Vision group's display name, or the pinned model's name. */
+    fun visionGroupName(): String? = slotDisplayName(_config.value.visionGroupId)
+
+    /** Group name, or the pinned model's display name when the slot is `entry:`. */
+    fun slotDisplayName(raw: String?): String? {
+        if (raw.isNullOrBlank()) return null
+        val pinned = com.openminis.app.data.model.ModelSlotRef.entryId(raw)
+        if (pinned != null) {
+            return _config.value.modelEntries.find { it.id == pinned }?.model?.displayName
+        }
+        return _config.value.modelGroups.find { it.id == raw }?.name
+    }
+
+    var defaultTranslationModelId: String?
+        get() = _config.value.defaultTranslationModelId
+        set(value) = synchronized(configLock) {
+            ensureConfigLoaded()
+            val config = workingCopy()
+            config.defaultTranslationModelId = value
+            saveConfig(config)
+        }
+
+    /** Translation slot: one pinned entry, or the first usable member of a group. */
+    fun resolveTranslationEntry(): com.openminis.app.data.model.ModelEntry? {
+        ensureConfigLoaded()
+        val config = _config.value
+        val raw = config.defaultTranslationModelId ?: return null
+        val pinned = com.openminis.app.data.model.ModelSlotRef.entryId(raw)
+        fun usable(id: String): com.openminis.app.data.model.ModelEntry? {
+            val entry = config.modelEntries.find { it.id == id && !it.isHidden } ?: return null
+            val inst = config.instances.find { it.id == entry.providerInstanceId } ?: return null
+            return entry.takeIf { inst.isEnabled }
+        }
+        if (pinned != null) return usable(pinned)
+        val group = config.modelGroups.find { it.id == raw } ?: return null
+        return group.memberEntryIds.firstNotNullOfOrNull { usable(it) }
     }
 
     /**
@@ -1622,6 +1660,8 @@ class ProviderRepository(private val context: Context) {
         }
 
         val gid = config.visionGroupId ?: return emptyList()
+        val pinned = com.openminis.app.data.model.ModelSlotRef.entryId(gid)
+        if (pinned != null) return listOfNotNull(providerEntry(pinned))
         val group = config.modelGroups.find { it.id == gid } ?: return emptyList()
         var members = group.memberEntryIds.mapNotNull { providerEntry(it) }
         if (group.strategy == RoutingStrategy.loadBalance && members.size > 1) {
@@ -1859,6 +1899,11 @@ class ProviderRepository(private val context: Context) {
             // Stale override (entry removed) — fall through to the group.
         }
         val gid = config.voiceInputGroupId
+        val pinnedVoice = com.openminis.app.data.model.ModelSlotRef.entryId(gid)
+        if (pinnedVoice != null) {
+            providerEntry(pinnedVoice)?.let { return VoiceInputChoice(null, it) }
+            return VoiceInputChoice(systemPreferOffline = null, entry = null)
+        }
         val group = gid?.let { g -> config.modelGroups.find { it.id == g } }
         if (group != null) {
             for (memberId in group.memberEntryIds) {
@@ -1870,10 +1915,7 @@ class ProviderRepository(private val context: Context) {
     }
 
     /** Bound Voice Input group's display name, or null (chip's "Group · Model"). */
-    fun voiceInputGroupName(): String? {
-        val gid = _config.value.voiceInputGroupId ?: return null
-        return _config.value.modelGroups.find { it.id == gid }?.name
-    }
+    fun voiceInputGroupName(): String? = slotDisplayName(_config.value.voiceInputGroupId)
 
     /**
      * [T-android-provider-voice] Resolve the current provider-backed voice
@@ -1999,6 +2041,11 @@ class ProviderRepository(private val context: Context) {
             // Stale override (entry removed) — fall through to the group.
         }
         val gid = config.voiceOutputGroupId
+        val pinnedOut = com.openminis.app.data.model.ModelSlotRef.entryId(gid)
+        if (pinnedOut != null) {
+            providerEntry(pinnedOut)?.let { return VoiceOutputChoice(false, it) }
+            return VoiceOutputChoice(isSystemEngine = true, entry = null)
+        }
         val group = gid?.let { g -> config.modelGroups.find { it.id == g } }
         if (group != null) {
             for (memberId in group.memberEntryIds) {
@@ -2032,6 +2079,8 @@ class ProviderRepository(private val context: Context) {
         ensureConfigLoaded()
         val config = _config.value
         val gid = if (output) config.voiceOutputGroupId else config.voiceInputGroupId
+        val pinnedMember = com.openminis.app.data.model.ModelSlotRef.entryId(gid)
+        if (pinnedMember != null) return pinnedMember
         val group = config.modelGroups.find { it.id == gid } ?: return null
         for (memberId in group.memberEntryIds) {
             // System sentinels are always usable — the on-device engine needs
@@ -2047,10 +2096,7 @@ class ProviderRepository(private val context: Context) {
     }
 
     /** Bound Voice Output group's display name, or null. */
-    fun voiceOutputGroupName(): String? {
-        val gid = _config.value.voiceOutputGroupId ?: return null
-        return _config.value.modelGroups.find { it.id == gid }?.name
-    }
+    fun voiceOutputGroupName(): String? = slotDisplayName(_config.value.voiceOutputGroupId)
 
     /**
      * Resolve the current provider-backed voice OUTPUT selection, or null when

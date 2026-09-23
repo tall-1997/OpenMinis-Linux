@@ -1295,11 +1295,20 @@
     <string name="model_group_detail_unlimited">不限</string>
     <string name="model_group_detail_context_limit_unavailable">分组成员未声明上下文窗口，无法启用上限。请先添加模型或检查模型元数据。</string>
     <string name="model_group_detail_context_limit_runtime_capped">当前分组成员最大 ctx=%1$s，配置值 %2$s 会被运行时裁剪。配置值已保留，添加更高上下文模型后会重新生效。</string>
+    <string name="model_groups_defaults">默认设置</string>
+    <string name="model_groups_default_primary">默认主模型</string>
+    <string name="model_groups_translation">翻译</string>
+    <string name="model_groups_slot_groups">分组</string>
+    <string name="model_groups_slot_models">模型</string>
+    <string name="composer_expand_editor">展开编辑</string>
+    <string name="translate_action">翻译</string>
+    <string name="translate_using_model">使用 %1$s</string>
+    <string name="translate_set_in_defaults">请先在设置 → 模型组 → 默认设置里选择翻译模型。</string>
     <string name="model_groups_model_groups">模型分组</string>
     <string name="model_groups_new_group">新建分组</string>
     <string name="model_groups_no_model_groups">暂无模型分组</string>
     <string name="model_groups_groups_let_you_combine_models_for_fallba">模型分组可实现回退或负载均衡。</string>
-    <string name="model_groups_primary_is_used_for_main_agent_tasks_sub">主模型用于主要任务，辅助模型用于标题生成等轻量任务。未设置辅助模型时将继承主模型。</string>
+    <string name="model_groups_primary_is_used_for_main_agent_tasks_sub">主模型是新对话的默认模型。翻译用于每段助手回复右下角的翻译按钮。每一项都可以选分组，也可以选单个模型。</string>
     <string name="model_groups_group_name">分组名称</string>
     <string name="model_groups_create">创建</string>
     <string name="model_groups_none">无</string>

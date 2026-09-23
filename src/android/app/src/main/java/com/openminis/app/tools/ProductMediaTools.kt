@@ -31,13 +31,14 @@ object ProductMediaTools {
 
     fun generateVideoDefinition(): AgentToolDefinition = AgentToolDefinition(
         name = GENERATE_VIDEO,
-        description = "Generate a short video from a text prompt using a configured video model (Sora, Veo, Kling, or an OpenAI-compatible /videos endpoint). Returns markdown that plays in chat.",
+        description = "Generate a short video from a text prompt using a configured video model (Sora, Veo, Kling, or an OpenAI-compatible /videos endpoint). Returns markdown that plays in chat. Some gateways require mode; if omitted and the provider says mode is required, std is sent once.",
         parameters = mapOf(
             "tool_title" to AgentToolParam("string", "A concise 5-10 word summary shown to the user."),
             "prompt" to AgentToolParam("string", "Video prompt. Describe the shot, motion, and style."),
+            "mode" to AgentToolParam("string", "Optional provider mode, such as std or pro. Omit to let the provider default; std is retried only when the provider says mode is required."),
         ),
         required = listOf("tool_title", "prompt"),
-        propertyOrdering = listOf("tool_title", "prompt"),
+        propertyOrdering = listOf("tool_title", "prompt", "mode"),
     )
 
     fun describeImageDefinition(): AgentToolDefinition = AgentToolDefinition(

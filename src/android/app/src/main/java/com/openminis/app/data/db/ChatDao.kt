@@ -307,6 +307,9 @@ interface ChatDao {
     @Query("UPDATE messages SET parts_json = :partsJson, updated_at = :updatedAt WHERE id = :id")
     suspend fun updateMessageParts(id: String, partsJson: String, updatedAt: Long = System.currentTimeMillis())
 
+    @Query("SELECT parts_json FROM messages WHERE id = :id")
+    suspend fun messagePartsJson(id: String): String?
+
     // [T-error-persist-android] Write/clear the terminal error sticker on a
     // specific message row by id. Used when the persisted DB id is known
     // (clear-on-retry via sourceDbIds).
