@@ -5,6 +5,8 @@ import com.openminis.app.MinisApp
 import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.model.AgentToolParam
 import com.openminis.app.data.repository.ChatRepository
+import com.openminis.app.sandbox.SessionAccessAudit
+import com.openminis.app.sandbox.SessionAccessPolicy
 import com.openminis.app.util.IsoTime
 import org.json.JSONArray
 import org.json.JSONObject
@@ -63,16 +65,26 @@ object SessionLookupTool {
             ?: return ToolExecutionResult("Error: chat store is not ready.", false, toolTitle = toolTitle)
         val query = args.optString("query", "").trim()
         val includeCurrent = args.optBoolean("include_current", false)
+        // [T-android-session-read-boundary] Without the `session_read` grant this
+        // tool only sees the session it runs in. Both branches below already take an
+        // explicit id filter, so the restriction is an argument rather than a second
+        // code path that could drift away from the granted one.
+        val granted = SessionAccessPolicy.isCrossSessionGranted(currentSessionId)
+        val scopeIds = if (granted) null else listOf(currentSessionId)
+        SessionAccessAudit.record(
+            currentSessionId, SEARCH, if (granted) "(all sessions)" else currentSessionId, true, granted,
+        )
         val limit = args.optInt("limit", SEARCH_LIMIT_DEFAULT).coerceIn(1, SEARCH_LIMIT_MAX)
         val keywords = splitQuery(query)
         return try {
             val json = run {
                 if (keywords.isEmpty()) {
-                    val rows = repo.querySessionsMeta(null, null, limit + 2, null, null)
-                        .filter { includeCurrent || it.id != currentSessionId }
+                    val rows = repo.querySessionsMeta(scopeIds, null, limit + 2, null, null)
+                        .filter { granted || includeCurrent || it.id != currentSessionId }
                         .take(limit)
                     JSONObject()
                         .put("count", rows.size)
+                        .put("scope", if (granted) "all_sessions" else "current_session")
                         .put("sessions", JSONArray().also { arr ->
                             rows.forEach { s ->
                                 arr.put(
@@ -86,8 +98,8 @@ object SessionLookupTool {
                             }
                         })
                 } else {
-                    val hits = repo.searchMessages(null, keywords, limit + 4, null, null)
-                        .filter { includeCurrent || it.sessionId != currentSessionId }
+                    val hits = repo.searchMessages(scopeIds, keywords, limit + 4, null, null)
+                        .filter { granted || includeCurrent || it.sessionId != currentSessionId }
                         .take(limit)
                     val ids = hits.map { it.sessionId }.distinct()
                     val titles = if (ids.isEmpty()) {
@@ -98,6 +110,7 @@ object SessionLookupTool {
                     }
                     JSONObject()
                         .put("count", hits.size)
+                        .put("scope", if (granted) "all_sessions" else "current_session")
                         .put("query", query)
                         .put("hits", JSONArray().also { arr ->
                             hits.forEach { h ->
@@ -119,12 +132,34 @@ object SessionLookupTool {
         }
     }
 
-    suspend fun executeRead(argsJson: String, context: Context): ToolExecutionResult {
+    suspend fun executeRead(
+        argsJson: String,
+        currentSessionId: String,
+        context: Context,
+    ): ToolExecutionResult {
         val args = parseArgs(argsJson)
         val toolTitle = args.optString("tool_title", READ)
         val sessionId = args.optString("session_id", "").trim()
         if (sessionId.isEmpty()) {
             return ToolExecutionResult("Error: session_id is required.", false, toolTitle = toolTitle)
+        }
+        // [T-android-session-read-boundary] Reading another chat's transcript is
+        // exactly what this boundary exists for: it needs the user's `session_read`
+        // grant. The attempt is audited either way, granted or not.
+        if (SessionAccessPolicy.isForeign(currentSessionId, sessionId)) {
+            val granted = SessionAccessPolicy.isCrossSessionGranted(currentSessionId)
+            SessionAccessAudit.record(currentSessionId, READ, sessionId, granted, granted)
+            if (!granted) {
+                return ToolExecutionResult(
+                    "Error: session $sessionId belongs to another chat. Reading it needs the user " +
+                        "to grant `session_read` (Settings > Permissions > Read other chats). Ask " +
+                        "the user first, then retry.",
+                    false,
+                    toolTitle = toolTitle,
+                )
+            }
+        } else {
+            SessionAccessAudit.record(currentSessionId, READ, sessionId, true, false)
         }
         val repo = repo(context)
             ?: return ToolExecutionResult("Error: chat store is not ready.", false, toolTitle = toolTitle)

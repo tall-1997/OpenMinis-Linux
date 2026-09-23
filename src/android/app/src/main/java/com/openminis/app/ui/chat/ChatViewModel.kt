@@ -9444,7 +9444,9 @@ class ChatViewModel(
             com.openminis.app.tools.SessionLookupTool.SEARCH -> com.openminis.app.tools.SessionLookupTool.executeSearch(
                 argsJson, activeSessionId, context,
             )
-            com.openminis.app.tools.SessionLookupTool.READ -> com.openminis.app.tools.SessionLookupTool.executeRead(argsJson, context)
+            com.openminis.app.tools.SessionLookupTool.READ -> com.openminis.app.tools.SessionLookupTool.executeRead(
+                argsJson, activeSessionId, context,
+            )
             com.openminis.app.tools.AskUserQuestion.NAME, com.openminis.app.tools.AskUserQuestion.ALIAS -> executeAskUserQuestion(argsJson)
             CodeGraphTool.NAME -> {
                 val args = JSONObject(argsJson).let { json ->

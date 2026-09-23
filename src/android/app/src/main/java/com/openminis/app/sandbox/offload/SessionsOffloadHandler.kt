@@ -6,6 +6,9 @@ import com.openminis.app.util.IsoTime
 import com.openminis.app.sandbox.NativeOffloadHandler
 import com.openminis.app.sandbox.NativeOffloadRequest
 import com.openminis.app.sandbox.NativeOffloadResult
+import com.openminis.app.offload.OffloadPermissionManager
+import com.openminis.app.sandbox.SessionAccessAudit
+import com.openminis.app.sandbox.SessionAccessPolicy
 import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
@@ -47,6 +50,9 @@ class SessionsOffloadHandler(
         }
 
         val sub = args.positional.firstOrNull() ?: "list"
+        // Cross-session reads are gated before any query runs: the boundary
+        // has to hold for the CLI surface, not just the in-app tools.
+        runBlocking { crossSessionDenial(request, sub, args) }?.let { return it }
         return try {
             when (sub) {
                 "list" -> cmdList(args)
@@ -78,6 +84,60 @@ class SessionsOffloadHandler(
         }
     }
 
+    /**
+     * [T-android-session-read-boundary] Cross-session chat reads need an
+     * explicit `session_read` grant.
+     *
+     * `list` stays ungated on purpose: it returns ids and titles only, and the
+     * agent needs an id before it can ask to read anything. `search` and
+     * `messages` return message bodies, which is the payload this boundary
+     * exists to protect: a caller that does not own the target session must
+     * hold the user's grant. Every attempt, allowed or not, is audited.
+     */
+    private suspend fun crossSessionDenial(
+        request: NativeOffloadRequest,
+        sub: String,
+        args: OffloadArgs,
+    ): NativeOffloadResult? {
+        val caller = request.sessionId?.takeIf { it.isNotBlank() }
+            ?: OffloadPermissionManager.OFFLOAD_GLOBAL_SESSION_ID
+        val target: String = when (sub) {
+            "messages" -> args.get("id")?.takeIf { it.isNotBlank() } ?: return null
+            "search" -> {
+                val ids = parseIds(args)
+                if (ids != null && ids.isNotEmpty() &&
+                    ids.all { !SessionAccessPolicy.isForeign(caller, it) }
+                ) {
+                    SessionAccessAudit.record(caller, sub, ids.joinToString(","), true, false)
+                    return null
+                }
+                ""
+            }
+            else -> return null
+        }
+        if (target.isNotEmpty() && !SessionAccessPolicy.isForeign(caller, target)) {
+            SessionAccessAudit.record(caller, sub, target, true, false)
+            return null
+        }
+        val granted = OffloadPermissionManager.checkPermission(
+            SessionAccessPolicy.GRANT,
+            "Read other chats",
+            caller,
+        )
+        SessionAccessAudit.record(caller, sub, target.ifEmpty { "(all sessions)" }, granted, granted)
+        if (granted) return null
+        val err = errorEnvelope(
+            sub,
+            "PERMISSION_DENIED",
+            "This command reads message bodies from other chat sessions, which needs the " +
+                "user to grant `session_read`. 'list' only returns ids and titles and stays " +
+                "available. Ask the user to allow it, then retry.",
+        )
+        return NativeOffloadResult(
+            EXIT_PERMISSION_DENIED,
+            OffloadOutput.formatBody(err.toString(2), args) + "\n",
+        )
+    }
     private fun cmdList(args: OffloadArgs): NativeOffloadResult {
         val ids = parseIds(args)
         val kws = parseKeywords(args)
@@ -287,6 +347,9 @@ class SessionsOffloadHandler(
         // iOS NOFF_EXIT_INVALID_ARGS — the shell convention is exit 2
         // for invalid CLI args, distinct from exit 1 for runtime errors.
         private const val EXIT_INVALID_ARGS = 2
+        // Same code ConfigOffloadHandler uses for permission_denied, so a
+        // caller can classify the failure without reading the message.
+        private const val EXIT_PERMISSION_DENIED = 126
 
         private const val HELP_TEXT = """minis-sessions-cli - Query historical chat sessions and messages
 

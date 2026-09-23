@@ -1,6 +1,7 @@
 package com.openminis.app.sandbox
 
 import com.openminis.app.logging.AppLogger
+import com.openminis.app.offload.OffloadPermissionManager
 import java.io.File
 
 /**
@@ -18,6 +19,20 @@ object SessionAccessPolicy {
         val self = caller?.let { owner(it) } ?: return true
         return owner != self
     }
+
+    /**
+     * Whether [caller] may read chat sessions it does not own.
+     *
+     * Deliberately routed through [OffloadPermissionManager] instead of a
+     * bespoke flag: the agent CLI and the in-app tools then share one prompt,
+     * one remembered answer per chat session, and the same "deny in this
+     * session" that stops an agent from nagging after the user said no.
+     * `session_read` must stay registered in that manager's toolRegistry — an
+     * unknown tool falls through to BYPASS there, which would make this a
+     * silent no-op.
+     */
+    suspend fun isCrossSessionGranted(caller: String): Boolean =
+        OffloadPermissionManager.checkPermission(GRANT, "Read other chats", caller)
 }
 
 object SessionAccessAudit {

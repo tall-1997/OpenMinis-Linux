@@ -2,6 +2,7 @@ package com.openminis.app.offload
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.openminis.app.sandbox.SessionAccessPolicy
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -71,6 +72,18 @@ object OffloadPermissionManager {
         ToolPermissionInfo("location", "Location", PermissionCategory.PRIVACY, PermissionLevel.BYPASS),
         ToolPermissionInfo("clipboard", "Clipboard", PermissionCategory.PRIVACY, PermissionLevel.BYPASS),
         ToolPermissionInfo("contacts", "Contacts", PermissionCategory.PRIVACY, PermissionLevel.BYPASS),
+        // [T-android-session-read-boundary] Chat transcripts are the one privacy
+        // entry whose default is ASK_ONCE rather than BYPASS: reading *another*
+        // chat's messages is not something the user opted into by installing an
+        // agent, so the caller has to hold a grant. Registered here rather than
+        // left unknown on purpose — getLevel() returns BYPASS for tools missing
+        // from this registry, which would have made the boundary a no-op.
+        ToolPermissionInfo(
+            SessionAccessPolicy.GRANT,
+            "Read other chats",
+            PermissionCategory.PRIVACY,
+            PermissionLevel.ASK_ONCE,
+        ),
         ToolPermissionInfo("photos", "Photos", PermissionCategory.PRIVACY, PermissionLevel.BYPASS),
         // Media — no personal data, hidden from Settings.
         ToolPermissionInfo("speak", "Text-to-Speech", PermissionCategory.MEDIA, PermissionLevel.BYPASS, showInSettings = false),

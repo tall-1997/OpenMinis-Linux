@@ -659,6 +659,10 @@ class MinisApp : Application(), ImageLoaderFactory {
         // so PATH lookup succeeds; PRoot intercepts the execve before
         // the stub runs and routes to this handler).
         NativeOffloadServer.register("minis-sessions-cli", SessionsOffloadHandler(chatRepository))
+        // [T-android-session-read-boundary] Cross-session reads are audited
+        // regardless of scope; point the audit at app storage so the trail
+        // survives a logcat flush. Only ids/actions are written, never bodies.
+        com.openminis.app.sandbox.SessionAccessAudit.dir = filesDir.resolve("session-access")
         // [T-android-scheduled-tasks-full] minis-scheduled — create/list/run
         // timed AI tasks (new chat / follow-up / re-run), mirroring the in-app
         // Scheduled Tasks editor and the iOS Shortcuts intent set.
