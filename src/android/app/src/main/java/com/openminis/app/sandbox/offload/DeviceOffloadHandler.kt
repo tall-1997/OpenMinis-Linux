@@ -1,5 +1,6 @@
 package com.openminis.app.sandbox.offload
 
+import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -54,6 +55,8 @@ class DeviceOffloadHandler(private val context: Context) : NativeOffloadHandler 
 
     private fun deviceInfo(): JSONObject {
         val runtime = Runtime.getRuntime()
+        val mem = ActivityManager.MemoryInfo()
+        (context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager)?.getMemoryInfo(mem)
         val manufacturer = Build.MANUFACTURER.orFallback(Build.BRAND.orFallback("unknown"))
         val model = Build.MODEL.orFallback(Build.DEVICE.orFallback(Build.PRODUCT.orFallback("unknown")))
         return JSONObject()
@@ -69,9 +72,10 @@ class DeviceOffloadHandler(private val context: Context) : NativeOffloadHandler 
             .put("hardware", Build.HARDWARE.orFallback("unknown"))
             .put("supported_abis", runCatching { Build.SUPPORTED_ABIS.joinToString(", ") }.getOrDefault(""))
             .put("available_processors", runtime.availableProcessors())
-            .put("total_memory_mb", runtime.totalMemory() / (1024 * 1024))
-            .put("free_memory_mb", runtime.freeMemory() / (1024 * 1024))
-            .put("max_memory_mb", runtime.maxMemory() / (1024 * 1024))
+            .put("total_memory_mb", mem.totalMem / (1024 * 1024))
+            .put("free_memory_mb", mem.availMem / (1024 * 1024))
+            .put("max_memory_mb", mem.totalMem / (1024 * 1024))
+            .put("jvm_heap_mb", runtime.maxMemory() / (1024 * 1024))
     }
 
     private fun batteryInfo(): JSONObject {
@@ -133,12 +137,15 @@ class DeviceOffloadHandler(private val context: Context) : NativeOffloadHandler 
         }
         json.put("app_data_mb", String.format("%.1f", dirSize(context.filesDir) / 1e6))
             .put("app_cache_mb", String.format("%.1f", dirSize(context.cacheDir) / 1e6))
+            .put("app_data_note", "Guest rootfs is excluded. Walking ubuntu-rootfs made `all` exceed the 20s offload deadline.")
         return json
     }
 
     private fun dirSize(dir: File): Long {
         var n = 0L
-        dir.walkTopDown().forEach { if (it.isFile) n += it.length() }
+        dir.walkTopDown()
+            .onEnter { child -> child.name != "ubuntu-rootfs" && child.name != "alpine-rootfs" }
+            .forEach { if (it.isFile) n += it.length() }
         return n
     }
 

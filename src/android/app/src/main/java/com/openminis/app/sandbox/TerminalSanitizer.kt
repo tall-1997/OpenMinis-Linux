@@ -19,6 +19,23 @@ object TerminalSanitizer {
      * 1. CR folding — simulate carriage return overwriting
      * 2. Strip remaining ANSI/VT escape sequences
      */
+    private val offloadExit = Regex("""proot info: native_offload:.*\bexit=(\d+)""")
+
+    /**
+     * Drop proot's offload trace line. The guest stub can still exit 0; the
+     * logged `exit=` is the host handler's real status.
+     */
+    fun dropOffloadTrace(raw: String): Pair<String, Int?> {
+        if (!raw.contains("proot info: native_offload:")) return raw to null
+        var logged: Int? = null
+        val kept = raw.lineSequence().filter { line ->
+            if (!line.contains("proot info: native_offload:")) return@filter true
+            logged = offloadExit.find(line)?.groupValues?.get(1)?.toIntOrNull() ?: logged
+            false
+        }.joinToString("\n")
+        return kept to logged
+    }
+
     fun sanitize(raw: String): String {
         if (raw.isEmpty()) return raw
 

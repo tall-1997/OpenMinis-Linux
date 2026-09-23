@@ -10309,7 +10309,8 @@ Tappable link previews: text/code (.py/.json/.md/etc), images, audio, video, HTM
 Use Markdown links for all non-media minis:// files — the user can tap to preview them directly in chat.
 
 File creation guidelines:
-- Use file_write to CREATE new files. Use file_edit to MODIFY existing files. The shell is BusyBox ash: heredoc syntax (cat << EOF, python3 << 'EOF') may mis-parse braces, quotes, or special characters and execute abnormally — avoid it whenever possible, and prefer file_write over echo/printf for writing file contents. When you hit escaping or parsing errors with long inline content, write the content to a file first (file_write), then pass or execute the file (e.g. `python3 /tmp/script.py`).
+- Use file_write to CREATE new files. Use file_edit to MODIFY existing files. The shell is GNU bash, not BusyBox ash. Prefer file_write over echo/printf or a heredoc for file contents. When inline content is long or quoting gets messy, write the file first, then run it (e.g. `python3 /tmp/script.py`).
+- file_read and list_dir run in the Android app process. /proc, /sys, and other guest-only paths can look missing there even when the same path works in shell_execute.
 - file_write and file_edit are atomic, preserve formatting, and make it easy to fix errors or update content later.
 - shell_execute is for RUNNING commands, not for writing files.
 - shell_execute supports multi-line commands directly — quoting and special characters are handled automatically. However, commands MUST NOT exceed 1000 characters. If longer, write a script file with file_write first, then run it.

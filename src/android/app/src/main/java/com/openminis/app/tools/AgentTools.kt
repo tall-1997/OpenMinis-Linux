@@ -111,7 +111,7 @@ object AgentTools {
                 ),
                 "write_paths" to AgentToolParam(
                     "string",
-                    "Comma-separated Linux path prefixes this worker may file_write/file_edit. Required when two or more workers run in the same wave.",
+                    "Comma-separated Linux path prefixes this worker may file_write/file_edit. Required when two or more workers run in the same wave. Use none if the task must not write.",
                 ),
                 "max_turns" to AgentToolParam(
                     "integer",
@@ -130,7 +130,7 @@ object AgentTools {
 
 Prefer ONE spawn_agent call with a tasks[] array. You choose how many tasks the work needs; they run concurrently up to the configured cap, and one failure does not cancel siblings. Nested spawn_agent/run_subagent is blocked.
 
-kind: explore (read-only recon), plan (read-only design), worker (can write), general-purpose (fallback when the slice does not fit the others). Parallel workers MUST set non-overlapping write_paths.
+kind: explore (read-only recon, shell inspection allowed), plan (read-only design), worker (can write), general-purpose (fallback when the slice does not fit the others). Parallel workers MUST set non-overlapping write_paths, or write_paths=none if they must not write.
 
 Each task prompt MUST be self-contained with ## Task / ## Expected result / ## Constraints / ## Workflow / ## Collaboration. Omit max_turns to auto-size (simple ≈ 10, complex 40–60). Dependent phases: wait, verify Expected result, then dispatch the next wave. A single-task call may still pass prompt at the top level.""",
             parameters = mapOf(
@@ -149,7 +149,7 @@ Each task prompt MUST be self-contained with ## Task / ## Expected result / ## C
                     "explore | plan | worker | general-purpose. Default worker.",
                     enumValues = listOf("explore", "plan", "worker", "general-purpose"),
                 ),
-                "write_paths" to AgentToolParam("string", "Comma-separated Linux path prefixes this worker may modify. Required for parallel workers."),
+                "write_paths" to AgentToolParam("string", "Comma-separated Linux path prefixes this worker may modify, or none. Required for parallel workers."),
                 "max_turns" to AgentToolParam("integer", "Omit to auto-size: simple ≈ 10, complex 40–60."),
             ),
             required = emptyList(),

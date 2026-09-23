@@ -454,7 +454,7 @@ class TerminalSession(private val context: Context) {
         envMap["TERM"] = "xterm-256color"
         envMap["LANG"] = "C.UTF-8"
         envMap["LC_ALL"] = "C.UTF-8"
-        envMap["TZ"] = PRootKernel.posixTz()
+        envMap["TZ"] = PRootKernel.guestTz()
         for ((k, v) in PRootKernel.customEnvironment) envMap[k] = v
         ExecutionCoordinator.envVarRepository?.allAsDict()?.forEach { (k, v) -> envMap[k] = v }
         return envMap.map { (k, v) -> "$k=$v" }

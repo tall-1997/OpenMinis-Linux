@@ -41,6 +41,9 @@ object SubAgentKind {
         GrepTool.NAME,
         GlobTool.NAME,
         ListDirTool.NAME,
+        "shell_execute",
+        "shell_exec",
+        "env_exec",
         WebFetchTool.NAME,
         ExecuteCodeTool.NAME,
     )
@@ -82,6 +85,22 @@ object SubAgentKind {
 
     fun requiresWritePaths(kind: String, parallelWriters: Int): Boolean {
         return normalize(kind) == WORKER && parallelWriters > 1
+    }
+
+    private val mutatingShell = Regex(
+        """(?:^|[;&|`\n]|\$\()(?:sudo\s+)?(rm|mv|cp|tee|chmod|chown|chgrp|mkdir|rmdir|touch|truncate|dd|install|apt|apt-get|dpkg|pip|npm|ln|unlink|shred)\b""",
+        RegexOption.IGNORE_CASE,
+    )
+    private val fileRedirect = Regex("""(?<![\d])>{1,2}(?!\s*/dev/null)""")
+
+    /** explore/plan may inspect the guest, not change it. */
+    fun readOnlyShellDenial(command: String): String? {
+        val trimmed = command.trim()
+        if (trimmed.isEmpty()) return null
+        if (mutatingShell.containsMatchIn(trimmed) || fileRedirect.containsMatchIn(trimmed)) {
+            return "Error: explore/plan shell is read-only. date, uname, cat, ls, and df are fine; writes and redirects are not."
+        }
+        return null
     }
 
     fun blocks(kind: String, toolName: String): Boolean {

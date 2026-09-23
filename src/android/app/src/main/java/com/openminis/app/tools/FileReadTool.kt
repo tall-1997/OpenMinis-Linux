@@ -70,7 +70,7 @@ object FileReadTool {
                 ?: return ToolExecutionResult("Error: Cannot resolve path: $path", false, toolTitle = toolTitle)
 
             if (!file.exists()) {
-                return ToolExecutionResult("Error: File not found: $path", false, toolTitle = toolTitle)
+                return ToolExecutionResult("Error: File not found: $path${guestNamespaceHint(path)}", false, toolTitle = toolTitle)
             }
 
             if (file.isDirectory) {
@@ -178,4 +178,13 @@ object FileReadTool {
             ToolExecutionResult("Error reading file: ${e.message}", false)
         }
     }
+}
+
+internal fun guestNamespaceHint(path: String): String {
+    val p = path.trim()
+    val guestOnly = p == "/proc" || p.startsWith("/proc/") ||
+        p == "/sys" || p.startsWith("/sys/") ||
+        p == "/dev" || p.startsWith("/dev/")
+    if (!guestOnly) return ""
+    return ". App-process file tools cannot see this guest path. Use shell_execute, for example `cat $p`."
 }

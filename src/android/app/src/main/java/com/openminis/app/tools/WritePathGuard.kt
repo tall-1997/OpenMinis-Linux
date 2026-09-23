@@ -21,7 +21,7 @@ object WritePathGuard {
     class Scope(
         prefixes: List<String>,
     ) : ThreadContextElement<List<String>?> {
-        private val normalized = prefixes.map(::normalize).filter { it.startsWith("/") }
+        private val normalized = prefixes.map(::normalize).filter { it.startsWith("/") || it.equals(NO_WRITE, true) }
 
         companion object Key : CoroutineContext.Key<Scope>
 
@@ -59,6 +59,9 @@ object WritePathGuard {
 
     fun denyReason(linuxPath: String): String? {
         val prefixes = allowed.get() ?: return null
+        if (prefixes.any { it.equals(NO_WRITE, true) }) {
+            return "Error: this worker declared write_paths=none and cannot file_write or file_edit."
+        }
         if (prefixes.isEmpty()) return null
         val n = normalize(linuxPath)
         if (n.isEmpty()) return "Error: path is empty and write_paths is in effect."
@@ -79,12 +82,16 @@ object WritePathGuard {
         return "export MINIS_WRITE_PATHS='$escaped'\n$command"
     }
 
+    const val NO_WRITE = "none"
+
+    fun isNoWrite(paths: List<String>): Boolean =
+        paths.size == 1 && paths[0].equals(NO_WRITE, ignoreCase = true)
+
     fun parse(raw: String?): List<String> {
         if (raw.isNullOrBlank()) return emptyList()
-        return raw.split(',', '\n', ';')
-            .map { normalize(it) }
-            .filter { it.startsWith("/") }
-            .distinct()
+        val parts = raw.split(',', '\n', ';').map { it.trim() }.filter { it.isNotEmpty() }
+        if (parts.size == 1 && parts[0].equals(NO_WRITE, ignoreCase = true)) return listOf(NO_WRITE)
+        return parts.map { normalize(it) }.filter { it.startsWith("/") }.distinct()
     }
 
     fun normalize(path: String): String {

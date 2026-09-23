@@ -1,3 +1,10 @@
+# OpenMinis-Linux 1.36.28-linux
+
+- versionCode **81**
+- 环境检出报告里确认的沙箱、设备信息和子代理问题。详见 `docs/github-release-1.36.28-linux.md`。
+
+---
+
 # OpenMinis-Linux 1.36.27-linux
 
 - versionCode **80**

@@ -122,14 +122,18 @@ object ExecutionCoordinator {
 
             val durationMs = System.currentTimeMillis() - startTime
             val sanitized = TerminalSanitizer.sanitize(rawOutput)
-            val truncated = TerminalSanitizer.truncateIfNeeded(sanitized)
-            val output = if (exitCode != 0 && exitCode != 124) {
-                "$truncated\n(exit code: $exitCode)"
+            val (stripped, loggedExit) = TerminalSanitizer.dropOffloadTrace(sanitized)
+            var effectiveExit = exitCode
+            if (effectiveExit == 0 && loggedExit != null && loggedExit != 0) effectiveExit = loggedExit
+            if (effectiveExit == 0 && stripped.contains("handler_timeout")) effectiveExit = 124
+            val truncated = TerminalSanitizer.truncateIfNeeded(stripped)
+            val output = if (effectiveExit != 0 && effectiveExit != 124) {
+                "$truncated\n(exit code: $effectiveExit)"
             } else {
                 truncated
             }
 
-            CommandResult(output = output, exitCode = exitCode, durationMs = durationMs)
+            CommandResult(output = output, exitCode = effectiveExit, durationMs = durationMs)
         }
         }
         } finally {

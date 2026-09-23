@@ -122,6 +122,18 @@ object SubAgentRunner {
                         continue
                     }
                     val argsJson = args.toString()
+                    if (SubAgentKind.isReadOnly(kind) && name in setOf("shell_execute", "shell_exec", "env_exec")) {
+                        val denied = SubAgentKind.readOnlyShellDenial(
+                            runCatching { org.json.JSONObject(argsJson).optString("command") }.getOrDefault(""),
+                        )
+                        if (denied != null) {
+                            timeline.append("- turn $turn: $name (read-only denied)\n")
+                            resultParts.add(
+                                AgentContentPart.ToolResult(id = id, name = name, content = denied, isError = true),
+                            )
+                            continue
+                        }
+                    }
                     val preview = previewToolArgs(argsJson)
                     runCatching {
                         onStep(turn, buildString {
@@ -310,7 +322,7 @@ object SubAgentRunner {
             ""
         }
         val toolLine = if (SubAgentKind.isReadOnly(kind)) {
-            "- Read-only: do not modify files or run shell_execute. Use file_read, grep_source, search_sessions, read_session, web_search, browser_use."
+            "- Read-only: file_read, grep_source, and shell_execute for inspection only (date, uname, cat, ls). Do not write files or redirect output into a file."
         } else {
             "- Use tools immediately. Prefer file_read / grep_source / file_edit / file_write / shell_execute."
         }

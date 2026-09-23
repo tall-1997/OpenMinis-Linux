@@ -8,8 +8,10 @@ import com.openminis.app.sandbox.SessionWorkspace
  * `android-su -c 'ls /data'` stays allowed: it does not name this app's tree.
  */
 object SuPathPolicy {
-    private val sessionTree = Regex("""(?:^|[^\w.-])minis-sessions(?:/([^/\s'"`]+))?""")
-    private val projectTree = Regex("""(?:^|[^\w.-])minis-workspaces(?:/([^/\s'"`]+))?""")
+    // The name must end here. `minis-sessions-cli` is the supported tool, not a
+    // directory read; the old pattern treated that hyphen as "end of token".
+    private val sessionTree = Regex("""(?:^|[^\w.-])minis-sessions(?![\w.-])(?:/([^/\s'"`]+))?""")
+    private val projectTree = Regex("""(?:^|[^\w.-])minis-workspaces(?![\w.-])(?:/([^/\s'"`]+))?""")
 
     fun denial(command: String, callerSessionId: String?, callerFolderId: String? = null): String? {
         val norm = command.replace('\\', '/')

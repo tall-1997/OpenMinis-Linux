@@ -188,7 +188,7 @@ object PRootKernel {
         // fixed name ("LCL") to avoid abbreviations like "GMT+8" which contain
         // +/- and confuse musl's TZ parser. POSIX sign is reversed from UTC
         // offset (UTC+8 → "LCL-8"), matching iOS exactly.
-        customEnvironment["TZ"] = posixTz()
+        customEnvironment["TZ"] = guestTz()
 
         // Propagate the Android system HTTP proxy into every sandboxed
         // process so curl/wget/pip/npm reuse the user's system or enterprise
@@ -634,6 +634,15 @@ object PRootKernel {
      * name "LCL" to avoid musl's confused parsing of abbreviations like
      * "GMT+8" (which contain an embedded sign).
      */
+    /**
+     * Zone id when the phone has one (`Asia/Shanghai`). POSIX `LCL-8` makes
+     * `date +%Z` print LCL even after `/etc/localtime` is correct.
+     */
+    fun guestTz(): String {
+        val id = TimeZone.getDefault().id
+        return if (id.contains('/') && !id.startsWith("GMT")) id else posixTz()
+    }
+
     fun posixTz(): String {
         val offsetMs = TimeZone.getDefault().getOffset(System.currentTimeMillis())
         val secs = offsetMs / 1000L
@@ -655,7 +664,7 @@ object PRootKernel {
      * [ExecutionCoordinator.broadcastTimezoneChange].
      */
     fun updateTimezone(): String {
-        val tz = posixTz()
+        val tz = guestTz()
         customEnvironment["TZ"] = tz
         Log.i(TAG, "Updated TZ=$tz")
         return tz

@@ -364,7 +364,7 @@ private suspend fun ChatViewModel.runOneSubAgent(
         val maxTurns = spawn.maxTurns
         val title = spawn.title.ifEmpty { "子代理 $index/$total" }
         if (SubAgentKind.requiresWritePaths(kind, parallelWriters) && writePaths.isEmpty()) {
-            val msg = "Error: parallel workers must declare non-overlapping write_paths so file_write/file_edit stay isolated."
+            val msg = "Error: parallel workers must set write_paths to non-overlapping directories, or write_paths=none if this task must not write."
             publishSubAgentCard(
                 parentToolId = toolId,
                 cardIndex = cardIndex,

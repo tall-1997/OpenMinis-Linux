@@ -250,7 +250,7 @@ class PersistentShell(
         // Timezone: customEnvironment["TZ"] is seeded at PRootKernel.boot(),
         // but refresh it here in case the system timezone changed between boot
         // and now.
-        env["TZ"] = PRootKernel.posixTz()
+        env["TZ"] = PRootKernel.guestTz()
         if (debugOffload) env["MINIS_NOFF_DEBUG"] = "1"
         // T340: forward the chat session id to native_offload handlers via
         // proot env. NativeOffloadServer reads this off `request.env` and
@@ -462,6 +462,38 @@ class PersistentShell(
      *
      * @return Pair of (output, exitCode)
      */
+    private fun offloadExitPrelude(): String {
+        val names = NativeOffloadServer.registeredHandlers
+            .filter { it.matches(Regex("[A-Za-z0-9._+-]+")) }
+            .sorted()
+        if (names.isEmpty()) return ""
+        val body = buildString {
+            appendLine("minis_offload_wrap() {")
+            appendLine("  local name=\"\$1\"")
+            appendLine("  shift")
+            appendLine("  local out rc")
+            appendLine("  out=\$(command \"\$name\" \"\$@\")")
+            appendLine("  rc=\$?")
+            appendLine("  printf '%s\\n' \"\$out\"")
+            appendLine("  case \"\$out\" in")
+            appendLine("    *handler_timeout*) return 124 ;;")
+            appendLine("  esac")
+            appendLine("  return \$rc")
+            appendLine("}")
+            for (name in names) {
+                append(name).append("() { minis_offload_wrap ").append(name).appendLine(" \"\$@\"; }")
+            }
+        }
+        val file = File(RootfsManager.getInstance(context).rootfsDir, "etc/minis-offload-exit.sh")
+        runCatching {
+            if (!file.isFile || file.readText() != body) {
+                file.parentFile?.mkdirs()
+                file.writeText(body)
+            }
+        }.onFailure { return "" }
+        return ". /etc/minis-offload-exit.sh 2>/dev/null || true\n"
+    }
+
     suspend fun executeCommand(
         command: String,
         timeout: Long = 600_000L,
@@ -497,6 +529,7 @@ class PersistentShell(
         // instead of `pwd` on purpose: it is a shell variable, so the probe
         // cannot itself fail with ENOENT in the very state it detects.
         val wrappedCommand = buildString {
+            append(offloadExitPrelude())
             append(command).append('\n')
             append("__minis_rc=\$?\n")
             append("if [ ! -d \"\$PWD\" ]; then cd /var/minis/workspace 2>/dev/null || cd / ; fi\n")
