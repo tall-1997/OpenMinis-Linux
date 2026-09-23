@@ -488,7 +488,20 @@ class PersistentShell(
         }
 
         val marker = UUID.randomUUID().toString().take(8)
-        val wrappedCommand = "$command\necho \"__MINIS_DONE_${marker}_EXIT_\$?__\"\n"
+        // [T-android-ghost-cwd] Heal the shell's cwd before handing control back
+        // to the next command. This shell is long-lived, so a `cd` into a
+        // directory that a later command deletes leaves EVERY following command
+        // running inside a deleted inode: `pwd` prints the dead path and
+        // `ls`/`os.getcwd()` fail, and it never repairs itself for the rest of
+        // the session (the bug report had to kill the app). `$PWD` is used
+        // instead of `pwd` on purpose: it is a shell variable, so the probe
+        // cannot itself fail with ENOENT in the very state it detects.
+        val wrappedCommand = buildString {
+            append(command).append('\n')
+            append("__minis_rc=\$?\n")
+            append("if [ ! -d \"\$PWD\" ]; then cd /var/minis/workspace 2>/dev/null || cd / ; fi\n")
+            append("echo \"__MINIS_DONE_${marker}_EXIT_\${__minis_rc}__\"\n")
+        }
 
         return withContext(Dispatchers.IO) {
             val result = withTimeoutOrNull(timeout) {

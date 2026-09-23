@@ -53,6 +53,8 @@ object AgentTools {
         add(ExecuteCodeTool.definition())
         add(InvokeSkillTool.definition())
         add(SkillManageTool.definition())
+        // Agent-facing surface for the evolution engine (status/list/decide).
+        add(EvolutionTool.definition())
         add(AskReasoningTool.definition())
         add(ProductMediaTools.generateImageDefinition())
         add(ProductMediaTools.generateVideoDefinition())

@@ -8,7 +8,9 @@ import java.io.DataOutputStream
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.concurrent.thread
 
@@ -63,16 +65,47 @@ object NativeOffloadServer {
     private const val REPLY_PREFIX = ".native-offload-"
 
     /**
-     * How long a reply file may live before the in-session sweep may remove it.
+     * How long a reply file may live before the sweep may remove it.
      *
      * The real gap between writing the file and the rewritten `/bin/cat` reading
-     * it is sub-millisecond, so 10 minutes is enormously conservative — it
+     * it is sub-millisecond, so even 10 seconds is enormously conservative — it
      * exists only so a stopped/slow tracee can never lose its output.
+     *
+     * It used to be 10 MINUTES, which defeated the sweep for the very case it
+     * was written for: re-checked minutes after the calls ran, build 8 still
+     * held 34 files (3 → 34 within a single session), because the guest tmp
+     * directory accumulates faster than a 10-minute age gate can retire it.
      */
-    private const val REPLY_TTL_MS = 10 * 60 * 1000L
+    private const val REPLY_TTL_MS = 10_000L
 
     /** Run the opportunistic sweep every N replies, not on every single one. */
-    private const val SWEEP_EVERY_N_REPLIES = 50L
+    private const val SWEEP_EVERY_N_REPLIES = 8L
+
+    /**
+     * [T-android-offload-watchdog] Hard ceiling on how long a single
+     * handler may run before the server gives up on it and replies on its
+     * behalf.
+     *
+     * WHY THIS EXISTS. Handlers are synchronous and several of them bridge
+     * to the UI with `runBlocking` while waiting for the user to answer a
+     * permission prompt (system dialog 120s, then an in-app settings gate
+     * another 120s). When the app has no foreground UI the prompt is never
+     * answered, so the handler sat in `runBlocking` for ~4 minutes while the
+     * guest sat in `read()` on the socket. The caller's `timeout 25` cannot
+     * reach into this process: it kills the guest tracee, the app's handler
+     * thread keeps waiting, and every retry leaks another pair of threads —
+     * the observed "N calls hang forever, process count 6 → 20" failure.
+     *
+     * With this watchdog a stuck handler can no longer wedge a caller: the
+     * server always replies, and it replies with a structured body + a
+     * distinct exit code so the agent can tell "the tool is broken" apart
+     * from "a human still has to answer a prompt".
+     *
+     * 20s is chosen to be comfortably above the slowest legitimate handler
+     * (a contacts/provider query or a media scan) and well below the
+     * shortest sane guest-side `timeout` so callers get a real answer.
+     */
+    private const val HANDLER_TIMEOUT_MS = 20_000L
 
     const val socketName: String = SOCKET_NAME
 
@@ -258,18 +291,17 @@ object NativeOffloadServer {
             Log.w(TAG, "no handler registered for '$name' (known=${handlers.keys})")
             NativeOffloadResult(exitCode = 127, output = "native_offload: no handler for '$name'\n")
         } else {
-            try {
-                handler.handle(NativeOffloadRequest(
+            runHandlerWithWatchdog(
+                name = name,
+                handler = handler,
+                request = NativeOffloadRequest(
                     pid = pid,
                     argv = argv,
                     env = env,
                     cwd = cwd,
                     sessionId = env["MINIS_CHAT_SESSION_ID"]?.takeIf { it.isNotEmpty() },
-                ))
-            } catch (e: Exception) {
-                Log.w(TAG, "handler '$name' threw: ${e.message}", e)
-                NativeOffloadResult(exitCode = 1, output = "native_offload: ${e.message}\n")
-            }
+                ),
+            )
         }
         val elapsedMs = (System.nanoTime() - t0) / 1_000_000
 
@@ -277,7 +309,24 @@ object NativeOffloadServer {
         tmpDir.mkdirs()
         val seq = counter.incrementAndGet()
         val tmpHost = File(tmpDir, "$REPLY_PREFIX$pid-$seq")
-        tmpHost.writeText(result.output)
+        // [T-android-offload-silent-exit] A non-zero exit with no output leaves
+        // the caller with literally nothing to show — observed once as
+        // `offloaded 'android-contacts' -> exit=77` with 0 bytes on both
+        // streams, which is indistinguishable from a crash and cost the agent a
+        // whole diagnostic detour. Never let a failure be mute: synthesize a
+        // body naming the tool and the code whenever a handler returns none.
+        val output = if (result.exitCode == 0 || result.output.isNotBlank()) {
+            result.output
+        } else {
+            Log.w(TAG, "handler '$name' returned exit=${result.exitCode} with no output — synthesizing body")
+            org.json.JSONObject()
+                .put("error", "silent_failure")
+                .put("tool", name)
+                .put("exit_code", result.exitCode)
+                .put("message", "The host handler failed without producing any output.")
+                .toString() + "\n"
+        }
+        tmpHost.writeText(output)
         val tmpGuest = "/tmp/${tmpHost.name}"
 
         // [T-android-offload-tmp-leak] Bound growth WITHIN a long-running
@@ -289,13 +338,68 @@ object NativeOffloadServer {
         // touched. Sampled rather than run per reply to keep the hot path cheap.
         if (seq % SWEEP_EVERY_N_REPLIES == 0L) sweepStaleReplies(all = false)
 
-        Log.d(TAG, "reply name='$name' exit=${result.exitCode} outBytes=${result.output.length} " +
+        Log.d(TAG, "reply name='$name' exit=${result.exitCode} outBytes=${output.length} " +
             "tmpGuest=$tmpGuest elapsed=${elapsedMs}ms")
 
         output.writeLEInt(MAGIC_RSP)
         output.writeLEInt(result.exitCode)
         output.writeLEString(tmpGuest)
         output.flush()
+    }
+
+    /**
+     * [T-android-offload-watchdog] Run [handler] with a hard deadline.
+     *
+     * The handler runs on its own daemon thread and hands its result back
+     * through a one-slot queue; if nothing arrives within
+     * [HANDLER_TIMEOUT_MS] the server replies with a structured
+     * `handler_timeout` body instead of leaving the client blocked in
+     * `read()` forever. The abandoned thread keeps running (Java cannot
+     * safely kill it) but it no longer owns the connection: it only ever
+     * touches the queue, so its late result is dropped harmlessly.
+     */
+    private fun runHandlerWithWatchdog(
+        name: String,
+        handler: NativeOffloadHandler,
+        request: NativeOffloadRequest,
+    ): NativeOffloadResult {
+        val slot = ArrayBlockingQueue<NativeOffloadResult>(1)
+        thread(name = "native-offload-handler", isDaemon = true) {
+            val result = try {
+                handler.handle(request)
+            } catch (e: Exception) {
+                Log.w(TAG, "handler '$name' threw: ${e.message}", e)
+                NativeOffloadResult(exitCode = 1, output = "native_offload: ${e.message}\n")
+            } catch (t: Throwable) {
+                // A handler that dies on an Error (assertion, OOM-adjacent state)
+                // must not take the connection with it.
+                Log.w(TAG, "handler '$name' threw ${t.javaClass.simpleName}: ${t.message}", t)
+                NativeOffloadResult(exitCode = 1, output = "native_offload: ${t.javaClass.simpleName}\n")
+            }
+            slot.offer(result)
+        }
+        val result = slot.poll(HANDLER_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+        if (result != null) return result
+
+        Log.w(
+            TAG,
+            "handler '$name' exceeded ${HANDLER_TIMEOUT_MS}ms — replying on its behalf " +
+                "(argv=${request.argv}, session=${request.sessionId})",
+        )
+        return NativeOffloadResult(
+            exitCode = 124,
+            output = buildString {
+                append("{\n")
+                append("  \"error\": \"handler_timeout\",\n")
+                append("  \"tool\": \"").append(name.replace("\\", "\\\\").replace("\"", "\\\"")).append("\",\n")
+                append("  \"timeout_ms\": ").append(HANDLER_TIMEOUT_MS).append(",\n")
+                append("  \"message\": \"")
+                append("The host handler did not finish within ${HANDLER_TIMEOUT_MS / 1000}s. ")
+                append("This is a host-side hang, not a guest problem. ")
+                append("If the tool needs a permission prompt, open the app, grant it, and retry.\"\n")
+                append("}\n")
+            },
+        )
     }
 
     // ---- little-endian helpers ----

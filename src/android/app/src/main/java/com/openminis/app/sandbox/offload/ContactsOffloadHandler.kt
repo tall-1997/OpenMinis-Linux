@@ -11,6 +11,7 @@ import com.openminis.app.sandbox.NativeOffloadHandler
 import com.openminis.app.sandbox.NativeOffloadRequest
 import com.openminis.app.sandbox.NativeOffloadResult
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -95,33 +96,41 @@ class ContactsOffloadHandler(private val context: Context) : NativeOffloadHandle
             listOf(Manifest.permission.READ_CONTACTS)
         }
         AppLogger.warning(TAG, "${perms.joinToString("+")} not granted — routing through permission flow")
+        // [T-android-offload-hang] Bounded on purpose: this runs on an offload
+        // worker thread while the guest blocks in read(). The dialog + settings
+        // gate chain below is sized for a user watching the screen (120s + 120s);
+        // with no foreground UI it used to hold the thread — and the caller —
+        // for ~4 minutes and then leave the caller hanging forever, because the
+        // guest's own `timeout` cannot cancel a reply that has not been sent yet.
         val result = runBlocking {
-            var r = OffloadPermissionManager.requestAndroidPermission(perms)
-            if (r == OffloadPermissionManager.AndroidPermissionResult.DENIED &&
-                OffloadPermissionManager.pollForPermissionGrant({ hasPermission(needsWrite) })
-            ) {
-                AppLogger.info(TAG, "Contacts permission granted during post-DENY poll")
-                r = OffloadPermissionManager.AndroidPermissionResult.GRANTED
+            withTimeoutOrNull(OffloadPermissionManager.INTERACTIVE_BUDGET_MS) {
+                var r = OffloadPermissionManager.requestAndroidPermission(perms)
+                if (r == OffloadPermissionManager.AndroidPermissionResult.DENIED &&
+                    OffloadPermissionManager.pollForPermissionGrant({ hasPermission(needsWrite) })
+                ) {
+                    AppLogger.info(TAG, "Contacts permission granted during post-DENY poll")
+                    r = OffloadPermissionManager.AndroidPermissionResult.GRANTED
+                }
+                if (r == OffloadPermissionManager.AndroidPermissionResult.DENIED) {
+                    r = OffloadPermissionManager.requestSettingsGate(
+                        OffloadPermissionManager.SettingsGateRequest(
+                            id = if (needsWrite) "CONTACTS_RW" else Manifest.permission.READ_CONTACTS,
+                            title = "Contacts permission needed",
+                            message = if (needsWrite) {
+                                "Minis needs read + write contacts permission to delete entries. Open Settings to allow it."
+                            } else {
+                                "Minis needs contacts permission to read your address book. Open Settings to allow it."
+                            },
+                            settingsAction = android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                            requiresPackageUri = true,
+                            positiveLabel = "Open Settings",
+                        ),
+                        check = { hasPermission(needsWrite) },
+                    )
+                }
+                r
             }
-            if (r == OffloadPermissionManager.AndroidPermissionResult.DENIED) {
-                r = OffloadPermissionManager.requestSettingsGate(
-                    OffloadPermissionManager.SettingsGateRequest(
-                        id = if (needsWrite) "CONTACTS_RW" else Manifest.permission.READ_CONTACTS,
-                        title = "Contacts permission needed",
-                        message = if (needsWrite) {
-                            "Minis needs read + write contacts permission to delete entries. Open Settings to allow it."
-                        } else {
-                            "Minis needs contacts permission to read your address book. Open Settings to allow it."
-                        },
-                        settingsAction = android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                        requiresPackageUri = true,
-                        positiveLabel = "Open Settings",
-                    ),
-                    check = { hasPermission(needsWrite) },
-                )
-            }
-            r
-        }
+        } ?: OffloadPermissionManager.AndroidPermissionResult.TIMEOUT
         return when (result) {
             OffloadPermissionManager.AndroidPermissionResult.GRANTED -> null
             OffloadPermissionManager.AndroidPermissionResult.DENIED -> NativeOffloadResult(
@@ -136,8 +145,10 @@ class ContactsOffloadHandler(private val context: Context) : NativeOffloadHandle
             OffloadPermissionManager.AndroidPermissionResult.TIMEOUT -> NativeOffloadResult(
                 77,
                 OffloadOutput.formatBody(
-                    JSONObject().put("error", "timeout")
-                        .put("message", "Timed out waiting for the user to grant the contacts permission.")
+                    JSONObject().put("error", "permission_timeout")
+                        .put("message", "Timed out waiting for the user to grant the contacts permission " +
+                            "(budget ${OffloadPermissionManager.INTERACTIVE_BUDGET_MS / 1000}s). No work was done. " +
+                            "Ask the user to approve the prompt in the app, then retry.")
                         .toString(),
                     args,
                 ) + "\n",

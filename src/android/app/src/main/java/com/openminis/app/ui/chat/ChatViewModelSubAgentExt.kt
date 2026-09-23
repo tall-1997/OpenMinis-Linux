@@ -231,8 +231,22 @@ internal suspend fun ChatViewModel.executeRunSubAgent(
         if (!multiAgentSettings.enabled.value) {
             return ToolExecutionResult("Multi-agent dispatch is disabled in Settings → Multi-agent.", false)
         }
-        if (subAgentDepth.get() > 0) {
+        // [T-android-subagent-depth-leak] The authoritative "am I a sub-agent?"
+        // test is the lane marker carried in the coroutine context: it is scoped
+        // to the coroutine, so it cannot leak, and it repairs itself by
+        // construction. The depth counter is kept only as a stale-state
+        // detector - an interrupted dispatch used to leave it above zero for the
+        // rest of the session, and gating on it turned one stopped dispatch into
+        // a session that could never dispatch again until the app was killed.
+        if (kotlin.coroutines.coroutineContext[SubAgentLane] != null) {
             return ToolExecutionResult("Error: sub-agents cannot spawn further sub-agents.", false)
+        }
+        if (subAgentDepth.get() > 0) {
+            Log.w(
+                ChatViewModel.TAG,
+                "sub-agent depth=${subAgentDepth.get()} with no lane marker - resetting stale counter",
+            )
+            subAgentDepth.set(0)
         }
         val spawns = parseSubAgentBatch(argsJson, com.openminis.app.data.ToolLimitPrefs.subagentMaxTurns())
         if (spawns.isEmpty()) {
@@ -385,7 +399,17 @@ private suspend fun ChatViewModel.runOneSubAgent(
             "No model available for sub-agent. Select models under Settings → Multi-agent, or keep the main session model selected.",
             false,
         )
+        // [T-android-subagent-depth-leak] Claim the depth slot inside a
+        // try/finally that covers EVERYTHING after the claim. The lane body has
+        // its own try/finally, but between this claim and entering that block
+        // sit suspension points (activity-tracker start, lane-id resolution).
+        // Stopping a dispatch while it was parked in one of them threw
+        // CancellationException before the lane's finally existed, so the
+        // decrement never ran: depth stayed above zero for the rest of the
+        // ViewModel's life and every later dispatch was refused with
+        // "sub-agents cannot spawn further sub-agents" until the app was killed.
         subAgentDepth.incrementAndGet()
+        return try {
         val parentSession = realSessionId.ifBlank { sessionId }.ifBlank { activeSessionId }
         val laneId = kotlin.coroutines.coroutineContext[SubAgentLane]?.id
             ?: SubAgentLane.idFor(parentSession, System.nanoTime())
@@ -620,10 +644,12 @@ private suspend fun ChatViewModel.runOneSubAgent(
             )
             return failed
         } finally {
-            subAgentDepth.decrementAndGet()
             withContext(NonCancellable) {
                 runCatching { ExecutionCoordinator.sessionDidTerminate(laneId) }
             }
+        }
+        } finally {
+            subAgentDepth.decrementAndGet()
         }
     }
 

@@ -9390,6 +9390,14 @@ class ChatViewModel(
             "browser_use" -> executeBrowserUseTool(argsJson)
             "memory_write", "save_memory" -> executeMemoryWriteTool(argsJson)
             "memory_get", "recall_memory" -> executeMemoryGetTool(argsJson)
+            // Evolution was previously reachable only through Settings; the
+            // agent that gathers the evidence had no way to inspect or decide
+            // a proposal. See EvolutionTool for why this is read-mostly.
+            com.openminis.app.tools.EvolutionTool.NAME ->
+                com.openminis.app.tools.EvolutionTool.execute(
+                    argsJson,
+                    com.openminis.app.evolution.EvolutionHooks.engine,
+                )
             com.openminis.app.tools.DispatchAgentsTool.NAME -> executeRunSubAgent(
                 com.openminis.app.tools.DispatchAgentsTool.toSpawnArgs(argsJson, context),
                 toolId, toolBlocks, assistantId, currentText,

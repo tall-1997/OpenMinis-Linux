@@ -136,6 +136,25 @@ object OffloadPermissionManager {
     /** Timeout for the "bounce the user to a settings page" flow. */
     const val SETTINGS_GATE_TIMEOUT_MS: Long = 120_000L
 
+    /**
+     * [T-android-offload-hang] Total budget an offload handler may spend
+     * waiting for a *human*, before it must give up and answer.
+     *
+     * WHY. Handlers run synchronously on an IPC worker thread and bridge to
+     * the UI with `runBlocking`. The dialogs above are sized for a user who
+     * is looking at the phone (120s each), so an agent-driven call that needs
+     * a permission prompt could sit in `runBlocking` for ~4 minutes — far
+     * longer than any caller's `timeout`, and impossible for the caller to
+     * cancel. Measured on device: `android-contacts list` never returned,
+     * leaked a `timeout`+client pair per attempt, and grew the visible
+     * process count from 6 to 20.
+     *
+     * 15s is long enough for a prompt answered by someone already holding the
+     * phone and short enough that an unanswered one costs the caller nothing
+     * but a structured "ask the user, then retry" error.
+     */
+    const val INTERACTIVE_BUDGET_MS: Long = 15_000L
+
     data class AndroidPermissionRequest(val permissions: List<String>)
 
     private val _pendingAndroidPermission = MutableStateFlow<AndroidPermissionRequest?>(null)
