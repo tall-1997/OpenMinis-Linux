@@ -85,7 +85,7 @@ object WebSearchTool {
             if (results.isEmpty()) {
                 return ToolExecutionResult(
                     "web_search failed for \"$query\" via ${preferred.id}: ${lastError ?: "no results"}. " +
-                        "Try a shorter query or open a known URL with browser_use.",
+                        "Configure Settings → Web search, or open a known URL with browser_use.",
                     success = false,
                     toolTitle = toolTitle,
                 )
@@ -106,12 +106,7 @@ object WebSearchTool {
     ): Attempt {
         return try {
             when (engine) {
-                WebSearchSettings.Engine.DDG -> {
-                    val html = fetchUrl("https://html.duckduckgo.com/html/?q=${enc(query)}", context = context)
-                        ?: return Attempt(emptyList(), "empty response from DuckDuckGo")
-                    val parsed = parseHtml(html, max)
-                    Attempt(parsed, if (parsed.isEmpty()) "DuckDuckGo returned no cards" else null)
-                }
+                WebSearchSettings.Engine.DDG -> searchDuckDuckGo(query, max, context)
                 WebSearchSettings.Engine.SEARXNG -> {
                     val base = context?.let { WebSearchSettings.searxngUrl(it) }.orEmpty().trimEnd('/')
                     if (base.isEmpty()) return Attempt(emptyList(), "SearXNG URL is not configured")
@@ -355,6 +350,27 @@ object WebSearchTool {
             if (out.size >= max) break
         }
         return out
+    }
+
+    private fun searchDuckDuckGo(query: String, max: Int, context: Context?): Attempt {
+        val urls = listOf(
+            "https://html.duckduckgo.com/html/?q=${enc(query)}",
+            "https://lite.duckduckgo.com/lite/?q=${enc(query)}",
+        )
+        var last = "DuckDuckGo returned no cards"
+        var sawBody = false
+        for (url in urls) {
+            val html = fetchUrl(url, context = context) ?: continue
+            sawBody = true
+            if (html.contains("anomaly.js") || html.contains("Unfortunately, bots use DuckDuckGo")) {
+                last = "DuckDuckGo blocked this client. Set a backend in Settings → Web search."
+                continue
+            }
+            val parsed = parseHtml(html, max)
+            if (parsed.isNotEmpty()) return Attempt(parsed, null)
+        }
+        if (!sawBody) last = "empty response from DuckDuckGo"
+        return Attempt(emptyList(), last)
     }
 
     internal fun parseHtml(html: String, max: Int = MAX_RESULTS): List<Result> {

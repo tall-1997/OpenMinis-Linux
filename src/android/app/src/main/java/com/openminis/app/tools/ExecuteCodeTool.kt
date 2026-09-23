@@ -6,8 +6,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import org.mozilla.javascript.BaseFunction
 import org.mozilla.javascript.Context
 import org.mozilla.javascript.ContextFactory
+import org.mozilla.javascript.Scriptable
 import org.mozilla.javascript.ScriptableObject
 
 /**
@@ -94,11 +96,36 @@ object ExecuteCodeTool {
             val cx = factory.enterContext()
             try {
                 val scope = cx.initStandardObjects()
-                ScriptableObject.putProperty(scope, "bridge", Context.javaToJS(bridge, scope))
+                val printFn = object : BaseFunction() {
+                    override fun call(
+                        cx: Context,
+                        scope: Scriptable,
+                        thisObj: Scriptable,
+                        args: Array<out Any>,
+                    ): Any? {
+                        bridge.print(args.getOrNull(0))
+                        return Context.getUndefinedValue()
+                    }
+                }
+                ScriptableObject.putProperty(scope, "print", printFn)
+                val console = cx.newObject(scope)
+                ScriptableObject.putProperty(console, "log", printFn)
+                ScriptableObject.putProperty(scope, "console", console)
+                val callFn = object : BaseFunction() {
+                    override fun call(
+                        cx: Context,
+                        scope: Scriptable,
+                        thisObj: Scriptable,
+                        args: Array<out Any>,
+                    ): Any? = bridge.call(
+                        args.getOrNull(0)?.toString().orEmpty(),
+                        args.getOrNull(1)?.toString() ?: "{}",
+                    )
+                }
+                ScriptableObject.putProperty(scope, "__minis_call", callFn)
                 val prelude = buildString {
-                    append("function print(v){bridge.print(v);}\n")
                     for (t in SANDBOX_TOOLS) {
-                        append("function $t(p){return bridge.call('$t', JSON.stringify(p||{}));}\n")
+                        append("function $t(p){return __minis_call('$t', JSON.stringify(p||{}));}\n")
                     }
                 }
                 cx.evaluateString(scope, prelude + "\n" + code, "execute_code", 1, null)

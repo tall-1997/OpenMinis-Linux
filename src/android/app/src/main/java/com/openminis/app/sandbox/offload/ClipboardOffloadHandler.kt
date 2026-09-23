@@ -2,6 +2,7 @@ package com.openminis.app.sandbox.offload
 
 import android.app.ActivityManager
 import android.content.ClipData
+import android.content.ClipDescription
 import android.content.ClipboardManager
 import android.content.Context
 import android.os.Build
@@ -89,13 +90,46 @@ class ClipboardOffloadHandler(private val context: Context) : NativeOffloadHandl
         if (clip == null || clip.itemCount == 0) {
             return NativeOffloadResult(0, "")
         }
+        if (!clipHasText(clip)) {
+            val mime = clip.description?.getMimeType(0) ?: "unknown"
+            return NativeOffloadResult(
+                1,
+                JSONObject()
+                    .put("error", "clipboard_contains_non_text")
+                    .put("mime", mime)
+                    .put("message", "Clipboard item is not text. Use android-clipboard status to see the type.")
+                    .toString() + "\n",
+            )
+        }
         // Backwards-compat: get's primary output is still the raw clipboard
         // text (lots of pipe consumers depend on it). The iOS version emits
         // structured JSON; we only switch to JSON when --json is requested
         // so existing prompts (`text=$(android-clipboard get)`) keep working.
         val text = try { clip.getItemAt(0).coerceToText(context).toString() } catch (_: Throwable) { "" }
+        if (text.indexOf('\u0000') >= 0) {
+            return NativeOffloadResult(
+                1,
+                JSONObject()
+                    .put("error", "clipboard_contains_non_text")
+                    .put("message", "Clipboard text contained binary bytes and was not printed.")
+                    .toString() + "\n",
+            )
+        }
         val body = OffloadOutput.formatBody(text.trimEnd('\n'), args)
         return NativeOffloadResult(0, "$body\n")
+    }
+
+    private fun clipHasText(clip: ClipData): Boolean {
+        val desc = clip.description ?: return false
+        if (desc.hasMimeType(ClipDescription.MIMETYPE_TEXT_PLAIN) ||
+            desc.hasMimeType(ClipDescription.MIMETYPE_TEXT_HTML)
+        ) {
+            return true
+        }
+        for (i in 0 until desc.mimeTypeCount) {
+            if (desc.getMimeType(i).orEmpty().startsWith("text/")) return true
+        }
+        return false
     }
 
     private fun doSet(cm: ClipboardManager, args: OffloadArgs): NativeOffloadResult {

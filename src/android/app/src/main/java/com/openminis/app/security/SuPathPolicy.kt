@@ -12,6 +12,8 @@ object SuPathPolicy {
     // directory read; the old pattern treated that hyphen as "end of token".
     private val sessionTree = Regex("""(?:^|[^\w.-])minis-sessions(?![\w.-])(?:/([^/\s'"`]+))?""")
     private val projectTree = Regex("""(?:^|[^\w.-])minis-workspaces(?![\w.-])(?:/([^/\s'"`]+))?""")
+    // Longer names first so `minis-su` is not missed by the bare `su` token.
+    private val hostSu = Regex("""(?:^|[^\w.-])(?:sudo|minis-su(?:-cli)?|android-su|su)(?![\w.-])""")
 
     fun denial(command: String, callerSessionId: String?, callerFolderId: String? = null): String? {
         val norm = command.replace('\\', '/')
@@ -20,7 +22,7 @@ object SuPathPolicy {
         ) {
             return "拒绝读取应用数据库 databases/minis.db。会话内容请用 search_sessions / read_session，跨会话需要用户授权。"
         }
-        if (APP_DATA_ROOTS.any { norm.contains(it) }) {
+        if (APP_DATA_ROOTS.any { norm.contains(it) } && hostSu.containsMatchIn(norm)) {
             return "拒绝通过宿主 su 读取应用私有目录。本会话文件在 /var/minis；其他会话需要 session_read 授权。"
         }
         val caller = callerSessionId?.takeIf { it.isNotBlank() }?.let { SessionWorkspace.ownerSessionId(it) }

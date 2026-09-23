@@ -383,12 +383,13 @@ object NativeOffloadServer {
             }
             slot.offer(result)
         }
-        val result = slot.poll(HANDLER_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+        val timeoutMs = if (name == "minis-model-use") 120_000L else HANDLER_TIMEOUT_MS
+        val result = slot.poll(timeoutMs, TimeUnit.MILLISECONDS)
         if (result != null) return result
 
         Log.w(
             TAG,
-            "handler '$name' exceeded ${HANDLER_TIMEOUT_MS}ms — replying on its behalf " +
+            "handler '$name' exceeded ${timeoutMs}ms — replying on its behalf " +
                 "(argv=${request.argv}, session=${request.sessionId})",
         )
         return NativeOffloadResult(
@@ -397,9 +398,9 @@ object NativeOffloadServer {
                 append("{\n")
                 append("  \"error\": \"handler_timeout\",\n")
                 append("  \"tool\": \"").append(name.replace("\\", "\\\\").replace("\"", "\\\"")).append("\",\n")
-                append("  \"timeout_ms\": ").append(HANDLER_TIMEOUT_MS).append(",\n")
+                append("  \"timeout_ms\": ").append(timeoutMs).append(",\n")
                 append("  \"message\": \"")
-                append("The host handler did not finish within ${HANDLER_TIMEOUT_MS / 1000}s. ")
+                append("The host handler did not finish within ${timeoutMs / 1000}s. ")
                 append("This is a host-side hang, not a guest problem. ")
                 append("If the tool needs a permission prompt, open the app, grant it, and retry.\"\n")
                 append("}\n")
