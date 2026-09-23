@@ -561,12 +561,11 @@ object SessionActivityTracker {
     }
 
     private fun updateService() {
-        val context = appContext ?: return
-        AgentForegroundService.startService(
-            context,
-            sessionCountForNotification(),
-            statusForNotification(),
-        )
+        // Already foreground: another startForegroundService forces a
+        // startForeground within 5s and makes MIUI re-inflate the island.
+        // The service collector applies status changes itself.
+        if (AgentForegroundService.isRunning) return
+        startServiceIfNeeded()
     }
 
     /**

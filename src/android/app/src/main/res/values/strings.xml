@@ -145,6 +145,7 @@
     <string name="a11y_repair_footer_manual">Android removes the accessibility grant whenever an app is force-stopped, and does not restore it automatically. Install and authorize Shizuku to repair this in one tap in future.</string>
     <string name="bg_service_notification_title">Minis Ultra Agent Active</string>
     <string name="bg_service_notification_text">%1$s | %2$s | %3$s</string>
+    <string name="bg_service_notification_text_live">%1$s | %2$s</string>
     <!-- Shown on the ongoing notification / Live Update chip once the agent
          task has finished but the service is still alive because the user is
          still in the chat. %1$s = session count label, %2$s = total run time. -->

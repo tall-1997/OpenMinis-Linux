@@ -25,7 +25,9 @@ object SandboxJobKeepAlive {
         val key = "sandbox:$sessionId"
         SessionActivityTracker.setActive(key)
         SessionActivityTracker.updateToolStatus(preview.take(80).ifBlank { "sandbox job" })
-        AgentForegroundService.startService(context, inflight.size, preview.take(40))
+        if (!AgentForegroundService.isRunning) {
+            AgentForegroundService.startService(context, inflight.size, preview.take(40))
+        }
     }
 
     fun onEnd(context: Context, sessionId: String) {
@@ -34,7 +36,10 @@ object SandboxJobKeepAlive {
         if (inflight.isEmpty()) {
             SessionActivityTracker.updateToolStatus("Idle")
         } else {
-            AgentForegroundService.startService(context, inflight.size, "sandbox jobs ${inflight.size}")
+            SessionActivityTracker.updateToolStatus("sandbox jobs ${inflight.size}")
+            if (!AgentForegroundService.isRunning) {
+                AgentForegroundService.startService(context, inflight.size, "sandbox jobs ${inflight.size}")
+            }
         }
     }
 

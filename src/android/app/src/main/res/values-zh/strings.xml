@@ -122,6 +122,7 @@
     <string name="a11y_repair_footer_manual">每次应用被强行停止，Android 都会移除无障碍授权，且不会自动恢复。安装并授权 Shizuku 后，今后可一键恢复。</string>
     <string name="bg_service_notification_title">Minis Ultra Agent 运行中</string>
     <string name="bg_service_notification_text">%1$s | %2$s | %3$s</string>
+    <string name="bg_service_notification_text_live">%1$s | %2$s</string>
     <string name="bg_service_notification_title_completed">任务已完成</string>
     <string name="bg_service_notification_text_completed">%1$s | 用时 %2$s</string>
     <string name="bg_service_stop_action">停止</string>

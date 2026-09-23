@@ -1,3 +1,12 @@
+# OpenMinis-Linux 1.36.38-linux
+
+- versionCode **91**
+- 前台通知不再降到最低重要性，也不再锁屏隐藏。MIUI 状态栏和灵动岛仍能看到任务状态。
+- 计时交给系统计时器。工具切换最多 1.5 秒更新一次，纯文字状态最多 30 秒一次，避免灵动岛反复 inflate 把 SystemUI 撑崩。
+- 已安装用户会一次性把被降级的通知渠道恢复为低重要性，之后不再改用户自己的设置。详见 `docs/github-release-1.36.38-linux.md`。
+
+---
+
 # OpenMinis-Linux 1.36.37-linux
 
 - versionCode **90**

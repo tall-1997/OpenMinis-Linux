@@ -10,7 +10,9 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.graphics.drawable.Icon
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
 import android.util.Log
@@ -56,6 +58,15 @@ class AgentForegroundService : Service() {
 
         private const val TAG = "AgentForegroundService"
         private const val CHANNEL_ID = "agent_status"
+        private const val PREFS = "agent_fgs"
+        private const val KEY_CHANNEL_RESTORED = "channel_visible_restored"
+        /** Tool switches post immediately after this gap; text-only ticks wait longer. */
+        private const val STRUCT_GAP_MS = 1_500L
+        private const val TEXT_GAP_MS = 30_000L
+
+        @Volatile
+        var isRunning: Boolean = false
+            private set
         private const val CHANNEL_NAME = "Agent Status"
         private const val NOTIFICATION_ID = 9001
 
@@ -172,6 +183,7 @@ class AgentForegroundService : Service() {
         // log, which is exactly the "detection logic recursively
         // crashing" pattern. Skip the overlay observer and let
         // onStartCommand satisfy the FG-deadline + stopSelf.
+        isRunning = true
         if (com.openminis.app.crash.CrashFrequencyDetector.isSafeMode()) {
             Log.w(TAG, "safe-mode ON — skipping overlay/wake-lock bring-up")
             createNotificationChannel()
@@ -320,6 +332,9 @@ class AgentForegroundService : Service() {
             } else {
                 startForeground(NOTIFICATION_ID, notification)
             }
+            lastNotifyAt = SystemClock.elapsedRealtime()
+            lastStructuralKey = structuralKey()
+            lastFullKey = fullKey()
         } catch (e: Exception) {
             // Missing POST_NOTIFICATIONS, a disallowed FGS type, or a
             // background start that slipped past startForegroundService.
@@ -400,6 +415,8 @@ class AgentForegroundService : Service() {
     }
 
     override fun onDestroy() {
+        isRunning = false
+        notifyHandler.removeCallbacksAndMessages(null)
         releaseWakeLock()
         try {
             overlayController?.hide()
@@ -482,6 +499,31 @@ class AgentForegroundService : Service() {
                     dynamicIslandEnabled = values[14] as Boolean,
                 )
             }.distinctUntilChanged().collect { state -> applyOverlayState(state) }
+        }
+        overlayScope.launch {
+            combine(
+                SessionActivityTracker.currentToolName,
+                SessionActivityTracker.currentToolStatus,
+                SessionActivityTracker.isToolRunning,
+                SessionActivityTracker.activeSessions,
+                SessionActivityTracker.presentSessions,
+                SessionActivityTracker.lastTaskFinishedAtMs,
+            ) { values: Array<Any?> ->
+                val active = values[3] as Set<*>
+                val present = values[4] as Set<*>
+                val finished = values[5] as Long?
+                listOf(
+                    active.size,
+                    present.size,
+                    values[0],
+                    values[1],
+                    values[2],
+                    finished != null && active.isEmpty(),
+                    values[1],
+                ).joinToString("|")
+            }.distinctUntilChanged().collect {
+                requestStatusRefresh()
+            }
         }
     }
 
@@ -684,25 +726,67 @@ class AgentForegroundService : Service() {
      * place rather than posting a duplicate.
      */
     private fun refreshOngoingNotification() {
-        try {
-            // [T-systemui-freeze-fix] Throttle notification updates to prevent
-            // MIUI Dynamic Island inflate loop from triggering SystemUI ANR/OOM.
-            // Only update if the status text changed AND at least 5 seconds elapsed.
-            val currentText = SessionActivityTracker.currentToolStatus.value
-            val now = SystemClock.elapsedRealtime()
-            if (currentText == lastNotificationText && now - lastNotificationTimeMs < 5_000L) {
-                return
-            }
-            lastNotificationText = currentText
-            lastNotificationTimeMs = now
+        requestStatusRefresh(force = true)
+    }
 
+    private val notifyHandler = Handler(Looper.getMainLooper())
+    private var lastNotifyAt = 0L
+    private var lastStructuralKey: String? = null
+    private var lastFullKey: String? = null
+    private var refreshScheduled = false
+
+    private fun structuralKey(): String {
+        val active = SessionActivityTracker.activeSessions.value.size
+        val present = SessionActivityTracker.presentSessions.value.size
+        val tool = SessionActivityTracker.currentToolName.value.orEmpty()
+        val title = SessionActivityTracker.currentToolTitle.value.orEmpty()
+        val running = SessionActivityTracker.isToolRunning.value
+        val completed = SessionActivityTracker.lastTaskFinishedAtMs.value != null && active == 0
+        return "$active|$present|$tool|$title|$running|$completed|${lastDynamicIslandActive == true}"
+    }
+
+    private fun fullKey(): String =
+        structuralKey() + "|" + SessionActivityTracker.currentToolStatus.value.take(160)
+
+    private val deferredRefresh = Runnable {
+        refreshScheduled = false
+        postOngoingNotification()
+    }
+
+    /**
+     * Rebind the foreground notification only when the visible state changed.
+     * Tool switches wait at most [STRUCT_GAP_MS]; streaming status text waits
+     * [TEXT_GAP_MS]. The clock itself is a system chronometer, so it does not
+     * need a notify. Hiding the channel (IMPORTANCE_MIN) is not used — that
+     * removes the status bar / MIUI island row users expect.
+     */
+    private fun requestStatusRefresh(force: Boolean = false) {
+        val structural = structuralKey()
+        val full = fullKey()
+        if (!force && full == lastFullKey) return
+        val now = SystemClock.elapsedRealtime()
+        val gap = if (force || structural != lastStructuralKey) STRUCT_GAP_MS else TEXT_GAP_MS
+        if (force || now - lastNotifyAt >= gap) {
+            notifyHandler.removeCallbacks(deferredRefresh)
+            refreshScheduled = false
+            postOngoingNotification()
+            return
+        }
+        if (!refreshScheduled) {
+            refreshScheduled = true
+            notifyHandler.postDelayed(deferredRefresh, gap - (now - lastNotifyAt))
+        }
+    }
+
+    private fun postOngoingNotification() {
+        try {
+            val sessions = SessionActivityTracker.activeSessions.value
+            val count = if (sessions.isNotEmpty()) sessions.size
+            else SessionActivityTracker.presentSessions.value.size
             val notification = buildNotification(
-                SessionActivityTracker.activeSessions.value.size,
-                currentText,
+                count,
+                SessionActivityTracker.currentToolStatus.value,
             )
-            // Keep the FGS contract: updating id 9001 via notify() can
-            // demote the service on Android 14+ OEMs. startForeground
-            // refreshes in place.
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 startForeground(
                     NOTIFICATION_ID,
@@ -712,8 +796,11 @@ class AgentForegroundService : Service() {
             } else {
                 startForeground(NOTIFICATION_ID, notification)
             }
+            lastNotifyAt = SystemClock.elapsedRealtime()
+            lastStructuralKey = structuralKey()
+            lastFullKey = fullKey()
         } catch (t: Throwable) {
-            Log.w(TAG, "refreshOngoingNotification failed: ${t.message}")
+            Log.w(TAG, "postOngoingNotification failed: ${t.message}")
         }
     }
 
@@ -756,27 +843,28 @@ class AgentForegroundService : Service() {
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val manager = getSystemService(NotificationManager::class.java)
-            // [T-systemui-freeze-fix] One-time migration: delete the old
-            // IMPORTANCE_LOW channel if it exists, so we can recreate it at
-            // IMPORTANCE_MIN. Channel importance can only be downgraded by
-            // deletion + recreation; the user-facing effect is zero because
-            // FGS notifications always show in the status bar regardless of
-            // importance, and IMPORTANCE_MIN just prevents the channel from
-            // being pulled into MIUI's Dynamic Island inflate loop.
-            val existing = manager.getNotificationChannel(CHANNEL_ID)
-            if (existing != null && existing.importance > NotificationManager.IMPORTANCE_MIN) {
-                manager.deleteNotificationChannel(CHANNEL_ID)
-                Log.i(TAG, "Migrated agent_status channel from IMPORTANCE_LOW to IMPORTANCE_MIN")
+            val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
+            // Undo the IMPORTANCE_MIN migration once. MIN + SECRET hides the
+            // ongoing row from the status bar and MIUI island. After this,
+            // never delete the channel again so a user who changes it in
+            // system settings keeps that choice.
+            if (!prefs.getBoolean(KEY_CHANNEL_RESTORED, false)) {
+                val existing = manager.getNotificationChannel(CHANNEL_ID)
+                if (existing != null && existing.importance <= NotificationManager.IMPORTANCE_MIN) {
+                    manager.deleteNotificationChannel(CHANNEL_ID)
+                    Log.i(TAG, "Restored agent_status channel to IMPORTANCE_LOW")
+                }
+                prefs.edit().putBoolean(KEY_CHANNEL_RESTORED, true).apply()
             }
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 getString(R.string.bg_service_channel_name),
-                NotificationManager.IMPORTANCE_MIN,
+                NotificationManager.IMPORTANCE_LOW,
             ).apply {
                 description = getString(R.string.bg_service_channel_description)
                 setShowBadge(false)
                 setSound(null, null)
-                lockscreenVisibility = Notification.VISIBILITY_SECRET
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             }
             // [T-bg-overlay phase 2 fix] Higher-importance channel for the
             // SYSTEM_ALERT_WINDOW permission nudge. IMPORTANCE_DEFAULT
@@ -807,15 +895,6 @@ class AgentForegroundService : Service() {
 
     /** Last observed Live-Updates-active flag, for edge-triggered notify. */
     private var lastDynamicIslandActive: Boolean? = null
-
-    /**
-     * [T-systemui-freeze-fix] Notify throttle for the agent_status FGS
-     * notification. High-frequency updates (tool progress, APK install) can
-     * trigger MIUI's Dynamic Island inflate loop and cause SystemUI ANR/OOM.
-     * Only update if the text changed AND at least 5 seconds have elapsed.
-     */
-    private var lastNotificationText: String? = null
-    private var lastNotificationTimeMs: Long = 0L
 
     private fun maybePostOverlayPermissionNudge() {
         if (overlayNudgePosted) return
@@ -924,10 +1003,14 @@ class AgentForegroundService : Service() {
         val collapsedText = if (isCompleted) {
             getString(R.string.bg_service_notification_text_completed, sessionLabel, timeString)
         } else {
-            getString(
-                R.string.bg_service_notification_text, sessionLabel, toolStatus, timeString,
-            )
+            // Clock is a system chronometer. Putting seconds in the text forces
+            // a RemoteViews inflate on every rebind, which is what MIUI's island
+            // fragments over a long run.
+            getString(R.string.bg_service_notification_text_live, sessionLabel, toolStatus)
         }
+        val anchorElapsed = SessionActivityTracker.currentRunStartedAtMs.value ?: startTimeMs
+        val runWhenMs = System.currentTimeMillis() -
+            (SystemClock.elapsedRealtime() - anchorElapsed).coerceAtLeast(0L)
 
         // [T-android-dynamic-island] Short critical text — the ~7-char glyph
         // the system shows on the always-on / compact chip. Available since
@@ -970,6 +1053,7 @@ class AgentForegroundService : Service() {
                 isCompleted = isCompleted,
                 contentIntent = pendingIntent,
                 stopIntent = stopPendingIntent,
+                runWhenMs = runWhenMs,
             )
             if (promoted.hasPromotableCharacteristics()) {
                 return promoted
@@ -986,7 +1070,9 @@ class AgentForegroundService : Service() {
             .setContentText(collapsedText)
             .setStyle(NotificationCompat.BigTextStyle().bigText(collapsedText))
             .setOngoing(true)
-            .setShowWhen(false)
+            .setWhen(runWhenMs)
+            .setShowWhen(!isCompleted)
+            .setUsesChronometer(!isCompleted)
             .setOnlyAlertOnce(true)
             .setContentIntent(pendingIntent)
             .setPriority(NotificationCompat.PRIORITY_LOW)
@@ -1044,6 +1130,7 @@ class AgentForegroundService : Service() {
         isCompleted: Boolean,
         contentIntent: PendingIntent,
         stopIntent: PendingIntent,
+        runWhenMs: Long,
     ): Notification {
         // [T-android-dynamic-island] A ProgressStyle only counts as a valid
         // *promotable* style when it carries at least one progress segment with
@@ -1071,7 +1158,9 @@ class AgentForegroundService : Service() {
             .setContentText(collapsedText)
             .setStyle(progressStyle)
             .setOngoing(true)
-            .setShowWhen(false)
+            .setShowWhen(!isCompleted)
+            .setUsesChronometer(!isCompleted)
+            .setWhen(runWhenMs)
             .setOnlyAlertOnce(true)
             .setContentIntent(contentIntent)
             // Explicitly NOT colorized and NOT a group summary — both would
