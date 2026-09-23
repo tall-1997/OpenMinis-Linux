@@ -45,7 +45,7 @@ class MinisNotifyOffloadHandler(private val context: Context) : NativeOffloadHan
         ) {
             return NativeOffloadResult(77, "minis-notify: POST_NOTIFICATIONS not granted\n")
         }
-        val title = args.get("title") ?: args.positional.getOrNull(1) ?: "Minis"
+        val title = args.get("title") ?: args.positional.getOrNull(1) ?: "minisultra"
         val body = args.get("body", "message") ?: args.positional.drop(2).joinToString(" ").ifBlank { title }
         val sessionId = args.get("session") ?: request.sessionId ?: "default"
         val actions = parseActions(sessionId, args)

@@ -172,7 +172,7 @@ object SessionActivityTracker {
 
     /**
      * [T-android-overlay-hide-camera] True while the user has launched the
-     * system camera (ACTION_IMAGE_CAPTURE) from inside Minis and we're
+     * system camera (ACTION_IMAGE_CAPTURE) from inside minisultra and we're
      * waiting on the ActivityResult callback. The overlay observer in
      * [AgentForegroundService] gates `shouldShow` on this flag so the
      * floating capsule doesn't obstruct the camera viewfinder — Minis is

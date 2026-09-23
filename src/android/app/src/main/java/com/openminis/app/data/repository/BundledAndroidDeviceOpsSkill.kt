@@ -11,10 +11,10 @@ internal val ANDROID_DEVICE_OPS_SKILL_CONTENT = """
 ---
 name: android-device-ops
 version: 1.0.0
-description: Drive this Android phone through OpenMinis-Linux tools — PRoot shell, minis-su-cli, Shizuku, accessibility, notifications — without LSPosed or bundled privileged APKs.
+description: Drive this Android phone through minisultra tools — PRoot shell, minis-su-cli, Shizuku, accessibility, notifications — without LSPosed or bundled privileged APKs.
 ---
 
-# Android device ops (OpenMinis-Linux)
+# Android device ops (minisultra)
 
 Use this skill when the user wants the agent to act on the **phone itself**
 (settings, files outside the sandbox, notifications, UI taps, screenshots)
@@ -38,7 +38,7 @@ rather than only inside the Ubuntu PRoot workspace.
 
 If a step is unavailable, **explain which grant is missing** and how the
 user can turn it on. Do not pretend LSPosed / Xposed / system injection
-exists — OpenMinis-Linux will not implement those.
+exists — minisultra will not implement those.
 
 ## Safety
 

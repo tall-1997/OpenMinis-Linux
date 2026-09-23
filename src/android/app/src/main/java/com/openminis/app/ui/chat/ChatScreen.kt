@@ -2566,7 +2566,7 @@ fun ChatScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    // iOS-style centered layout: "Minis" + group row + provider·model row
+                    // iOS-style centered layout: "minisultra" + group row + provider·model row
                     Box(
                         modifier = Modifier.fillMaxWidth(),
                         contentAlignment = Alignment.Center,
@@ -2603,7 +2603,7 @@ fun ChatScreen(
                             // exists and the toggle is on, else fall back to
                             // the Soul name (matches the input placeholder
                             // "Message <SoulName>"), then to app_name
-                            // ("Minis") as the terminal fallback.
+                            // ("minisultra") as the terminal fallback.
                             // Tap opens the same SessionEditSheet used from
                             // the session list — drafts return null from
                             // loadSessionEntity so the sheet stays closed.

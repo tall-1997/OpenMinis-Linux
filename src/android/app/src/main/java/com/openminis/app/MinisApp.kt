@@ -504,6 +504,7 @@ class MinisApp : Application(), ImageLoaderFactory {
         com.openminis.app.agent.SoulStore.forceOverwriteOnce(this)
         com.openminis.app.agent.SoulStore.ensureExists(this)
         com.openminis.app.agent.SoulStore.upgradeStaleDefault(this)
+        com.openminis.app.agent.SoulStore.renameStockProduct(this)
         com.openminis.app.agent.SoulStore.refreshCache(this)
 
         // [T-global-md-seed + T-default-assets] Seed GLOBAL.md starter template
@@ -910,7 +911,7 @@ class MinisApp : Application(), ImageLoaderFactory {
         // T268: one-shot migration of pre-T266 internal alarms into the
         // system Clock app. Pre-T266 builds wrote alarms into Minis's own
         // SharedPreferences + AlarmManager; T266 retired that path but old
-        // installs still have ghost entries that fire only inside Minis.
+        // installs still have ghost entries that fire only inside minisultra.
         // Replay each future-dated entry through the same SET_ALARM /
         // SET_TIMER intents the new path uses, then clear prefs so the
         // migration runs at most once. Wrapped in runCatching so an

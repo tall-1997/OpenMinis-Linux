@@ -90,7 +90,7 @@ class ShareReceiverActivity : ComponentActivity() {
      * that isn't a provider-import candidate.
      */
     /**
-     * Global text-selection toolbar ("Minis Ultra") → inline PendingShare.
+     * Global text-selection toolbar ("minisultra") → inline PendingShare.
      * EXTRA_PROCESS_TEXT_READONLY is ignored: we never write the selection back.
      */
     private fun handleProcessText(intent: Intent, items: MutableList<PendingShare.Item>) {
