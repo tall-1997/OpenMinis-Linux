@@ -2183,4 +2183,17 @@
     <string name="provider_imported">已导入提供商「%1$s」</string>
     <string name="provider_import_invalid">提供商配置文件无效</string>
     <string name="provider_import_read_failed">无法读取文件</string>
+    <string name="mirror_name_official_ports">官方 ports</string>
+    <string name="mirror_name_official_pypi">官方 PyPI</string>
+    <string name="mirror_name_official_npm">官方 npm</string>
+    <string name="mirror_name_tuna">清华 TUNA</string>
+    <string name="mirror_name_aliyun">阿里云</string>
+    <string name="mirror_name_huawei">华为云</string>
+    <string name="mirror_name_tencent">腾讯云</string>
+    <string name="mirror_name_nchc">台湾 NCHC</string>
+    <string name="mirror_name_jaist">日本 JAIST</string>
+    <string name="mirror_name_kakao">韩国 Kakao</string>
+    <string name="mirror_region_global">全球</string>
+    <string name="mirror_region_china">中国</string>
+    <string name="mirror_region_asia">亚洲</string>
 </resources>

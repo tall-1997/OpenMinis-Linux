@@ -1,3 +1,12 @@
+# OpenMinis-Linux 1.36.37-linux
+
+- versionCode **90**
+- 设置一级页去掉多余返回箭头；MCP 工具改为二级页，开关仍会拒绝真实调用。
+- 刷新模型会先清掉失效条目并清理悬空引用；失败标记保留到下次成功。
+- 镜像名称和地区在中文界面不再显示英文。详见 `docs/github-release-1.36.37-linux.md`。
+
+---
+
 # OpenMinis-Linux 1.36.36-linux
 
 - versionCode **89**

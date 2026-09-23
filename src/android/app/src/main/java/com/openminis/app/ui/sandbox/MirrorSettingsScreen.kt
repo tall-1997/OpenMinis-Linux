@@ -124,6 +124,29 @@ data class MirrorTestResult(
 
 // ─── Mirror Definitions ──────────────────────────────────────────────────────
 
+@Composable
+private fun localizedMirrorName(name: String): String = when (name) {
+    "Official ports" -> stringResource(R.string.mirror_name_official_ports)
+    "Official PyPI" -> stringResource(R.string.mirror_name_official_pypi)
+    "Official npm" -> stringResource(R.string.mirror_name_official_npm)
+    "Tsinghua TUNA" -> stringResource(R.string.mirror_name_tuna)
+    "Alibaba" -> stringResource(R.string.mirror_name_aliyun)
+    "Huawei" -> stringResource(R.string.mirror_name_huawei)
+    "Tencent" -> stringResource(R.string.mirror_name_tencent)
+    "NCHC Taiwan" -> stringResource(R.string.mirror_name_nchc)
+    "JAIST Japan" -> stringResource(R.string.mirror_name_jaist)
+    "Kakao Korea" -> stringResource(R.string.mirror_name_kakao)
+    else -> name
+}
+
+@Composable
+private fun localizedMirrorRegion(region: String): String = when (region) {
+    "Global" -> stringResource(R.string.mirror_region_global)
+    "China" -> stringResource(R.string.mirror_region_china)
+    "Asia" -> stringResource(R.string.mirror_region_asia)
+    else -> region
+}
+
 object MirrorCatalog {
     private const val UBUNTU_PROBE = "dists/noble/Release"
 
@@ -545,7 +568,7 @@ private fun MirrorCategoryRow(category: MirrorCategory, onClick: () -> Unit) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (active && selected != null) {
                     Text(
-                        text = selected.name,
+                        text = localizedMirrorName(selected.name),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
@@ -670,7 +693,7 @@ fun MirrorCategoryDetailScreen(
                 ListItem(
                     headlineContent = {
                         Text(
-                            selected.name,
+                            localizedMirrorName(selected.name),
                             style = MaterialTheme.typography.bodyMedium,
                         )
                     },
@@ -782,7 +805,7 @@ private fun MirrorRow(
         Spacer(Modifier.width(10.dp))
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(mirror.name, style = MaterialTheme.typography.bodyMedium)
+                Text(localizedMirrorName(mirror.name), style = MaterialTheme.typography.bodyMedium)
                 if (mirror.isOfficial) {
                     Spacer(Modifier.width(6.dp))
                     Box(
@@ -800,7 +823,7 @@ private fun MirrorRow(
                 }
                 Spacer(Modifier.width(6.dp))
                 Text(
-                    mirror.region,
+                    localizedMirrorRegion(mirror.region),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                 )

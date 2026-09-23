@@ -167,6 +167,8 @@ object Routes {
     const val MEMORY = "memory"
     /** [T-mcp-integration-android] MCP Integrations management screen. */
     const val MCP = "mcp"
+    const val MCP_TOOLS = "mcp_tools/{serverId}"
+    fun mcpTools(serverId: String) = "mcp_tools/${android.net.Uri.encode(serverId)}"
     const val PLUGIN_MARKET = "plugin_market"
     /** [T-soul-md] SOUL.md editor. */
     const val SOUL = "soul"
@@ -1324,6 +1326,25 @@ fun AppNavigation(
                     mcpRepository = mcpRepository,
                     onBack = { navController.safePopBackStack() },
                     envVarRepository = envVarRepository,
+                    onOpenTools = { server -> navController.safeNavigate(Routes.mcpTools(server.id)) },
+                )
+            }
+        }
+
+        composable(
+            Routes.MCP_TOOLS,
+            arguments = listOf(navArgument("serverId") { type = NavType.StringType }),
+        ) { entry ->
+            val repo = mcpRepository
+            val serverId = android.net.Uri.decode(entry.arguments?.getString("serverId").orEmpty())
+            if (repo == null) {
+                LaunchedEffect(serverId) { navController.safePopBackStack() }
+            } else {
+                com.openminis.app.ui.settings.MCPToolsScreen(
+                    mcpRepository = repo,
+                    serverId = serverId,
+                    onBack = { navController.safePopBackStack() },
+                    onManage = { navController.safePopBackStack() },
                 )
             }
         }

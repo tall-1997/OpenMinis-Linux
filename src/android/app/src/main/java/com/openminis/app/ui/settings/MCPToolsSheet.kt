@@ -16,6 +16,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -132,6 +133,102 @@ fun MCPToolsSheet(
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
             ) { Text(stringResource(R.string.mcp_manage)) }
         }
+    }
+}
+
+@Composable
+fun MCPToolsScreen(
+    mcpRepository: MCPRepository,
+    serverId: String,
+    onBack: () -> Unit,
+    onManage: () -> Unit,
+) {
+    val servers by mcpRepository.servers.collectAsState()
+    val server = servers.find { it.id == serverId }
+    val context = LocalContext.current
+    var busy by remember { mutableStateOf(true) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var tools by remember { mutableStateOf<List<McpToolRow>>(emptyList()) }
+    var disabled by remember(serverId) { mutableStateOf(MCPToolPolicy.disabled(context, serverId)) }
+
+    LaunchedEffect(serverId, servers) {
+        if (servers.isNotEmpty() && server == null) onBack()
+    }
+
+    LaunchedEffect(server?.id) {
+        val current = server ?: return@LaunchedEffect
+        busy = true
+        error = null
+        val quoted = "'" + current.id.replace("'", "'\\''") + "'"
+        val result = withContext(Dispatchers.IO) {
+            ExecutionCoordinator.execute(
+                sessionId = "mcp-tools-ui",
+                command = "minis-mcp-cli tools $quoted",
+                timeout = 25_000L,
+            )
+        }
+        tools = parseMcpTools(result.output)
+        disabled = MCPToolPolicy.disabled(context, current.id)
+        if (tools.isEmpty()) {
+            error = result.output.ifBlank { "exit ${result.exitCode}" }
+        }
+        busy = false
+    }
+
+    SettingsScaffold(
+        title = stringResource(R.string.mcp_tools_title, server?.id ?: serverId),
+        onBack = onBack,
+    ) {
+        Text(
+            stringResource(R.string.mcp_tools_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+        )
+        when {
+            busy -> Text(
+                stringResource(R.string.mcp_tools_loading),
+                modifier = Modifier.padding(20.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            tools.isEmpty() -> Text(
+                error ?: stringResource(R.string.mcp_tools_empty),
+                modifier = Modifier.padding(20.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            else -> tools.forEach { tool ->
+                val on = tool.name !in disabled
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(tool.name, style = MaterialTheme.typography.bodyLarge)
+                        if (tool.description.isNotBlank()) {
+                            Text(
+                                tool.description,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    Switch(
+                        checked = on,
+                        onCheckedChange = { enabled ->
+                            MCPToolPolicy.setEnabled(context, serverId, tool.name, enabled)
+                            disabled = MCPToolPolicy.disabled(context, serverId)
+                        },
+                    )
+                }
+                HorizontalDivider()
+            }
+        }
+        TextButton(
+            onClick = onManage,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+        ) { Text(stringResource(R.string.mcp_manage)) }
     }
 }
 

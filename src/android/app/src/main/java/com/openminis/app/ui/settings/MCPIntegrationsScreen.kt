@@ -66,6 +66,7 @@ import com.openminis.app.ui.components.MinisTextButton
 fun MCPIntegrationsScreen(
     mcpRepository: MCPRepository,
     onBack: () -> Unit,
+    onOpenTools: (MCPRepository.MCPServerConfig) -> Unit = {},
     // [T-mcp-env-var-picker-android] App env vars, for the STDIO env field's
     // "insert app var" picker ($$VAR references resolve at runtime in PRoot).
     // Null when the caller hasn't wired it — the picker affordance hides.
@@ -86,7 +87,6 @@ fun MCPIntegrationsScreen(
     // [T-mcp-review-fixes-android] FIX 1: tapping a row opens the form in EDIT
     // mode (matches iOS). null = the sheet is for adding a new server.
     var editServer by remember { mutableStateOf<MCPRepository.MCPServerConfig?>(null) }
-    var toolsServer by remember { mutableStateOf<MCPRepository.MCPServerConfig?>(null) }
     var deleteId by remember { mutableStateOf<String?>(null) }
 
     SettingsScaffold(
@@ -161,7 +161,7 @@ fun MCPIntegrationsScreen(
                         showDivider = index < servers.size - 1,
                         // FIX 1: plain tap opens the edit form (was delete-confirm).
                         // Delete stays reachable from inside the edit sheet.
-                        onClick = { toolsServer = server },
+                        onClick = { onOpenTools(server) },
                         trailing = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
@@ -191,18 +191,6 @@ fun MCPIntegrationsScreen(
             editServer = null,
             onDismiss = { showAddSheet = false },
             onRequestDelete = {},
-        )
-    }
-
-    // FIX 1: edit sheet — same form, pre-filled, with a Delete affordance.
-    toolsServer?.let { server ->
-        MCPToolsSheet(
-            server = server,
-            onDismiss = { toolsServer = null },
-            onManage = {
-                toolsServer = null
-                editServer = server
-            },
         )
     }
 

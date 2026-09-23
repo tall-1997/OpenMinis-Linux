@@ -2356,4 +2356,17 @@
     <string name="provider_imported">Imported provider "%1$s"</string>
     <string name="provider_import_invalid">Invalid provider configuration file</string>
     <string name="provider_import_read_failed">Failed to read file</string>
+    <string name="mirror_name_official_ports">Official ports</string>
+    <string name="mirror_name_official_pypi">Official PyPI</string>
+    <string name="mirror_name_official_npm">Official npm</string>
+    <string name="mirror_name_tuna">Tsinghua TUNA</string>
+    <string name="mirror_name_aliyun">Alibaba</string>
+    <string name="mirror_name_huawei">Huawei</string>
+    <string name="mirror_name_tencent">Tencent</string>
+    <string name="mirror_name_nchc">NCHC Taiwan</string>
+    <string name="mirror_name_jaist">JAIST Japan</string>
+    <string name="mirror_name_kakao">Kakao Korea</string>
+    <string name="mirror_region_global">Global</string>
+    <string name="mirror_region_china">China</string>
+    <string name="mirror_region_asia">Asia</string>
 </resources>

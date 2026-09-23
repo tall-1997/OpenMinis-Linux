@@ -16,7 +16,7 @@ fun ToolLimitsSettingsScreen(onBack: () -> Unit) {
     val lines = remember(revision) { ToolLimitPrefs.fileReadMaxLines() }
     val turns = remember(revision) { ToolLimitPrefs.subagentMaxTurns() }
 
-    SettingsScaffold(title = stringResource(R.string.tool_limits_title), onBack = onBack) {
+    SettingsScaffold(title = stringResource(R.string.tool_limits_title), onBack = null) {
         SettingsSection(
             header = stringResource(R.string.tool_limits_header),
             footer = stringResource(R.string.tool_limits_footer),

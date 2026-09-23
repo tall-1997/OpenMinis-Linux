@@ -8,7 +8,7 @@
 
 Android arm64 上的私人 AI Agent。把兼容接口接到手机里的一台 Ubuntu 24.04：能装包、跑脚本、用浏览器、技能和记忆，也能派出子代理。
 
-包名 `com.openminis.linux`，启动器名称 **Minis Ultra**。可与 [OpenMinis](https://github.com/OpenMinis) 并排安装。检查更新只指向本仓库。
+包名 `com.openminis.linux`，启动器名称 **Minis Ultra**。可与上游 [OpenMinis](https://github.com/OpenMinis/OpenMinis)（GPL-3.0）并排安装。检查更新只指向本仓库。
 
 本仓库以 [GNU GPL v3.0](LICENSE) 发布。它包含并修改了 GPLv3 程序，因此衍生作品也必须按 GPLv3 提供对应源码。沙箱链接的 [PRoot](https://github.com/proot-me/PRoot/) 为 GPLv2，合并分发时按 GPLv3 处理。第三方组件的名称、版本和许可见 [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)。
 
@@ -74,7 +74,7 @@ scripts/        rootfs 与开发脚本
 
 A private AI agent for Android arm64. It connects compatible model APIs to an Ubuntu 24.04 guest on the phone: packages, scripts, a browser, skills, memory, and sub-agents.
 
-Package id `com.openminis.linux`. Launcher name **Minis Ultra**. It can be installed beside [OpenMinis](https://github.com/OpenMinis). Update checks point only at this repository.
+Package id `com.openminis.linux`. Launcher name **Minis Ultra**. It can be installed beside upstream [OpenMinis](https://github.com/OpenMinis/OpenMinis) (GPL-3.0). Update checks point only at this repository.
 
 This repository is published under the [GNU GPL v3.0](LICENSE). It contains and modifies GPL-3 programs, so derivative works must ship corresponding source under GPL-3. The sandbox links [PRoot](https://github.com/proot-me/PRoot/) (GPL-2.0); the combined work is distributed under GPL-3. Names, versions, and licenses of other components are in [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
 

@@ -34,7 +34,7 @@ fun TranslateScreen(onBack: () -> Unit) {
     var busy by remember { mutableStateOf(false) }
 
     BackHandler(onBack = onBack)
-    SettingsScaffold(title = stringResource(R.string.settings_translate), onBack = onBack) {
+    SettingsScaffold(title = stringResource(R.string.settings_translate), onBack = null) {
         SettingsSection(footer = stringResource(R.string.translate_footer)) {
             Column(Modifier.fillMaxWidth().padding(16.dp)) {
                 DialogTextField(

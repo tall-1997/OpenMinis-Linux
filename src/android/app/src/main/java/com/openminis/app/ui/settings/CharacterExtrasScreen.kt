@@ -54,7 +54,7 @@ fun CharacterExtrasScreen(onBack: () -> Unit) {
             text = { Text(stringResource(R.string.character_extras_confirm_body)) },
         )
     }
-    SettingsScaffold(title = stringResource(R.string.settings_character_extras), onBack = onBack) {
+    SettingsScaffold(title = stringResource(R.string.settings_character_extras), onBack = null) {
         SettingsSection(
             header = stringResource(R.string.world_book_header),
             footer = stringResource(R.string.world_book_footer),

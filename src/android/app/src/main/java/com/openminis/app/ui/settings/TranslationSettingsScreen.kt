@@ -49,7 +49,7 @@ fun TranslationSettingsScreen(
 
     SettingsScaffold(
         title = stringResource(R.string.settings_translate),
-        onBack = onBack,
+        onBack = null,
     ) {
         SettingsSection(header = stringResource(R.string.translate_settings_section)) {
             Row(
