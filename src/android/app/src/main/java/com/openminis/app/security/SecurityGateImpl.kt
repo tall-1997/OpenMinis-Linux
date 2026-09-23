@@ -92,7 +92,22 @@ class SecurityGateImpl : SecurityGate {
     }
 
     override fun classifyRisk(command: String): RiskLevel {
-        val raw = command
+        var worst = RiskLevel.NORMAL
+        val units = riskUnits(command).ifEmpty { listOf(command) }
+        for (unit in units) {
+            when (classifySegment(unit)) {
+                RiskLevel.FATAL_BANNED -> return RiskLevel.FATAL_BANNED
+                RiskLevel.DANGEROUS -> worst = RiskLevel.DANGEROUS
+                else -> {}
+            }
+        }
+        if (worst == RiskLevel.NORMAL && containsShellExpansionSyntax(command)) {
+            return RiskLevel.DANGEROUS
+        }
+        return worst
+    }
+
+    private fun classifySegment(raw: String): RiskLevel {
         val unwrapped = raw.replace(Regex("\\$\\{IFS\\}"), " ")
         val argv = tokenizeCommand(unwrapped)
         val joined = argv.joinToString(" ")
@@ -165,6 +180,11 @@ class SecurityGateImpl : SecurityGate {
             mode != PermissionMode.READ_ONLY && mode != PermissionMode.PLAN
         ) {
             return Decision.Allow("协调工具自动放行")
+        }
+
+        // Host su shares the app UID. Deny private trees before any mode can allow them.
+        if (cmd.toolName in SHELL_TOOLS || cmd.toolName == "shell_exec" || cmd.toolName == "su_exec") {
+            SuPathPolicy.denial(extractCommand(cmd), null)?.let { return Decision.Denied(it) }
         }
 
         // [4] Mode-level block: DENY_ALL, READ_ONLY, PLAN.
@@ -368,7 +388,8 @@ class SecurityGateImpl : SecurityGate {
     }
 
     private fun describeFatalViolation(command: String): String {
-        val norm = command.replace(Regex("\\s+"), " ")
+        val fatal = riskUnits(command).firstOrNull { classifySegment(it) == RiskLevel.FATAL_BANNED } ?: command
+        val norm = fatal.replace(Regex("\\s+"), " ")
         return when {
             APP_DATA_ROOTS.any { norm.contains(it) } -> "禁止写入应用私有数据 ($command)"
             listOf("/system", "/system_ext", "/vendor", "/product", "/odm", "/boot", "/recovery").any { norm.contains(it) } ->
