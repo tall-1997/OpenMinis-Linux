@@ -1,18 +1,22 @@
+<p align="right"><a href="#english">English</a> · <b>中文</b></p>
+
 # Minis Ultra
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Platforms](https://img.shields.io/badge/Platforms-Android%20arm64-lightgrey.svg)](#下载)
 [![Release](https://img.shields.io/github/v/release/tall-1997/OpenMinis-Linux?include_prereleases)](https://github.com/tall-1997/OpenMinis-Linux/releases)
 
-Android arm64 上的私人 AI Agent。把 Claude、GPT、Gemini 和兼容中转接到手机里的一台 Ubuntu 24.04：能装包、跑脚本、用浏览器、技能和记忆，也能派出子代理。
+Android arm64 上的私人 AI Agent。把兼容接口接到手机里的一台 Ubuntu 24.04：能装包、跑脚本、用浏览器、技能和记忆，也能派出子代理。
 
-包名 `com.openminis.linux`，启动器名称 **Minis Ultra**。可与官方 OpenMinis 并排安装。检查更新只指向本仓库。
+包名 `com.openminis.linux`，启动器名称 **Minis Ultra**。可与 [OpenMinis](https://github.com/OpenMinis) 并排安装。检查更新只指向本仓库。
+
+本仓库以 [GNU GPL v3.0](LICENSE) 发布。它包含并修改了 GPLv3 程序，因此衍生作品也必须按 GPLv3 提供对应源码。沙箱链接的 [PRoot](https://github.com/proot-me/PRoot/) 为 GPLv2，合并分发时按 GPLv3 处理。第三方组件的名称、版本和许可见 [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)。
 
 ## 下载
 
-当前版本 **1.36.24-linux**（versionCode 77）。
+当前版本见 [Releases](https://github.com/tall-1997/OpenMinis-Linux/releases)。安装包名为 `minis-ultra-com.openminis.linux.apk`。
 
-- 发行包：[1.36.24-linux](https://github.com/tall-1997/OpenMinis-Linux/releases/tag/1.36.24-linux) → `minis-ultra-com.openminis.linux.apk`
+- 正式版：带版本号的 tag（例如 `1.36.36-linux`）
 - 滚动构建：[android-latest](https://github.com/tall-1997/OpenMinis-Linux/releases/tag/android-latest)（`main` 每次成功构建覆盖）
 
 侧载前允许「安装未知应用」。debug 签名不能覆盖另一张证书装上的版本，见 [docs/SIGNING.md](docs/SIGNING.md)。
@@ -48,12 +52,78 @@ docs/           说明与发行注记
 scripts/        rootfs 与开发脚本
 ```
 
-## 更新日志
+## 引用
 
-本版修了手机改时区后，客户机 `/etc/localtime` 仍停在启动时区，`date` 和 Python 显示旧偏移的问题。详细说明：[docs/RELEASE-NOTES.zh.md](docs/RELEASE-NOTES.zh.md)。
-
-## 许可
-
-[GNU GPL v3.0](LICENSE)。沙箱链接 PRoot（GPLv2），合并作品按 GPLv3 分发。第三方许可见 [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)。
+- 应用源码与本仓库修改：© 各贡献者，[GPL-3.0](LICENSE)
+- [PRoot](https://github.com/proot-me/PRoot/)（GPL-2.0），本仓库子模块 `deps/proot` 基于 [OpenMinis/proot](https://github.com/OpenMinis/proot)
+- [talloc](https://talloc.samba.org)（LGPL-3.0-or-later）
+- Ubuntu 24.04 arm64 根文件系统：构建时下载，许可随 Canonical / Ubuntu 软件包
+- Android SDK / AndroidX、OkHttp、Kotlin 协程等：见 [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)
 
 问题与功能请求请提到 [Issues](https://github.com/tall-1997/OpenMinis-Linux/issues)。
+
+---
+
+<p align="right" id="english"><b>English</b> · <a href="#minis-ultra">中文</a></p>
+
+# Minis Ultra
+
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+[![Platforms](https://img.shields.io/badge/Platforms-Android%20arm64-lightgrey.svg)](#download)
+[![Release](https://img.shields.io/github/v/release/tall-1997/OpenMinis-Linux?include_prereleases)](https://github.com/tall-1997/OpenMinis-Linux/releases)
+
+A private AI agent for Android arm64. It connects compatible model APIs to an Ubuntu 24.04 guest on the phone: packages, scripts, a browser, skills, memory, and sub-agents.
+
+Package id `com.openminis.linux`. Launcher name **Minis Ultra**. It can be installed beside [OpenMinis](https://github.com/OpenMinis). Update checks point only at this repository.
+
+This repository is published under the [GNU GPL v3.0](LICENSE). It contains and modifies GPL-3 programs, so derivative works must ship corresponding source under GPL-3. The sandbox links [PRoot](https://github.com/proot-me/PRoot/) (GPL-2.0); the combined work is distributed under GPL-3. Names, versions, and licenses of other components are in [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
+
+## Download
+
+Current builds are on [Releases](https://github.com/tall-1997/OpenMinis-Linux/releases). The APK is `minis-ultra-com.openminis.linux.apk`.
+
+- Versioned tags (for example `1.36.36-linux`)
+- Rolling build: [android-latest](https://github.com/tall-1997/OpenMinis-Linux/releases/tag/android-latest) (replaced on each successful `main` build)
+
+Allow unknown-app installs before sideloading. A debug signature cannot replace an install signed with a different certificate. See [docs/SIGNING.md](docs/SIGNING.md).
+
+## What it does
+
+- **Sandbox**: Ubuntu 24.04 arm64 under PRoot. Guest commands, host `su`, and shared storage are described in [LINUX.md](LINUX.md).
+- **Sessions**: an ungrouped session has its own workspace; sessions in a project share the workspace, attachments, and browser cache. The diary stays per session.
+- **Models**: compatible endpoints. A model id missing limits is filled from the catalog (context, output, thinking).
+- **Agents**: the main session can dispatch sub-agents. Settings → Agents.
+- **Skills and memory**: global skills; the session diary lives at `/var/minis/memory`. `GLOBAL.md` is edited separately in Settings.
+
+## Build from source
+
+PRoot and the Ubuntu rootfs are produced at build time and are not stored in git. NDK r28+ is required. Full steps are in [BUILDING.md](BUILDING.md).
+
+```sh
+git clone --recurse-submodules https://github.com/tall-1997/OpenMinis-Linux.git
+cd OpenMinis-Linux
+./deps/build_proot.sh && ./scripts/prepare_android_sandbox.sh
+cd src/android && ./gradlew :app:assembleDebug
+```
+
+Do not replace the guest's aarch64 `aapt2` with the sdkmanager x86_64 package. Mirrors: [docs/android-sdk-mirrors.md](docs/android-sdk-mirrors.md).
+
+## Layout
+
+```
+src/android/    Android app (Kotlin / Compose) and JNI
+src/shared/     Shared resources
+deps/           Native dependency build scripts
+docs/           Notes and release notes
+scripts/        Rootfs and development scripts
+```
+
+## Citations
+
+- Application source and modifications in this repository: © contributors, [GPL-3.0](LICENSE)
+- [PRoot](https://github.com/proot-me/PRoot/) (GPL-2.0). The `deps/proot` submodule tracks [OpenMinis/proot](https://github.com/OpenMinis/proot)
+- [talloc](https://talloc.samba.org) (LGPL-3.0-or-later)
+- Ubuntu 24.04 arm64 rootfs: downloaded at build time; licenses follow Canonical / Ubuntu packages
+- Android SDK / AndroidX, OkHttp, Kotlin coroutines, and the rest: [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)
+
+File issues and feature requests at [Issues](https://github.com/tall-1997/OpenMinis-Linux/issues).

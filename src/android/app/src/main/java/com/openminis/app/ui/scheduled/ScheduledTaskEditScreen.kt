@@ -39,7 +39,7 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TimeInput
-import androidx.compose.material3.CenterAlignedTopAppBar
+import com.openminis.app.ui.components.MinisCenterTopBar
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
@@ -203,7 +203,7 @@ fun ScheduledTaskEditScreen(
 
     Scaffold(
         topBar = {
-            CenterAlignedTopAppBar(
+            MinisCenterTopBar(
                 title = {
                     Text(
                         stringResource(

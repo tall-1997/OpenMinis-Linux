@@ -39,7 +39,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.CenterAlignedTopAppBar
+import com.openminis.app.ui.components.MinisCenterTopBar
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.CompositionLocalProvider
@@ -109,11 +109,11 @@ fun SettingsScaffold(
                 when {
                     navigation != null -> navigation()
                     onBack != null -> IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back))
                     }
                 }
             }
-            CenterAlignedTopAppBar(
+            MinisCenterTopBar(
                 title = titleSlot,
                 navigationIcon = navigationSlot,
                 actions = { actions?.invoke() },
@@ -470,7 +470,7 @@ fun SettingsChoiceRow(
             if (selected) {
                 Icon(
                     Icons.Default.Check,
-                    contentDescription = "Selected",
+                    contentDescription = stringResource(R.string.cd_selected),
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(20.dp),
                 )

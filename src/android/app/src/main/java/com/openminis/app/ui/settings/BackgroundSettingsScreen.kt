@@ -38,7 +38,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.CenterAlignedTopAppBar
+import com.openminis.app.ui.components.MinisCenterTopBar
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.Composable
@@ -163,7 +163,7 @@ fun BackgroundSettingsScreen(onBack: () -> Unit) {
 
     Scaffold(
         topBar = {
-            CenterAlignedTopAppBar(
+            MinisCenterTopBar(
                 title = { Text(stringResource(R.string.bg_section_header)) },
             )
         },

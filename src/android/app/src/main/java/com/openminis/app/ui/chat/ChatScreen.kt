@@ -168,7 +168,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
-import androidx.compose.material3.CenterAlignedTopAppBar
+import com.openminis.app.ui.components.MinisCenterTopBar
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -2567,7 +2567,7 @@ fun ChatScreen(
         containerColor = ChatColors.background,
         contentWindowInsets = WindowInsets(0),
         topBar = {
-            CenterAlignedTopAppBar(
+            MinisCenterTopBar(
                 title = {
                     // iOS-style centered layout: "Minis Ultra" + group row + provider·model row
                     Box(
@@ -2837,7 +2837,7 @@ fun ChatScreen(
                     // [T-android-tablet-split] See `isTwoPane`.
                     if (!isTwoPane) {
                         IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back))
                         }
                     } else if (onToggleSidebar != null) {
                         // [T-android-tablet-sidebar-collapse] The slot the back
@@ -2915,7 +2915,7 @@ fun ChatScreen(
                     // iOS: "..." circle button → dropdown menu
                     Box {
                         IconButton(onClick = { showChatMenu = true }) {
-                            Icon(Icons.Default.MoreVert, contentDescription = "More")
+                            Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.cd_more))
                         }
                         MinisMenu(
                             expanded = showChatMenu,
@@ -4220,21 +4220,26 @@ fun ChatScreen(
                                     SideEffect {
                                         selectionController.rememberMessageMarkdown(item.messageId, item.messageMarkdown)
                                     }
-                                    StreamingMarkdownText(
-                                        content = item.block.content,
-                                        isStreaming = item.isStreaming,
-                                        shardId = TextShardId(
-                                            messageId = item.messageId,
-                                            shardId = "text:${item.block.id}",
-                                        ),
-                                    )
-                                    if (!item.isStreaming && item.block.content.isNotBlank()) {
-                                        AssistantTranslateButton(
-                                            source = item.block.content,
-                                            onTranslated = {
-                                                viewModel.replaceAssistantTextBlock(item.messageId, item.block.id, it)
-                                            },
-                                        )
+                                    Box(Modifier.fillMaxWidth()) {
+                                        Column(Modifier.padding(end = 40.dp, bottom = 32.dp)) {
+                                            StreamingMarkdownText(
+                                                content = item.block.content,
+                                                isStreaming = item.isStreaming,
+                                                shardId = TextShardId(
+                                                    messageId = item.messageId,
+                                                    shardId = "text:${item.block.id}",
+                                                ),
+                                            )
+                                        }
+                                        if (!item.isStreaming && item.block.content.isNotBlank()) {
+                                            AssistantTranslateButton(
+                                                source = item.block.content,
+                                                onTranslated = {
+                                                    viewModel.replaceAssistantTextBlock(item.messageId, item.block.id, it)
+                                                },
+                                                modifier = Modifier.align(Alignment.BottomEnd),
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -4251,21 +4256,26 @@ fun ChatScreen(
                                     SideEffect {
                                         selectionController.rememberMessageMarkdown(item.messageId, item.messageMarkdown)
                                     }
-                                    MarkdownBlock(
-                                        rawText = item.rawText,
-                                        isStreaming = item.isStreaming,
-                                        shardId = TextShardId(
-                                            messageId = item.messageId,
-                                            shardId = "mdblock:${item.parentBlockId}:${item.blockIndex}",
-                                        ),
-                                    )
-                                    if (item.showTranslate) {
-                                        AssistantTranslateButton(
-                                            source = item.segmentText.ifBlank { item.rawText },
-                                            onTranslated = {
-                                                viewModel.replaceAssistantTextBlock(item.messageId, item.parentBlockId, it)
-                                            },
-                                        )
+                                    Box(Modifier.fillMaxWidth()) {
+                                        Column(Modifier.padding(end = 40.dp, bottom = 32.dp)) {
+                                            MarkdownBlock(
+                                                rawText = item.rawText,
+                                                isStreaming = item.isStreaming,
+                                                shardId = TextShardId(
+                                                    messageId = item.messageId,
+                                                    shardId = "mdblock:${item.parentBlockId}:${item.blockIndex}",
+                                                ),
+                                            )
+                                        }
+                                        if (item.showTranslate) {
+                                            AssistantTranslateButton(
+                                                source = item.segmentText.ifBlank { item.rawText },
+                                                onTranslated = {
+                                                    viewModel.replaceAssistantTextBlock(item.messageId, item.parentBlockId, it)
+                                                },
+                                                modifier = Modifier.align(Alignment.BottomEnd),
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -4740,7 +4750,7 @@ fun ChatScreen(
                             // anchor" for the turn-walk, and keeps this button visually
                             // distinct from the down button's plain chevron.
                             imageVector = Icons.Default.VerticalAlignTop,
-                            contentDescription = "Scroll to previous message",
+                            contentDescription = stringResource(R.string.cd_scroll_prev),
                             modifier = Modifier.size(20.dp),
                         )
                     }
@@ -4788,7 +4798,7 @@ fun ChatScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.KeyboardArrowDown,
-                            contentDescription = "Scroll to bottom",
+                            contentDescription = stringResource(R.string.cd_scroll_bottom),
                             modifier = Modifier.size(20.dp),
                         )
                     }
@@ -6211,7 +6221,7 @@ fun ChatScreen(
                             ) {
                                 Icon(
                                     Icons.Default.Add,
-                                    contentDescription = "Attach",
+                                    contentDescription = stringResource(R.string.cd_attach),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(20.dp),
                                 )
@@ -6772,7 +6782,7 @@ fun ChatScreen(
                             ) {
                                 Icon(
                                     Icons.Default.Stop,
-                                    contentDescription = "Stop",
+                                    contentDescription = stringResource(R.string.cd_stop),
                                     tint = Color.White,
                                     modifier = Modifier.size(20.dp),
                                 )
@@ -6807,7 +6817,7 @@ fun ChatScreen(
                             ) {
                                 Icon(
                                     Icons.Default.ArrowUpward,
-                                    contentDescription = "Send",
+                                    contentDescription = stringResource(R.string.cd_send),
                                     tint = if (canActivate) ChatColors.background
                                     else ChatColors.primaryText.copy(alpha = 0.5f),
                                     modifier = Modifier.size(20.dp),

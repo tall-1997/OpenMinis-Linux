@@ -45,6 +45,23 @@ class ScheduledTaskStore(private val context: Context) {
         write(all().filter { it.id != taskId })
     }
 
+    /** Null model pins that name entries removed by a provider model-list clear. */
+    fun dropEntryRefs(removedIds: Set<String>) {
+        if (removedIds.isEmpty()) return
+        val current = all()
+        val next = current.map { task ->
+            val binding = task.modelBinding
+            val bindingHit = binding != null && removedIds.any { it.isNotEmpty() && binding.contains(it) }
+            val modelHit = task.modelId != null && task.modelId in removedIds
+            if (!bindingHit && !modelHit) task
+            else task.copy(
+                modelId = if (modelHit) null else task.modelId,
+                modelBinding = if (bindingHit) null else binding,
+            )
+        }
+        if (next != current) write(next)
+    }
+
     fun clear() {
         prefs.edit().remove(KEY_TASKS).apply()
     }

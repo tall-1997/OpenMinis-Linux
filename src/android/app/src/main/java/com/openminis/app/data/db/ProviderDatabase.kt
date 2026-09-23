@@ -56,7 +56,7 @@ abstract class ProviderDatabase : RoomDatabase() {
          */
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE provider_instances ADD COLUMN azure_mode INTEGER NOT NULL DEFAULT 0")
+                db.addColumnIfMissing("provider_instances", "azure_mode", "INTEGER NOT NULL DEFAULT 0")
             }
         }
 
@@ -70,8 +70,8 @@ abstract class ProviderDatabase : RoomDatabase() {
          */
         val MIGRATION_2_3 = object : Migration(2, 3) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE provider_instances ADD COLUMN image_endpoint_mode TEXT")
-                db.execSQL("ALTER TABLE provider_instances ADD COLUMN image_endpoint_resolved TEXT")
+                db.addColumnIfMissing("provider_instances", "image_endpoint_mode", "TEXT")
+                db.addColumnIfMissing("provider_instances", "image_endpoint_resolved", "TEXT")
             }
         }
 
@@ -106,7 +106,7 @@ abstract class ProviderDatabase : RoomDatabase() {
 
         val MIGRATION_4_5 = object : Migration(4, 5) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE provider_instances ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0")
+                db.addColumnIfMissing("provider_instances", "pinned", "INTEGER NOT NULL DEFAULT 0")
             }
         }
 

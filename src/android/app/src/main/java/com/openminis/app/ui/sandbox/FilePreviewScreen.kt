@@ -58,7 +58,7 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.CenterAlignedTopAppBar
+import com.openminis.app.ui.components.MinisCenterTopBar
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -168,7 +168,7 @@ fun FilePreviewScreen(
     // (FileBrowserScreen) renders correctly with zero overrides; do the same.
     Scaffold(
         topBar = {
-            CenterAlignedTopAppBar(
+            MinisCenterTopBar(
                 title = {
                     Text(
                         text = if (showFullPath) item.file.absolutePath else item.name,
@@ -456,7 +456,7 @@ private fun MarkdownPreview(item: FileItem) {
             ),
         )
         else -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("Loading...", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.loading), color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

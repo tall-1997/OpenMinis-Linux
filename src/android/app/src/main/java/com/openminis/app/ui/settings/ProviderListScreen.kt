@@ -37,6 +37,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -56,6 +57,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.key
 import sh.calvin.reorderable.ReorderableColumn
 import com.openminis.app.data.model.ProviderInstance
+import com.openminis.app.data.repository.ProviderRefreshMarks
 import com.openminis.app.data.repository.ProviderRepository
 import com.openminis.app.data.repository.ModelRefreshResult
 import kotlinx.coroutines.Dispatchers
@@ -85,6 +87,7 @@ fun ProviderListScreen(
 
     var showMenu by remember { mutableStateOf(false) }
     var isSyncing by remember { mutableStateOf(false) }
+    var syncMarks by remember { mutableStateOf(ProviderRefreshMarks.load(context)) }
     val syncScope = rememberCoroutineScope()
 
     fun syncSummary(ok: Int, noKey: Int, failed: Int): String =
@@ -130,14 +133,14 @@ fun ProviderListScreen(
                 if (jsonStr != null) {
                     val label = providerRepository.importInstanceJSON(jsonStr)
                     if (label != null) {
-                        Toast.makeText(context, "Imported provider \"$label\"", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, context.getString(R.string.provider_imported, label), Toast.LENGTH_SHORT).show()
                     } else {
-                        Toast.makeText(context, "Invalid provider configuration file", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, context.getString(R.string.provider_import_invalid), Toast.LENGTH_SHORT).show()
                     }
                 }
             }
         } catch (e: Exception) {
-            Toast.makeText(context, "Failed to read file", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, context.getString(R.string.provider_import_read_failed), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -154,6 +157,8 @@ fun ProviderListScreen(
                             val results = withContext(Dispatchers.IO) {
                                 providerRepository.refreshAllModelsForce()
                             }
+                            ProviderRefreshMarks.recordAll(context, results)
+                            syncMarks = ProviderRefreshMarks.load(context)
                             val ok = results.count { it.second == ModelRefreshResult.SUCCESS_API }
                             val noKey = results.count { it.second == ModelRefreshResult.NO_KEY }
                             val failed = results.count {
@@ -230,6 +235,7 @@ fun ProviderListScreen(
                             context = context,
                             onProviderClick = onProviderClick,
                             onRequestDelete = { instanceToDelete = instance },
+                            syncResult = syncMarks[instance.id],
                         )
                         if (index < pinnedInstances.size - 1) {
                             val divider = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
@@ -350,6 +356,7 @@ fun ProviderListScreen(
                                             providerRepository.setInstancePinned(instance.id, !instance.pinned)
                                         },
                                         onClick = { onProviderClick(instance.id) },
+                                        syncResult = syncMarks[instance.id],
                                     )
                                 }
                             }
@@ -481,6 +488,7 @@ private fun ProviderSwipeableRow(
     context: android.content.Context,
     onProviderClick: (String) -> Unit,
     onRequestDelete: () -> Unit,
+    syncResult: ModelRefreshResult? = null,
 ) {
     val modelCount = providerRepository.visibleEntries(instance.id).size
     val apiKey = providerRepository.loadApiKey(instance.id)
@@ -519,6 +527,7 @@ private fun ProviderSwipeableRow(
                 providerRepository.setInstancePinned(instance.id, !instance.pinned)
             },
             onClick = { onProviderClick(instance.id) },
+            syncResult = syncResult,
         )
     }
 }
@@ -532,6 +541,7 @@ private fun ProviderInstanceRow(
     pinned: Boolean,
     onTogglePinned: () -> Unit,
     onClick: () -> Unit,
+    syncResult: ModelRefreshResult? = null,
 ) {
     val isActive = isConfigured && instance.isEnabled
 
@@ -582,10 +592,24 @@ private fun ProviderInstanceRow(
                     // say so instead of the alarming "No API key".
                     text = if (!apiKey.isNullOrBlank()) maskKey(apiKey)
                         else if (instance.allowsEmptyAPIKey) stringResource(R.string.provider_no_key_required)
-                        else "No API key",
+                        else stringResource(R.string.provider_list_no_api_key),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
+                )
+            }
+
+            if (syncResult != null && syncResult != ModelRefreshResult.SUCCESS_API) {
+                val mark = when (syncResult) {
+                    ModelRefreshResult.NO_KEY -> stringResource(R.string.provider_sync_mark_nokey)
+                    ModelRefreshResult.PRESERVED -> stringResource(R.string.provider_sync_mark_unchanged)
+                    else -> stringResource(R.string.provider_sync_mark_failed)
+                }
+                Text(
+                    text = mark,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = 2.dp),
                 )
             }
             if (modelCount > 0) {

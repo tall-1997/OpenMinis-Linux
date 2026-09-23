@@ -1,5 +1,6 @@
 package com.openminis.app.provider.gemini
 
+import com.openminis.app.provider.ModelListFetchIsolation
 import android.content.Context
 import com.openminis.app.data.model.LLMModel
 import com.openminis.app.provider.ModelsDevApi
@@ -38,25 +39,26 @@ object GeminiModelsApi {
         cloudCodeFallback: Boolean = false,
         context: Context? = null,
         forceRefresh: Boolean = false,
+        cacheScope: String = "",
     ): List<LLMModel> = withContext(Dispatchers.IO) {
         if (cloudCodeFallback) return@withContext LLMModel.allGemini
 
-        val cacheKey = (if (isOAuth) "oauth|" else "key|") + apiKey
+        val cacheKey = ModelListFetchIsolation.cacheKey((if (isOAuth) "oauth|" else "key|") + apiKey, cacheScope)
         if (context != null && !forceRefresh) {
             cache.load(context, cacheKey)?.let { return@withContext it }
         }
 
         val builder = Request.Builder()
         if (isOAuth) {
-            builder.url("https://generativelanguage.googleapis.com/v1beta/models")
+            builder.url(ModelListFetchIsolation.bustUrl("https://generativelanguage.googleapis.com/v1beta/models", forceRefresh, cacheScope))
             builder.header("Authorization", "Bearer $apiKey")
         } else {
-            builder.url("https://generativelanguage.googleapis.com/v1beta/models?key=$apiKey")
+            builder.url(ModelListFetchIsolation.bustUrl("https://generativelanguage.googleapis.com/v1beta/models?key=$apiKey", forceRefresh, cacheScope))
         }
 
         // [T-android-default-ua] brand outbound /v1beta/models request.
         builder.applyUserAgentOverride(null)
-        val response = client.newCall(builder.build()).execute()
+        val response = client.newCall(ModelListFetchIsolation.run { builder.noStoreIf(forceRefresh) }.build()).execute()
         val body = response.body?.string() ?: return@withContext LLMModel.allGemini
 
         if (!response.isSuccessful) {

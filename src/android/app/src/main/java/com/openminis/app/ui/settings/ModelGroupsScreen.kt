@@ -51,7 +51,7 @@ import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.CenterAlignedTopAppBar
+import com.openminis.app.ui.components.MinisCenterTopBar
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -159,7 +159,7 @@ fun ModelGroupsScreen(
 
     Scaffold(
         topBar = {
-            CenterAlignedTopAppBar(
+            MinisCenterTopBar(
                 title = { Text(stringResource(R.string.model_groups_model_groups)) },
                 actions = {
                     IconButton(onClick = { showNewGroupDialog = true }) {

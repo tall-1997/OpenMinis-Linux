@@ -1,5 +1,6 @@
 package com.openminis.app.provider.openrouter
 
+import com.openminis.app.provider.ModelListFetchIsolation
 import android.content.Context
 import com.openminis.app.data.model.LLMModel
 import com.openminis.app.data.model.normalizeModalities
@@ -32,20 +33,23 @@ object OpenRouterModelsApi {
         apiKey: String,
         context: Context? = null,
         forceRefresh: Boolean = false,
+        cacheScope: String = "",
     ): List<LLMModel> = withContext(Dispatchers.IO) {
-        val cacheKey = apiKey
+        val cacheKey = ModelListFetchIsolation.cacheKey(apiKey, cacheScope)
         if (context != null && !forceRefresh) {
             cache.load(context, cacheKey)?.let { return@withContext it }
         }
 
-        val request = Request.Builder()
-            .url("https://openrouter.ai/api/v1/models")
-            .header("Authorization", "Bearer $apiKey")
-            .header("HTTP-Referer", "https://github.com/OpenMinis/OpenMinis")
-            .header("X-Title", "Minis App")
-            // [T-android-default-ua] brand outbound /api/v1/models request.
-            .applyUserAgentOverride(null)
-            .build()
+        val request = ModelListFetchIsolation.run {
+            Request.Builder()
+                .url(bustUrl("https://openrouter.ai/api/v1/models", forceRefresh, cacheScope))
+                .header("Authorization", "Bearer $apiKey")
+                .header("HTTP-Referer", "https://github.com/OpenMinis/OpenMinis")
+                .header("X-Title", "Minis App")
+                .applyUserAgentOverride(null)
+                .noStoreIf(forceRefresh)
+                .build()
+        }
 
         val response = client.newCall(request).execute()
         val body = response.body?.string() ?: return@withContext emptyList()

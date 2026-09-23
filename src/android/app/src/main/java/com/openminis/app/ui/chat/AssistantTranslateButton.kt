@@ -1,5 +1,6 @@
 package com.openminis.app.ui.chat
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,6 +14,7 @@ import androidx.compose.material.icons.filled.Language
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
@@ -33,6 +35,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.openminis.app.MinisApp
 import com.openminis.app.R
+import com.openminis.app.i18n.TranslationPrefs
 import com.openminis.app.data.model.LLMMessage
 import com.openminis.app.data.model.ThinkingLevel
 import com.openminis.app.provider.ProviderFactory
@@ -52,12 +55,13 @@ private const val KEY_LANG = "lang"
 fun AssistantTranslateButton(
     source: String,
     onTranslated: (String) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    if (!TranslationPrefs.isEnabled(context)) return
     val scope = rememberCoroutineScope()
-    val prefs = remember { context.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE) }
     var open by remember { mutableStateOf(false) }
-    var lang by remember { mutableStateOf(prefs.getString(KEY_LANG, "中文") ?: "中文") }
+    var lang by remember { mutableStateOf(TranslationPrefs.lang(context)) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var modelName by remember { mutableStateOf<String?>(null) }
@@ -67,41 +71,22 @@ fun AssistantTranslateButton(
     LaunchedEffect(open) {
         if (!open) return@LaunchedEffect
         val entry = withContext(Dispatchers.IO) {
-            (context.applicationContext as? MinisApp)?.providerRepository?.resolveTranslationEntry()
+            resolveBubbleEntry(context)
         }
         modelName = entry?.model?.displayName
         if (entry == null) error = missing
     }
 
-    Row(
-        modifier = Modifier.padding(top = 4.dp),
-        horizontalArrangement = Arrangement.End,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
+    Box(modifier = modifier.size(32.dp), contentAlignment = Alignment.Center) {
         if (busy) {
-            CircularProgressIndicator(modifier = Modifier.size(16.dp).padding(end = 6.dp), strokeWidth = 2.dp)
-        }
-        Surface(
-            onClick = { if (!busy) open = true },
-            enabled = !busy,
-            shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant,
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
+            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+        } else {
+            IconButton(onClick = { open = true }, modifier = Modifier.size(32.dp)) {
                 Icon(
                     Icons.Filled.Language,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
+                    contentDescription = stringResource(R.string.translate_action),
+                    modifier = Modifier.size(18.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    stringResource(R.string.translate_action),
-                    modifier = Modifier.padding(start = 4.dp),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
@@ -139,7 +124,7 @@ fun AssistantTranslateButton(
                 onClick = {
                     busy = true
                     error = null
-                    prefs.edit().putString(KEY_LANG, lang).apply()
+                    TranslationPrefs.setLang(context, lang)
                     scope.launch {
                         val result = translateBubble(context, source, lang)
                         busy = false
@@ -164,7 +149,7 @@ private suspend fun translateBubble(context: android.content.Context, text: Stri
     val app = context.applicationContext as? MinisApp
         ?: return "Error: " + context.getString(R.string.translate_no_model)
     val repo = app.providerRepository
-    val entry = withContext(Dispatchers.IO) { repo.resolveTranslationEntry() }
+    val entry = withContext(Dispatchers.IO) { resolveBubbleEntry(context) }
         ?: return "Error: " + context.getString(R.string.translate_set_in_defaults)
     val instance = repo.instance(entry.providerInstanceId)
         ?: return "Error: " + context.getString(R.string.translate_no_model)
@@ -182,4 +167,18 @@ private suspend fun translateBubble(context: android.content.Context, text: Stri
     } catch (e: Exception) {
         "Error: " + (e.message ?: context.getString(R.string.translate_empty))
     }
+}
+
+
+private fun resolveBubbleEntry(context: android.content.Context): com.openminis.app.data.model.ModelEntry? {
+    val repo = (context.applicationContext as? MinisApp)?.providerRepository ?: return null
+    val config = repo.config.value
+    fun usable(id: String): com.openminis.app.data.model.ModelEntry? {
+        val entry = config.modelEntries.find { it.id == id && !it.isHidden } ?: return null
+        val inst = config.instances.find { it.id == entry.providerInstanceId } ?: return null
+        return entry.takeIf { inst.isEnabled }
+    }
+    val wanted = TranslationPrefs.entryId(context)
+    if (wanted != null) return usable(wanted)
+    return config.modelEntries.firstNotNullOfOrNull { if (it.isHidden) null else usable(it.id) }
 }

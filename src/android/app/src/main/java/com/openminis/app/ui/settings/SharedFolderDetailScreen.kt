@@ -26,7 +26,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.CenterAlignedTopAppBar
+import com.openminis.app.ui.components.MinisCenterTopBar
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -65,7 +65,7 @@ fun SharedFolderDetailScreen(
 
     Scaffold(
         topBar = {
-            CenterAlignedTopAppBar(
+            MinisCenterTopBar(
                 title = { Text(stringResource(R.string.shared_folder_detail_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {

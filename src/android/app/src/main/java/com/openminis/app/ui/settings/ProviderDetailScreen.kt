@@ -63,6 +63,8 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import com.openminis.app.data.model.ProviderType
+import com.openminis.app.data.repository.ModelRefreshResult
+import com.openminis.app.data.repository.ProviderRefreshMarks
 import com.openminis.app.data.repository.ProviderRepository
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.ui.components.MinisAlertDialog
@@ -135,6 +137,7 @@ fun ProviderDetailScreen(
     var isRefreshing by remember { mutableStateOf(false) }
 
     val exportContext = androidx.compose.ui.platform.LocalContext.current
+    var refreshNote by remember { mutableStateOf(ProviderRefreshMarks.get(exportContext, instance.id)) }
 
     SettingsScaffold(
         title = instance.label,
@@ -445,7 +448,7 @@ fun ProviderDetailScreen(
                                 }
                             },
                             shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3),
-                        ) { Text("Auto") }
+                        ) { Text(stringResource(R.string.provider_image_auto)) }
                         SegmentedButton(
                             selected = mode == com.openminis.app.data.model.ImageEndpointMode.imagesGenerations,
                             onClick = {
@@ -460,7 +463,7 @@ fun ProviderDetailScreen(
                                 }
                             },
                             shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3),
-                        ) { Text("Images API") }
+                        ) { Text(stringResource(R.string.provider_image_images_api)) }
                         SegmentedButton(
                             selected = mode == com.openminis.app.data.model.ImageEndpointMode.chatCompletions,
                             onClick = {
@@ -474,7 +477,7 @@ fun ProviderDetailScreen(
                                 }
                             },
                             shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3),
-                        ) { Text("Chat") }
+                        ) { Text(stringResource(R.string.provider_image_chat)) }
                     }
                 }
             }
@@ -531,7 +534,15 @@ fun ProviderDetailScreen(
             // Refresh action sits as the first row, mirroring the iOS
             // tap-to-refresh affordance in the section header area.
             SettingsRow(
-                title = if (isRefreshing) "Refreshing…" else "Refresh model list",
+                title = stringResource(if (isRefreshing) R.string.provider_detail_refreshing else R.string.provider_detail_refresh_models),
+                subtitle = refreshNote?.let { note ->
+                    stringResource(when (note) {
+                        ModelRefreshResult.NO_KEY -> R.string.provider_sync_mark_nokey
+                        ModelRefreshResult.PRESERVED -> R.string.provider_sync_mark_unchanged
+                        ModelRefreshResult.FAILURE -> R.string.provider_sync_mark_failed
+                        ModelRefreshResult.SUCCESS_API -> R.string.provider_sync_mark_unchanged
+                    })
+                },
                 onClick = if (isRefreshing) {
                     null
                 } else {
@@ -539,8 +550,10 @@ fun ProviderDetailScreen(
                         isRefreshing = true
                         scope.launch {
                             try {
-                                providerRepository.refreshModels(instance)
-                                AppLogger.info(TAG, "Refreshed models for ${instance.id}")
+                                val result = providerRepository.refreshModels(instance, forceRefresh = true, clearFirst = false)
+                                ProviderRefreshMarks.record(exportContext, instance.id, result)
+                                refreshNote = ProviderRefreshMarks.get(exportContext, instance.id)
+                                AppLogger.info(TAG, "Refreshed models for ${instance.id}: $result")
                             } finally {
                                 isRefreshing = false
                             }

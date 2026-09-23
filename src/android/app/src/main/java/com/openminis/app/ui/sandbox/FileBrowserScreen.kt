@@ -57,7 +57,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.CenterAlignedTopAppBar
+import com.openminis.app.ui.components.MinisCenterTopBar
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -101,7 +101,7 @@ fun FileBrowserScreen(
 
     Scaffold(
         topBar = {
-            CenterAlignedTopAppBar(
+            MinisCenterTopBar(
                 title = { Text(stringResource(R.string.filebrowser_title)) },
                 navigationIcon = {
                     IconButton(onClick = handleBack) {
@@ -238,7 +238,7 @@ fun FileBrowserScreen(
             text = { Text(msg) },
             confirmButton = {
                 MinisTextButton(onClick = { viewModel.dismissError() }) {
-                    Text("OK")  // OK is locale-neutral
+                    Text(stringResource(R.string.ok))  // OK is locale-neutral
                 }
             },
         )

@@ -258,8 +258,6 @@ class SessionListViewModel(
     val groupSuggestFailed = MutableStateFlow(false)
 
     // Multi-select
-    val isSelecting = MutableStateFlow(false)
-    val selectedIds = MutableStateFlow<Set<String>>(emptySet())
 
     // Session IDs currently regenerating their titles (UI overlay)
     val regeneratingIds = MutableStateFlow<Set<String>>(emptySet())
@@ -357,49 +355,6 @@ class SessionListViewModel(
         }
     }
 
-    fun toggleSelect(id: String) {
-        selectedIds.value = selectedIds.value.toMutableSet().also {
-            if (id in it) it.remove(id) else it.add(id)
-        }
-    }
-
-    /**
-     * [T-android-sessionlist-longpress-select] Long-press → Select: enter
-     * selection mode WITH this row selected. ADD semantics, not toggle — if
-     * the id is somehow already in the set, tapping Select must still select
-     * it. The context-menu item previously only toggled the id into
-     * [selectedIds] without ever setting [isSelecting], so the list never
-     * showed checkboxes and the id sat invisibly pre-selected.
-     */
-    fun enterSelection(id: String) {
-        selectedIds.value = selectedIds.value + id
-        isSelecting.value = true
-    }
-
-    fun selectAll() {
-        selectedIds.value = _allSessions.value.map { it.id }.toSet()
-    }
-
-    fun clearSelection() {
-        selectedIds.value = emptySet()
-        isSelecting.value = false
-    }
-
-    fun deleteSelected() {
-        val ids = selectedIds.value.toList()
-        viewModelScope.launch {
-            ids.forEach {
-                chatRepository.deleteSession(it)
-                ChatViewModelStore.release(it)
-                // [T-android-session-paused-badge] Drop badges for the
-                // deleted session so persisted PAUSED entries don't leak
-                // forever in SharedPreferences.
-                com.openminis.app.service.SessionBadgeStore.clear(it)
-            }
-        }
-        clearSelection()
-    }
-
     fun deleteSession(id: String) {
         viewModelScope.launch {
             chatRepository.deleteSession(id)
@@ -432,18 +387,6 @@ class SessionListViewModel(
         )
     }
 
-    /** Open the picker for the current multi-selection (toolbar entry point). */
-    fun requestGroupPickerForSelection() {
-        val ids = selectedIds.value.toList()
-        if (ids.isEmpty()) return
-        val anyFiled = _allSessions.value.any { it.id in ids && isFiled(it) }
-        groupPickerRequest.value = GroupPickerRequest(
-            sessionIds = ids,
-            anyFiled = anyFiled,
-            fromMultiSelect = true,
-        )
-    }
-
     fun dismissGroupPicker() {
         val wasMultiSelect = groupPickerRequest.value?.fromMultiSelect == true
         groupPickerRequest.value = null
@@ -458,7 +401,6 @@ class SessionListViewModel(
         // Teardown happens HERE, after the sheet is gone — tearing down at
         // choice time makes the selection UI animate out from under the
         // closing sheet.
-        if (wasMultiSelect) clearSelection()
     }
 
     /**

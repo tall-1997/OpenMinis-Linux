@@ -138,6 +138,8 @@ object Routes {
     const val WEB_SEARCH = "web_search"
     const val CHARACTER_EXTRAS = "character_extras"
     const val TRANSLATE = "translate"
+    const val HOME_BROWSER = "home_browser"
+    const val HOME_BROWSER_SETTINGS = "home_browser_settings"
     const val TOOL_LIMITS = "tool_limits"
 
     fun skillDetail(skillId: String) = "skill/$skillId"
@@ -617,6 +619,8 @@ fun AppNavigation(
                 onWebSearchClick = { navController.safeNavigate(Routes.WEB_SEARCH) },
                 onCharacterExtrasClick = { navController.safeNavigate(Routes.CHARACTER_EXTRAS) },
                 onTranslateClick = { navController.safeNavigate(Routes.TRANSLATE) },
+                onOpenBrowser = { navController.safeNavigate(Routes.HOME_BROWSER) },
+                onBrowserSettings = { navController.safeNavigate(Routes.HOME_BROWSER_SETTINGS) },
 
                 onLogsClick = { navController.safeNavigate(Routes.LOGS) },
                 onAboutClick = { navController.safeNavigate(Routes.ABOUT) },
@@ -1429,7 +1433,20 @@ fun AppNavigation(
         }
 
         composable(Routes.TRANSLATE) {
-            com.openminis.app.ui.settings.TranslateScreen(
+            com.openminis.app.ui.settings.TranslationSettingsScreen(
+                providerRepository = providerRepository,
+                onBack = { navController.safePopBackStack() },
+            )
+        }
+        composable(Routes.HOME_BROWSER) {
+            com.openminis.app.ui.browser.HomeBrowserRoute(
+                settings = false,
+                onBack = { navController.safePopBackStack() },
+            )
+        }
+        composable(Routes.HOME_BROWSER_SETTINGS) {
+            com.openminis.app.ui.browser.HomeBrowserRoute(
+                settings = true,
                 onBack = { navController.safePopBackStack() },
             )
         }

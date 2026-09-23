@@ -38,14 +38,14 @@ abstract class AppDatabase : RoomDatabase() {
 
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE sessions ADD COLUMN last_message TEXT")
-                db.execSQL("ALTER TABLE sessions ADD COLUMN model_binding TEXT")
+                db.addColumnIfMissing("sessions", "last_message", "TEXT")
+                db.addColumnIfMissing("sessions", "model_binding", "TEXT")
             }
         }
 
         val MIGRATION_2_3 = object : Migration(2, 3) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE messages ADD COLUMN reasoning_content TEXT")
+                db.addColumnIfMissing("messages", "reasoning_content", "TEXT")
             }
         }
 
@@ -56,8 +56,8 @@ abstract class AppDatabase : RoomDatabase() {
          */
         val MIGRATION_4_5 = object : Migration(4, 5) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE compact_markers ADD COLUMN first_kept_message_id TEXT")
-                db.execSQL("ALTER TABLE compact_markers ADD COLUMN last_compacted_message_id TEXT")
+                db.addColumnIfMissing("compact_markers", "first_kept_message_id", "TEXT")
+                db.addColumnIfMissing("compact_markers", "last_compacted_message_id", "TEXT")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_compact_markers_first_kept_message_id ON compact_markers(first_kept_message_id)")
             }
         }
@@ -69,7 +69,7 @@ abstract class AppDatabase : RoomDatabase() {
          */
         val MIGRATION_5_6 = object : Migration(5, 6) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE sessions ADD COLUMN thinking_override TEXT")
+                db.addColumnIfMissing("sessions", "thinking_override", "TEXT")
             }
         }
 
@@ -110,7 +110,7 @@ abstract class AppDatabase : RoomDatabase() {
          */
         val MIGRATION_7_8 = object : Migration(7, 8) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE compact_markers ADD COLUMN version INTEGER NOT NULL DEFAULT 1")
+                db.addColumnIfMissing("compact_markers", "version", "INTEGER NOT NULL DEFAULT 1")
             }
         }
 
@@ -170,7 +170,7 @@ abstract class AppDatabase : RoomDatabase() {
          */
         val MIGRATION_9_10 = object : Migration(9, 10) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE messages ADD COLUMN error_info TEXT")
+                db.addColumnIfMissing("messages", "error_info", "TEXT")
             }
         }
 
@@ -205,7 +205,7 @@ abstract class AppDatabase : RoomDatabase() {
                     )
                     """.trimIndent(),
                 )
-                db.execSQL("ALTER TABLE sessions ADD COLUMN folder_id TEXT")
+                db.addColumnIfMissing("sessions", "folder_id", "TEXT")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_sessions_folder_id ON sessions(folder_id)")
             }
         }
@@ -213,14 +213,14 @@ abstract class AppDatabase : RoomDatabase() {
         val MIGRATION_3_4 = object : Migration(3, 4) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 // sessions: add iOS-parity columns
-                db.execSQL("ALTER TABLE sessions ADD COLUMN source TEXT")
-                db.execSQL("ALTER TABLE sessions ADD COLUMN memory_enabled INTEGER NOT NULL DEFAULT 1")
-                db.execSQL("ALTER TABLE sessions ADD COLUMN pinned_at INTEGER")
-                db.execSQL("ALTER TABLE sessions ADD COLUMN edit_count INTEGER NOT NULL DEFAULT 0")
+                db.addColumnIfMissing("sessions", "source", "TEXT")
+                db.addColumnIfMissing("sessions", "memory_enabled", "INTEGER NOT NULL DEFAULT 1")
+                db.addColumnIfMissing("sessions", "pinned_at", "INTEGER")
+                db.addColumnIfMissing("sessions", "edit_count", "INTEGER NOT NULL DEFAULT 0")
 
                 // messages: add iOS-parity columns
-                db.execSQL("ALTER TABLE messages ADD COLUMN stream_interrupt_count INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE messages ADD COLUMN updated_at INTEGER")
+                db.addColumnIfMissing("messages", "stream_interrupt_count", "INTEGER NOT NULL DEFAULT 0")
+                db.addColumnIfMissing("messages", "updated_at", "INTEGER")
 
                 // compact_markers: new table mirroring iOS
                 db.execSQL("""
@@ -251,10 +251,10 @@ abstract class AppDatabase : RoomDatabase() {
          */
         val MIGRATION_11_12 = object : Migration(11, 12) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE messages ADD COLUMN model_id TEXT")
-                db.execSQL("ALTER TABLE messages ADD COLUMN model_display_name TEXT")
-                db.execSQL("ALTER TABLE messages ADD COLUMN provider_type TEXT")
-                db.execSQL("ALTER TABLE messages ADD COLUMN provider_instance_id TEXT")
+                db.addColumnIfMissing("messages", "model_id", "TEXT")
+                db.addColumnIfMissing("messages", "model_display_name", "TEXT")
+                db.addColumnIfMissing("messages", "provider_type", "TEXT")
+                db.addColumnIfMissing("messages", "provider_instance_id", "TEXT")
             }
         }
 

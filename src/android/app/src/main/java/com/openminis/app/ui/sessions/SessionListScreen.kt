@@ -120,7 +120,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.CenterAlignedTopAppBar
+import com.openminis.app.ui.components.MinisCenterTopBar
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.AlertDialog
 import androidx.compose.runtime.Composable
@@ -538,8 +538,6 @@ fun SessionListScreen(
     val searchQuery by viewModel.searchQuery.collectAsState()
     val isSearching by viewModel.isSearching.collectAsState()
     val searchSnippets by viewModel.searchSnippets.collectAsState()
-    val isSelecting by viewModel.isSelecting.collectAsState()
-    val selectedIds by viewModel.selectedIds.collectAsState()
     val regeneratingIds by viewModel.regeneratingIds.collectAsState()
     val providerConfig by providerRepository.config.collectAsState()
     val hasProviders = providerConfig.instances.isNotEmpty()
@@ -604,9 +602,6 @@ fun SessionListScreen(
     // iOS "Delete Group & N Sessions" — pair carries the member count so the
     // confirmation can restate the consequence.
     var folderToDelete by remember { mutableStateOf<Pair<FolderEntity, Int>?>(null) }
-    var showBulkDeleteDialog by remember { mutableStateOf(false) }
-    var showBulkExportDialog by remember { mutableStateOf(false) }
-    var showOverflowMenu by remember { mutableStateOf(false) }
     var editSession by remember { mutableStateOf<ChatSessionEntity?>(null) }
     var showBrowserSheet by remember { mutableStateOf(false) }
     var showBrowserSettings by remember { mutableStateOf(false) }
@@ -694,7 +689,7 @@ fun SessionListScreen(
     val listState = rememberLazyListState()
     LaunchedEffect(Unit) {
         viewModel.newTopSessionEvent.collect {
-            if (!viewModel.isSearchActive.value && !viewModel.isSelecting.value) {
+            if (!viewModel.isSearchActive.value) {
                 listState.animateScrollToItem(0)
             }
         }
@@ -736,9 +731,8 @@ fun SessionListScreen(
     // → collapse). Derived straight from LazyListState — no visibility probes
     // needed: header offscreen-above ⇔ the first visible item's index is past
     // the header's reconstructed index. Suppressed in select mode (iOS guard).
-    val miniBarBlock by remember(folderBlocks, folderHeaderIndices, isSelecting) {
+    val miniBarBlock by remember(folderBlocks, folderHeaderIndices) {
         derivedStateOf {
-            if (isSelecting) return@derivedStateOf null
             val block = folderBlocks.firstOrNull { !it.isCollapsed && it.ids.isNotEmpty() }
                 ?: return@derivedStateOf null
             val headerIdx = folderHeaderIndices[block.folder.id] ?: return@derivedStateOf null
@@ -765,122 +759,36 @@ fun SessionListScreen(
 
     Scaffold(
         topBar = {
-            CenterAlignedTopAppBar(
+            MinisCenterTopBar(
                 title = {
-                    if (isSelecting) {
-                        Text(
-                            if (selectedIds.isEmpty())
-                                stringResource(R.string.sessionlist_select_title)
-                            else
-                                stringResource(R.string.sessionlist_n_selected, selectedIds.size),
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 20.sp,
-                        )
-                    } else {
-                        Text(
+                    Text(
                             stringResource(R.string.app_name),
                             fontWeight = FontWeight.Bold,
                             fontSize = 20.sp,
                         )
-                    }
                 },
                 navigationIcon = {
-                    if (isSelecting) {
-                        MinisTextButton(onClick = { viewModel.clearSelection() }) {
-                            Text(stringResource(R.string.cancel))
-                        }
-                    } else {
-                        IconButton(onClick = onSettingsClick) {
-                            Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.sessionlist_settings))
-                        }
+                    IconButton(onClick = onSettingsClick) {
+                        Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.sessionlist_settings))
                     }
                 },
                 actions = {
-                    if (isSelecting) {
-                        MinisTextButton(onClick = { viewModel.selectAll() }) {
-                            Text(
-                                stringResource(
-                                    if (selectedIds.size == sessions.size) R.string.sessionlist_deselect_all
-                                    else R.string.sessionlist_select_all
-                                )
-                            )
-                        }
-                    } else {
-                        // [T-android-scheduled-tasks-design] Scheduled-tasks entry,
-                        // sits to the left of the Shell button on the home toolbar.
-                        // [T-android-scheduled-tasks-full] Badge shows the count of
-                        // scheduled tasks so the user can see at a glance how many
-                        // are configured without opening the list.
                         IconButton(onClick = onScheduledTasksClick) {
-                            if (scheduledTaskCount > 0) {
-                                BadgedBox(badge = { Badge { Text("$scheduledTaskCount") } }) {
-                                    Icon(
-                                        Icons.Outlined.Schedule,
-                                        contentDescription = stringResource(R.string.sessionlist_scheduled_tasks),
-                                    )
-                                }
-                            } else {
+                            Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
                                 Icon(
                                     Icons.Outlined.Schedule,
                                     contentDescription = stringResource(R.string.sessionlist_scheduled_tasks),
+                                    modifier = Modifier.size(24.dp),
                                 )
+                                if (scheduledTaskCount > 0) {
+                                    Badge(
+                                        modifier = Modifier
+                                            .align(Alignment.TopEnd)
+                                            .offset(x = 10.dp, y = (-8).dp),
+                                    ) { Text("$scheduledTaskCount") }
+                                }
                             }
                         }
-                        // Shell menu (matching iOS trailing shell button: Terminal, Rootfs, Browser)
-                        Box {
-                            IconButton(onClick = { showOverflowMenu = true }) {
-                                Icon(Icons.Outlined.Terminal, contentDescription = stringResource(R.string.sessionlist_shell))
-                            }
-                            MinisMenu(
-                                expanded = showOverflowMenu,
-                                onDismissRequest = { showOverflowMenu = false },
-                                offset = DpOffset(0.dp, 0.dp),
-                            ) {
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.sessionlist_shell_terminal)) },
-                                    onClick = {
-                                        showOverflowMenu = false
-                                        onTerminalClick()
-                                    },
-                                    leadingIcon = {
-                                        Icon(Icons.Outlined.Terminal, contentDescription = null)
-                                    },
-                                )
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.sessionlist_rootfs_management)) },
-                                    onClick = {
-                                        showOverflowMenu = false
-                                        onRootfsClick()
-                                    },
-                                    leadingIcon = {
-                                        Icon(Icons.Outlined.Settings, contentDescription = null)
-                                    },
-                                )
-                                MinisMenuDivider()
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.sessionlist_open_browser)) },
-                                    onClick = {
-                                        showOverflowMenu = false
-                                        browserTabPool.ensureTabForUI()
-                                        showBrowserSheet = true
-                                    },
-                                    leadingIcon = {
-                                        Icon(Icons.Outlined.Language, contentDescription = null)
-                                    },
-                                )
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.sessionlist_browser_settings)) },
-                                    onClick = {
-                                        showOverflowMenu = false
-                                        showBrowserSettings = true
-                                    },
-                                    leadingIcon = {
-                                        Icon(Icons.Outlined.Settings, contentDescription = null)
-                                    },
-                                )
-                            }
-                        }
-                    }
                 },
             )
         },
@@ -1021,11 +929,7 @@ fun SessionListScreen(
                                 ) {
                                 SessionItemContent(
                                     session = session,
-                                    isSelecting = isSelecting,
-                                    selectedIds = selectedIds,
                                     onSessionClick = onSessionClickGuarded,
-                                    onToggleSelect = { viewModel.toggleSelect(it) },
-                                    onEnterSelect = { viewModel.enterSelection(it) },
                                     onPinToggle = { viewModel.togglePin(it) },
                                     onEditRequest = { editSession = it },
                                     onExportRequest = { s, fmt ->
@@ -1225,17 +1129,7 @@ fun SessionListScreen(
                 }
             }
 
-            // Bottom area: dual FABs or selection toolbar (matching iOS fabRow / selectionToolbar)
-            if (isSelecting) {
-                // Selection toolbar at bottom (matching iOS: Export + Delete)
-                SelectionToolbar(
-                    selectedCount = selectedIds.size,
-                    onExport = { showBulkExportDialog = true },
-                    onMove = { viewModel.requestGroupPickerForSelection() },
-                    onDelete = { showBulkDeleteDialog = true },
-                    modifier = Modifier.align(Alignment.BottomCenter),
-                )
-            } else if (hasProviders && (sessions.isNotEmpty() || isSearchActive)) {
+            if (hasProviders && (sessions.isNotEmpty() || isSearchActive)) {
                 // Dual FAB row (matching iOS: New Chat left + Search right, or vice versa).
                 // Hidden while the onboarding landing is showing — Step 3 provides the CTA.
                 // T46: stay visible while search is active even when the result
@@ -1293,38 +1187,6 @@ fun SessionListScreen(
                 deleteTargetId?.let { viewModel.deleteSession(it) }
                 showDeleteDialog = false
                 deleteTargetId = null
-            },
-        )
-    }
-
-    if (showBulkExportDialog) {
-        MinisAlertDialog(
-            onDismissRequest = { showBulkExportDialog = false },
-            title = stringResource(R.string.sessionlist_export),
-            confirmText = stringResource(R.string.sessionlist_export_json),
-            onConfirm = {
-                showBulkExportDialog = false
-                exportSelectedSessions(context, sessions, selectedIds, draftPlaceholderId, chatRepository, scope, "json")
-            },
-            text = stringResource(R.string.sessionlist_n_selected, selectedIds.size),
-            neutralText = stringResource(R.string.sessionlist_export_plain),
-            onNeutral = {
-                showBulkExportDialog = false
-                exportSelectedSessions(context, sessions, selectedIds, draftPlaceholderId, chatRepository, scope, "text")
-            },
-        )
-    }
-
-    // Bulk delete confirmation
-    if (showBulkDeleteDialog) {
-        MinisAlertDialog(
-            onDismissRequest = { showBulkDeleteDialog = false },
-            title = stringResource(R.string.sessionlist_delete_n_title, selectedIds.size),
-            confirmText = stringResource(R.string.delete),
-            isDestructive = true,
-            onConfirm = {
-                viewModel.deleteSelected()
-                showBulkDeleteDialog = false
             },
         )
     }
@@ -1738,79 +1600,6 @@ private fun DualFabRow(
     }
 }
 
-// ─── Selection Toolbar (matching iOS selectionToolbar) ──────────────────────
-
-@Composable
-private fun SelectionToolbar(
-    selectedCount: Int,
-    onExport: () -> Unit,
-    /** [T-android-session-grouping] Bulk-file the selection into a group. */
-    onMove: () -> Unit,
-    onDelete: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f))
-            .padding(vertical = 10.dp),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-    ) {
-        // Export button (matching iOS)
-        MinisTextButton(
-            onClick = onExport,
-            enabled = selectedCount > 0,
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(
-                    Icons.Default.Share,
-                    contentDescription = stringResource(R.string.sessionlist_export),
-                    modifier = Modifier.size(20.dp),
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(stringResource(R.string.sessionlist_export), fontSize = 11.sp)
-            }
-        }
-
-        // Move to Group button
-        MinisTextButton(
-            onClick = onMove,
-            enabled = selectedCount > 0,
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(
-                    Icons.Default.Folder,
-                    contentDescription = stringResource(R.string.group_move_action),
-                    modifier = Modifier.size(20.dp),
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(stringResource(R.string.group_move_action), fontSize = 11.sp)
-            }
-        }
-
-        // Delete button (matching iOS)
-        MinisTextButton(
-            onClick = onDelete,
-            enabled = selectedCount > 0,
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(
-                    Icons.Default.Delete,
-                    contentDescription = stringResource(R.string.delete),
-                    tint = if (selectedCount > 0) MaterialTheme.colorScheme.error else Color.Gray,
-                    modifier = Modifier.size(20.dp),
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    stringResource(R.string.delete),
-                    fontSize = 11.sp,
-                    color = if (selectedCount > 0) MaterialTheme.colorScheme.error else Color.Gray,
-                )
-            }
-        }
-    }
-}
-
 // ─── Section Header (matching iOS .subheadline.weight(.semibold)) ───────────
 
 @Composable
@@ -1851,14 +1640,7 @@ private fun SectionHeader(title: String) {
 @Composable
 private fun SessionItemContent(
     session: ChatSessionEntity,
-    isSelecting: Boolean,
-    selectedIds: Set<String>,
     onSessionClick: (String) -> Unit,
-    onToggleSelect: (String) -> Unit,
-    // [T-android-sessionlist-longpress-select] Context-menu Select: enters
-    // selection mode with this row selected (distinct from onToggleSelect,
-    // which only flips set membership while ALREADY selecting).
-    onEnterSelect: (String) -> Unit,
     onPinToggle: (String) -> Unit,
     onEditRequest: (ChatSessionEntity) -> Unit,
     onExportRequest: (ChatSessionEntity, String) -> Unit,
@@ -1893,239 +1675,204 @@ private fun SessionItemContent(
      */
     isFolderMember: Boolean = false,
 ) {
-    if (isSelecting) {
-        val isSelected = session.id in selectedIds
+    var showContextMenu by remember { mutableStateOf(false) }
+    var pressOffset by remember { mutableStateOf(DpOffset.Zero) }
+    // [T-android-menu-press-side] Which HALF of the row the finger was on.
+    // Pressing on the right used to left-anchor the menu at the finger,
+    // overflow the window, and get clamped left — so the popup (and its
+    // top-LEFT-origin scale animation) visually appeared to the left of
+    // the finger. Right-half presses now anchor the menu's RIGHT edge at
+    // the press point with a matching top-right animation origin, so the
+    // menu hangs off the finger naturally on both sides.
+    var menuAlignEnd by remember { mutableStateOf(false) }
+    var rowWidthPx by remember { mutableFloatStateOf(0f) }
+    val density = LocalDensity.current
+    val isPinned = session.pinnedAt != null
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .onSizeChanged { rowWidthPx = it.width.toFloat() },
+    ) {
         SessionRow(
             session = session,
-            onClick = { onToggleSelect(session.id) },
-            onLongClick = null,
+            onClick = { onSessionClick(session.id) },
             searchQuery = searchQuery,
             searchSnippet = searchSnippet,
             rowBackground = rowBackground,
             isFolderMember = isFolderMember,
-            leadingIcon = {
-                Icon(
-                    imageVector = if (isSelected) Icons.Filled.CheckCircle else Icons.Outlined.Circle,
-                    contentDescription = null,
-                    tint = if (isSelected) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(24.dp),
-                )
+            onLongClick = { offsetPx ->
+                pressOffset = with(density) {
+                    DpOffset(offsetPx.x.toDp(), offsetPx.y.toDp())
+                }
+                menuAlignEnd = rowWidthPx > 0f && offsetPx.x > rowWidthPx / 2f
+                showContextMenu = true
             },
         )
-    } else {
-        var showContextMenu by remember { mutableStateOf(false) }
-        var pressOffset by remember { mutableStateOf(DpOffset.Zero) }
-        // [T-android-menu-press-side] Which HALF of the row the finger was on.
-        // Pressing on the right used to left-anchor the menu at the finger,
-        // overflow the window, and get clamped left — so the popup (and its
-        // top-LEFT-origin scale animation) visually appeared to the left of
-        // the finger. Right-half presses now anchor the menu's RIGHT edge at
-        // the press point with a matching top-right animation origin, so the
-        // menu hangs off the finger naturally on both sides.
-        var menuAlignEnd by remember { mutableStateOf(false) }
-        var rowWidthPx by remember { mutableFloatStateOf(0f) }
-        val density = LocalDensity.current
-        val isPinned = session.pinnedAt != null
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .onSizeChanged { rowWidthPx = it.width.toFloat() },
-        ) {
-            SessionRow(
-                session = session,
-                onClick = { onSessionClick(session.id) },
-                searchQuery = searchQuery,
-                searchSnippet = searchSnippet,
-                rowBackground = rowBackground,
-                isFolderMember = isFolderMember,
-                onLongClick = { offsetPx ->
-                    pressOffset = with(density) {
-                        DpOffset(offsetPx.x.toDp(), offsetPx.y.toDp())
-                    }
-                    menuAlignEnd = rowWidthPx > 0f && offsetPx.x > rowWidthPx / 2f
-                    showContextMenu = true
-                },
-            )
-            // Loading overlay when regenerating title
-            if (isRegenerating) {
-                Box(
-                    modifier = Modifier
-                        .matchParentSize()
-                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        androidx.compose.material3.CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp,
-                        )
-                        Text(
-                            stringResource(R.string.sessionlist_regenerating_title),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                    }
-                }
-            }
-            // Invisible zero-size anchor at the press position — DropdownMenu
-            // will open from here so it follows the touch point.
+        // Loading overlay when regenerating title
+        if (isRegenerating) {
             Box(
                 modifier = Modifier
-                    .offset(x = pressOffset.x, y = pressOffset.y)
-                    .size(1.dp),
+                    .matchParentSize()
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)),
+                contentAlignment = Alignment.Center,
             ) {
-                MinisMenu(
-                    expanded = showContextMenu,
-                    onDismissRequest = { showContextMenu = false },
-                    alignEnd = menuAlignEnd,
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                // Pin / Unpin
-                DropdownMenuItem(
-                    text = { Text(stringResource(if (isPinned) R.string.sessionlist_unpin else R.string.sessionlist_pin)) },
-                    onClick = {
-                        showContextMenu = false
-                        onPinToggle(session.id)
-                    },
-                    leadingIcon = {
-                        Icon(
-                            if (isPinned) Icons.Default.Close else Icons.Default.PushPin,
-                            contentDescription = null,
-                        )
-                    },
-                )
-                // Export submenu (JSON / Plain Text)
-                var showExportSub by remember { mutableStateOf(false) }
-                DropdownMenuItem(
-                    text = {
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Text(stringResource(R.string.sessionlist_export))
-                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, modifier = Modifier.size(16.dp))
-                        }
-                    },
-                    onClick = { showExportSub = !showExportSub },
-                    leadingIcon = {
-                        Icon(Icons.Default.Share, contentDescription = null)
-                    },
-                )
-                if (showExportSub) {
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.sessionlist_export_json), modifier = Modifier.padding(start = 24.dp)) },
-                        onClick = {
-                            showContextMenu = false
-                            onExportRequest(session, "json")
-                        },
+                    androidx.compose.material3.CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
                     )
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.sessionlist_export_plain), modifier = Modifier.padding(start = 24.dp)) },
-                        onClick = {
-                            showContextMenu = false
-                            onExportRequest(session, "text")
-                        },
+                    Text(
+                        stringResource(R.string.sessionlist_regenerating_title),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
-                }
-                // Edit Title & Category
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.sessionlist_edit_title_category)) },
-                    onClick = {
-                        showContextMenu = false
-                        onEditRequest(session)
-                    },
-                    leadingIcon = {
-                        Icon(Icons.Default.Edit, contentDescription = null)
-                    },
-                )
-                // Regenerate Title
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.sessionlist_regenerate_title)) },
-                    onClick = {
-                        showContextMenu = false
-                        onRegenerateTitle(session.id)
-                    },
-                    leadingIcon = {
-                        Icon(Icons.Default.Refresh, contentDescription = null)
-                    },
-                )
-                // Duplicate
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.sessionlist_duplicate)) },
-                    onClick = {
-                        showContextMenu = false
-                        onDuplicate(session.id)
-                    },
-                    leadingIcon = {
-                        Icon(Icons.Default.ContentCopy, contentDescription = null)
-                    },
-                )
-                // Move to / Change Group
-                // [T-android-session-grouping] The wording follows membership:
-                // a session already in a group is being MOVED BETWEEN groups,
-                // not filed for the first time. Same idiom as Pin/Unpin.
-                //
-                // A single item opening a sheet, deliberately NOT an inline
-                // submenu of group names — the menu body would then cost
-                // O(groups) to compose on every open, and the group data would
-                // have to be captured into the menu closure.
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            stringResource(
-                                if (isFiled) R.string.group_change
-                                else R.string.group_move_to,
-                            ),
-                        )
-                    },
-                    onClick = {
-                        showContextMenu = false
-                        onMoveToGroup(session.id)
-                    },
-                    leadingIcon = {
-                        Icon(
-                            if (isFiled) Icons.Default.DriveFileMove
-                            else Icons.Default.Folder,
-                            contentDescription = null,
-                        )
-                    },
-                )
-                // Select
-                // [T-android-sessionlist-longpress-select] Must ENTER
-                // selection mode, not just toggle the hidden set —
-                // onToggleSelect alone never set isSelecting, so nothing
-                // visibly happened and the id sat invisibly pre-selected.
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.sessionlist_select_action)) },
-                    onClick = {
-                        showContextMenu = false
-                        onEnterSelect(session.id)
-                    },
-                    leadingIcon = {
-                        Icon(Icons.Outlined.ChecklistRtl, contentDescription = null)
-                    },
-                )
-                MinisMenuDivider()
-                // Delete
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error) },
-                    onClick = {
-                        showContextMenu = false
-                        onDeleteRequest(session.id)
-                    },
-                    leadingIcon = {
-                        Icon(
-                            Icons.Default.Delete,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.error,
-                        )
-                    },
-                )
                 }
             }
         }
+        // Invisible zero-size anchor at the press position — DropdownMenu
+        // will open from here so it follows the touch point.
+        Box(
+            modifier = Modifier
+                .offset(x = pressOffset.x, y = pressOffset.y)
+                .size(1.dp),
+        ) {
+            MinisMenu(
+                expanded = showContextMenu,
+                onDismissRequest = { showContextMenu = false },
+                alignEnd = menuAlignEnd,
+            ) {
+            // Pin / Unpin
+            DropdownMenuItem(
+                text = { Text(stringResource(if (isPinned) R.string.sessionlist_unpin else R.string.sessionlist_pin)) },
+                onClick = {
+                    showContextMenu = false
+                    onPinToggle(session.id)
+                },
+                leadingIcon = {
+                    Icon(
+                        if (isPinned) Icons.Default.Close else Icons.Default.PushPin,
+                        contentDescription = null,
+                    )
+                },
+            )
+            // Export submenu (JSON / Plain Text)
+            var showExportSub by remember { mutableStateOf(false) }
+            DropdownMenuItem(
+                text = {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Text(stringResource(R.string.sessionlist_export))
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, modifier = Modifier.size(16.dp))
+                    }
+                },
+                onClick = { showExportSub = !showExportSub },
+                leadingIcon = {
+                    Icon(Icons.Default.Share, contentDescription = null)
+                },
+            )
+            if (showExportSub) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.sessionlist_export_json), modifier = Modifier.padding(start = 24.dp)) },
+                    onClick = {
+                        showContextMenu = false
+                        onExportRequest(session, "json")
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.sessionlist_export_plain), modifier = Modifier.padding(start = 24.dp)) },
+                    onClick = {
+                        showContextMenu = false
+                        onExportRequest(session, "text")
+                    },
+                )
+            }
+            // Edit Title & Category
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.sessionlist_edit_title_category)) },
+                onClick = {
+                    showContextMenu = false
+                    onEditRequest(session)
+                },
+                leadingIcon = {
+                    Icon(Icons.Default.Edit, contentDescription = null)
+                },
+            )
+            // Regenerate Title
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.sessionlist_regenerate_title)) },
+                onClick = {
+                    showContextMenu = false
+                    onRegenerateTitle(session.id)
+                },
+                leadingIcon = {
+                    Icon(Icons.Default.Refresh, contentDescription = null)
+                },
+            )
+            // Duplicate
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.sessionlist_duplicate)) },
+                onClick = {
+                    showContextMenu = false
+                    onDuplicate(session.id)
+                },
+                leadingIcon = {
+                    Icon(Icons.Default.ContentCopy, contentDescription = null)
+                },
+            )
+            // Move to / Change Group
+            // [T-android-session-grouping] The wording follows membership:
+            // a session already in a group is being MOVED BETWEEN groups,
+            // not filed for the first time. Same idiom as Pin/Unpin.
+            //
+            // A single item opening a sheet, deliberately NOT an inline
+            // submenu of group names — the menu body would then cost
+            // O(groups) to compose on every open, and the group data would
+            // have to be captured into the menu closure.
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        stringResource(
+                            if (isFiled) R.string.group_change
+                            else R.string.group_move_to,
+                        ),
+                    )
+                },
+                onClick = {
+                    showContextMenu = false
+                    onMoveToGroup(session.id)
+                },
+                leadingIcon = {
+                    Icon(
+                        if (isFiled) Icons.Default.DriveFileMove
+                        else Icons.Default.Folder,
+                        contentDescription = null,
+                    )
+                },
+            )
+            MinisMenuDivider()
+            // Delete
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error) },
+                onClick = {
+                    showContextMenu = false
+                    onDeleteRequest(session.id)
+                },
+                leadingIcon = {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                    )
+                },
+            )
+            }
+        }
     }
+
+
 }
 
 /**
@@ -2796,11 +2543,11 @@ private fun SessionRow(
                 // drawn tint instead (see the drawBehind above).
                 vertical = 12.dp,
             ),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment = Alignment.Top,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         if (leadingIcon != null) {
-            leadingIcon()
+            Box(Modifier.padding(top = 2.dp)) { leadingIcon() }
         }
 
         // Category icon in colored circle (18% opacity matching iOS)
@@ -2857,7 +2604,7 @@ private fun SessionRow(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(1.dp),
         ) {
-            val titleText = session.title ?: "New Chat"
+            val titleText = session.title ?: stringResource(R.string.sessionlist_untitled)
             if (searchQuery.isNotBlank()) {
                 Text(
                     text = highlightedAnnotatedString(titleText, searchQuery),
@@ -2890,7 +2637,7 @@ private fun SessionRow(
                 )
             } else {
                 Text(
-                    text = session.lastMessage ?: "No messages yet",
+                    text = session.lastMessage ?: stringResource(R.string.sessionlist_no_messages),
                     fontSize = 14.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -2899,11 +2646,11 @@ private fun SessionRow(
             }
         }
 
-        // Relative timestamp
         Text(
             text = timeText,
             fontSize = 13.sp,
             color = MaterialTheme.colorScheme.outline,
+            modifier = Modifier.padding(top = 12.dp),
         )
     }
 }
@@ -3250,7 +2997,7 @@ internal fun SessionEditSheet(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                MinisTextButton(onClick = onDismiss) { Text("Cancel") }
+                MinisTextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
                 Spacer(Modifier.weight(1f))
                 Text(
                     "Edit Session",
@@ -3260,7 +3007,7 @@ internal fun SessionEditSheet(
                 Spacer(Modifier.weight(1f))
                 MinisTextButton(
                     onClick = { onSave(title.ifBlank { "New Chat" }, selectedCategory) },
-                ) { Text("Save") }
+                ) { Text(stringResource(R.string.save)) }
             }
 
             Spacer(Modifier.height(16.dp))
@@ -3269,7 +3016,7 @@ internal fun SessionEditSheet(
             OutlinedTextField(
                 value = title,
                 onValueChange = { title = it },
-                label = { Text("Title") },
+                label = { Text(stringResource(R.string.label_title)) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
             )
@@ -3390,41 +3137,6 @@ private fun exportSession(
                 format = format,
             )
             shareZip(context, uri, session.title ?: "Conversation")
-        } catch (t: Throwable) {
-            android.widget.Toast.makeText(
-                context,
-                context.getString(R.string.export_progress_failed),
-                android.widget.Toast.LENGTH_LONG,
-            ).show()
-        }
-    }
-}
-
-private fun exportSelectedSessions(
-    context: Context,
-    sessions: List<ChatSessionEntity>,
-    selectedIds: Set<String>,
-    draftPlaceholderId: String?,
-    chatRepository: ChatRepository,
-    scope: kotlinx.coroutines.CoroutineScope,
-    format: String,
-) {
-    val picked = sessions.filter { it.id in selectedIds && it.id != draftPlaceholderId }
-    if (picked.isEmpty()) return
-    scope.launch {
-        try {
-            val (uri, _) = com.openminis.app.share.ChatExporter.exportManyToZip(
-                context = context,
-                sessions = picked,
-                repository = chatRepository,
-                format = format,
-            )
-            val subject = if (picked.size == 1) {
-                picked.first().title ?: "Conversation"
-            } else {
-                context.getString(R.string.sessionlist_n_selected, picked.size)
-            }
-            shareZip(context, uri, subject)
         } catch (t: Throwable) {
             android.widget.Toast.makeText(
                 context,

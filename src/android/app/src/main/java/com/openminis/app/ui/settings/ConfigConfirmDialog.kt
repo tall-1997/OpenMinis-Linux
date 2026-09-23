@@ -33,6 +33,8 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
+import com.openminis.app.R
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -123,7 +125,7 @@ private fun ConfigConfirmDialog(change: PendingConfigChange) {
         },
         dismissButton = {
             MinisTextButton(onClick = { ConfigConfirmationGate.userReject() }) {
-                Text("Cancel")
+                Text(stringResource(R.string.cancel))
             }
         },
     )
@@ -187,11 +189,11 @@ private fun ConfirmRow(item: PendingConfigChangeItem, onToggle: (Boolean) -> Uni
         }
         when (item.risk) {
             ConfigRisk.DESTRUCTIVE -> RiskHint(
-                text = "This may affect later tool calls.",
+                text = stringResource(R.string.config_affects_later),
                 color = MaterialTheme.colorScheme.error,
             )
             ConfigRisk.SENSITIVE -> RiskHint(
-                text = "Reversible, but worth a quick look.",
+                text = stringResource(R.string.config_reversible),
                 color = Color(0xFFE65100),
             )
             else -> Unit

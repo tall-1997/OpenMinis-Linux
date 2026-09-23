@@ -38,6 +38,7 @@ import androidx.compose.material.icons.outlined.FrontHand
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.MenuBook
 import androidx.compose.material.icons.outlined.Inventory2
+import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Psychology
@@ -56,7 +57,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.CenterAlignedTopAppBar
+import com.openminis.app.ui.components.MinisCenterTopBar
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -123,13 +124,15 @@ fun SettingsScreen(
     onWebSearchClick: () -> Unit = {},
     onCharacterExtrasClick: () -> Unit = {},
     onTranslateClick: () -> Unit = {},
+    onOpenBrowser: () -> Unit = {},
+    onBrowserSettings: () -> Unit = {},
     onAboutClick: () -> Unit = {},
 ) {
     val context = LocalContext.current
     var showFeedbackSheet by remember { mutableStateOf(false) }
     Scaffold(
         topBar = {
-            CenterAlignedTopAppBar(
+            MinisCenterTopBar(
                 title = { Text(stringResource(R.string.settings_title)) },
             )
         },
@@ -204,6 +207,13 @@ fun SettingsScreen(
                     subtitle = stringResource(R.string.settings_web_search_subtitle),
                     onClick = onWebSearchClick,
                 )
+                SettingsItem(
+                    icon = Icons.Outlined.Translate,
+                    iconColor = Color(0xFF007AFF),
+                    title = stringResource(R.string.settings_translate),
+                    subtitle = stringResource(R.string.settings_translate_subtitle),
+                    onClick = onTranslateClick,
+                )
                 // [T-soul-md] insertion between Skills and Memory per spec.
                 SettingsItem(
                     icon = Icons.Outlined.AutoAwesome,
@@ -244,6 +254,31 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_env_vars),
                     subtitle = stringResource(R.string.settings_env_vars_subtitle),
                     onClick = onEnvVarsClick,
+                    showDivider = false,
+                )
+            }
+
+            SettingsSection(title = stringResource(R.string.settings_section_tools)) {
+                SettingsItem(
+                    icon = Icons.Outlined.Terminal,
+                    iconColor = Color(0xFF5856D6),
+                    title = stringResource(R.string.sessionlist_shell_terminal),
+                    subtitle = stringResource(R.string.settings_section_tools),
+                    onClick = onTerminalClick,
+                )
+                SettingsItem(
+                    icon = Icons.Outlined.Language,
+                    iconColor = Color(0xFF34C759),
+                    title = stringResource(R.string.sessionlist_open_browser),
+                    subtitle = stringResource(R.string.sessionlist_browser_settings),
+                    onClick = onOpenBrowser,
+                )
+                SettingsItem(
+                    icon = Icons.Outlined.Settings,
+                    iconColor = Color(0xFF8E8E93),
+                    title = stringResource(R.string.sessionlist_browser_settings),
+                    subtitle = null,
+                    onClick = onBrowserSettings,
                     showDivider = false,
                 )
             }

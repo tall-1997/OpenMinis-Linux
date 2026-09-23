@@ -1,5 +1,6 @@
 package com.openminis.app.provider.antigravity
 
+import com.openminis.app.provider.ModelListFetchIsolation
 import android.content.Context
 import com.openminis.app.data.model.LLMModel
 import com.openminis.app.provider.ModelsDevApi
@@ -45,21 +46,25 @@ object AntigravityModelsApi {
         baseURL: String,
         context: Context? = null,
         forceRefresh: Boolean = false,
+        cacheScope: String = "",
     ): List<LLMModel> = withContext(Dispatchers.IO) {
-        val cacheKey = baseURL + "|" + accessToken
+        val cacheKey = ModelListFetchIsolation.cacheKey(baseURL + "|" + accessToken, cacheScope)
         if (context != null && !forceRefresh) {
             cache.load(context, cacheKey)?.let { return@withContext it }
         }
 
-        val request = Request.Builder()
-            .url("${baseURL.trimEnd('/')}/v1internal:fetchAvailableModels")
+        val request = ModelListFetchIsolation.run {
+            Request.Builder()
+            .url(bustUrl("${baseURL.trimEnd('/')}/v1internal:fetchAvailableModels", forceRefresh, cacheScope))
             .post("{}".toRequestBody("application/json".toMediaType()))
             .header("Authorization", "Bearer $accessToken")
             .header("User-Agent", USER_AGENT)
             .header("X-Client-Name", "antigravity")
             .header("X-Client-Version", "1.107.0")
             .header("Accept", "application/json")
+            .noStoreIf(forceRefresh)
             .build()
+        }
 
         val response = try {
             client.newCall(request).execute()

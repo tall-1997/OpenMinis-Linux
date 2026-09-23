@@ -1,3 +1,10 @@
+# OpenMinis-Linux 1.36.36-linux
+
+- versionCode **89**
+- 主页菜单收进设置，独立翻译页，MCP 工具开关会拦截真实调用。升级不再因重复加列失败。详见 `docs/github-release-1.36.36-linux.md`。
+
+---
+
 # OpenMinis-Linux 1.36.34-linux
 
 - versionCode **87**

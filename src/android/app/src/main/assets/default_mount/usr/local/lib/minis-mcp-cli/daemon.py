@@ -21,6 +21,20 @@ intermediate files. _read_reply uses a reader thread joined with a timeout
 """
 
 import json
+
+def _disabled_tool_names(server):
+    """Host-written switches. Missing file means every tool stays enabled."""
+    path = "/var/minis/mcp-servers/disabled-tools.json"
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+    except Exception:
+        return set()
+    names = data.get(server) if isinstance(data, dict) else None
+    if not isinstance(names, list):
+        return set()
+    return set(str(n) for n in names if n)
+
 import logging
 import os
 import signal
@@ -412,10 +426,15 @@ class DaemonServer:
                 if data.get("refresh"):
                     self.pool.evict(server)
                 tools = self.pool.call_with_retry(server, lambda s: s.list_tools())
+                disabled = _disabled_tool_names(server)
+                if disabled:
+                    tools = [item for item in tools if (item.get("name") if isinstance(item, dict) else str(item)) not in disabled]
                 return {"ok": True, "result": {"server": server, "tools": tools, "count": len(tools)}}
 
             if cmd == "call":
                 tool = data.get("tool", "")
+                if tool in _disabled_tool_names(server):
+                    return {"ok": False, "error": "tool disabled in OpenMinis settings", "code": "TOOL_DISABLED", "server": server}
                 args = data.get("args") or {}
                 result = self.pool.call_with_retry(server, lambda s: s.call_tool(tool, args))
                 return {"ok": True, "result": {"server": server, "tool": tool, "result": result}}

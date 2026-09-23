@@ -1,5 +1,6 @@
 package com.openminis.app.provider.anthropic
 
+import com.openminis.app.provider.ModelListFetchIsolation
 import android.content.Context
 import com.openminis.app.data.model.LLMModel
 import com.openminis.app.provider.ModelsDevApi
@@ -35,10 +36,11 @@ object AnthropicModelsApi {
         // [T-provider-custom-user-agent] Per-provider UA override; null/blank
         // keeps the default UA. Threaded from ProviderRepository.refreshModels.
         customUserAgent: String? = null,
+        cacheScope: String = "",
     ): List<LLMModel> = withContext(Dispatchers.IO) {
         // Cache key: base URL included so the same API key across proxies doesn't
         // share cached model lists (vLLM vs api.anthropic.com can differ).
-        val cacheKey = (baseURL ?: "") + "|" + apiKey + "|" + isOAuth
+        val cacheKey = ModelListFetchIsolation.cacheKey((baseURL ?: "") + "|" + apiKey + "|" + isOAuth, cacheScope)
         if (context != null && !forceRefresh) {
             AnthropicModelsCache.load(context, cacheKey)?.let { return@withContext it }
         }
@@ -72,7 +74,7 @@ object AnthropicModelsApi {
             // overridden and services without /v1 return 404. idx > 0 are climbed parent
             // paths used purely for host-root discovery (e.g. deepseek.com/anthropic ->
             // host root /v1/models); those keep the /v1 auto-append.
-            val url = buildURL(candidate, forceV1Discovery = idx > 0)
+            val url = ModelListFetchIsolation.bustUrl(buildURL(candidate, forceV1Discovery = idx > 0), forceRefresh, cacheScope)
             val requestBuilder = Request.Builder()
                 .url(url)
                 .header("anthropic-version", "2023-06-01")
@@ -91,7 +93,7 @@ object AnthropicModelsApi {
                 requestBuilder.header("x-api-key", apiKey)
             }
 
-            val request = requestBuilder.build()
+            val request = ModelListFetchIsolation.run { requestBuilder.noStoreIf(forceRefresh) }.build()
             android.util.Log.d("AnthropicModels", "Fetching models (level=$idx): ${request.url} isOAuth=$isOAuth headers=${request.headers}")
 
             val response: Response = try {

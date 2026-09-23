@@ -1,5 +1,7 @@
 package com.openminis.app.sandbox
 
+import com.openminis.app.data.repository.MCPToolPolicy
+
 import android.content.Context
 import android.util.Log
 import com.openminis.app.data.repository.EnvVarRepository
@@ -78,6 +80,10 @@ object ExecutionCoordinator {
         timeout: Long = 600_000L,
         lineCallback: ((String) -> Unit)? = null
     ): CommandResult {
+        MCPToolPolicy.blockedMessage(appContext, command)?.let { msg ->
+            lineCallback?.invoke(msg)
+            return CommandResult(output = msg, exitCode = 1, durationMs = 0)
+        }
         SandboxJobKeepAlive.onStart(appContext, sessionId, command)
         try {
         // ConcurrentHashMap.getOrPut is not atomic, use putIfAbsent pattern
@@ -133,7 +139,11 @@ object ExecutionCoordinator {
                 truncated
             }
 
-            CommandResult(output = output, exitCode = effectiveExit, durationMs = durationMs)
+            CommandResult(
+                output = MCPToolPolicy.filterToolsOutput(appContext, command, output),
+                exitCode = effectiveExit,
+                durationMs = durationMs,
+            )
         }
         }
         } finally {

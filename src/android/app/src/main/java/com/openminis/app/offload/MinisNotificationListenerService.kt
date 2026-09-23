@@ -36,14 +36,12 @@ class MinisNotificationListenerService : NotificationListenerService() {
         // [T-systemui-freeze-fix] Filter out our own notifications to prevent
         // MIUI's Dynamic Island from inflating agent_status FGS updates and
         // triggering SystemUI heap fragmentation ANR/OOM.
-        if (sbn.packageName == packageName) return
-        // The system fans posts to bound listeners on its own thread, so a
-        // notification we just sent via `NotificationManager.notify` won't
-        // appear in `getActiveNotifications()` synchronously. `handleSend`
-        // registers a latch keyed by (package, id) here so it can block
-        // until the listener has actually observed its own post.
+        // Count down before any filter. Filtering the whole package starved
+        // awaitPosted for android-notification send. Only the agent status
+        // channel is ignored after the latch fires.
         val key = postKey(sbn.packageName, sbn.id)
         postedLatches.remove(key)?.countDown()
+        if (sbn.packageName == packageName && (sbn.id == 9001 || sbn.notification.channelId == "agent_status")) return
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {}

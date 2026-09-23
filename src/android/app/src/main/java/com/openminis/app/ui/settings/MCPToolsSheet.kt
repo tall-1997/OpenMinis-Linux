@@ -1,28 +1,40 @@
 package com.openminis.app.ui.settings
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.openminis.app.R
 import com.openminis.app.data.repository.MCPRepository
+import com.openminis.app.data.repository.MCPToolPolicy
 import com.openminis.app.sandbox.ExecutionCoordinator
-import com.openminis.app.ui.components.MinisTextButton
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
+
+private data class McpToolRow(val name: String, val description: String)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -31,38 +43,117 @@ fun MCPToolsSheet(
     onDismiss: () -> Unit,
     onManage: () -> Unit,
 ) {
-    var body by remember(server.id) { mutableStateOf("") }
-    var busy by remember(server.id) { mutableStateOf(true) }
+    val context = LocalContext.current
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var busy by remember { mutableStateOf(true) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var tools by remember { mutableStateOf<List<McpToolRow>>(emptyList()) }
+    var disabled by remember { mutableStateOf(MCPToolPolicy.disabled(context, server.id)) }
+
     LaunchedEffect(server.id) {
+        busy = true
+        error = null
         val quoted = "'" + server.id.replace("'", "'\\''") + "'"
-        val result = ExecutionCoordinator.execute(
-            sessionId = "mcp-tools-ui",
-            command = "minis-mcp-cli tools $quoted",
-            timeout = 25_000L,
-        )
-        body = result.output.ifBlank { result.exitCode.toString() }
+        val result = withContext(Dispatchers.IO) {
+            ExecutionCoordinator.execute(
+                sessionId = "mcp-tools-ui",
+                command = "minis-mcp-cli tools $quoted",
+                timeout = 25_000L,
+            )
+        }
+        tools = parseMcpTools(result.output)
+        disabled = MCPToolPolicy.disabled(context, server.id)
+        if (tools.isEmpty()) {
+            error = result.output.ifBlank { "exit ${result.exitCode}" }
+        }
         busy = false
     }
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(
             Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(bottom = 24.dp),
         ) {
-            Text(server.id, style = MaterialTheme.typography.titleMedium)
             Text(
-                server.transportSummary,
+                stringResource(R.string.mcp_tools_title, server.id),
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+            )
+            Text(
+                stringResource(R.string.mcp_tools_hint),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
             )
-            MinisTextButton(onClick = onManage) { Text(stringResource(R.string.mcp_manage)) }
-            Text(
-                if (busy) stringResource(R.string.mcp_tools_loading) else body,
-                fontFamily = FontFamily.Monospace,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(bottom = 24.dp),
-            )
+            when {
+                busy -> Text(
+                    stringResource(R.string.mcp_tools_loading),
+                    modifier = Modifier.padding(20.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                tools.isEmpty() -> Text(
+                    error ?: stringResource(R.string.mcp_tools_empty),
+                    modifier = Modifier.padding(20.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                else -> tools.forEach { tool ->
+                    val on = tool.name !in disabled
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(tool.name, style = MaterialTheme.typography.bodyLarge)
+                            if (tool.description.isNotBlank()) {
+                                Text(
+                                    tool.description,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                        Switch(
+                            checked = on,
+                            onCheckedChange = { enabled ->
+                                MCPToolPolicy.setEnabled(context, server.id, tool.name, enabled)
+                                disabled = MCPToolPolicy.disabled(context, server.id)
+                            },
+                        )
+                    }
+                    HorizontalDivider()
+                }
+            }
+            TextButton(
+                onClick = onManage,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            ) { Text(stringResource(R.string.mcp_manage)) }
         }
+    }
+}
+
+private fun parseMcpTools(output: String): List<McpToolRow> {
+    val start = output.indexOf('{')
+    val end = output.lastIndexOf('}')
+    if (start < 0 || end <= start) return emptyList()
+    return try {
+        val obj = JSONObject(output.substring(start, end + 1))
+        val arr: JSONArray = obj.optJSONArray("tools") ?: return emptyList()
+        buildList {
+            for (i in 0 until arr.length()) {
+                when (val item = arr.get(i)) {
+                    is JSONObject -> {
+                        val name = item.optString("name")
+                        if (name.isNotBlank()) add(McpToolRow(name, item.optString("description")))
+                    }
+                    is String -> if (item.isNotBlank()) add(McpToolRow(item, ""))
+                }
+            }
+        }
+    } catch (_: Exception) {
+        emptyList()
     }
 }

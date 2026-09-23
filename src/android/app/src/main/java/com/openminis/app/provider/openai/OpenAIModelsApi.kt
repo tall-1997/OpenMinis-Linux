@@ -1,5 +1,6 @@
 package com.openminis.app.provider.openai
 
+import com.openminis.app.provider.ModelListFetchIsolation
 import android.content.Context
 import com.openminis.app.data.model.LLMModel
 import com.openminis.app.data.model.normalizeModalities
@@ -89,23 +90,25 @@ object OpenAIModelsApi {
         // [T-provider-custom-user-agent] Per-provider UA override; null/blank
         // keeps the default UA. Threaded from ProviderRepository.refreshModels.
         customUserAgent: String? = null,
+        cacheScope: String = "",
     ): List<LLMModel> = withContext(Dispatchers.IO) {
         val isCustomBase = baseURL != null && !isOfficialOpenAI(baseURL)
         // For third-party endpoints (vLLM, Ollama, etc.), return empty on failure
         // so the caller preserves existing models instead of replacing with built-in GPT list.
         val fallback = if (isCustomBase) emptyList() else LLMModel.allOpenAI
 
-        val cacheKey = (baseURL ?: "") + "|" + apiKey
+        val cacheKey = ModelListFetchIsolation.cacheKey((baseURL ?: "") + "|" + apiKey, cacheScope)
         if (context != null && !forceRefresh) {
             cache.load(context, cacheKey)?.let { return@withContext it }
         }
 
-        val url = buildURL(baseURL)
+        val url = ModelListFetchIsolation.bustUrl(buildURL(baseURL), forceRefresh, cacheScope)
         val request = Request.Builder()
             .url(url)
             .header("Authorization", "Bearer $apiKey")
             // [T-provider-custom-user-agent] models-list UA override.
             .applyUserAgentOverride(customUserAgent)
+            .let { ModelListFetchIsolation.run { it.noStoreIf(forceRefresh) } }
             .build()
 
         val response = client.newCall(request).execute()

@@ -245,7 +245,7 @@ fun SessionStorageDetailScreen(
         SettingsSection(header = stringResource(R.string.storage_section_media)) {
             if (mediaSize > 0) {
                 SettingsValueRow(
-                    title = "Media",
+                    title = stringResource(R.string.storage_media),
                     value = Formatter.formatFileSize(context, mediaSize),
                     showDivider = false,
                 )
@@ -304,7 +304,7 @@ fun SessionStorageDetailScreen(
             onDismissRequest = { showClearDialog = false },
             title = { Text(stringResource(R.string.storage_clear_confirm_title)) },
             text = {
-                Text("This will delete ${Formatter.formatFileSize(context, totalSize)} of files. This action cannot be undone.")
+                Text(stringResource(R.string.storage_delete_confirm, Formatter.formatFileSize(context, totalSize)))
             },
             confirmButton = {
                 MinisTextButton(onClick = {

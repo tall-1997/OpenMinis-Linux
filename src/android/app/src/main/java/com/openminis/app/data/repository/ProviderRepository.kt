@@ -1097,7 +1097,7 @@ class ProviderRepository(private val context: Context) {
         return instance.isEnabled
     }
 
-    fun replaceEntries(instanceId: String, models: List<LLMModel>) = synchronized(configLock) {
+    fun replaceEntries(instanceId: String, models: List<LLMModel>, dropStaleRefs: Boolean = false): Set<String> = synchronized(configLock) {
         ensureConfigLoaded()
         // Hot path for concurrent autoRefreshModels coroutines (one per
         // enabled instance) — without this lock, two replaceEntries() calls
@@ -1180,7 +1180,7 @@ class ProviderRepository(private val context: Context) {
         val survivingEntryIds = config.modelEntries.map { it.id }.toSet()
         val prunedEntryIds = existingEntryIds - survivingEntryIds
         if (prunedEntryIds.isNotEmpty()) {
-            val suspiciousShrink = existing.size >= 4 && models.size * 2 < existing.size
+            val suspiciousShrink = !dropStaleRefs && existing.size >= 4 && models.size * 2 < existing.size
             if (suspiciousShrink) {
                 android.util.Log.w("ProviderRepo", "[ModelList] replaceEntries SUSPICIOUS SHRINK before=${existing.size} after=${models.size} — group references PRESERVED as stale")
             } else {
@@ -1206,9 +1206,75 @@ class ProviderRepository(private val context: Context) {
             }
         }
 
+        val droppedRefs = prunedEntryIds.isNotEmpty() && (dropStaleRefs || existing.size < 4 || models.size * 2 >= existing.size)
+        if (droppedRefs) scrubConfigEntryRefs(config, prunedEntryIds)
         saveConfig(config)
         // Stamp so staleness checks know this instance just refreshed.
         markInstanceFetched(instanceId)
+        if (droppedRefs) prunedEntryIds else emptySet()
+    }
+
+
+    /**
+     * Drop fetched (non-custom, non voice-seed) entries so a manual refresh
+     * cannot keep models the provider no longer returns. Voice template seeds
+     * stay: vendors such as MiMo do not list ASR/TTS on /v1/models.
+     */
+    private fun clearFetchedModelEntries(instanceId: String): Set<String> {
+        synchronized(configLock) {
+            ensureConfigLoaded()
+            val config = workingCopy()
+            val instance = config.instances.firstOrNull { it.id == instanceId } ?: return emptySet()
+            val voiceIds = VoiceProviderTemplate.template(instance.customBaseURL)
+                ?.mockModels
+                ?.filter { it.hasVoiceModality }
+                ?.map { it.id }
+                ?.toSet()
+                ?: emptySet()
+            val removed = config.modelEntries.filter {
+                it.providerInstanceId == instanceId && !it.isCustom && it.baseModel.id !in voiceIds
+            }
+            if (removed.isEmpty()) return emptySet()
+            val removedIds = removed.map { it.id }.toSet()
+            config.modelEntries.removeAll { it.id in removedIds }
+            scrubConfigEntryRefs(config, removedIds)
+            saveConfig(config)
+            return removedIds
+        }
+    }
+
+    /** Group pins, agent-loop pins, and default slots that pointed at removed entries. */
+    private fun scrubConfigEntryRefs(config: ProviderConfig, removedIds: Set<String>) {
+        if (removedIds.isEmpty()) return
+        for (i in config.modelGroups.indices) {
+            config.modelGroups[i].memberEntryIds.removeAll { it in removedIds }
+        }
+        config.agentLoopModelEntryIds.removeAll { it in removedIds }
+        if (config.defaultTranslationModelId in removedIds) config.defaultTranslationModelId = null
+        fun clearSlot(current: String?): String? {
+            if (current == null) return null
+            val pinned = com.openminis.app.data.model.ModelSlotRef.entryId(current)
+            return if (current in removedIds || pinned in removedIds) null else current
+        }
+        config.defaultPrimaryGroupId = clearSlot(config.defaultPrimaryGroupId)
+        config.defaultSubGroupId = clearSlot(config.defaultSubGroupId)
+        val last = prefs.getString(KEY_LAST_USED_ENTRY, null)
+        if (last in removedIds) prefs.edit().remove(KEY_LAST_USED_ENTRY).apply()
+    }
+
+    /**
+     * Sessions and scheduled tasks keep their own copy of the entry id.
+     * Clearing the provider list must not leave those copies resolving to a
+     * missing row. Null the binding so the existing fallback (app default)
+     * runs instead of crashing or sending to a deleted model.
+     */
+    private suspend fun scrubExternalEntryRefs(removedIds: Set<String>) {
+        if (removedIds.isEmpty()) return
+        val dao = com.openminis.app.data.db.AppDatabase.getInstance(context).chatDao()
+        for (id in removedIds) {
+            dao.clearBindingReferencing(id)
+        }
+        com.openminis.app.scheduled.ScheduledTaskStore(context).dropEntryRefs(removedIds)
     }
 
     // --- Model Entry management ---
@@ -2219,7 +2285,11 @@ class ProviderRepository(private val context: Context) {
     suspend fun refreshModels(
         instance: ProviderInstance,
         forceRefresh: Boolean = false,
+        clearFirst: Boolean = false,
     ): ModelRefreshResult {
+        val clearedIds = if (clearFirst) clearFetchedModelEntries(instance.id) else emptySet()
+        if (clearedIds.isNotEmpty()) scrubExternalEntryRefs(clearedIds)
+        val liveForce = forceRefresh || clearFirst
         // [T-android-refresh-models-empty-key] usableApiKey, NOT loadApiKey.
         //
         // A self-hosted OpenAI/Anthropic-compatible endpoint (ollama, LM
@@ -2286,23 +2356,25 @@ class ProviderRepository(private val context: Context) {
                         apiKey, baseURL,
                         isOAuth = instance.credentialType == com.openminis.app.data.model.ProviderCredential.oauth,
                         context = context,
-                        forceRefresh = forceRefresh,
+                        forceRefresh = liveForce,
                         // [T-provider-custom-user-agent] models-list UA override.
                         customUserAgent = instance.customUserAgent,
+                        cacheScope = instance.id,
                     )
                     ProviderType.gemini -> GeminiModelsApi.fetchModels(
                         apiKey,
                         isOAuth = instance.credentialType == com.openminis.app.data.model.ProviderCredential.oauth,
                         context = context,
-                        forceRefresh = forceRefresh,
+                        forceRefresh = liveForce,
+                        cacheScope = instance.id,
                     )
                     // [T-provider-custom-user-agent] models-list UA override.
                     // [T-android-provider-type-parity] openAIResponses lists
                     // models from the same /v1/models endpoint — only the
                     // completion endpoint differs.
                     ProviderType.openAI, ProviderType.openAIResponses ->
-                        OpenAIModelsApi.fetchModels(apiKey, baseURL, context = context, forceRefresh = forceRefresh, customUserAgent = instance.customUserAgent)
-                    ProviderType.openRouter -> OpenRouterModelsApi.fetchModels(apiKey, context = context, forceRefresh = forceRefresh)
+                        OpenAIModelsApi.fetchModels(apiKey, baseURL, context = context, forceRefresh = liveForce, customUserAgent = instance.customUserAgent, cacheScope = instance.id)
+                    ProviderType.openRouter -> OpenRouterModelsApi.fetchModels(apiKey, context = context, forceRefresh = liveForce, cacheScope = instance.id)
                     // [T-provider-dynamic-catalog-reconcile] xAI: fetch the live
                     // catalog, fall back to the built-in list.
                     //
@@ -2339,8 +2411,9 @@ class ProviderRepository(private val context: Context) {
                         apiKey,
                         baseURL ?: "https://api.x.ai/v1",
                         context = context,
-                        forceRefresh = forceRefresh,
+                        forceRefresh = liveForce,
                         customUserAgent = instance.customUserAgent,
+                        cacheScope = instance.id,
                     ).ifEmpty { com.openminis.app.provider.xai.XAIModelsApi.fetchModelsOAuth() }
                     // [T-kimi-oauth] Kimi Code: unlike Codex OAuth, the Kimi
                     // OAuth token CAN call the models endpoint — real fetch
@@ -2351,8 +2424,9 @@ class ProviderRepository(private val context: Context) {
                         apiKey,
                         baseURL ?: "${com.openminis.app.auth.KimiDeviceFlow.CODING_API_BASE}/v1",
                         context = context,
-                        forceRefresh = forceRefresh,
+                        forceRefresh = liveForce,
                         customUserAgent = instance.customUserAgent,
+                        cacheScope = instance.id,
                     )
                     // [T-android-provider-type-parity] No models endpoint to
                     // query for a type this build cannot drive; the instance
@@ -2367,9 +2441,17 @@ class ProviderRepository(private val context: Context) {
 
             // Step 2: If API returned results, use them
             if (models.isNotEmpty()) {
-                replaceEntries(instance.id, models)
+                val pruned = replaceEntries(instance.id, models, dropStaleRefs = clearFirst)
+                if (pruned.isNotEmpty()) scrubExternalEntryRefs(pruned)
                 return ModelRefreshResult.SUCCESS_API
             }
+        }
+
+        // Explicit force refresh must not pretend a hostname-keyed models.dev
+        // catalog is a per-credential refresh. Same API address used to make
+        // every sibling provider look freshly synced.
+        if (liveForce) {
+            return if (apiKey == null) ModelRefreshResult.NO_KEY else ModelRefreshResult.FAILURE
         }
 
         // Step 3: Fallback to models.dev by base URL.

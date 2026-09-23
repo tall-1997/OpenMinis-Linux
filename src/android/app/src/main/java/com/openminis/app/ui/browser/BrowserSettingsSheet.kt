@@ -1,6 +1,5 @@
 package com.openminis.app.ui.browser
 
-import androidx.compose.ui.res.stringResource
 import android.webkit.CookieManager
 import android.webkit.WebStorage
 import androidx.compose.foundation.background
@@ -554,7 +553,7 @@ private fun ViewportSection(
             onClick = onSelectDefault,
         )
         Column(modifier = Modifier.weight(1f)) {
-            Text("Default (auto by UA)", style = MaterialTheme.typography.bodyMedium)
+            Text(stringResource(R.string.browser_viewport_default), style = MaterialTheme.typography.bodyMedium)
             val (uaW, uaH) = selectedProfile.viewportSize
             Text(
                 "${uaW} × $uaH",
@@ -576,9 +575,9 @@ private fun ViewportSection(
             onClick = onSelectCustom,
         )
         Column(modifier = Modifier.weight(1f)) {
-            Text("Custom", style = MaterialTheme.typography.bodyMedium)
+            Text(stringResource(R.string.browser_viewport_custom), style = MaterialTheme.typography.bodyMedium)
             Text(
-                "Set your own width × height",
+                stringResource(R.string.browser_viewport_custom_hint),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -595,7 +594,7 @@ private fun ViewportSection(
             OutlinedTextField(
                 value = widthText,
                 onValueChange = onWidthChange,
-                label = { Text("Width") },
+                label = { Text(stringResource(R.string.label_width)) },
                 singleLine = true,
                 // [T-android-browser-settings-keyboard-overlap] focus →
                 // scroll-into-view so the soft keyboard doesn't cover
@@ -610,7 +609,7 @@ private fun ViewportSection(
             OutlinedTextField(
                 value = heightText,
                 onValueChange = onHeightChange,
-                label = { Text("Height") },
+                label = { Text(stringResource(R.string.label_height)) },
                 singleLine = true,
                 // [T-android-browser-settings-keyboard-overlap] focus →
                 // scroll-into-view; mirrors the Width field.

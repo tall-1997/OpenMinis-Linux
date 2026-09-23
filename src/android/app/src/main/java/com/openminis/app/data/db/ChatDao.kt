@@ -86,6 +86,10 @@ interface ChatDao {
     @Query("UPDATE sessions SET model_binding = :binding, model_id = :modelId, updated_at = :updatedAt WHERE id = :id")
     suspend fun updateSessionBinding(id: String, binding: String, modelId: String, updatedAt: Long = System.currentTimeMillis())
 
+    /** Drop a session pin that names a model entry the provider list no longer has. */
+    @Query("UPDATE sessions SET model_binding = NULL, updated_at = :updatedAt WHERE model_binding LIKE '%' || :entryId || '%'")
+    suspend fun clearBindingReferencing(entryId: String, updatedAt: Long = System.currentTimeMillis())
+
     @Query("DELETE FROM sessions WHERE id = :id")
     suspend fun deleteSession(id: String)
 

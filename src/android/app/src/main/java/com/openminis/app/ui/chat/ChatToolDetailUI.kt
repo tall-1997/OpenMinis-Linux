@@ -46,7 +46,9 @@ import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Terminal
+import com.openminis.app.R
 import com.openminis.app.logging.AppLogger
+import androidx.compose.ui.res.stringResource
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
@@ -812,7 +814,7 @@ internal fun ToolDetailSheet(
                                             strokeWidth = 2.dp,
                                             color = ChatColors.link,
                                         )
-                                        Text("Loading...", fontSize = 12.sp, color = ChatColors.tertiaryText)
+                                        Text(stringResource(R.string.loading), fontSize = 12.sp, color = ChatColors.tertiaryText)
                                     }
                                 }
                             }
