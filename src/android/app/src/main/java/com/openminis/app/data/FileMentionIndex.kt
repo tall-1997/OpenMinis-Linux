@@ -117,13 +117,19 @@ class FileMentionIndex(
         val collected = mutableListOf<Entry>()
         try {
             // Layer 1: this chat's workspace.
-            val sessionsRoot = File(filesDir.parentFile ?: filesDir, "minis-sessions")
+            // SessionWorkspace.hostDir is the same resolver the shell bind and
+            // file_write use. A filed session's workspace lives under
+            // minis-workspaces/<folder>, not minis-sessions/<id>, so scanning the
+            // private tree here listed files the shell could not see and hid the
+            // ones it could. The old parentFile/minis-sessions path was wrong on
+            // both counts: this class is constructed with filesDir/minis-global.
+            val appFilesDir = filesDir.parentFile ?: filesDir
             layerEntries(
                 sessionId = sessionId,
                 layers = listOf(
-                    File(sessionsRoot, "$sessionId/workspace") to Scope.WORKSPACE,
-                    File(sessionsRoot, "$sessionId/attachments") to Scope.ATTACHMENTS,
-                    File(sessionsRoot, "$sessionId/memory") to Scope.MEMORY,
+                    com.openminis.app.sandbox.SessionWorkspace.hostDir(appFilesDir, sessionId, "workspace") to Scope.WORKSPACE,
+                    com.openminis.app.sandbox.SessionWorkspace.hostDir(appFilesDir, sessionId, "attachments") to Scope.ATTACHMENTS,
+                    com.openminis.app.sandbox.SessionWorkspace.hostDir(appFilesDir, sessionId, "memory") to Scope.MEMORY,
                 ),
                 linuxRootFor = { scope -> "/var/minis/${scope.displayLabel}" },
             ).let { newBatch ->
@@ -132,6 +138,8 @@ class FileMentionIndex(
             }
 
             // Layer 2: tools shared by every chat (not session memory).
+            // filesDir here IS minis-global (see the Context constructor), which
+            // is where the shell bind actually mounts skills/ and shared/.
             layerEntries(
                 sessionId = sessionId,
                 layers = listOf(

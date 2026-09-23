@@ -67,7 +67,6 @@ object SecurityGateHolder {
     }
 
     /**
-    /**
      * @param callerSessionId the chat that is asking, so the isolation policies
      *   can allow a session to touch its own tree while still refusing every
      *   other one. Callers that do not know it may omit it — a null caller keeps
