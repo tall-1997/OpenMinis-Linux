@@ -26,10 +26,21 @@ object DisplayRegex {
     fun file(context: Context): File =
         File(context.filesDir, "minis-global/memory/display-regex.json")
 
+    private var cachedStamp = Long.MIN_VALUE
+    private var cachedRules: List<Rule> = emptyList()
+
     fun load(context: Context): List<Rule> {
         val f = file(context)
-        if (!f.isFile) return emptyList()
-        return runCatching { parse(f.readText()) }.getOrDefault(emptyList())
+        val stamp = if (f.isFile) f.lastModified() xor f.length() else 0L
+        if (stamp == cachedStamp) return cachedRules
+        val rules = if (!f.isFile) {
+            emptyList()
+        } else {
+            runCatching { parse(f.readText()) }.getOrDefault(emptyList())
+        }
+        cachedRules = rules
+        cachedStamp = stamp
+        return rules
     }
 
     fun save(context: Context, rules: List<Rule>) {
@@ -49,6 +60,7 @@ object DisplayRegex {
         val f = file(context)
         f.parentFile?.mkdirs()
         f.writeText(arr.toString())
+        cachedStamp = Long.MIN_VALUE
     }
 
     fun apply(context: Context, text: String, scope: Scope): String =

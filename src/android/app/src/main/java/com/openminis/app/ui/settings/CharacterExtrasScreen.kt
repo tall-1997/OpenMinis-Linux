@@ -5,6 +5,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -33,8 +35,26 @@ fun CharacterExtrasScreen(onBack: () -> Unit) {
     var pattern by remember { mutableStateOf("") }
     var replacement by remember { mutableStateOf("") }
     var highRefresh by remember { mutableStateOf(HighRefreshRate.enabled(context)) }
+    var pendingRemove by remember { mutableStateOf<(() -> Unit)?>(null) }
 
     BackHandler(onBack = onBack)
+    pendingRemove?.let { remove ->
+        AlertDialog(
+            onDismissRequest = { pendingRemove = null },
+            confirmButton = {
+                TextButton(onClick = {
+                    remove()
+                    pendingRemove = null
+                }) { Text(stringResource(R.string.character_extras_confirm_remove)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingRemove = null }) {
+                    Text(stringResource(android.R.string.cancel))
+                }
+            },
+            text = { Text(stringResource(R.string.character_extras_confirm_body)) },
+        )
+    }
     SettingsScaffold(title = stringResource(R.string.settings_character_extras), onBack = onBack) {
         SettingsSection(
             header = stringResource(R.string.world_book_header),
@@ -73,12 +93,14 @@ fun CharacterExtrasScreen(onBack: () -> Unit) {
             entries.forEachIndexed { index, entry ->
                 SettingsRow(
                     title = entry.name,
-                    subtitle = entry.keywords.joinToString(", "),
+                    subtitle = entry.keywords.joinToString(", ") + " · " + stringResource(R.string.character_extras_tap_remove),
                     showDivider = index < entries.lastIndex,
                     onClick = {
-                        val next = entries.filterNot { it.id == entry.id }
-                        entries = next
-                        WorldBook.save(context, next)
+                        pendingRemove = {
+                            val next = entries.filterNot { it.id == entry.id }
+                            entries = next
+                            WorldBook.save(context, next)
+                        }
                     },
                 )
             }
@@ -115,12 +137,14 @@ fun CharacterExtrasScreen(onBack: () -> Unit) {
             rules.forEachIndexed { index, rule ->
                 SettingsRow(
                     title = rule.pattern,
-                    subtitle = rule.replacement,
+                    subtitle = rule.replacement + " · " + stringResource(R.string.character_extras_tap_remove),
                     showDivider = index < rules.lastIndex,
                     onClick = {
-                        val next = rules.filterNot { it.id == rule.id }
-                        rules = next
-                        DisplayRegex.save(context, next)
+                        pendingRemove = {
+                            val next = rules.filterNot { it.id == rule.id }
+                            rules = next
+                            DisplayRegex.save(context, next)
+                        }
                     },
                 )
             }

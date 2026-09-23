@@ -2006,6 +2006,14 @@
 <!-- 1.15-linux -->
     <string name="settings_web_search">网络搜索</string>
     <string name="settings_web_search_subtitle">Tavily、博查、Exa、Brave、Jina、智谱、Bing、SearXNG 或自定义</string>
+    <string name="settings_open_tool_limits">工具上限</string>
+    <string name="settings_open_tool_limits_sub">Shell 超时、文件读取和子代理轮数只在上限页修改</string>
+    <string name="settings_open_permissions">工具权限模式</string>
+    <string name="settings_open_permissions_sub">只在权限页修改。当前：%1$s</string>
+    <string name="settings_shared_controls_footer">这里只跳到拥有该设置的那一页，不是第二套开关。</string>
+    <string name="character_extras_tap_remove">点按删除</string>
+    <string name="character_extras_confirm_remove">删除</string>
+    <string name="character_extras_confirm_body">删除这条？不会改常驻人格，也不会改已经发出的消息。</string>
     <string name="settings_character_extras">世界书</string>
     <string name="settings_character_extras_subtitle">关键词设定、显示正则、高刷新率</string>
     <string name="settings_translate">翻译</string>

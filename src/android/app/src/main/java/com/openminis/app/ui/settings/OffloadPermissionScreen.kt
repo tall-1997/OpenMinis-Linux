@@ -105,7 +105,7 @@ fun OffloadPermissionScreen(
         // mistaken for two copies of the same switch.
         SettingsSection(
             header = "工具权限模式",
-            footer = "控制 Agent 调用 shell / 文件工具时要不要确认。和下面的系统权限（无障碍、Shizuku、存储）不是同一层。会话里的「本会话全部允许」走同一套闸门；写好的拒绝规则仍然优先。",
+            footer = "只在这一页改工具权限模式。控制 Agent 调用 shell / 文件工具时要不要确认，和下面的系统权限（无障碍、Shizuku、存储）不是同一层。会话里的「本会话全部允许」走同一套闸门；写好的拒绝规则仍然优先。",
         ) {
             val order = listOf(
                 PermissionMode.ASK,

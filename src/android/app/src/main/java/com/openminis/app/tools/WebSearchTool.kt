@@ -60,13 +60,14 @@ object WebSearchTool {
             val preferred = context?.let { WebSearchSettings.engine(it) } ?: WebSearchSettings.Engine.DDG
             val allowFallback = context?.let { WebSearchSettings.fallbackEnabled(it) } ?: true
             val engines = mutableListOf(preferred)
-            if (allowFallback && context != null) {
+            // A user who picked DuckDuckGo must not silently spend keyed quotas
+            // when it returns nothing. Keyed fallback only runs after a keyed
+            // engine was the one they asked for.
+            if (allowFallback && context != null && preferred != WebSearchSettings.Engine.DDG) {
                 for (keyed in WebSearchSettings.configuredKeyed(context)) {
                     if (keyed != preferred) engines += keyed
                 }
-                if (preferred != WebSearchSettings.Engine.DDG && WebSearchSettings.Engine.DDG !in engines) {
-                    engines += WebSearchSettings.Engine.DDG
-                }
+                if (WebSearchSettings.Engine.DDG !in engines) engines += WebSearchSettings.Engine.DDG
             }
             var lastError: String? = null
             var used = preferred
@@ -312,26 +313,29 @@ object WebSearchTool {
         if (fromSearx.isNotEmpty()) return fromSearx
         val fromBing = parseBingJson(json, max)
         if (fromBing.isNotEmpty()) return fromBing
-        val root = JSONObject(json)
-        for (key in arrayOf(
-            "results", "items", "data", "organic", "organic_results",
-            "webPages", "web", "search_result",
-        )) {
-            val nested = root.optJSONObject(key)
-            if (nested != null) {
-                val inner = nested.optJSONArray("value")
-                    ?: nested.optJSONArray("results")
-                    ?: nested.optJSONArray("items")
-                if (inner != null) {
-                    val parsed = parseResultArray(inner, max)
-                    if (parsed.isNotEmpty()) return parsed
-                }
+        return findResultArray(JSONObject(json), max, depth = 0).orEmpty()
+    }
+
+    private val RESULT_KEYS = arrayOf(
+        "results", "items", "data", "organic", "organic_results",
+        "webPages", "web", "search_result", "value",
+    )
+
+    /** Bocha nests hits at data.webPages.value; one flat pass misses that. */
+    private fun findResultArray(node: JSONObject, max: Int, depth: Int): List<Result>? {
+        if (depth > 3) return null
+        for (key in RESULT_KEYS) {
+            node.optJSONArray(key)?.let { arr ->
+                val parsed = parseResultArray(arr, max)
+                if (parsed.isNotEmpty()) return parsed
             }
-            val arr = root.optJSONArray(key) ?: continue
-            val parsed = parseResultArray(arr, max)
-            if (parsed.isNotEmpty()) return parsed
         }
-        return emptyList()
+        if (depth == 3) return null
+        for (key in RESULT_KEYS) {
+            val child = node.optJSONObject(key) ?: continue
+            findResultArray(child, max, depth + 1)?.let { return it }
+        }
+        return null
     }
 
     private fun parseResultArray(arr: JSONArray, max: Int): List<Result> {

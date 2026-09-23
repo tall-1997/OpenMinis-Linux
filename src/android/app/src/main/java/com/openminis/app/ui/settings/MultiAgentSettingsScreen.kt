@@ -29,14 +29,17 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.openminis.app.MinisApp
 import com.openminis.app.R
-import com.openminis.app.data.ToolLimitPrefs
 import com.openminis.app.data.PlanDiscussionPrefs
 import com.openminis.app.data.model.ModelEntry
 import com.openminis.app.data.model.ProviderInstance
 import com.openminis.app.data.repository.MultiAgentSettings
 
 @Composable
-fun MultiAgentSettingsScreen(onBack: () -> Unit) {
+fun MultiAgentSettingsScreen(
+    onBack: () -> Unit,
+    onOpenPermissions: () -> Unit = {},
+    onOpenToolLimits: () -> Unit = {},
+) {
     val context = LocalContext.current
     val app = context.applicationContext as MinisApp
     val repo = app.multiAgentSettingsRepository
@@ -239,89 +242,21 @@ fun MultiAgentSettingsScreen(onBack: () -> Unit) {
             }
         }
 
-        // [T-tool-limits-merge] Tool limits moved here from the removed
-        // standalone settings entry (shell timeout / file_read caps /
-        // sub-agent turns). ToolLimitPrefs is SharedPreferences-backed;
-        // revision drives recomposition after +/- taps.
-        val toolLimitRevision by ToolLimitPrefs.revision.collectAsState()
-        SettingsSection(
-            header = stringResource(R.string.tool_limits_header),
-            footer = stringResource(R.string.tool_limits_footer),
-        ) {
-            val shell = remember(toolLimitRevision) { ToolLimitPrefs.shellTimeoutSec() }
-            val chars = remember(toolLimitRevision) { ToolLimitPrefs.fileReadMaxChars() }
-            val lines = remember(toolLimitRevision) { ToolLimitPrefs.fileReadMaxLines() }
-            val turns = remember(toolLimitRevision) { ToolLimitPrefs.subagentMaxTurns() }
-            LimitStepper(
-                title = stringResource(R.string.tool_limits_shell),
-                valueLabel = stringResource(R.string.tool_limits_shell_value, shell),
-                value = shell,
-                min = ToolLimitPrefs.MIN_SHELL_TIMEOUT_SEC,
-                max = ToolLimitPrefs.MAX_SHELL_TIMEOUT_SEC,
-                step = ToolLimitPrefs.SHELL_STEP_SEC,
-                onChange = { ToolLimitPrefs.setShellTimeoutSec(it) },
-                showDivider = true,
+        SettingsSection(footer = stringResource(R.string.settings_shared_controls_footer)) {
+            SettingsRow(
+                title = stringResource(R.string.settings_open_tool_limits),
+                subtitle = stringResource(R.string.settings_open_tool_limits_sub),
+                onClick = onOpenToolLimits,
             )
-            LimitStepper(
-                title = stringResource(R.string.tool_limits_file_chars),
-                valueLabel = chars.toString(),
-                value = chars,
-                min = ToolLimitPrefs.MIN_FILE_READ_MAX_CHARS,
-                max = ToolLimitPrefs.MAX_FILE_READ_MAX_CHARS,
-                step = ToolLimitPrefs.FILE_CHARS_STEP,
-                onChange = { ToolLimitPrefs.setFileReadMaxChars(it) },
-                showDivider = true,
-            )
-            LimitStepper(
-                title = stringResource(R.string.tool_limits_file_lines),
-                valueLabel = if (lines == 0) {
-                    stringResource(R.string.tool_limits_file_lines_unlimited)
-                } else {
-                    lines.toString()
-                },
-                value = lines,
-                min = 0,
-                max = ToolLimitPrefs.MAX_FILE_READ_MAX_LINES,
-                step = ToolLimitPrefs.FILE_LINES_STEP,
-                onChange = { ToolLimitPrefs.setFileReadMaxLines(it) },
-                showDivider = true,
-            )
-            LimitStepper(
-                title = stringResource(R.string.tool_limits_subagent),
-                valueLabel = turns.toString(),
-                value = turns,
-                min = ToolLimitPrefs.MIN_SUBAGENT_MAX_TURNS,
-                max = ToolLimitPrefs.MAX_SUBAGENT_MAX_TURNS,
-                step = ToolLimitPrefs.TURNS_STEP,
-                onChange = { ToolLimitPrefs.setSubagentMaxTurns(it) },
+            SettingsRow(
+                title = stringResource(R.string.settings_open_permissions),
+                subtitle = stringResource(
+                    R.string.settings_open_permissions_sub,
+                    com.openminis.app.security.SecurityGateHolder.gate.getPermissionMode().labelZh(),
+                ),
+                onClick = onOpenPermissions,
                 showDivider = false,
             )
-        }
-
-        val gate = com.openminis.app.security.SecurityGateHolder.gate
-        var permMode by remember { mutableStateOf(gate.getPermissionMode()) }
-        SettingsSection(
-            header = "权限模式",
-            footer = "这是 Agent 工具闸门，和设置 → 权限里的系统权限（无障碍 / Shizuku）不是同一个开关。同一套模式也显示在权限页顶部。询问是默认；全部允许仍会弹确认拦截 rm -rf /，但不再静默拒绝。拒绝规则优先。会话里的「本会话全部允许」走同一闸门。",
-        ) {
-            val modes = listOf(
-                com.openminis.app.security.PermissionMode.ASK,
-                com.openminis.app.security.PermissionMode.ALLOW_ALL,
-                com.openminis.app.security.PermissionMode.READ_ONLY,
-                com.openminis.app.security.PermissionMode.PLAN,
-                com.openminis.app.security.PermissionMode.DENY_ALL,
-            )
-            modes.forEachIndexed { index, mode ->
-                SettingsChoiceRow(
-                    title = mode.labelZh(),
-                    selected = permMode == mode,
-                    onSelect = {
-                        permMode = mode
-                        com.openminis.app.security.SecurityGateHolder.setMode(context, mode)
-                    },
-                    showDivider = index < modes.lastIndex,
-                )
-            }
         }
 
         SettingsSection(
@@ -394,40 +329,6 @@ private fun slotModelLabel(
     instancesById[entry.providerInstanceId]?.label?.takeIf { it.isNotBlank() }?.let {
         append(" · ").append(it)
     }
-}
-
-/**
- * [T-tool-limits-merge] +/- stepper for a numeric tool limit. Moved from the
- * removed ToolLimitsSettingsScreen.
- */
-@Composable
-private fun LimitStepper(
-    title: String,
-    valueLabel: String,
-    value: Int,
-    min: Int,
-    max: Int,
-    step: Int,
-    onChange: (Int) -> Unit,
-    showDivider: Boolean,
-) {
-    SettingsRow(
-        title = title,
-        subtitle = valueLabel,
-        showChevron = false,
-        showDivider = showDivider,
-        trailing = {
-            PlusMinusStepper(
-                value = value,
-                min = min,
-                max = max,
-                step = step,
-                onValueChange = onChange,
-                decreaseContentDescription = stringResource(R.string.tool_limits_decrease),
-                increaseContentDescription = stringResource(R.string.tool_limits_increase),
-            )
-        },
-    )
 }
 
 @Composable

@@ -1205,6 +1205,8 @@ fun AppNavigation(
         composable(Routes.MULTI_AGENT) {
             com.openminis.app.ui.settings.MultiAgentSettingsScreen(
                 onBack = { navController.safePopBackStack() },
+                onOpenPermissions = { navController.safeNavigate(Routes.PERMISSIONS) },
+                onOpenToolLimits = { navController.safeNavigate(Routes.TOOL_LIMITS) },
             )
         }
 

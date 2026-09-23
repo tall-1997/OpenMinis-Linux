@@ -3,7 +3,6 @@ package com.openminis.app.ui
 import android.app.Activity
 import android.content.Context
 import android.os.Build
-import android.view.WindowManager
 
 /** Asks the window for the display's highest refresh rate. Off leaves the system default. */
 object HighRefreshRate {
@@ -38,14 +37,8 @@ object HighRefreshRate {
         }
         val modes = display?.supportedModes ?: return
         val best = modes.maxByOrNull { it.refreshRate } ?: return
-        if (lp.preferredDisplayModeId != best.modeId) {
-            lp.preferredDisplayModeId = best.modeId
-            window.attributes = lp
-        }
-        if (Build.VERSION.SDK_INT >= 31) {
-            window.attributes = window.attributes.apply {
-                preferredRefreshRate = best.refreshRate
-            }
-        }
+        lp.preferredDisplayModeId = best.modeId
+        lp.preferredRefreshRate = best.refreshRate
+        window.attributes = lp
     }
 }

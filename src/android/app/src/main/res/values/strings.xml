@@ -2179,6 +2179,14 @@
 <!-- 1.15-linux -->
     <string name="settings_web_search">Web search</string>
     <string name="settings_web_search_subtitle">Tavily, Bocha, Exa, Brave, Jina, Zhipu, Bing, SearXNG, or custom</string>
+    <string name="settings_open_tool_limits">Tool caps</string>
+    <string name="settings_open_tool_limits_sub">Shell timeout, file reads, and sub-agent turns are edited only on the caps page</string>
+    <string name="settings_open_permissions">Tool permission mode</string>
+    <string name="settings_open_permissions_sub">Edited only on the Permissions page. Current: %1$s</string>
+    <string name="settings_shared_controls_footer">These open the single page that owns the setting. They are not a second copy.</string>
+    <string name="character_extras_tap_remove">tap to remove</string>
+    <string name="character_extras_confirm_remove">Remove</string>
+    <string name="character_extras_confirm_body">Remove this entry? This does not change the standing persona file or messages already sent.</string>
     <string name="settings_character_extras">World book</string>
     <string name="settings_character_extras_subtitle">Keyword lore, display regex, refresh rate</string>
     <string name="settings_translate">Translate</string>

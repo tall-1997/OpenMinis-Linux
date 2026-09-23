@@ -36,7 +36,7 @@ import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.FolderShared
 import androidx.compose.material.icons.outlined.FrontHand
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.automirrored.outlined.MenuBook
+import androidx.compose.material.icons.outlined.MenuBook
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Palette
@@ -223,7 +223,7 @@ fun SettingsScreen(
                     onClick = onSoulClick,
                 )
                 SettingsItem(
-                    icon = MenuBook,
+                    icon = Icons.Outlined.MenuBook,
                     iconColor = Color(0xFFAF52DE),
                     title = stringResource(R.string.settings_character_extras),
                     subtitle = stringResource(R.string.settings_character_extras_subtitle),

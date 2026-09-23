@@ -1,3 +1,10 @@
+# OpenMinis-Linux 1.36.27-linux
+
+- versionCode **80**
+- 去掉权限模式和工具上限的重复入口。详见 `docs/github-release-1.36.27-linux.md`。
+
+---
+
 # OpenMinis-Linux 1.36.26-linux
 
 - versionCode **79**
