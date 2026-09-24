@@ -16,7 +16,10 @@ fun ToolLimitsSettingsScreen(onBack: () -> Unit) {
     val lines = remember(revision) { ToolLimitPrefs.fileReadMaxLines() }
     val turns = remember(revision) { ToolLimitPrefs.subagentMaxTurns() }
 
-    SettingsScaffold(title = stringResource(R.string.tool_limits_title), onBack = null) {
+    // Nested under multi-agent (and the tool-limits deep link), not a
+    // first-level settings page. 1.36.16 keeps the back arrow here; 1.36.37
+    // only drops it on the settings root and its first-level children.
+    SettingsScaffold(title = stringResource(R.string.tool_limits_title), onBack = onBack) {
         SettingsSection(
             header = stringResource(R.string.tool_limits_header),
             footer = stringResource(R.string.tool_limits_footer),

@@ -1,3 +1,10 @@
+# OpenMinis-Linux 1.36.49-linux
+
+- versionCode **102**
+- 多智能体下的工具限额页重新显示返回箭头。导航已经把返回回调传进来了，页面却写成不显示，只能靠系统返回。详见 `docs/github-release-1.36.49-linux.md`。
+
+---
+
 # OpenMinis-Linux 1.36.48-linux
 
 - versionCode **101**
