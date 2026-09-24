@@ -36,6 +36,10 @@ fun PersonaWorldBookSection() {
 
     var rules by remember { mutableStateOf(DisplayRegex.load(context)) }
     var hidePattern by remember { mutableStateOf("") }
+    // 1.36.27 requires a confirm before delete for BOTH lists; the regex
+    // section below used to delete on first tap. Same strings as the world
+    // book dialog and CharacterExtrasScreen so the wording stays uniform.
+    var pendingRule by remember { mutableStateOf<DisplayRegex.Rule?>(null) }
 
     pending?.let { entry ->
         AlertDialog(
@@ -99,6 +103,24 @@ fun PersonaWorldBookSection() {
         }
     }
 
+    pendingRule?.let { rule ->
+        AlertDialog(
+            onDismissRequest = { pendingRule = null },
+            text = { Text(stringResource(R.string.character_extras_confirm_body)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    val next = rules.filterNot { it.id == rule.id }
+                    DisplayRegex.save(context, next)
+                    rules = next
+                    pendingRule = null
+                }) { Text(stringResource(R.string.character_extras_confirm_remove)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingRule = null }) { Text(stringResource(android.R.string.cancel)) }
+            },
+        )
+    }
+
     SettingsSection(
         header = stringResource(R.string.persona_hide_header),
         footer = stringResource(R.string.persona_hide_footer),
@@ -109,11 +131,7 @@ fun PersonaWorldBookSection() {
                     title = rule.pattern,
                     subtitle = stringResource(R.string.persona_hide_tap_remove),
                     showChevron = false,
-                    onClick = {
-                        val next = rules.filterNot { it.id == rule.id }
-                        DisplayRegex.save(context, next)
-                        rules = next
-                    },
+                    onClick = { pendingRule = rule },
                 )
             }
             DialogTextField(

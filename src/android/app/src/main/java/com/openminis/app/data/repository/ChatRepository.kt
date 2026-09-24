@@ -592,6 +592,13 @@ class ChatRepository(
      * must match (possibly in different messages). This matches iOS,
      * which intentionally avoids requiring keywords to co-occur in one
      * row so a multi-turn session about "python" + "flask" still hits.
+     *
+     * [keywordsMatchBody] = false restricts keyword matching to titles.
+     * `minis-sessions-cli list` passes false: that command is ungated
+     * (1.36.25 — "list stays open: only returns id and title"), so matching
+     * — and thereby revealing hits against — message bodies of foreign
+     * sessions would hand an unauthorized caller a content oracle that
+     * defeats the session_read boundary.
      */
     suspend fun querySessionsMeta(
         sessionIds: List<String>?,
@@ -599,6 +606,7 @@ class ChatRepository(
         limit: Int,
         startMs: Long?,
         endMs: Long?,
+        keywordsMatchBody: Boolean = true,
     ): List<SessionMeta> {
         val conditions = mutableListOf<String>()
         val args = mutableListOf<Any>()
@@ -618,11 +626,16 @@ class ChatRepository(
         if (!keywords.isNullOrEmpty()) {
             for (kw in keywords) {
                 val pat = "%$kw%"
-                conditions +=
-                    "(s.title LIKE ? OR EXISTS (SELECT 1 FROM messages m " +
-                    "WHERE m.session_id = s.id AND m.parts_json LIKE ?))"
-                args += pat
-                args += pat
+                if (keywordsMatchBody) {
+                    conditions +=
+                        "(s.title LIKE ? OR EXISTS (SELECT 1 FROM messages m " +
+                        "WHERE m.session_id = s.id AND m.parts_json LIKE ?))"
+                    args += pat
+                    args += pat
+                } else {
+                    conditions += "s.title LIKE ?"
+                    args += pat
+                }
             }
         }
         val where = if (conditions.isEmpty()) "" else "WHERE " + conditions.joinToString(" AND ")

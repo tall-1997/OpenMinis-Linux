@@ -145,7 +145,13 @@ class SessionsOffloadHandler(
         val endMs = parseEndDate(args.get("end"))
         val limit = parseLimit(args)
 
-        val metas = runBlocking { repo.querySessionsMeta(ids, kws, limit, startMs, endMs) }
+        val metas = runBlocking {
+            // keywordsMatchBody=false: list is ungated, so keyword matching
+            // must not act as a yes/no oracle over foreign sessions' message
+            // bodies (that would bypass the session_read boundary that
+            // messages/search enforce).
+            repo.querySessionsMeta(ids, kws, limit, startMs, endMs, keywordsMatchBody = false)
+        }
 
         val sessions = JSONArray()
         for (m in metas) {
@@ -158,7 +164,9 @@ class SessionsOffloadHandler(
             // matches iOS's `(optional)` shape rather than carrying
             // null literals through to the agent prompt.
             m.title?.let { if (it.isNotBlank()) s.put("title", it) }
-            m.preview?.let { if (it.isNotBlank()) s.put("preview", it) }
+            // preview is deliberately NOT emitted: list is ungated and its
+            // documented contract is "id and title only" — a first-message
+            // excerpt would leak foreign session content without a grant.
             m.source?.let { if (it.isNotBlank()) s.put("source", it) }
             sessions.put(s)
         }
@@ -375,8 +383,9 @@ OPTIONS:
   -q, --quiet           Output only data field
 
 OUTPUT (list):
-  Each session includes: session_id, title, preview (first user message,
-  60 chars), source, started_at, last_active, message_count.
+  Each session includes: session_id, title, source, started_at,
+  last_active, message_count. No message content: bodies (and keyword
+  matching against them) need a session_read grant via search/messages.
 
 OUTPUT (search):
   Each message includes: session_id, message_id, role, created_at,

@@ -28,7 +28,7 @@ class OffloadReplySweepTest {
     val tmp = TemporaryFolder()
 
     private val prefix = ".native-offload-"
-    private val ttlMs = 10 * 60 * 1000L
+    private val ttlMs = 10_000L // mirrors NativeOffload.REPLY_TTL_MS (1.36.25: was 10 min)
 
     /** Mirrors the production predicate in NativeOffloadServer.sweepStaleReplies. */
     private fun eligible(file: File, all: Boolean, now: Long): Boolean {
