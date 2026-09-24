@@ -1,3 +1,10 @@
+# OpenMinis-Linux 1.36.48-linux
+
+- versionCode **101**
+- 软件源页中文界面补上中科大、上海交大和淘宝 npm。以前这三条没进对照表，仍显示 USTC、SJTU、npmmirror。详见 `docs/github-release-1.36.48-linux.md`。
+
+---
+
 # OpenMinis-Linux 1.36.47-linux
 
 - versionCode **100**

@@ -124,27 +124,45 @@ data class MirrorTestResult(
 
 // ─── Mirror Definitions ──────────────────────────────────────────────────────
 
-@Composable
-private fun localizedMirrorName(name: String): String = when (name) {
-    "Official ports" -> stringResource(R.string.mirror_name_official_ports)
-    "Official PyPI" -> stringResource(R.string.mirror_name_official_pypi)
-    "Official npm" -> stringResource(R.string.mirror_name_official_npm)
-    "Tsinghua TUNA" -> stringResource(R.string.mirror_name_tuna)
-    "Alibaba" -> stringResource(R.string.mirror_name_aliyun)
-    "Huawei" -> stringResource(R.string.mirror_name_huawei)
-    "Tencent" -> stringResource(R.string.mirror_name_tencent)
-    "NCHC Taiwan" -> stringResource(R.string.mirror_name_nchc)
-    "JAIST Japan" -> stringResource(R.string.mirror_name_jaist)
-    "Kakao Korea" -> stringResource(R.string.mirror_name_kakao)
-    else -> name
+/**
+ * Every [MirrorCatalog] display name must map here. A miss falls through to
+ * the English catalog string, which is what left USTC / SJTU / npmmirror
+ * untranslated on the Chinese software-source page.
+ */
+internal fun mirrorNameStringRes(name: String): Int? = when (name) {
+    "Official ports" -> R.string.mirror_name_official_ports
+    "Official PyPI" -> R.string.mirror_name_official_pypi
+    "Official npm" -> R.string.mirror_name_official_npm
+    "Tsinghua TUNA" -> R.string.mirror_name_tuna
+    "Alibaba" -> R.string.mirror_name_aliyun
+    "USTC" -> R.string.mirror_name_ustc
+    "Huawei" -> R.string.mirror_name_huawei
+    "Tencent" -> R.string.mirror_name_tencent
+    "SJTU" -> R.string.mirror_name_sjtu
+    "NCHC Taiwan" -> R.string.mirror_name_nchc
+    "JAIST Japan" -> R.string.mirror_name_jaist
+    "Kakao Korea" -> R.string.mirror_name_kakao
+    "npmmirror" -> R.string.mirror_name_npmmirror
+    else -> null
+}
+
+internal fun mirrorRegionStringRes(region: String): Int? = when (region) {
+    "Global" -> R.string.mirror_region_global
+    "China" -> R.string.mirror_region_china
+    "Asia" -> R.string.mirror_region_asia
+    else -> null
 }
 
 @Composable
-private fun localizedMirrorRegion(region: String): String = when (region) {
-    "Global" -> stringResource(R.string.mirror_region_global)
-    "China" -> stringResource(R.string.mirror_region_china)
-    "Asia" -> stringResource(R.string.mirror_region_asia)
-    else -> region
+private fun localizedMirrorName(name: String): String {
+    val id = mirrorNameStringRes(name) ?: return name
+    return stringResource(id)
+}
+
+@Composable
+private fun localizedMirrorRegion(region: String): String {
+    val id = mirrorRegionStringRes(region) ?: return region
+    return stringResource(id)
 }
 
 object MirrorCatalog {

@@ -2366,8 +2366,11 @@
     <string name="mirror_name_official_npm">Official npm</string>
     <string name="mirror_name_tuna">Tsinghua TUNA</string>
     <string name="mirror_name_aliyun">Alibaba</string>
+    <string name="mirror_name_ustc">USTC</string>
     <string name="mirror_name_huawei">Huawei</string>
     <string name="mirror_name_tencent">Tencent</string>
+    <string name="mirror_name_sjtu">SJTU</string>
+    <string name="mirror_name_npmmirror">npmmirror</string>
     <string name="mirror_name_nchc">NCHC Taiwan</string>
     <string name="mirror_name_jaist">JAIST Japan</string>
     <string name="mirror_name_kakao">Kakao Korea</string>
