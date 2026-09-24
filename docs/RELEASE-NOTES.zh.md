@@ -1,3 +1,10 @@
+# OpenMinis-Linux 1.36.44-linux
+
+- versionCode **97**
+- 高刷新率只请求当前分辨率下最快的显示模式，不再同时写刷新率，避免被系统盖回 60Hz。关闭时两种窗口参数都会清掉。视频请求没传 `mode` 时结果不再谎报 `std`；传了的 mode 仍只用于这一次。详见 `docs/github-release-1.36.44-linux.md`。
+
+---
+
 # OpenMinis-Linux 1.36.43-linux
 
 - versionCode **96**

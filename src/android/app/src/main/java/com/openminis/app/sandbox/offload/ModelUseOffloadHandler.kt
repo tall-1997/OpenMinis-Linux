@@ -1292,13 +1292,18 @@ class ModelUseOffloadHandler(
             hostFile.writeBytes(att.data)
             logModelUseWrite(outputPath, hostFile, sessionId)
         }
+        val sentMode = openAI.videoModeSent?.trim()?.takeIf { it.isNotEmpty() }
         return NativeOffloadResult(
             0,
             org.json.JSONObject()
                 .put("text", response.text)
                 .put("video_endpoint", custom ?: "/videos")
-                .put("mode", openAI.videoMode ?: "std")
-                .apply { if (outputPath != null) put("output", outputPath) }
+                .apply {
+                    // generateVideo clears the request field before we get here.
+                    // Report only the mode that was actually sent; do not invent std.
+                    if (sentMode != null) put("mode", sentMode)
+                    if (outputPath != null) put("output", outputPath)
+                }
                 .toString() + "\n",
         )
     }

@@ -290,6 +290,13 @@ class OpenAIProvider private constructor(
     /** Optional video `mode` (std/pro/…). Null means omit until the provider says it is required. */
     var videoMode: String? = null
 
+    /**
+     * Mode actually placed on the last successful create body. Survives the
+     * per-call clear of [videoMode] so the caller can report it, and is cleared
+     * at the start of the next [generateVideo] so it is never sent again.
+     */
+    var videoModeSent: String? = null
+
     // MARK: - Chat passthrough [T-android-model-use-passthrough-mode / GH#72]
 
     /**
@@ -1992,6 +1999,7 @@ class OpenAIProvider private constructor(
      * OpenAI-compatible relay shapes (`/video/generations`, sync `data[].url`).
      */
     override suspend fun generateVideo(prompt: String): LLMResponse = try {
+        videoModeSent = null
         withContext(Dispatchers.IO) {
             ProviderKeyGate.withPermit(callGateKey) {
                 generateVideoLocked(prompt.trim())
@@ -2078,6 +2086,7 @@ class OpenAIProvider private constructor(
                 }
                 throw mapHttpError(code, errText, null)
             }
+            videoModeSent = modeToSend
             if (looksLikeMp4(bytes)) {
                 return LLMResponse("", "end_turn", null, listOf(videoAtt(bytes)))
             }

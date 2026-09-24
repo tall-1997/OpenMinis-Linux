@@ -10,6 +10,8 @@ import okio.Buffer
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -67,7 +69,7 @@ class OpenAIProviderVideoTest {
     }
 
     @Test
-    fun `generateVideo falls back to video generations on 404`() = runBlocking {
+    fun `generateVideo falls back to v1 videos on 404`() = runBlocking {
         server.enqueue(MockResponse().setResponseCode(404).setBody("""{"error":{"message":"missing"}}"""))
         val fileUrl = server.url("/clip.mp4").toString()
         server.enqueue(MockResponse().setBody("""{"data":[{"url":"$fileUrl"}]}"""))
@@ -77,7 +79,7 @@ class OpenAIProviderVideoTest {
         assertEquals(1, response.mediaAttachments.size)
 
         assertEquals("/videos", server.takeRequest().path)
-        assertEquals("/video/generations", server.takeRequest().path)
+        assertEquals("/v1/videos", server.takeRequest().path)
     }
 
     @Test
@@ -96,6 +98,59 @@ class OpenAIProviderVideoTest {
         assertEquals("/videos/vid_1", poll1.path)
         assertEquals("/videos/vid_1", server.takeRequest().path)
         assertEquals("/videos/vid_1/content", server.takeRequest().path)
+    }
+
+    @Test
+    fun `generateVideo omits mode unless the caller set one`() = runBlocking {
+        enqueueJson("""{"data":[{"url":"${server.url("/clip.mp4")}"}]}""")
+        enqueueMp4()
+
+        provider.generateVideo("no mode")
+        val body = JSONObject(server.takeRequest().body.readUtf8())
+        assertFalse(body.has("mode"))
+        assertNull(provider.videoMode)
+        assertNull(provider.videoModeSent)
+    }
+
+    @Test
+    fun `generateVideo sends mode once and does not carry it forward`() = runBlocking {
+        provider.videoMode = "pro"
+        enqueueJson("""{"data":[{"url":"${server.url("/clip.mp4")}"}]}""")
+        enqueueMp4()
+        provider.generateVideo("pro clip")
+        val first = JSONObject(server.takeRequest().body.readUtf8())
+        assertEquals("pro", first.getString("mode"))
+        assertNull(provider.videoMode)
+        assertEquals("pro", provider.videoModeSent)
+        server.takeRequest()
+
+        enqueueJson("""{"data":[{"url":"${server.url("/clip.mp4")}"}]}""")
+        enqueueMp4()
+        provider.generateVideo("plain clip")
+        val second = JSONObject(server.takeRequest().body.readUtf8())
+        assertFalse(second.has("mode"))
+        assertNull(provider.videoModeSent)
+    }
+
+    @Test
+    fun `generateVideo retries with std only when the provider requires mode`() = runBlocking {
+        server.enqueue(
+            MockResponse().setResponseCode(400).setBody("""{"error":{"message":"mode is required"}}"""),
+        )
+        enqueueJson("""{"data":[{"url":"${server.url("/clip.mp4")}"}]}""")
+        enqueueMp4()
+
+        provider.generateVideo("needs mode")
+        val rejected = JSONObject(server.takeRequest().body.readUtf8())
+        assertFalse(rejected.has("mode"))
+        val retried = JSONObject(server.takeRequest().body.readUtf8())
+        assertEquals("std", retried.getString("mode"))
+        assertNull(provider.videoMode)
+        assertEquals("std", provider.videoModeSent)
+    }
+
+    private fun enqueueJson(body: String) {
+        server.enqueue(MockResponse().setBody(body))
     }
 
     private fun enqueueMp4() {
