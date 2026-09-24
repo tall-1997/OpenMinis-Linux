@@ -774,7 +774,7 @@ fun SessionListScreen(
                 },
                 actions = {
                         IconButton(onClick = onScheduledTasksClick) {
-                            Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
+                            Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
                                 Icon(
                                     Icons.Outlined.Schedule,
                                     contentDescription = stringResource(R.string.sessionlist_scheduled_tasks),
@@ -784,7 +784,7 @@ fun SessionListScreen(
                                     Badge(
                                         modifier = Modifier
                                             .align(Alignment.TopEnd)
-                                            .offset(x = 10.dp, y = (-8).dp),
+                                            .offset(x = 0.dp, y = 2.dp),
                                     ) { Text("$scheduledTaskCount") }
                                 }
                             }

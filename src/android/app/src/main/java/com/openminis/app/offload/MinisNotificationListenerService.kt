@@ -109,6 +109,16 @@ class MinisNotificationListenerService : NotificationListenerService() {
             }
         }
 
+        /** Cancel one status-bar entry. Never cancels the whole bar. */
+        fun cancelKey(key: String): Boolean {
+            return try {
+                instance?.cancelNotification(key)
+                instance != null
+            } catch (_: SecurityException) {
+                false
+            }
+        }
+
         /** True if the user has granted Notification Access for this app. */
         fun isEnabled(context: Context): Boolean {
             val pkg = context.packageName

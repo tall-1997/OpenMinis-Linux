@@ -36,40 +36,67 @@ class ScheduledTaskStore(private val context: Context) {
 
     fun get(taskId: String): ScheduledTask? = all().firstOrNull { it.id == taskId }
 
+    private val lock = Any()
+
     fun upsert(task: ScheduledTask) {
-        val current = all().filter { it.id != task.id }
-        write(current + task)
+        mutate { cur ->
+            cur.removeAll { it.id == task.id }
+            cur.add(task)
+        }
     }
 
-    fun delete(taskId: String) {
-        write(all().filter { it.id != taskId })
+    fun delete(taskId: String): Boolean {
+        var removed = false
+        mutate { cur ->
+            removed = cur.removeAll { it.id == taskId }
+        }
+        return removed && get(taskId) == null
+    }
+
+    /** Exact id, or a unique prefix of at least 4 characters. */
+    fun resolveId(idOrPrefix: String): String? {
+        val tasks = all()
+        tasks.find { it.id == idOrPrefix }?.let { return it.id }
+        if (idOrPrefix.length < 4) return null
+        return tasks.filter { it.id.startsWith(idOrPrefix) }.singleOrNull()?.id
+    }
+
+    private fun mutate(block: (MutableList<ScheduledTask>) -> Unit) {
+        synchronized(lock) {
+            val cur = all().toMutableList()
+            block(cur)
+            write(cur)
+        }
     }
 
     /** Null model pins that name entries removed by a provider model-list clear. */
     fun dropEntryRefs(removedIds: Set<String>) {
         if (removedIds.isEmpty()) return
-        val current = all()
-        val next = current.map { task ->
-            val binding = task.modelBinding
-            val bindingHit = binding != null && removedIds.any { it.isNotEmpty() && binding.contains(it) }
-            val modelHit = task.modelId != null && task.modelId in removedIds
-            if (!bindingHit && !modelHit) task
-            else task.copy(
-                modelId = if (modelHit) null else task.modelId,
-                modelBinding = if (bindingHit) null else binding,
-            )
+        mutate { cur ->
+            for (i in cur.indices) {
+                val task = cur[i]
+                val binding = task.modelBinding
+                val bindingHit = binding != null && removedIds.any { it.isNotEmpty() && binding.contains(it) }
+                val modelHit = task.modelId != null && task.modelId in removedIds
+                if (!bindingHit && !modelHit) continue
+                cur[i] = task.copy(
+                    modelId = if (modelHit) null else task.modelId,
+                    modelBinding = if (bindingHit) null else binding,
+                )
+            }
         }
-        if (next != current) write(next)
     }
 
     fun clear() {
-        prefs.edit().remove(KEY_TASKS).apply()
+        prefs.edit().remove(KEY_TASKS).commit()
     }
 
     private fun write(tasks: List<ScheduledTask>) {
         val arr = JSONArray()
         for (t in tasks) arr.put(t.toJson())
-        prefs.edit().putString(KEY_TASKS, arr.toString()).apply()
+        // apply() returns before the file is durable. A later delete then looked
+        // successful while a stale flush restored the task under a new id.
+        prefs.edit().putString(KEY_TASKS, arr.toString()).commit()
     }
 
     /**

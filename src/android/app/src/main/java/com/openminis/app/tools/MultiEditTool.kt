@@ -52,16 +52,25 @@ object MultiEditTool {
             WritePathGuard.denyReason(path)?.let {
                 return ToolExecutionResult(it, false, toolTitle = toolTitle)
             }
-            val edits = args.optJSONArray("edits") ?: JSONArray()
-            if (edits.length() == 0) return ToolExecutionResult("Error: edits required", false, toolTitle = toolTitle)
+            val edits = coerceEdits(args)
+            if (edits.length() == 0) {
+                val keys = args.keys().asSequence().joinToString(",")
+                return ToolExecutionResult(
+                    "Error: edits required as an array of {old_string, new_string}. " +
+                        "A JSON string, one edit object, or a top-level old_string/new_string pair is also accepted. " +
+                        "Received keys: $keys",
+                    false,
+                    toolTitle = toolTitle,
+                )
+            }
             var last: ToolExecutionResult? = null
             for (i in 0 until edits.length()) {
                 val e = edits.getJSONObject(i)
                 val one = JSONObject()
                     .put("tool_title", toolTitle)
                     .put("path", path)
-                    .put("old_string", e.optString("old_string"))
-                    .put("new_string", e.optString("new_string"))
+                    .put("old_string", e.optString("old_string", e.optString("old", "")))
+                    .put("new_string", e.optString("new_string", e.optString("new", "")))
                     .put("replace_all", e.optBoolean("replace_all", false))
                 last = FileEditTool.execute(one.toString(), sessionId, context)
                 if (last?.success != true) {
@@ -75,6 +84,53 @@ object MultiEditTool {
             ToolExecutionResult("Applied ${edits.length()} edits to $path. ${last?.output.orEmpty()}", true, toolTitle = toolTitle)
         } catch (e: Exception) {
             ToolExecutionResult("Error multi_edit: ${e.message}", false, toolTitle = toolTitle)
+        }
+    }
+
+    /**
+     * Models sometimes stringify the array, nest it under replacements/changes,
+     * or send one old_string/new_string pair. Those used to become "edits required"
+     * even though the edit was in the arguments.
+     */
+    private fun coerceEdits(args: JSONObject): JSONArray {
+        val raw = args.opt("edits")
+            ?: args.opt("replacements")
+            ?: args.opt("changes")
+            ?: args.opt("operations")
+            ?: args.optJSONObject("input")?.opt("edits")
+            ?: args.optJSONObject("arguments")?.opt("edits")
+        val arr = when (raw) {
+            is JSONArray -> raw
+            is JSONObject -> JSONArray().put(raw)
+            is String -> parseEditString(raw)
+            else -> JSONArray()
+        }
+        if (arr.length() == 0 && (args.has("old_string") || args.has("old"))) {
+            arr.put(
+                JSONObject()
+                    .put("old_string", args.optString("old_string", args.optString("old", "")))
+                    .put("new_string", args.optString("new_string", args.optString("new", ""))),
+            )
+        }
+        for (i in 0 until arr.length()) {
+            val item = arr.optJSONObject(i) ?: continue
+            if (!item.has("old_string") && item.has("old")) item.put("old_string", item.opt("old"))
+            if (!item.has("new_string") && item.has("new")) item.put("new_string", item.opt("new"))
+        }
+        return arr
+    }
+
+    private fun parseEditString(raw: String): JSONArray {
+        val text = raw.trim()
+        if (text.isEmpty()) return JSONArray()
+        return try {
+            JSONArray(text)
+        } catch (_: Exception) {
+            try {
+                JSONArray().put(JSONObject(text))
+            } catch (_: Exception) {
+                JSONArray()
+            }
         }
     }
 }

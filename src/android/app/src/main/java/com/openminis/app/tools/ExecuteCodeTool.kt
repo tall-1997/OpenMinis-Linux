@@ -125,7 +125,11 @@ object ExecuteCodeTool {
                 ScriptableObject.putProperty(scope, "__minis_call", callFn)
                 val prelude = buildString {
                     for (t in SANDBOX_TOOLS) {
-                        append("function $t(p){return __minis_call('$t', JSON.stringify(p||{}));}\n")
+                        append("function $t(p){")
+                        append("if(typeof p==='string'){var k={file_read:'path',list_dir:'path',grep:'pattern',glob:'pattern',web_search:'query',web_fetch:'url',memory_get:'name',grep_source:'pattern'};")
+                        append("var o={};o[k['$t']||'query']=p;return __minis_call('$t', JSON.stringify(o));}")
+                        append("if(p==null||typeof p!=='object'){return 'Error: $t expects an object like {path:\\\"...\\\"} or a string, got '+(typeof p);}")
+                        append("return __minis_call('$t', JSON.stringify(p));}\n")
                     }
                 }
                 cx.evaluateString(scope, prelude + "\n" + code, "execute_code", 1, null)

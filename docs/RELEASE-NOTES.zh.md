@@ -1,3 +1,11 @@
+# OpenMinis-Linux 1.36.40-linux
+
+- versionCode **93**
+- 模型调用不再把自定义路径改写成图片或聊天接口。空输入返回退出码 2。视频生成先走 `/v1/videos`。
+- 混合命令只失败越界的那一段。定时任务删除会落盘并确认。通知清空默认只清本应用。详见 `docs/github-release-1.36.40-linux.md`。
+
+---
+
 # OpenMinis-Linux 1.36.39-linux
 
 - versionCode **92**

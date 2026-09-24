@@ -190,13 +190,16 @@ class ModelUseOffloadHandler(
         // System prompt: --system takes precedence over --system-file
         val explicitSystem = args.get("system") ?: args.get("system-file")?.let { readLinuxPath(it, request.sessionId) }
 
-        // Parse input messages: --input <path> | stdin
+        // Native offload does not forward stdin. A pipe used to become an empty
+        // user turn that still returned RC=0 with a constant token count.
+        val positionalPrompt = args.positional.drop(1).joinToString(" ").trim()
         val inputText = when {
             args.get("input") != null -> readLinuxPath(args.get("input")!!, request.sessionId)
                 ?: return NativeOffloadResult(
                     2,
                     "minis-model-use run: cannot read --input '${args.get("input")}'\n",
                 )
+            positionalPrompt.isNotEmpty() -> positionalPrompt
             else -> ""
         }
         val parsed = try {
@@ -388,6 +391,26 @@ class ModelUseOffloadHandler(
         )
         if (videoRouted != null) return attachCallFeedback(videoRouted, callWarnings, appliedExtras)
 
+        // An empty turn used to return RC=0 with a constant input_tokens count
+        // while the model replied that the message was empty. Fail closed.
+        val sentUserChars = nonSystem.sumOf { it.content.length }
+        if (sentUserChars == 0) {
+            return NativeOffloadResult(
+                2,
+                JSONObject()
+                    .put("error", "empty_user_content")
+                    .put("sent_user_chars", 0)
+                    .put(
+                        "message",
+                        "No user content was sent, so the model was not called. " +
+                            "Pass --input <file> or a prompt after run, for example: " +
+                            "minis-model-use run --model <id> \"只回复：收到\". " +
+                            "Native offload does not forward stdin; a pipe is empty.",
+                    )
+                    .toString() + "\n",
+            )
+        }
+
         val response = try {
             runBlocking {
                 provider.sendMessage(
@@ -474,6 +497,7 @@ class ModelUseOffloadHandler(
         val body = JSONObject().apply {
             put("model", entry.model.id)
             put("text", response.text)
+            put("sent_user_chars", nonSystem.sumOf { it.content.length })
             response.usage?.let { u ->
                 put("usage", JSONObject().apply {
                     put("input_tokens", u.inputTokens)
@@ -727,8 +751,13 @@ class ModelUseOffloadHandler(
 
         val warnings = mutableListOf<String>()
         val envRaw: Any? = obj.opt("passthrough")
-        val env = envRaw as? JSONObject
+        val env = when (envRaw) {
+            is JSONObject -> envRaw
+            is String -> runCatching { JSONObject(envRaw.trim()) }.getOrNull()
+            else -> null
+        }
         if (env == null) {
+            implicitPassthrough(obj)?.let { return it }
             // [T-model-use-passthrough-warnings] Exact key absent or wrong
             // type — surface the two silent failure shapes. Mirrors iOS.
             if (envRaw != null && envRaw != JSONObject.NULL) {
@@ -984,9 +1013,50 @@ class ModelUseOffloadHandler(
             val t = inputJson.trim()
             if (t.startsWith("{")) JSONObject(t) else null
         } catch (_: Throwable) { null } ?: return null
-        val raw = obj.safeOptString("image_endpoint", "").ifEmpty { obj.safeOptString("endpoint", "") }
+        val raw = obj.safeOptString("image_endpoint", "")
+            .ifEmpty { obj.safeOptString("endpoint", "") }
+            .ifEmpty { obj.safeOptString("endpoint_path", "") }
             .trim()
         return if (raw.startsWith("/")) raw else null
+    }
+
+    /**
+     * A flattened envelope (`endpoint`/`endpoint_path` plus `method` or `body`)
+     * is the same request as a nested `passthrough` object. Leaving it in
+     * standard mode used to rewrite image models onto `/images/generations`.
+     */
+    private fun implicitPassthrough(obj: JSONObject): PassthroughSpec? {
+        val method = obj.safeOptString("method", "").trim().uppercase()
+        val endpoint = obj.safeOptString("endpoint", "")
+            .ifEmpty { obj.safeOptString("endpoint_path", "") }
+            .ifEmpty { obj.safeOptString("image_endpoint", "") }
+            .trim()
+        if (!endpoint.startsWith("/")) return null
+        val bodyObj = obj.optJSONObject("body")
+        val hasBody = bodyObj != null || obj.safeOptString("body_mode", "").isNotBlank()
+        if (method.isEmpty() && !hasBody) return null
+        val headers = LinkedHashMap<String, String>()
+        obj.optJSONObject("headers")?.let { h ->
+            for (key in h.keys()) {
+                val v = h.opt(key)
+                if (v is String) headers[key] = v
+            }
+        }
+        val body = LinkedHashMap<String, Any?>()
+        bodyObj?.let { b -> for (key in b.keys()) body[key] = b.opt(key) }
+        val mode = obj.safeOptString("body_mode", "replace").ifEmpty { "replace" }
+        return PassthroughSpec(
+            active = true,
+            endpoint = endpoint,
+            method = method.ifEmpty { "POST" },
+            headers = headers,
+            body = body,
+            bodyMode = if (mode == "merge") "merge" else "replace",
+            warnings = listOf(
+                "Top-level endpoint/endpoint_path with method or body was treated as passthrough. " +
+                    "The nested {\"passthrough\":{...}} object is preferred.",
+            ),
+        )
     }
 
     /**
@@ -1184,7 +1254,22 @@ class ModelUseOffloadHandler(
         val prompt = obj.safeOptString("prompt", "").ifEmpty {
             fallbackPromptMessages.lastOrNull { it.role == "user" }?.content.orEmpty()
         }.trim()
-        if (prompt.isEmpty()) return null
+        if (prompt.isEmpty()) {
+            return NativeOffloadResult(
+                2,
+                org.json.JSONObject()
+                    .put("error", "video_prompt_required")
+                    .put(
+                        "message",
+                        "This model is a video model, so the request was not sent to " +
+                            "chat/completions. Pass a prompt, or use " +
+                            "{\"passthrough\":{\"endpoint\":\"/v1/videos\",\"method\":\"POST\"," +
+                            "\"body_mode\":\"replace\",\"body\":{...}}}. " +
+                            "endpoint and endpoint_path are the same absolute-path field.",
+                    )
+                    .toString() + "\n",
+            )
+        }
         openAI.videoMode = obj.safeOptString("mode", "").trim().ifEmpty { null }
         val response = try {
             runBlocking { openAI.generateVideo(prompt) }
@@ -2035,11 +2120,14 @@ Input format (OpenAI Chat Completions JSON — the ONLY input format):
                    are NOT converted.
     extra_headers  string map — added to request headers; same-name REPLACES
                    the default (incl. auth headers).
-    endpoint       "/abs/path" starting with "/" replaces the ENTIRE path on
-                   the provider's own base URL host (credentials never leave
-                   the host); body is still auto-converted, response parsed.
-                   A non-image path is not rewritten to /images/generations.
-                   A path containing "video" is sent as a video generation.
+    endpoint       "/abs/path" starting with "/". endpoint_path is the same
+                   field. It replaces the ENTIRE path on the provider's own
+                   base URL host (credentials never leave the host). A path
+                   that does not contain "/images/" is never rewritten to
+                   /images/generations, even for an image model. A video model
+                   or a path containing "video" is never sent to
+                   chat/completions. Add method or body (or a passthrough
+                   object) to send the raw body instead of the converted one.
 
 Passthrough mode (raw escape hatch; response is NOT parsed):
   For endpoints/formats our schema doesn't model (video gen, TTS,

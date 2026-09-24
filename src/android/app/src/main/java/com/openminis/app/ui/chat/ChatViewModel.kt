@@ -9737,6 +9737,8 @@ class ChatViewModel(
             if (command.isBlank()) {
                 return ToolExecutionResult("Error: 'command' is required", false, toolTitle = toolTitle)
             }
+            val mounted = com.openminis.app.security.SecurityGateHolder.gate.sdcardMounted?.invoke() ?: true
+            command = com.openminis.app.security.GuestMountPolicy.rewriteCompound(command, mounted)
             command = com.openminis.app.tools.WritePathGuard.wrapShellCommand(command)
 
             // [T-android-overlay-finalize item 1] Removed the

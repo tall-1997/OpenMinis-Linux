@@ -65,7 +65,7 @@ class NotificationOffloadHandler(private val context: Context) : NativeOffloadHa
     }
 
     override fun handle(request: NativeOffloadRequest): NativeOffloadResult {
-        val args = OffloadArgs(request.argv.drop(1), booleanFlags = setOf("all"))
+        val args = OffloadArgs(request.argv.drop(1), booleanFlags = setOf("all", "all-apps", "everyone"))
         // [T-offload-defaults-batch-android] Help only on explicit
         // --help/-h; no subcommand defaults to `list`.
         if (args.hasFlag("h", "help")) {
@@ -75,10 +75,7 @@ class NotificationOffloadHandler(private val context: Context) : NativeOffloadHa
         return try {
             when (val sub = args.positional.firstOrNull() ?: "list") {
                 "send", "schedule" -> handleSend(args)
-                "clear" -> {
-                    nm.cancelAll()
-                    NativeOffloadResult(0, OffloadOutput.formatBody("All notifications cleared.", args) + "\n")
-                }
+                "clear" -> clearDelivered(args, pendingToo = false)
                 "list" -> handleList(args)
                 "pending" -> handlePending(args)
                 "cancel" -> handleCancel(args)
@@ -301,6 +298,66 @@ class NotificationOffloadHandler(private val context: Context) : NativeOffloadHa
         return NativeOffloadResult(0, OffloadOutput.formatBody(data.toString(2), args) + "\n")
     }
 
+    // ── clear ───────────────────────────────────────────────────────────
+
+    /**
+     * Default clear cancels only this app's posts, by id. [NotificationManager.cancelAll]
+     * is not used: on some Xiaomi builds it clears the whole status bar.
+     * Other apps are touched only when `--all-apps` is explicit.
+     */
+    private fun clearDelivered(args: OffloadArgs, pendingToo: Boolean): NativeOffloadResult {
+        val allApps = args.hasFlag("all-apps", "everyone")
+        var pending = 0
+        if (pendingToo) {
+            val all = store.loadAll()
+            for (i in 0 until all.length()) {
+                val o = all.getJSONObject(i)
+                cancelAlarmFor(o.optString("id"), o.optInt("request_code"))
+                pending++
+            }
+            store.clear()
+        }
+        val (own, other) = clearOwnDelivered(allApps)
+        val msg = if (allApps) {
+            "Cleared $own notification(s) from this app and $other from other apps."
+        } else {
+            "Cleared $own notification(s) posted by this app. Other apps were left alone. Pass --all-apps to clear the whole status bar."
+        }
+        val data = JSONObject()
+            .put("cleared_own", own)
+            .put("cleared_other", other)
+            .put("pending_cleared", pending)
+            .put("message", msg)
+        return NativeOffloadResult(0, OffloadOutput.formatBody(data.toString(2), args) + "\n")
+    }
+
+    private fun clearOwnDelivered(allApps: Boolean): Pair<Int, Int> {
+        val pkg = context.packageName
+        var own = 0
+        var other = 0
+        val active = MinisNotificationListenerService.getActiveNotifications()
+        if (active != null) {
+            for (sbn in active) {
+                val mine = sbn.packageName == pkg
+                if (!mine && !allApps) continue
+                if (mine) {
+                    nm.cancel(sbn.tag, sbn.id)
+                    own++
+                } else if (MinisNotificationListenerService.cancelKey(sbn.key)) {
+                    other++
+                }
+            }
+            return own to other
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            for (sbn in nm.activeNotifications) {
+                nm.cancel(sbn.tag, sbn.id)
+                own++
+            }
+        }
+        return own to other
+    }
+
     // ── cancel ──────────────────────────────────────────────────────────
 
     /**
@@ -321,11 +378,16 @@ class NotificationOffloadHandler(private val context: Context) : NativeOffloadHa
                 n++
             }
             store.clear()
-            // Also clear delivered notifications (matches apple-notification
-            // cancel --all semantics: nothing the user sees from us remains).
-            nm.cancelAll()
-            AppLogger.info(TAG, "cancel --all: pending=$n")
-            val data = JSONObject().put("cancelled", "all").put("pending_cleared", n)
+            // cancel --all means this app's pending and delivered posts, not
+            // the whole status bar. Xiaomi's NotificationManager.cancelAll()
+            // has wiped other apps' notifications.
+            val cleared = clearOwnDelivered(args.hasFlag("all-apps", "everyone"))
+            AppLogger.info(TAG, "cancel --all: pending=$n own=${cleared.first} other=${cleared.second}")
+            val data = JSONObject()
+                .put("cancelled", "all")
+                .put("pending_cleared", n)
+                .put("cleared_own", cleared.first)
+                .put("cleared_other", cleared.second)
             return NativeOffloadResult(0, OffloadOutput.formatBody(data.toString(2), args) + "\n")
         }
         val id = args.get("id")
@@ -547,7 +609,8 @@ Usage:
   android-notification pending          Scheduled but not yet fired
   android-notification cancel --id <id>
   android-notification cancel --all
-  android-notification clear            Cancel all delivered (legacy)
+  android-notification clear            Cancel this app's delivered notifications
+  android-notification clear --all-apps Cancel other apps too (explicit only)
   android-notification settings         Authorization + channel state
 
 Examples:

@@ -62,7 +62,7 @@ fun MinisCenterTopBar(
                 }.first().measure(loose)
                 val acts = subcompose("actions") {
                     Row(
-                        Modifier.padding(end = 4.dp),
+                        Modifier.padding(end = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         CompositionLocalProvider(LocalContentColor provides colors.actionIconContentColor) {
@@ -71,7 +71,13 @@ fun MinisCenterTopBar(
                     }
                 }.first().measure(loose)
                 val side = maxOf(nav.width, acts.width)
-                val titleMax = (constraints.maxWidth - side * 2).coerceAtLeast(0)
+                val symmetricMax = (constraints.maxWidth - side * 2).coerceAtLeast(0)
+                val gapMax = (constraints.maxWidth - nav.width - acts.width).coerceAtLeast(0)
+                val probe = subcompose("titleProbe") {
+                    Box { title() }
+                }.first().measure(loose.copy(maxWidth = 10_000))
+                val expand = probe.width > symmetricMax && gapMax > symmetricMax
+                val titleMax = if (expand) gapMax else symmetricMax
                 val titlePlaceable = subcompose("title") {
                     Box(
                         Modifier.fillMaxWidth(),
@@ -88,8 +94,9 @@ fun MinisCenterTopBar(
                 layout(constraints.maxWidth, barHeight) {
                     nav.placeRelative(0, (barHeight - nav.height) / 2)
                     acts.placeRelative(constraints.maxWidth - acts.width, (barHeight - acts.height) / 2)
+                    val titleX = if (expand) nav.width else (constraints.maxWidth - titlePlaceable.width) / 2
                     titlePlaceable.placeRelative(
-                        (constraints.maxWidth - titlePlaceable.width) / 2,
+                        titleX,
                         (barHeight - titlePlaceable.height) / 2,
                     )
                 }

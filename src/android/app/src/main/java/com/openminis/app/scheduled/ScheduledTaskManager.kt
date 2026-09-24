@@ -34,10 +34,28 @@ class ScheduledTaskManager(private val context: Context) {
     fun get(taskId: String): ScheduledTask? = store.get(taskId)
 
     fun create(task: ScheduledTask): ScheduledTask {
+        findIdentical(task)?.let { return it }
         store.upsert(task)
         if (task.enabled) registerAlarm(task)
         return task
     }
+
+    /**
+     * A retry of the same label, time, prompt and repeat must not mint a second
+     * id after the caller deleted the id that was returned.
+     */
+    fun findIdentical(task: ScheduledTask): ScheduledTask? = store.all().firstOrNull {
+        it.label == task.label &&
+            it.timeOfDayHour == task.timeOfDayHour &&
+            it.timeOfDayMinute == task.timeOfDayMinute &&
+            it.repeatMode == task.repeatMode &&
+            it.customDays == task.customDays &&
+            it.prompt == task.prompt &&
+            it.targetMode == task.targetMode &&
+            it.enabled == task.enabled
+    }
+
+    fun resolveId(idOrPrefix: String): String? = store.resolveId(idOrPrefix)
 
     fun update(task: ScheduledTask): ScheduledTask {
         cancelAlarm(task.id)
@@ -53,9 +71,12 @@ class ScheduledTaskManager(private val context: Context) {
         if (enabled) registerAlarm(updated) else cancelAlarm(taskId)
     }
 
-    fun delete(taskId: String) {
-        cancelAlarm(taskId)
-        store.delete(taskId)
+    fun delete(taskId: String): Boolean {
+        val id = store.resolveId(taskId) ?: return false
+        cancelAlarm(id)
+        val removed = store.delete(id)
+        cancelAlarm(id)
+        return removed && store.get(id) == null
     }
 
     /**

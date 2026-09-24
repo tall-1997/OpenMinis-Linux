@@ -881,7 +881,7 @@ class DebugRPCHandler(private val context: Context) {
      * (`minis-browser-use`, `minis-open`, …) without going through the agent.
      *
      * Params:
-     *   command  (string, required) — command line to run under /bin/sh -c.
+     *   command  (string, required) — command line to run under GNU bash (/bin/bash).
      *   session  (string)           — session id. Defaults to "debug-rpc" so
      *                                 callers don't accidentally mutate a
      *                                 real chat's shell state.

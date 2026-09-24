@@ -103,27 +103,36 @@ class ScheduledTaskOffloadHandler(private val context: Context) : NativeOffloadH
             startDateMs = args.get("start")?.let { parseDate(it) },
             endDateMs = args.get("end")?.let { parseDate(it) },
         )
-        manager.create(task)
-        val out = JSONObject().put("created", taskJson(task))
+        val saved = manager.create(task)
+        val out = JSONObject().put("created", taskJson(saved))
+        if (saved.id != task.id) out.put("already_existed", true)
         return NativeOffloadResult(0, out.toString(2))
     }
 
+    private fun requireId(args: OffloadArgs): String {
+        val raw = args.get("id") ?: throw IllegalArgumentException("--id required")
+        return manager.resolveId(raw)
+            ?: throw IllegalArgumentException("minis-scheduled: no task with id=$raw")
+    }
+
     private fun handleDelete(args: OffloadArgs): NativeOffloadResult {
-        val id = args.get("id") ?: throw IllegalArgumentException("--id required")
-        if (manager.get(id) == null) return NativeOffloadResult(1, "minis-scheduled: no task with id=$id")
-        manager.delete(id)
+        val id = requireId(args)
+        if (!manager.delete(id) || manager.get(id) != null) {
+            return NativeOffloadResult(1, "minis-scheduled: delete did not persist for id=$id")
+        }
         return NativeOffloadResult(0, JSONObject().put("deleted", id).toString())
     }
 
     private fun handleSetEnabled(args: OffloadArgs, enabled: Boolean): NativeOffloadResult {
-        val id = args.get("id") ?: throw IllegalArgumentException("--id required")
+        val id = requireId(args)
         if (manager.get(id) == null) return NativeOffloadResult(1, "minis-scheduled: no task with id=$id")
         manager.setEnabled(id, enabled)
         return NativeOffloadResult(0, JSONObject().put("id", id).put("enabled", enabled).toString())
     }
 
     private fun handleRun(args: OffloadArgs): NativeOffloadResult {
-        val id = args.get("id") ?: throw IllegalArgumentException("--id required")
+        val raw = args.get("id") ?: throw IllegalArgumentException("--id required")
+        val id = manager.resolveId(raw) ?: return NativeOffloadResult(1, "minis-scheduled: no task with id=$raw")
         val task = manager.get(id) ?: return NativeOffloadResult(1, "minis-scheduled: no task with id=$id")
         // Fire immediately, off-schedule. Blocks until the agent loop finishes
         // (ScheduledAgentRunner waits internally). Mirrors the editor "Run now".

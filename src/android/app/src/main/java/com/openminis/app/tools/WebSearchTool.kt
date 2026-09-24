@@ -83,8 +83,17 @@ object WebSearchTool {
                 lastError = attempt.error
             }
             if (results.isEmpty()) {
+                val fallback = searchNoKeyFallback(query, max, context)
+                if (fallback.isNotEmpty()) {
+                    return ToolExecutionResult(
+                        format(query, fallback, "no-key-fallback"),
+                        success = true,
+                        toolTitle = toolTitle,
+                    )
+                }
                 return ToolExecutionResult(
                     "web_search failed for \"$query\" via ${preferred.id}: ${lastError ?: "no results"}. " +
+                        "DuckDuckGo HTML returned no cards, and the no-key Wikipedia/Bing/Mojeek fallback was also empty. " +
                         "Configure Settings → Web search, or open a known URL with browser_use.",
                     success = false,
                     toolTitle = toolTitle,
@@ -438,6 +447,78 @@ object WebSearchTool {
 
     private fun enc(query: String): String =
         URLEncoder.encode(query, StandardCharsets.UTF_8.name())
+
+    /**
+     * DuckDuckGo HTML often returns a page with no result cards. Wikipedia
+     * OpenSearch and public HTML engines need no API key, so they run only
+     * after every configured engine returned empty.
+     */
+    private fun searchNoKeyFallback(query: String, max: Int, context: Context?): List<Result> {
+        val out = mutableListOf<Result>()
+        out += searchWikipedia(query, max, context)
+        if (out.size < max) {
+            out += searchHtmlLinks(
+                "https://www.bing.com/search?q=${enc(query)}&setlang=zh-Hans",
+                max - out.size,
+                context,
+                Regex("""<h2>\s*<a[^>]+href="(https?://[^"]+)"[^>]*>(.*?)</a>""", RegexOption.IGNORE_CASE),
+            )
+        }
+        if (out.size < max) {
+            out += searchHtmlLinks(
+                "https://www.mojeek.com/search?q=${enc(query)}",
+                max - out.size,
+                context,
+                Regex("""<a[^>]+class="[^"]*title[^"]*"[^>]+href="(https?://[^"]+)"[^>]*>(.*?)</a>""", RegexOption.IGNORE_CASE),
+            )
+        }
+        return out.distinctBy { it.url }.take(max)
+    }
+
+    private fun searchWikipedia(query: String, max: Int, context: Context?): List<Result> {
+        val host = if (query.any { it.code > 127 }) "zh.wikipedia.org" else "en.wikipedia.org"
+        val url = "https://$host/w/api.php?action=opensearch&search=${enc(query)}&limit=$max&namespace=0&format=json"
+        val body = fetchUrl(url, mapOf("Accept" to "application/json"), context) ?: return emptyList()
+        return try {
+            val arr = JSONArray(body)
+            val titles = arr.optJSONArray(1) ?: return emptyList()
+            val snippets = arr.optJSONArray(2) ?: JSONArray()
+            val urls = arr.optJSONArray(3) ?: JSONArray()
+            buildList {
+                for (i in 0 until titles.length().coerceAtMost(max)) {
+                    val link = urls.optString(i)
+                    if (!link.startsWith("http")) continue
+                    add(Result(titles.optString(i), link, snippets.optString(i)))
+                }
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun searchHtmlLinks(
+        url: String,
+        max: Int,
+        context: Context?,
+        pattern: Regex,
+    ): List<Result> {
+        if (max <= 0) return emptyList()
+        val html = fetchUrl(url, context = context) ?: return emptyList()
+        val out = mutableListOf<Result>()
+        for (match in pattern.findAll(html)) {
+            val link = match.groupValues.getOrNull(1)?.trim().orEmpty()
+            if (!link.startsWith("http") || link.contains("bing.com/ck/") || link.contains("microsoft.com")) continue
+            val title = match.groupValues.getOrNull(2).orEmpty()
+                .replace(Regex("<[^>]+>"), "")
+                .replace("&amp;", "&")
+                .replace("&quot;", "\"")
+                .trim()
+            if (title.isEmpty()) continue
+            out += Result(title, link, "")
+            if (out.size >= max) break
+        }
+        return out
+    }
 
     private fun httpUserAgent(context: Context?): String {
         val major = context?.let {

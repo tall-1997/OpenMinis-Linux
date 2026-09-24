@@ -2015,10 +2015,31 @@ class OpenAIProvider private constructor(
             else -> Unit
         }
         val abs = absoluteEndpointOverride?.takeIf { it.startsWith("/") }
-        val paths = if (abs != null) listOf(abs) else listOf("/videos", "/video/generations", "/videos/generations")
+        // Image calls join under basePath (`/v1/images/generations`) and the same
+        // key works. Guessing host-root `/videos` first hits a different gateway
+        // that answers "Invalid API key" and used to abort before `/v1/videos`.
+        val candidates = linkedMapOf<String, Boolean>()
+        fun addCandidate(url: String, authFatal: Boolean) {
+            if (url.isNotBlank()) candidates.putIfAbsent(url, authFatal)
+        }
+        if (abs != null) {
+            addCandidate(hostRootURL(abs) ?: "$basePath$abs", true)
+        } else {
+            addCandidate("$basePath/videos", true)
+            hostRootURL("/v1/videos")?.let { addCandidate(it, false) }
+            addCandidate("$basePath/video/generations", false)
+            addCandidate("$basePath/videos/generations", false)
+            hostRootURL("/videos")?.let { addCandidate(it, false) }
+            hostRootURL("/video/generations")?.let { addCandidate(it, false) }
+            hostRootURL("/videos/generations")?.let { addCandidate(it, false) }
+        }
         var lastError: LLMError? = null
-        for (path in paths) {
-            val url = if (path.startsWith("/")) hostRootURL(path) ?: "$basePath$path" else "$basePath$path"
+        for ((url, authFatal) in candidates) {
+            val path = when {
+                url.contains("/video/generations") -> "/video/generations"
+                url.contains("/videos/generations") -> "/videos/generations"
+                else -> "/videos"
+            }
             var modeToSend = videoMode?.trim()?.takeIf { it.isNotEmpty() }
             var triedDefaultMode = false
             while (true) {
@@ -2041,7 +2062,7 @@ class OpenAIProvider private constructor(
             val bytes = response.body?.bytes() ?: ByteArray(0)
             val contentType = response.header("Content-Type").orEmpty()
             response.close()
-            if (code == 404 || code == 405) {
+            if (code == 404 || code == 405 || (!authFatal && (code == 401 || code == 403))) {
                 lastError = mapHttpError(code, bytes.decodeToString())
                 break
             }
