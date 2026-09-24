@@ -1264,20 +1264,27 @@ class RootfsManager private constructor(private val context: Context) {
         if (!File(rootfsDir, "usr/bin/fuser").exists()) essentials += "psmisc"
         if (!File(rootfsDir, "usr/bin/unzip").exists()) essentials += "unzip"
         
-        if (essentials.isEmpty()) {
-            Log.i(TAG, "[net-seed] all essentials present, skipping")
-            return
-        }
-        
-        Log.i(TAG, "[net-seed] installing ${essentials.joinToString()}")
-        val r = runAptInstallInGuest(essentials)
-        Log.i(TAG, "[net-seed] essentials exit=${r.exitCode}")
-        
-        // Node.js: try once, but don't block boot
         val nodeBin = File(rootfsDir, "usr/bin/node")
         val nodejsBin = File(rootfsDir, "usr/bin/nodejs")
         val nodeAttempted = File(rootfsDir, "var/lib/minis/node-seed.attempted")
-        if (!nodeBin.exists() && !nodejsBin.exists() && !nodeAttempted.exists()) {
+        val retryNode = RootfsUpgradePolicy.shouldRetryNodeSeed(
+            nodeBin.exists() || nodejsBin.exists(),
+            nodeAttempted.exists(),
+        )
+        if (essentials.isEmpty() && !retryNode) {
+            Log.i(TAG, "[net-seed] all essentials present, skipping")
+            return
+        }
+        if (essentials.isNotEmpty()) {
+            Log.i(TAG, "[net-seed] installing ${essentials.joinToString()}")
+            val r = runAptInstallInGuest(essentials)
+            Log.i(TAG, "[net-seed] essentials exit=${r.exitCode}")
+        }
+        
+        // Node.js: try once, but don't block boot. A previous launch may have
+        // installed the other essentials and then lost the node attempt to a
+        // busy lock; that must still retry here.
+        if (retryNode) {
             Log.i(TAG, "[net-seed] attempting nodejs npm (best-effort)")
             val nr = runAptInstallInGuest(listOf("nodejs", "npm"))
             val present = nodeBin.exists() || nodejsBin.exists()
@@ -1728,4 +1735,11 @@ internal object RootfsUpgradePolicy {
         return output.contains("Unable to locate package") ||
             output.contains("has no installation candidate")
     }
+
+    /**
+     * 1.36.23: a lock or network failure must be retried next boot. Skipping the
+     * whole seed because curl/git are already installed also skipped that retry.
+     */
+    fun shouldRetryNodeSeed(nodeBinaryPresent: Boolean, stampExists: Boolean): Boolean =
+        !nodeBinaryPresent && !stampExists
 }

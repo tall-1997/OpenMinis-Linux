@@ -24,6 +24,13 @@ class UpgradeRootfsCompatTest {
     }
 
     @Test
+    fun nodeSeedRetriesWhenEssentialsAreAlreadyInstalled() {
+        assertTrue(RootfsUpgradePolicy.shouldRetryNodeSeed(nodeBinaryPresent = false, stampExists = false))
+        assertFalse(RootfsUpgradePolicy.shouldRetryNodeSeed(nodeBinaryPresent = true, stampExists = false))
+        assertFalse(RootfsUpgradePolicy.shouldRetryNodeSeed(nodeBinaryPresent = false, stampExists = true))
+    }
+
+    @Test
     fun nodeSeedMarkerIsWrittenAfterSuccessOrAMissingPackage() {
         assertTrue(RootfsUpgradePolicy.shouldStampNodeSeed(0, "", binaryPresent = true))
         assertTrue(

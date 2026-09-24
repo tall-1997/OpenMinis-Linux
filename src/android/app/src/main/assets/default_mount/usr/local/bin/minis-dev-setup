@@ -54,13 +54,7 @@ fi
 
 echo "Installing essential tools..."
 apt-get install -y --no-install-recommends \
-  ca-certificates curl wget \
-  python3 python3-pip \
-  git git-lfs \
-  nodejs npm \
-  psmisc unzip \
-  || apt-get install -y --no-install-recommends \
-       ca-certificates curl wget python3 git nodejs psmisc unzip \
+  ca-certificates curl wget python3 git nodejs npm psmisc unzip \
   || true
 
 update-ca-certificates 2>/dev/null || true

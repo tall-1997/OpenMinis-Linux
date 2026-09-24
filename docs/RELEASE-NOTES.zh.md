@@ -1,3 +1,10 @@
+# OpenMinis-Linux 1.36.51-linux
+
+- versionCode **104**
+- 基础包已齐时仍会重试失败的 Node 安装；轻量 `minis-dev-setup` 不再多装 pip 和 git-lfs。详见 `docs/github-release-1.36.51-linux.md`。
+
+---
+
 # OpenMinis-Linux 1.36.50-linux
 
 - versionCode **103**

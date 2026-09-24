@@ -2,7 +2,7 @@
 
 产品名 Minis Ultra。不要改 CLI 名，不要改 `/var/minis`。不要抽 `:provider`、`:sandbox`、`:core:model`，不要拆 `ChatViewModel.kt`。不要把任务清单里的 Gradle 缓存、CI、benchmark、`shrinkResources`、`StreamSessionController` 抽离当成未完成工作，除非某条仍生效的说明明确要求。后写说明覆盖先写。仓库没有 1.36.15、1.36.29–1.36.33 的说明，不要臆造。「本版未接」和明确延期不是工作。没有核实到的行为缺口不要改版本。
 
-本交接写于 1.36.50-linux / versionCode 103 的修复提交里。`:app:compileDebugKotlin` 与 `VideoModalityTest`、`SessionForkCopyTest` 已离线通过。若该提交已推送，远程 tag 是 `1.36.50-linux`。下一轮只在又核实到新缺口时才升到 1.36.51-linux / versionCode 104。
+本交接更新于 1.36.51-linux / versionCode 104。1.36.50 远程提交是 `28307ba6b1831567f8cc75a039d25a40ba9cba9c`。下一轮若再核实到缺口，升到 1.36.52-linux / versionCode 105，`--expect-parent` 用 1.36.51 推送后的远程完整哈希。推送脚本用 `git cat-file --batch`，不要改回 `git show rev:path`。
 
 ## 本轮已修（1.36.50）
 
@@ -18,19 +18,28 @@
 
 1.36.1–1.36.8 抽查已对上的包括：缺参补 256k/128k、步进器、强 429、限流桶、组内换人、压缩不拆段、视频生成路径（在模态判断之后）、浏览器底栏、检查更新、网页搜索、无障碍 awaitA11yEvent、shrinkResources。1.36.9–1.36.14 抽查已对上的包括：项目共享与记忆仍按会话、删会话不删项目树、人格绑定不入库、密钥不进沙箱、更新续装、折叠增量收起。
 
+## 1.36.51 已修
+
+- 开机种子在基础包已齐时仍重试未打标的 Node 安装。`RootfsManager.seedNetworkToolsLocked` 以前在 `essentials.isEmpty()` 时直接 return。
+- 轻量 `minis-dev-setup` 去掉 python3-pip 和 git-lfs。npm 仍随 nodejs 安装，与开机种子一致，不记缺口。
+
+## 本轮已对上，不要再当缺口
+
+- 1.36.17：`reconcileWorkspaceFiles` 搬私有共享目录；移出/解散先清 `folder_id` 再 `copyProjectToSession`；冲突时 `independent == false`，项目目录不删；右下角创建按钮是「新建文件夹」，搜索按钮不是「新会话」小 FAB。
+- 1.36.18：主机 CA 用 `copyTo`，不链到 Android 路径；`minis-mirror` 用 `/dev/tcp`，回退链含 SJTU。
+- 1.36.19：轻量忙锁 exit 0，完整安装拿不到锁 exit 1；TERM 走 `exit 143`，EXIT 放锁。不要改回重试。
+- 1.36.20：证书目录 0755、文件 0644，OpenSSL `.0`，`SSL_CERT_FILE` 写入 `/etc/environment`。
+- 1.36.21：已有会话打开时收起键盘，只有这次流式过才结束聚焦；内置 SOUL 不可删除；子代理单个 Error 不取消同批；保留 `org.json`；自编译未成功不报成功。
+- 1.36.22：NDK `android-ndk-r29-aarch64.tar.xz`、三种压缩包、CA 双目录与 `minis-ca-dedup`、脚本无 `Verify-Peer=false`。
+- 1.36.23：空目标搬移失败不藏私有文件；会话路径被拒不回退全局绑定。不要改回回退。
+- 1.36.25：`SecurityGateHolder` 在 `decision.hard` 时不把「全部允许」降级成放行。`su` 拒绝走 `withCallerSession`。
+
 ## 下一轮要逐行对的
 
 这些还没有用文件行号证明，不能记成已对上，也不能直接改：
 
-- 1.36.17：移出/解散分组的拷回、冲突不删项目、单个「新建文件夹」FAB。
-- 1.36.18：主机 CA 是拷贝不是符号链接；`/dev/tcp` 快筛后的临时 `sources.list`。1.36.19 已覆盖「拿不到锁就重试」，轻量脚本忙锁应 exit 0，不要改回重试。
-- 1.36.19：轻量/完整 `minis-dev-setup` 包清单，以及 `trap … exit 143`。
-- 1.36.20：证书 0755/0644、OpenSSL `.0`、`SSL_CERT_FILE` 写入 `/etc/environment`。
-- 1.36.21：流式结束后才重新聚焦；内置 SOUL 不可删除；子代理单个 Error 不取消同批；保留 `org.json`；自编译未编译成功不报成功。
-- 1.36.22：NDK 包名 `android-ndk-r29-aarch64.tar.xz`、压缩包三种格式、主机 CA 双目录与 `minis-ca-dedup`、脚本不再 `Verify-Peer=false`。
-- 1.36.23：空目标搬移失败不藏私有文件；会话路径被拒后不再改读全局绑定。读图和模型调用已经按这条拒绝回退，不要改回去。
-- 1.36.25：隔离拒绝不可被「全部允许」降级；`su` 使用真正调用方会话。
-- 1.36.1–1.36.8 未追完：`models-dev-api.json.gz` 失败是否回退明文；聊天气泡能否播放 `minis://attachments/generated/*.mp4`；点停止后视频阻塞请求是否立刻断开。`:core:model` 迁移和 CI 归档不要当成缺口，除非说明仍要求且后文没取消。
+- 1.36.1–1.36.8：`models-dev-api.json.gz` 失败是否回退明文；聊天气泡能否播放 `minis://attachments/generated/*.mp4`；点停止后视频阻塞请求是否立刻断开。`:core:model` 迁移和 CI 归档不要当成缺口。
+- 1.36.20 权限模式界面和 `rm -rf /` 确认、1.36.21 导入对话框文案与子代理卡片、1.36.22 UTF-8 半字符、结束标记拆包、`--kill-on-exit`、CMake 路径。
 - 1.36.36「一批界面文案补了中文」没有清单，不要为了凑数改文案。
 - 启动图标缺 XML inset：没有像素测量之前不是缺口。
 
