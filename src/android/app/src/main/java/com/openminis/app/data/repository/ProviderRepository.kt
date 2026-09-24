@@ -1250,12 +1250,13 @@ class ProviderRepository(private val context: Context) {
             config.modelGroups[i].memberEntryIds.removeAll { it in removedIds }
         }
         config.agentLoopModelEntryIds.removeAll { it in removedIds }
-        if (config.defaultTranslationModelId in removedIds) config.defaultTranslationModelId = null
         fun clearSlot(current: String?): String? {
             if (current == null) return null
             val pinned = com.openminis.app.data.model.ModelSlotRef.entryId(current)
             return if (current in removedIds || pinned in removedIds) null else current
         }
+        // Retained only so old configs round-trip. Translation reads TranslationPrefs.
+        config.defaultTranslationModelId = clearSlot(config.defaultTranslationModelId)
         config.defaultPrimaryGroupId = clearSlot(config.defaultPrimaryGroupId)
         config.defaultSubGroupId = clearSlot(config.defaultSubGroupId)
         val last = prefs.getString(KEY_LAST_USED_ENTRY, null)
@@ -1678,31 +1679,6 @@ class ProviderRepository(private val context: Context) {
             return _config.value.modelEntries.find { it.id == pinned }?.model?.displayName
         }
         return _config.value.modelGroups.find { it.id == raw }?.name
-    }
-
-    var defaultTranslationModelId: String?
-        get() = _config.value.defaultTranslationModelId
-        set(value) = synchronized(configLock) {
-            ensureConfigLoaded()
-            val config = workingCopy()
-            config.defaultTranslationModelId = value
-            saveConfig(config)
-        }
-
-    /** Translation slot: one pinned entry, or the first usable member of a group. */
-    fun resolveTranslationEntry(): com.openminis.app.data.model.ModelEntry? {
-        ensureConfigLoaded()
-        val config = _config.value
-        val raw = config.defaultTranslationModelId ?: return null
-        val pinned = com.openminis.app.data.model.ModelSlotRef.entryId(raw)
-        fun usable(id: String): com.openminis.app.data.model.ModelEntry? {
-            val entry = config.modelEntries.find { it.id == id && !it.isHidden } ?: return null
-            val inst = config.instances.find { it.id == entry.providerInstanceId } ?: return null
-            return entry.takeIf { inst.isEnabled }
-        }
-        if (pinned != null) return usable(pinned)
-        val group = config.modelGroups.find { it.id == raw } ?: return null
-        return group.memberEntryIds.firstNotNullOfOrNull { usable(it) }
     }
 
     /**

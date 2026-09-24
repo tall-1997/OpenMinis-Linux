@@ -27,15 +27,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.dp
-import com.openminis.app.MinisApp
 import com.openminis.app.R
+import com.openminis.app.i18n.TranslationOutcome
 import com.openminis.app.i18n.TranslationPrefs
-import com.openminis.app.data.model.LLMMessage
-import com.openminis.app.data.model.ThinkingLevel
-import com.openminis.app.provider.ProviderFactory
-import kotlinx.coroutines.Dispatchers
+import com.openminis.app.i18n.TranslationRunner
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlin.math.ceil
 
 /**
@@ -206,9 +202,6 @@ fun AssistantTranslateButton(
     if (!TranslationPrefs.isEnabled(context)) return
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
-    val missing = stringResource(R.string.translate_set_in_defaults)
-    val noModel = stringResource(R.string.translate_no_model)
-
     Box(modifier = modifier.size(32.dp), contentAlignment = Alignment.Center) {
         if (busy) {
             CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
@@ -219,17 +212,17 @@ fun AssistantTranslateButton(
                     val lang = TranslationPrefs.lang(context)
                     busy = true
                     scope.launch {
-                        val result = translateBubble(context, source, lang)
-                        busy = false
-                        val failed = result.startsWith("Error:") || result == noModel || result == missing
-                        if (failed) {
-                            Toast.makeText(
-                                context,
-                                result.removePrefix("Error:").trim().ifBlank { missing },
-                                Toast.LENGTH_LONG,
-                            ).show()
-                        } else {
-                            onTranslated(result)
+                        try {
+                            when (val result = TranslationRunner.translate(context, source, lang)) {
+                                is TranslationOutcome.Text -> onTranslated(result.value)
+                                is TranslationOutcome.Failed -> Toast.makeText(
+                                    context,
+                                    result.message,
+                                    Toast.LENGTH_LONG,
+                                ).show()
+                            }
+                        } finally {
+                            busy = false
                         }
                     }
                 },
@@ -244,41 +237,4 @@ fun AssistantTranslateButton(
             }
         }
     }
-}
-
-private suspend fun translateBubble(context: android.content.Context, text: String, lang: String): String {
-    val app = context.applicationContext as? MinisApp
-        ?: return "Error: " + context.getString(R.string.translate_no_model)
-    val repo = app.providerRepository
-    val entry = withContext(Dispatchers.IO) { resolveBubbleEntry(context) }
-        ?: return "Error: " + context.getString(R.string.translate_set_in_defaults)
-    val instance = repo.instance(entry.providerInstanceId)
-        ?: return "Error: " + context.getString(R.string.translate_no_model)
-    val key = repo.usableApiKey(instance) ?: return "Error: " + context.getString(R.string.translate_no_model)
-    return try {
-        val provider = ProviderFactory.create(instance, key, entry.model, context)
-        val response = provider.sendMessage(
-            messages = listOf(LLMMessage(role = LLMMessage.Role.USER, content = text)),
-            systemPrompt = "You are a translator. Return only the translation into $lang. No preface.",
-            maxTokens = 4096,
-            temperature = 0.2,
-            thinkingLevel = ThinkingLevel.OFF,
-        )
-        response.text.trim().ifBlank { "Error: " + context.getString(R.string.translate_empty) }
-    } catch (e: Exception) {
-        "Error: " + (e.message ?: context.getString(R.string.translate_empty))
-    }
-}
-
-private fun resolveBubbleEntry(context: android.content.Context): com.openminis.app.data.model.ModelEntry? {
-    val repo = (context.applicationContext as? MinisApp)?.providerRepository ?: return null
-    val config = repo.config.value
-    fun usable(id: String): com.openminis.app.data.model.ModelEntry? {
-        val entry = config.modelEntries.find { it.id == id && !it.isHidden } ?: return null
-        val inst = config.instances.find { it.id == entry.providerInstanceId } ?: return null
-        return entry.takeIf { inst.isEnabled }
-    }
-    val wanted = TranslationPrefs.entryId(context)
-    if (wanted != null) return usable(wanted)
-    return config.modelEntries.firstNotNullOfOrNull { if (it.isHidden) null else usable(it.id) }
 }

@@ -2029,9 +2029,9 @@
     <string name="character_extras_confirm_remove">删除</string>
     <string name="character_extras_confirm_body">删除这条？不会改常驻人格，也不会改已经发出的消息。</string>
     <string name="settings_character_extras">世界书</string>
-    <string name="settings_character_extras_subtitle">关键词设定、显示正则、高刷新率</string>
+    <string name="settings_character_extras_subtitle">关键词设定和显示正则</string>
     <string name="settings_translate">翻译</string>
-    <string name="settings_translate_subtitle">目标语言、调用模型和气泡开关</string>
+    <string name="settings_translate_subtitle">目标语言、调用模型、气泡开关和独立翻译</string>
     <string name="world_book_header">世界书</string>
     <string name="world_book_footer">只有最近消息命中关键词时才注入。点条目可删除。常驻人格文件不会被整份替换。</string>
     <string name="world_book_name">名称</string>
@@ -2046,7 +2046,11 @@
     <string name="high_refresh_title">高刷新率</string>
     <string name="high_refresh_sub">让窗口使用这块屏幕的最高刷新率</string>
     <string name="high_refresh_footer">关闭后窗口回到系统默认刷新率。</string>
-    <string name="translate_footer">使用第一个已启用且有密钥的对话模型。结果不会写入会话。</string>
+    <string name="translate_footer">使用已保存的目标语言和翻译模型。结果不会写入会话。</string>
+    <string name="translate_pad_title">翻译一段文字</string>
+    <string name="translate_pad_open">翻译一段文字</string>
+    <string name="translate_pad_open_sub">使用上面的语言和模型。结果不会写入会话。</string>
+    <string name="translate_using">使用 %1$s</string>
     <string name="translate_source">要翻译的文字</string>
     <string name="translate_target">目标语言</string>
     <string name="translate_run">翻译</string>

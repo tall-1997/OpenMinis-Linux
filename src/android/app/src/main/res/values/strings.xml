@@ -2202,9 +2202,9 @@
     <string name="character_extras_confirm_remove">Remove</string>
     <string name="character_extras_confirm_body">Remove this entry? This does not change the standing persona file or messages already sent.</string>
     <string name="settings_character_extras">World book</string>
-    <string name="settings_character_extras_subtitle">Keyword lore, display regex, refresh rate</string>
+    <string name="settings_character_extras_subtitle">Keyword lore and display regex</string>
     <string name="settings_translate">Translate</string>
-    <string name="settings_translate_subtitle">Target language, model, and bubble switch</string>
+    <string name="settings_translate_subtitle">Target language, model, bubble switch, and a standalone page</string>
     <string name="world_book_header">World book</string>
     <string name="world_book_footer">An entry is injected only when a recent message contains one of its keywords. Tap an entry to remove it. The standing persona file is unchanged.</string>
     <string name="world_book_name">Name</string>
@@ -2219,7 +2219,11 @@
     <string name="high_refresh_title">High refresh rate</string>
     <string name="high_refresh_sub">Ask the window for the display\'s highest refresh rate</string>
     <string name="high_refresh_footer">Off returns the window to the system default.</string>
-    <string name="translate_footer">Uses the first enabled chat model. The result is not written into a conversation.</string>
+    <string name="translate_footer">Uses the saved target language and translation model. The result is not written into a conversation.</string>
+    <string name="translate_pad_title">Translate text</string>
+    <string name="translate_pad_open">Translate text</string>
+    <string name="translate_pad_open_sub">Uses the language and model above. Not written into a conversation.</string>
+    <string name="translate_using">Using %1$s</string>
     <string name="translate_source">Text to translate</string>
     <string name="translate_target">Target language</string>
     <string name="translate_run">Translate</string>

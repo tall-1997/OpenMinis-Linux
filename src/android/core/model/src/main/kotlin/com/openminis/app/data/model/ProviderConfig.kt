@@ -427,8 +427,8 @@ data class ProviderConfig(
     // voiceInputGroupId (meta KV row, not synced CRDT member maps). Absent in
     // old persisted JSON → deserializes to null (ignoreUnknownKeys + default).
     var visionGroupId: String? = null,
-    // Translation model for the assistant-reply translate button. Stores a
-    // group id or an `entry:` pin. Absent in old JSON → null.
+    // Unused translation slot kept so old configs still load and save. Live
+    // translation reads TranslationPrefs, not this field. Absent → null.
     var defaultTranslationModelId: String? = null,
     // Models and groups exposed to the agent loop (minis-model-use terminal
     // command) — mirrors iOS agentLoopModelEntryIds / agentLoopGroupIds.

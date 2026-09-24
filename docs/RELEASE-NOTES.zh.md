@@ -1,3 +1,10 @@
+# OpenMinis-Linux 1.36.42-linux
+
+- versionCode **95**
+- 设置 → 翻译里可以翻译一段文字。页面和会话按钮共用已保存的目标语言和模型，结果不写入会话。详见 `docs/github-release-1.36.42-linux.md`。
+
+---
+
 # OpenMinis-Linux 1.36.41-linux
 
 - versionCode **94**

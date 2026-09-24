@@ -1,5 +1,6 @@
 package com.openminis.app.ui.settings
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -35,12 +36,14 @@ import com.openminis.app.ui.components.DialogTextField
 fun TranslationSettingsScreen(
     providerRepository: ProviderRepository,
     onBack: () -> Unit,
+    onOpenPad: () -> Unit,
 ) {
     val context = LocalContext.current
     val config by providerRepository.config.collectAsState()
     var enabled by remember { mutableStateOf(TranslationPrefs.isEnabled(context)) }
     var lang by remember { mutableStateOf(TranslationPrefs.lang(context)) }
     var entryId by remember { mutableStateOf(TranslationPrefs.entryId(context)) }
+    BackHandler(onBack = onBack)
     val entries = config.modelEntries.filter { entry ->
         if (entry.isHidden) return@filter false
         val inst = config.instances.find { it.id == entry.providerInstanceId } ?: return@filter false
@@ -139,5 +142,13 @@ fun TranslationSettingsScreen(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        SettingsSection {
+            SettingsRow(
+                title = stringResource(R.string.translate_pad_open),
+                subtitle = stringResource(R.string.translate_pad_open_sub),
+                onClick = onOpenPad,
+                showDivider = false,
+            )
+        }
     }
 }

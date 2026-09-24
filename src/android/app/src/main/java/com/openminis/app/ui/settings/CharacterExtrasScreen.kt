@@ -20,7 +20,6 @@ import androidx.compose.ui.unit.dp
 import com.openminis.app.R
 import com.openminis.app.agent.DisplayRegex
 import com.openminis.app.agent.WorldBook
-import com.openminis.app.ui.HighRefreshRate
 import com.openminis.app.ui.components.DialogTextField
 import java.util.UUID
 
