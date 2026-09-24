@@ -29,6 +29,17 @@ class WritePathGuardTest {
     }
 
     @Test
+    fun swapNoneStillDeniesWrites() {
+        val prev = WritePathGuard.swap(listOf("none"))
+        try {
+            val denied = WritePathGuard.denyReason("/tmp/out")
+            assertTrue(denied!!.contains("none"))
+        } finally {
+            WritePathGuard.restore(prev)
+        }
+    }
+
+    @Test
     fun unrestrictedWhenEmpty() {
         val prev = WritePathGuard.swap(emptyList())
         try {

@@ -1,3 +1,10 @@
+# OpenMinis-Linux 1.36.47-linux
+
+- versionCode **100**
+- explore / plan 的只读 shell 不再放过 `2>文件`、`1>>文件` 这类带描述符的重定向，引号里的 `>` 和 `2>&1` 仍放行。`sh -c` 和 `$(...)` 里的写入也会被拒绝。详见 `docs/github-release-1.36.47-linux.md`。
+
+---
+
 # OpenMinis-Linux 1.36.46-linux
 
 - versionCode **99**

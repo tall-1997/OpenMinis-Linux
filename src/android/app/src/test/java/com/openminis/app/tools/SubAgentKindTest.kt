@@ -4,6 +4,7 @@ import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.model.AgentToolParam
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -28,7 +29,7 @@ class SubAgentKindTest {
             AgentToolDefinition("web_search", "q", mapOf("x" to AgentToolParam("string", "x")), listOf("x")),
         )
         val names = SubAgentKind.filterTools(SubAgentKind.EXPLORE, tools).map { it.name }
-        assertEquals(listOf("file_read", "web_search"), names)
+        assertEquals(listOf("file_read", "shell_execute", "web_search"), names)
         assertTrue(SubAgentKind.blocks(SubAgentKind.PLAN, "file_edit"))
         assertFalse(SubAgentKind.blocks(SubAgentKind.WORKER, "file_write"))
         assertFalse(SubAgentKind.blocks(SubAgentKind.GENERAL, "file_write"))
@@ -97,5 +98,37 @@ class SubAgentKindTest {
         assertTrue(json.contains("\"prompt\""))
         val gemini = param.toGeminiJson().toString()
         assertTrue(gemini.contains("\"type\":\"ARRAY\""))
+    }
+
+    @Test
+    fun exploreShellAllowsInspectionAndDeniesWrites() {
+        assertNull(SubAgentKind.readOnlyShellDenial("date"))
+        assertNull(SubAgentKind.readOnlyShellDenial("uname -a"))
+        assertNull(SubAgentKind.readOnlyShellDenial("cat /etc/os-release"))
+        assertNull(SubAgentKind.readOnlyShellDenial("ls -l /var/minis"))
+        assertNull(SubAgentKind.readOnlyShellDenial("df -h"))
+        assertNull(SubAgentKind.readOnlyShellDenial("date 2>&1"))
+        assertNull(SubAgentKind.readOnlyShellDenial("uname 2>/dev/null"))
+        assertNull(SubAgentKind.readOnlyShellDenial("echo hi >/dev/null"))
+        assertNull(SubAgentKind.readOnlyShellDenial("echo \"a > b\""))
+        assertNull(SubAgentKind.readOnlyShellDenial("echo 'rm /tmp/x'"))
+        assertNull(SubAgentKind.readOnlyShellDenial("echo \$(date)"))
+        assertNull(SubAgentKind.readOnlyShellDenial("sed -n 's/a/b/p' file"))
+        assertNull(SubAgentKind.readOnlyShellDenial("cat <<EOF\na > b\nEOF\ndate"))
+        assertTrue(SubAgentKind.readOnlyShellDenial("echo hi > /tmp/out") != null)
+        assertTrue(SubAgentKind.readOnlyShellDenial("echo hi 2> /tmp/out") != null)
+        assertTrue(SubAgentKind.readOnlyShellDenial("echo hi 1>>/tmp/out") != null)
+        assertTrue(SubAgentKind.readOnlyShellDenial("echo hi &> /tmp/out") != null)
+        assertTrue(SubAgentKind.readOnlyShellDenial("echo hi >| /tmp/out") != null)
+        assertTrue(SubAgentKind.readOnlyShellDenial("rm -f /tmp/out") != null)
+        assertTrue(SubAgentKind.readOnlyShellDenial("sudo rm /tmp/out") != null)
+        assertTrue(SubAgentKind.readOnlyShellDenial("bash -c 'echo hi 2> /tmp/out'") != null)
+        assertTrue(SubAgentKind.readOnlyShellDenial("busybox sh -c 'rm /tmp/out'") != null)
+        assertTrue(SubAgentKind.readOnlyShellDenial("env bash -c 'rm /tmp/out'") != null)
+        assertTrue(SubAgentKind.readOnlyShellDenial("bash -lc 'echo hi 2> /tmp/out'") != null)
+        assertTrue(SubAgentKind.readOnlyShellDenial("echo \$(rm /tmp/out)") != null)
+        assertTrue(SubAgentKind.readOnlyShellDenial("sed -i 's/a/b/' file") != null)
+        assertTrue(SubAgentKind.readOnlyShellDenial("perl -pi -e 's/a/b/' file") != null)
+        assertTrue(SubAgentKind.readOnlyShellDenial("echo hi > out") != null)
     }
 }

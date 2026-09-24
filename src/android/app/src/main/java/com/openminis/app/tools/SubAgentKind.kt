@@ -87,20 +87,431 @@ object SubAgentKind {
         return normalize(kind) == WORKER && parallelWriters > 1
     }
 
-    private val mutatingShell = Regex(
-        """(?:^|[;&|`\n]|\$\()(?:sudo\s+)?(rm|mv|cp|tee|chmod|chown|chgrp|mkdir|rmdir|touch|truncate|dd|install|apt|apt-get|dpkg|pip|npm|ln|unlink|shred)\b""",
-        RegexOption.IGNORE_CASE,
+    private val MUTATING_BINS = setOf(
+        "rm", "mv", "cp", "tee", "chmod", "chown", "chgrp", "mkdir", "rmdir",
+        "touch", "truncate", "dd", "install", "apt", "apt-get", "dpkg", "pip",
+        "npm", "ln", "unlink", "shred",
     )
-    private val fileRedirect = Regex("""(?<![\d])>{1,2}(?!\s*/dev/null)""")
+    private val SHELL_WRAPPERS = setOf(
+        "sudo", "command", "busybox", "env", "sh", "bash", "dash", "ash", "su",
+    )
 
-    /** explore/plan may inspect the guest, not change it. */
+    /**
+     * explore/plan may inspect the guest, not change it.
+     *
+     * Numbered redirects (`2>file`, `1>>out`) are writes. A digit before `>`
+     * is not enough to skip the operator — that used to let stderr redirects
+     * through. Quotes, here-docs, and fd dups (`2>&1`) are not writes.
+     * `sh -c` / `$(...)` payloads are scanned too, or the wrapper hides both.
+     */
     fun readOnlyShellDenial(command: String): String? {
         val trimmed = command.trim()
         if (trimmed.isEmpty()) return null
-        if (mutatingShell.containsMatchIn(trimmed) || fileRedirect.containsMatchIn(trimmed)) {
+        if (shellMutates(trimmed, 0)) {
             return "Error: explore/plan shell is read-only. date, uname, cat, ls, and df are fine; writes and redirects are not."
         }
         return null
+    }
+
+    private fun shellMutates(raw: String, depth: Int): Boolean {
+        if (raw.isBlank()) return false
+        if (depth > 6) return true
+        if (hasFileRedirect(raw, depth)) return true
+        if (simpleCommandsMutate(raw)) return true
+        for (payload in wrapperPayloads(raw)) {
+            if (shellMutates(payload, depth + 1)) return true
+        }
+        return false
+    }
+
+    private fun simpleCommandsMutate(raw: String): Boolean {
+        for (seg in splitSimpleCommands(raw)) {
+            if (simpleCommandMutates(seg)) return true
+        }
+        return false
+    }
+
+    private fun simpleCommandMutates(unit: String): Boolean {
+        val argv = com.openminis.app.security.tokenizeCommand(unit)
+        var i = 0
+        while (i < argv.size && isEnvAssignment(argv[i])) i++
+        while (i < argv.size) {
+            val bin = argv[i].substringAfterLast('/')
+            if (bin !in SHELL_WRAPPERS) break
+            i++
+            if (bin == "sudo" || bin == "env" || bin == "command" || bin == "busybox") {
+                while (i < argv.size && (argv[i].startsWith("-") || (bin == "env" && isEnvAssignment(argv[i])))) i++
+            }
+        }
+        if (i >= argv.size) return false
+        val bin = argv[i].substringAfterLast('/')
+        if (bin in MUTATING_BINS) return true
+        val rest = argv.drop(i + 1)
+        if (bin == "sed" && rest.any(::isSedInPlace)) return true
+        if (bin == "perl" && rest.any(::isPerlInPlace)) return true
+        return false
+    }
+
+    private fun wrapperPayloads(raw: String): List<String> {
+        val out = ArrayList<String>()
+        for (seg in splitSimpleCommands(raw)) {
+            val payload = wrapperPayload(seg) ?: continue
+            out.add(payload)
+        }
+        return out
+    }
+
+    private fun wrapperPayload(unit: String): String? {
+        val argv = com.openminis.app.security.tokenizeCommand(unit)
+        if (argv.isEmpty()) return null
+        var i = 0
+        while (i < argv.size && isEnvAssignment(argv[i])) i++
+        while (i < argv.size) {
+            val bin = argv[i].substringAfterLast('/')
+            if (bin == "sudo" || bin == "env" || bin == "command" || bin == "busybox") {
+                i++
+                while (i < argv.size && (argv[i].startsWith("-") || (bin == "env" && isEnvAssignment(argv[i])))) i++
+                continue
+            }
+            if (bin !in setOf("sh", "bash", "dash", "ash", "su")) return null
+            val cIdx = cFlagIndex(argv, i + 1)
+            if (cIdx < 0 || cIdx + 1 >= argv.size) return null
+            return argv[cIdx + 1]
+        }
+        return null
+    }
+
+    /** `-c` or a clustered flag such as `-lc` / `-ic`. The next argv is the script. */
+    private fun cFlagIndex(argv: List<String>, from: Int): Int {
+        for (i in from until argv.size) {
+            val arg = argv[i]
+            if (arg == "-c") return i
+            if (arg.startsWith("-") && !arg.startsWith("--") && 'c' in arg) return i
+        }
+        return -1
+    }
+
+    private fun isEnvAssignment(tok: String): Boolean {
+        val eq = tok.indexOf('=')
+        if (eq <= 0) return false
+        return tok.substring(0, eq).all { it.isLetterOrDigit() || it == '_' }
+    }
+
+    private fun isSedInPlace(arg: String): Boolean {
+        if (arg == "--in-place" || arg.startsWith("--in-place=")) return true
+        if (arg == "-i" || arg.startsWith("-i.")) return true
+        return arg.startsWith("-i") && arg.length > 2 && !arg.startsWith("-in")
+    }
+
+    private fun isPerlInPlace(arg: String): Boolean {
+        if (arg == "-i" || (arg.startsWith("-i") && !arg.startsWith("-I"))) return true
+        return arg.length > 2 && arg[0] == '-' && arg[1] != '-' && arg.indexOf('i') > 0
+    }
+
+    private fun hasFileRedirect(raw: String, depth: Int): Boolean {
+        var i = 0
+        var quote = '\u0000'
+        while (i < raw.length) {
+            val c = raw[i]
+            if (quote == '\'') {
+                if (c == '\'') quote = '\u0000'
+                i++
+                continue
+            }
+            if (quote == '"') {
+                if (c == '\\' && i + 1 < raw.length) {
+                    i += 2
+                    continue
+                }
+                if (c == '$' && i + 1 < raw.length && raw[i + 1] == '(') {
+                    val jumped = scanSubstitution(raw, i, depth) ?: return true
+                    i = jumped
+                    continue
+                }
+                if (c == '`') {
+                    val jumped = scanBacktick(raw, i, depth) ?: return true
+                    i = jumped
+                    continue
+                }
+                if (c == '"') quote = '\u0000'
+                i++
+                continue
+            }
+            if (c == '\\' && i + 1 < raw.length) {
+                i += 2
+                continue
+            }
+            if (c == '\'' || c == '"') {
+                quote = c
+                i++
+                continue
+            }
+            if (c == '#' && (i == 0 || raw[i - 1].isWhitespace())) {
+                val nl = raw.indexOf('\n', i)
+                i = if (nl < 0) raw.length else nl + 1
+                continue
+            }
+            if (c == '$' && i + 1 < raw.length && raw[i + 1] == '(') {
+                val jumped = scanSubstitution(raw, i, depth) ?: return true
+                i = jumped
+                continue
+            }
+            if (c == '`') {
+                val jumped = scanBacktick(raw, i, depth) ?: return true
+                i = jumped
+                continue
+            }
+            if (c == '<' && i + 1 < raw.length && raw[i + 1] == '<' && (i + 2 >= raw.length || raw[i + 2] != '<')) {
+                var j = i + 2
+                val stripTabs = j < raw.length && raw[j] == '-'
+                if (stripTabs) j++
+                val delim = readRedirectWord(raw, j)
+                i = skipHereDoc(raw, delim.next, delim.word, stripTabs)
+                continue
+            }
+            if (c == '>' || c == '<' || (c == '&' && i + 1 < raw.length && raw[i + 1] == '>')) {
+                val op = parseRedirect(raw, i)
+                if (op == null) {
+                    i++
+                    continue
+                }
+                if (op.write && !op.harmless) return true
+                if (op.nested != null && shellMutates(op.nested, depth + 1)) return true
+                i = op.next
+                continue
+            }
+            i++
+        }
+        return false
+    }
+
+    private fun scanSubstitution(raw: String, dollarAt: Int, depth: Int): Int? {
+        if (dollarAt + 2 < raw.length && raw[dollarAt + 2] == '(') {
+            val end = matchingClose(raw, dollarAt + 1, '(', ')')
+            return if (end < 0) null else end + 1
+        }
+        val end = matchingClose(raw, dollarAt + 1, '(', ')')
+        if (end < 0) return null
+        val body = raw.substring(dollarAt + 2, end)
+        if (shellMutates(body, depth + 1)) return null
+        return end + 1
+    }
+
+    private fun scanBacktick(raw: String, at: Int, depth: Int): Int? {
+        val end = raw.indexOf('`', at + 1)
+        if (end < 0) return null
+        if (shellMutates(raw.substring(at + 1, end), depth + 1)) return null
+        return end + 1
+    }
+
+    private class RedirectHit(
+        val write: Boolean,
+        val harmless: Boolean,
+        val next: Int,
+        val nested: String? = null,
+    )
+
+    private fun parseRedirect(raw: String, at: Int): RedirectHit? {
+        if (raw[at] == '&') {
+            if (at + 1 >= raw.length || raw[at + 1] != '>') return null
+            val target = readRedirectWord(raw, at + 2)
+            return RedirectHit(write = true, harmless = isHarmlessTarget(target.word), next = target.next)
+        }
+        if (raw[at] == '<') {
+            if (at + 1 < raw.length && raw[at + 1] == '>') {
+                val target = readRedirectWord(raw, at + 2)
+                return RedirectHit(write = true, harmless = isHarmlessTarget(target.word), next = target.next)
+            }
+            if (at + 1 < raw.length && raw[at + 1] == '(') {
+                val end = matchingClose(raw, at + 1, '(', ')')
+                if (end < 0) return RedirectHit(write = true, harmless = false, next = raw.length)
+                return RedirectHit(
+                    write = false,
+                    harmless = true,
+                    next = end + 1,
+                    nested = raw.substring(at + 2, end),
+                )
+            }
+            val target = readRedirectWord(raw, at + 1)
+            return RedirectHit(write = false, harmless = true, next = target.next)
+        }
+        var j = at + 1
+        var dup = false
+        if (j < raw.length && raw[j] == '>') {
+            j++
+        } else if (j < raw.length && raw[j] == '&') {
+            j++
+            dup = true
+        } else if (j < raw.length && raw[j] == '|') {
+            j++
+        } else if (j < raw.length && raw[j] == '(') {
+            val end = matchingClose(raw, j, '(', ')')
+            if (end < 0) return RedirectHit(write = true, harmless = false, next = raw.length)
+            return RedirectHit(write = true, harmless = false, next = end + 1)
+        }
+        val target = readRedirectWord(raw, j)
+        val harmless = if (dup) isFdDup(target.word) || isHarmlessTarget(target.word) else isHarmlessTarget(target.word)
+        return RedirectHit(write = true, harmless = harmless, next = target.next)
+    }
+
+    private class RedirectWord(val word: String, val next: Int)
+
+    private fun readRedirectWord(raw: String, start: Int): RedirectWord {
+        var i = start
+        while (i < raw.length && raw[i].isWhitespace()) i++
+        if (i >= raw.length) return RedirectWord("", i)
+        if (raw[i] == '&') {
+            var k = i + 1
+            while (k < raw.length && raw[k].isDigit()) k++
+            if (k > i + 1) return RedirectWord(raw.substring(i, k), k)
+        }
+        val q = raw[i]
+        if (q == '\'' || q == '"') {
+            val end = raw.indexOf(q, i + 1)
+            if (end < 0) return RedirectWord(raw.substring(i + 1), raw.length)
+            return RedirectWord(raw.substring(i + 1, end), end + 1)
+        }
+        val begin = i
+        while (i < raw.length && !raw[i].isWhitespace() &&
+            raw[i] != ';' && raw[i] != '|' && raw[i] != '&' &&
+            raw[i] != '<' && raw[i] != '>' && raw[i] != '\n' && raw[i] != '\r'
+        ) {
+            i++
+        }
+        return RedirectWord(raw.substring(begin, i), i)
+    }
+
+    private fun isFdDup(word: String): Boolean {
+        val body = word.trim().removePrefix("&")
+        return body.isNotEmpty() && body.all { it.isDigit() }
+    }
+
+    private fun isHarmlessTarget(word: String): Boolean {
+        val w = word.trim().trim('"').trim('\'')
+        if (w.isEmpty()) return false
+        if (w.startsWith("&") && isFdDup(w)) return true
+        return w == "/dev/null" || w == "/dev/stdout" || w == "/dev/stderr" ||
+            w == "/dev/tty" || w == "/dev/fd" || w.startsWith("/dev/fd/")
+    }
+
+    private fun skipHereDoc(raw: String, from: Int, delim: String, stripTabs: Boolean): Int {
+        val marker = delim.trim().trim('"', '\'')
+        if (marker.isEmpty()) return from
+        val nl = raw.indexOf('\n', from)
+        if (nl < 0) return raw.length
+        var i = nl + 1
+        while (i < raw.length) {
+            val lineEnd = raw.indexOf('\n', i).let { if (it < 0) raw.length else it }
+            var line = raw.substring(i, lineEnd).trimEnd('\r')
+            if (stripTabs) line = line.trimStart('\t')
+            if (line == marker) return if (lineEnd < raw.length) lineEnd + 1 else raw.length
+            i = if (lineEnd < raw.length) lineEnd + 1 else raw.length
+        }
+        return raw.length
+    }
+
+    private fun matchingClose(raw: String, openAt: Int, open: Char, close: Char): Int {
+        var depth = 0
+        var quote = '\u0000'
+        var i = openAt
+        while (i < raw.length) {
+            val c = raw[i]
+            if (quote != '\u0000') {
+                if (c == '\\' && quote == '"' && i + 1 < raw.length) {
+                    i += 2
+                    continue
+                }
+                if (c == quote) quote = '\u0000'
+                i++
+                continue
+            }
+            if (c == '\\' && i + 1 < raw.length) {
+                i += 2
+                continue
+            }
+            if (c == '\'' || c == '"') {
+                quote = c
+                i++
+                continue
+            }
+            if (c == open) depth++
+            else if (c == close) {
+                depth--
+                if (depth == 0) return i
+            }
+            i++
+        }
+        return -1
+    }
+
+    /** Split on `;`, `&&`, `||`, `|`, `&`, and newlines, but not `>&` / `&>` / `>|`. */
+    private fun splitSimpleCommands(raw: String): List<String> {
+        val out = ArrayList<String>()
+        val cur = StringBuilder()
+        var quote = '\u0000'
+        var i = 0
+        fun flush() {
+            val s = cur.toString().trim()
+            if (s.isNotEmpty()) out.add(s)
+            cur.clear()
+        }
+        while (i < raw.length) {
+            val c = raw[i]
+            if (quote != '\u0000') {
+                cur.append(c)
+                if (c == '\\' && quote == '"' && i + 1 < raw.length) {
+                    cur.append(raw[i + 1])
+                    i += 2
+                    continue
+                }
+                if (c == quote) quote = '\u0000'
+                i++
+                continue
+            }
+            if (c == '\\' && i + 1 < raw.length) {
+                cur.append(c).append(raw[i + 1])
+                i += 2
+                continue
+            }
+            if (c == '\'' || c == '"') {
+                quote = c
+                cur.append(c)
+                i++
+                continue
+            }
+            if (c == '\n' || c == '\r' || c == ';') {
+                flush()
+                i++
+                continue
+            }
+            if (c == '&') {
+                val keep = (i + 1 < raw.length && raw[i + 1] == '>') || (i > 0 && raw[i - 1] == '>')
+                if (keep) {
+                    cur.append(c)
+                    i++
+                    continue
+                }
+                flush()
+                if (i + 1 < raw.length && raw[i + 1] == '&') i++
+                i++
+                continue
+            }
+            if (c == '|') {
+                if (i > 0 && raw[i - 1] == '>') {
+                    cur.append(c)
+                    i++
+                    continue
+                }
+                flush()
+                if (i + 1 < raw.length && raw[i + 1] == '|') i++
+                i++
+                continue
+            }
+            cur.append(c)
+            i++
+        }
+        flush()
+        return out
     }
 
     fun blocks(kind: String, toolName: String): Boolean {

@@ -48,7 +48,9 @@ object WritePathGuard {
         if (prefixes.isNullOrEmpty()) {
             allowed.remove()
         } else {
-            allowed.set(prefixes.map(::normalize).filter { it.startsWith("/") })
+            allowed.set(
+                prefixes.map(::normalize).filter { it.startsWith("/") || it.equals(NO_WRITE, true) },
+            )
         }
         return previous
     }
