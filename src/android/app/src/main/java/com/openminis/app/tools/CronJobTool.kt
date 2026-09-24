@@ -43,7 +43,7 @@ object CronJobTool {
                 "For create: '30m', '2h', '1d', or 'every 30m' / 'every 2h' / 'every 1d'.",
             ),
             "prompt" to AgentToolParam("string", "Agent prompt to run when the task fires."),
-            "id" to AgentToolParam("string", "Task id for remove (from list)."),
+            "id" to AgentToolParam("string", "Task id or a unique id prefix for remove (from list)."),
         ),
         required = listOf("tool_title", "action"),
         propertyOrdering = listOf("tool_title", "action", "name", "schedule", "prompt", "id"),
@@ -113,25 +113,38 @@ object CronJobTool {
             fireAtMs = fireAt,
             createdAt = now,
         )
-        manager.create(task)
+        val saved = manager.create(task)
         return ToolExecutionResult(
             JSONObject().apply {
                 put("ok", true)
-                put("id", task.id)
-                put("name", task.label)
+                put("id", saved.id)
+                put("name", saved.label)
                 put("schedule", schedule)
-                put("fireAtMs", fireAt)
-                put("repeat", task.repeatMode.name)
+                put("fireAtMs", saved.fireAtMs ?: fireAt)
+                put("repeat", saved.repeatMode.name)
+                if (saved.id != task.id) put("already_existed", true)
             }.toString(),
             true,
         )
     }
 
     private fun removeJob(manager: ScheduledTaskManager, args: JSONObject): ToolExecutionResult {
-        val id = args.optString("id").trim()
-        if (id.isEmpty()) return ToolExecutionResult("Error: id is required for remove", false)
-        if (manager.get(id) == null) return ToolExecutionResult("Error: no scheduled task with id $id", false)
-        manager.delete(id)
+        val raw = args.optString("id").trim()
+        if (raw.isEmpty()) return ToolExecutionResult("Error: id is required for remove", false)
+        val id = manager.resolveId(raw)
+        if (id == null) {
+            val hits = if (raw.length >= 4) manager.list().filter { it.id.startsWith(raw) } else emptyList()
+            if (hits.size > 1) {
+                return ToolExecutionResult(
+                    "Error: id prefix $raw matches ${hits.size} tasks: " + hits.joinToString { it.id },
+                    false,
+                )
+            }
+            return ToolExecutionResult("Error: no scheduled task with id $raw", false)
+        }
+        if (!manager.delete(id) || manager.get(id) != null) {
+            return ToolExecutionResult("Error: scheduled task $id was not deleted", false)
+        }
         return ToolExecutionResult(JSONObject().put("ok", true).put("id", id).toString(), true)
     }
 }

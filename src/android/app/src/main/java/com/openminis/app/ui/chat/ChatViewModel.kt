@@ -2155,12 +2155,18 @@ class ChatViewModel(
         }
         val updated = msg.copy(content = text, toolBlocks = newBlocks)
         _messages.value = cur.toMutableList().also { it[idx] = updated }
+        val dbIds = msg.sourceDbIds
+        if (dbIds.isEmpty()) return
         viewModelScope.launch {
-            val parts = org.json.JSONArray()
-                .put(org.json.JSONObject().put("type", "text").put("value", text))
-                .toString()
-            msg.sourceDbIds.forEach { id ->
-                runCatching { chatRepository.dao.updateMessageParts(id, parts) }
+            runCatching {
+                val rows = dbIds.mapNotNull { id ->
+                    val raw = chatRepository.dao.messagePartsJson(id) ?: return@mapNotNull null
+                    if (runCatching { org.json.JSONArray(raw) }.isFailure) return@mapNotNull null
+                    id to raw
+                }
+                for ((id, parts) in AssistantReplyText.rewriteStoredParts(rows, text)) {
+                    chatRepository.dao.updateMessageParts(id, parts)
+                }
             }
         }
     }
@@ -2183,20 +2189,27 @@ class ChatViewModel(
         val dbIds = msg.sourceDbIds
         if (dbIds.isEmpty() || old == null) return
         viewModelScope.launch {
+            var done = false
             for (id in dbIds) {
+                if (done) break
                 runCatching {
                     val raw = chatRepository.dao.messagePartsJson(id) ?: return@runCatching
                     val parts = org.json.JSONArray(raw)
                     var replaced = false
                     for (i in 0 until parts.length()) {
                         val part = parts.optJSONObject(i) ?: continue
-                        if (part.optString("type") == "text" && part.optString("value") == old) {
-                            part.put("value", text)
+                        if (part.optString("type") == "text" &&
+                            AssistantReplyText.visible(part.optString("value")) == old
+                        ) {
+                            part.put("value", AssistantReplyText.replaceVisible(part.optString("value"), text))
                             replaced = true
                             break
                         }
                     }
-                    if (replaced) chatRepository.dao.updateMessageParts(id, parts.toString())
+                    if (replaced) {
+                        chatRepository.dao.updateMessageParts(id, parts.toString())
+                        done = true
+                    }
                 }
             }
         }

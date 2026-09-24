@@ -4271,7 +4271,11 @@ fun ChatScreen(
                                                 AssistantTranslateButton(
                                                     source = item.segmentText.ifBlank { item.rawText },
                                                     onTranslated = {
-                                                        viewModel.replaceAssistantTextBlock(item.messageId, item.parentBlockId, it)
+                                                        if (item.translateWholeReply) {
+                                                            viewModel.replaceAssistantOutput(item.messageId, it)
+                                                        } else {
+                                                            viewModel.replaceAssistantTextBlock(item.messageId, item.parentBlockId, it)
+                                                        }
                                                     },
                                                 )
                                             },

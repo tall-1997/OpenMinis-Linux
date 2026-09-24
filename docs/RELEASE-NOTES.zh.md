@@ -1,3 +1,10 @@
+# OpenMinis-Linux 1.36.43-linux
+
+- versionCode **96**
+- 折叠模式下最后一个翻译按钮翻译整段可见回复，写回不删工具卡片，重新打开也不会把旧正文叠在译文上面。`cronjob` 重试返回已有任务的 id，删除支持唯一前缀并回读确认。详见 `docs/github-release-1.36.43-linux.md`。
+
+---
+
 # OpenMinis-Linux 1.36.42-linux
 
 - versionCode **95**

@@ -121,6 +121,7 @@ internal sealed class FlatChatItem {
         val messageMarkdown: String,
         val showTranslate: Boolean = false,
         val segmentText: String = "",
+        val translateWholeReply: Boolean = false,
     ) : FlatChatItem() {
         override val key = "mdblock:$messageId:$parentBlockId:$blockIndex"
         override val contentType = "mdblock"
@@ -137,7 +138,8 @@ internal sealed class FlatChatItem {
                 rawText.length == other.rawText.length &&
                 messageMarkdown.length == other.messageMarkdown.length &&
                 showTranslate == other.showTranslate &&
-                segmentText.length == other.segmentText.length
+                segmentText.length == other.segmentText.length &&
+                translateWholeReply == other.translateWholeReply
         }
         override fun hashCode(): Int {
             var h = messageId.hashCode()
@@ -149,6 +151,7 @@ internal sealed class FlatChatItem {
             h = h * 31 + messageMarkdown.length
             h = h * 31 + if (showTranslate) 1 else 0
             h = h * 31 + segmentText.length
+            h = h * 31 + if (translateWholeReply) 1 else 0
             return h
         }
     }
@@ -321,6 +324,7 @@ internal fun buildFlatChatItems(
                 messageMarkdown = item.messageMarkdown,
                 showTranslate = item.showTranslate,
                 segmentText = item.segmentText,
+                translateWholeReply = item.translateWholeReply,
             )
             is FlatChatItem.AssistantThinking -> item.copy(messageId = "${item.messageId}#$n")
             is FlatChatItem.AssistantProcessSummary -> item.copy(messageId = "${item.messageId}#$n")
@@ -415,6 +419,7 @@ internal fun buildFlatChatItems(
             }
         }
         val showProcessSummary = foldAiProcess && !isSystem && hasFoldableProcess
+        val replyText = AssistantReplyText.joined(blocks)
         blocks.forEachIndexed { index, block ->
             when (block.kind) {
                 "text" -> {
@@ -484,9 +489,11 @@ internal fun buildFlatChatItems(
                                 isLastBlockOfMessage = isLastText && message.isStreaming,
                                 messageIsStreaming = message.isStreaming && isLastText,
                                 messageMarkdown = joinedMarkdown,
-                                showTranslate = !message.isStreaming && block.content.isNotBlank() && 
+                                showTranslate = !message.isStreaming && block.content.isNotBlank() &&
                                     (!showProcessSummary || isLastText),
-                                segmentText = block.content,
+                                segmentText = if (showProcessSummary && isLastText) replyText else block.content,
+                                translateWholeReply = showProcessSummary && isLastText &&
+                                    !message.isStreaming && block.content.isNotBlank(),
                             )))
                         } else {
                             fragments.forEachIndexed { fragIdx, raw ->
@@ -501,7 +508,10 @@ internal fun buildFlatChatItems(
                                     messageMarkdown = joinedMarkdown,
                                     showTranslate = isLastFragOfText && !message.isStreaming && block.content.isNotBlank() &&
                                         (!showProcessSummary || isLastText),
-                                    segmentText = if (isLastFragOfText) block.content else "",
+                                    segmentText = if (showProcessSummary && isLastText && isLastFragOfText) replyText
+                                        else if (isLastFragOfText) block.content else "",
+                                    translateWholeReply = showProcessSummary && isLastText && isLastFragOfText &&
+                                        !message.isStreaming && block.content.isNotBlank(),
                                 )))
                             }
                         }

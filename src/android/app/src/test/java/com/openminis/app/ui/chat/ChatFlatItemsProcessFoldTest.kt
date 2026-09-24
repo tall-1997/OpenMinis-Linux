@@ -86,12 +86,40 @@ class ChatFlatItemsProcessFoldTest {
             foldAiProcess = true,
         )
         val k = kinds(items)
-        assertEquals(listOf("header", "summary", "md", "md"), k)
+        assertEquals(listOf("header", "md", "md", "summary"), k)
         val summary = items.filterIsInstance<FlatChatItem.AssistantProcessSummary>().single()
         assertEquals(1, summary.thinkingCount)
         assertEquals(1, summary.toolCount)
         assertFalse(summary.expanded)
         assertFalse(summary.hasFailure)
+        val blocks = items.filterIsInstance<FlatChatItem.AssistantMarkdownBlock>()
+        assertFalse(blocks[0].showTranslate)
+        assertTrue(blocks[1].showTranslate)
+        assertTrue(blocks[1].translateWholeReply)
+        assertEquals("one\n\ntwo", blocks[1].segmentText)
+    }
+
+    @Test
+    fun `fold off translates each text block instead of the whole reply`() {
+        val items = buildFlatChatItems(
+            listOf(
+                assistant(
+                    blocks = listOf(
+                        text(id = "tx1", content = "one"),
+                        text(id = "tx2", content = "two"),
+                    ),
+                ),
+            ),
+            showCompletedToolCards = true,
+            foldAiProcess = false,
+        )
+        val blocks = items.filterIsInstance<FlatChatItem.AssistantMarkdownBlock>()
+        assertEquals(2, blocks.size)
+        assertTrue(blocks[0].showTranslate)
+        assertFalse(blocks[0].translateWholeReply)
+        assertEquals("one", blocks[0].segmentText)
+        assertTrue(blocks[1].showTranslate)
+        assertEquals("two", blocks[1].segmentText)
     }
 
     @Test
