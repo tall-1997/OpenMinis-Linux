@@ -1,5 +1,6 @@
 package com.openminis.app.data.model
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -54,5 +55,42 @@ class VideoModalityTest {
         assertTrue(m.isVideoOutput)
         assertFalse(m.isPureVideoGenerator)
         assertTrue(m.isTextOutput)
+    }
+
+    @Test
+    fun `empty catalog sora is not stamped text-only`() {
+        val m = applyUnrecognizedModelDefaults(LLMModel("sora-2", "Sora 2", "OpenAI"))
+        assertTrue(m.isPureVideoGenerator)
+        assertFalse(m.outputModalities.orEmpty().contains("text"))
+    }
+
+    @Test
+    fun `persisted empty-catalog text stamp is repaired`() {
+        val stamped = applyUnrecognizedModelDefaults(LLMModel("sora-2", "Sora 2", "OpenAI"))
+            .copy(outputModalities = listOf("text"), inputModalities = listOf("text"))
+        val healed = applyUnrecognizedModelDefaults(stripDefaultedGeneratorModality(stamped))
+        assertTrue(healed.isPureVideoGenerator)
+    }
+
+    @Test
+    fun `catalog text with a real context window is not inferred`() {
+        val m = applyUnrecognizedModelDefaults(
+            LLMModel(
+                "sora-2",
+                "Sora 2",
+                "OpenAI",
+                contextWindow = 32_000,
+                outputModalities = listOf("text"),
+            ),
+        )
+        assertEquals(listOf("text"), m.outputModalities)
+        assertFalse(m.isPureVideoGenerator)
+    }
+
+    @Test
+    fun `empty catalog seedream infers image not text`() {
+        val m = applyUnrecognizedModelDefaults(LLMModel("doubao-seedream-4-0", "Seedream", "Ark"))
+        assertTrue(m.isImageOutput)
+        assertFalse(m.outputModalities.orEmpty().contains("text"))
     }
 }

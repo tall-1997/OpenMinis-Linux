@@ -397,7 +397,15 @@ data class ModelEntry(
                 inputModalities = overrides.inputModalities ?: baseModel.inputModalities,
                 outputModalities = overrides.outputModalities ?: baseModel.outputModalities,
             )
-            return applyUnrecognizedModelDefaults(resolved)
+            // A user who explicitly saved output modalities wins over the
+            // empty-catalog repair. Otherwise a persisted ["text"] stamp on
+            // sora/seedream is not a catalog modality.
+            val healed = if (overrides.outputModalities == null) {
+                stripDefaultedGeneratorModality(resolved)
+            } else {
+                resolved
+            }
+            return applyUnrecognizedModelDefaults(healed)
                 .withInferredVideoModality()
                 .withInferredImageModality()
         }

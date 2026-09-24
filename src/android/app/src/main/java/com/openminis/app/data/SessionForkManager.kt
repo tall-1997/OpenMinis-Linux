@@ -159,11 +159,7 @@ class SessionForkManager(
         }
 
         runCatching {
-            val src = SessionWorkspace.base(filesDir, sessionId)
-            val dst = SessionWorkspace.base(filesDir, new.id)
-            if (src.exists() && src.isDirectory) {
-                src.copyRecursively(dst, overwrite = true)
-            }
+            copyEffectiveSessionFiles(filesDir, sessionId, source.folderId, new.id)
         }.onFailure {
             AppLogger.warning(TAG, "duplicateSession: workspace copy failed: ${it.message}")
         }
@@ -209,6 +205,56 @@ class SessionForkManager(
             AppLogger.warning(TAG, "copyMemory: write failed: ${e.message}")
             false
         }
+    }
+}
+
+/**
+ * Copy the workspace the source session actually mounts, into the new session's
+ * private tree. A filed session's `/var/minis/workspace` lives in the project
+ * dir; copying only `minis-sessions/<id>/` would leave the duplicate empty.
+ * The copy stays ungrouped so it does not share the project tree with the
+ * original — "拷走" is an independent copy, not a second mount of the same files.
+ */
+internal fun copyEffectiveSessionFiles(
+    filesDir: File,
+    sourceId: String,
+    folderId: String?,
+    newId: String,
+) {
+    if (!SessionWorkspace.isSafeId(sourceId) || !SessionWorkspace.isSafeId(newId)) return
+    if (sourceId == newId) return
+    val dstRoot = SessionWorkspace.base(filesDir, newId)
+    copySessionDir(
+        File(SessionWorkspace.base(filesDir, sourceId), "memory"),
+        File(dstRoot, "memory"),
+    )
+    for (sub in SessionWorkspace.SHARED_SUBDIRS) {
+        copySessionDir(
+            effectiveSharedSource(filesDir, sourceId, folderId, sub),
+            File(dstRoot, sub),
+        )
+    }
+}
+
+private fun effectiveSharedSource(
+    filesDir: File,
+    sourceId: String,
+    folderId: String?,
+    sub: String,
+): File {
+    if (!folderId.isNullOrBlank() && SessionWorkspace.isSafeId(folderId)) {
+        val shared = File(SessionWorkspace.projectBase(filesDir, folderId), sub)
+        if (shared.isDirectory && !shared.listFiles().isNullOrEmpty()) return shared
+    }
+    return File(SessionWorkspace.base(filesDir, sourceId), sub)
+}
+
+private fun copySessionDir(src: File, dst: File) {
+    if (!src.isDirectory || src.listFiles().isNullOrEmpty()) return
+    if (src.absolutePath == dst.absolutePath) return
+    dst.parentFile?.mkdirs()
+    if (!src.copyRecursively(dst, overwrite = true)) {
+        error("copy failed: ${src.path} -> ${dst.path}")
     }
 }
 

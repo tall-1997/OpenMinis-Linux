@@ -1022,9 +1022,7 @@ class OpenAIProvider private constructor(
                     )
                     continue
                 }
-                if (payload.contains("\"error\"") ||
-                    android.util.Log.isLoggable("ToolChain[Provider]", android.util.Log.VERBOSE)
-                ) {
+                if (android.util.Log.isLoggable("ToolChain[Provider]", android.util.Log.VERBOSE)) {
                     android.util.Log.d(
                         "ToolChain[Provider]",
                         "RAW SSE: ${com.openminis.app.text.BoundedText.clampSsePayload(payload)}",

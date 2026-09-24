@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.openminis.app.data.SessionForkManager
 import com.openminis.app.data.db.ChatSessionEntity
 import com.openminis.app.data.db.FolderEntity
 import com.openminis.app.data.model.LLMMessage
@@ -1039,22 +1040,11 @@ class SessionListViewModel(
     }
 
     fun duplicateSession(id: String) {
-        viewModelScope.launch {
-            val session = chatRepository.getSession(id) ?: return@launch
-            val messages = chatRepository.loadMessages(id)
-            val newSession = chatRepository.createSession(
-                modelId = session.modelId,
-                title = "${session.title ?: "Chat"} (Copy)",
-            )
-            for (msg in messages) {
-                chatRepository.appendMessage(
-                    sessionId = newSession.id,
-                    role = msg.role,
-                    partsJson = msg.partsJson,
-                    tokenUsage = msg.tokenUsage,
-                    reasoningContent = msg.reasoningContent,
-                )
-            }
+        viewModelScope.launch(Dispatchers.IO) {
+            SessionForkManager(
+                chatRepository = chatRepository,
+                filesDir = context.filesDir,
+            ).duplicateSession(id)
         }
     }
 

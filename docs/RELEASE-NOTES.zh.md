@@ -1,3 +1,10 @@
+# OpenMinis-Linux 1.36.50-linux
+
+- versionCode **103**
+- 目录没给模态的视频/生图模型不再被缺省文本挡住；RAW SSE 仅 VERBOSE 打印；复制会话会拷走当前工作区。详见 `docs/github-release-1.36.50-linux.md`。
+
+---
+
 # OpenMinis-Linux 1.36.49-linux
 
 - versionCode **102**
