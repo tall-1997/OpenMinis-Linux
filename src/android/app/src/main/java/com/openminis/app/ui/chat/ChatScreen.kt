@@ -4220,8 +4220,17 @@ fun ChatScreen(
                                     SideEffect {
                                         selectionController.rememberMessageMarkdown(item.messageId, item.messageMarkdown)
                                     }
-                                    Box(Modifier.fillMaxWidth()) {
-                                        Column(Modifier.padding(end = 40.dp, bottom = 32.dp)) {
+                                    if (!item.isStreaming && item.block.content.isNotBlank()) {
+                                        TranslateCorner(
+                                            button = {
+                                                AssistantTranslateButton(
+                                                    source = item.block.content,
+                                                    onTranslated = {
+                                                        viewModel.replaceAssistantTextBlock(item.messageId, item.block.id, it)
+                                                    },
+                                                )
+                                            },
+                                        ) {
                                             StreamingMarkdownText(
                                                 content = item.block.content,
                                                 isStreaming = item.isStreaming,
@@ -4231,15 +4240,15 @@ fun ChatScreen(
                                                 ),
                                             )
                                         }
-                                        if (!item.isStreaming && item.block.content.isNotBlank()) {
-                                            AssistantTranslateButton(
-                                                source = item.block.content,
-                                                onTranslated = {
-                                                    viewModel.replaceAssistantTextBlock(item.messageId, item.block.id, it)
-                                                },
-                                                modifier = Modifier.align(Alignment.BottomEnd),
-                                            )
-                                        }
+                                    } else {
+                                        StreamingMarkdownText(
+                                            content = item.block.content,
+                                            isStreaming = item.isStreaming,
+                                            shardId = TextShardId(
+                                                messageId = item.messageId,
+                                                shardId = "text:${item.block.id}",
+                                            ),
+                                        )
                                     }
                                 }
                             }
@@ -4256,8 +4265,17 @@ fun ChatScreen(
                                     SideEffect {
                                         selectionController.rememberMessageMarkdown(item.messageId, item.messageMarkdown)
                                     }
-                                    Box(Modifier.fillMaxWidth()) {
-                                        Column(Modifier.padding(end = 40.dp, bottom = 32.dp)) {
+                                    if (item.showTranslate) {
+                                        TranslateCorner(
+                                            button = {
+                                                AssistantTranslateButton(
+                                                    source = item.segmentText.ifBlank { item.rawText },
+                                                    onTranslated = {
+                                                        viewModel.replaceAssistantTextBlock(item.messageId, item.parentBlockId, it)
+                                                    },
+                                                )
+                                            },
+                                        ) {
                                             MarkdownBlock(
                                                 rawText = item.rawText,
                                                 isStreaming = item.isStreaming,
@@ -4267,15 +4285,15 @@ fun ChatScreen(
                                                 ),
                                             )
                                         }
-                                        if (item.showTranslate) {
-                                            AssistantTranslateButton(
-                                                source = item.segmentText.ifBlank { item.rawText },
-                                                onTranslated = {
-                                                    viewModel.replaceAssistantTextBlock(item.messageId, item.parentBlockId, it)
-                                                },
-                                                modifier = Modifier.align(Alignment.BottomEnd),
-                                            )
-                                        }
+                                    } else {
+                                        MarkdownBlock(
+                                            rawText = item.rawText,
+                                            isStreaming = item.isStreaming,
+                                            shardId = TextShardId(
+                                                messageId = item.messageId,
+                                                shardId = "mdblock:${item.parentBlockId}:${item.blockIndex}",
+                                            ),
+                                        )
                                     }
                                 }
                             }

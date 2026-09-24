@@ -2135,7 +2135,7 @@
     <string name="translate_settings_section">气泡</string>
     <string name="translate_settings_enabled">显示翻译按钮</string>
     <string name="translate_settings_enabled_sub">出现在助手回复结束处</string>
-    <string name="translate_settings_hint">按钮使用这里的语言和模型，不再使用模型组默认槽。</string>
+    <string name="translate_settings_hint">点会话里的翻译按钮会直接用这里的语言和模型，不会再问一次语言。</string>
     <string name="mcp_tools_title">工具 · %1$s</string>
     <string name="mcp_tools_hint">关闭后会从列表隐藏，并拒绝调用。</string>
     <string name="mcp_tools_empty">没有返回工具。</string>

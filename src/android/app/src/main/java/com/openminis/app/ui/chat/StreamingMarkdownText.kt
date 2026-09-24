@@ -74,6 +74,7 @@ import android.widget.Toast
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -335,6 +336,18 @@ private fun MdText(
     val context = LocalContext.current
     val hasUrlAnnotation = remember(text) { text.getStringAnnotations("url", 0, text.length).isNotEmpty() }
     val hasInlineCodeAnnotation = remember(text) { text.getStringAnnotations("inline_code", 0, text.length).isNotEmpty() }
+    val translateInk = LocalTranslateInk.current
+    val translateWidth = remember { intArrayOf(0) }
+    val translateToken = remember(translateInk) { translateInk?.alloc() ?: -1 }
+    val translateModifier = if (translateInk != null) {
+        Modifier.layout { measurable, constraints ->
+            translateWidth[0] = constraints.maxWidth
+            val placeable = measurable.measure(constraints)
+            layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+        }
+    } else {
+        Modifier
+    }
 
     // [T-android-stream-fade] When this MdText is the streaming last block,
     // overlay a fade-in alpha on each freshly-appended word range. Off by
@@ -392,8 +405,14 @@ private fun MdText(
         maxLines = maxLines,
         overflow = overflow,
         inlineContent = inlineContent,
-        onTextLayout = { layoutResult = it },
+        onTextLayout = { result ->
+            layoutResult = result
+            if (translateInk != null && translateToken >= 0) {
+                translateInk.reportText(translateToken, translateWidth[0], result)
+            }
+        },
         modifier = modifier
+            .then(translateModifier)
             .then(tapModifier)
             .onGloballyPositioned { layoutCoordinatesHolder[0] = it }
             .drawBehind {
@@ -1812,6 +1831,7 @@ private fun RenderBlock(block: MdBlock) {
                     }
                 }
             }
+            ReportTranslateInkBlocked()
         }
 
         is MdBlock.BlockQuote -> {
@@ -1912,6 +1932,7 @@ private fun RenderBlock(block: MdBlock) {
                 color = colors.divider,
                 modifier = Modifier.padding(vertical = 8.dp),
             )
+            ReportTranslateInkBlocked()
         }
 
         is MdBlock.Image -> {
@@ -1998,22 +2019,27 @@ private fun RenderBlock(block: MdBlock) {
                     else -> SubcomposeAsyncImageContent()
                 }
             }
+            ReportTranslateInkBlocked()
         }
 
         is MdBlock.Video -> {
             RenderMdVideo(block)
+            ReportTranslateInkBlocked()
         }
 
         is MdBlock.Audio -> {
             RenderMdAudio(block)
+            ReportTranslateInkBlocked()
         }
 
         is MdBlock.Table -> {
             RenderTable(block)
+            ReportTranslateInkBlocked()
         }
 
         is MdBlock.MathDisplay -> {
             RenderMathDisplay(block.latex)
+            ReportTranslateInkBlocked()
         }
     }
 }

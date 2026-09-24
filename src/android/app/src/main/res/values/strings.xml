@@ -2308,7 +2308,7 @@
     <string name="translate_settings_section">Bubble</string>
     <string name="translate_settings_enabled">Show translate button</string>
     <string name="translate_settings_enabled_sub">Icon at the end of assistant replies</string>
-    <string name="translate_settings_hint">The button uses this language and model. It does not use the model-group default slot.</string>
+    <string name="translate_settings_hint">One tap translates with this language and model. The button does not ask for the language again.</string>
     <string name="mcp_tools_title">Tools · %1$s</string>
     <string name="mcp_tools_hint">Turn a tool off to hide it and reject calls.</string>
     <string name="mcp_tools_empty">No tools returned.</string>

@@ -1,3 +1,10 @@
+# OpenMinis-Linux 1.36.41-linux
+
+- versionCode **94**
+- 会话翻译按钮直接用设置里的目标语言，不再弹出语言表。按钮贴在正文结束后的右下角，不再把整段左移。详见 `docs/github-release-1.36.41-linux.md`。
+
+---
+
 # OpenMinis-Linux 1.36.40-linux
 
 - versionCode **93**
