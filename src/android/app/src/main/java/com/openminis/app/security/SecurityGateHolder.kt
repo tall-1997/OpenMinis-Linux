@@ -106,9 +106,13 @@ object SecurityGateHolder {
             }
             is Decision.NeedConfirm -> {
                 val preview = decision.preview.take(240).ifBlank { decision.reason }
-                val id = ApprovalGate.requestApproval(canonical, preview)
-                // Empty id = auto-approved by the session allow-all switch; no
-                // card, no notification — just execute.
+                val id = ApprovalGate.requestApproval(
+                    canonical,
+                    preview,
+                    mustPrompt = decision.mustPrompt,
+                )
+                // Empty id = auto-approved by the session allow-all switch.
+                // Fatal confirms set mustPrompt, so rm -rf / still shows the dialog.
                 if (id.isEmpty()) return null
                 ApprovalNotifier(context).notifyApproval(
                     id,

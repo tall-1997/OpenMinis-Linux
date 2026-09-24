@@ -14,7 +14,11 @@ data class GateCommand(
 
 sealed class Decision {
     data class Allow(val reason: String) : Decision()
-    data class NeedConfirm(val reason: String, val preview: String) : Decision()
+    data class NeedConfirm(
+        val reason: String,
+        val preview: String,
+        val mustPrompt: Boolean = false,
+    ) : Decision()
     /**
      * [hard] marks a denial no permission mode may downgrade: the isolation
      * boundaries (another chat's tree, the app database, unmounted guest

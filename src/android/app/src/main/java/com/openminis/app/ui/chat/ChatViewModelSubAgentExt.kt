@@ -567,7 +567,7 @@ private suspend fun ChatViewModel.runOneSubAgent(
                 assistantId = assistantId,
                 currentText = currentText,
                 toolBlocks = toolBlocks,
-                log = currentSubAgentLine(spawn, index, total, result.output.trim()),
+                log = currentSubAgentLine(spawn, index, total, SubAgentRunner.cardStep(result.output)),
                 status = if (result.success) ToolBlockStatus.SUCCESS else ToolBlockStatus.FAILED,
             )
             com.openminis.app.service.SubAgentActivityTracker.finish(trackerId, result.success)

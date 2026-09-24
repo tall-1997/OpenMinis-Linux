@@ -1,6 +1,7 @@
 package com.openminis.app.service
 
 import android.util.Log
+import com.openminis.app.security.sessionAllowAllSkipsPrompt
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -60,8 +61,8 @@ object ApprovalGate {
      * the broadcast map, so no card / notification is surfaced; [waitFor]
      * treats it as approved.
      */
-    fun requestApproval(toolName: String, preview: String): String {
-        if (sessionAllowAll) {
+    fun requestApproval(toolName: String, preview: String, mustPrompt: Boolean = false): String {
+        if (sessionAllowAllSkipsPrompt(sessionAllowAll, mustPrompt)) {
             Log.d(TAG, "approval auto-allowed (session allow-all) tool=$toolName")
             return ""
         }

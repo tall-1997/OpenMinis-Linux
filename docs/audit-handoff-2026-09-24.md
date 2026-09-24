@@ -2,7 +2,7 @@
 
 产品名 Minis Ultra。不要改 CLI 名，不要改 `/var/minis`。不要抽 `:provider`、`:sandbox`、`:core:model`，不要拆 `ChatViewModel.kt`。不要把任务清单里的 Gradle 缓存、CI、benchmark、`shrinkResources`、`StreamSessionController` 抽离当成未完成工作，除非某条仍生效的说明明确要求。后写说明覆盖先写。仓库没有 1.36.15、1.36.29–1.36.33 的说明，不要臆造。「本版未接」和明确延期不是工作。没有核实到的行为缺口不要改版本。
 
-本交接更新于 1.36.51-linux / versionCode 104。1.36.50 远程提交是 `28307ba6b1831567f8cc75a039d25a40ba9cba9c`。下一轮若再核实到缺口，升到 1.36.52-linux / versionCode 105，`--expect-parent` 用 1.36.51 推送后的远程完整哈希。推送脚本用 `git cat-file --batch`，不要改回 `git show rev:path`。
+本交接更新于 1.36.52-linux / versionCode 105。1.36.51 远程提交是 `d50baa25763c5705a59c3b6bb194d8d4b80f562d`。下一轮若再核实到缺口，升到 1.36.53-linux / versionCode 106，`--expect-parent` 用 1.36.52 推送后的远程完整哈希。推送脚本用 `git cat-file --batch`，不要改回 `git show rev:path`。
 
 ## 本轮已修（1.36.50）
 
@@ -17,6 +17,14 @@
 1.36.16–1.36.49 里已经逐行对过的包括：启动顺序 overlay → 时区 → 镜像配置 → minis-mirror auto → seed → dpkg retry → pip retry；工具上限返回箭头；一级设置无箭头；MCP 工具开关；提供商置顶与并行强制刷新；时区相对链接；技能 requirements 的 env/tiers 为 Map 且 apt 优先于 apk；原子写（路径锁 + 临时文件 rename + 回读）；共享存储进 shell_execute；startForeground 失败不崩；minis-config 可读 security.permissionMode；世界书只在最近消息命中时注入；显示正则不改存档；权限模式只在权限页；tool-limits 深链接；total_memory_mb 是整机内存；TZ 用时区名；write_paths=none；proot info 噪声；handler_timeout 退出码 124；Termux terminal-view 0.118.0；dpkg/pip 快照与最多 3 次、apt `--no-upgrade`；键盘 120dp 与长文编辑 imePadding；视频路径先 `/v1/videos` 再宿主根；字符串 passthrough 与顶层 endpoint；翻译写回；高刷新率只写一次；通知 IMPORTANCE_LOW、1.5s / 30s；OCR 长边 1600；explore/plan 拒绝 `2>文件` 但放行 `2>&1`；镜像中文对照；minis-open 无 TTY 仍发 OSC。
 
 1.36.1–1.36.8 抽查已对上的包括：缺参补 256k/128k、步进器、强 429、限流桶、组内换人、压缩不拆段、视频生成路径（在模态判断之后）、浏览器底栏、检查更新、网页搜索、无障碍 awaitA11yEvent、shrinkResources。1.36.9–1.36.14 抽查已对上的包括：项目共享与记忆仍按会话、删会话不删项目树、人格绑定不入库、密钥不进沙箱、更新续装、折叠增量收起。
+
+## 1.36.52 已修
+
+- 点停止会取消视频创建、轮询、下载和厂商媒体请求上的 OkHttp call。流式路径原来就有 `call.cancel()`，视频路径以前是阻塞 `execute()`，读超时 600 秒。
+- 纯视频气泡完成后只自动打开这一次播放器。旧会话重开不会自动播。工具返回的 markdown 仍是点开播放，说明没有要求那条路径自动播。
+- 「本会话全部允许」对 `mustPrompt` 的致命确认不再返回空 id。`rm -rf /` 在全部允许下仍是 NeedConfirm，并且会弹出确认。
+- 子代理结束卡片用 `SubAgentRunner.cardStep`，只留 `## Report`。详情页本来就只显示 `lastStep`。交给父代理的工具结果仍含 Trace。
+- `models-dev-api.json` 和 gzip 一起放进 assets。加载代码本来就会在 gzip 失败时打开明文，包里以前没有这个文件。
 
 ## 1.36.51 已修
 
@@ -38,8 +46,9 @@
 
 这些还没有用文件行号证明，不能记成已对上，也不能直接改：
 
-- 1.36.1–1.36.8：`models-dev-api.json.gz` 失败是否回退明文；聊天气泡能否播放 `minis://attachments/generated/*.mp4`；点停止后视频阻塞请求是否立刻断开。`:core:model` 迁移和 CI 归档不要当成缺口。
-- 1.36.20 权限模式界面和 `rm -rf /` 确认、1.36.21 导入对话框文案与子代理卡片、1.36.22 UTF-8 半字符、结束标记拆包、`--kill-on-exit`、CMake 路径。
+- 1.36.20 权限模式界面（闸门和 `rm -rf /` 确认已修，页面本身还没逐行对）。
+- 1.36.21 导入对话框文案。子代理卡片结束时回放 Trace 已修；详情页只显示当前步骤，已对上。
+- 1.36.22 UTF-8 半字符、结束标记拆包、`--kill-on-exit`、CMake 路径。
 - 1.36.36「一批界面文案补了中文」没有清单，不要为了凑数改文案。
 - 启动图标缺 XML inset：没有像素测量之前不是缺口。
 
@@ -51,4 +60,4 @@
 java -classpath gradle\wrapper\gradle-wrapper.jar org.gradle.wrapper.GradleWrapperMain :app:compileDebugKotlin --offline
 ```
 
-不要提交 `src/android/.kotlin/`，不要提交临时 pin。不要 force-push。推送用 `C:\Users\yp\AppData\Local\Temp\apipush.bat`，先 `--check`。有版本修复时再带 `--tag` 和 `--expect-parent`。父提交以当时的 `git rev-parse HEAD` 和远程 `713b0d261673ee7d67912e57804e6a817fefe790`（1.36.49-linux）为准；若 1.36.50 已推送，下一轮的 expect-parent 改成 1.36.50 的完整哈希。
+不要提交 `src/android/.kotlin/`，不要提交临时 pin。不要 force-push。推送用 `C:\Users\yp\AppData\Local\Temp\apipush.bat`，先 `--check`。有版本修复时再带 `--tag` 和 `--expect-parent`。1.36.52 的父提交是远程 `d50baa25763c5705a59c3b6bb194d8d4b80f562d`。下一轮用 1.36.52 推送后的远程完整哈希。

@@ -253,6 +253,21 @@ object SubAgentRunner {
         return truncate(composed)
     }
 
+    /**
+     * Card and detail show the current result, not the step history.
+     * The tool result returned to the parent still uses [composeOutput].
+     */
+    fun cardStep(output: String): String {
+        val text = output.trim()
+        val marker = "## Report"
+        val at = text.indexOf(marker)
+        if (at >= 0) {
+            return text.substring(at + marker.length).trim().ifEmpty { text }
+        }
+        if (text.startsWith("## Trace")) return "已结束"
+        return text
+    }
+
     private fun appendTimeline(
         timeline: StringBuilder,
         turn: Int,

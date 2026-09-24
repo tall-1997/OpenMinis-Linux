@@ -3,9 +3,15 @@ package com.openminis.app.provider
 import com.openminis.app.data.model.LLMMediaAttachment
 import com.openminis.app.data.model.LLMModel
 import com.openminis.app.provider.openai.OpenAIProvider
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.RecordedRequest
+import okhttp3.mockwebserver.SocketPolicy
 import okio.Buffer
 import org.json.JSONObject
 import org.junit.After
@@ -147,6 +153,26 @@ class OpenAIProviderVideoTest {
         assertEquals("std", retried.getString("mode"))
         assertNull(provider.videoMode)
         assertEquals("std", provider.videoModeSent)
+    }
+
+    @Test(timeout = 20_000)
+    fun cancelAbortsBlockingVideoCall() = runBlocking {
+        val arrived = java.util.concurrent.CountDownLatch(1)
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                arrived.countDown()
+                return MockResponse().setSocketPolicy(SocketPolicy.STALL_SOCKET_AT_START)
+            }
+        }
+        val job = launch(Dispatchers.IO) { provider.generateVideo("slow clip") }
+        assertTrue(
+            "video request was not received",
+            arrived.await(8, java.util.concurrent.TimeUnit.SECONDS),
+        )
+        val started = System.nanoTime()
+        job.cancelAndJoin()
+        val elapsedMs = (System.nanoTime() - started) / 1_000_000
+        assertTrue("cancel took ${elapsedMs}ms", elapsedMs < 5_000)
     }
 
     private fun enqueueJson(body: String) {

@@ -53,6 +53,9 @@ class SecurityGateImplTest {
             PermissionMode.ALLOW_ALL,
         )
         assertTrue(d is Decision.NeedConfirm)
+        assertTrue((d as Decision.NeedConfirm).mustPrompt)
+        assertFalse(sessionAllowAllSkipsPrompt(sessionAllowAll = true, mustPrompt = true))
+        assertTrue(sessionAllowAllSkipsPrompt(sessionAllowAll = true, mustPrompt = false))
         val denied = gate.decide(
             gate.classify("shell_execute", """{"command":"rm -rf /"}"""),
             PermissionMode.ASK,

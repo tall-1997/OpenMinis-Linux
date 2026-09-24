@@ -38,4 +38,15 @@ class SubAgentPreviewArgsTest {
     fun composeOutputEmptyFallback() {
         assertEquals("(sub-agent finished with empty output)", SubAgentRunner.composeOutput("", ""))
     }
+
+    @Test
+    fun cardStepKeepsReportAndDropsTrace() {
+        val out = SubAgentRunner.composeOutput(
+            report = "found 2 files",
+            timeline = "- turn 1: file_read `/tmp/a`\n  → hello",
+        )
+        assertEquals("found 2 files", SubAgentRunner.cardStep(out))
+        assertEquals("已结束", SubAgentRunner.cardStep("## Trace\n- turn 1: file_read"))
+        assertEquals("plain failure", SubAgentRunner.cardStep("plain failure"))
+    }
 }

@@ -27,3 +27,10 @@ enum class PermissionMode {
  */
 fun effectivePermissionMode(stored: PermissionMode, sessionAllowAll: Boolean): PermissionMode =
     if (sessionAllowAll) PermissionMode.ALLOW_ALL else stored
+
+/**
+ * Session allow-all skips ordinary confirms. A fatal command still prompts,
+ * the same as global ALLOW_ALL: `rm -rf /` asks, it does not run.
+ */
+fun sessionAllowAllSkipsPrompt(sessionAllowAll: Boolean, mustPrompt: Boolean): Boolean =
+    sessionAllowAll && !mustPrompt

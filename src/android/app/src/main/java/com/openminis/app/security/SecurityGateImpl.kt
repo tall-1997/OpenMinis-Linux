@@ -254,7 +254,8 @@ class SecurityGateImpl : SecurityGate {
                 // [Fix-P0-option-2] User selected: FATAL→confirm in ALLOW_ALL.
                 return Decision.NeedConfirm(
                     describeFatalViolation(command),
-                    "⚠️ 危险命令（可能损坏系统）\n\n${preview(cmd)}"
+                    "⚠️ 危险命令（可能损坏系统）\n\n${preview(cmd)}",
+                    mustPrompt = true,
                 )
             } else {
                 return Decision.Denied(describeFatalViolation(command))

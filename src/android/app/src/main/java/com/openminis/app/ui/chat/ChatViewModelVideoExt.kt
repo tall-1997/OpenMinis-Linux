@@ -7,11 +7,22 @@ import com.openminis.app.provider.ProviderFactory
 import com.openminis.app.provider.openai.OpenAIProvider
 import com.openminis.app.tools.ProductMediaTools
 import com.openminis.app.tools.ToolExecutionResult
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
+
+/**
+ * One-shot URL of a video that just finished in this process. Historical
+ * bubbles must not open the player again when the chat is reopened.
+ */
+internal object GeneratedVideoAutoPlay {
+    var url by mutableStateOf<String?>(null)
+}
 
 internal data class SavedGeneratedVideo(
     val relPath: String,
@@ -47,8 +58,10 @@ internal suspend fun ChatViewModel.runVideoGenerationTurn(
         } ?: error(response.text.ifBlank { "接口没有返回视频" })
         val saved = persistGeneratedVideo(activeSessionId, att.data)
         val caption = response.text.trim()
+        val videoUrl = "minis://attachments/${saved.relPath}"
+        GeneratedVideoAutoPlay.url = videoUrl
         val md = buildString {
-            append("![video](minis://attachments/${saved.relPath})")
+            append("![video](").append(videoUrl).append(")")
             if (caption.isNotEmpty()) {
                 append("\n\n")
                 append(caption)

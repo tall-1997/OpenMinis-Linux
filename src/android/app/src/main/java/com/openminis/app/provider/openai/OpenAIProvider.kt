@@ -30,7 +30,10 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 import okhttp3.Call
 import okhttp3.Connection
 import okhttp3.EventListener
@@ -1996,6 +1999,23 @@ class OpenAIProvider private constructor(
      * OpenAI Videos API (`POST /videos` + poll + `/content`) and common
      * OpenAI-compatible relay shapes (`/video/generations`, sync `data[].url`).
      */
+    /**
+     * Blocking [Call.execute] does not notice coroutine cancellation until the
+     * socket times out. Stop must tear the video request down the same way the
+     * streaming path does: [Call.cancel] from the cancellation handler.
+     */
+    private suspend fun Call.executeCancellable(): Response {
+        return suspendCancellableCoroutine { cont ->
+            cont.invokeOnCancellation { runCatching { cancel() } }
+            try {
+                val response = execute()
+                if (cont.isActive) cont.resume(response) else runCatching { response.close() }
+            } catch (t: Throwable) {
+                if (cont.isActive) cont.resumeWithException(t)
+            }
+        }
+    }
+
     override suspend fun generateVideo(prompt: String): LLMResponse = try {
         videoModeSent = null
         withContext(Dispatchers.IO) {
@@ -2063,7 +2083,7 @@ class OpenAIProvider private constructor(
                 }
                 .applyUserAgentOverride(customUserAgent)
                 .build()
-            val response = client.newCall(req).execute()
+            val response = client.newCall(req).executeCancellable()
             val code = response.code
             val bytes = response.body?.bytes() ?: ByteArray(0)
             val contentType = response.header("Content-Type").orEmpty()
@@ -2134,7 +2154,7 @@ class OpenAIProvider private constructor(
                 }
                 .applyUserAgentOverride(customUserAgent)
                 .build()
-            val resp = client.newCall(pollReq).execute()
+            val resp = client.newCall(pollReq).executeCancellable()
             val code = resp.code
             val bodyBytes = resp.body?.bytes() ?: ByteArray(0)
             resp.close()
@@ -2162,7 +2182,7 @@ class OpenAIProvider private constructor(
         throw LLMError.ProviderError("Video generation timed out")
     }
 
-    private fun extractVideoAttachment(json: org.json.JSONObject): LLMResponse? {
+    private suspend fun extractVideoAttachment(json: org.json.JSONObject): LLMResponse? {
         val data = json.optJSONArray("data")
         if (data != null) {
             for (i in 0 until data.length()) {
@@ -2180,7 +2200,7 @@ class OpenAIProvider private constructor(
         return null
     }
 
-    private fun attachmentFromItem(item: org.json.JSONObject): LLMMediaAttachment? {
+    private suspend fun attachmentFromItem(item: org.json.JSONObject): LLMMediaAttachment? {
         val b64 = item.safeOptString("b64_json", item.safeOptString("video_b64", ""))
         if (b64.isNotEmpty()) {
             val raw = try {
@@ -2200,19 +2220,21 @@ class OpenAIProvider private constructor(
         return null
     }
 
-    private fun downloadUrl(url: String): LLMMediaAttachment? {
+    private suspend fun downloadUrl(url: String): LLMMediaAttachment? {
         return try {
-            val resp = client.newCall(Request.Builder().url(url).get().build()).execute()
+            val resp = client.newCall(Request.Builder().url(url).get().build()).executeCancellable()
             val mime = resp.header("Content-Type")
             val raw = resp.body?.bytes()
             resp.close()
             if (raw != null && raw.isNotEmpty()) videoAtt(raw, mime) else null
+        } catch (e: CancellationException) {
+            throw e
         } catch (_: Exception) {
             null
         }
     }
 
-    private fun downloadVideoContent(token: String, id: String): LLMResponse? {
+    private suspend fun downloadVideoContent(token: String, id: String): LLMResponse? {
         val url = "$basePath/videos/$id/content"
         val req = Request.Builder()
             .url(url)
@@ -2223,7 +2245,7 @@ class OpenAIProvider private constructor(
             }
             .applyUserAgentOverride(customUserAgent)
             .build()
-        val resp = client.newCall(req).execute()
+        val resp = client.newCall(req).executeCancellable()
         val code = resp.code
         val raw = resp.body?.bytes() ?: ByteArray(0)
         resp.close()
@@ -2475,7 +2497,7 @@ class OpenAIProvider private constructor(
         return LLMResponse("", "end_turn", null, attachments)
     }
 
-    private fun videoFromUrl(url: String): LLMResponse {
+    private suspend fun videoFromUrl(url: String): LLMResponse {
         val att = downloadUrl(url)
             ?: throw LLMError.ProviderError("Failed to download video from temporary URL")
         return LLMResponse("", "end_turn", null, listOf(att))
@@ -2491,7 +2513,7 @@ class OpenAIProvider private constructor(
     private fun requireHostPath(path: String, label: String): String =
         hostRootURL(path) ?: throw LLMError.ProviderError("Cannot resolve $label endpoint from $basePath")
 
-    private fun postMediaJson(
+    private suspend fun postMediaJson(
         url: String,
         token: String,
         body: JSONObject,
@@ -2508,14 +2530,14 @@ class OpenAIProvider private constructor(
             }
             .applyUserAgentOverride(customUserAgent)
             .build()
-        val resp = client.newCall(req).execute()
+        val resp = client.newCall(req).executeCancellable()
         val code = resp.code
         val text = resp.body?.string() ?: ""
         resp.close()
         return code to text
     }
 
-    private fun getMedia(url: String, token: String): Pair<Int, String> {
+    private suspend fun getMedia(url: String, token: String): Pair<Int, String> {
         val req = Request.Builder()
             .url(url)
             .get()
@@ -2525,7 +2547,7 @@ class OpenAIProvider private constructor(
             }
             .applyUserAgentOverride(customUserAgent)
             .build()
-        val resp = client.newCall(req).execute()
+        val resp = client.newCall(req).executeCancellable()
         val code = resp.code
         val text = resp.body?.string() ?: ""
         resp.close()

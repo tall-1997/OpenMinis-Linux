@@ -2417,6 +2417,15 @@ private fun RenderMdVideo(block: MdBlock.Video) {
     val file = remember(block.url, sessionId) { resolveMdMediaFile(context, block.url, sessionId) }
     val filename = remember(block.url) { filenameFromMdUrl(block.url) }
     var showPlayer by remember { mutableStateOf(false) }
+    val pendingAutoPlay = GeneratedVideoAutoPlay.url
+    LaunchedEffect(file, pendingAutoPlay, block.url) {
+        if (file != null && pendingAutoPlay != null && block.url == pendingAutoPlay) {
+            showPlayer = true
+            if (GeneratedVideoAutoPlay.url == pendingAutoPlay) {
+                GeneratedVideoAutoPlay.url = null
+            }
+        }
+    }
 
     val thumbnail by produceState<Bitmap?>(initialValue = null, key1 = file?.absolutePath) {
         val f = file ?: run { value = null; return@produceState }

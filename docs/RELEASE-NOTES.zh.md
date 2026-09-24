@@ -1,3 +1,10 @@
+# OpenMinis-Linux 1.36.52-linux
+
+- versionCode **105**
+- 停止会断开视频 HTTP；生成完成自动播放一次；本会话全部允许不再跳过 `rm -rf /` 确认；子代理结束卡片不回放 Trace；目录 gzip 失败可回退明文。详见 `docs/github-release-1.36.52-linux.md`。
+
+---
+
 # OpenMinis-Linux 1.36.51-linux
 
 - versionCode **104**
