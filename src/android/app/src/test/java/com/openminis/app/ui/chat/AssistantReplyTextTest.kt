@@ -31,6 +31,48 @@ class AssistantReplyTextTest {
         assertEquals("译文", AssistantReplyText.visible(value))
     }
 
+    @Test
+    fun `later identical paragraph is not rewritten by the earlier one`() {
+        val row = JSONArray()
+            .put(text("same"))
+            .put(tool("bash"))
+            .put(text("<system-reminder>keep</system-reminder>\nsame"))
+            .toString()
+        val rows = listOf("a" to row)
+        val first = AssistantReplyText.replaceVisibleOccurrence(rows, "same", "前段", 0)!!
+        val parts = JSONArray(first.second)
+        assertEquals("前段", parts.getJSONObject(0).getString("value"))
+        assertTrue(parts.getJSONObject(2).getString("value").contains("same"))
+        assertTrue(parts.getJSONObject(2).getString("value").contains("<system-reminder>keep</system-reminder>"))
+
+        val second = AssistantReplyText.replaceVisibleOccurrence(rows, "same", "后段", 1)!!
+        val later = JSONArray(second.second)
+        assertEquals("same", later.getJSONObject(0).getString("value"))
+        val value = later.getJSONObject(2).getString("value")
+        assertTrue(value.contains("后段"))
+        assertTrue(value.contains("<system-reminder>keep</system-reminder>"))
+        assertFalse(AssistantReplyText.visible(value).contains("same"))
+    }
+
+    @Test
+    fun `occurrence past the end does not rewrite a different paragraph`() {
+        val row = JSONArray().put(text("same")).toString()
+        assertEquals(null, AssistantReplyText.replaceVisibleOccurrence(listOf("a" to row), "same", "x", 1))
+    }
+
+    @Test
+    fun `text occurrence counts only earlier copies of the same paragraph`() {
+        val blocks = listOf(
+            AssistantBlock(id = "a", kind = "text", content = "same"),
+            AssistantBlock(id = "t", kind = "tool_use", content = "same"),
+            AssistantBlock(id = "b", kind = "text", content = "other"),
+            AssistantBlock(id = "c", kind = "text", content = "same"),
+        )
+        assertEquals(0, AssistantReplyText.textOccurrence(blocks, "a", "same"))
+        assertEquals(1, AssistantReplyText.textOccurrence(blocks, "c", "same"))
+        assertEquals(-1, AssistantReplyText.textOccurrence(blocks, "t", "same"))
+    }
+
     private fun text(value: String) =
         org.json.JSONObject().put("type", "text").put("value", value)
 

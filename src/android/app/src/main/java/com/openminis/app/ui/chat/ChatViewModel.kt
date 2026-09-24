@@ -2188,29 +2188,18 @@ class ChatViewModel(
         _messages.value = cur.toMutableList().also { it[idx] = updated }
         val dbIds = msg.sourceDbIds
         if (dbIds.isEmpty() || old == null) return
+        val occurrence = AssistantReplyText.textOccurrence(msg.toolBlocks, blockId, old)
+        if (occurrence < 0) return
         viewModelScope.launch {
-            var done = false
-            for (id in dbIds) {
-                if (done) break
-                runCatching {
-                    val raw = chatRepository.dao.messagePartsJson(id) ?: return@runCatching
-                    val parts = org.json.JSONArray(raw)
-                    var replaced = false
-                    for (i in 0 until parts.length()) {
-                        val part = parts.optJSONObject(i) ?: continue
-                        if (part.optString("type") == "text" &&
-                            AssistantReplyText.visible(part.optString("value")) == old
-                        ) {
-                            part.put("value", AssistantReplyText.replaceVisible(part.optString("value"), text))
-                            replaced = true
-                            break
-                        }
-                    }
-                    if (replaced) {
-                        chatRepository.dao.updateMessageParts(id, parts.toString())
-                        done = true
-                    }
+            runCatching {
+                val rows = dbIds.mapNotNull { id ->
+                    val raw = chatRepository.dao.messagePartsJson(id) ?: return@mapNotNull null
+                    if (runCatching { org.json.JSONArray(raw) }.isFailure) return@mapNotNull null
+                    id to raw
                 }
+                val updated = AssistantReplyText.replaceVisibleOccurrence(rows, old, text, occurrence)
+                    ?: return@runCatching
+                chatRepository.dao.updateMessageParts(updated.first, updated.second)
             }
         }
     }

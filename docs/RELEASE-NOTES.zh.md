@@ -1,3 +1,10 @@
+# OpenMinis-Linux 1.36.45-linux
+
+- versionCode **98**
+- 不折叠时，翻译某一段只写回这一段。两段正文相同也不会把后一段的译文写到前一段上。详见 `docs/github-release-1.36.45-linux.md`。
+
+---
+
 # OpenMinis-Linux 1.36.44-linux
 
 - versionCode **97**
