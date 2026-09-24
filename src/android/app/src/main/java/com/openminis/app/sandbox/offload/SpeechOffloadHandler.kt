@@ -21,6 +21,7 @@ import com.openminis.app.sandbox.NativeOffloadRequest
 import com.openminis.app.sandbox.NativeOffloadResult
 import com.openminis.app.sandbox.PRootKernel
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -151,7 +152,7 @@ class SpeechOffloadHandler(private val context: Context) : NativeOffloadHandler 
         // Pre-T61 callers also passed --max / --timeout; preserve those.
         val lang = args.get("language")
         val maxResults = args.getInt("max") ?: 3
-        val durationSec = args.getInt("duration") ?: args.getInt("timeout") ?: 30
+        val durationSec = (args.getInt("duration") ?: args.getInt("timeout") ?: 30).coerceIn(1, 120)
         val text = recognize(lang, maxResults, durationSec.toLong())
         return NativeOffloadResult(0, OffloadOutput.formatBody(text, args) + "\n")
     }
@@ -251,6 +252,7 @@ class SpeechOffloadHandler(private val context: Context) : NativeOffloadHandler 
         if (hasMic()) return null
         AppLogger.warning(TAG, "RECORD_AUDIO not granted — routing through permission flow")
         val result = runBlocking {
+            withTimeoutOrNull(OffloadPermissionManager.INTERACTIVE_BUDGET_MS) {
             var r = OffloadPermissionManager.requestAndroidPermission(
                 listOf(Manifest.permission.RECORD_AUDIO),
             )
@@ -274,7 +276,8 @@ class SpeechOffloadHandler(private val context: Context) : NativeOffloadHandler 
                 )
             }
             r
-        }
+                }
+        } ?: OffloadPermissionManager.AndroidPermissionResult.TIMEOUT
         return when (result) {
             OffloadPermissionManager.AndroidPermissionResult.GRANTED -> null
             OffloadPermissionManager.AndroidPermissionResult.DENIED -> NativeOffloadResult(

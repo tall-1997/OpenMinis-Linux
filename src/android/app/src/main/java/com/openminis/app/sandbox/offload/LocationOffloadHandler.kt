@@ -15,6 +15,7 @@ import com.openminis.app.sandbox.NativeOffloadHandler
 import com.openminis.app.sandbox.NativeOffloadRequest
 import com.openminis.app.sandbox.NativeOffloadResult
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Locale
@@ -60,7 +61,7 @@ class LocationOffloadHandler(private val context: Context) : NativeOffloadHandle
 
         return try {
             when (val sub = args.positional.firstOrNull() ?: "current") {
-                "current" -> current(args.getInt("timeout") ?: 8, args)
+                "current" -> current((args.getInt("timeout") ?: 8).coerceIn(1, 30), args)
                 "geocode" -> handleGeocode(args)
                 "forward" -> handleForward(args)
                 else -> NativeOffloadResult(2, "android-location: unknown subcommand '$sub'\n$HELP")
@@ -119,6 +120,7 @@ class LocationOffloadHandler(private val context: Context) : NativeOffloadHandle
                 Manifest.permission.ACCESS_COARSE_LOCATION,
             )
             val result = runBlocking {
+                withTimeoutOrNull(OffloadPermissionManager.INTERACTIVE_BUDGET_MS) {
                 var r = OffloadPermissionManager.requestAndroidPermission(permissions)
                 if (r == OffloadPermissionManager.AndroidPermissionResult.DENIED &&
                     OffloadPermissionManager.pollForPermissionGrant({ hasPermission() })
@@ -140,7 +142,8 @@ class LocationOffloadHandler(private val context: Context) : NativeOffloadHandle
                     )
                 }
                 r
-            }
+                }
+            } ?: OffloadPermissionManager.AndroidPermissionResult.TIMEOUT
             when (result) {
                 OffloadPermissionManager.AndroidPermissionResult.GRANTED -> {} // fall through
                 OffloadPermissionManager.AndroidPermissionResult.DENIED -> {

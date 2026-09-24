@@ -24,6 +24,7 @@ import com.openminis.app.sandbox.NativeOffloadHandler
 import com.openminis.app.sandbox.NativeOffloadRequest
 import com.openminis.app.sandbox.NativeOffloadResult
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
 import com.openminis.app.util.IsoTime
@@ -112,6 +113,7 @@ class NotificationOffloadHandler(private val context: Context) : NativeOffloadHa
             PackageManager.PERMISSION_GRANTED
         ) {
             val result = runBlocking {
+                withTimeoutOrNull(OffloadPermissionManager.INTERACTIVE_BUDGET_MS) {
                 var r = OffloadPermissionManager.requestAndroidPermission(
                     listOf(Manifest.permission.POST_NOTIFICATIONS)
                 )
@@ -146,7 +148,8 @@ class NotificationOffloadHandler(private val context: Context) : NativeOffloadHa
                     )
                 }
                 r
-            }
+                }
+            } ?: OffloadPermissionManager.AndroidPermissionResult.TIMEOUT
             when (result) {
                 OffloadPermissionManager.AndroidPermissionResult.GRANTED -> {} // continue
                 OffloadPermissionManager.AndroidPermissionResult.DENIED -> {
@@ -428,18 +431,20 @@ class NotificationOffloadHandler(private val context: Context) : NativeOffloadHa
             // "settings gate" which shows a dialog, opens the settings page,
             // and polls for the user to complete the grant.
             val result = runBlocking {
-                OffloadPermissionManager.requestSettingsGate(
-                    OffloadPermissionManager.SettingsGateRequest(
-                        id = "notification_access",
-                        title = "Notification access needed",
-                        message = "Minis needs Notification access to read the status-bar notifications. Open Settings and enable \"Minis\" under Notification access.",
-                        settingsAction = MinisNotificationListenerService.SETTINGS_ACTION,
-                        requiresPackageUri = false,
-                        positiveLabel = "Open Settings",
-                    ),
-                    check = { MinisNotificationListenerService.isEnabled(context) },
-                )
-            }
+                withTimeoutOrNull(OffloadPermissionManager.INTERACTIVE_BUDGET_MS) {
+                    OffloadPermissionManager.requestSettingsGate(
+                        OffloadPermissionManager.SettingsGateRequest(
+                            id = "notification_access",
+                            title = "Notification access needed",
+                            message = "Minis needs Notification access to read the status-bar notifications. Open Settings and enable \"Minis\" under Notification access.",
+                            settingsAction = MinisNotificationListenerService.SETTINGS_ACTION,
+                            requiresPackageUri = false,
+                            positiveLabel = "Open Settings",
+                        ),
+                        check = { MinisNotificationListenerService.isEnabled(context) },
+                    )
+                }
+            } ?: OffloadPermissionManager.AndroidPermissionResult.TIMEOUT
             when (result) {
                 OffloadPermissionManager.AndroidPermissionResult.GRANTED -> {} // continue
                 OffloadPermissionManager.AndroidPermissionResult.DENIED -> {

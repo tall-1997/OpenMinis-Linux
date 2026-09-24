@@ -353,6 +353,34 @@ object NativeOffloadServer {
     }
 
     /**
+     * Deadline must outlast the handler's own budget, or the guest gets a
+     * false timeout and the real result is dropped.
+     *
+     * Fast tools stay at 20s. Browser actions run up to 90s, accessibility
+     * prompts up to 60s, speech listens up to 120s, a fresh location fix up
+     * to 30s, and video polls up to about 16 minutes. Permission prompts are
+     * already capped inside the handler.
+     */
+    internal fun handlerDeadlineMs(name: String, argv: List<String>): Long {
+        fun flagSec(flag: String, defaultSec: Int, capSec: Int): Int {
+            val idx = argv.indexOf("--$flag")
+            val raw = if (idx >= 0) argv.getOrNull(idx + 1)?.toIntOrNull() else null
+            return (raw ?: defaultSec).coerceIn(1, capSec)
+        }
+        return when (name) {
+            "minis-browser-use" -> 100_000L
+            "android-a11y-cli" -> 75_000L
+            "android-speech" -> {
+                val listen = if ("--duration" in argv) flagSec("duration", 30, 120) else flagSec("timeout", 30, 120)
+                15_000L + listen * 1_000L + 10_000L
+            }
+            "android-location" -> 15_000L + flagSec("timeout", 8, 30) * 1_000L + 8_000L
+            "minis-model-use" -> 18L * 60L * 1000L
+            else -> HANDLER_TIMEOUT_MS
+        }
+    }
+
+    /**
      * [T-android-offload-watchdog] Run [handler] with a hard deadline.
      *
      * The handler runs on its own daemon thread and hands its result back
@@ -383,7 +411,7 @@ object NativeOffloadServer {
             }
             slot.offer(result)
         }
-        val timeoutMs = if (name == "minis-model-use") 120_000L else HANDLER_TIMEOUT_MS
+        val timeoutMs = handlerDeadlineMs(name, request.argv)
         val result = slot.poll(timeoutMs, TimeUnit.MILLISECONDS)
         if (result != null) return result
 

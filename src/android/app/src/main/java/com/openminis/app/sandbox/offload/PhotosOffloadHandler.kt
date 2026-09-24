@@ -17,6 +17,7 @@ import com.openminis.app.sandbox.NativeOffloadHandler
 import com.openminis.app.sandbox.NativeOffloadRequest
 import com.openminis.app.sandbox.NativeOffloadResult
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -225,6 +226,7 @@ class PhotosOffloadHandler(private val context: Context) : NativeOffloadHandler 
             listOf(Manifest.permission.READ_EXTERNAL_STORAGE)
         }
         val result = runBlocking {
+            withTimeoutOrNull(OffloadPermissionManager.INTERACTIVE_BUDGET_MS) {
             var r = OffloadPermissionManager.requestAndroidPermission(requestList)
             if (r == OffloadPermissionManager.AndroidPermissionResult.DENIED &&
                 OffloadPermissionManager.pollForPermissionGrant({ hasMediaPermission() })
@@ -246,7 +248,8 @@ class PhotosOffloadHandler(private val context: Context) : NativeOffloadHandler 
                 )
             }
             r
-        }
+            }
+        } ?: OffloadPermissionManager.AndroidPermissionResult.TIMEOUT
         return when (result) {
             OffloadPermissionManager.AndroidPermissionResult.GRANTED -> null
             OffloadPermissionManager.AndroidPermissionResult.DENIED -> NativeOffloadResult(
@@ -286,6 +289,7 @@ class PhotosOffloadHandler(private val context: Context) : NativeOffloadHandler 
         if (hasMediaLocationPermission()) return null
         AppLogger.warning(TAG, "ACCESS_MEDIA_LOCATION not granted — routing through permission flow")
         val result = runBlocking {
+            withTimeoutOrNull(OffloadPermissionManager.INTERACTIVE_BUDGET_MS) {
             var r = OffloadPermissionManager.requestAndroidPermission(
                 listOf("android.permission.ACCESS_MEDIA_LOCATION"),
             )
@@ -309,7 +313,8 @@ class PhotosOffloadHandler(private val context: Context) : NativeOffloadHandler 
                 )
             }
             r
-        }
+                }
+        } ?: OffloadPermissionManager.AndroidPermissionResult.TIMEOUT
         return when (result) {
             OffloadPermissionManager.AndroidPermissionResult.GRANTED -> null
             OffloadPermissionManager.AndroidPermissionResult.DENIED -> NativeOffloadResult(

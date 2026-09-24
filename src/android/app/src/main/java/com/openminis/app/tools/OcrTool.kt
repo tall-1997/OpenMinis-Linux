@@ -1,6 +1,7 @@
 package com.openminis.app.tools
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import com.google.android.gms.tasks.Tasks
 import com.google.mlkit.vision.common.InputImage
@@ -47,7 +48,7 @@ object OcrTool {
             PRootKernel.resolveHostPath(path)
         } ?: return ToolExecutionResult("Cannot resolve path: $path", false, toolTitle = title)
         if (!file.isFile) return ToolExecutionResult("File not found: $path", false, toolTitle = title)
-        val bitmap = BitmapFactory.decodeFile(file.absolutePath)
+        val bitmap = decodeForOcr(file.absolutePath)
             ?: return ToolExecutionResult("Cannot decode image: $path", false, toolTitle = title)
         return try {
             val image = InputImage.fromBitmap(bitmap, 0)
@@ -69,3 +70,18 @@ object OcrTool {
         }
     }
 }
+
+    /** Longest edge 1600px. Full-resolution camera shots OOM the recognizer. */
+    internal fun decodeForOcr(path: String): Bitmap? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(path, bounds)
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+        var sample = 1
+        val maxEdge = 1600
+        while (bounds.outWidth / sample > maxEdge || bounds.outHeight / sample > maxEdge) {
+            sample *= 2
+        }
+        val opts = BitmapFactory.Options().apply { inSampleSize = sample.coerceAtLeast(1) }
+        return BitmapFactory.decodeFile(path, opts)
+    }
+

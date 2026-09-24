@@ -12,6 +12,7 @@ import com.openminis.app.sandbox.NativeOffloadHandler
 import com.openminis.app.sandbox.NativeOffloadRequest
 import com.openminis.app.sandbox.NativeOffloadResult
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
 import com.openminis.app.util.IsoTime
@@ -92,6 +93,7 @@ class CalendarOffloadHandler(private val context: Context) : NativeOffloadHandle
         if (satisfied()) return null
         AppLogger.warning(TAG, "$humanLabel not granted — routing through permission flow")
         val result = runBlocking {
+            withTimeoutOrNull(OffloadPermissionManager.INTERACTIVE_BUDGET_MS) {
             var r = OffloadPermissionManager.requestAndroidPermission(permissions)
             if (r == OffloadPermissionManager.AndroidPermissionResult.DENIED &&
                 OffloadPermissionManager.pollForPermissionGrant(satisfied)
@@ -113,7 +115,8 @@ class CalendarOffloadHandler(private val context: Context) : NativeOffloadHandle
                 )
             }
             r
-        }
+            }
+        } ?: OffloadPermissionManager.AndroidPermissionResult.TIMEOUT
         return when (result) {
             OffloadPermissionManager.AndroidPermissionResult.GRANTED -> null
             OffloadPermissionManager.AndroidPermissionResult.DENIED -> NativeOffloadResult(
