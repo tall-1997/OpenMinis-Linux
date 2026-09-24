@@ -30,23 +30,26 @@ internal object AssistantReplyText {
     }
 
     /**
-     * Index of [blockId] among text blocks whose content equals [old].
-     * -1 when that block is not a text block. Used so a later identical
-     * paragraph is not written onto the earlier one.
+     * Index of [blockId] among text blocks whose visible text equals [old].
+     * Trailing newlines are not a different paragraph. -1 when that block is
+     * not a text block, or when [old] has no visible text.
      */
     fun textOccurrence(blocks: List<AssistantBlock>, blockId: String, old: String): Int {
+        val needle = visible(old)
+        if (needle.isEmpty()) return -1
         var seen = 0
         for (block in blocks) {
             if (block.id == blockId && block.kind == "text") return seen
-            if (block.kind == "text" && block.content == old) seen++
+            if (block.kind == "text" && visible(block.content) == needle) seen++
         }
         return -1
     }
 
     /**
      * Replace the [occurrence]-th visible text part equal to [oldVisible].
-     * Earlier and later copies stay. Returns the one changed row, or null
-     * when that occurrence is not in the stored parts.
+     * Comparison uses [visible], so a stored trailing newline still matches
+     * the paragraph the user translated. Earlier and later copies stay.
+     * Returns the one changed row, or null when that occurrence is absent.
      */
     fun replaceVisibleOccurrence(
         rows: List<Pair<String, String>>,
@@ -54,14 +57,15 @@ internal object AssistantReplyText {
         replacement: String,
         occurrence: Int,
     ): Pair<String, String>? {
-        if (occurrence < 0 || oldVisible.isEmpty()) return null
+        val needle = visible(oldVisible)
+        if (occurrence < 0 || needle.isEmpty()) return null
         var seen = 0
         for ((id, raw) in rows) {
             val parts = runCatching { JSONArray(raw) }.getOrNull() ?: continue
             for (i in 0 until parts.length()) {
                 val part = parts.optJSONObject(i) ?: continue
                 if (part.optString("type") != "text") continue
-                if (visible(part.optString("value")) != oldVisible) continue
+                if (visible(part.optString("value")) != needle) continue
                 if (seen == occurrence) {
                     part.put("value", replaceVisible(part.optString("value"), replacement))
                     return id to parts.toString()

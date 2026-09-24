@@ -73,6 +73,26 @@ class AssistantReplyTextTest {
         assertEquals(-1, AssistantReplyText.textOccurrence(blocks, "t", "same"))
     }
 
+    @Test
+    fun `trailing newline still writes the translated paragraph back`() {
+        val row = JSONArray().put(text("same\n")).put(text("same\n")).toString()
+        val blocks = listOf(
+            AssistantBlock(id = "a", kind = "text", content = "same\n"),
+            AssistantBlock(id = "b", kind = "text", content = "same\n"),
+        )
+        val occurrence = AssistantReplyText.textOccurrence(blocks, "b", "same\n")
+        assertEquals(1, occurrence)
+        val rewritten = AssistantReplyText.replaceVisibleOccurrence(
+            listOf("row" to row),
+            "same\n",
+            "后段",
+            occurrence,
+        )
+        val parts = JSONArray(rewritten!!.second)
+        assertEquals("same\n", parts.getJSONObject(0).getString("value"))
+        assertEquals("后段", parts.getJSONObject(1).getString("value"))
+    }
+
     private fun text(value: String) =
         org.json.JSONObject().put("type", "text").put("value", value)
 

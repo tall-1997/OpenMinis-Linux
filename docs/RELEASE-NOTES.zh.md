@@ -1,3 +1,10 @@
+# OpenMinis-Linux 1.36.46-linux
+
+- versionCode **99**
+- 不折叠时，段尾换行不再让译文写不回去。相同正文仍按出现次序落盘。详见 `docs/github-release-1.36.46-linux.md`。
+
+---
+
 # OpenMinis-Linux 1.36.45-linux
 
 - versionCode **98**
