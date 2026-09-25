@@ -646,14 +646,38 @@ class ChatViewModel(
     private val _hasOlderMessages = MutableStateFlow(false)
     val hasOlderMessages: StateFlow<Boolean> = _hasOlderMessages.asStateFlow()
 
-    /** Load one bounded page before the current in-memory window. */
+    private fun refreshHasOlderMessages() {
+        val loadedVisible = _messages.value.count { !it.isInternalBridge }
+        _hasOlderMessages.value = loadedMessageOffset > 0 || loadedVisible > _visibleMessageCap.value
+    }
+
+    /**
+     * Reveal one bounded window above the current UI tail. Already-loaded rows
+     * are exposed first; only after that in-memory prefix is exhausted do we
+     * query another database page. A fetched page also grows the visible cap,
+     * otherwise prepending it would leave the same tail on screen and make
+     * persisted history look permanently missing.
+     */
     fun loadOlderMessages() {
-        if (loadingOlderMessages || loadedMessageOffset <= 0) return
+        if (loadingOlderMessages) return
+
+        val loadedVisible = _messages.value.count { !it.isInternalBridge }
+        val plan = ChatHistoryWindow.planOlderLoad(
+            loadedVisible = loadedVisible,
+            visibleCap = _visibleMessageCap.value,
+            loadedOffset = loadedMessageOffset,
+            step = VISIBLE_MESSAGE_CAP_STEP,
+        )
+        val newOffset = plan.fetchOffset
+        if (newOffset == null) {
+            _visibleMessageCap.value = plan.nextVisibleCap
+            refreshHasOlderMessages()
+            return
+        }
+
         loadingOlderMessages = true
         viewModelScope.launch {
             try {
-                val pageSize = VISIBLE_MESSAGE_CAP_STEP
-                val newOffset = (loadedMessageOffset - pageSize).coerceAtLeast(0)
                 val page = withContext(Dispatchers.IO) {
                     val rows = ArrayList<com.openminis.app.data.db.MessageEntity>(
                         loadedMessageOffset - newOffset,
@@ -679,8 +703,9 @@ class ChatViewModel(
                     _messages.value = older + _messages.value
                     agentHistory.addAll(0, olderHistory)
                     loadedMessageOffset = newOffset
-                    _hasOlderMessages.value = loadedMessageOffset > 0
+                    _visibleMessageCap.value = plan.nextVisibleCap
                 }
+                refreshHasOlderMessages()
             } finally {
                 loadingOlderMessages = false
             }
@@ -4279,7 +4304,7 @@ class ChatViewModel(
             val ordered = loaded.ordered
             loadedMessageTotal = loaded.totalMessages
             loadedMessageOffset = loaded.firstMessageOffset
-            _hasOlderMessages.value = loadedMessageOffset > 0
+            refreshHasOlderMessages()
             loadingOlderMessages = false
             val tHangDiagAfterLoad = tHangDiagBeforeLoad + loaded.loadMs
             val tHangDiagAfterTransform = tHangDiagAfterLoad + loaded.transformMs
