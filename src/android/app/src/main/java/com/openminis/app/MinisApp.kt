@@ -71,6 +71,8 @@ import com.openminis.app.ui.MinisImageFetcher
 import kotlinx.coroutines.launch
 
 class MinisApp : Application(), ImageLoaderFactory {
+    /** Process-owned scopes; all application background work is cancelled together in tests. */
+    val appCoroutineScopes = com.openminis.app.di.AppCoroutineScopes()
     /**
      * T-android-safemode-lateinit-crash: true once the heavy subsystem
      * block in [onCreate] has fully run (DB + every repository assigned).
@@ -513,7 +515,7 @@ class MinisApp : Application(), ImageLoaderFactory {
         com.openminis.app.data.repository.MemoryRepository.loadGlobalDefaultFromAssets(this)
         com.openminis.app.data.repository.MemoryRepository.ensureGlobalExists(this)
 
-        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+        appCoroutineScopes.io.launch {
             runCatching { chatRepository.warmupWorkspaceOwners() }.onFailure {
                 android.util.Log.e("MinisApp", "workspace owner warmup failed", it)
             }
@@ -536,13 +538,13 @@ class MinisApp : Application(), ImageLoaderFactory {
         // register anything new, and default-enable the whole library except
         // ids the user explicitly switched off. Runs on IO so a large library
         // (100+ dirs) never blocks the first frame.
-        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+        appCoroutineScopes.io.launch {
             runCatching { skillRepository.refreshOnStartup() }.onFailure {
                 android.util.Log.e("MinisApp", "skill startup refresh failed", it)
             }
         }
 
-        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+        appCoroutineScopes.io.launch {
             kotlinx.coroutines.delay(5_000)
             runCatching {
                 com.openminis.app.data.repository.SkillSubscriptionSync.refreshAuto(
@@ -723,7 +725,7 @@ class MinisApp : Application(), ImageLoaderFactory {
         // runs it, so the badge would be missing after restart. The persisted
         // message tail is the durable source of truth — scan it off-main and
         // reconcile. Runs after init() so it merges with the restored queues.
-        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+        appCoroutineScopes.io.launch {
             val interrupted = runCatching { chatRepository.interruptedSessionIds() }.getOrElse { emptySet() }
             // Exclude any session that is already actively streaming (defensive;
             // at cold start this is empty, but keeps the rule "active ⇒ never
@@ -739,7 +741,7 @@ class MinisApp : Application(), ImageLoaderFactory {
         // Mirrors iOS BackgroundKeepAliveManager.postBackgroundTaskNotification.
         backgroundSettingsRepository = BackgroundSettingsRepository(this)
         multiAgentSettingsRepository = MultiAgentSettingsRepository(this)
-        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+        appCoroutineScopes.io.launch {
             kotlinx.coroutines.flow.combine(
                 providerRepository.configLoaded,
                 providerRepository.config,
@@ -811,7 +813,7 @@ class MinisApp : Application(), ImageLoaderFactory {
                 // stranded; we additionally exclude currently-active sessions so
                 // a mid-loop running session is never flagged.
                 if (wasBackgrounded) {
-                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                    appCoroutineScopes.io.launch {
                         val interrupted = runCatching { chatRepository.interruptedSessionIds() }.getOrElse { emptySet() }
                         val active = SessionActivityTracker.activeSessions.value
                         com.openminis.app.service.SessionBadgeStore.reconcileInterruptedSessions(interrupted - active)
@@ -831,7 +833,7 @@ class MinisApp : Application(), ImageLoaderFactory {
                 // storage unmounted, etc.) propagate into the UI badge
                 // and the read-only enforcement gate. Mirrors iOS
                 // MountedFoldersManager.refreshAllWritability().
-                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                appCoroutineScopes.io.launch {
                     runCatching { mountedFoldersStore.refreshWritability() }
                 }
             }
@@ -860,7 +862,7 @@ class MinisApp : Application(), ImageLoaderFactory {
         // Refresh model lists once per calendar day (mirrors iOS MinisApp.swift).
         // Runs per-instance in parallel; `autoRefreshModels` skips instances with custom models.
         providerRepository.refreshAllModelsIfNeeded(
-            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO)
+            appCoroutineScopes.io
         )
 
         // Propagate system timezone and HTTP-proxy changes into the sandbox.
@@ -870,7 +872,7 @@ class MinisApp : Application(), ImageLoaderFactory {
         // without a restart.
         val sandboxSystemReceiver = object : BroadcastReceiver() {
             override fun onReceive(ctx: Context, intent: Intent) {
-                val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO)
+                val scope = appCoroutineScopes.io
                 when (intent.action) {
                     Intent.ACTION_TIMEZONE_CHANGED -> scope.launch {
                         try {

@@ -5,7 +5,6 @@ import android.content.Intent
 import android.net.Uri
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -22,6 +21,10 @@ abstract class OAuthManager(
     protected val context: Context,
     protected val instanceId: String,
 ) {
+    protected val ioScope: kotlinx.coroutines.CoroutineScope
+        get() = (context.applicationContext as? com.openminis.app.MinisApp)
+            ?.appCoroutineScopes?.io
+            ?: error("OAuthManager requires MinisApp application context")
     companion object {
         private const val TAG = "OAuthManager"
         private const val KEY_MANUAL_BEARER = "manual_bearer_token"
@@ -168,7 +171,7 @@ abstract class OAuthManager(
                 onComplete(false)
                 return@OAuthCallbackServer
             }
-            kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
+            ioScope.launch(Dispatchers.IO) {
                 val success = exchangeCode(code)
                 withContext(Dispatchers.Main) { onComplete(success) }
             }
