@@ -13,7 +13,7 @@ class BundledModelsCatalogTest {
             ?: find("app/src/main/assets")
             ?: find("src/main/assets")
             ?: error("assets dir not found from ${System.getProperty("user.dir")}")
-        val gz = File(assets, "models-dev-api.json.gz")
+        val gz = File(assets, "models-dev-api.json.gzip")
         val plain = File(assets, "models-dev-api.json")
         assertTrue(gz.isFile)
         assertTrue(plain.isFile)

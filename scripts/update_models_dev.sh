@@ -7,7 +7,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 IOS_DEST="$SCRIPT_DIR/../src/ios/Resources/models-dev-api.json"
 ANDROID_DEST="$SCRIPT_DIR/../src/android/app/src/main/assets/models-dev-api.json"
-ANDROID_GZ="${ANDROID_DEST}.gz"
+# Android's asset merger strips the .gz suffix and would collide with the
+# plaintext fallback. Use .gzip so both assets can coexist in the APK.
+ANDROID_GZ="${ANDROID_DEST}.gzip"
 URL="https://models.dev/api.json"
 
 echo "Downloading $URL ..."
@@ -40,7 +42,6 @@ src, dst = sys.argv[1], sys.argv[2]
 with open(src, "rb") as inf, gzip.open(dst, "wb", compresslevel=9) as out:
     shutil.copyfileobj(inf, out)
 PY
-rm -f "$ANDROID_DEST"
 echo "Updated $ANDROID_GZ"
 
 # Show size

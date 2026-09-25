@@ -45,6 +45,7 @@ data class MessageCountRow(val count: Int)
 
 data class MessageUsageRow(
     val id: String,
+    val role: String,
     @ColumnInfo(name = "created_at") val createdAt: Long,
     @ColumnInfo(name = "token_usage") val tokenUsage: String,
 )
@@ -269,7 +270,7 @@ interface ChatDao {
     suspend fun tokenUsages(sessionId: String): List<String>
 
     @Query("""
-        SELECT id, created_at, token_usage
+        SELECT id, role, created_at, token_usage
         FROM messages
         WHERE session_id = :sessionId AND token_usage IS NOT NULL
         ORDER BY sort_order ASC
