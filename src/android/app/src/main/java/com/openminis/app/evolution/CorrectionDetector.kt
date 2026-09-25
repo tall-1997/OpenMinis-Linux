@@ -49,7 +49,7 @@ object CorrectionDetector {
     fun fingerprint(text: String): String {
         val norm = BoundedText.icuWindow(text).toString()
             .lowercase()
-            .replace(Regex("[\\p{Punct}\\s]+"), " ")
+            .replace(Regex("[\\p{P}\\p{S}\\s]+"), " ")
             .trim()
             .take(80)
         return Integer.toHexString(norm.hashCode())

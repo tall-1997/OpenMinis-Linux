@@ -47,6 +47,9 @@ class AnthropicProvider(
      * request. Only set for custom-base Anthropic-compat instances.
      */
     private val customUserAgent: String? = null,
+    private val oauthIdentifierPromptProvider: () -> String = {
+        com.openminis.app.auth.ClaudeOAuthManager.ANTHROPIC_OAUTH_IDENTIFIER_PROMPT
+    },
 ) : LLMProvider {
     override val name = "Anthropic"
     override val callGateKey: String
@@ -305,7 +308,7 @@ class AnthropicProvider(
      */
     internal fun resolveSystemPrompt(userPrompt: String?): JSONArray? {
         if (isOAuth) {
-            val claudeCodePrefix = com.openminis.app.auth.ClaudeOAuthManager.ANTHROPIC_OAUTH_IDENTIFIER_PROMPT
+            val claudeCodePrefix = oauthIdentifierPromptProvider()
             // Strip the prefix if the caller already prepended it; the tail is the real user prompt.
             val tail = when {
                 userPrompt == null -> ""

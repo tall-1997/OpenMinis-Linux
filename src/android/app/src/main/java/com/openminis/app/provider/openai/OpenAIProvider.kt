@@ -642,7 +642,7 @@ class OpenAIProvider private constructor(
         // minis-model-use (ModelUseOffloadHandler) — get them on
         // LLMResponse.mediaAttachments and can write the image to --output.
         val media = mutableListOf<LLMMediaAttachment>()
-        streamMessageClamped(
+        rawStreamMessage(
             messages = messages,
             systemPrompt = systemPrompt,
             maxTokens = maxTokens,
@@ -650,6 +650,7 @@ class OpenAIProvider private constructor(
             imageParts = imageParts,
             tools = tools,
             thinkingLevel = thinkingLevel,
+            stream = false,
         ).collect { chunk ->
             when (chunk) {
                 is LLMStreamChunk.Text -> textBuf.append(chunk.text)
@@ -672,6 +673,7 @@ class OpenAIProvider private constructor(
         thinkingLevel: ThinkingLevel,
     ): Flow<LLMStreamChunk> = rawStreamMessage(
         messages, systemPrompt, maxTokens, temperature, imageParts, tools, thinkingLevel,
+        stream = true,
     ).failOnSilentEmptyCompletion(name)
 
     private fun rawStreamMessage(
@@ -682,6 +684,7 @@ class OpenAIProvider private constructor(
         imageParts: List<LLMMessage.ImagePart>,
         tools: List<AgentToolDefinition>,
         thinkingLevel: ThinkingLevel,
+        stream: Boolean,
     ): Flow<LLMStreamChunk> = callbackFlow {
         val body = if (isCodexImageModel) {
             // [T-gpt-image2-codex-backend-route-android] gpt-image-2 on an
@@ -708,9 +711,9 @@ class OpenAIProvider private constructor(
             )
             buildCodexImageBody(messages)
         } else if (usesChatCompletionsAPI) {
-            buildRequestBody(messages, systemPrompt, maxTokens, stream = true, temperature = temperature, imageParts = imageParts, tools = tools, thinkingLevel = thinkingLevel)
+            buildRequestBody(messages, systemPrompt, maxTokens, stream = stream, temperature = temperature, imageParts = imageParts, tools = tools, thinkingLevel = thinkingLevel)
         } else {
-            buildResponsesAPIBody(messages, systemPrompt, maxTokens, stream = true, imageParts = imageParts, tools = tools, thinkingLevel = thinkingLevel)
+            buildResponsesAPIBody(messages, systemPrompt, maxTokens, stream = stream, imageParts = imageParts, tools = tools, thinkingLevel = thinkingLevel)
         }
         // T302: serialize the request body exactly once. Pre-T302 we called
         // body.toString() three times per request (debug log + OAuth byte
@@ -899,6 +902,33 @@ class OpenAIProvider private constructor(
                     responseStatusCode = response.code,
                 )
             )
+        }
+
+        // Some compatible gateways ignore `stream=true` and return regular
+        // Chat Completions JSON. Parse it instead of feeding JSON to the SSE
+        // parser and misclassifying the response as silently empty.
+        val responseContentType = response.header("Content-Type").orEmpty().lowercase()
+        if (usesChatCompletionsAPI && !responseContentType.contains("text/event-stream")) {
+            try {
+                val json = JSONObject(response.body?.string().orEmpty())
+                send(LLMStreamChunk.Started)
+                val choice = json.optJSONArray("choices")?.optJSONObject(0)
+                val message = choice?.optJSONObject("message")
+                val text = message?.optString("content", "").orEmpty()
+                if (text.isNotEmpty()) send(LLMStreamChunk.Text(text))
+                json.optJSONObject("usage")?.let {
+                    send(LLMStreamChunk.Usage(parseChatCompletionsUsage(it)))
+                }
+                send(LLMStreamChunk.Finished(choice?.optString("finish_reason", null)))
+            } finally {
+                response.close()
+            }
+            channel.close()
+            awaitClose {
+                try { call.cancel() } catch (_: Exception) {}
+                try { response.close() } catch (_: Exception) {}
+            }
+            return@callbackFlow
         }
 
         val reader = BufferedReader(InputStreamReader(response.body!!.byteStream()))
@@ -3141,7 +3171,7 @@ class OpenAIProvider private constructor(
         // latestContextTokens stays the full prompt (that IS the context size).
         val freshInput = cacheRead?.let { (promptTokens - it).takeIf { d -> d >= 0 } } ?: promptTokens
         return LLMUsage(
-            inputTokens = freshInput,
+            inputTokens = promptTokens,
             outputTokens = usage.optInt("completion_tokens", 0),
             cacheReadInputTokens = cacheRead,
             latestContextTokens = promptTokens,
@@ -3207,7 +3237,7 @@ class OpenAIProvider private constructor(
             // [OpenMinis#163] null (catalog silent) must read as false here —
             // only an affirmative declaration may suppress the field.
             declaresNoEffortTiers = model.declaresNoEffortTiers == true,
-            level = level,
+            level = clampThinkingLevel(level),
             maxTokens = maxTokens,
             isOpenRouter = isOpenRouter,
             usesUnifiedReasoningEffort = usesUnifiedReasoningEffort,

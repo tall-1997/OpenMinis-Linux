@@ -6,6 +6,7 @@ import java.time.Instant
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
+import java.util.Locale
 import kotlin.random.Random
 
 /**
@@ -45,7 +46,11 @@ object HttpRetryAfter {
      */
     private fun httpDateSeconds(value: String): Int? {
         return try {
-            val whenUtc = ZonedDateTime.parse(value, DateTimeFormatter.RFC_1123_DATE_TIME).toInstant()
+            // Some proxies emit an incorrect weekday token. RFC recipients
+            // should still honor the absolute date rather than discard it.
+            val withoutWeekday = value.replace(Regex("^[A-Za-z]{3},\\s*"), "")
+            val formatter = DateTimeFormatter.ofPattern("dd MMM uuuu HH:mm:ss z", Locale.US)
+            val whenUtc = ZonedDateTime.parse(withoutWeekday, formatter).toInstant()
             Duration.between(Instant.now(), whenUtc).seconds.toInt().coerceIn(1, MAX_HONORED_RETRY_AFTER_SEC)
         } catch (_: DateTimeParseException) {
             null
@@ -63,7 +68,12 @@ object HttpRetryAfter {
             schedule.isEmpty() -> 2
             attemptZeroBased < 0 -> schedule.first()
             attemptZeroBased < schedule.size -> schedule[attemptZeroBased]
-            else -> (schedule.last() * 2).coerceAtMost(32)
+            else -> {
+                val extraSteps = (attemptZeroBased - schedule.lastIndex).coerceAtMost(30)
+                (schedule.last().toLong() shl extraSteps)
+                    .coerceAtMost(LADDER_MAX_SEC.toLong())
+                    .toInt()
+            }
         }
         return if (retryAfterSeconds != null) {
             // Explicit server value: honor it beyond the ladder ceiling.

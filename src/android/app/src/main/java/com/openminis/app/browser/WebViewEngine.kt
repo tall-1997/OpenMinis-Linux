@@ -85,9 +85,13 @@ object WebViewEngine {
         }
     }
 
-    fun storeIntent(packageName: String?): Intent {
+    internal fun storeUri(packageName: String?): String {
         val id = packageName?.takeIf { it.isNotBlank() } ?: "com.google.android.webview"
-        val market = Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$id"))
+        return "market://details?id=$id"
+    }
+
+    fun storeIntent(packageName: String?): Intent {
+        val market = Intent(Intent.ACTION_VIEW, Uri.parse(storeUri(packageName)))
         market.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         return market
     }

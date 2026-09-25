@@ -36,8 +36,8 @@ class WebViewEngineTest {
 
     @Test
     fun `store intent targets the current WebView package`() {
-        val intent = WebViewEngine.storeIntent("com.google.android.webview")
-        assertEquals("market", intent.data?.scheme)
-        assertTrue(intent.dataString!!.contains("com.google.android.webview"))
+        val uri = WebViewEngine.storeUri("com.google.android.webview")
+        assertTrue(uri.startsWith("market://"))
+        assertTrue(uri.contains("com.google.android.webview"))
     }
 }
