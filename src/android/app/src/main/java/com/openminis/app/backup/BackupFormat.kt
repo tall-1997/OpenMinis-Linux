@@ -146,7 +146,11 @@ enum class BackupCategory(val key: String) {
      * `environment_variables` to match the iOS `BackupCategory` raw value so a
      * cross-platform package is decodable on both sides.
      */
-    ENVIRONMENT_VARIABLES("environment_variables");
+    ENVIRONMENT_VARIABLES("environment_variables"),
+    /** Full Ubuntu sandbox; large and reproducible, therefore opt-in. */
+    ROOTFS("rootfs"),
+    /** App cache; volatile and potentially large, therefore opt-in. */
+    CACHE("cache");
 
     /**
      * Categories that stream file trees through the blob store — the ones the
@@ -154,7 +158,7 @@ enum class BackupCategory(val key: String) {
      */
     val carriesFileTree: Boolean
         get() = when (this) {
-            CHATS, SHARED_FILES, SKILLS -> true
+            CHATS, SHARED_FILES, SKILLS, ROOTFS, CACHE -> true
             MEMORY, PROVIDERS, MCP_SERVERS, VOICE_CORRECTIONS,
             ENVIRONMENT_VARIABLES -> false
         }
@@ -169,7 +173,10 @@ enum class BackupCategory(val key: String) {
          * exist in already-written packages and must remain decodable.
          */
         val backupable: List<BackupCategory>
-            get() = entries.filter { it != VOICE_CORRECTIONS }
+            get() = entries.filter { it !in setOf(VOICE_CORRECTIONS, ROOTFS, CACHE) }
+
+        /** Large/reproducible trees shown in UI but disabled for a new backup. */
+        val optionalLarge: List<BackupCategory> get() = listOf(ROOTFS, CACHE)
     }
 }
 

@@ -49,6 +49,9 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
     private val _encrypt = MutableStateFlow(prefs.getBoolean(KEY_ENCRYPT, false))
     val encrypt: StateFlow<Boolean> = _encrypt.asStateFlow()
 
+    private val _includeCredentials = MutableStateFlow(prefs.getBoolean(KEY_INCLUDE_CREDENTIALS, false))
+    val includeCredentials: StateFlow<Boolean> = _includeCredentials.asStateFlow()
+
     /**
      * Max per-file size, in MB, using iOS's sentinel tags: -1 = don't back up
      * files, 0 = unlimited (the default), otherwise the MB cap. Persisted.
@@ -211,7 +214,17 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setEncrypt(on: Boolean) {
         _encrypt.value = on
+        if (!on && _includeCredentials.value) setIncludeCredentials(false)
         prefs.edit().putBoolean(KEY_ENCRYPT, on).apply()
+    }
+
+    fun setIncludeCredentials(on: Boolean) {
+        _includeCredentials.value = on
+        if (on && !_encrypt.value) {
+            _encrypt.value = true
+            prefs.edit().putBoolean(KEY_ENCRYPT, true).apply()
+        }
+        prefs.edit().putBoolean(KEY_INCLUDE_CREDENTIALS, on).apply()
     }
 
     fun setMaxFileSizeMB(value: Int) {
@@ -231,19 +244,8 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
     fun clearExportReady() { _exportReady.value = null }
 
     /**
-     * Run an export. [passphrase] must be non-empty when [encrypt] is on.
-     *
-     * [T-backup-credentials-without-encryption] Credentials are ALWAYS
-     * included — `includeCredentials = true` unconditionally, no longer
-     * derived from [encrypt]. Deriving it meant the default (unencrypted)
-     * export restored a half-working device: providers with no key, env vars
-     * with no value, and nothing anywhere saying so. A backup exists to
-     * reconstitute a device, so it carries what that takes; the encryption
-     * footer states plainly what an unencrypted package contains.
-     *
-     * Only the PASSPHRASE still depends on [encrypt] — that is what "not
-     * encrypted" means. Matches iOS 08904c7b1; the two sides must agree or
-     * packages stop being interchangeable.
+     * Run an export. Credentials are an explicit user choice and are never
+     * emitted into an unencrypted package.
      */
     fun startExport(passphrase: String?) {
         if (_isRunning.value) return
@@ -262,6 +264,10 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
         val encrypting = _encrypt.value
         if (encrypting && passphrase.isNullOrEmpty()) {
             _errorText.value = "Set a passphrase to encrypt this backup."
+            return
+        }
+        if (_includeCredentials.value && !encrypting) {
+            _errorText.value = "Encrypt the backup before including credentials."
             return
         }
         _isRunning.value = true
@@ -292,9 +298,7 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
                         BackupExporter.Options(
                             categories = cats,
                             maxFileBytes = maxFileBytesOption(),
-                            // Unconditional — see the KDoc above. Only the
-                            // passphrase tracks `encrypting`.
-                            includeCredentials = true,
+                            includeCredentials = _includeCredentials.value,
                             passphrase = passphrase?.takeIf { encrypting },
                         ),
                     ) { line ->
@@ -1041,6 +1045,7 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
 
         private const val KEY_CATEGORIES = "selectedCategories"
         private const val KEY_ENCRYPT = "encrypt"
+        private const val KEY_INCLUDE_CREDENTIALS = "includeCredentials"
         private const val KEY_MAX_FILE_MB = "maxFileSizeMB"
     }
 }

@@ -134,6 +134,18 @@ class BackupExporter(
                     onProgress?.invoke("Exporting skills…")
                     stats[BackupCategory.SKILLS.key] = exportSkills(trees)
                 }
+                if (BackupCategory.ROOTFS in options.categories) {
+                    onProgress?.invoke("Exporting Ubuntu rootfs…")
+                    stats[BackupCategory.ROOTFS.key] = exportTree(
+                        trees, File(context.filesDir, "ubuntu-rootfs"), "rootfs", BackupCategory.ROOTFS,
+                    )
+                }
+                if (BackupCategory.CACHE in options.categories) {
+                    onProgress?.invoke("Exporting cache…")
+                    stats[BackupCategory.CACHE.key] = exportTree(
+                        trees, context.cacheDir, "cache", BackupCategory.CACHE,
+                    )
+                }
                 if (BackupCategory.MEMORY in options.categories) {
                     onProgress?.invoke("Exporting memory…")
                     stats[BackupCategory.MEMORY.key] = exportMemory(dataDir)
@@ -422,6 +434,16 @@ class BackupExporter(
      * §3.2 — the cross-session `/var/minis/shared` bucket. Host-side this is
      * `<filesDir>/minis-global/shared`, NOT anything inside the rootfs.
      */
+    private fun exportTree(
+        trees: BackupFileTreeExporter,
+        root: File,
+        prefix: String,
+        category: BackupCategory,
+    ): BackupManifest.CategoryStat {
+        val r = trees.export(root, prefix, category)
+        return BackupManifest.CategoryStat(r.filesIncluded, r.bytesIncluded, encrypted = false)
+    }
+
     private fun exportSharedFiles(trees: BackupFileTreeExporter): BackupManifest.CategoryStat {
         val r = trees.export(
             File(context.filesDir, "minis-global/shared"), "shared", BackupCategory.SHARED_FILES

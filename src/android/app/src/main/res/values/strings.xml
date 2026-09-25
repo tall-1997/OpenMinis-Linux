@@ -1602,6 +1602,10 @@
     <string name="backup_category_mcp">MCP Servers</string>
     <string name="backup_category_env_vars">Environment Variables</string>
     <string name="backup_category_voice">Voice Corrections</string>
+    <string name="backup_category_rootfs">Ubuntu Rootfs</string>
+    <string name="backup_category_cache">Application Cache</string>
+    <string name="backup_include_credentials">Include credentials</string>
+    <string name="backup_include_credentials_subtitle">API keys, OAuth tokens, environment values, and MCP authorization headers. Requires encryption.</string>
     <!-- Max Per-File Size picker -->
     <string name="backup_max_file_size">Max Per-File Size</string>
     <string name="backup_max_file_no_files">Don\'t back up files</string>

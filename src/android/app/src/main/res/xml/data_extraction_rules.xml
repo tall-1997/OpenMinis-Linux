@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<data-extraction-rules>
+    <cloud-backup>
+        <include domain="database" path="minis.db" />
+        <include domain="database" path="skills.db" />
+        <include domain="database" path="mcp.db" />
+        <include domain="file" path="minis-workspaces" />
+        <include domain="file" path="minis-global" />
+        <include domain="file" path="skills" />
+        <include domain="sharedpref" path="appearance_prefs.xml" />
+        <include domain="sharedpref" path="minis_settings.xml" />
+        <include domain="sharedpref" path="minis_memory_prefs.xml" />
+        <include domain="sharedpref" path="session_list_ui.xml" />
+        <include domain="sharedpref" path="ui_prefs.xml" />
+        <include domain="sharedpref" path="offload_permissions.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <include domain="database" path="minis.db" />
+        <include domain="database" path="skills.db" />
+        <include domain="database" path="mcp.db" />
+        <include domain="file" path="minis-workspaces" />
+        <include domain="file" path="minis-global" />
+        <include domain="file" path="skills" />
+        <include domain="sharedpref" path="appearance_prefs.xml" />
+        <include domain="sharedpref" path="minis_settings.xml" />
+        <include domain="sharedpref" path="minis_memory_prefs.xml" />
+        <include domain="sharedpref" path="session_list_ui.xml" />
+        <include domain="sharedpref" path="ui_prefs.xml" />
+        <include domain="sharedpref" path="offload_permissions.xml" />
+    </device-transfer>
+</data-extraction-rules>

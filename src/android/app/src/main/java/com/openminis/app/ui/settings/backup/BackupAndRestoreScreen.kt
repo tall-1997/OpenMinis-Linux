@@ -222,6 +222,7 @@ private fun BackupTab(
     val context = androidx.compose.ui.platform.LocalContext.current
     val selected by vm.selected.collectAsState()
     val encrypt by vm.encrypt.collectAsState()
+    val includeCredentials by vm.includeCredentials.collectAsState()
     val maxFileSizeMB by vm.maxFileSizeMB.collectAsState()
     val running by vm.isRunning.collectAsState()
     val status by vm.statusText.collectAsState()
@@ -279,7 +280,7 @@ private fun BackupTab(
         header = stringResource(R.string.backup_section_include),
         footer = includeFooter,
     ) {
-        val cats = BackupCategory.backupable
+        val cats = BackupCategory.backupable + BackupCategory.optionalLarge
         cats.forEachIndexed { i, cat ->
             CategorySwitchRow(
                 title = stringResource(categoryNameRes(cat)),
@@ -320,6 +321,22 @@ private fun BackupTab(
             stringResource(R.string.backup_encrypt_footer_off)
         },
     ) {
+        val hasSensitiveCategory = BackupCategory.PROVIDERS in selected ||
+            BackupCategory.ENVIRONMENT_VARIABLES in selected ||
+            BackupCategory.MCP_SERVERS in selected
+        if (hasSensitiveCategory) {
+            CategorySwitchRow(
+                title = stringResource(R.string.backup_include_credentials),
+                subtitle = stringResource(R.string.backup_include_credentials_subtitle),
+                icon = Icons.Outlined.Link,
+                iconColor = Color(0xFFFF9500),
+                checked = includeCredentials,
+                onCheckedChange = { vm.setIncludeCredentials(it) },
+                enabled = !running,
+                showDivider = true,
+            )
+        }
+
         CategorySwitchRow(
             title = stringResource(R.string.backup_encrypt_backup),
             icon = Icons.Outlined.Lock,
@@ -1642,6 +1659,8 @@ internal fun categoryNameRes(cat: BackupCategory): Int = when (cat) {
     BackupCategory.MCP_SERVERS -> R.string.backup_category_mcp
     BackupCategory.ENVIRONMENT_VARIABLES -> R.string.backup_category_env_vars
     BackupCategory.VOICE_CORRECTIONS -> R.string.backup_category_voice
+    BackupCategory.ROOTFS -> R.string.backup_category_rootfs
+    BackupCategory.CACHE -> R.string.backup_category_cache
 }
 
 /**
@@ -1658,6 +1677,8 @@ private fun categoryIcon(cat: BackupCategory): ImageVector = when (cat) {
     BackupCategory.MCP_SERVERS -> Icons.Outlined.Layers          // square.stack.3d.up.fill
     BackupCategory.ENVIRONMENT_VARIABLES -> Icons.Outlined.Terminal // terminal.fill
     BackupCategory.VOICE_CORRECTIONS -> Icons.Outlined.RecordVoiceOver // waveform
+    BackupCategory.ROOTFS -> Icons.Outlined.Storage
+    BackupCategory.CACHE -> Icons.Outlined.FolderZip
 }
 
 /** Tint per category, mirroring iOS BackupCategoryIcon.tint(for:). */
@@ -1670,6 +1691,8 @@ private fun categoryTint(cat: BackupCategory): Color = when (cat) {
     BackupCategory.MCP_SERVERS -> Color(0xFF32ADE6)      // cyan
     BackupCategory.ENVIRONMENT_VARIABLES -> Color(0xFFA2845E) // brown
     BackupCategory.VOICE_CORRECTIONS -> Color(0xFFAF52DE) // purple
+    BackupCategory.ROOTFS -> Color(0xFF34C759)             // green
+    BackupCategory.CACHE -> Color(0xFF8E8E93)              // gray
 }
 
 /**

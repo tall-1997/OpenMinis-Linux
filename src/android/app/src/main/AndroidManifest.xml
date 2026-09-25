@@ -160,6 +160,10 @@
     <application
         android:name=".MinisApp"
         android:allowBackup="true"
+        android:backupAgent=".backup.MinisBackupAgent"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:restoreAnyVersion="true"
         android:largeHeap="true"
         android:requestLegacyExternalStorage="true"
         android:preserveLegacyExternalStorage="true"

@@ -206,6 +206,14 @@ class BackupImporter(
                         BackupCategory.CHATS -> importChats(work, fileIndex, report0)
                         BackupCategory.SHARED_FILES -> importSharedFiles(work, fileIndex)
                         BackupCategory.SKILLS -> importSkills(work, fileIndex)
+                        BackupCategory.ROOTFS -> importTree(
+                            work, fileIndex, BackupCategory.ROOTFS,
+                            File(context.filesDir, "ubuntu-rootfs"), "rootfs/",
+                        )
+                        BackupCategory.CACHE -> importTree(
+                            work, fileIndex, BackupCategory.CACHE,
+                            context.cacheDir, "cache/",
+                        )
                         BackupCategory.MEMORY -> importMemory(work)
                         BackupCategory.MCP_SERVERS -> importMcpServers(work)
                         BackupCategory.PROVIDERS -> importProviders(work)
@@ -582,6 +590,21 @@ class BackupImporter(
         val files = BackupRestoreFiles.restore(root, fileIndex, BackupCategory.SKILLS, dest) { path ->
             if (!path.startsWith("skills/")) null
             else File(dest, path.removePrefix("skills/"))
+        }
+        applyFileResult(report, files)
+        return report
+    }
+
+    private fun importTree(
+        root: File,
+        fileIndex: List<BackupFileIndexEntry>,
+        category: BackupCategory,
+        dest: File,
+        prefix: String,
+    ): CategoryReport {
+        val report = CategoryReport(category.key)
+        val files = BackupRestoreFiles.restore(root, fileIndex, category, dest) { path ->
+            if (!path.startsWith(prefix)) null else File(dest, path.removePrefix(prefix))
         }
         applyFileResult(report, files)
         return report
@@ -986,6 +1009,8 @@ class BackupImporter(
             BackupCategory.CHATS,
             BackupCategory.SHARED_FILES,
             BackupCategory.SKILLS,
+            BackupCategory.ROOTFS,
+            BackupCategory.CACHE,
             BackupCategory.MEMORY,
             BackupCategory.MCP_SERVERS,
             // Providers before env-vars: both pull VALUES from secrets.json, but
