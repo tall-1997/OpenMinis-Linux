@@ -24,8 +24,15 @@ env:
   GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=1g"
 
 jobs:
+  native-deps:
+    uses: ./.github/workflows/native-deps.yml
+
+  sandbox-assets:
+    uses: ./.github/workflows/sandbox-assets.yml
+
   build:
     name: Build Minis Ultra APK
+    needs: [native-deps, sandbox-assets]
     runs-on: ubuntu-22.04
     timeout-minutes: 180
     steps:
@@ -70,32 +77,33 @@ jobs:
           echo "ANDROID_NDK_HOME=/usr/local/lib/android/sdk/ndk/${ANDROID_NDK}" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_ROOT=/usr/local/lib/android/sdk/ndk/${ANDROID_NDK}" >> "$GITHUB_ENV"
 
-      - name: Build PRoot
-        run: |
-          chmod +x deps/build_proot.sh
-          ANDROID_NDK_HOME="/usr/local/lib/android/sdk/ndk/${ANDROID_NDK}" bash deps/build_proot.sh
+      - name: Download native dependencies
+        uses: actions/download-artifact@v4
+        with:
+          name: native-deps-${{ github.sha }}
+          path: /tmp/native-deps
 
-      - name: Prepare Ubuntu sandbox + SDK assets
+      - name: Install native dependencies
         run: |
-          chmod +x scripts/prepare_android_sandbox.sh
-          bash scripts/prepare_android_sandbox.sh
-          test -f src/android/app/src/main/assets/ubuntu-base.tar.gz
-          test -f src/android/app/src/main/assets/android-sdk-tools-aarch64.zip
-          test -f src/android/app/src/main/assets/android-cmdline-tools.zip
+          mkdir -p src/android/app/src/main/assets src/android/app/src/main/jniLibs/arm64-v8a src/android/app/libs
+          cp /tmp/native-deps/assets/proot-aarch64 src/android/app/src/main/assets/
+          cp /tmp/native-deps/jniLibs/arm64-v8a/libproot.so src/android/app/src/main/jniLibs/arm64-v8a/
+          cp /tmp/native-deps/libs/rclone.aar src/android/app/libs/rclone.aar
+          find /usr/local/lib/android/sdk/ndk/${ANDROID_NDK}/toolchains/llvm/prebuilt -path '*sysroot/usr/lib/aarch64-linux-android' -type d -print0 | while IFS= read -r -d '' d; do cp /tmp/native-deps/libunwind.a "$d/libunwind.a"; done
 
-      - name: Build rclone.aar
+      - name: Download sandbox assets
+        uses: actions/download-artifact@v4
+        with:
+          name: sandbox-assets-${{ github.sha }}
+          path: /tmp/sandbox-assets
+
+      - name: Install embedded sandbox assets
         run: |
-          curl -sL -o /tmp/go.tar.gz https://go.dev/dl/go1.25.0.linux-amd64.tar.gz
-          sudo tar -C /usr/local -xzf /tmp/go.tar.gz
-          export PATH=/usr/local/go/bin:$PATH
-          go version
-          go install golang.org/x/mobile/cmd/gomobile@latest
-          export PATH=$PATH:$(go env GOPATH)/bin
-          gomobile init
-          chmod +x deps/build_rclone_android.sh
-          ANDROID_NDK_HOME="/usr/local/lib/android/sdk/ndk/${ANDROID_NDK}" bash deps/build_rclone_android.sh
-          mkdir -p src/android/app/libs
-          cp deps/build/rclone/rclone.aar src/android/app/libs/rclone.aar
+          for f in ubuntu-base.tar.gz android-sdk-tools-aarch64.zip android-cmdline-tools.zip; do
+            src=$(find /tmp/sandbox-assets -name "$f" -type f -print -quit)
+            test -n "$src" && test -s "$src"
+            cp "$src" "src/android/app/src/main/assets/$f"
+          done
 
       - name: Provider customization stub
         run: |
@@ -119,18 +127,6 @@ jobs:
           else
             echo "No upload keystore — APK will be debug-signed (cannot replace a differently signed install)"
           fi
-
-      - name: Cross-compile libunwind.a for aarch64
-        env:
-          ANDROID_NDK_HOME: /usr/local/lib/android/sdk/ndk/${{ env.ANDROID_NDK }}
-          LLVM_SRC: ${{ github.workspace }}/.llvm-libunwind
-          LIBUNWIND_BUILD: ${{ runner.temp }}/libunwind-build
-        run: |
-          chmod +x scripts/build_libunwind_aarch64.sh
-          bash scripts/build_libunwind_aarch64.sh "$ANDROID_NDK_HOME"
-          A=$(find "$ANDROID_NDK_HOME" -path '*sysroot/usr/lib/aarch64-linux-android*' -name libunwind.a | head -n 1)
-          test -n "$A" && test -f "$A"
-          echo "aarch64 libunwind.a: $A"
 
       - name: Assemble release APK
         working-directory: src/android

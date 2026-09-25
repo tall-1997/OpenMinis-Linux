@@ -1,0 +1,31 @@
+name: Sandbox assets
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-sandbox-assets:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare embedded sandbox assets
+        run: |
+          chmod +x scripts/prepare_android_sandbox.sh
+          bash scripts/prepare_android_sandbox.sh
+          for f in ubuntu-base.tar.gz android-sdk-tools-aarch64.zip android-cmdline-tools.zip; do
+            test -s "src/android/app/src/main/assets/$f"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sandbox-assets-${{ github.sha }}
+          path: |
+            src/android/app/src/main/assets/ubuntu-base.tar.gz
+            src/android/app/src/main/assets/android-sdk-tools-aarch64.zip
+            src/android/app/src/main/assets/android-cmdline-tools.zip
+          if-no-files-found: error
+          retention-days: 7
