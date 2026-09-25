@@ -569,15 +569,13 @@ object SessionActivityTracker {
     }
 
     /**
-     * Notification session count = streaming sessions if any, otherwise
-     * presence count. The user sees "1 session — Streaming…" while a
-     * turn runs, and "1 session — In session" while they're composing
-     * but idle. Two-bucket display keeps the count honest without
-     * double-counting a session that's both present and streaming.
+     * [T-android-notif-running-count] The notification count reflects RUNNING
+     * agent tasks only. It previously fell back to the presence count, which
+     * counted every open chat / workspace member and made one running turn
+     * look like several running sessions. Presence still keeps the service
+     * alive — it just must not inflate the running count.
      */
-    private fun sessionCountForNotification(): Int =
-        if (_activeSessions.value.isNotEmpty()) _activeSessions.value.size
-        else _presentSessions.value.size
+    private fun sessionCountForNotification(): Int = _activeSessions.value.size
 
     /**
      * Tool status fallback: when nothing is streaming, expose "In session"

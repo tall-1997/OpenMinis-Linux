@@ -2,6 +2,7 @@ package com.openminis.app.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.openminis.app.data.UpdateVersionLogic
 import com.openminis.app.logging.AppLogger
 import org.json.JSONObject
 import java.io.File
@@ -159,6 +160,11 @@ object PendingUpdateStore {
             clearPendingIntent(context)
             return null
         }
+        if (isStaleForRunningBuild(context, intent.targetVersionName)) {
+            AppLogger.info(TAG, "pending intent ${intent.targetVersionName} superseded; clearing")
+            clearPendingIntent(context)
+            return null
+        }
         return intent
     }
 
@@ -201,7 +207,41 @@ object PendingUpdateStore {
             clearPending(context)
             return null
         }
+        if (isStaleForRunningBuild(context, pending.targetVersionName)) {
+            AppLogger.info(
+                TAG,
+                "pending update ${pending.targetVersionName} superseded by running build; clearing",
+            )
+            clearPending(context)
+            return null
+        }
         return pending
+    }
+
+    /**
+     * True when [targetVersionName] would NOT upgrade the running build.
+     * Guards against the "already latest but still asked to install" bug:
+     * the record survives `markInstallLaunched` by design, so the only
+     * reliable "install succeeded" signal is the running build itself.
+     */
+    internal fun isStaleForRunningBuild(context: Context, targetVersionName: String): Boolean {
+        if (targetVersionName.isBlank()) return false
+        val installed = try {
+            val pm = context.packageManager
+            val info = if (android.os.Build.VERSION.SDK_INT >= 33) {
+                pm.getPackageInfo(context.packageName, android.content.pm.PackageManager.PackageInfoFlags.of(0))
+            } else {
+                @Suppress("DEPRECATION")
+                pm.getPackageInfo(context.packageName, 0)
+            }
+            info.versionName ?: com.openminis.app.BuildConfig.VERSION_NAME
+        } catch (_: Exception) {
+            com.openminis.app.BuildConfig.VERSION_NAME
+        }
+        return UpdateVersionLogic.compareVersions(
+            targetVersionName,
+            UpdateVersionLogic.normalizeTag(installed),
+        ) <= 0
     }
 
     fun clearPending(context: Context) {

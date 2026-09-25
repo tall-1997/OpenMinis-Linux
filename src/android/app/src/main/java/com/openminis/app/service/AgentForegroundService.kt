@@ -780,9 +780,9 @@ class AgentForegroundService : Service() {
 
     private fun postOngoingNotification() {
         try {
-            val sessions = SessionActivityTracker.activeSessions.value
-            val count = if (sessions.isNotEmpty()) sessions.size
-            else SessionActivityTracker.presentSessions.value.size
+            // [T-android-notif-running-count] Active streams only; presence
+            // must not inflate the running-task count.
+            val count = SessionActivityTracker.activeSessions.value.size
             val notification = buildNotification(
                 count,
                 SessionActivityTracker.currentToolStatus.value,

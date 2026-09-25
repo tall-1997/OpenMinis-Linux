@@ -564,6 +564,14 @@ class ChatViewModel(
     private var loadedMessageOffset = 0
     private var loadedMessageTotal = 0
     private var loadingOlderMessages = false
+
+    /**
+     * Index (in DB order from the session start) of the first row that
+     * [agentHistory] currently covers after the windowed cold-open parse.
+     * Rows before it exist in `_messages` only when the user loaded older
+     * UI history; their LLM forms are parsed on demand before send.
+     */
+    private var llmHistoryStartOffset = 0
     /**
      * Current tail cap. Reflective via [uiMessages]; bump with
      * [loadOlderMessages] when the user scrolls past the windowed top.
@@ -701,7 +709,18 @@ class ChatViewModel(
                         page.map { it.toLLMMessage() }
                     }
                     _messages.value = older + _messages.value
-                    agentHistory.addAll(0, olderHistory)
+                    // [T-android-coldopen-window-parse] Only rows ABOVE the
+                    // previously parsed window belong in agentHistory; rows
+                    // inside it were already parsed at load time (or by an
+                    // earlier extend) and would duplicate the prefix.
+                    val parseCount = (llmHistoryStartOffset - newOffset).coerceIn(0, page.size)
+                    if (parseCount > 0) {
+                        val parsed = withContext(Dispatchers.IO) {
+                            page.take(parseCount).map { it.toLLMMessage() }
+                        }
+                        agentHistory.addAll(0, parsed)
+                        llmHistoryStartOffset = newOffset
+                    }
                     loadedMessageOffset = newOffset
                     _visibleMessageCap.value = plan.nextVisibleCap
                 }
@@ -4279,9 +4298,24 @@ class ChatViewModel(
                 // bulk-append to `agentHistory` on Main below; loadSession
                 // runs once at init before any other writer touches
                 // agentHistory, so a bulk addAll is race-free.
-                val llm = ArrayList<LLMMessage>(rows.size)
+                //
+                // [T-android-coldopen-window-parse] Only parse the rows the
+                // first paint actually shows. toChatMessages + toLLMMessage on
+                // all ~400 tail rows made every session (re)entry re-parse the
+                // full tail even though uiMessages caps rendering at
+                // INITIAL_VISIBLE_MESSAGE_CAP. Rows beyond the cap are parsed
+                // lazily by loadOlderMessages; for the LLM history the tail
+                // beyond the cap is also what providers need first, so
+                // restricting here keeps first-paint O(window) without
+                // changing send-path behavior.
+                val windowRows = if (rows.size > INITIAL_VISIBLE_MESSAGE_CAP) {
+                    rows.subList(rows.size - INITIAL_VISIBLE_MESSAGE_CAP, rows.size)
+                } else {
+                    rows
+                }
+                val llm = ArrayList<LLMMessage>(windowRows.size)
                 var totalPartsChars = 0L
-                for (entity in rows) {
+                for (entity in windowRows) {
                     totalPartsChars += entity.partsJson.length
                     llm.add(entity.toLLMMessage())
                 }
@@ -4304,6 +4338,13 @@ class ChatViewModel(
             val ordered = loaded.ordered
             loadedMessageTotal = loaded.totalMessages
             loadedMessageOffset = loaded.firstMessageOffset
+            // [T-android-coldopen-window-parse] agentHistory covers only the
+            // newest INITIAL_VISIBLE_MESSAGE_CAP DB rows; the skipped prefix
+            // of the tail (if any) is parsed lazily by loadOlderMessages.
+            // Counted in DB rows, not UI messages — toChatMessages merges
+            // tool-result rows, so the UI list is shorter than the tail.
+            val windowedRows = minOf(messages.size, INITIAL_VISIBLE_MESSAGE_CAP)
+            llmHistoryStartOffset = loaded.firstMessageOffset + (messages.size - windowedRows)
             refreshHasOlderMessages()
             loadingOlderMessages = false
             val tHangDiagAfterLoad = tHangDiagBeforeLoad + loaded.loadMs

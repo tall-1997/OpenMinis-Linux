@@ -385,9 +385,6 @@ internal fun buildFlatChatItems(
             .map { messages[it] }
             .firstOrNull { it.role != "system" }
         val isResumeContinuation = prevNonSystem?.role == "assistant"
-        if (!isSystem && !isResumeContinuation) {
-            out.add(dedupe(FlatChatItem.AssistantHeader(message.id)))
-        }
 
         val blocks = message.toolBlocks
         val toolPillBlocks = blocks.filter { it.kind == "tool_use" }
@@ -420,6 +417,31 @@ internal fun buildFlatChatItems(
         }
         val showProcessSummary = foldAiProcess && !isSystem && hasFoldableProcess
         val replyText = AssistantReplyText.joined(blocks)
+        // [T-android-fold-toolonly-blank] A turn whose entire visible payload
+        // is completed thinking/tool cards collapses into the process summary.
+        // Emitting the AssistantHeader row above an otherwise empty turn left
+        // header padding + spacedBy(2.dp) rendered as a large blank band in the
+        // reverse-layout list. Compute whether anything besides the summary
+        // will actually render and skip the header when it will not.
+        val headerVisibleInBlocks = blocks.any { block ->
+            when (block.kind) {
+                "text" -> block.content.isNotEmpty()
+                "info" -> true
+                "thinking" -> !showProcessSummary || processExpanded || block.id == liveThinkingId
+                "tool_use" -> shouldShowProcessToolRow(
+                    block,
+                    showCompletedToolCards = showCompletedToolCards,
+                    showProcessSummary = showProcessSummary,
+                    processExpanded = processExpanded,
+                )
+                else -> false
+            }
+        }
+        val headerHiddenByFold = showProcessSummary && !headerVisibleInBlocks &&
+            message.content.isBlank() && message.error == null
+        if (!isSystem && !isResumeContinuation && !headerHiddenByFold) {
+            out.add(dedupe(FlatChatItem.AssistantHeader(message.id)))
+        }
         blocks.forEachIndexed { index, block ->
             when (block.kind) {
                 "text" -> {
