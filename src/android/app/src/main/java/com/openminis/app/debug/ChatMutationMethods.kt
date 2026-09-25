@@ -85,8 +85,7 @@ internal object ChatMutationMethods {
         )
 
         // Re-read DB to pick up the latest message metadata after the run.
-        val msgs = app.chatRepository.dao.loadMessages(sessionId)
-        val userMsg = msgs.lastOrNull { it.role == "user" }
+        val userMsg = app.chatRepository.dao.lastMessageByRole(sessionId, "user")
         val displayedModelName = overrideName ?: app.chatRepository.dao.getSession(sessionId)?.let { resolveDisplay(context, it.modelId) }
         return JSONObject().apply {
             put("sessionId", sessionId)
@@ -183,14 +182,13 @@ internal object ChatMutationMethods {
         val app = app(context)
         val s = app.chatRepository.dao.getSession(sessionId)
             ?: throw RPCException(-32602, "Session not found")
-        val msgs = app.chatRepository.dao.loadMessages(sessionId)
-        val lastMsg = msgs.lastOrNull()
+        val lastMsg = app.chatRepository.dao.lastMessage(sessionId)
         return JSONObject().apply {
             put("sessionId", sessionId)
             put("title", s.title ?: JSONObject.NULL)
             put("modelName", resolveDisplay(context, s.modelId))
             put("isRunning", com.openminis.app.service.SessionActivityTracker.isActive(sessionId))
-            put("messageCount", msgs.size)
+            put("messageCount", app.chatRepository.messageCount(sessionId))
             put("lastMessageRole", lastMsg?.role ?: JSONObject.NULL)
             put("updatedAt", s.updatedAt)
         }

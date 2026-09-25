@@ -50,6 +50,70 @@ class ChatRepository(
 
     suspend fun listSessions(): List<ChatSessionEntity> = dao.listSessions()
 
+    /**
+     * [T-android-huge-session-load-oom] Tail-bounded session load for
+     * loadSession-style callers. Returns at most [limit] most-recent messages
+     * (ASC order) plus the session's total row count, so the caller knows how
+     * many older messages exist above the window.
+     *
+     * Rows are fetched in pages of [pageSize] to keep every underlying query
+     * small enough for a CursorWindow (the same invariant as [loadMessagesPage]
+     * — Issue #17's SQLiteBlobTooBigException). The pages walk BACKWARD from
+     * the newest row and are re-assembled oldest-first.
+     */
+    data class SessionTail(
+        val messages: List<com.openminis.app.data.db.MessageEntity>,
+        val totalMessages: Int,
+    )
+
+    suspend fun loadSessionTail(
+        sessionId: String,
+        limit: Int = MAX_TAIL_MESSAGES,
+        pageSize: Int = 50,
+    ): SessionTail {
+        val total = dao.messageCountForSession(sessionId)
+        if (total <= 0) return SessionTail(emptyList(), 0)
+        val want = minOf(limit, total)
+        val oldestWantedSort = total - want // 0-based index of first kept row
+        val out = ArrayList<com.openminis.app.data.db.MessageEntity>(want)
+        var pageStart = oldestWantedSort
+        var remaining = want
+        while (remaining > 0) {
+            val page = dao.loadMessagesPage(sessionId, pageStart, minOf(pageSize, remaining))
+            if (page.isEmpty()) break
+            out.addAll(page)
+            pageStart += page.size
+            remaining -= page.size
+            if (page.size < minOf(pageSize, remaining + page.size)) break
+        }
+        return SessionTail(out, total)
+    }
+
+    /**
+     * [T-android-huge-session-load-oom] Bounded heads for title generation,
+     * content snippets and evolution harvest. Each row carries at most
+     * [headChars] characters of parts_json (SQL-side substr), so a 5.4M-char
+     * session costs a few KB here instead of materialising every 500KB blob.
+     */
+    suspend fun loadMessageHeads(
+        sessionId: String,
+        headChars: Int = 800,
+        limit: Int = 32,
+    ): List<com.openminis.app.data.db.MessageHeadRow> =
+        dao.loadMessageHeads(sessionId, headChars, limit)
+
+    suspend fun loadMessageHeadsByRole(
+        sessionId: String,
+        role: String,
+        headChars: Int = 800,
+        limit: Int = 32,
+        newest: Boolean = false,
+    ): List<com.openminis.app.data.db.MessageHeadRow> = if (newest) {
+        dao.loadMessageHeadsByRoleNewest(sessionId, role, headChars, limit)
+    } else {
+        dao.loadMessageHeadsByRole(sessionId, role, headChars, limit)
+    }
+
     /** All persisted token_usage JSON strings for a session (one per LLM call). */
     suspend fun sessionTokenUsages(sessionId: String): List<String> = dao.tokenUsages(sessionId)
 
@@ -875,6 +939,9 @@ class ChatRepository(
 
     companion object {
         private const val TAG = "ChatRepository"
+
+        /** Hard cap on how many messages [ChatRepository.loadSessionTail] returns in one call. */
+        internal const val MAX_TAIL_MESSAGES = 400
 
         // Session-list preview only needs ~100 chars. Regex.replace on a
         // 500 KB parts_json body was a leftover ICU Matcher.reset path.

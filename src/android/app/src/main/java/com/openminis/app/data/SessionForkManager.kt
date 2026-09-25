@@ -59,7 +59,7 @@ class SessionForkManager(
             AppLogger.warning(TAG, "duplicateSession: $sessionId not found")
             return null
         }
-        val messages = chatRepository.loadMessages(sessionId)
+        val messageTotal = chatRepository.messageCount(sessionId)
         val dupTitle = "${source.title ?: "Chat"} (Copy)"
         val new = chatRepository.createSession(
             modelId = source.modelId,
@@ -95,16 +95,22 @@ class SessionForkManager(
         // (id + sortOrder), so no re-query is needed. Aligns iOS e8ac8b82.
         val oldToNewId = HashMap<String, String>()
         val oldToNewSort = HashMap<String, Int>()
-        for (msg in messages) {
-            val newMsg = chatRepository.appendMessage(
-                sessionId = new.id,
-                role = msg.role,
-                partsJson = msg.partsJson,
-                tokenUsage = msg.tokenUsage,
-                reasoningContent = msg.reasoningContent,
-            )
-            oldToNewId[msg.id] = newMsg.id
-            oldToNewSort[msg.id] = newMsg.sortOrder
+        var offset = 0
+        while (offset < messageTotal) {
+            val page = chatRepository.dao.loadMessagesPage(sessionId, offset, 50)
+            if (page.isEmpty()) break
+            for (msg in page) {
+                val newMsg = chatRepository.appendMessage(
+                    sessionId = new.id,
+                    role = msg.role,
+                    partsJson = msg.partsJson,
+                    tokenUsage = msg.tokenUsage,
+                    reasoningContent = msg.reasoningContent,
+                )
+                oldToNewId[msg.id] = newMsg.id
+                oldToNewSort[msg.id] = newMsg.sortOrder
+            }
+            offset += page.size
         }
 
         // [T-session-duplicate-compact-marker-android] Copy compact markers
@@ -166,7 +172,7 @@ class SessionForkManager(
 
         AppLogger.info(
             TAG,
-            "duplicated session $sessionId → ${new.id} (${messages.size} msgs, " +
+            "duplicated session $sessionId → ${new.id} (${messageTotal} msgs, " +
                 "category=${source.category}, modelBinding=${source.modelBinding}, " +
                 "memoryEnabled=${source.memoryEnabled})",
         )

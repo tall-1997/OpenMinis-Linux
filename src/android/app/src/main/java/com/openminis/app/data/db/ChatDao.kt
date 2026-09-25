@@ -28,6 +28,28 @@ data class SessionMetaRow(
 )
 
 /**
+ * [T-android-huge-session-load-oom] Lightweight projection for callers that
+ * only need each message's role and a bounded text head (title generation,
+ * content-search snippets, evolution harvest). SQL `substr` bounds the
+ * payload BEFORE it crosses the CursorWindow, so a 5.4M-char session costs
+ * ~4.6k chars here instead of materialising every 500KB parts_json blob.
+ */
+data class MessageHeadRow(
+    val id: String,
+    val role: String,
+    @ColumnInfo(name = "created_at") val createdAt: Long,
+    @ColumnInfo(name = "head_text") val headText: String?,
+)
+
+data class MessageCountRow(val count: Int)
+
+data class MessageUsageRow(
+    val id: String,
+    @ColumnInfo(name = "created_at") val createdAt: Long,
+    @ColumnInfo(name = "token_usage") val tokenUsage: String,
+)
+
+/**
  * Row projection for `ChatRepository.searchMessages` (T188 — backing
  * the `minis-sessions-cli search` offload command). Same RawQuery
  * pattern as [SessionMetaRow] — keyword count varies per call, so the
@@ -179,6 +201,38 @@ interface ChatDao {
     @Query("SELECT * FROM messages WHERE session_id = :sessionId ORDER BY sort_order ASC")
     suspend fun loadMessages(sessionId: String): List<MessageEntity>
 
+    @Query("SELECT * FROM messages WHERE id = :messageId AND session_id = :sessionId LIMIT 1")
+    suspend fun getMessage(sessionId: String, messageId: String): MessageEntity?
+
+    @Query("SELECT * FROM messages WHERE session_id = :sessionId ORDER BY sort_order DESC LIMIT 1")
+    suspend fun lastMessage(sessionId: String): MessageEntity?
+
+    @Query("SELECT * FROM messages WHERE session_id = :sessionId AND role = :role ORDER BY sort_order DESC LIMIT 1")
+    suspend fun lastMessageByRole(sessionId: String, role: String): MessageEntity?
+    /**
+     * [T-android-huge-session-load-oom] Tail-bounded variant of [loadMessages].
+     *
+     * A 4562-message / 5.4M-char session crashed the process: loading EVERY row
+     * kept three full copies alive at once (raw MessageEntity list + the
+     * toChatMessages UI transform + the toLLMMessage history rebuild), pushing
+     * RSS to 2.3GB -> GC storm -> Scudo OOM -> SIGABRT restart loop. The UI tail
+     * window (`uiMessages` cap 200) and the request-boundary `ContextPolicy`
+     * only bound what is RENDERED and SENT - nothing bounded what loadSession
+     * KEPT.
+     *
+     * [offset] must be non-negative; callers pass `max(0, total - limit)` so the
+     * query selects the LAST [limit] rows. The list arrives in sort_order ASC
+     * (same order as [loadMessages]). When total <= limit the offset is 0 and
+     * this degrades to the full history - identical to [loadMessages].
+     */
+    @Query("""
+        SELECT * FROM messages
+        WHERE session_id = :sessionId
+        ORDER BY sort_order ASC
+        LIMIT :limit OFFSET :offset
+    """)
+    suspend fun loadMessagesTail(sessionId: String, limit: Int, offset: Int): List<MessageEntity>
+
     @Query("SELECT * FROM messages WHERE session_id = :sessionId ORDER BY sort_order ASC")
     fun observeMessages(sessionId: String): Flow<List<MessageEntity>>
 
@@ -213,6 +267,14 @@ interface ChatDao {
 
     @Query("SELECT token_usage FROM messages WHERE session_id = :sessionId AND token_usage IS NOT NULL")
     suspend fun tokenUsages(sessionId: String): List<String>
+
+    @Query("""
+        SELECT id, created_at, token_usage
+        FROM messages
+        WHERE session_id = :sessionId AND token_usage IS NOT NULL
+        ORDER BY sort_order ASC
+    """)
+    suspend fun messageUsages(sessionId: String): List<MessageUsageRow>
 
     /**
      * Fetch all token usage records joined with session model_id for aggregation.
@@ -395,6 +457,12 @@ interface ChatDao {
     @RawQuery
     suspend fun runMessageSearchQuery(query: SupportSQLiteQuery): List<MessageSearchRow>
 
+    @RawQuery
+    suspend fun runMessagesQuery(query: SupportSQLiteQuery): List<MessageEntity>
+
+    @RawQuery
+    suspend fun runMessageCountQuery(query: SupportSQLiteQuery): MessageCountRow
+
     /**
      * Paginated message page for `minis-sessions-cli messages --offset --limit`.
      * Sorted by `sort_order ASC` (stable insertion order) with `created_at ASC`
@@ -438,6 +506,84 @@ interface ChatDao {
      *  alongside the paginated slice so callers can compute `hasMore`. */
     @Query("SELECT COUNT(*) FROM messages WHERE session_id = :sessionId")
     suspend fun messageCountForSession(sessionId: String): Int
+    /**
+     * [T-android-huge-session-load-oom] Title / snippet / harvest callers only
+     * need the first USER text head of a session (plus its char length to
+     * detect blankness). Extracting `value` in SQL via json_extract would be
+     * ideal but org.json-style parts are a JSON ARRAY whose text parts are
+     * objects; SQLite's json1 IS available on Android 9+ (minSdk 26), so this
+     * stays a plain substring head and the caller re-parses only [limit]
+     * bounded rows. `head_chars` bounds each row's payload at the CURSOR, so a
+     * 5.4M-char parts_json costs <= head_chars + overhead per row here — never
+     * the full blob.
+     */
+    @Query("""
+        SELECT id, role, created_at,
+               substr(parts_json, 1, :headChars) AS head_text
+        FROM messages
+        WHERE session_id = :sessionId
+        ORDER BY sort_order ASC, created_at ASC
+        LIMIT :limit
+    """)
+    suspend fun loadMessageHeads(sessionId: String, headChars: Int, limit: Int): List<MessageHeadRow>
+
+    @Query("""
+        SELECT id, role, created_at,
+               substr(parts_json, 1, :headChars) AS head_text
+        FROM messages
+        WHERE session_id = :sessionId
+        ORDER BY sort_order DESC, created_at DESC
+        LIMIT :limit
+    """)
+    suspend fun loadMessageHeadsNewest(sessionId: String, headChars: Int, limit: Int): List<MessageHeadRow>
+
+    @Query("""
+        SELECT id, role, created_at,
+               substr(parts_json, 1, :headChars) AS head_text
+        FROM messages
+        WHERE session_id = :sessionId AND role = :role
+        ORDER BY sort_order ASC, created_at ASC
+        LIMIT :limit
+    """)
+    suspend fun loadMessageHeadsByRole(
+        sessionId: String,
+        role: String,
+        headChars: Int,
+        limit: Int,
+    ): List<MessageHeadRow>
+
+    @Query("""
+        SELECT id, role, created_at,
+               substr(parts_json, 1, :headChars) AS head_text
+        FROM messages
+        WHERE session_id = :sessionId AND role = :role
+        ORDER BY sort_order DESC, created_at DESC
+        LIMIT :limit
+    """)
+    suspend fun loadMessageHeadsByRoleNewest(
+        sessionId: String,
+        role: String,
+        headChars: Int,
+        limit: Int,
+    ): List<MessageHeadRow>
+
+    @Query("""
+        SELECT id, role, created_at,
+               substr(parts_json,
+                      max(1, instr(lower(parts_json), lower(:query)) - :radius),
+                      :windowChars) AS head_text
+        FROM messages
+        WHERE session_id = :sessionId
+          AND instr(lower(parts_json), lower(:query)) > 0
+        ORDER BY sort_order ASC, created_at ASC
+        LIMIT 1
+    """)
+    suspend fun findFirstMessageSnippet(
+        sessionId: String,
+        query: String,
+        radius: Int,
+        windowChars: Int,
+    ): MessageHeadRow?
 
     /**
      * [T-android-sessions-cli-messages-daterange] Count under the SAME range as

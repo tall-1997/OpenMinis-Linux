@@ -161,7 +161,7 @@ class EvolutionEngine(
     }
 
     private suspend fun processSession(sessionId: String) {
-        val messages = chatRepository.loadMessages(sessionId)
+        val messages = chatRepository.loadSessionTail(sessionId, limit = 400).messages
         if (messages.isEmpty()) return
         beActive(sessionId, messages)
         harvestSession(sessionId, messages, force = false)
@@ -210,7 +210,7 @@ class EvolutionEngine(
         var n = 0
         for (session in sessions) {
             if (n >= 3) break
-            val messages = chatRepository.loadMessages(session.id)
+            val messages = chatRepository.loadSessionTail(session.id, limit = 400).messages
             if (messages.isEmpty()) continue
             val lastId = messages.last().id
             if (store.watermark(session.id) == lastId) continue
@@ -331,7 +331,7 @@ class EvolutionEngine(
         val userTurns = mutableListOf<String>()
         var transcriptChars = 0
         sessionLoop@ for (session in sessions) {
-            val messages = chatRepository.loadMessages(session.id)
+            val messages = chatRepository.loadSessionTail(session.id, limit = 400).messages
             for (msg in messages) {
                 if (!msg.role.equals("user", true)) continue
                 val raw = ChatRepository.extractTextPreview(msg.partsJson) ?: continue

@@ -212,8 +212,7 @@ internal object HeadlessChatRunner {
         // Best-effort: read the last assistant text from the DB so we don't
         // depend on the in-memory UI list (which may not have flushed yet).
         val app = app(context)
-        val msgs = app.chatRepository.dao.loadMessages(sessionId)
-        val lastAssistant = msgs.lastOrNull { it.role == "assistant" }
+        val lastAssistant = app.chatRepository.dao.lastMessageByRole(sessionId, "assistant")
         val responseText = lastAssistant?.let { extractText(it.partsJson) }
         PromptResult(
             status = if (finished) "Completed" else "Timeout",
@@ -232,16 +231,16 @@ internal object HeadlessChatRunner {
         val app = app(context)
         val vm = viewModel(context, sessionId)
         val targetMsgId = messageId ?: run {
-            val msgs = app.chatRepository.dao.loadMessages(sessionId)
-            msgs.lastOrNull { it.role == "user" }?.id
+            app.chatRepository.dao.lastMessageByRole(sessionId, "user")?.id
                 ?: throw RPCException(-32602, "Session has no user messages")
         }
         // Validate it points at a user message.
-        val all = app.chatRepository.dao.loadMessages(sessionId)
-        val target = all.firstOrNull { it.id == targetMsgId }
+        val target = app.chatRepository.dao.getMessage(sessionId, targetMsgId)
             ?: throw RPCException(-32602, "Message not found in session")
         if (target.role != "user") throw RPCException(-32602, "Target is not a user message")
-        val deletedCount = all.size - all.indexOf(target) - 1
+        val targetSort = target.sortOrder
+        val totalBefore = app.chatRepository.messageCount(sessionId)
+        val deletedCount = (totalBefore - targetSort - 1).coerceAtLeast(0)
 
         // Same readiness gate as prompt() — retryFromMessage hits the same
         // currentProvider-null early-return if invoked before resolve.
@@ -275,8 +274,7 @@ internal object HeadlessChatRunner {
             }
             true
         } ?: false
-        val msgs = app.chatRepository.dao.loadMessages(sessionId)
-        val lastAssistant = msgs.lastOrNull { it.role == "assistant" }
+        val lastAssistant = app.chatRepository.dao.lastMessageByRole(sessionId, "assistant")
         val responseText = lastAssistant?.let { extractText(it.partsJson) }
         PromptResult(
             status = if (finished) "Completed" else "Timeout",
@@ -318,7 +316,7 @@ internal object HeadlessChatRunner {
                 retriedMessageId = assistantMessageId,
             )
         }
-        val before = app.chatRepository.dao.loadMessages(sessionId).size
+        val before = app.chatRepository.messageCount(sessionId)
         // The in-memory assistant bubble id is a volatile `assistant_<ts>`
         // runtime id, not the DB row id a harness reads from chat.messages.list.
         // Resolve the live bubble that owns this tool block; fall back to the
@@ -348,13 +346,12 @@ internal object HeadlessChatRunner {
             if (vm.isStreaming.value) vm.isStreaming.first { !it }
             true
         } ?: false
-        val msgs = app.chatRepository.dao.loadMessages(sessionId)
-        val lastAssistant = msgs.lastOrNull { it.role == "assistant" }
+        val lastAssistant = app.chatRepository.dao.lastMessageByRole(sessionId, "assistant")
         PromptResult(
             status = if (finished) "Completed" else "Timeout",
             responseText = lastAssistant?.let { extractText(it.partsJson) },
             timedOut = !finished,
-            deletedMessageCount = (before - msgs.size).coerceAtLeast(0),
+            deletedMessageCount = (before - app.chatRepository.messageCount(sessionId)).coerceAtLeast(0),
             retriedMessageId = assistantMessageId,
         )
     }

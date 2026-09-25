@@ -79,9 +79,15 @@ class ScheduledTasksViewModel(private val appContext: Context) : ViewModel() {
 
     suspend fun listUserMessages(sessionId: String): List<MessageOption> = withContext(Dispatchers.IO) {
         if (!ready()) return@withContext emptyList()
-        app.chatRepository.loadMessages(sessionId)
-            .filter { it.role == "user" }
-            .map { MessageOption(it.id, extractPreview(it.partsJson), it.createdAt) }
+        app.chatRepository.loadMessageHeadsByRole(
+            sessionId = sessionId,
+            role = "user",
+            headChars = 800,
+            limit = 500,
+            newest = true,
+        ).asReversed().map {
+            MessageOption(it.id, extractPreview(it.headText.orEmpty()), it.createdAt)
+        }
     }
 
     /** Best-effort human-readable label for a `model_binding` JSON string —

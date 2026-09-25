@@ -75,7 +75,7 @@ internal object ChatDebugMethods {
         val session = repo.dao.getSession(sessionId)
             ?: throw RPCException(-32602, "Session not found")
         val provRepo = provider(context)
-        val msgs = repo.dao.loadMessages(sessionId)
+        val messageCount = repo.messageCount(sessionId)
         return JSONObject().apply {
             put("id", session.id)
             put("title", session.title ?: JSONObject.NULL)
@@ -85,7 +85,7 @@ internal object ChatDebugMethods {
             put("isRunning", SessionActivityTracker.isActive(session.id))
             put("memoryEnabled", session.memoryEnabled == 1)
             put("category", session.category ?: JSONObject.NULL)
-            put("messageCount", msgs.size)
+            put("messageCount", messageCount)
             put("createdAt", session.createdAt)
             put("updatedAt", session.updatedAt)
         }
@@ -109,15 +109,29 @@ internal object ChatDebugMethods {
 
         val repo = chat(context)
         repo.dao.getSession(sessionId) ?: throw RPCException(-32602, "Session not found")
-        val all = repo.dao.loadMessages(sessionId)
-        val filtered = if (rolesFilter == null) all else all.filter { it.role in rolesFilter }
-        val sliced = filtered.drop(offset).take(limit)
+        val roleClause = rolesFilter?.takeIf { it.isNotEmpty() }?.let {
+            " AND role IN (${it.joinToString(",") { "?" }})"
+        } ?: ""
+        val args = mutableListOf<Any>(sessionId)
+        if (rolesFilter != null) args.addAll(rolesFilter)
+        val countSql = "SELECT COUNT(*) AS count FROM messages WHERE session_id = ?$roleClause"
+        val totalCount = repo.dao.runMessageCountQuery(
+            androidx.sqlite.db.SimpleSQLiteQuery(countSql, args.toTypedArray())
+        ).count
+        val pageArgs = args.toMutableList()
+        pageArgs += limit
+        pageArgs += offset
+        val pageSql = "SELECT * FROM messages WHERE session_id = ?$roleClause " +
+            "ORDER BY sort_order ASC, created_at ASC LIMIT ? OFFSET ?"
+        val sliced = repo.dao.runMessagesQuery(
+            androidx.sqlite.db.SimpleSQLiteQuery(pageSql, pageArgs.toTypedArray())
+        )
 
         val arr = JSONArray()
         for (m in sliced) arr.put(messageToJson(m, includeTools, includeReasoning))
         return JSONObject().apply {
             put("sessionId", sessionId)
-            put("totalCount", filtered.size)
+            put("totalCount", totalCount)
             put("count", arr.length())
             put("messages", arr)
         }
@@ -170,7 +184,7 @@ internal object ChatDebugMethods {
         val perTurn = params.optBoolean("perTurn", false)
         val repo = chat(context)
         repo.dao.getSession(sessionId) ?: throw RPCException(-32602, "Session not found")
-        val msgs = repo.dao.loadMessages(sessionId)
+        val msgs = repo.dao.messageUsages(sessionId)
 
         var totalIn = 0L
         var totalOut = 0L
@@ -182,7 +196,7 @@ internal object ChatDebugMethods {
 
         for (m in msgs) {
             if (m.role != "assistant") continue
-            val raw = m.tokenUsage ?: continue
+            val raw = m.tokenUsage
             val usage = try { JSONObject(raw) } catch (_: Exception) { continue }
             val ti = usage.optLong("inputTokens", usage.optLong("input_tokens", 0))
             val to = usage.optLong("outputTokens", usage.optLong("output_tokens", 0))

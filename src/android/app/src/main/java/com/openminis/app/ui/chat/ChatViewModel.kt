@@ -557,6 +557,13 @@ class ChatViewModel(
     // Reset on session load (different sessionId) is wired in loadSession.
 
     private val _visibleMessageCap = MutableStateFlow(INITIAL_VISIBLE_MESSAGE_CAP)
+
+    // Database window state. The canonical UI list contains only this loaded
+    // window; older rows are fetched on demand instead of retaining the whole
+    // session and its parsed LLM representation in memory.
+    private var loadedMessageOffset = 0
+    private var loadedMessageTotal = 0
+    private var loadingOlderMessages = false
     /**
      * Current tail cap. Reflective via [uiMessages]; bump with
      * [loadOlderMessages] when the user scrolls past the windowed top.
@@ -636,28 +643,47 @@ class ChatViewModel(
      * ChatScreen uses this to show / hide the "Load older messages" header
      * pill on the LazyColumn.
      */
-    val hasOlderMessages: StateFlow<Boolean> =
-        kotlinx.coroutines.flow.combine(_messages, _visibleMessageCap) { full, cap ->
-            full.size > LONG_SESSION_THRESHOLD && full.size > cap
-        }.stateIn(
-            viewModelScope,
-            kotlinx.coroutines.flow.SharingStarted.Eagerly,
-            false,
-        )
+    private val _hasOlderMessages = MutableStateFlow(false)
+    val hasOlderMessages: StateFlow<Boolean> = _hasOlderMessages.asStateFlow()
 
-    /**
-     * Bump the visible cap by [VISIBLE_MESSAGE_CAP_STEP], saturating at
-     * the total message count. Safe to call when there are no older
-     * messages — it's a no-op (cap clamps to size). Called by the
-     * LazyColumn's "load older" header when the user reaches the top of
-     * the windowed slice.
-     */
+    /** Load one bounded page before the current in-memory window. */
     fun loadOlderMessages() {
-        val totalNow = _messages.value.size
-        if (totalNow <= LONG_SESSION_THRESHOLD) return
-        val next = (_visibleMessageCap.value + VISIBLE_MESSAGE_CAP_STEP).coerceAtMost(totalNow)
-        if (next != _visibleMessageCap.value) {
-            _visibleMessageCap.value = next
+        if (loadingOlderMessages || loadedMessageOffset <= 0) return
+        loadingOlderMessages = true
+        viewModelScope.launch {
+            try {
+                val pageSize = VISIBLE_MESSAGE_CAP_STEP
+                val newOffset = (loadedMessageOffset - pageSize).coerceAtLeast(0)
+                val page = withContext(Dispatchers.IO) {
+                    val rows = ArrayList<com.openminis.app.data.db.MessageEntity>(
+                        loadedMessageOffset - newOffset,
+                    )
+                    var offset = newOffset
+                    while (offset < loadedMessageOffset) {
+                        val chunk = chatRepository.dao.loadMessagesPage(
+                            sessionId,
+                            offset,
+                            minOf(50, loadedMessageOffset - offset),
+                        )
+                        if (chunk.isEmpty()) break
+                        rows.addAll(chunk)
+                        offset += chunk.size
+                    }
+                    rows
+                }
+                if (page.isNotEmpty()) {
+                    val older = withContext(Dispatchers.IO) { page.toChatMessages() }
+                    val olderHistory = withContext(Dispatchers.IO) {
+                        page.map { it.toLLMMessage() }
+                    }
+                    _messages.value = older + _messages.value
+                    agentHistory.addAll(0, olderHistory)
+                    loadedMessageOffset = newOffset
+                    _hasOlderMessages.value = loadedMessageOffset > 0
+                }
+            } finally {
+                loadingOlderMessages = false
+            }
         }
     }
 
@@ -4197,18 +4223,23 @@ class ChatViewModel(
                 val messages: List<com.openminis.app.data.db.MessageEntity>,
                 val ordered: List<ChatMessage>,
                 val llmHistory: List<LLMMessage>,
+                val totalMessages: Int,
+                val firstMessageOffset: Int,
                 val loadMs: Long,
                 val transformMs: Long,
             )
             com.openminis.app.diagnostics.PerfLongCtx.step(sessionId, "db.query.begin")
             val loaded = withContext(Dispatchers.IO) {
                 val tIoBeforeLoad = System.currentTimeMillis()
-                val rows = chatRepository.loadMessages(sessionId)
+                val tail = chatRepository.loadSessionTail(sessionId)
+                val totalMessages = tail.totalMessages
+                val rows = tail.messages
+                val firstMessageOffset = (totalMessages - rows.size).coerceAtLeast(0)
                 val tIoAfterLoad = System.currentTimeMillis()
                 com.openminis.app.diagnostics.PerfLongCtx.step(
                     sessionId,
                     "db.query.end",
-                    "count=${rows.size}",
+                    "count=${rows.size} total=$totalMessages offset=$firstMessageOffset",
                 )
                 val chatUi = rows.toChatMessages()
                 val tIoAfterTransform = System.currentTimeMillis()
@@ -4238,12 +4269,18 @@ class ChatViewModel(
                     messages = rows,
                     ordered = chatUi,
                     llmHistory = llm,
+                    totalMessages = totalMessages,
+                    firstMessageOffset = firstMessageOffset,
                     loadMs = tIoAfterLoad - tIoBeforeLoad,
                     transformMs = tIoAfterTransform - tIoAfterLoad,
                 )
             }
             val messages = loaded.messages
             val ordered = loaded.ordered
+            loadedMessageTotal = loaded.totalMessages
+            loadedMessageOffset = loaded.firstMessageOffset
+            _hasOlderMessages.value = loadedMessageOffset > 0
+            loadingOlderMessages = false
             val tHangDiagAfterLoad = tHangDiagBeforeLoad + loaded.loadMs
             val tHangDiagAfterTransform = tHangDiagAfterLoad + loaded.transformMs
             println(

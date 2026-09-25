@@ -268,10 +268,18 @@ class BackupExporter(
                             }
                             sessions.write("SessionV2", 1, sessionRecord(session))
 
-                            for (msg in dao.loadMessages(session.id)) {
-                                if (msg.createdAt > snapshotAtMillis) continue
-                                messages.write("MessageV2", 1, messageRecord(msg))
-                                messageCount += 1
+                            var messageOffset = 0
+                            while (true) {
+                                val page = dao.loadMessagesPage(session.id, messageOffset, 50)
+                                if (page.isEmpty()) break
+                                for (msg in page) {
+                                    if (msg.createdAt <= snapshotAtMillis) {
+                                        messages.write("MessageV2", 1, messageRecord(msg))
+                                        messageCount += 1
+                                    }
+                                }
+                                messageOffset += page.size
+                                if (page.size < 50) break
                             }
                             for (marker in dao.listCompactMarkers(session.id)) {
                                 markers.write("CompactMarkerV2", 1, markerRecord(marker))
