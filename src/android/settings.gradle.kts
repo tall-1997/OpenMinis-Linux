@@ -68,6 +68,7 @@ dependencyResolutionManagement {
 rootProject.name = "MinisUltra"
 include(":app")
 include(":core:model")
+include(":core:common")
 include(":benchmark")
 
 /**
