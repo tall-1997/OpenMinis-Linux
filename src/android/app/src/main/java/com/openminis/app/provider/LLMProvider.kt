@@ -13,10 +13,48 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withTimeout
+import com.openminis.app.provider.api.ChatRequest
+import com.openminis.app.provider.api.ModelProvider
+import com.openminis.app.provider.api.ProviderCapabilities
+import com.openminis.app.provider.api.StreamEvent
 
-interface LLMProvider {
+interface LLMProvider : ModelProvider {
     val name: String
     var model: LLMModel
+
+    override val id: String get() = name
+    override val capabilities: ProviderCapabilities
+        get() = ProviderCapabilities(
+            streaming = true,
+            images = true,
+            tools = true,
+            thinking = model.supportsReasoning != false,
+            models = false,
+        )
+
+    override suspend fun chat(request: ChatRequest, systemPrompt: String?): LLMResponse =
+        sendMessage(
+            request.messages,
+            systemPrompt ?: request.systemPrompt,
+            request.maxTokens,
+            request.temperature,
+            request.imageParts,
+            request.tools,
+            request.thinkingLevel,
+        )
+
+    override fun streamChat(request: ChatRequest): Flow<StreamEvent> =
+        streamMessage(
+            request.messages,
+            request.systemPrompt,
+            request.maxTokens,
+            request.temperature,
+            request.imageParts,
+            request.tools,
+            request.thinkingLevel,
+        )
+
+    override suspend fun models(): List<LLMModel> = listOf(model)
 
     /**
      * [T-android-nonstream-deadline] Wall-clock ceiling for NON-streaming calls
