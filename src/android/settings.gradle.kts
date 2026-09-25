@@ -1,4 +1,5 @@
 pluginManagement {
+    includeBuild("build-logic")
     val extraMirrors = run {
         val mode = (System.getenv("MINIS_BUILD_MIRRORS") ?: "auto").lowercase()
         val extra = mutableListOf<String>()

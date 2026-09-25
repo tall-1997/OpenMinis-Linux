@@ -1,15 +1,6 @@
 plugins {
-    kotlin("jvm")
+    id("minis.kotlin.library")
     kotlin("plugin.serialization")
-}
-
-java {
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
-}
-
-kotlin {
-    jvmToolchain(17)
 }
 
 dependencies {
