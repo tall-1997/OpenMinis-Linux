@@ -38,7 +38,7 @@ class ScheduledTaskAlarmReceiver : BroadcastReceiver() {
 
         val pending = goAsync()
         val appContext = context.applicationContext
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val scope = (appContext as com.openminis.app.MinisApp).appCoroutineScopes.application
         val startedAt = SystemClock.elapsedRealtime()
         scope.launch {
             try {

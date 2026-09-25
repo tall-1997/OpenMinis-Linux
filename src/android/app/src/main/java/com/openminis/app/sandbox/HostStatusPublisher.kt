@@ -49,7 +49,7 @@ object HostStatusPublisher {
         SandboxFirewall.syncHttpProxy(context)
         if (!started.compareAndSet(false, true)) return
         val app = context.applicationContext
-        job = CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+        job = (app as com.openminis.app.MinisApp).appCoroutineScopes.io.launch {
             while (isActive) {
                 delay(INTERVAL_MS)
                 val r = currentRootfs ?: continue

@@ -27,7 +27,8 @@ class SandboxNotifyActionReceiver : BroadcastReceiver() {
             return
         }
         val pending = goAsync()
-        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+        (context.applicationContext as com.openminis.app.MinisApp)
+            .appCoroutineScopes.io.launch {
             try {
                 AppLogger.info(TAG, "execute action=$action session=$sessionId")
                 ExecutionCoordinator.execute(sessionId, command)

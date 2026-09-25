@@ -4,6 +4,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.suspendCancellableCoroutine
 import java.util.LinkedList
 import kotlin.coroutines.Continuation
@@ -73,7 +74,8 @@ object SessionConcurrencyManager {
                 "holders=${holdersAtWait.joinToString(",")} " +
                 "queueDepth=${_suspendedSessions.value.size}",
         )
-        val watchdog = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+        coroutineScope {
+            val watchdog = launch(kotlinx.coroutines.Dispatchers.IO) {
             var waited = 0L
             while (true) {
                 kotlinx.coroutines.delay(SLOT_WAIT_WARN_MS)
@@ -107,6 +109,7 @@ object SessionConcurrencyManager {
                 "[T-STALL-DIAG] slot WAIT-END sid=$sessionId " +
                     "waitedMs=${android.os.SystemClock.elapsedRealtime() - waitStartMs}",
             )
+        }
         }
     }
 
