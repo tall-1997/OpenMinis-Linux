@@ -244,6 +244,8 @@ tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") && it
 dependencies {
     implementation(project(":core:model"))
     implementation(project(":core:common"))
+    implementation(project(":provider:api"))
+    implementation(project(":hostcapability:api"))
     // Compose BOM
     val composeBom = platform("androidx.compose:compose-bom:2025.09.00")
     implementation(composeBom)
