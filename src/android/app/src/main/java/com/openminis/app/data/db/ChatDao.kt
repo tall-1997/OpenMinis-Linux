@@ -43,6 +43,13 @@ data class MessageHeadRow(
 
 data class MessageCountRow(val count: Int)
 
+data class MessageAnchorRow(
+    val id: String,
+    val role: String,
+    @ColumnInfo(name = "sort_order") val sortOrder: Int,
+    @ColumnInfo(name = "head_text") val headText: String?,
+)
+
 data class MessageUsageRow(
     val id: String,
     val role: String,
@@ -507,6 +514,28 @@ interface ChatDao {
      *  alongside the paginated slice so callers can compute `hasMore`. */
     @Query("SELECT COUNT(*) FROM messages WHERE session_id = :sessionId")
     suspend fun messageCountForSession(sessionId: String): Int
+
+    @Query("""
+        SELECT id FROM messages
+        WHERE session_id = :sessionId
+        ORDER BY sort_order ASC, created_at ASC
+        LIMIT :limit OFFSET :offset
+    """)
+    suspend fun loadMessageIdsPage(sessionId: String, offset: Int, limit: Int): List<String>
+
+    @Query("""
+        SELECT id, role, sort_order, substr(parts_json, 1, :headChars) AS head_text
+        FROM messages
+        WHERE session_id = :sessionId
+        ORDER BY sort_order ASC, created_at ASC
+        LIMIT :limit OFFSET :offset
+    """)
+    suspend fun loadMessageAnchorsPage(
+        sessionId: String,
+        offset: Int,
+        limit: Int,
+        headChars: Int,
+    ): List<MessageAnchorRow>
     /**
      * [T-android-huge-session-load-oom] Title / snippet / harvest callers only
      * need the first USER text head of a session (plus its char length to

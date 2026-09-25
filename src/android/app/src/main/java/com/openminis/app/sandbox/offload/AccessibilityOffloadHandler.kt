@@ -8,6 +8,7 @@ import android.graphics.Rect
 import android.os.Build
 import android.view.Display
 import android.view.accessibility.AccessibilityNodeInfo
+import com.openminis.app.accessibility.AccessibilityQueryGuard
 import com.openminis.app.accessibility.AccessibilityRecoveryManager
 import com.openminis.app.accessibility.MinisAccessibilityService
 import com.openminis.app.accessibility.NodeRegistry
@@ -522,7 +523,7 @@ First-run: enable "Minis Ultra" under Settings → Accessibility, then `service 
         val n = matches.getOrNull(index)
             ?: return err(args, "NODE_NOT_FOUND",
                 "no node with text${if (contains) " containing " else "="}\"$text\" (matches: ${matches.size})")
-        if (n.isClickable) n.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        if (n.isClickable) AccessibilityQueryGuard.query(false) { n.performAction(AccessibilityNodeInfo.ACTION_CLICK) }
         else {
             val r = Rect(); n.getBoundsInScreen(r)
             tapXYRaw(svc, r.centerX(), r.centerY(), args)
@@ -699,11 +700,11 @@ First-run: enable "Minis Ultra" under Settings → Accessibility, then `service 
             if (hit != null) return ok(args, JSONObject()
                 .put("found", true)
                 .put("node", nodeToJson(svc.nodeRegistry, hit, 0, compact = true)))
-            val scrolled = container?.performAction(action) ?: run {
+            val scrolled = container?.let { node -> AccessibilityQueryGuard.query(false) { node.performAction(action) } } ?: run {
                 var any = false
                 for (root in svc.rootNodes()) {
                     val s = firstScrollable(root, 30, 0)
-                    if (s != null) { any = s.performAction(action); break }
+                    if (s != null) { any = AccessibilityQueryGuard.query(false) { s.performAction(action) }; break }
                 }
                 any
             }
@@ -1098,7 +1099,7 @@ First-run: enable "Minis Ultra" under Settings → Accessibility, then `service 
             for (root in svc.rootNodes()) findByTextOrDesc(root, label, contains = false, 30, 0, matches)
             val btn = matches.firstOrNull { it.isClickable } ?: matches.firstOrNull()
             if (btn != null) {
-                val clicked = if (btn.isClickable) btn.performAction(AccessibilityNodeInfo.ACTION_CLICK) else {
+                val clicked = if (btn.isClickable) AccessibilityQueryGuard.query(false) { btn.performAction(AccessibilityNodeInfo.ACTION_CLICK) } else {
                     val r = Rect(); btn.getBoundsInScreen(r)
                     svc.dispatchSimpleGesture(
                         Path().apply { moveTo(r.exactCenterX(), r.exactCenterY()); lineTo(r.exactCenterX() + 0.1f, r.exactCenterY() + 0.1f) },
@@ -1176,7 +1177,7 @@ First-run: enable "Minis Ultra" under Settings → Accessibility, then `service 
                 if (items.size >= maxItems) break
             }
             if (!autoScroll || items.size >= maxItems) break
-            val scrolled = container.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+            val scrolled = AccessibilityQueryGuard.query(false) { container.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD) }
             if (!scrolled) break
             if (!awaitA11yEvent(svc, 400L)) return err(args, "INTERRUPTED", "extract cancelled")
             iter++

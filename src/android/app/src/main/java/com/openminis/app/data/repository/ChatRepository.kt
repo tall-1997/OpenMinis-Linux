@@ -89,6 +89,22 @@ class ChatRepository(
         return SessionTail(out, total)
     }
 
+    suspend fun loadMessageIds(sessionId: String, pageSize: Int = 500): Set<String> {
+        val total = dao.messageCountForSession(sessionId)
+        val ids = HashSet<String>(total.coerceAtLeast(16))
+        var offset = 0
+        while (offset < total) {
+            val page = dao.loadMessageIdsPage(sessionId, offset, pageSize)
+            if (page.isEmpty()) break
+            ids.addAll(page)
+            offset += page.size
+        }
+        return ids
+    }
+
+    suspend fun loadMessagesTail(sessionId: String, limit: Int): List<com.openminis.app.data.db.MessageEntity> =
+        loadSessionTail(sessionId, limit = limit).messages
+
     /**
      * [T-android-huge-session-load-oom] Bounded heads for title generation,
      * content snippets and evolution harvest. Each row carries at most
@@ -473,6 +489,7 @@ class ChatRepository(
             )
             return emptyList()
         }
+        throw IllegalStateException("Unbounded session loading is disabled; page through loadMessagesTail or forEachMessagePage.")
         val total = dao.messageCountForSession(sessionId)
         if (total == 0) return emptyList()
         val out = ArrayList<MessageEntity>(total)

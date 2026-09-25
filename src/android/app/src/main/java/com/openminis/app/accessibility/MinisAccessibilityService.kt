@@ -132,20 +132,14 @@ class MinisAccessibilityService : AccessibilityService() {
         eventListeners.remove(listener)
     }
 
-    fun rootNodes(): List<AccessibilityNodeInfo> {
+    fun rootNodes(): List<AccessibilityNodeInfo> = AccessibilityQueryGuard.query(emptyList()) {
         val out = ArrayList<AccessibilityNodeInfo>()
-        try {
-            for (w in windows ?: emptyList()) {
-                w.root?.let { out.add(it) }
-            }
-        } catch (_: Throwable) {}
-        if (out.isEmpty()) {
-            try { rootInActiveWindow?.let { out.add(it) } } catch (_: Throwable) {}
-        }
-        return out
+        for (w in windows ?: emptyList()) w.root?.let { out.add(it) }
+        if (out.isEmpty()) rootInActiveWindow?.let { out.add(it) }
+        out
     }
 
-    fun windowInfos(): List<Map<String, Any?>> {
+    fun windowInfos(): List<Map<String, Any?>> = AccessibilityQueryGuard.query(emptyList()) {
         val out = ArrayList<Map<String, Any?>>()
         try {
             for (w in windows ?: emptyList()) {
@@ -164,14 +158,12 @@ class MinisAccessibilityService : AccessibilityService() {
                 ))
             }
         } catch (_: Throwable) {}
-        return out
+        out
     }
 
-    fun foregroundPackage(): Pair<String?, String?> {
-        return try {
-            val r = rootInActiveWindow
-            (r?.packageName?.toString()) to (r?.className?.toString())
-        } catch (_: Throwable) { null to null }
+    fun foregroundPackage(): Pair<String?, String?> = AccessibilityQueryGuard.query(null to null) {
+        val r = rootInActiveWindow
+        (r?.packageName?.toString()) to (r?.className?.toString())
     }
 
     fun dispatchSimpleGesture(path: Path, startTime: Long, durationMs: Long, timeoutMs: Long = 5000): Boolean {
@@ -283,6 +275,6 @@ class MinisAccessibilityService : AccessibilityService() {
         val args = Bundle().apply {
             putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
         }
-        return node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+        return AccessibilityQueryGuard.query(false) { node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args) }
     }
 }

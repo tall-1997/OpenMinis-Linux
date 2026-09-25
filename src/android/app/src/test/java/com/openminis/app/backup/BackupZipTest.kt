@@ -92,28 +92,16 @@ class BackupZipTest {
         assertTrue(File(dest, "blobs/ab/abcdef").readBytes().contentEquals(ByteArray(4096) { it.toByte() }))
     }
 
-    /**
-     * The ZIP64 guard. Without it, ZipOutputStream promotes the archive on its
-     * own and iOS reads the saturated 0xFFFF entry count as 65 535 — extracting
-     * a subset and calling the restore a success. Refusing up front is the only
-     * safe behaviour, because the damage is invisible on the writing side.
-     */
     @Test
-    fun `refuses an archive with more entries than the classic EOCD can count`() {
+    fun `one zip restores every file beyond the classic entry count`() {
         val dir = File(tmp, "many").apply { mkdirs() }
-        // Build the file list cheaply — 65 536 empty files, one over the limit.
-        for (i in 0..65_535) File(dir, "f$i").writeBytes(ByteArray(0))
-
-        var message: String? = null
-        try {
-            BackupZip.archive(dir, File(tmp, "too-many.minisbak"))
-        } catch (e: BackupZip.ZipException) {
-            message = e.message
-        }
-        assertTrue(
-            "an over-large entry count must be refused before writing, got: $message",
-            message?.contains("65535") == true,
-        )
+        repeat(65_536) { File(dir, "f$it").writeText("row-$it") }
+        val archive = File(tmp, "many.minisbak")
+        BackupZip.archive(dir, archive)
+        val extracted = File(tmp, "many-out")
+        BackupZip.extract(archive, extracted)
+        assertEquals("row-0", File(extracted, "f0").readText())
+        assertEquals("row-65535", File(extracted, "f65535").readText())
     }
 
     /** §5.5: a malicious package must not write outside the destination. */

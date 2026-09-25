@@ -415,6 +415,8 @@ class ChatViewModel(
         const val INITIAL_VISIBLE_MESSAGE_CAP: Int = 200
         /** Each "load older" tap grows the cap by this many messages. */
         const val VISIBLE_MESSAGE_CAP_STEP: Int = 100
+        const val MAX_LOADED_MESSAGE_WINDOW: Int = 400
+        private const val MAX_AGENT_HISTORY_MESSAGES: Int = 400
         /**
          * Sessions with this many or fewer messages bypass the windowing
          * machinery entirely — the derived `uiMessages` returns the same
@@ -705,24 +707,14 @@ class ChatViewModel(
                 }
                 if (page.isNotEmpty()) {
                     val older = withContext(Dispatchers.IO) { page.toChatMessages() }
-                    val olderHistory = withContext(Dispatchers.IO) {
-                        page.map { it.toLLMMessage() }
-                    }
-                    _messages.value = older + _messages.value
-                    // [T-android-coldopen-window-parse] Only rows ABOVE the
-                    // previously parsed window belong in agentHistory; rows
-                    // inside it were already parsed at load time (or by an
-                    // earlier extend) and would duplicate the prefix.
-                    val parseCount = (llmHistoryStartOffset - newOffset).coerceIn(0, page.size)
-                    if (parseCount > 0) {
-                        val parsed = withContext(Dispatchers.IO) {
-                            page.take(parseCount).map { it.toLLMMessage() }
-                        }
-                        agentHistory.addAll(0, parsed)
-                        llmHistoryStartOffset = newOffset
-                    }
+                    val combined = older + _messages.value
+                    val retained = combined.take(MAX_LOADED_MESSAGE_WINDOW)
+                    _messages.value = retained
                     loadedMessageOffset = newOffset
-                    _visibleMessageCap.value = plan.nextVisibleCap
+                    _visibleMessageCap.value = minOf(
+                        plan.nextVisibleCap,
+                        retained.count { !it.isInternalBridge },
+                    )
                 }
                 refreshHasOlderMessages()
             } finally {
@@ -2197,12 +2189,12 @@ class ChatViewModel(
             // affordance opening a detail sheet (mirrors iOS CompactSummarySheet).
             toolArgs = payload.orEmpty(),
         )
-        _messages.value = _messages.value + ChatMessage(
+        _messages.value = trimLoadedWindow(_messages.value + ChatMessage(
             id = "sysinfo_${System.currentTimeMillis()}",
             role = "system",
             content = "",
             toolBlocks = listOf(block),
-        )
+        ))
     }
 
     /** Replace an assistant bubble's visible text with a translation. Tool cards stay. */
@@ -2543,7 +2535,7 @@ class ChatViewModel(
                 // the original anchorIdx until we find an entry whose id is
                 // both non-empty AND present in rawDbIds.
                 val rawDbIds: Set<String> = try {
-                    chatRepository.dao.loadMessages(sid).map { it.id }.toSet()
+                    chatRepository.loadMessageIds(sid)
                 } catch (e: Exception) {
                     Log.w(TAG, "[Compact] loadMessages for raw-id verify failed: ${e.message}")
                     emptySet()
@@ -4432,7 +4424,7 @@ class ChatViewModel(
             // above to avoid re-parsing partsJson on the UI thread. Safe to
             // bulk-addAll here because loadSession runs once at init before
             // any sender writes into agentHistory.
-            agentHistory.addAll(loaded.llmHistory)
+            appendBoundedHistoryAll(loaded.llmHistory)
             val tHangDiagAfterAgentHistory = System.currentTimeMillis()
             println(
                 "[T-HANG-DIAG] agentHistory rebuilt session=$sessionId tookMs=${tHangDiagAfterAgentHistory - tHangDiagAfterTransform}",
@@ -5484,7 +5476,7 @@ class ChatViewModel(
 
                 // Locate the DB assistant row holding the target tool_use, and
                 // the parts-array index of that tool_use within it.
-                val dbMessages = chatRepository.loadMessages(sid)
+                val dbMessages = chatRepository.loadMessagesTail(sid, MAX_AGENT_HISTORY_MESSAGES)
                 var cutRow: MessageEntity? = null
                 var cutPartIdx = -1
                 outer@ for (entity in dbMessages) {
@@ -5582,12 +5574,8 @@ class ChatViewModel(
                     _streamingById.value = _streamingById.value.filterKeys { it in keptIds }
                 }
 
-                // Rebuild agentHistory from the trimmed DB state.
-                agentHistory.clear()
-                toolLoopDetector.reset()
-                for (entity in chatRepository.loadMessages(sid)) {
-                    agentHistory.add(entity.toLLMMessage())
-                }
+                // Rebuild only the bounded model context from the persisted tail.
+                awaitBoundedHistoryRebuild(sid)
 
                 streamLaunched = runRerunStreamTail(initialProvider, "rerunFromToolBlock")
             } finally {
@@ -5676,48 +5664,12 @@ class ChatViewModel(
             // UI visible user messages are the N-th user msg with actual text content.
             // Count which visible user message this is (0-based).
             val visibleUserIndex = messages.subList(0, index + 1).count { it.role == "user" } - 1
-            val dbMessages = chatRepository.loadMessages(sid)
-            // Walk DB rows, counting visible user messages (those with non-toolResult text)
-            var visibleUserCount = 0
-            var cutoffSortOrder = -1
-            for (entity in dbMessages) {
-                if (entity.role == "user") {
-                    // Check if this user message has visible text (not toolResult-only).
-                    // [T-ios-retry-anchor-synthetic-user] Synthetic user rows the
-                    // agent loop persists WITHOUT a UI bubble — resume()'s
-                    // stop-continue "<system-reminder>" message — must not count,
-                    // or the cutoff anchors one user message too early and the
-                    // retried bubble (plus the whole last turn) is silently
-                    // dropped from the rebuilt history (mirrors the iOS fix).
-                    val hasText = try {
-                        val arr = org.json.JSONArray(entity.partsJson)
-                        (0 until arr.length()).any { i ->
-                            val o = arr.getJSONObject(i)
-                            val v = o.optString("value", "")
-                            o.optString("type") == "text" && v.isNotBlank() &&
-                                !v.trimStart().startsWith("<system-reminder>")
-                        }
-                    } catch (_: Exception) { true }
-                    if (hasText) {
-                        if (visibleUserCount == visibleUserIndex) {
-                            cutoffSortOrder = entity.sortOrder + 1
-                            break
-                        }
-                        visibleUserCount++
-                    }
-                }
-            }
+            val cutoffSortOrder = visibleUserCutoff(sid, visibleUserIndex)?.let { it.sortOrder + 1 } ?: -1
             if (cutoffSortOrder >= 0) {
                 chatRepository.deleteMessagesAfter(sid, cutoffSortOrder)
             }
 
-            // Rebuild agentHistory from remaining DB messages
-            agentHistory.clear()
-            toolLoopDetector.reset()
-            val remaining = chatRepository.loadMessages(sid)
-            for (entity in remaining) {
-                agentHistory.add(entity.toLLMMessage())
-            }
+            awaitBoundedHistoryRebuild(sid)
 
             streamLaunched = runRerunStreamTail(provider, "retryFromMessage")
             } finally {
@@ -5796,22 +5748,17 @@ class ChatViewModel(
 
             // Rebuild agentHistory from what survived, so the next turn is
             // built on the truncated conversation rather than a stale list.
-            agentHistory.clear()
-            toolLoopDetector.reset()
-            val remaining = chatRepository.loadMessages(sid)
-            for (entity in remaining) {
-                agentHistory.add(entity.toLLMMessage())
-            }
+            val tail = awaitBoundedHistoryRebuild(sid)
             // Refresh the session's last-message preview; otherwise the
             // session list keeps quoting a message that no longer exists.
             // An empty remainder clears it rather than leaving the stale text.
             runCatching {
-                chatRepository.updateSessionPreview(sid, remaining.lastOrNull()?.partsJson ?: "[]")
+                chatRepository.updateSessionPreview(sid, tail.lastOrNull()?.partsJson ?: "[]")
             }
             AppLogger.info(
                 TAG,
                 "deleteFromMessage: cut at sortOrder=$cutoffSortOrder, " +
-                    "${deletedMessages.size} message(s) removed, ${remaining.size} remain",
+                    "${deletedMessages.size} message(s) removed, ${tail.size} remain",
             )
         }
     }
@@ -5836,38 +5783,10 @@ class ChatViewModel(
         index: Int,
         target: ChatMessage,
     ): Int {
-        val dbMessages = chatRepository.loadMessages(sid)
-        // Which visible user message anchors the cut, 0-based.
-        // Both a user target and an assistant target anchor to the same
-        // ordinal — the last visible user message at or before `index`. What
-        // differs is only whether the cut lands on that row or just after it,
-        // resolved at the return below.
         val visibleUserIndex = messages.subList(0, index + 1).count { it.role == "user" } - 1
-        // No user turn at or before the target (e.g. deleting from a leading
-        // assistant/system row): everything goes.
         if (visibleUserIndex < 0) return 0
-        var visibleUserCount = 0
-        for (entity in dbMessages) {
-            if (entity.role != "user") continue
-            val hasText = try {
-                val arr = org.json.JSONArray(entity.partsJson)
-                (0 until arr.length()).any { i ->
-                    val o = arr.getJSONObject(i)
-                    val v = o.optString("value", "")
-                    o.optString("type") == "text" && v.isNotBlank() &&
-                        !v.trimStart().startsWith("<system-reminder>")
-                }
-            } catch (_: Exception) { true }
-            if (!hasText) continue
-            if (visibleUserCount == visibleUserIndex) {
-                // Target is that user message → cut AT it (removing it).
-                // Target is a later assistant reply → cut just AFTER it
-                // (keeping the user turn, removing the reply onward).
-                return if (target.role == "user") entity.sortOrder else entity.sortOrder + 1
-            }
-            visibleUserCount++
-        }
-        return -1
+        val anchor = visibleUserCutoff(sid, visibleUserIndex) ?: return -1
+        return if (target.role == "user") anchor.sortOrder else anchor.sortOrder + 1
     }
 
     /**
@@ -6165,52 +6084,11 @@ class ChatViewModel(
         // strictly before `index`, which is the 0-based ordinal of the
         // edited turn itself.
         val visibleUserIndex = messages.subList(0, index).count { it.role == "user" }
-        val dbMessages = chatRepository.loadMessages(sid)
-        var visibleUserCount = 0
-        var cutoffSortOrder = -1
-        for (entity in dbMessages) {
-            if (entity.role == "user") {
-                val hasText = try {
-                    val arr = org.json.JSONArray(entity.partsJson)
-                    (0 until arr.length()).any { i ->
-                        val o = arr.getJSONObject(i)
-                        // [T-android-retry-attachment-loss] Exclude the now-
-                        // persisted <user-attached-files> XML text part so this
-                        // "is this a visible user bubble?" count stays identical
-                        // to pre-XML-persistence behaviour. An attachments-only
-                        // turn must NOT flip to hasText just because the XML
-                        // inventory is now a text part — that would shift the
-                        // retry/edit cutoff onto the wrong message.
-                        // [T-ios-retry-anchor-synthetic-user] Likewise exclude
-                        // resume()'s synthetic stop-continue <system-reminder>
-                        // user row — it has no UI bubble, so counting it shifts
-                        // the cutoff one user message too early.
-                        o.optString("type") == "text" &&
-                            stripAttachedFilesXml(o.optString("value", "")).isNotBlank() &&
-                            !o.optString("value", "").trimStart().startsWith("<system-reminder>")
-                    }
-                } catch (_: Exception) { true }
-                if (hasText) {
-                    if (visibleUserCount == visibleUserIndex) {
-                        // ChatDao.deleteMessagesAfter is `sort_order >= keepCount`
-                        // → passing this row's sortOrder deletes IT and everything
-                        // after, which is exactly what edit semantics want.
-                        cutoffSortOrder = entity.sortOrder
-                        break
-                    }
-                    visibleUserCount++
-                }
-            }
-        }
+        val cutoffSortOrder = visibleUserCutoff(sid, visibleUserIndex)?.sortOrder ?: -1
         if (cutoffSortOrder >= 0) {
             chatRepository.deleteMessagesAfter(sid, cutoffSortOrder)
         }
-        agentHistory.clear()
-        toolLoopDetector.reset()
-        val remaining = chatRepository.loadMessages(sid)
-        for (entity in remaining) {
-            agentHistory.add(entity.toLLMMessage())
-        }
+        val remaining = awaitBoundedHistoryRebuild(sid)
         AppLogger.info(
             TAG_STREAM,
             "✏️ truncateBeforeEdit cutoffSortOrder=$cutoffSortOrder remaining=${remaining.size}"
@@ -6248,7 +6126,7 @@ class ChatViewModel(
             isQueued = true,
             queuedPromptId = prompt.id,
         )
-        _messages.value = _messages.value + chatMsg
+        _messages.value = trimLoadedWindow(_messages.value + chatMsg)
         clearAttachments()
         Log.i(TAG, "Enqueued prompt (${trimmed.length}ch, ${pendingAttachments.size} attachments), queue=${_promptQueue.value.size}")
     }
@@ -6354,7 +6232,7 @@ class ChatViewModel(
         // provider merges them — exactly the regression iOS hit at #579.
         // Empty/whitespace-only bridge text would itself be merged out by
         // some sanitizers; keep a small visible string for parity with iOS.
-        agentHistory.add(
+        appendBoundedHistory(
             LLMMessage(
                 role = LLMMessage.Role.ASSISTANT,
                 content = "(Interrupted mid-task by a new user message. Decide based on the new message and overall context whether the prior task should continue — do not forget or abandon it unless the user explicitly says to stop, or the new message makes clear it is no longer needed.)",
@@ -6384,7 +6262,7 @@ class ChatViewModel(
             bodyPartsJson = queuedPaste?.partsJson,
         )
         val userEntity = chatRepository.appendMessage(sid, "user", userPartsJson)
-        agentHistory.add(
+        appendBoundedHistory(
             LLMMessage(
                 role = LLMMessage.Role.USER,
                 // Expanded for the model; the persisted row above stays small.
@@ -6442,7 +6320,7 @@ class ChatViewModel(
                 isAwaitingModelResponse = true,
                 thinkingLevel = _thinkingLevel.value,
             )
-            _messages.value = _messages.value + queuedUserMsg + nextAssistantMsg
+            _messages.value = trimLoadedWindow(_messages.value + queuedUserMsg + nextAssistantMsg)
             // Note: ChatScreen's `lastUserAppendMs` (the trailing-row
             // ScrollPin send-grace window) is updated reactively by
             // ChatScreen's `LaunchedEffect(messages.size)` user-send hook
@@ -6531,7 +6409,7 @@ class ChatViewModel(
             )
             chatRepository.appendMessage(sid, "user", userPartsJson)
 
-            agentHistory.add(LLMMessage(
+            appendBoundedHistory(LLMMessage(
                 role = LLMMessage.Role.USER,
                 content = drainPaste?.modelText ?: userText,
                 imageParts = prepared.imageParts,
@@ -6750,7 +6628,7 @@ class ChatViewModel(
                 attachmentNames = prepared.attachmentNames + (pasted?.uiNames ?: emptyList()),
                 attachmentUris = prepared.nonImageUris + (pasted?.uiUris ?: emptyList()),
             )
-            _messages.value = _messages.value + userMsg
+            _messages.value = trimLoadedWindow(_messages.value + userMsg)
             val imageParts = prepared.imageParts
 
             // T132: build the user contentParts in iOS order — caption first
@@ -6780,7 +6658,7 @@ class ChatViewModel(
             }
             prepared.attachedFilesXml?.let { userContentParts.add(AgentContentPart.Text(it)) }
 
-            agentHistory.add(LLMMessage(
+            appendBoundedHistory(LLMMessage(
                 role = LLMMessage.Role.USER,
                 content = modelBody,
                 imageParts = imageParts,
@@ -7136,7 +7014,7 @@ class ChatViewModel(
             // toolLoopDetector keeps its accumulated state — completed tools
             // shouldn't be unlearned just because the next turn errored.
             if (poppedAssistant != null) {
-                val dbMessages = chatRepository.loadMessages(sid)
+                val dbMessages = chatRepository.loadMessagesTail(sid, MAX_AGENT_HISTORY_MESSAGES)
                 val trailingAssistantSortOrder = dbMessages
                     .lastOrNull { it.role == "assistant" }?.sortOrder
                 if (trailingAssistantSortOrder != null) {
@@ -7316,6 +7194,7 @@ class ChatViewModel(
                     role = LLMMessage.Role.USER, content = "",
                     contentParts = placeholders,
                 ))
+                trimAgentHistory()
             }
             i++
         }
@@ -7798,11 +7677,11 @@ class ChatViewModel(
         // forced-reasoning model still streams reasoning_content.
         val turnThinkingLevel = _thinkingLevel.value
         withContext(Dispatchers.Main) {
-            _messages.value = _messages.value + ChatMessage(
+            _messages.value = trimLoadedWindow(_messages.value + ChatMessage(
                 id = assistantId, role = "assistant", content = "", isStreaming = true,
                 isAwaitingModelResponse = true,
                 thinkingLevel = turnThinkingLevel,
-            )
+            ))
         }
 
         // Tracks whether the loop was exited via a `break` (any reason — no
@@ -7932,14 +7811,14 @@ class ChatViewModel(
                                 "[Compact] in-loop: dropped empty sealed bubble $sealedId",
                             )
                         }
-                        _messages.value = _messages.value + ChatMessage(
+                        _messages.value = trimLoadedWindow(_messages.value + ChatMessage(
                             id = freshAssistantId,
                             role = "assistant",
                             content = "",
                             isStreaming = true,
                             isAwaitingModelResponse = true,
                             thinkingLevel = turnThinkingLevel,
-                        )
+                        ))
                     }
                     clearStreamFlushState(sealedId)
                     if (_streamingById.value.containsKey(sealedId)) {
@@ -8828,7 +8707,7 @@ class ChatViewModel(
             val turnReasoningContent: String? = turnReasoningBlob
                 ?: turnThinking.toString().takeIf { it.isNotEmpty() }
 
-            agentHistory.add(LLMMessage(
+            appendBoundedHistory(LLMMessage(
                 role = LLMMessage.Role.ASSISTANT,
                 content = turnText,
                 contentParts = assistantParts,
@@ -9356,7 +9235,7 @@ class ChatViewModel(
             val toolResultDbId = persistToolResultMessage(resultParts)
 
             // Add tool results to history
-            agentHistory.add(LLMMessage(
+            appendBoundedHistory(LLMMessage(
                 role = LLMMessage.Role.USER,
                 content = "",
                 contentParts = resultParts,
@@ -11984,7 +11863,7 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
                     "<system-reminder>The user stopped this response. Content may be incomplete.</system-reminder>"
                 ),
             )
-            agentHistory.add(
+            appendBoundedHistory(
                 LLMMessage(
                     role = LLMMessage.Role.ASSISTANT,
                     content = partialText,
@@ -12075,7 +11954,7 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
             val reminder =
                 "<system-reminder>The user stopped the previous response but now wants to continue. Pick up exactly where you left off.</system-reminder>"
             val parts = listOf<AgentContentPart>(AgentContentPart.Text(reminder))
-            agentHistory.add(
+            appendBoundedHistory(
                 LLMMessage(
                     role = LLMMessage.Role.USER,
                     content = reminder,
@@ -12533,6 +12412,102 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
             }
             merged
         }
+    }
+
+
+    /**
+     * Rebuild model context from the newest persisted rows only. The database
+     * remains the complete transcript; no operation may parse the whole session
+     * merely to continue, retry, edit, or delete it.
+     */
+
+    private fun appendBoundedHistory(message: LLMMessage) {
+        agentHistory.add(message)
+        trimAgentHistory()
+    }
+
+    private fun appendBoundedHistoryAll(messages: Collection<LLMMessage>) {
+        agentHistory.addAll(messages)
+        trimAgentHistory()
+    }
+
+    private fun trimAgentHistory() {
+        val overflow = agentHistory.size - MAX_AGENT_HISTORY_MESSAGES
+        if (overflow <= 0) return
+        // A cut boundary must never orphan a ToolResult: providers reject a
+        // tool_result whose tool_use was trimmed away. Walk the cut forward
+        // until the boundary message contains no ToolResult parts, then drop
+        // everything before it in one contiguous slice.
+        var keep = overflow
+        while (keep < agentHistory.size &&
+            agentHistory[keep].contentParts.any { it is AgentContentPart.ToolResult }
+        ) {
+            keep++
+        }
+        if (keep >= agentHistory.size) return
+        agentHistory.subList(0, keep).clear()
+        llmHistoryStartOffset += keep
+    }
+
+    private suspend fun awaitBoundedHistoryRebuild(
+        sid: String,
+    ): List<com.openminis.app.data.db.MessageEntity> {
+        val tail = chatRepository.loadMessagesTail(sid, MAX_AGENT_HISTORY_MESSAGES)
+        val parsed = tail.map { it.toLLMMessage() }
+        agentHistory.clear()
+        toolLoopDetector.reset()
+        appendBoundedHistoryAll(parsed)
+        llmHistoryStartOffset = (
+            chatRepository.dao.messageCountForSession(sid) - tail.size
+        ).coerceAtLeast(0)
+        return tail
+    }
+
+
+    private suspend fun visibleUserCutoff(
+        sid: String,
+        visibleUserIndex: Int,
+    ): com.openminis.app.data.db.MessageAnchorRow? {
+        if (visibleUserIndex < 0) return null
+        val total = chatRepository.dao.messageCountForSession(sid)
+        var offset = 0
+        var seen = 0
+        while (offset < total) {
+            val page = chatRepository.dao.loadMessageAnchorsPage(sid, offset, 100, 4_096)
+            if (page.isEmpty()) break
+            for (row in page) {
+                if (row.role != "user" || !anchorHeadHasVisibleUserText(row.headText.orEmpty())) continue
+                if (seen == visibleUserIndex) return row
+                seen++
+            }
+            offset += page.size
+        }
+        return null
+    }
+
+    private fun anchorHeadHasVisibleUserText(head: String): Boolean = try {
+        val arr = org.json.JSONArray(head)
+        (0 until arr.length()).any { i ->
+            val o = arr.optJSONObject(i) ?: return@any false
+            val value = o.optString("value", "")
+            o.optString("type") == "text" &&
+                stripAttachedFilesXml(value).isNotBlank() &&
+                !value.trimStart().startsWith("<system-reminder>")
+        }
+    } catch (_: Exception) {
+        true
+    }
+
+
+    private fun trimLoadedWindow(messages: List<ChatMessage>): List<ChatMessage> {
+        if (messages.size <= MAX_LOADED_MESSAGE_WINDOW) return messages
+        val droppedCount = messages.size - MAX_LOADED_MESSAGE_WINDOW
+        // Only persisted rows advance the database offset. System info bubbles
+        // are UI-only, so counting them would skip real rows on the next page.
+        val droppedRows = messages.take(droppedCount)
+            .sumOf { msg -> msg.sourceDbIds?.size?.coerceAtLeast(1) ?: 1 }
+        loadedMessageOffset = (loadedMessageOffset - droppedRows).coerceAtLeast(0)
+        return messages.takeLast(MAX_LOADED_MESSAGE_WINDOW)
     }
 
     private data class ToolResultData(val output: String, val success: Boolean)
