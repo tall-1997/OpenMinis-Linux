@@ -73,6 +73,7 @@ import kotlinx.coroutines.launch
 class MinisApp : Application(), ImageLoaderFactory {
     /** Process-owned scopes; all application background work is cancelled together in tests. */
     val appCoroutineScopes = com.openminis.app.di.AppCoroutineScopes()
+    internal val appContainer = com.openminis.app.di.AppGraph.create(appCoroutineScopes)
     /**
      * T-android-safemode-lateinit-crash: true once the heavy subsystem
      * block in [onCreate] has fully run (DB + every repository assigned).
@@ -158,32 +159,22 @@ class MinisApp : Application(), ImageLoaderFactory {
      */
     fun subsystemsReady(): Boolean = subsystemsInitialized
 
-    lateinit var database: AppDatabase
-        private set
-    lateinit var chatRepository: ChatRepository
-        private set
-    lateinit var providerRepository: ProviderRepository
-        private set
-    lateinit var envVarRepository: EnvVarRepository
-        private set
-    lateinit var skillRepository: SkillRepository
-        private set
-    lateinit var mcpRepository: MCPRepository
-        private set
-    lateinit var memoryRepository: MemoryRepository
-        private set
-    var evolutionEngine: EvolutionEngine? = null
-        private set
-    lateinit var webAppShortcutRepository: WebAppShortcutRepository
-        private set
-    lateinit var backgroundSettingsRepository: BackgroundSettingsRepository
-        private set
-    lateinit var multiAgentSettingsRepository: MultiAgentSettingsRepository
-        private set
-    lateinit var backgroundTaskNotifier: BackgroundTaskNotifier
-        private set
-    lateinit var mountedFoldersStore: MountedFoldersStore
-        private set
+    val database: AppDatabase get() = checkNotNull(appContainer.database)
+    val chatRepository: ChatRepository get() = appContainer.requireChatRepository()
+    val providerRepository: ProviderRepository get() = appContainer.requireProviderRepository()
+    val envVarRepository: EnvVarRepository get() = appContainer.requireEnvVarRepository()
+    val skillRepository: SkillRepository get() = appContainer.requireSkillRepository()
+    val mcpRepository: MCPRepository get() = appContainer.requireMcpRepository()
+    val memoryRepository: MemoryRepository get() = appContainer.requireMemoryRepository()
+    val evolutionEngine: EvolutionEngine? get() = appContainer.evolutionEngine
+    val webAppShortcutRepository: WebAppShortcutRepository
+        get() = checkNotNull(appContainer.webAppShortcutRepository)
+    val backgroundSettingsRepository: BackgroundSettingsRepository
+        get() = appContainer.requireBackgroundSettingsRepository()
+    val multiAgentSettingsRepository: MultiAgentSettingsRepository
+        get() = appContainer.requireMultiAgentSettingsRepository()
+    val backgroundTaskNotifier: BackgroundTaskNotifier get() = checkNotNull(appContainer.backgroundTaskNotifier)
+    val mountedFoldersStore: MountedFoldersStore get() = appContainer.requireMountedFoldersStore()
 
     /**
      * T180-bg-notif: foreground-Activity counter, mutated by the
@@ -443,8 +434,8 @@ class MinisApp : Application(), ImageLoaderFactory {
                     "The database file is left completely untouched — upgrading restores everything."
             )
         }
-        database = AppDatabase.getInstance(this)
-        chatRepository = ChatRepository(database.chatDao(), filesDir)
+        appContainer.database = AppDatabase.getInstance(this)
+        appContainer.chatRepository = ChatRepository(database.chatDao(), filesDir)
         // Must finish before the first file tool or shell. A filed session's
         // folder id is what makes both sides share minis-workspaces/<folder>.
         runCatching {
@@ -452,18 +443,18 @@ class MinisApp : Application(), ImageLoaderFactory {
                 chatRepository.warmupWorkspaceOwners()
             }
         }.onFailure { Log.e("MinisApp", "workspace owner warmup failed", it) }
-        providerRepository = ProviderRepository(this)
-        envVarRepository = EnvVarRepository(this)
+        appContainer.providerRepository = ProviderRepository(this)
+        appContainer.envVarRepository = EnvVarRepository(this)
         // [T-android-safemode-lateinit-crash-147] SkillRepository parses
         // third-party content (skills imported from external hubs), which
         // makes it the realistic source of a throw in this block. Its own
         // init is now fully guarded, so construction cannot escape here — see
         // the comment there for why an exception at this point permanently
         // breaks the Application and produces the GH#147 crash loop.
-        skillRepository = SkillRepository(this)
-        mcpRepository = MCPRepository(this)
-        memoryRepository = MemoryRepository(java.io.File(filesDir, "minis-global/memory"))
-        evolutionEngine = runCatching {
+        appContainer.skillRepository = SkillRepository(this)
+        appContainer.mcpRepository = MCPRepository(this)
+        appContainer.memoryRepository = MemoryRepository(java.io.File(filesDir, "minis-global/memory"))
+        appContainer.evolutionEngine = runCatching {
             EvolutionEngine(
                 context = this,
                 memoryRepository = memoryRepository,
@@ -473,8 +464,8 @@ class MinisApp : Application(), ImageLoaderFactory {
                 skillRepository = skillRepository,
             )
         }.onFailure { Log.e("MinisApp", "evolution init failed", it) }.getOrNull()
-        EvolutionHooks.engine = evolutionEngine
-        webAppShortcutRepository = WebAppShortcutRepository(database.webAppShortcutDao())
+        EvolutionHooks.engine = appContainer.evolutionEngine
+        appContainer.webAppShortcutRepository = WebAppShortcutRepository(database.webAppShortcutDao())
 
         // T-android-safemode-lateinit-crash: every repository the UI layer
         // reads is now assigned, so MainActivity may safely compose. Set
@@ -595,7 +586,7 @@ class MinisApp : Application(), ImageLoaderFactory {
         // Entries whose SAF tree URI didn't resolve to a real POSIX path
         // (cloud providers, unmounted SD card) are silently skipped by
         // bindMountSpecs.
-        mountedFoldersStore = MountedFoldersStore(this)
+        appContainer.mountedFoldersStore = MountedFoldersStore(this)
         // T219-5: hand the singleton to PRootKernel so applyMountedFoldersSnapshot
         // can read the live state, and wire an onChange callback so any UI CRUD
         // (add/remove/rename/toggle) re-applies the snapshot.
@@ -605,7 +596,7 @@ class MinisApp : Application(), ImageLoaderFactory {
         // Kill any live shells so the next execute() rebuilds them with the
         // updated bind set. Mount CRUD is a Settings-screen action; the user
         // is not in chat mid-command, so this restart is safe and user-invisible.
-        PRootKernel.mountedFoldersStore = mountedFoldersStore
+        PRootKernel.mountedFoldersStore = appContainer.mountedFoldersStore
         mountedFoldersStore.onChange = {
             PRootKernel.applyMountedFoldersSnapshot(this)
             ExecutionCoordinator.stopCurrentCommand()
@@ -739,8 +730,8 @@ class MinisApp : Application(), ImageLoaderFactory {
         // hook so any session whose stream finishes (success or error)
         // posts a tap-to-open notification when the app is backgrounded.
         // Mirrors iOS BackgroundKeepAliveManager.postBackgroundTaskNotification.
-        backgroundSettingsRepository = BackgroundSettingsRepository(this)
-        multiAgentSettingsRepository = MultiAgentSettingsRepository(this)
+        appContainer.backgroundSettingsRepository = BackgroundSettingsRepository(this)
+        appContainer.multiAgentSettingsRepository = MultiAgentSettingsRepository(this)
         appCoroutineScopes.io.launch {
             kotlinx.coroutines.flow.combine(
                 providerRepository.configLoaded,
@@ -755,7 +746,7 @@ class MinisApp : Application(), ImageLoaderFactory {
                 multiAgentSettingsRepository.retainLiveEntries(live)
             }
         }
-        backgroundTaskNotifier = BackgroundTaskNotifier(
+        appContainer.backgroundTaskNotifier = BackgroundTaskNotifier(
             context = this,
             chatRepository = chatRepository,
             backgroundSettings = backgroundSettingsRepository,
@@ -799,7 +790,7 @@ class MinisApp : Application(), ImageLoaderFactory {
                 // The user is back in front of the app — there's no point
                 // making them swipe away a "task completed" entry for the
                 // result they're about to look at directly.
-                if (wasBackgrounded && ::backgroundTaskNotifier.isInitialized) {
+                if (wasBackgrounded && appContainer.backgroundTaskNotifier != null) {
                     backgroundTaskNotifier.cancelAllCompletedNotifications()
                 }
                 // [T-android-session-paused-badge-hardkill] On foreground,
