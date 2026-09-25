@@ -529,7 +529,10 @@ class ChatViewModel(
 
     private val mediaStore = com.openminis.app.data.storage.MediaStore(context)
 
-    internal val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
+    internal val _messages = SnapshotMutableStateFlow<List<ChatMessage>>(
+        emptyList(),
+        ::snapshotChatMessages,
+    )
     val messages: StateFlow<List<ChatMessage>> = _messages.asStateFlow()
 
     // ── Long-session window cap ────────────────────────────────────────
@@ -742,7 +745,10 @@ class ChatViewModel(
      * The map is keyed by the assistant message id; absent ⇒ no live
      * stream (turn either hasn't started or has already flushed).
      */
-    private val _streamingById = MutableStateFlow<Map<String, StreamingDelta>>(emptyMap())
+    private val _streamingById = SnapshotMutableStateFlow<Map<String, StreamingDelta>>(
+        emptyMap(),
+        ::snapshotStreamingDeltas,
+    )
     val streamingById: StateFlow<Map<String, StreamingDelta>> = _streamingById.asStateFlow()
 
     private val streamSession = StreamSessionController(

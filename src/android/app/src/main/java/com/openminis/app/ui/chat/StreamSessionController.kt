@@ -97,7 +97,7 @@ internal class StreamSessionController(
         // clear the side-channel entry so post-turn reads (history rebuild,
         // persist, agent loop) see the canonical truth.
         if (isStreaming) {
-            val toolBlocksImmutable = toolBlocks.toList()
+            val toolBlocksImmutable = snapshotAssistantBlocks(toolBlocks)
 
             // [T-android-stream-flush-dualpath] Dual-path flush at the
             // message-accumulation layer (NOT per-fragment, which never
@@ -149,7 +149,7 @@ internal class StreamSessionController(
                 streamingById.value = streamingById.value + (
                     id to StreamingDelta(
                         content = text,
-                        toolBlocks = blocks,
+                        toolBlocks = snapshotAssistantBlocks(blocks),
                         isAwaitingModelResponse = awaiting,
                     )
                 )
@@ -210,7 +210,7 @@ internal class StreamSessionController(
             if (canonicalIdx >= 0 && canonical[canonicalIdx].error != null) {
                 val updated = canonical.toMutableList()
                 updated[canonicalIdx] = canonical[canonicalIdx].copy(error = null)
-                messages.value = updated
+                messages.value = snapshotChatMessages(updated)
             }
             return
         }
@@ -233,10 +233,10 @@ internal class StreamSessionController(
         updated[idx] = current[idx].copy(
             content = content,
             isStreaming = false,
-            toolBlocks = toolBlocks.toList(),
+            toolBlocks = snapshotAssistantBlocks(toolBlocks),
             isAwaitingModelResponse = isAwaitingModelResponse,
         )
-        messages.value = updated
+        messages.value = snapshotChatMessages(updated)
         if (streamingById.value.containsKey(id)) {
             streamingById.value = streamingById.value - id
         }
@@ -273,7 +273,7 @@ internal class StreamSessionController(
                 toolBlocks = delta.toolBlocks,
                 isAwaitingModelResponse = delta.isAwaitingModelResponse,
             )
-            messages.value = updated
+            messages.value = snapshotChatMessages(updated)
         }
         // [T-android-stream-flush-review] Cancel the pending trailing flush
         // BEFORE clearing the side channel — otherwise its viewModelScope
@@ -302,7 +302,7 @@ internal class StreamSessionController(
             )
             changed = true
         }
-        if (changed) messages.value = current
+        if (changed) messages.value = snapshotChatMessages(current)
         streamingById.value = emptyMap()
     }
 }
