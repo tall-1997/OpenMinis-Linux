@@ -29,8 +29,10 @@ object SpeechRecognitionManager {
     private const val KEY_ENGINE_ID = "engineId"
     private const val KEY_LOCALE = "locale"
 
-    private lateinit var appContext: Context
-    private lateinit var prefs: SharedPreferences
+    private var appContextRef: Context? = null
+    private val appContext: Context get() = checkNotNull(appContextRef) { "SpeechRecognitionManager.init must be called first" }
+    private var prefsRef: SharedPreferences? = null
+    private val prefs: SharedPreferences get() = checkNotNull(prefsRef) { "SpeechRecognitionManager.init must be called first" }
     private val engines = mutableListOf<SpeechRecognitionEngine>()
 
     private val _state = MutableStateFlow(RecognitionState.IDLE)
@@ -97,7 +99,7 @@ object SpeechRecognitionManager {
      * silently removing the control.
      */
     val hasMicrophoneHardware: Boolean
-        get() = if (::appContext.isInitialized) {
+        get() = if (appContextRef != null) {
             runCatching {
                 appContext.packageManager.hasSystemFeature(
                     android.content.pm.PackageManager.FEATURE_MICROPHONE,
@@ -166,9 +168,9 @@ object SpeechRecognitionManager {
     }
 
     fun init(context: Context) {
-        if (::appContext.isInitialized) return
-        appContext = context.applicationContext
-        prefs = appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        if (appContextRef != null) return
+        appContextRef = context.applicationContext
+        prefsRef = appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
         engines.clear()
         engines.add(SystemSpeechRecognitionEngine(appContext))

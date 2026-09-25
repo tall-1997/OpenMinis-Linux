@@ -40,7 +40,8 @@ object PRootKernel {
     var prootLoader32Path: String = ""
         private set
 
-    private lateinit var rootfsManager: RootfsManager
+    private var rootfsManagerRef: RootfsManager? = null
+    private val rootfsManager: RootfsManager get() = checkNotNull(rootfsManagerRef) { "PRootKernel.boot must be called first" }
 
     /** Custom environment variables injected into every proot command. */
     val customEnvironment: MutableMap<String, String> = mutableMapOf()
@@ -57,7 +58,7 @@ object PRootKernel {
             return
         }
 
-        rootfsManager = RootfsManager.getInstance(context)
+        rootfsManagerRef = RootfsManager.getInstance(context)
         rootfsManager.installIfNeeded()
         rootfsManager.installProotIfNeeded()
 
@@ -78,7 +79,8 @@ object PRootKernel {
         // source cannot burn dpkg/pip retry strikes, then retry failed
         // restores, then snapshot. One IO job so these never interleave
         // (they also serialize on RootfsManager.aptMutex).
-        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+        (context.applicationContext as? com.openminis.app.MinisApp)
+            ?.appCoroutineScopes?.io?.launch {
             runCatching { rootfsManager.runMinisMirrorAuto() }
                 .onFailure { Log.e(TAG, "[boot] mirror auto failed", it) }
             runCatching { rootfsManager.seedNetworkTools() }
@@ -676,7 +678,7 @@ object PRootKernel {
      * fall back to the symlink, which otherwise stays on the zone from boot.
      */
     suspend fun syncHostTimezoneFiles() {
-        if (!::rootfsManager.isInitialized) return
+        if (rootfsManagerRef == null) return
         rootfsManager.applyHostTimezone()
     }
 
@@ -855,7 +857,7 @@ object PRootKernel {
         }
 
         // Fallback: resolve relative to rootfs
-        if (!::rootfsManager.isInitialized) return null
+        if (rootfsManagerRef == null) return null
         val stripped = linuxPath.removePrefix("/")
         if (stripped.isEmpty()) return rootfsManager.rootfsDir
         val file = File(rootfsManager.rootfsDir, stripped)

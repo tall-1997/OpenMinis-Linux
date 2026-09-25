@@ -115,7 +115,8 @@ object OffloadPermissionManager {
      *  upgrades naturally to BYPASS via [respondToRequest]. */
     const val OFFLOAD_GLOBAL_SESSION_ID = "offload-global"
 
-    private lateinit var prefs: SharedPreferences
+    private var prefsRef: SharedPreferences? = null
+    private val prefs: SharedPreferences get() = checkNotNull(prefsRef) { "OffloadPermissionManager.init must be called first" }
 
     /** Session-scoped grants for ASK_ONCE tools. Populated by the
      *  "Allow in this session" dialog response. Cleared when the
@@ -342,7 +343,7 @@ object OffloadPermissionManager {
     }
 
     fun init(context: Context) {
-        prefs = context.getSharedPreferences("offload_permissions", Context.MODE_PRIVATE)
+        prefsRef = context.getSharedPreferences("offload_permissions", Context.MODE_PRIVATE)
     }
 
     fun getLevel(toolName: String): PermissionLevel {

@@ -38,7 +38,8 @@ object ExecutionCoordinator {
         val durationMs: Long
     )
 
-    private lateinit var appContext: Context
+    private var appContextRef: Context? = null
+    private val appContext: Context get() = checkNotNull(appContextRef) { "ExecutionCoordinator.init must be called first" }
     var envVarRepository: EnvVarRepository? = null
 
     /** Thread-safe per-session shell registry. */
@@ -62,7 +63,7 @@ object ExecutionCoordinator {
     private val globalLock = Mutex()
 
     fun init(context: Context) {
-        appContext = context.applicationContext
+        appContextRef = context.applicationContext
     }
 
     /**
