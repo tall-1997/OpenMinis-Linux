@@ -25,7 +25,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
-import java.io.ByteArrayOutputStream
+
 import java.io.File
 
 /**
@@ -134,6 +134,33 @@ class BrowserUseManager(
                 setAcceptThirdPartyCookies(webView, true)
             }
         }
+    }
+
+    @Volatile
+    var isDisposed: Boolean = false
+        private set
+
+    /** Permanent release, always on Main; a hidden sheet must not call this. */
+    fun dispose() {
+        check(Looper.myLooper() == Looper.getMainLooper())
+        if (isDisposed) return
+        isDisposed = true
+        navigationDeferred?.cancel()
+        navigationDeferred = null
+        asyncJsDeferred?.cancel()
+        asyncJsDeferred = null
+        onNewWindow = null
+        onCloseWindow = null
+        onDownloadStart = null
+        onBlobDownloadData = null
+        webView.stopLoading()
+        (webView.parent as? android.view.ViewGroup)?.removeView(webView)
+        webView.setDownloadListener(null)
+        webView.removeJavascriptInterface("__minis__")
+        webView.webChromeClient = null
+        webView.webViewClient = WebViewClient()
+        webView.removeAllViews()
+        webView.destroy()
     }
 
     private val _currentURL = MutableStateFlow("")
@@ -664,6 +691,7 @@ class BrowserUseManager(
     // -- Execute Action --
 
     suspend fun execute(input: BrowserActionInput): BrowserActionResult {
+        if (isDisposed) return BrowserActionResult.error("Browser tab is closed")
         val prevUrl = withContext(Dispatchers.Main) { webView.url }
         var result: BrowserActionResult = when (input.action) {
             BrowserAction.NAVIGATE -> navigate(input.url)
@@ -718,9 +746,14 @@ class BrowserUseManager(
         return try {
             delay(300) // Let page settle
             val bitmap = captureWebViewBitmap() ?: return result
-            val file = saveBitmapToFile(bitmap, "snapshot", SNAPSHOT_QUALITY)
-            bitmap.recycle()
+            val file = try {
+                withContext(Dispatchers.IO) { saveBitmapToFile(bitmap, "snapshot", SNAPSHOT_QUALITY) }
+            } finally {
+                bitmap.recycle()
+            }
             result.copy(imageFilePath = file.absolutePath)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.w(TAG, "Auto-snapshot failed: ${e.message}")
             result
@@ -848,6 +881,8 @@ class BrowserUseManager(
                     })()
                     """.trimIndent()
                 )
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (_: Exception) { /* best-effort */ }
             delay(50)
 
@@ -867,28 +902,29 @@ class BrowserUseManager(
             captureWebViewBitmap()
         } finally {
             if (didStretch) {
-                withContext(Dispatchers.Main) {
+                withContext(kotlinx.coroutines.NonCancellable + Dispatchers.Main) {
                     applyViewport(savedW, savedH)
                 }
             }
         } ?: return BrowserActionResult.error("Failed to capture screenshot")
 
-        val out = ByteArrayOutputStream()
-        bitmap.compress(Bitmap.CompressFormat.JPEG, SCREENSHOT_QUALITY, out)
-        val jpegBytes = out.toByteArray()
-
-        val file = saveBitmapToFile(bitmap, "screenshot")
-        val base64 = Base64.encodeToString(jpegBytes, Base64.NO_WRAP)
-
         val w = bitmap.width; val h = bitmap.height
-        bitmap.recycle()
-
-        Log.i(TAG, "Screenshot saved: ${file.absolutePath}, ${w}x$h, ${jpegBytes.size} bytes (full_page=$fullPage)")
+        val file = try {
+            withContext(Dispatchers.IO) { saveBitmapToFile(bitmap, "screenshot") }
+        } finally {
+            bitmap.recycle()
+        }
+        // Encode once and release native pixels before creating the protocol payload.
+        val base64 = withContext(Dispatchers.IO) {
+            Base64.encodeToString(file.readBytes(), Base64.NO_WRAP)
+        }
+        val fileSize = file.length().toInt()
+        Log.i(TAG, "Screenshot saved: ${file.absolutePath}, ${w}x$h, $fileSize bytes (full_page=$fullPage)")
 
         val meta = viewportMetadata(
             imageW = w,
             imageH = h,
-            fileSize = jpegBytes.size,
+            fileSize = fileSize,
             fullPage = fullPage,
             truncated = truncated,
             originalHeightPx = originalHeightPx,
@@ -939,6 +975,7 @@ class BrowserUseManager(
             appendLine("  Image: ${imageW}x$imageH (${fileSize / 1024}KB)")
             appendLine("  Viewport: ${effectiveVpW}x$effectiveVpH")
             if (pageW > 0 || pageH > 0) appendLine("  Page size: ${pageW}x$pageH")
+            appendLine("  Image may be downscaled; use viewport coordinates for actions.")
             if (fullPage) {
                 appendLine("  Full page: true")
                 if (originalHeightPx > 0) appendLine("  Original height: ${originalHeightPx}px")
@@ -958,6 +995,7 @@ class BrowserUseManager(
     suspend fun captureLiveSnapshot(): Bitmap? = captureWebViewBitmap()
 
     private suspend fun captureWebViewBitmap(): Bitmap? = withContext(Dispatchers.Main) {
+        if (isDisposed) return@withContext null
         try {
             // WebView may be detached (pool-owned, never added to a window), so
             // width/height can be 0. Ensure it has a layout box matching the
@@ -978,11 +1016,18 @@ class BrowserUseManager(
                 webView.layout(0, 0, targetW, targetH)
                 w = targetW; h = targetH
             }
-            val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-            val canvas = Canvas(bitmap)
-            webView.draw(canvas)
-            Log.d(TAG, "captureWebViewBitmap ${w}x$h")
-            bitmap
+            val (boundedW, boundedH) = ScreenshotBudget.size(w, h)
+            val bitmap = Bitmap.createBitmap(boundedW, boundedH, Bitmap.Config.ARGB_8888)
+            try {
+                val canvas = Canvas(bitmap)
+                canvas.scale(boundedW.toFloat() / w, boundedH.toFloat() / h)
+                webView.draw(canvas)
+                Log.d(TAG, "captureWebViewBitmap ${w}x$h -> ${boundedW}x$boundedH")
+                bitmap
+            } catch (t: Throwable) {
+                bitmap.recycle()
+                throw t
+            }
         } catch (e: Exception) {
             Log.e(TAG, "captureWebViewBitmap failed: ${e.message}")
             null
@@ -993,7 +1038,7 @@ class BrowserUseManager(
         val filename = "${prefix}_${System.currentTimeMillis()}.jpg"
         val file = File(screenshotsDir, filename)
         file.outputStream().use { out ->
-            bitmap.compress(Bitmap.CompressFormat.JPEG, quality, out)
+            check(bitmap.compress(Bitmap.CompressFormat.JPEG, quality, out)) { "Screenshot encoding failed" }
         }
         return file
     }
@@ -1261,6 +1306,7 @@ class BrowserUseManager(
      * — mirrors iOS `BrowserUseManager.setViewport(width:height:...)`.
      */
     fun applyViewport(cssWidth: Int, cssHeight: Int) {
+        if (isDisposed) return
         val density = webView.resources.displayMetrics.density
         val w = ((cssWidth * density).toInt()).coerceAtLeast(1)
         val h = ((cssHeight * density).toInt()).coerceAtLeast(1)
@@ -1301,10 +1347,10 @@ class BrowserUseManager(
 
     // -- User Navigation --
 
-    fun goBack() { if (webView.canGoBack()) webView.goBack() }
-    fun goForward() { if (webView.canGoForward()) webView.goForward() }
-    fun reload() { webView.reload() }
-    fun stopLoading() { webView.stopLoading(); _isLoading.value = false }
+    fun goBack() { if (!isDisposed && webView.canGoBack()) webView.goBack() }
+    fun goForward() { if (!isDisposed && webView.canGoForward()) webView.goForward() }
+    fun reload() { if (!isDisposed) webView.reload() }
+    fun stopLoading() { if (!isDisposed) webView.stopLoading(); _isLoading.value = false }
 
     /**
      * Reload the current page and suspend until `onPageFinished` fires (or
@@ -1320,6 +1366,7 @@ class BrowserUseManager(
      * viewport-change callers still get a deterministic page refresh.
      */
     suspend fun reloadAndWait() {
+        if (isDisposed) return
         val deferred = CompletableDeferred<Unit>()
         navigationDeferred = deferred
         _isLoading.value = true
@@ -1360,6 +1407,7 @@ class BrowserUseManager(
      * `document.body` populated. Must be called on the main thread.
      */
     suspend fun loadBlankPage() {
+        check(!isDisposed) { "Browser tab is closed" }
         val deferred = CompletableDeferred<Unit>()
         navigationDeferred = deferred
         _isLoading.value = true
@@ -1378,6 +1426,7 @@ class BrowserUseManager(
     }
 
     fun loadURL(urlString: String) {
+        if (isDisposed) return
         var normalized = urlString
         if (!normalized.contains("://")) normalized = "https://$normalized"
         _isLoading.value = true
@@ -1387,6 +1436,7 @@ class BrowserUseManager(
     // -- JS Evaluation Helpers --
 
     private suspend fun evaluateJavascript(js: String): String = withContext(Dispatchers.Main) {
+        check(!isDisposed) { "Browser tab is closed" }
         val deferred = CompletableDeferred<String>()
         webView.evaluateJavascript(js) { result ->
             // Android WebView returns JSON-encoded strings, so unquote

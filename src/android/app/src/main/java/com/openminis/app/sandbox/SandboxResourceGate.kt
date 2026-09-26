@@ -10,7 +10,51 @@ import java.util.concurrent.ConcurrentHashMap
  * shared PRoot guest (one gradle daemon, one SDK tree, one apt dpkg lock).
  */
 object SandboxResourceGate {
-    private val apkLock = Mutex()
+    private val heavyLock = Mutex()
+
+    enum class ResourceClass { AUTO, HEAVY }
+
+    fun isHeavy(command: String): Boolean {
+        // Resource cleanup must remain available while a daemon holds memory.
+        val trimmed = command.trim()
+        if (Regex("""^(?:kill|pkill|killall)(?:\s|$)""").containsMatchIn(trimmed) ||
+            Regex("""^(?:\S*/)?gradle(?:w)?\s+--stop\s*$""").matches(trimmed)) return false
+        return isApkBuild(command) || isPackageManager(command) || Regex("""(^|[\s/;&|()])(?:jadx(?:-gui)?|apktool|java|javac|kotlinc|ninja|make|cmake|gcc|g\+\+|clang(?:\+\+)?|rustc|cargo|ffmpeg)(?=$|[\s;&|()])""")
+            .containsMatchIn(command.lowercase())
+    }
+
+    /** Wait budgets apply only to admission, never to the admitted task. */
+    private suspend fun acquire(mutex: Mutex, waitMs: Long, reason: String, onWaiting: (String) -> Unit) {
+        val started = System.nanoTime()
+        var notified = false
+        while (!mutex.tryLock()) {
+            if (!notified) { onWaiting(reason); notified = true }
+            if ((System.nanoTime() - started) / 1_000_000 >= waitMs) error(reason)
+            delay(50)
+        }
+    }
+
+    private suspend fun <T> withHeavyBudget(
+        waitMs: Long,
+        pressure: suspend () -> String?,
+        onWaiting: (String) -> Unit,
+        block: suspend () -> T,
+    ): T {
+        acquire(heavyLock, waitMs, "Another heavy task is running; waiting for its memory budget", onWaiting)
+        try {
+            val start = System.nanoTime()
+            var previous: String? = null
+            while (true) {
+                val reason = pressure() ?: break
+                if (reason != previous) { onWaiting(reason); previous = reason }
+                if ((System.nanoTime() - start) / 1_000_000 >= waitMs) error(reason)
+                delay(1_000)
+            }
+            return block()
+        } finally {
+            heavyLock.unlock()
+        }
+    }
     /**
      * Shared with [RootfsManager] so boot-time `minis-mirror` / dpkg-world
      * restore cannot race an agent `apt-get` / `minis-dev-setup` on the guest
@@ -45,9 +89,9 @@ object SandboxResourceGate {
     /**
      * Wrap a command with resource locks to serialize conflicting operations.
      *
-     * APK builds and package managers (apt/dpkg/sdkmanager/minis-dev-setup)
-     * are serialized to prevent dpkg lock conflicts. Shell commands that don't
-     * touch package state run concurrently.
+     * Builds, package managers and other heavy tools share a global budget.
+     * Package state also retains its existing dpkg lock. Lightweight commands
+     * remain concurrent; opaque scripts can explicitly request HEAVY.
      *
      * The apt wait is capped at [aptWaitMs]. The command that already holds
      * the lock is not cancelled: `minis-dev-setup-full` is documented at
@@ -57,12 +101,18 @@ object SandboxResourceGate {
     suspend fun <T> withCommandLock(
         command: String,
         aptWaitMs: Long = APT_WAIT_MS,
+        resourceClass: ResourceClass = ResourceClass.AUTO,
+        pressure: suspend () -> String? = { null },
+        onWaiting: (String) -> Unit = {},
         block: suspend () -> T,
     ): T {
         return when {
             // Package manager wins when a line matches both (apt-get install gradle).
-            isPackageManager(command) -> withAptLock(aptWaitMs, block)
-            isApkBuild(command) -> apkLock.withLock { block() }
+            isPackageManager(command) -> withAptLock(aptWaitMs) {
+                withHeavyBudget(aptWaitMs, pressure, onWaiting, block)
+            }
+            resourceClass == ResourceClass.HEAVY || isHeavy(command) ->
+                withHeavyBudget(aptWaitMs, pressure, onWaiting, block)
             else -> block()
         }
     }

@@ -79,7 +79,8 @@ object ExecutionCoordinator {
         sessionId: String,
         command: String,
         timeout: Long = 600_000L,
-        lineCallback: ((String) -> Unit)? = null
+        lineCallback: ((String) -> Unit)? = null,
+        resourceClass: SandboxResourceGate.ResourceClass = SandboxResourceGate.ResourceClass.AUTO,
     ): CommandResult {
         MCPToolPolicy.blockedMessage(appContext, command)?.let { msg ->
             lineCallback?.invoke(msg)
@@ -90,7 +91,12 @@ object ExecutionCoordinator {
         // ConcurrentHashMap.getOrPut is not atomic, use putIfAbsent pattern
         val mutex = mutexes.getOrPut(sessionId) { Mutex() }
 
-        return SandboxResourceGate.withCommandLock(command) {
+        return SandboxResourceGate.withCommandLock(
+            command,
+            resourceClass = resourceClass,
+            pressure = { SandboxMemoryPressure.reason(appContext) },
+            onWaiting = { lineCallback?.invoke(it) },
+        ) {
         mutex.withLock {
             val startTime = System.currentTimeMillis()
 

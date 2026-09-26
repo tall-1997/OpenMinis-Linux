@@ -24,6 +24,66 @@ object ChatViewModelStore {
      * `onCleared`.
      */
     private val stores = mutableMapOf<String, ViewModelStore>()
+    private val models = mutableMapOf<String, ChatViewModel>()
+    private val lastAccess = mutableMapOf<String, Long>()
+    private val mounted = mutableMapOf<String, Int>()
+    private var generation = 0L
+    private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val trimRunnable = Runnable { trimIdle() }
+
+    @Synchronized
+    internal fun register(sessionId: String, model: ChatViewModel) {
+        val key = resolveKey(sessionId)
+        models[key] = model
+        lastAccess[key] = ++generation
+        scheduleTrim()
+    }
+
+    fun scheduleTrim() {
+        mainHandler.removeCallbacks(trimRunnable)
+        mainHandler.postDelayed(trimRunnable, 30_000)
+    }
+
+    @Synchronized
+    fun screenEntered(sessionId: String) {
+        val key = resolveKey(sessionId)
+        mounted[key] = (mounted[key] ?: 0) + 1
+        lastAccess[key] = ++generation
+        activeSessionIdInternal = key
+        scheduleTrim()
+    }
+
+    @Synchronized
+    fun screenLeft(sessionId: String) {
+        val key = resolveKey(sessionId)
+        val count = (mounted[key] ?: 1) - 1
+        if (count <= 0) mounted.remove(key) else mounted[key] = count
+        if (activeSessionId == key && count <= 0) activeSessionIdInternal = mounted.keys.lastOrNull()
+        scheduleTrim()
+    }
+
+    /** Main-thread snapshot: never kill a live agent, draft, download or shell. */
+    @Synchronized
+    fun trimIdle(pressure: Boolean = false) {
+        if (android.os.Looper.myLooper() != android.os.Looper.getMainLooper()) {
+            mainHandler.post { trimIdle(pressure) }
+            return
+        }
+        val entries = models.map { (id, vm) ->
+            val pinned = (mounted[id] ?: 0) > 0 || !vm.canEvictFromMemory()
+            if (pressure && !pinned) vm.trimIdleBrowser()
+            IdleSessionBudget.Entry(id, lastAccess[id] ?: 0, vm.retainedTextBytes(), pinned)
+        }
+        val budget = (Runtime.getRuntime().maxMemory() / 16).coerceIn(8L shl 20, 32L shl 20)
+        IdleSessionBudget.victims(entries, if (pressure) 0 else 3, budget).forEach { id ->
+            models[id]?.preserveShellOnCacheEviction()
+            // Preserve aliases for navigation entries still holding a draft ID.
+            models.remove(id)
+            lastAccess.remove(id)
+            stores.remove(id)?.clear()
+        }
+        if (models.size > 3) scheduleTrim()
+    }
 
     /**
      * Draft → canonical mapping. When a draft ("__new__...") session is
@@ -90,6 +150,8 @@ object ChatViewModelStore {
     @Synchronized
     fun ownerFor(sessionId: String): ViewModelStoreOwner {
         val key = resolveKey(sessionId)
+        lastAccess[key] = ++generation
+        scheduleTrim()
         val store = stores.getOrPut(key) {
             Log.d(TAG, "allocate store for $key (total=${stores.size + 1})")
             ViewModelStore()
@@ -109,9 +171,16 @@ object ChatViewModelStore {
         val key = resolveKey(sessionId)
         aliases.entries.removeAll { it.value == key }
         aliasGeneration.intValue++
-        stores.remove(key)?.let {
-            it.clear()
+        models.remove(key)
+        lastAccess.remove(key)
+        mounted.remove(key)
+        val store = stores.remove(key)
+        if (store != null) {
+            store.clear()
             Log.d(TAG, "release store for $key (remaining=${stores.size})")
+        } else {
+            // The VM may have been evicted while its independent shell stayed alive.
+            com.openminis.app.sandbox.ExecutionCoordinator.sessionDidTerminate(key)
         }
     }
 
@@ -148,6 +217,9 @@ object ChatViewModelStore {
         if (store != null) {
             stores[toSessionId] = store
         }
+        models.remove(fromSessionId)?.let { models[toSessionId] = it }
+        lastAccess.remove(fromSessionId)?.let { lastAccess[toSessionId] = it }
+        mounted.remove(fromSessionId)?.let { mounted[toSessionId] = it + (mounted[toSessionId] ?: 0) }
         aliases[fromSessionId] = toSessionId
         // Invalidate anything resolving through the alias map — see
         // [aliasGeneration].

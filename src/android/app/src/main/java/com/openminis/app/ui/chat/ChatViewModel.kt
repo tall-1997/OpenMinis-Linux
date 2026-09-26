@@ -515,14 +515,14 @@ class ChatViewModel(
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 return ChatViewModel(
-                    sessionId = sessionId,
+                    sessionId = ChatViewModelStore.resolvePersistedId(sessionId),
                     chatRepository = chatRepository,
                     providerRepository = providerRepository,
                     context = appContext,
                     memoryRepository = memoryRepository,
                     skillRepository = skillRepository,
                     mcpRepository = mcpRepository,
-                ) as T
+                ).also { ChatViewModelStore.register(sessionId, it) } as T
             }
         }
     }
@@ -3797,7 +3797,14 @@ class ChatViewModel(
     /** The real session ID (same as sessionId for existing sessions, generated on first message for drafts). */
     internal var realSessionId: String = if (isDraft) "" else sessionId
 
+    private var unsubscribeSafeMode: (() -> Unit)? = null
+    private var preserveShellOnClear = false
+    private var initialScopeJobs: Set<Job> = emptySet()
+
     init {
+        viewModelScope.launch {
+            _isStreaming.collect { if (!it) ChatViewModelStore.scheduleTrim() }
+        }
         loadSession()
         // [T-session-paused-badge-active-false-positive] Drive the session-list
         // PAUSED badge directly off canResume — the authoritative "this session
@@ -3861,7 +3868,7 @@ class ChatViewModel(
         // cold start. loadSession() is idempotent (re-checks isSafeMode
         // on entry; sessionLoaded gate prevents double-population), so
         // this is a clean "now finish the work you skipped" hook.
-        com.openminis.app.crash.CrashFrequencyDetector
+        unsubscribeSafeMode = com.openminis.app.crash.CrashFrequencyDetector
             .registerSafeModeClearedListener {
                 viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
                     runCatching { loadSession() }
@@ -3977,6 +3984,12 @@ class ChatViewModel(
                 }
             }
         }
+    }
+
+    init {
+        // Long-lived initial collectors are cancelled on eviction; later jobs
+        // (DB writes, sends, imports, etc.) must finish before a VM is eligible.
+        initialScopeJobs = viewModelScope.coroutineContext[Job]?.children?.toSet().orEmpty()
     }
 
     /**
@@ -9718,6 +9731,13 @@ class ChatViewModel(
         return try {
             val args = JSONObject(argsJson)
             var command = args.optString("command", "")
+            val resourceClass = when (args.optString("resource_class", "auto")) {
+                "auto", "" -> if (com.openminis.app.sandbox.SandboxResourceGate.isHeavy(command))
+                    com.openminis.app.sandbox.SandboxResourceGate.ResourceClass.HEAVY
+                    else com.openminis.app.sandbox.SandboxResourceGate.ResourceClass.AUTO
+                "heavy" -> com.openminis.app.sandbox.SandboxResourceGate.ResourceClass.HEAVY
+                else -> return ToolExecutionResult("Error: resource_class must be auto or heavy", false)
+            }
             val timeoutSec = com.openminis.app.data.ToolLimitPrefs.resolveShellTimeoutSec(
                 if (args.has("timeout")) args.optInt("timeout") else null,
             )
@@ -9803,10 +9823,21 @@ class ChatViewModel(
                 }
             }
 
-            var result = ExecutionCoordinator.execute(
+            val preview = ShellOutputPreview(
+                kotlinx.coroutines.CoroutineScope(kotlin.coroutines.coroutineContext + Dispatchers.Main),
+            ) { text ->
+                val idx = toolBlocks.indexOfFirst { it.id == toolId }
+                if (idx >= 0) {
+                    toolBlocks[idx] = toolBlocks[idx].copy(content = text)
+                    updateAssistantMessage(assistantId, currentText, true, toolBlocks)
+                }
+            }
+            var result = try {
+                ExecutionCoordinator.execute(
                 sessionId = dispatchSessionId,
                 command = command,
                 timeout = timeoutSec * 1000L,
+                resourceClass = resourceClass,
                 lineCallback = lc@{ rawLine ->
                     // Strip any OSC MinisOpenURL markers emitted by
                     // /usr/local/bin/minis-open and forward the captured
@@ -9818,19 +9849,14 @@ class ChatViewModel(
                     for (raw in capturedUrls) MinisOpenUrlBroker.offer(raw)
                     if (cleanedLine.isEmpty() && rawLine.isNotEmpty()) return@lc
 
-                    val idx = toolBlocks.indexOfFirst { it.id == toolId }
-                    if (idx >= 0) {
-                        val current = toolBlocks[idx].content
-                        val updated = if (current.isEmpty()) cleanedLine else "$current\n$cleanedLine"
-                        // Keep last 50 lines for display
-                        val trimmed = updated.lines().takeLast(50).joinToString("\n")
-                        toolBlocks[idx] = toolBlocks[idx].copy(content = trimmed)
-                        viewModelScope.launch(Dispatchers.Main) {
-                            updateAssistantMessage(assistantId, currentText, true, toolBlocks)
-                        }
-                    }
+                    preview.append(cleanedLine)
                 },
-            )
+                ).also {
+                    withContext(Dispatchers.Main) { preview.finish() }
+                }
+            } finally {
+                preview.cancel()
+            }
 
             // [T-bash-on-demand] M5 self-heal: our bash wrapper returns sentinel
             // 119 when bash vanished (user apk del'd) after we cached it
@@ -9847,7 +9873,8 @@ class ChatViewModel(
                 val healed = OnDemandBash.ensureBash(context, executor)
                 command = if (healed is OnDemandBash.Outcome.Available) wrapForBash(bashScript!!) else bashScript!!
                 result = ExecutionCoordinator.execute(
-                    sessionId = dispatchSessionId, command = command, timeout = timeoutSec * 1000L)
+                    sessionId = dispatchSessionId, command = command, timeout = timeoutSec * 1000L,
+                    resourceClass = resourceClass)
             }
 
             // Also scrub markers from the aggregated one-shot output and
@@ -12045,14 +12072,38 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
         }
     }
 
+    /** Conservative eligibility: unfinished work and in-memory drafts stay pinned. */
+    internal fun canEvictFromMemory(): Boolean =
+        sessionLoaded.value && realSessionId.isNotBlank() && !_isStreaming.value && !_isCompacting.value &&
+            streamJob?.isActive != true && compactJob?.isActive != true &&
+            _inputText.value.isEmpty() && _attachments.value.isEmpty() && _pastedTexts.value.isEmpty() &&
+            _editingMessageId.value == null && _promptQueue.value.isEmpty() && pendingSendText == null &&
+            _pendingUserQuestions.value == null && pendingApprovals.value.isEmpty() &&
+            _browserTabPoolRef?.isAgentBusy != true && _browserTabPoolRef?.isVisible != true &&
+            _browserTabPoolRef?.hasActiveDownloads != true &&
+            viewModelScope.coroutineContext[Job]?.children?.none { it.isActive && it !in initialScopeJobs } != false
+
+    internal fun preserveShellOnCacheEviction() { preserveShellOnClear = true }
+
+    // A conservative text estimate, not a process PSS measurement. Account
+    // for the separately retained LLM history as well as UI tool output.
+    internal fun retainedTextBytes(): Long = _messages.value.sumOf { message ->
+        message.content.length.toLong() * 4 + message.toolBlocks.sumOf { it.content.length.toLong() * 4 }
+    }
+
+    internal fun trimIdleBrowser() { _browserTabPoolRef?.trimIdleTabs() }
+
     override fun onCleared() {
+        unsubscribeSafeMode?.invoke()
+        unsubscribeSafeMode = null
+        _browserTabPoolRef?.dispose()
         super.onCleared()
         // Tear down whichever shell was actually serving this VM. Terminate
         // both ids when the rename happened, since a draft shell may still
         // linger if the agent ran a tool before `ensureSession()`.
-        ExecutionCoordinator.sessionDidTerminate(activeSessionId)
-        if (activeSessionId != sessionId) {
-            ExecutionCoordinator.sessionDidTerminate(sessionId)
+        if (!preserveShellOnClear) {
+            ExecutionCoordinator.sessionDidTerminate(activeSessionId)
+            if (activeSessionId != sessionId) ExecutionCoordinator.sessionDidTerminate(sessionId)
         }
     }
 

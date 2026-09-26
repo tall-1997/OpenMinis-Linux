@@ -14,6 +14,10 @@ fun HomeBrowserRoute(
 ) {
     val context = LocalContext.current
     val pool = remember { BrowserTabPool(context) }
+    androidx.compose.runtime.DisposableEffect(pool) {
+        pool.isVisible = true
+        onDispose { pool.dispose() }
+    }
     LaunchedEffect(Unit) { pool.ensureTabForUI() }
     if (settings) {
         BrowserSettingsSheet(tabPool = pool, onDismiss = onBack)

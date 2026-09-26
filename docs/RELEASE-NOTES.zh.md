@@ -1,3 +1,10 @@
+# OpenMinis-Linux 2.0.2-linux
+
+- versionCode **202**
+- 运行时内存优化：重任务单通道准入、浏览器销毁与全局标签预算、空闲会话淘汰、Shell 输出节流、截图像素预算。详见 `docs/github-release-2.0.2-linux.md`。
+
+---
+
 # OpenMinis-Linux 1.36.52-linux
 
 - versionCode **105**

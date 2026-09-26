@@ -125,6 +125,10 @@ fun BrowserSheet(
     // Callers should also call `ensureTabForUI()` before flipping the sheet
     // visible so the first composition sees a non-empty tab list; this is a
     // defensive fallback.
+    androidx.compose.runtime.DisposableEffect(tabPool) {
+        tabPool.isVisible = true
+        onDispose { tabPool.isVisible = false }
+    }
     LaunchedEffect(Unit) {
         if (tabs.isEmpty()) tabPool.ensureTabForUI()
     }

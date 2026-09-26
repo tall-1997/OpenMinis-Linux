@@ -1028,6 +1028,7 @@ class MinisApp : Application(), ImageLoaderFactory {
         super.onTrimMemory(level)
 
         val dropFormulaCaches = when (level) {
+            TRIM_MEMORY_UI_HIDDEN,
             TRIM_MEMORY_RUNNING_LOW,
             TRIM_MEMORY_RUNNING_CRITICAL,
             TRIM_MEMORY_BACKGROUND,
@@ -1038,6 +1039,7 @@ class MinisApp : Application(), ImageLoaderFactory {
         }
         if (!dropFormulaCaches) return
 
+        com.openminis.app.ui.chat.ChatViewModelStore.trimIdle(pressure = level != TRIM_MEMORY_UI_HIDDEN)
         Log.i("MinisApp", "onTrimMemory(level=$level): releasing formula bitmap caches")
         runCatching { com.openminis.app.ui.chat.KatexWebViewPool.evictAll() }
             .onFailure { Log.w("MinisApp", "KatexWebViewPool.evictAll failed: ${it.message}") }

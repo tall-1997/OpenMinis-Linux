@@ -701,7 +701,7 @@ fun ChatScreen(
     // is a non-composable scope so we lift the read up here.
     val tHangDiagAppContext = androidx.compose.ui.platform.LocalContext.current.applicationContext
     androidx.compose.runtime.DisposableEffect(sessionId) {
-        ChatViewModelStore.setActiveSession(sessionId)
+        ChatViewModelStore.screenEntered(sessionId)
         // [T-HANG-DIAG] enter / dispose markers around the ChatScreen lifetime
         // so we can correlate "user tapped session X" → loadSession timings
         // and any subsequent hang record. Removable by grepping out
@@ -713,7 +713,7 @@ fun ChatScreen(
         com.openminis.app.diagnostics.PerfLongCtx.step(sessionId, "chatScreen.mount")
         onDispose {
             println("[T-HANG-DIAG] ChatScreen UNMOUNT session=$sessionId")
-            ChatViewModelStore.setActiveSession(null)
+            ChatViewModelStore.screenLeft(sessionId)
             // T-android-new-chat-empty-residue: drop sessions materialised by
             // a settings toggle (ensureSession via /memory, /thinking, etc.)
             // but never sent a real message. VM guards on streaming + DB count

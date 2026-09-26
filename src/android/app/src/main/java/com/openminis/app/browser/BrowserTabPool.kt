@@ -8,6 +8,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -34,6 +36,9 @@ class BrowserTabPool(private val context: Context) {
     companion object {
         private const val TAG = "BrowserTabPool"
         private const val MAX_TABS = 3
+        private const val MAX_GLOBAL_TABS = 6
+        // Access only on Main. Weak keys do not become an additional pool owner.
+        private val pools = java.util.WeakHashMap<BrowserTabPool, Unit>()
         private const val IDLE_CHECK_INTERVAL_MS = 60_000L  // 60 seconds
         /** Default idle timeout — matches iOS BrowserTabPool.idleTimeout (15 minutes). */
         const val DEFAULT_IDLE_TIMEOUT_MINUTES = 15
@@ -106,6 +111,74 @@ class BrowserTabPool(private val context: Context) {
      * tab-less navigates run in parallel instead of deadlocking on one tab.
      */
     private val tabLocks = ConcurrentHashMap<Int, Mutex>()
+    private val runningActions = mutableMapOf<Int, Int>()
+    private val closingTabs = mutableMapOf<Int, Tab>()
+    @Volatile private var disposed = false
+    var isVisible: Boolean = false
+    val hasActiveDownloads: Boolean get() = downloadJobs.values.any { it.isActive }
+
+    private fun reserveTab(): Boolean {
+        check(android.os.Looper.myLooper() == android.os.Looper.getMainLooper())
+        if (disposed) return false
+        pools[this] = Unit
+        fun count() = pools.keys.sumOf { it._tabs.value.size + it.closingTabs.size }
+        while (count() >= MAX_GLOBAL_TABS) {
+            val candidate = pools.keys.filter { it !== this && !it.isVisible && !it.hasActiveDownloads }
+                .flatMap { pool -> pool._tabs.value.filter {
+                    !it.inUse && (pool.runningActions[it.id] ?: 0) == 0
+                }.map { pool to it } }
+                .minByOrNull { it.second.lastActivityDate.time } ?: return false
+            candidate.first.removeTab(candidate.second, rememberUrl = true)
+        }
+        return true
+    }
+
+    // Remove immediately from discovery, but defer native destruction until any
+    // suspended page operation has left its finally block.
+    private fun removeTab(tab: Tab, rememberUrl: Boolean = false) {
+        if (_tabs.value.none { it.manager === tab.manager }) return
+        if (rememberUrl) tab.manager.currentURL.value.takeIf { it.isNotBlank() }?.let { savedURLs[tab.id] = it }
+        tab.inUseGraceJob?.cancel()
+        tab.inUseGraceJob = null
+        _tabs.value = _tabs.value.filterNot { it.manager === tab.manager }
+        if (_selectedTabId.value == tab.id) _selectedTabId.value = _tabs.value.firstOrNull()?.id ?: 0
+        if ((runningActions[tab.id] ?: 0) > 0) closingTabs[tab.id] = tab
+        else destroyTab(tab)
+        saveState()
+    }
+
+    private fun destroyTab(tab: Tab) {
+        tab.manager.dispose()
+        closingTabs.remove(tab.id)
+        // Existing waiters keep their mutex reference. IDs are never reused.
+        tabLocks.remove(tab.id)
+    }
+
+    /** Permanent owner teardown. Do not use for merely hiding a browser sheet. */
+    fun dispose() {
+        if (android.os.Looper.myLooper() != android.os.Looper.getMainLooper()) {
+            android.os.Handler(android.os.Looper.getMainLooper()).post { dispose() }
+            return
+        }
+        if (disposed) return
+        _tabs.value.forEach { tab ->
+            tab.manager.currentURL.value.takeIf { it.isNotBlank() }?.let { savedURLs[tab.id] = it }
+        }
+        saveState()
+        disposed = true
+        evictionScope.cancel()
+        downloadScope.cancel()
+        onDownloadEvent = null
+        _tabs.value.toList().forEach { removeTab(it) }
+        if (closingTabs.isEmpty()) pools.remove(this)
+    }
+
+    /** Pressure cleanup never destroys the visible page or a running operation. */
+    fun trimIdleTabs() {
+        if (isVisible || hasActiveDownloads) return
+        _tabs.value.filter { !it.inUse && (runningActions[it.id] ?: 0) == 0 }
+            .forEach { removeTab(it, rememberUrl = true) }
+    }
 
     private fun lockForTab(id: Int): Mutex = tabLocks.getOrPut(id) { Mutex() }
 
@@ -139,7 +212,7 @@ class BrowserTabPool(private val context: Context) {
     val selectedTabId: StateFlow<Int> = _selectedTabId.asStateFlow()
 
     /** Whether any tab is currently executing an agent action. */
-    val isAgentBusy: Boolean get() = _tabs.value.any { it.inUse }
+    val isAgentBusy: Boolean get() = _tabs.value.any { it.inUse } || runningActions.isNotEmpty()
 
     /** Currently selected tab's manager, or the first tab's if none selected — mirrors iOS activeManager. */
     val activeManager: BrowserUseManager?
@@ -523,6 +596,7 @@ class BrowserTabPool(private val context: Context) {
         input: BrowserActionInput,
         singleTab: Boolean = false,
     ): BrowserActionResult {
+        if (disposed) return BrowserActionResult.error("Browser session is closed")
         // Handle tab management actions at pool level
         return when (input.action) {
             BrowserAction.NEW_TAB -> newTab(input.url)
@@ -626,9 +700,21 @@ class BrowserTabPool(private val context: Context) {
         implicitTab: Boolean,
         acquireTabId: Int? = null,
     ): BrowserActionResult {
-        val tab = acquireTab(acquireTabId ?: input.tabId)
-            ?: return BrowserActionResult.error("Failed to acquire browser tab")
+        var acquired: Tab? = null
         return try {
+            val tab = withContext(Dispatchers.Main) {
+                if (acquireTabId != null && _tabs.value.none { it.id == acquireTabId }) return@withContext null
+                acquireTab(acquireTabId ?: input.tabId)?.also {
+                    acquired = it
+                    runningActions[it.id] = (runningActions[it.id] ?: 0) + 1
+                }
+            } ?: return BrowserActionResult.error("Browser tab closed or browser memory budget reached")
+            withContext(Dispatchers.Main) {
+                if (tab.needsInitialBlankPage) {
+                    tab.needsInitialBlankPage = false
+                    tab.manager.loadBlankPage()
+                }
+            }
             val result = tab.manager.execute(input)
             // [T-android-js-dialogs-256] If this tab's page tried to open an
             // alert/confirm/prompt, the agent browser answered it with a default
@@ -649,6 +735,15 @@ class BrowserTabPool(private val context: Context) {
             // follow-up reads/scrolls and routinely picked the wrong tab.
             stampTabId(withDialogs.copy(pageURL = tab.manager.currentURL.value), tab.id)
         } finally {
+            withContext(NonCancellable + Dispatchers.Main) {
+            val tab = acquired ?: return@withContext
+            val remaining = (runningActions[tab.id] ?: 1) - 1
+            if (remaining == 0) runningActions.remove(tab.id) else runningActions[tab.id] = remaining
+            if (disposed || closingTabs.containsKey(tab.id)) {
+                if (remaining == 0) destroyTab(tab)
+                if (disposed && closingTabs.isEmpty()) pools.remove(this@BrowserTabPool)
+                return@withContext
+            }
             tab.lastActivityDate = Date()
             if (implicitTab) {
                 // [T-browser-implicit-tab-inuse-until-load-android] Keep the tab
@@ -673,6 +768,7 @@ class BrowserTabPool(private val context: Context) {
             }
             updateTabs()
             saveState()
+            }
         }
     }
 
@@ -730,6 +826,7 @@ class BrowserTabPool(private val context: Context) {
      * lazily created.
      */
     private suspend fun acquireTab(requestedTabId: Int? = null): Tab? = withContext(Dispatchers.Main) {
+        if (disposed) return@withContext null
         var currentTabs = _tabs.value.toMutableList()
 
         // Find requested tab, falling back to default-or-create when the
@@ -760,12 +857,13 @@ class BrowserTabPool(private val context: Context) {
                 while (waited < waitDeadline) {
                     delay(IMPLICIT_TAB_WAIT_POLL_MS)
                     waited += IMPLICIT_TAB_WAIT_POLL_MS
+                    if (disposed) return@withContext null
                     currentTabs = _tabs.value.toMutableList()
                     picked = currentTabs.firstOrNull { !it.inUse } ?: createTab(currentTabs)
                     if (picked != null) break
                 }
             }
-            picked ?: currentTabs.firstOrNull()
+            picked
         }
 
         if (tab != null) {
@@ -782,15 +880,15 @@ class BrowserTabPool(private val context: Context) {
         // Apply the pending blank-page load from createTab() now that we're
         // in a suspend context. Must happen BEFORE returning so the agent's
         // first JS evaluation on this tab sees `document.body` populated.
-        if (tab != null && tab.needsInitialBlankPage) {
-            tab.needsInitialBlankPage = false
-            tab.manager.loadBlankPage()
-        }
+        // The caller loads a blank page after registering its running action,
+        // so a concurrent close cannot destroy a suspended initial navigation.
         tab
     }
 
     private fun createTab(tabs: MutableList<Tab>, url: String? = null): Tab? {
-        if (tabs.size >= MAX_TABS) return null
+        if (tabs.size >= MAX_TABS || !reserveTab()) return null
+        // reserveTab may have evicted a cold tab from this pool too.
+        tabs.retainAll(_tabs.value.toSet())
 
         val id = nextTabId++
         val webView = WebView(context)
@@ -869,14 +967,7 @@ class BrowserTabPool(private val context: Context) {
         val idx = currentTabs.indexOfFirst { it.id == id }
         if (idx < 0) return@withContext BrowserActionResult.error("Tab $id not found")
 
-        currentTabs.removeAt(idx)
-        _tabs.value = currentTabs
-
-        // Select next tab
-        if (currentTabs.isNotEmpty() && _selectedTabId.value == id) {
-            _selectedTabId.value = currentTabs.first().id
-        }
-        saveState()
+        removeTab(currentTabs[idx])
         BrowserActionResult(text = "Closed tab $id")
     }
 
@@ -898,10 +989,11 @@ class BrowserTabPool(private val context: Context) {
 
     private fun handleNewWindow(resultMsg: Message) {
         val currentTabs = _tabs.value.toMutableList()
-        if (currentTabs.size >= MAX_TABS) {
-            Log.w(TAG, "window.open rejected: max tabs reached")
+        if (currentTabs.size >= MAX_TABS || !reserveTab()) {
+            Log.w(TAG, "window.open rejected: browser budget reached")
             return
         }
+        currentTabs.retainAll(_tabs.value.toSet())
         val id = nextTabId++
         val newWebView = WebView(context)
         val manager = BrowserUseManager(
@@ -937,11 +1029,7 @@ class BrowserTabPool(private val context: Context) {
         val idx = currentTabs.indexOfFirst { it.manager === manager }
         if (idx >= 0) {
             val closedId = currentTabs[idx].id
-            currentTabs.removeAt(idx)
-            _tabs.value = currentTabs
-            if (_selectedTabId.value == closedId && currentTabs.isNotEmpty()) {
-                _selectedTabId.value = currentTabs.first().id
-            }
+            removeTab(currentTabs[idx])
             Log.i(TAG, "window.close → removed tab $closedId")
         }
     }
@@ -974,12 +1062,7 @@ class BrowserTabPool(private val context: Context) {
         val currentTabs = _tabs.value.toMutableList()
         val idx = currentTabs.indexOfFirst { it.id == tabId }
         if (idx < 0) return@withContext
-        currentTabs.removeAt(idx)
-        _tabs.value = currentTabs
-        if (_selectedTabId.value == tabId && currentTabs.isNotEmpty()) {
-            _selectedTabId.value = currentTabs.first().id
-        }
-        saveState()
+        removeTab(currentTabs[idx])
     }
 
     /**
@@ -1030,7 +1113,7 @@ class BrowserTabPool(private val context: Context) {
      * Also sets the selected tab id so the sheet's `selectedTab` lookup
      * resolves on first composition, and persists state.
      */
-    fun ensureTabForUI(): Tab {
+    fun ensureTabForUI(): Tab? {
         val currentTabs = _tabs.value.toMutableList()
         val existing = currentTabs.firstOrNull()
         if (existing != null) {
@@ -1040,7 +1123,7 @@ class BrowserTabPool(private val context: Context) {
             }
             return existing
         }
-        val tab = createTab(currentTabs)!!
+        val tab = createTab(currentTabs) ?: return null
         _selectedTabId.value = tab.id
         saveState()
         return tab
@@ -1066,30 +1149,27 @@ class BrowserTabPool(private val context: Context) {
     // -- Release --
 
     fun releaseAllTabs() {
-        _tabs.value = _tabs.value.map { it.copy(inUse = false) }
+        _tabs.value.forEach {
+            if ((runningActions[it.id] ?: 0) == 0) {
+                it.inUseGraceJob?.cancel()
+                it.inUseGraceJob = null
+                it.inUse = false
+            }
+        }
+        updateTabs()
         saveState()
     }
 
     // -- Idle Eviction (call from a timer) --
 
     fun evictIdleTabs() {
+        if (disposed || isVisible || hasActiveDownloads) return
         val now = System.currentTimeMillis()
         val currentTabs = _tabs.value.toMutableList()
         val timeoutMs = idleTimeoutMs
-        val toRemove = currentTabs.filter { !it.inUse && (now - it.lastActivityDate.time) >= timeoutMs }
-        for (tab in toRemove) {
-            val url = tab.manager.currentURL.value
-            if (url.isNotEmpty()) savedURLs[tab.id] = url
-            currentTabs.remove(tab)
-            Log.i(TAG, "Evicted idle tab ${tab.id}")
-        }
-        if (toRemove.isNotEmpty()) {
-            _tabs.value = currentTabs
-            if (currentTabs.isNotEmpty() && currentTabs.none { it.id == _selectedTabId.value }) {
-                _selectedTabId.value = currentTabs.first().id
-            }
-            saveState()
-        }
+        currentTabs.filter {
+            !it.inUse && (runningActions[it.id] ?: 0) == 0 && (now - it.lastActivityDate.time) >= timeoutMs
+        }.forEach { removeTab(it, rememberUrl = true) }
     }
 
     // -- Viewport API (mirrors iOS BrowserTabPool) --
@@ -1199,6 +1279,7 @@ class BrowserTabPool(private val context: Context) {
     // -- Disk Persistence --
 
     private fun saveState() {
+        if (disposed) return
         val sid = sessionId ?: return
         try {
             val dir = File(context.filesDir, "browser_tabs")

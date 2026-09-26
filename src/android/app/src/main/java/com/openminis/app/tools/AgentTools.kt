@@ -170,10 +170,11 @@ Each task prompt MUST be self-contained with ## Task / ## Expected result / ## C
             "tool_title" to AgentToolParam("string", "A concise 5-10 word summary of what this tool call does, shown to the user (e.g. 'Install Python data analysis packages', 'List files in home directory'). Use the same language as the user."),
             "command" to AgentToolParam("string", "The shell command to execute. Supports multi-line commands directly — no special escaping needed. Keep under 1000 chars; for longer scripts, write to a file with file_write first, then run it."),
             "timeout" to AgentToolParam("integer", "Timeout in seconds (default: 900). Use a larger value for long-running commands like package installs."),
+            "resource_class" to AgentToolParam("string", "Use heavy for memory-intensive work, including scripts that run decompilers, compilers, JVMs or large data processing. Heavy tasks share one process-wide memory budget. Omit or use auto for other commands."),
             "delay" to AgentToolParam("integer", "Delay in seconds before execution begins. The tool blocks the agent flow during this wait WITHOUT occupying the shell, so other concurrent tasks can use it. Use this instead of sleep commands to avoid resource contention."),
         ),
         required = listOf("tool_title", "command"),
-        propertyOrdering = listOf("tool_title", "command", "timeout", "delay"),
+        propertyOrdering = listOf("tool_title", "command", "timeout", "delay", "resource_class"),
     )
 
     // Aligned with iOS AIChatViewModel.swift browser_use definition
