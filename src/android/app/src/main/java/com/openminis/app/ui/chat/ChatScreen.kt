@@ -43,6 +43,7 @@ import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.FolderZip
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.VideoFile
 import androidx.compose.material.icons.automirrored.filled.Article
@@ -146,6 +147,7 @@ import com.openminis.app.ui.settings.SettingsSwitch
 import com.openminis.app.BuildConfig
 import com.openminis.app.R
 import com.openminis.app.security.InterceptFeedback
+import com.openminis.app.security.PermissionMode
 import com.openminis.app.data.FileMentionIndex
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.text.BoundedText
@@ -2928,21 +2930,35 @@ fun ChatScreen(
                             // of the memory_get / memory_write tools and the
                             // system-prompt injection.
                             val menuMemoryEnabled by viewModel.memoryEnabled.collectAsState()
-                            // [T-new-chat-menu-entry] New Chat — first item
-                            // (iOS parity: square.and.pencil at the top of the
-                            // "..." menu). Streaming sessions confirm first.
+                            val sessionPerm by viewModel.permissionMode.collectAsState()
+                            val yoyoOn = sessionPerm.isYoyo()
                             DropdownMenuItem(
-                                text = { Text(stringResource(R.string.chat_menu_new_chat)) },
+                                text = {
+                                    Text(
+                                        if (yoyoOn) stringResource(R.string.chat_menu_perm_yoyo)
+                                        else stringResource(R.string.chat_menu_perm_ask),
+                                    )
+                                },
                                 onClick = {
-                                    showChatMenu = false
-                                    if (isStreaming) {
-                                        showNewChatStopDialog = true
-                                    } else {
-                                        onNewChat()
-                                    }
+                                    viewModel.setSessionPermissionMode(
+                                        if (yoyoOn) PermissionMode.ASK else PermissionMode.ALLOW_ALL,
+                                    )
                                 },
                                 leadingIcon = {
-                                    Icon(Icons.Outlined.Forum, contentDescription = null)
+                                    Icon(
+                                        if (yoyoOn) Icons.Filled.Bolt else Icons.Filled.Shield,
+                                        contentDescription = null,
+                                    )
+                                },
+                                trailingIcon = {
+                                    SettingsSwitch(
+                                        checked = yoyoOn,
+                                        onCheckedChange = { on ->
+                                            viewModel.setSessionPermissionMode(
+                                                if (on) PermissionMode.ALLOW_ALL else PermissionMode.ASK,
+                                            )
+                                        },
+                                    )
                                 },
                             )
                             MinisMenuDivider()
@@ -6941,7 +6957,7 @@ fun ChatScreen(
                     onDismiss = { viewModel.denyPendingTool(approval.id) },
                     // [T-session-allow-all] Third action: approve this request
                     // and auto-approve every remaining request this session.
-                    neutralText = "本会话全部允许",
+                    neutralText = "本次会话全部允许",
                     onNeutral = { viewModel.approveAllForSession(approval.id) },
                 )
             }

@@ -454,7 +454,9 @@
     <string name="settings_section_storage">Storage</string>
     <string name="settings_storage_subtitle">Manage Ubuntu Linux rootfs and browse files</string>
     <string name="settings_section_permissions">Permissions</string>
-    <string name="settings_permissions_subtitle">Control Agent access to privacy-sensitive features</string>
+    <string name="settings_permissions_subtitle">System privileges: accessibility, Shizuku, storage. Tool gate is YOYO / Approval in the chat menu.</string>
+    <string name="chat_menu_perm_yoyo">YOYO · full auto</string>
+    <string name="chat_menu_perm_ask">Approval · confirm actions</string>
     <string name="settings_section_logs">Logs</string>
     <string name="settings_logs_subtitle">View and export app logs</string>
     <string name="settings_section_about">About</string>

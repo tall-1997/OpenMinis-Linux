@@ -361,6 +361,9 @@ interface ChatDao {
     @Query("UPDATE sessions SET thinking_override = :value, updated_at = :updatedAt WHERE id = :id")
     suspend fun updateThinkingOverride(id: String, value: String?, updatedAt: Long = System.currentTimeMillis())
 
+    @Query("UPDATE sessions SET permission_mode = :value, updated_at = :updatedAt WHERE id = :id")
+    suspend fun updatePermissionMode(id: String, value: String, updatedAt: Long = System.currentTimeMillis())
+
     // Session: pinned_at
     @Query("UPDATE sessions SET pinned_at = :pinnedAt, updated_at = :updatedAt WHERE id = :id")
     suspend fun updatePinnedAt(id: String, pinnedAt: Long?, updatedAt: Long = System.currentTimeMillis())

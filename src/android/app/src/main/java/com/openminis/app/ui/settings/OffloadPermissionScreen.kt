@@ -30,8 +30,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.openminis.app.R
-import com.openminis.app.security.PermissionMode
-import com.openminis.app.security.SecurityGateHolder
 import com.openminis.app.accessibility.MinisAccessibilityService
 import com.openminis.app.accessibility.RestrictedSettingsManager
 import com.openminis.app.logging.AppLogger
@@ -89,8 +87,6 @@ fun OffloadPermissionScreen(
     val hostSuSnap by HostSuManager.snapshot.collectAsState()
     LaunchedEffect(Unit) { HostSuManager.refresh() }
 
-    var permMode by remember { mutableStateOf(SecurityGateHolder.gate.getPermissionMode()) }
-
     SettingsScaffold(
         title = stringResource(R.string.perm_title),
         onBack = onBack,
@@ -100,32 +96,8 @@ fun OffloadPermissionScreen(
             }
         },
     ) {
-        // Tool gate (SecurityGate) is a different layer from the system
-        // privilege rows below. Keep both on this page so they are not
-        // mistaken for two copies of the same switch.
-        SettingsSection(
-            header = "工具权限模式",
-            footer = "只在这一页改工具权限模式。控制 Agent 调用 shell / 文件工具时要不要确认，和下面的系统权限（无障碍、Shizuku、存储）不是同一层。会话里的「本会话全部允许」走同一套闸门；写好的拒绝规则仍然优先。",
-        ) {
-            val order = listOf(
-                PermissionMode.ASK,
-                PermissionMode.ALLOW_ALL,
-                PermissionMode.READ_ONLY,
-                PermissionMode.PLAN,
-                PermissionMode.DENY_ALL,
-            )
-            order.forEachIndexed { index, mode ->
-                SettingsChoiceRow(
-                    title = mode.labelZh(),
-                    selected = permMode == mode,
-                    onSelect = {
-                        permMode = mode
-                        SecurityGateHolder.setMode(context, mode)
-                    },
-                    showDivider = index < order.lastIndex,
-                )
-            }
-        }
+        // Tool gate lives on the chat "..." menu (YOYO / 审批). This page
+        // only keeps system privileges and per-tool integration rows.
 
         // T-config: master switch for the minis-config CLI surface.
         SettingsSection(

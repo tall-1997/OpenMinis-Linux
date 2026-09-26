@@ -78,6 +78,7 @@ import com.openminis.app.data.PlanDiscussionTrigger
 import com.openminis.app.MinisApp
 import com.openminis.app.offload.OffloadPermissionManager
 import com.openminis.app.service.ApprovalGate
+import com.openminis.app.security.SecurityGateHolder
 import com.openminis.app.notification.ApprovalNotifier
 import com.openminis.app.service.SessionActivityTracker
 import com.openminis.app.service.SessionConcurrencyManager
@@ -1533,6 +1534,9 @@ class ChatViewModel(
     internal val _thinkingLevel = MutableStateFlow(ThinkingLevel.OFF)
     override val thinkingLevel: StateFlow<ThinkingLevel> = _thinkingLevel.asStateFlow()
 
+    internal val _permissionMode = MutableStateFlow(com.openminis.app.security.PermissionMode.ASK)
+    val permissionMode: StateFlow<com.openminis.app.security.PermissionMode> = _permissionMode.asStateFlow()
+
     /**
      * [T-android-enhanced-cache] Enhanced Cache (1-hour Anthropic cache TTL)
      * toggle. Per-VM memory state, NOT persisted — mirrors iOS
@@ -1643,8 +1647,30 @@ class ChatViewModel(
      * ApprovalGate and resets on session teardown (cleanupAll).
      */
     fun approveAllForSession(id: String) {
-        ApprovalGate.enableSessionAllowAll()
+        val tool = pendingApprovals.value[id]?.toolName
+        if (tool != null) ApprovalGate.allowToolForSession(tool)
+        else ApprovalGate.enableSessionAllowAll()
         approvePendingTool(id)
+    }
+
+    fun setSessionPermissionMode(mode: com.openminis.app.security.PermissionMode) {
+        val next = if (mode.isYoyo()) com.openminis.app.security.PermissionMode.ALLOW_ALL
+        else com.openminis.app.security.PermissionMode.ASK
+        _permissionMode.value = next
+        applyGateMode(next)
+        val sid = realSessionId.ifEmpty { sessionId }
+        if (!isDraft && sid.isNotBlank() && !sid.startsWith("__new__")) {
+            viewModelScope.launch {
+                runCatching { chatRepository.dao.updatePermissionMode(sid, next.name) }
+            }
+        }
+    }
+
+    private fun applyGateMode(mode: com.openminis.app.security.PermissionMode) {
+        SecurityGateHolder.setActiveSessionMode(mode)
+        ApprovalGate.bindSession(realSessionId.ifEmpty { sessionId })
+        if (mode.isYoyo()) ApprovalGate.enableSessionAllowAll()
+        else ApprovalGate.resetSessionAllowAll()
     }
 
     private fun activeOverrides(): com.openminis.app.data.model.ModelOverrides? {
@@ -4204,6 +4230,7 @@ class ChatViewModel(
         val session = chatRepository.createSession(
             modelId = modelId,
             memoryEnabled = _memoryEnabled.value,
+            permissionMode = _permissionMode.value.name,
         )
         realSessionId = session.id
         // "New Chat in Group": file the just-promoted draft into its folder.
@@ -4361,6 +4388,7 @@ class ChatViewModel(
             _availableGroups.value = config.modelGroups
 
             if (isDraft) {
+                applyGateMode(_permissionMode.value)
                 // Draft session: just set up provider using default group or first entry
                 _sessionTitle.value = "New Chat"
                 _sessionCategory.value = null
@@ -4378,6 +4406,13 @@ class ChatViewModel(
             _sessionTitle.value = session.title ?: "New Chat"
             _sessionCategory.value = session.category
             _memoryEnabled.value = session.memoryEnabled != 0
+            _permissionMode.value = runCatching {
+                com.openminis.app.security.PermissionMode.valueOf(session.permissionMode ?: "ASK")
+            }.getOrDefault(com.openminis.app.security.PermissionMode.ASK).let {
+                if (it.isYoyo()) com.openminis.app.security.PermissionMode.ALLOW_ALL
+                else com.openminis.app.security.PermissionMode.ASK
+            }
+            applyGateMode(_permissionMode.value)
             // T239: hydrate persisted thinking-mode override. null = unset
             // (use OFF as the legacy default); non-null = explicit user
             // choice persisted across cold-start. runCatching guards against

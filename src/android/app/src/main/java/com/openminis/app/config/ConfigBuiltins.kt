@@ -92,10 +92,8 @@ internal object ConfigBuiltins {
             ReadOnlyField(
                 path = "security.permissionMode",
                 displayName = "Permission mode",
-                description = "Effective SecurityGate mode: ALLOW_ALL, ASK, DENY_ALL, READ_ONLY, or PLAN. " +
-                    "Session allow-all is reported as ALLOW_ALL. " +
-                    "Reads pass unless the mode is DENY_ALL. Shell and writes follow this mode plus any saved rules. " +
-                    "Change it in Settings → Permissions; this field is not writable.",
+                description = "Effective tool gate for the current chat: ALLOW_ALL (YOYO) or ASK (approval). " +
+                    "Change it in the chat menu. Destructive commands still confirm under YOYO.",
                 valueSchema = ConfigSchema.Str(),
                 reader = {
                     val mode = effectivePermissionMode(

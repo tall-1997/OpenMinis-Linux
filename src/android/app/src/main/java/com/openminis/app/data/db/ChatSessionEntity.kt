@@ -60,4 +60,9 @@ data class ChatSessionEntity(
      * in its old section.
      */
     @ColumnInfo(name = "folder_id") val folderId: String? = null,
+    /**
+     * Session tool gate: ASK (审批) or ALLOW_ALL (YOYO). Default ASK.
+     * Other enum names are accepted on read but the UI only writes these two.
+     */
+    @ColumnInfo(name = "permission_mode") val permissionMode: String? = "ASK",
 )

@@ -19,22 +19,41 @@ object ApprovalGate {
     private val pending = ConcurrentHashMap<String, MutableStateFlow<Boolean?>>()
     private val approvalDetails = ConcurrentHashMap<String, ApprovalRequest>()
 
-    // Session-scoped "allow everything" switch. Set from the in-app approval
-    // card's third action ("允许本会话全部操作"); every subsequent request is
-    // auto-approved until the session ends ([resetSessionAllowAll]).
+    // Session-scoped allow list. "本次会话全部允许" only auto-approves the
+    // same tool name for the rest of this session. Fatal confirms still prompt.
     @Volatile private var sessionAllowAll = false
+    private val sessionAllowedTools = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
 
     fun enableSessionAllowAll() {
         sessionAllowAll = true
         Log.i(TAG, "session allow-all enabled")
     }
 
+    fun allowToolForSession(toolName: String) {
+        sessionAllowedTools.add(toolName)
+        Log.i(TAG, "session allow-same-tool enabled tool=$toolName")
+    }
+
     fun isSessionAllowAll(): Boolean = sessionAllowAll
 
+    fun isToolAllowedForSession(toolName: String): Boolean =
+        sessionAllowAll || sessionAllowedTools.contains(toolName)
+
     fun resetSessionAllowAll() {
-        if (sessionAllowAll) Log.i(TAG, "session allow-all reset")
+        if (sessionAllowAll || sessionAllowedTools.isNotEmpty()) {
+            Log.i(TAG, "session allow-all reset")
+        }
         sessionAllowAll = false
+        sessionAllowedTools.clear()
     }
+
+    fun bindSession(sessionId: String?) {
+        if (boundSessionId == sessionId) return
+        resetSessionAllowAll()
+        boundSessionId = sessionId
+    }
+
+    @Volatile private var boundSessionId: String? = null
 
     private val _pendingApprovals = MutableStateFlow<Map<String, ApprovalRequest>>(emptyMap())
     val pendingApprovals: StateFlow<Map<String, ApprovalRequest>> = _pendingApprovals.asStateFlow()
@@ -62,6 +81,10 @@ object ApprovalGate {
      * treats it as approved.
      */
     fun requestApproval(toolName: String, preview: String, mustPrompt: Boolean = false): String {
+        if (!mustPrompt && isToolAllowedForSession(toolName)) {
+            Log.d(TAG, "approval auto-allowed (session same-tool) tool=$toolName")
+            return ""
+        }
         if (sessionAllowAllSkipsPrompt(sessionAllowAll, mustPrompt)) {
             Log.d(TAG, "approval auto-allowed (session allow-all) tool=$toolName")
             return ""

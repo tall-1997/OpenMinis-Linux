@@ -1,3 +1,10 @@
+# OpenMinis-Linux 2.0.4-linux
+
+- versionCode **204**
+- 会话两档权限：YOYO 全授权 / 审批部分授权。菜单去掉新建会话，设置页去掉工具五档。详见 `docs/github-release-2.0.4-linux.md`。
+
+---
+
 # OpenMinis-Linux 2.0.3-linux
 
 - versionCode **203**

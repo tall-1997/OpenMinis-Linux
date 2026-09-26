@@ -416,7 +416,9 @@
     <string name="settings_section_storage">存储</string>
     <string name="settings_storage_subtitle">管理 Ubuntu rootfs 并浏览文件</string>
     <string name="settings_section_permissions">权限</string>
-    <string name="settings_permissions_subtitle">控制 Agent 对隐私敏感功能的访问</string>
+    <string name="settings_permissions_subtitle">系统权限：无障碍、Shizuku、存储。工具闸门在会话菜单的 YOYO / 审批。</string>
+    <string name="chat_menu_perm_yoyo">YOYO · 全授权</string>
+    <string name="chat_menu_perm_ask">审批 · 部分授权</string>
     <string name="settings_section_logs">日志</string>
     <string name="settings_logs_subtitle">查看与导出应用日志</string>
     <string name="settings_section_about">关于</string>

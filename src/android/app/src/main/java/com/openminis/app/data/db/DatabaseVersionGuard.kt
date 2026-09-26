@@ -55,7 +55,7 @@ object DatabaseVersionGuard {
      * treated the user's own database as "from a newer build" and blocked
      * opening. Keep this equal to `@Database(version=...)`.
      */
-    const val CODE_DB_VERSION = 16 // 1.36.7: sessions.updated_at index 15 -> 16
+    const val CODE_DB_VERSION = 17 // sessions.permission_mode 16 -> 17
 
     /** Filename must match the one passed to `Room.databaseBuilder`. */
     private const val DB_NAME = "minis.db"

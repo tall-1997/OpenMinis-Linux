@@ -242,30 +242,20 @@ class SecurityGateImpl : SecurityGate {
             }
         }
 
-        // [5] FATAL risk check, but ALLOW_ALL downgrades to confirm.
+        // [5] Destructive / fatal risk. YOYO still asks. Approval mode also asks.
         val command = extractCommand(cmd)
-        val risk = if (cmd.toolName in SHELL_TOOLS || cmd.toolName == "shell_exec") {
-            classifyRisk(command)
-        } else {
-            RiskLevel.NORMAL
-        }
+        val risk = commandRisk(cmd, command)
         if (risk == RiskLevel.FATAL_BANNED) {
-            if (mode == PermissionMode.ALLOW_ALL) {
-                // [Fix-P0-option-2] User selected: FATAL→confirm in ALLOW_ALL.
-                return Decision.NeedConfirm(
-                    describeFatalViolation(command),
-                    "⚠️ 危险命令（可能损坏系统）\n\n${preview(cmd)}",
-                    mustPrompt = true,
-                )
-            } else {
-                return Decision.Denied(describeFatalViolation(command))
-            }
+            return Decision.NeedConfirm(
+                describeFatalViolation(command),
+                "⚠️ 极端高危操作（格式化 / 清空 / 批量删除）\n\n${preview(cmd)}",
+                mustPrompt = true,
+            )
         }
 
-        // [6] ALLOW_ALL: if we reached here, no rule/fatal blocked it → allow.
-        // Authority fence is checked *after* ALLOW_ALL to let users override it.
+        // [6] YOYO: everything except fatal-confirm is auto-run.
         if (mode == PermissionMode.ALLOW_ALL) {
-            return Decision.Allow("允许全部模式：直接放行")
+            return Decision.Allow("YOYO：自动执行")
         }
 
         // [7] Authority fence: only enforced in ASK mode (workspace jail).
@@ -285,11 +275,25 @@ class SecurityGateImpl : SecurityGate {
             }
         }
 
-        // [8] ASK: safe commands auto-allow, others confirm.
-        if (cmd.toolName in SHELL_TOOLS && isSafeReadOnlyCommand(command)) {
-            return Decision.Allow("只读安全命令自动放行")
+        // [8] Approval: low-risk auto-run. Everything else confirms.
+        if (isLowRisk(cmd, command, risk)) {
+            return Decision.Allow("审批：低风险自动放行")
         }
         return Decision.NeedConfirm(cmd.why, preview(cmd))
+    }
+
+    private fun commandRisk(cmd: GateCommand, command: String): RiskLevel {
+        if (cmd.toolName in SHELL_TOOLS || cmd.toolName == "shell_exec") {
+            return classifyRisk(command)
+        }
+        return RiskLevel.NORMAL
+    }
+
+    private fun isLowRisk(cmd: GateCommand, command: String, risk: RiskLevel): Boolean {
+        if (risk != RiskLevel.NORMAL) return false
+        if (cmd.toolName in READ_ONLY_TOOLS || cmd.toolName in COORDINATOR_TOOLS) return true
+        if (cmd.toolName in SHELL_TOOLS) return isSafeReadOnlyCommand(command)
+        return false
     }
 
     override fun preview(cmd: GateCommand): String {

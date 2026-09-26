@@ -88,6 +88,9 @@ class SessionForkManager(
         source.thinkingOverride?.let { override ->
             chatRepository.dao.updateThinkingOverride(new.id, override)
         }
+        source.permissionMode?.let { mode ->
+            chatRepository.dao.updatePermissionMode(new.id, mode)
+        }
         // [T-session-duplicate-compact-marker-android] Track old→new message id
         // and old→new sort_order so copied compact markers (which reference DB
         // message ids + legacy sort_orders) can be remapped onto the freshly

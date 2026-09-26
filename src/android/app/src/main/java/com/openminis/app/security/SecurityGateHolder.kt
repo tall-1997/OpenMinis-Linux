@@ -51,6 +51,16 @@ object SecurityGateHolder {
             .edit().putString(KEY_MODE, mode.name).apply()
     }
 
+    @Volatile
+    private var activeSessionMode: PermissionMode = PermissionMode.ASK
+
+    fun setActiveSessionMode(mode: PermissionMode) {
+        activeSessionMode = if (mode.isYoyo()) PermissionMode.ALLOW_ALL else PermissionMode.ASK
+        gate.setPermissionMode(activeSessionMode)
+    }
+
+    fun activeSessionMode(): PermissionMode = activeSessionMode
+
     fun setRules(context: Context, rules: List<PermissionRule>) {
         gate.setPermissionRules(rules)
         val arr = JSONArray()
@@ -85,7 +95,7 @@ object SecurityGateHolder {
         // it here — before any Denied short-circuit — is what stops "本会话全部
         // 允许" from swallowing the command with no dialog.
         val sessionAllowAll = ApprovalGate.isSessionAllowAll()
-        val mode = effectivePermissionMode(gate.getPermissionMode(), sessionAllowAll)
+        val mode = effectivePermissionMode(activeSessionMode, sessionAllowAll)
         val decision = gate.withCallerSession(callerSessionId) { gate.decide(cmd, mode) }
         gate.audit(cmd, decision, null)
         return when (decision) {

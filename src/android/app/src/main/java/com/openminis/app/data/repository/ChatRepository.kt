@@ -32,6 +32,7 @@ class ChatRepository(
         // here; existing call sites that omit it keep the prior
         // memoryEnabled=1 behavior (legacy default).
         memoryEnabled: Boolean = true,
+        permissionMode: String = "ASK",
     ): ChatSessionEntity {
         val now = System.currentTimeMillis()
         val session = ChatSessionEntity(
@@ -41,6 +42,7 @@ class ChatRepository(
             createdAt = now,
             updatedAt = now,
             memoryEnabled = if (memoryEnabled) 1 else 0,
+            permissionMode = permissionMode,
         )
         dao.insertSession(session)
         return session
