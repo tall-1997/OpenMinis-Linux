@@ -1378,6 +1378,9 @@ class ProviderRepository(private val context: Context) {
         if (config.visionGroupId == groupId) {
             config.visionGroupId = null
         }
+        if (config.compactFallbackGroupId == groupId) {
+            config.compactFallbackGroupId = null
+        }
         config.agentLoopGroupIds.removeAll { it == groupId }
         saveConfig(config)
     }
@@ -1655,6 +1658,15 @@ class ProviderRepository(private val context: Context) {
             saveConfig(config)
         }
 
+    var compactFallbackGroupId: String?
+        get() = _config.value.compactFallbackGroupId
+        set(value) = synchronized(configLock) {
+            ensureConfigLoaded()
+            val config = workingCopy()
+            config.compactFallbackGroupId = value
+            saveConfig(config)
+        }
+
     /** True when a Vision Group is bound AND still exists. Gates read_image
      *  tool exposure for main models that cannot natively see images. */
     fun hasVisionGroupConfigured(): Boolean {
@@ -1712,6 +1724,33 @@ class ProviderRepository(private val context: Context) {
         }
         val out = mutableListOf<Pair<ProviderInstance, ModelEntry>>()
         for (m in members) {
+            if (out.none { it.second.id == m.second.id }) out.add(m)
+        }
+        return out
+    }
+
+    /**
+     * Compact fallback candidates from Defaults → Compact fallback.
+     * Pinned entry or group members; skips disabled instances. The compact
+     * path still prefers the current session model and only walks this list
+     * after that model fails.
+     */
+    fun resolveCompactFallbackCandidates(): List<Pair<ProviderInstance, ModelEntry>> {
+        ensureConfigLoaded()
+        val config = _config.value
+        fun providerEntry(memberId: String): Pair<ProviderInstance, ModelEntry>? {
+            val entry = config.modelEntries.find { it.id == memberId } ?: return null
+            val inst = config.instances.find { it.id == entry.providerInstanceId } ?: return null
+            if (!inst.isEnabled) return null
+            return inst to entry
+        }
+        val gid = config.compactFallbackGroupId ?: return emptyList()
+        val pinned = com.openminis.app.data.model.ModelSlotRef.entryId(gid)
+        if (pinned != null) return listOfNotNull(providerEntry(pinned))
+        val group = config.modelGroups.find { it.id == gid } ?: return emptyList()
+        val out = mutableListOf<Pair<ProviderInstance, ModelEntry>>()
+        for (id in group.memberEntryIds) {
+            val m = providerEntry(id) ?: continue
             if (out.none { it.second.id == m.second.id }) out.add(m)
         }
         return out

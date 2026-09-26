@@ -159,6 +159,44 @@ class ChatViewModel(
          */
         internal const val MAX_COMPACT_LLM_CALLS = 6
 
+        internal const val COMPACT_SEGMENT_MIN_TOKENS = 8_000
+        internal const val COMPACT_SEGMENT_MAX_TOKENS = 32_000
+
+        internal fun estimateCompactTokens(text: String): Int =
+            (text.length / 4).coerceAtLeast(1)
+
+        internal fun compactSegmentTokenBudget(contextWindow: Int): Int =
+            (contextWindow / 5).coerceIn(COMPACT_SEGMENT_MIN_TOKENS, COMPACT_SEGMENT_MAX_TOKENS)
+
+        internal fun shouldProactivelySplit(
+            messageCount: Int,
+            estimatedTokens: Int,
+            tokenBudget: Int,
+            depth: Int,
+            callsAlreadySpent: Int,
+        ): Boolean =
+            messageCount >= 2 &&
+                depth < 3 &&
+                estimatedTokens > tokenBudget &&
+                callsAlreadySpent + 2 <= MAX_COMPACT_LLM_CALLS
+
+        internal fun isFirstByteTimeout(error: Throwable): Boolean {
+            val detail = when (error) {
+                is LLMError.TransientError -> error.detail
+                else -> error.message
+            }?.lowercase() ?: return false
+            return detail.contains("no response") ||
+                detail.contains("ttfb") ||
+                detail.contains("first byte")
+        }
+
+        /** Two shots only: session, then fallback or one session retry. */
+        internal const val COMPACT_STAGE_BUDGET = 2
+
+        internal fun compactStageKinds(hasFallbackDistinctFromSession: Boolean): List<String> =
+            if (hasFallbackDistinctFromSession) listOf("session", "fallback")
+            else listOf("session", "session-retry")
+
         /** Floor for the dynamic wall-clock timeout. */
         internal const val COMPACT_TIMEOUT_BASE_MS = 90_000L
 
@@ -208,15 +246,15 @@ class ChatViewModel(
                     //  - NetworkError: never reached a model, size is irrelevant.
                     //  - RateLimited (429): refusing on quota, not length —
                     //    halving just doubles the rejected calls under backoff.
-                    //  - TransientError (5xx): server-side fault, payload
-                    //    independent; retrying smaller multiplies the outage.
+                    //  - TransientError: generic 5xx stays unsplit. First-byte
+                    //    watchdog ("no response" / TTFB) may split.
                     //  - InvalidApiKey: auth, not size.
                     is LLMError.Cancelled,
                     is LLMError.NetworkError,
                     is LLMError.RateLimited,
-                    is LLMError.TransientError,
                     is LLMError.InvalidApiKey,
                     -> false
+                    is LLMError.TransientError -> isFirstByteTimeout(error)
                     is LLMError.ProviderError ->
                         !error.detail.contains("[429]") &&
                             !com.openminis.app.provider.HttpRetryAfter.isPermanentCapacityBody(error.detail)
@@ -1169,6 +1207,14 @@ class ChatViewModel(
         val callBudget: Int = MAX_COMPACT_LLM_CALLS,
         /** Seconds the whole run is allowed before it is cancelled. */
         val timeoutSeconds: Int = 0,
+        /** 1-based stage in the two-shot compact plan. */
+        val stage: Int = 1,
+        val stageBudget: Int = 2,
+        /** session / fallback / session-retry */
+        val stageKind: String = "session",
+        val modelLabel: String = "",
+        /** What happens if this stage fails. */
+        val nextHint: String = "",
     )
 
     private val _compactProgress = MutableStateFlow<CompactProgress?>(null)
@@ -2481,17 +2527,23 @@ class ChatViewModel(
         val transcriptChars = buildConversationTextForSummary(toCompact).length
         val timeoutMs = compactTimeoutMsFor(transcriptChars)
         compactCallsIssued.set(0)
+        val stages = compactStagePlan()
         _compactProgress.value = CompactProgress(
             startedAtMs = System.currentTimeMillis(),
             depth = 0,
             callsIssued = 0,
-            callBudget = MAX_COMPACT_LLM_CALLS,
+            callBudget = COMPACT_STAGE_BUDGET,
             timeoutSeconds = (timeoutMs / 1000L).toInt(),
+            stage = 1,
+            stageBudget = stages.size.coerceAtLeast(1),
+            stageKind = stages.firstOrNull()?.kind ?: "session",
+            modelLabel = stages.firstOrNull()?.label ?: "session",
+            nextHint = stages.firstOrNull()?.nextHint ?: "",
         )
         AppLogger.info(
             TAG,
-            "[Compact] starting: ${toCompact.size} entries, ${transcriptChars} transcript chars, " +
-                "timeout=${timeoutMs / 1000}s, callBudget=$MAX_COMPACT_LLM_CALLS",
+            "[Compact] starting two-shot: ${toCompact.size} entries, ${transcriptChars} transcript chars, " +
+                "timeout=${timeoutMs / 1000}s, stages=${stages.joinToString { it.kind }}",
         )
         compactJob = viewModelScope.launch(Dispatchers.IO) {
             // [T-android-compact-queued-drain] Only a SUCCESSFUL compact kicks
@@ -2503,22 +2555,12 @@ class ChatViewModel(
             var timedOut = false
             try {
                 val existing = _compactSummary.value
-                // Mirrors iOS `generateCompactSummaryWithSplitting` — when the
-                // joined transcript exceeds the model's context window, halve
-                // the message list and summarize each half independently, then
-                // merge. depth cap=3 prevents pathological recursion.
-                //
-                // [T-android-compact-runaway] withTimeout bounds the WHOLE run,
-                // including every split segment. Without it the only ceiling was
-                // the provider's 10-minute readTimeout multiplied by however
-                // many sequential segments the split produced.
-                val summary = withTimeout(timeoutMs) {
-                    generateCompactSummaryWithSplitting(
-                        messages = toCompact,
-                        previousSummary = existing,
-                        depth = 0,
-                    )
-                }.trim()
+                val summary = runTwoShotCompact(
+                    messages = toCompact,
+                    previousSummary = existing,
+                    stages = stages,
+                    timeoutMs = timeoutMs,
+                )
                 if (summary.isEmpty()) {
                     withContext(Dispatchers.Main) {
                         appendSystemInfo("Compaction produced no output — try again later.", "compact")
@@ -3334,6 +3376,23 @@ class ChatViewModel(
             "Previous context summary:\n$previousSummary\n\n" +
                 "New conversation to merge:\n$transcript"
         }
+        val tokenBudget = compactSegmentTokenBudget(currentModel?.contextWindow ?: 128_000)
+        val estimatedTokens = estimateCompactTokens(conversationText)
+        if (compactAllowSplit && shouldProactivelySplit(
+                messages.size,
+                estimatedTokens,
+                tokenBudget,
+                depth,
+                compactCallsIssued.get(),
+            )
+        ) {
+            AppLogger.info(
+                TAG,
+                "[Compact] proactive split ${messages.size} msgs ~$estimatedTokens tok " +
+                    "(budget=$tokenBudget, depth=$depth)",
+            )
+            return splitCompactHalves(messages, previousSummary, depth)
+        }
         // [T-android-compact-runaway] Spend one unit of the run's call budget.
         // The depth cap bounds how DEEP the recursion goes; this bounds how
         // WIDE it gets in total, which is what actually determines wall-clock
@@ -3355,7 +3414,7 @@ class ChatViewModel(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            if (!isSegmentRetryableError(e) || messages.size < 2 || depth >= 3) {
+            if (!compactAllowSplit || !isSegmentRetryableError(e) || messages.size < 2 || depth >= 3) {
                 throw e
             }
             // Don't start a split we cannot afford to finish: a half that
@@ -3368,39 +3427,25 @@ class ChatViewModel(
                 )
                 throw e
             }
-            val mid = messages.size / 2
-            val firstHalf = messages.subList(0, mid).toList()
-            val secondHalf = messages.subList(mid, messages.size).toList()
             AppLogger.info(
                 TAG,
-                "[Compact] Splitting ${messages.size} messages into ${firstHalf.size} + ${secondHalf.size} (depth=$depth)",
+                "[Compact] Splitting ${messages.size} messages after retryable error (depth=$depth)",
             )
-            val summary1 = generateCompactSummaryWithSplitting(firstHalf, null, depth + 1)
-            val summary2 = generateCompactSummaryWithSplitting(secondHalf, null, depth + 1)
-            // Join the partials textually — the caller stores a single summary
-            // string, so segmentation stays invisible downstream.
-            //
-            // This used to be a THIRD LLM call that re-summarised the two
-            // partials. Dropped, because the size premise behind it does not
-            // hold: each segment's output is already hard-capped (see
-            // maxOutputTokens in generateCompactSummary), so two partials are
-            // nowhere near a context boundary and not worth another round-trip
-            // to shrink.
-            //
-            // It was also the one genuinely fragile step: the merge went
-            // through generateCompactSummary directly, with no depth and no
-            // split retry of its own, so a failure there threw away the
-            // segments that had just succeeded. The mechanism that exists to
-            // rescue a failing compaction ended its own happy path on an
-            // unprotected call. A string join cannot fail.
-            //
-            // What is lost is the merge prompt's cross-part editing (prefer the
-            // newer half, de-duplicate shared background). Accepted: the parts
-            // are already ordered oldest-first, which is the same signal in
-            // positional form, and each is internally coherent because it was
-            // summarised under the full system prompt.
-            summary1 + "\n\n" + summary2
+            return splitCompactHalves(messages, previousSummary = null, depth)
         }
+    }
+
+    private suspend fun splitCompactHalves(
+        messages: List<LLMMessage>,
+        previousSummary: String?,
+        depth: Int,
+    ): String {
+        val mid = messages.size / 2
+        val firstHalf = messages.subList(0, mid).toList()
+        val secondHalf = messages.subList(mid, messages.size).toList()
+        val summary1 = generateCompactSummaryWithSplitting(firstHalf, previousSummary, depth + 1)
+        val summary2 = generateCompactSummaryWithSplitting(secondHalf, null, depth + 1)
+        return summary1 + "\n\n" + summary2
     }
 
     /**
@@ -3427,29 +3472,147 @@ class ChatViewModel(
                     "was done\", NOT as an ongoing goal or todo list."
             )
         }
-        val model = currentModel
-        val contextWindow = model?.contextWindow ?: 128_000
-        val estimatedInput = userMessage.length / 4
-        val maxOut = maxOf(1024, minOf(8192, contextWindow - estimatedInput))
-        val provider = currentProvider
+        val attempt = compactLeafAttempt ?: compactStagePlan().firstOrNull()
             ?: throw IllegalStateException("No LLM provider available for compaction")
-        val response = provider.sendMessage(
+        AppLogger.info(TAG, "[Compact] leaf via ${attempt.label}")
+        val text = attempt.provider.sendMessage(
             messages = listOf(
                 LLMMessage(role = LLMMessage.Role.USER, content = userMessage)
             ),
             systemPrompt = compactSummarySystemPrompt,
-            maxTokens = maxOut,
-            // Mirror iOS AIChatViewModel.swift:12926 — null lets the
-            // provider/model use its default. gpt-5.x family rejects any
-            // temperature != 1 with HTTP 400, and Android
-            // OpenAIProvider.buildRequestBody omits the field entirely when
-            // temperature is null.
+            maxTokens = attempt.maxOutFor(userMessage),
             temperature = null,
             imageParts = emptyList(),
             tools = emptyList(),
             thinkingLevel = ThinkingLevel.OFF,
+        ).text
+        if (text.isBlank()) throw IllegalStateException("empty compact summary from ${attempt.label}")
+        return text
+    }
+
+    private data class CompactAttempt(
+        val kind: String,
+        val label: String,
+        val provider: LLMProvider,
+        val model: LLMModel,
+        val nextHint: String,
+    ) {
+        fun maxOutFor(userMessage: String): Int {
+            val estimatedInput = userMessage.length / 4
+            return maxOf(1024, minOf(8192, (model.contextWindow.takeIf { it > 0 } ?: 128_000) - estimatedInput))
+        }
+    }
+
+    @Volatile
+    private var compactLeafAttempt: CompactAttempt? = null
+
+    /** Two-shot compact: one leaf call per stage, no in-stage split fan-out. */
+    @Volatile
+    private var compactAllowSplit = false
+
+    private fun compactStagePlan(): List<CompactAttempt> {
+        val sessionProvider = currentProvider
+        val sessionModel = currentModel
+        if (sessionProvider == null || sessionModel == null) return emptyList()
+        val sessionName = sessionModel.displayName.ifBlank { sessionModel.id }
+        val fallback = providerRepository.resolveCompactFallbackCandidates()
+            .firstOrNull { it.second.model.id != sessionModel.id }
+            ?.let { (instance, entry) ->
+                val apiKey = runCatching { providerRepository.usableApiKey(instance) }.getOrNull()
+                val provider = apiKey?.let {
+                    runCatching { ProviderFactory.create(instance, it, entry.model, context) }.getOrNull()
+                }
+                if (provider == null) null
+                else CompactAttempt(
+                    kind = "fallback",
+                    label = entry.model.displayName.ifBlank { entry.model.id },
+                    provider = provider,
+                    model = entry.model,
+                    nextHint = "truncate",
+                )
+            }
+        val second = fallback ?: CompactAttempt(
+            kind = "session-retry",
+            label = sessionName,
+            provider = sessionProvider,
+            model = sessionModel,
+            nextHint = "truncate",
         )
-        return response.text
+        return listOf(
+            CompactAttempt(
+                kind = "session",
+                label = sessionName,
+                provider = sessionProvider,
+                model = sessionModel,
+                nextHint = if (fallback != null) "fallback" else "session-retry",
+            ),
+            second,
+        )
+    }
+
+    private suspend fun runTwoShotCompact(
+        messages: List<LLMMessage>,
+        previousSummary: String?,
+        stages: List<CompactAttempt>,
+        timeoutMs: Long,
+    ): String {
+        val existing = previousSummary
+        if (stages.isEmpty()) {
+            throw IllegalStateException("No LLM provider available for compaction")
+        }
+        var lastError: Exception? = null
+        for ((index, stage) in stages.withIndex()) {
+            val stageNo = index + 1
+            compactLeafAttempt = stage
+            _compactProgress.value = _compactProgress.value?.copy(
+                stage = stageNo,
+                stageBudget = stages.size,
+                stageKind = stage.kind,
+                modelLabel = stage.label,
+                nextHint = stage.nextHint,
+                callsIssued = stageNo,
+                callBudget = stages.size,
+            )
+            val headline = when (stage.kind) {
+                "fallback" -> "Compressing ($stageNo/${stages.size}) with fallback model ${stage.label}. If this fails, older context is truncated."
+                "session-retry" -> "Compressing ($stageNo/${stages.size}) retrying current model ${stage.label}. No fallback set. If this fails, older context is truncated."
+                else -> "Compressing ($stageNo/${stages.size}) with current model ${stage.label}." +
+                    if (stage.nextHint == "fallback") " If this fails, the fallback model is tried once."
+                    else " If this fails, the current model is tried once more."
+            }
+            withContext(Dispatchers.Main) {
+                appendSystemInfo(headline, "compact")
+            }
+            try {
+                val stageTimeout = minOf(timeoutMs, 120_000L)
+                val text = withTimeout(stageTimeout) {
+                    generateCompactSummaryWithSplitting(messages, existing, 0)
+                }.trim()
+                if (text.isNotEmpty()) return text
+                lastError = IllegalStateException("empty compact summary from ${stage.label}")
+            } catch (e: CancellationException) {
+                if (e is kotlinx.coroutines.TimeoutCancellationException) {
+                    lastError = e
+                    AppLogger.warning(TAG, "[Compact] stage ${stage.kind} timed out")
+                } else {
+                    throw e
+                }
+            } catch (e: Exception) {
+                lastError = e
+                AppLogger.warning(TAG, "[Compact] stage ${stage.kind} failed: ${e.message}")
+            } finally {
+                compactLeafAttempt = null
+            }
+        }
+        AppLogger.warning(TAG, "[Compact] both stages failed, truncating older context: ${lastError?.message}")
+        withContext(Dispatchers.Main) {
+            appendSystemInfo(
+                "Both compact attempts failed (${lastError?.message ?: "no output"}). Truncating older context to continue.",
+                "compact",
+            )
+        }
+        return existing?.takeIf { it.isNotBlank() }
+            ?: "Earlier conversation was truncated after compaction failed. Recent turns remain below."
     }
 
     /**

@@ -184,12 +184,16 @@ class AgentForegroundService : Service() {
         // crashing" pattern. Skip the overlay observer and let
         // onStartCommand satisfy the FG-deadline + stopSelf.
         isRunning = true
+        createNotificationChannel()
+        startTimeMs = SystemClock.elapsedRealtime()
+        // Meet the startForeground deadline before any AMS/PendingIntent
+        // work. The 2026-09-24 crash was startForegroundService → empty
+        // session count → stop/destroy without startForeground.
+        promoteToForeground()
         if (com.openminis.app.crash.CrashFrequencyDetector.isSafeMode()) {
             Log.w(TAG, "safe-mode ON — skipping overlay/wake-lock bring-up")
-            createNotificationChannel()
             return
         }
-        createNotificationChannel()
         startTimeMs = SystemClock.elapsedRealtime()
         acquireWakeLock()
         startOverlayObserver()
@@ -220,6 +224,7 @@ class AgentForegroundService : Service() {
         // with a stub notification, then unwind. The crash share dialog
         // owns the UX from here; running a background service in this
         // state would re-trip the lateinit access that brought us down.
+        promoteToForeground()
         if (com.openminis.app.crash.CrashFrequencyDetector.isSafeMode()) {
             try {
                 val stub = androidx.core.app.NotificationCompat.Builder(this, CHANNEL_ID)
@@ -248,6 +253,7 @@ class AgentForegroundService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
+        promoteToForeground()
         if (intent?.action == ACTION_APPROVE || intent?.action == ACTION_DENY) {
             // [T-android-notif-approval] Approval notification action fallback.
             // PendingIntent targets ApprovalBroadcastReceiver (getBroadcast), which
@@ -266,6 +272,7 @@ class AgentForegroundService : Service() {
             if (id != null) com.openminis.app.notification.ApprovalNotifier.cancelApproval(this, id)
             return START_NOT_STICKY
         }
+        promoteToForeground()
         if (intent?.action == ACTION_STOP) {
             // T50: the notification's Stop action — also cancel every
             // running agent loop. Without this, stopSelf() alone leaves
@@ -320,31 +327,66 @@ class AgentForegroundService : Service() {
         val sessionCount = intent?.getIntExtra(EXTRA_SESSION_COUNT, 0) ?: 0
         val toolStatus = intent?.getStringExtra(EXTRA_TOOL_STATUS) ?: "Idle"
 
-        val notification = buildNotification(sessionCount, toolStatus)
-
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                startForeground(
-                    NOTIFICATION_ID,
-                    notification,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
-                )
-            } else {
-                startForeground(NOTIFICATION_ID, notification)
-            }
-            lastNotifyAt = SystemClock.elapsedRealtime()
-            lastStructuralKey = structuralKey()
-            lastFullKey = fullKey()
-        } catch (e: Exception) {
-            // Missing POST_NOTIFICATIONS, a disallowed FGS type, or a
-            // background start that slipped past startForegroundService.
-            // stopSelf so the process is not killed for missing startForeground.
-            Log.w(TAG, "startForeground failed: ${e.message}")
+        if (!promoteToForeground(sessionCount, toolStatus)) {
+            Log.w(TAG, "startForeground failed")
             stopSelf()
             return START_NOT_STICKY
         }
 
         return START_STICKY
+    }
+
+    /**
+     * Satisfy the FGS deadline with a cached notification first. Building
+     * the full status row hits AMS PendingIntent and can stall past 5s on
+     * MIUI; that must never precede startForeground.
+     */
+    private fun promoteToForeground(sessionCount: Int? = null, toolStatus: String? = null): Boolean {
+        val stub = lastForegroundNotification ?: stubForegroundNotification()
+        if (!applyForeground(stub)) return false
+        lastNotifyAt = SystemClock.elapsedRealtime()
+        try {
+            val full = buildNotification(
+                sessionCount ?: SessionActivityTracker.activeSessions.value.size,
+                toolStatus ?: SessionActivityTracker.currentToolStatus.value.ifBlank { "Idle" },
+            )
+            applyForeground(full)
+            lastStructuralKey = structuralKey()
+            lastFullKey = fullKey()
+        } catch (t: Throwable) {
+            Log.w(TAG, "full notification deferred: ${t.message}")
+        }
+        return true
+    }
+
+    private var lastForegroundNotification: Notification? = null
+
+    private fun stubForegroundNotification(): Notification =
+        NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("Minis Ultra")
+            .setContentText("Starting")
+            .setSmallIcon(android.R.drawable.stat_notify_sync)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .build()
+
+    private fun applyForeground(notification: Notification): Boolean {
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(
+                    NOTIFICATION_ID,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK,
+                )
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+            lastForegroundNotification = notification
+            true
+        } catch (t: Throwable) {
+            Log.w(TAG, "applyForeground failed: ${t.message}")
+            false
+        }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null

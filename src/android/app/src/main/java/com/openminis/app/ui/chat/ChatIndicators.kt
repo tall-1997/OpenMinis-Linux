@@ -122,18 +122,28 @@ internal fun CompactProgressIndicator(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = if (progress.depth > 0) {
-                // Only surfaced once a split actually happened — saying
-                // "segment 1" on the common single-call path would imply a
-                // complexity that isn't there.
-                stringResource(
-                    R.string.compact_progress_split,
+            text = when (progress.stageKind) {
+                "fallback" -> stringResource(
+                    R.string.compact_progress_fallback,
+                    progress.stage,
+                    progress.stageBudget,
+                    progress.modelLabel.ifBlank { "fallback" },
                     elapsedSec,
-                    progress.callsIssued,
-                    progress.callBudget,
                 )
-            } else {
-                stringResource(R.string.compact_progress, elapsedSec)
+                "session-retry" -> stringResource(
+                    R.string.compact_progress_session_retry,
+                    progress.stage,
+                    progress.stageBudget,
+                    progress.modelLabel.ifBlank { "session" },
+                    elapsedSec,
+                )
+                else -> stringResource(
+                    R.string.compact_progress_session,
+                    progress.stage.coerceAtLeast(1),
+                    progress.stageBudget.coerceAtLeast(2),
+                    progress.modelLabel.ifBlank { "session" },
+                    elapsedSec,
+                )
             },
             fontSize = 14.sp,
             color = ChatColors.tertiaryText,

@@ -329,11 +329,21 @@ fun ModelGroupsScreen(
                             selectedId = config.visionGroupId,
                             onSelect = { providerRepository.visionGroupId = it },
                         )
+                        SectionDivider()
+                        SlotPickerField(
+                            label = stringResource(R.string.model_groups_compact_fallback),
+                            groups = groups,
+                            entries = config.modelEntries,
+                            instances = config.instances,
+                            selectedId = config.compactFallbackGroupId,
+                            onSelect = { providerRepository.compactFallbackGroupId = it },
+                        )
                     }
                 }
                 item("defaults_section_footer") {
                     SectionFooter(
-                        text = stringResource(R.string.model_groups_primary_is_used_for_main_agent_tasks_sub),
+                        text = stringResource(R.string.model_groups_primary_is_used_for_main_agent_tasks_sub) +
+                            "\n" + stringResource(R.string.model_groups_compact_fallback_footer),
                     )
                 }
             }

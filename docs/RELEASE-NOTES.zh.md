@@ -1,3 +1,10 @@
+# OpenMinis-Linux 2.0.3-linux
+
+- versionCode **203**
+- 压缩两档各一次：当前模型 → 备用或再试当前模型；两次失败截断上文。前台服务先挂通知再构建完整状态，避免未及时 startForeground 被杀。详见 `docs/github-release-2.0.3-linux.md`。
+
+---
+
 # OpenMinis-Linux 2.0.2-linux
 
 - versionCode **202**

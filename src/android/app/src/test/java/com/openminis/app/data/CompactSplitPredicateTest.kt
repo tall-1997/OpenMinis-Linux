@@ -32,6 +32,11 @@ class CompactSplitPredicateTest {
     @Test
     fun `transient server errors do not split`() {
         assertFalse(shouldSplitOnError(LLMError.TransientError("502 Bad Gateway")))
+        assertTrue(
+            shouldSplitOnError(
+                LLMError.TransientError("no response from server (120s TTFB) — check network/proxy"),
+            ),
+        )
     }
 
     @Test

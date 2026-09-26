@@ -261,6 +261,8 @@
     <string name="model_groups_voice_input">语音输入</string>
     <string name="model_groups_voice_output">语音输出</string>
     <string name="model_groups_vision">视觉输入</string>
+    <string name="model_groups_compact_fallback">压缩备用模型</string>
+    <string name="model_groups_compact_fallback_footer">当前模型先压一次。失败后备用模型再压一次；未设置备用则用当前模型再试一次。两次都失败就截断更早上文。</string>
     <string name="mcp_form_env_insert_app_var">插入应用变量</string>
     <string name="mcp_form_env_clear">清除</string>
     <string name="mcp_form_env_clear_confirm_title">清除环境变量？</string>
@@ -2017,6 +2019,9 @@
     <string name="chat_input_placeholder_hint_5">Minis Ultra 可以把 ↩︎ 键设为发送或换行</string>
     <string name="compact_progress">正在压缩… 已进行 %1$d 秒</string>
     <string name="compact_progress_split">正在压缩… %1$d 秒 · 分段摘要中（%2$d/%3$d）</string>
+    <string name="compact_progress_session">正在压缩（%1$d/%2$d）当前模型 %3$s… %4$d 秒。失败后会试备用或再试当前模型一次。</string>
+    <string name="compact_progress_fallback">正在压缩（%1$d/%2$d）备用模型 %3$s… %4$d 秒。再失败将截断更早上文。</string>
+    <string name="compact_progress_session_retry">正在压缩（%1$d/%2$d）重试当前模型 %3$s… %4$d 秒。未设置备用。再失败将截断更早上文。</string>
 <!-- 1.15-linux -->
     <string name="settings_web_search">网络搜索</string>
     <string name="settings_web_search_subtitle">Tavily、博查、Exa、Brave、Jina、智谱、Bing、SearXNG 或自定义</string>

@@ -294,6 +294,8 @@
     <string name="model_groups_voice_output">Voice Output</string>
     <!-- [T-android-vision-group / GH#182] Vision Input slot label: the group whose vision-capable members read images for a main model that cannot natively see them. -->
     <string name="model_groups_vision">Vision Input</string>
+    <string name="model_groups_compact_fallback">Compact fallback</string>
+    <string name="model_groups_compact_fallback_footer">Current model is tried once. If that fails, the fallback is tried once. With no fallback, the current model is retried once. Two failures truncate older context.</string>
     <!-- [T-mcp-env-var-picker-android] Insert a reference to an App env var as $$VAR -->
     <string name="mcp_form_env_insert_app_var">Insert app var</string>
     <!-- [T-mcp-env-var-delete-confirm-android] Clear-all env vars affordance + confirm -->
@@ -2194,6 +2196,9 @@
     <!-- [T-android-compact-progress] Live status while a compaction runs. -->
     <string name="compact_progress">Compacting… %1$d s elapsed</string>
     <string name="compact_progress_split">Compacting… %1$d s · summarizing in segments (%2$d/%3$d)</string>
+    <string name="compact_progress_session">Compressing (%1$d/%2$d) with current model %3$s… %4$d s. If this fails, the fallback or a one-shot retry runs.</string>
+    <string name="compact_progress_fallback">Compressing (%1$d/%2$d) with fallback model %3$s… %4$d s. If this fails, older context is truncated.</string>
+    <string name="compact_progress_session_retry">Compressing (%1$d/%2$d) retrying current model %3$s… %4$d s. No fallback set. If this fails, older context is truncated.</string>
 <!-- 1.15-linux -->
     <string name="settings_web_search">Web search</string>
     <string name="settings_web_search_subtitle">Tavily, Bocha, Exa, Brave, Jina, Zhipu, Bing, SearXNG, or custom</string>

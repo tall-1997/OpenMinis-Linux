@@ -435,6 +435,9 @@ data class ProviderConfig(
     // voiceInputGroupId (meta KV row, not synced CRDT member maps). Absent in
     // old persisted JSON → deserializes to null (ignoreUnknownKeys + default).
     var visionGroupId: String? = null,
+    // Compact fallback: used only after the current session model fails to
+    // compact. Same slot shape as visionGroupId (group id or entry:<id>).
+    var compactFallbackGroupId: String? = null,
     // Unused translation slot kept so old configs still load and save. Live
     // translation reads TranslationPrefs, not this field. Absent → null.
     var defaultTranslationModelId: String? = null,

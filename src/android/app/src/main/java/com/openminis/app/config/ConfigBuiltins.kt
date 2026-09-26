@@ -886,6 +886,25 @@ internal object ConfigBuiltins {
                 },
             )
         )
+        r.register(
+            ClosureField(
+                path = "defaults.compactFallback",
+                displayName = "Compact fallback",
+                description = "Model or group used only after the current chat model fails to compact. Empty clears it. Accepts a group id or entry:<id>.",
+                valueSchema = ConfigSchema.Str(maxLength = 200),
+                risk = ConfigRisk.SENSITIVE,
+                revertable = true,
+                reader = { ConfigValue.Str(repo.compactFallbackGroupId ?: "") },
+                writer = { v ->
+                    val s = (v as? ConfigValue.Str)?.value ?: throw ConfigError.TypeMismatch("string")
+                    if (s.isEmpty()) {
+                        repo.compactFallbackGroupId = null
+                    } else {
+                        repo.compactFallbackGroupId = s
+                    }
+                },
+            )
+        )
     }
 
     // -- Soul (SOUL.md personality) --
