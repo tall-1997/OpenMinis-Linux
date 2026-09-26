@@ -19,8 +19,14 @@ object SecurityGateHolder {
 
     fun load(context: Context) {
         val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val mode = p.getString(KEY_MODE, PermissionMode.ASK.name) ?: PermissionMode.ASK.name
-        gate.setPermissionMode(runCatching { PermissionMode.valueOf(mode) }.getOrDefault(PermissionMode.ASK))
+        // Drop the retired five-mode global default. Tool gate is per-session
+        // now; leftover ALLOW_ALL / READ_ONLY / PLAN / DENY_ALL must not
+        // apply to upgraded chats before a session VM binds.
+        if (p.contains(KEY_MODE)) {
+            p.edit().putString(KEY_MODE, PermissionMode.ASK.name).apply()
+        }
+        activeSessionMode = PermissionMode.ASK
+        gate.setPermissionMode(PermissionMode.ASK)
         val raw = p.getString(KEY_RULES, "[]") ?: "[]"
         val rules = mutableListOf<PermissionRule>()
         runCatching {

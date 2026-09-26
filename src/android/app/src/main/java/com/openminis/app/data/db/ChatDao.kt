@@ -364,6 +364,16 @@ interface ChatDao {
     @Query("UPDATE sessions SET permission_mode = :value, updated_at = :updatedAt WHERE id = :id")
     suspend fun updatePermissionMode(id: String, value: String, updatedAt: Long = System.currentTimeMillis())
 
+    @Query(
+        """
+        UPDATE sessions SET permission_mode = 'ASK'
+        WHERE permission_mode IS NULL
+           OR TRIM(permission_mode) = ''
+           OR permission_mode IN ('DENY_ALL', 'READ_ONLY', 'PLAN')
+        """,
+    )
+    suspend fun backfillBlankPermissionModesToAsk()
+
     // Session: pinned_at
     @Query("UPDATE sessions SET pinned_at = :pinnedAt, updated_at = :updatedAt WHERE id = :id")
     suspend fun updatePinnedAt(id: String, pinnedAt: Long?, updatedAt: Long = System.currentTimeMillis())

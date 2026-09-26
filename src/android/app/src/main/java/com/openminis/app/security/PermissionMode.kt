@@ -22,6 +22,19 @@ enum class PermissionMode {
 
     /** Session-facing pair. Sub-agent fences still use READ_ONLY / PLAN / DENY_ALL. */
     fun isYoyo(): Boolean = this == ALLOW_ALL
+
+    companion object {
+        /**
+         * Session default is ASK. Only the 2.0.4+ menu token "YOYO" stays
+         * full-auto. Null, blank, READ_ONLY / PLAN / DENY_ALL, leftover
+         * global ALLOW_ALL, and unknown names all land on ASK so a
+         * 2.0.3 → 2.0.4 upgrade never inherits "全部允许".
+         */
+        fun sessionDefault(raw: String?): PermissionMode {
+            val token = raw?.trim()?.uppercase().orEmpty()
+            return if (token == "YOYO") ALLOW_ALL else ASK
+        }
+    }
 }
 
 /**

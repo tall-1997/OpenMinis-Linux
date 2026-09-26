@@ -439,6 +439,9 @@ abstract class AppDatabase : RoomDatabase() {
         val MIGRATION_16_17 = object : Migration(16, 17) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.addColumnIfMissing("sessions", "permission_mode", "TEXT")
+                // Pre-2.0.4 rows have NULL. Force ASK so upgraded chats
+                // do not inherit the old global ALLOW_ALL / READ_ONLY prefs.
+                db.execSQL("UPDATE sessions SET permission_mode = 'ASK' WHERE permission_mode IS NULL OR TRIM(permission_mode) = ''")
             }
         }
 

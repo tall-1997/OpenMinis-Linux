@@ -1,3 +1,10 @@
+# OpenMinis-Linux 2.0.5-linux
+
+- versionCode **205**
+- 低版本升级会话一律默认审批，不继承旧全局「全部允许」。详见 `docs/github-release-2.0.5-linux.md`。
+
+---
+
 # OpenMinis-Linux 2.0.4-linux
 
 - versionCode **204**

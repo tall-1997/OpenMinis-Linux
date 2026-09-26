@@ -476,6 +476,9 @@ class MinisApp : Application(), ImageLoaderFactory {
         // late, non-UI subsystem from permanently locking the user out
         // of an app whose UI dependencies are in fact ready.
         subsystemsInitialized = true
+            appCoroutineScopes.io.launch {
+                runCatching { chatRepository.dao.backfillBlankPermissionModesToAsk() }
+            }
             try {
                 Log.i("WebViewEngine", com.openminis.app.browser.WebViewEngine.snapshot(this).summary)
             } catch (t: Throwable) {

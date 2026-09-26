@@ -1661,7 +1661,8 @@ class ChatViewModel(
         val sid = realSessionId.ifEmpty { sessionId }
         if (!isDraft && sid.isNotBlank() && !sid.startsWith("__new__")) {
             viewModelScope.launch {
-                runCatching { chatRepository.dao.updatePermissionMode(sid, next.name) }
+                val stored = if (next.isYoyo()) "YOYO" else "ASK"
+                runCatching { chatRepository.dao.updatePermissionMode(sid, stored) }
             }
         }
     }
@@ -4406,12 +4407,9 @@ class ChatViewModel(
             _sessionTitle.value = session.title ?: "New Chat"
             _sessionCategory.value = session.category
             _memoryEnabled.value = session.memoryEnabled != 0
-            _permissionMode.value = runCatching {
-                com.openminis.app.security.PermissionMode.valueOf(session.permissionMode ?: "ASK")
-            }.getOrDefault(com.openminis.app.security.PermissionMode.ASK).let {
-                if (it.isYoyo()) com.openminis.app.security.PermissionMode.ALLOW_ALL
-                else com.openminis.app.security.PermissionMode.ASK
-            }
+            _permissionMode.value = com.openminis.app.security.PermissionMode.sessionDefault(
+                session.permissionMode,
+            )
             applyGateMode(_permissionMode.value)
             // T239: hydrate persisted thinking-mode override. null = unset
             // (use OFF as the legacy default); non-null = explicit user
