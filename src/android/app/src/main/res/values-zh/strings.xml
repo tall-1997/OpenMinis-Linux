@@ -2211,4 +2211,15 @@
     <string name="mirror_region_global">全球</string>
     <string name="mirror_region_china">中国</string>
     <string name="mirror_region_asia">亚洲</string>
+    <string name="execution_resources">执行资源</string>
+    <string name="execution_resources_help">对所有会话的重型沙箱调用生效。轻工具和模型请求继续，运行中的任务不暂停、不强杀。资源等待不计入执行时间；排队超时为不限时，持续等待至资源恢复或用户取消。不限制单任务内存。</string>
+    <string name="execution_auto">自动调整并发</string>
+    <string name="execution_concurrent">沙箱命令并发上限</string>
+    <string name="execution_heavy">重任务并发上限</string>
+    <string name="execution_queue">高级执行设置</string>
+    <string name="execution_queue_timeout">排队超时（与执行超时分开）</string>
+    <string name="execution_idle_count">空闲 Shell 保留数量</string>
+    <string name="execution_idle_minutes">空闲 Shell 回收时间</string>
+    <string name="execution_minutes_value">%1$d 分钟</string>
+    <string name="execution_idle_help">只回收确认空闲的 Shell。后台进程受保护，进程状态不确定时不自动回收。回收后 Shell 内临时变量和工作目录会重置。</string>
 </resources>

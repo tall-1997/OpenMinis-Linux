@@ -2388,4 +2388,15 @@
     <string name="mirror_region_global">Global</string>
     <string name="mirror_region_china">China</string>
     <string name="mirror_region_asia">Asia</string>
+    <string name="execution_resources">Execution resources</string>
+    <string name="execution_resources_help">Applies to heavy sandbox calls across all chats. Light tools and model requests continue. Running tasks are never paused or killed. Waiting does not consume execution time; zero queue timeout means wait until resources recover or you cancel. No per-task memory cap is imposed.</string>
+    <string name="execution_auto">Automatically adjust concurrency</string>
+    <string name="execution_concurrent">Sandbox command concurrency limit</string>
+    <string name="execution_heavy">Heavy task concurrency limit</string>
+    <string name="execution_queue">Advanced execution settings</string>
+    <string name="execution_queue_timeout">Queue timeout (separate from execution)</string>
+    <string name="execution_idle_count">Idle shells to retain</string>
+    <string name="execution_idle_minutes">Idle shell timeout</string>
+    <string name="execution_minutes_value">%1$d min</string>
+    <string name="execution_idle_help">Only shells confirmed idle are reclaimed. Background processes are protected; uncertain process state prevents automatic reclamation. Shell-local variables and working directory reset after reclamation.</string>
 </resources>

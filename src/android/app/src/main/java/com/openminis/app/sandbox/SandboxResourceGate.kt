@@ -10,7 +10,7 @@ import java.util.concurrent.ConcurrentHashMap
  * shared PRoot guest (one gradle daemon, one SDK tree, one apt dpkg lock).
  */
 object SandboxResourceGate {
-    private val heavyLock = Mutex()
+    private val executionGate = AdaptiveExecutionGate()
 
     enum class ResourceClass { AUTO, HEAVY }
 
@@ -23,38 +23,6 @@ object SandboxResourceGate {
             .containsMatchIn(command.lowercase())
     }
 
-    /** Wait budgets apply only to admission, never to the admitted task. */
-    private suspend fun acquire(mutex: Mutex, waitMs: Long, reason: String, onWaiting: (String) -> Unit) {
-        val started = System.nanoTime()
-        var notified = false
-        while (!mutex.tryLock()) {
-            if (!notified) { onWaiting(reason); notified = true }
-            if ((System.nanoTime() - started) / 1_000_000 >= waitMs) error(reason)
-            delay(50)
-        }
-    }
-
-    private suspend fun <T> withHeavyBudget(
-        waitMs: Long,
-        pressure: suspend () -> String?,
-        onWaiting: (String) -> Unit,
-        block: suspend () -> T,
-    ): T {
-        acquire(heavyLock, waitMs, "Another heavy task is running; waiting for its memory budget", onWaiting)
-        try {
-            val start = System.nanoTime()
-            var previous: String? = null
-            while (true) {
-                val reason = pressure() ?: break
-                if (reason != previous) { onWaiting(reason); previous = reason }
-                if ((System.nanoTime() - start) / 1_000_000 >= waitMs) error(reason)
-                delay(1_000)
-            }
-            return block()
-        } finally {
-            heavyLock.unlock()
-        }
-    }
     /**
      * Shared with [RootfsManager] so boot-time `minis-mirror` / dpkg-world
      * restore cannot race an agent `apt-get` / `minis-dev-setup` on the guest
@@ -100,27 +68,40 @@ object SandboxResourceGate {
      */
     suspend fun <T> withCommandLock(
         command: String,
-        aptWaitMs: Long = APT_WAIT_MS,
+        aptWaitMs: Long = com.openminis.app.data.ToolLimitPrefs.queueTimeoutSec() * 1000L,
         resourceClass: ResourceClass = ResourceClass.AUTO,
         pressure: suspend () -> String? = { null },
         onWaiting: (String) -> Unit = {},
+        limits: () -> Pair<Int, Int> = {
+            val total = com.openminis.app.data.ToolLimitPrefs.commandConcurrency()
+            total to minOf(total, com.openminis.app.data.ToolLimitPrefs.heavyConcurrency())
+        },
         block: suspend () -> T,
     ): T {
-        return when {
-            // Package manager wins when a line matches both (apt-get install gradle).
-            isPackageManager(command) -> withAptLock(aptWaitMs) {
-                withHeavyBudget(aptWaitMs, pressure, onWaiting, block)
-            }
-            resourceClass == ResourceClass.HEAVY || isHeavy(command) ->
-                withHeavyBudget(aptWaitMs, pressure, onWaiting, block)
-            else -> block()
-        }
+        val heavy = resourceClass == ResourceClass.HEAVY || isHeavy(command)
+        // Light commands (including cleanup) do not consume heavy permits.
+        // Their per-lane serialization remains in ExecutionCoordinator.
+        if (!heavy) return block()
+        val queuedAt = System.nanoTime()
+        suspend fun admitted(): T = executionGate.run(
+            heavy, if (aptWaitMs <= 0) 0 else
+                (aptWaitMs - (System.nanoTime() - queuedAt) / 1_000_000).also {
+                    check(it > 0) { "Execution queue timed out; command was not started" }
+                },
+            limits = { limits().let { AdaptiveExecutionGate.Limits(it.first, it.second) } },
+            pressure = { if (heavy) pressure() else null },
+            onWaiting = onWaiting,
+            block = block,
+        )
+        return if (isPackageManager(command)) withAptLock(aptWaitMs, onWaiting) { admitted() }
+        else admitted()
     }
 
-    private suspend fun <T> withAptLock(waitMs: Long, block: suspend () -> T): T {
+    private suspend fun <T> withAptLock(waitMs: Long, onWaiting: (String) -> Unit, block: suspend () -> T): T {
+        if (aptMutex.isLocked) onWaiting("WAITING_RESOURCE: package manager is busy; command not started")
         if (!awaitAptLock(waitMs)) {
             throw RuntimeException(
-                "apt/dpkg is busy for 5+ minutes (another install is running). Retry later.",
+                "Package manager queue timed out; command was not started.",
             )
         }
         try {
@@ -134,7 +115,7 @@ object SandboxResourceGate {
     private suspend fun awaitAptLock(waitMs: Long): Boolean {
         val deadline = System.currentTimeMillis() + waitMs.coerceAtLeast(0L)
         while (!aptMutex.tryLock()) {
-            if (System.currentTimeMillis() >= deadline) return false
+            if (waitMs > 0 && System.currentTimeMillis() >= deadline) return false
             delay(50)
         }
         return true

@@ -32,6 +32,23 @@ object ToolLimitPrefs {
     const val MAX_SUBAGENT_MAX_TURNS = 200
     const val TURNS_STEP = 10
 
+    fun idleShellCount(): Int = (prefs?.getInt("idleShellCount", 2) ?: 2).coerceIn(0, 8)
+    fun idleShellMinutes(): Int = (prefs?.getInt("idleShellMinutes", 3) ?: 3).coerceIn(1, 30)
+    fun setIdleShellCount(value: Int) = put("idleShellCount", value.coerceIn(0, 8))
+    fun setIdleShellMinutes(value: Int) = put("idleShellMinutes", value.coerceIn(1, 30))
+
+    fun autoConcurrency(): Boolean = prefs?.getBoolean("autoConcurrency", true) ?: true
+    fun setAutoConcurrency(value: Boolean) {
+        prefs?.edit()?.putBoolean("autoConcurrency", value)?.apply()
+        _revision.value++
+    }
+    fun commandConcurrency(): Int = (prefs?.getInt("commandConcurrency", 4) ?: 4).coerceIn(1, 8)
+    fun heavyConcurrency(): Int = (prefs?.getInt("heavyConcurrency", 1) ?: 1).coerceIn(1, 4)
+    fun queueTimeoutSec(): Int = (prefs?.getInt("queueTimeoutSec", 0) ?: 0).coerceIn(0, 1800)
+    fun setCommandConcurrency(value: Int) = put("commandConcurrency", value.coerceIn(1, 8))
+    fun setHeavyConcurrency(value: Int) = put("heavyConcurrency", value.coerceIn(1, 4))
+    fun setQueueTimeoutSec(value: Int) = put("queueTimeoutSec", value.coerceIn(0, 1800))
+
     private const val KEY_SHELL = "shellTimeoutSec"
     private const val KEY_CHARS = "fileReadMaxChars"
     private const val KEY_LINES = "fileReadMaxLines"

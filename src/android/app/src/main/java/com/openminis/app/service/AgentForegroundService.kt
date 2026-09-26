@@ -60,9 +60,6 @@ class AgentForegroundService : Service() {
         private const val CHANNEL_ID = "agent_status"
         private const val PREFS = "agent_fgs"
         private const val KEY_CHANNEL_RESTORED = "channel_visible_restored"
-        /** Tool switches post immediately after this gap; text-only ticks wait longer. */
-        private const val STRUCT_GAP_MS = 1_500L
-        private const val TEXT_GAP_MS = 30_000L
 
         @Volatile
         var isRunning: Boolean = false
@@ -76,9 +73,6 @@ class AgentForegroundService : Service() {
         // intentionally LOW so it doesn't make sound on every tool).
         private const val OVERLAY_NUDGE_CHANNEL_ID = "overlay_permission_nudge"
         private const val OVERLAY_NUDGE_NOTIFICATION_ID = 9002
-
-        private const val EXTRA_SESSION_COUNT = "session_count"
-        private const val EXTRA_TOOL_STATUS = "tool_status"
 
         // [T-android-dynamic-island] Framework extras key read by
         // Notification.isRequestPromotedOngoing() (Android 16). Not exported as
@@ -99,11 +93,10 @@ class AgentForegroundService : Service() {
         /**
          * Starts or updates the foreground service with current status.
          */
-        fun startService(context: Context, sessionCount: Int, toolStatus: String) {
-            val intent = Intent(context, AgentForegroundService::class.java).apply {
-                putExtra(EXTRA_SESSION_COUNT, sessionCount)
-                putExtra(EXTRA_TOOL_STATUS, toolStatus)
-            }
+        fun startService(context: Context) {
+            // The tracker is the source of truth; carrying a second status
+            // snapshot in start intents caused stale/duplicate foreground posts.
+            val intent = Intent(context, AgentForegroundService::class.java)
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     context.startForegroundService(intent)
@@ -186,15 +179,13 @@ class AgentForegroundService : Service() {
         isRunning = true
         createNotificationChannel()
         startTimeMs = SystemClock.elapsedRealtime()
-        // Meet the startForeground deadline before any AMS/PendingIntent
-        // work. The 2026-09-24 crash was startForegroundService → empty
-        // session count → stop/destroy without startForeground.
-        promoteToForeground()
-        if (com.openminis.app.crash.CrashFrequencyDetector.isSafeMode()) {
-            Log.w(TAG, "safe-mode ON — skipping overlay/wake-lock bring-up")
+        // Meet the deadline before creating PendingIntents or starting observers.
+        // Exactly one cheap, unpromoted placeholder per service instance.
+        publishBootstrap()
+        if (!bootstrapPosted || com.openminis.app.crash.CrashFrequencyDetector.isSafeMode()) {
+            Log.w(TAG, "foreground unavailable or safe-mode ON — skipping overlay/wake-lock bring-up")
             return
         }
-        startTimeMs = SystemClock.elapsedRealtime()
         acquireWakeLock()
         startOverlayObserver()
         Log.d(TAG, "Service created")
@@ -219,41 +210,21 @@ class AgentForegroundService : Service() {
                 "processAliveMs=${android.os.SystemClock.elapsedRealtime() - processStartElapsedMs} " +
                 "slots=${SessionConcurrencyManager.diagSnapshot()}",
         )
-        // Safe-mode: system restarted us under START_STICKY (intent==null)
-        // after a crash. Satisfy the 5-second startForeground deadline
-        // with a stub notification, then unwind. The crash share dialog
-        // owns the UX from here; running a background service in this
-        // state would re-trip the lateinit access that brought us down.
-        promoteToForeground()
-        if (com.openminis.app.crash.CrashFrequencyDetector.isSafeMode()) {
-            try {
-                val stub = androidx.core.app.NotificationCompat.Builder(this, CHANNEL_ID)
-                    .setContentTitle("Minis Ultra")
-                    .setSmallIcon(android.R.drawable.stat_sys_warning)
-                    .setOngoing(false)
-                    .build()
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    startForeground(
-                        NOTIFICATION_ID,
-                        stub,
-                        ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK,
-                    )
-                } else {
-                    startForeground(NOTIFICATION_ID, stub)
-                }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                    stopForeground(STOP_FOREGROUND_REMOVE)
-                } else {
-                    @Suppress("DEPRECATION")
-                    stopForeground(true)
-                }
-            } catch (t: Throwable) {
-                Log.w(TAG, "safe-mode stub startForeground failed: ${t.message}")
-            }
+        // onCreate already satisfied the foreground deadline with a plain stub.
+        // If even the stub failed, no background service should remain alive.
+        if (!bootstrapPosted || com.openminis.app.crash.CrashFrequencyDetector.isSafeMode()) {
             stopSelf()
             return START_NOT_STICKY
         }
-        promoteToForeground()
+        // START_STICKY restores the service, not in-memory agent jobs. Do not
+        // leave an orphan foreground notification after a process restart.
+        if (intent == null &&
+            SessionActivityTracker.activeSessions.value.isEmpty() &&
+            SessionActivityTracker.presentSessions.value.isEmpty()
+        ) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
         if (intent?.action == ACTION_APPROVE || intent?.action == ACTION_DENY) {
             // [T-android-notif-approval] Approval notification action fallback.
             // PendingIntent targets ApprovalBroadcastReceiver (getBroadcast), which
@@ -272,7 +243,6 @@ class AgentForegroundService : Service() {
             if (id != null) com.openminis.app.notification.ApprovalNotifier.cancelApproval(this, id)
             return START_NOT_STICKY
         }
-        promoteToForeground()
         if (intent?.action == ACTION_STOP) {
             // T50: the notification's Stop action — also cancel every
             // running agent loop. Without this, stopSelf() alone leaves
@@ -324,42 +294,16 @@ class AgentForegroundService : Service() {
             return START_NOT_STICKY
         }
 
-        val sessionCount = intent?.getIntExtra(EXTRA_SESSION_COUNT, 0) ?: 0
-        val toolStatus = intent?.getStringExtra(EXTRA_TOOL_STATUS) ?: "Idle"
-
-        if (!promoteToForeground(sessionCount, toolStatus)) {
-            Log.w(TAG, "startForeground failed")
-            stopSelf()
-            return START_NOT_STICKY
-        }
-
+        // The stub was posted once in onCreate. Subsequent start intents only
+        // update the visible state if it actually changed; never replay it.
+        requestStatusRefresh()
         return START_STICKY
     }
 
-    /**
-     * Satisfy the FGS deadline with a cached notification first. Building
-     * the full status row hits AMS PendingIntent and can stall past 5s on
-     * MIUI; that must never precede startForeground.
-     */
-    private fun promoteToForeground(sessionCount: Int? = null, toolStatus: String? = null): Boolean {
-        val stub = lastForegroundNotification ?: stubForegroundNotification()
-        if (!applyForeground(stub)) return false
-        lastNotifyAt = SystemClock.elapsedRealtime()
-        try {
-            val full = buildNotification(
-                sessionCount ?: SessionActivityTracker.activeSessions.value.size,
-                toolStatus ?: SessionActivityTracker.currentToolStatus.value.ifBlank { "Idle" },
-            )
-            applyForeground(full)
-            lastStructuralKey = structuralKey()
-            lastFullKey = fullKey()
-        } catch (t: Throwable) {
-            Log.w(TAG, "full notification deferred: ${t.message}")
-        }
-        return true
+    private var bootstrapPosted = false
+    private fun publishBootstrap() {
+        bootstrapPosted = applyForeground(stubForegroundNotification())
     }
-
-    private var lastForegroundNotification: Notification? = null
 
     private fun stubForegroundNotification(): Notification =
         NotificationCompat.Builder(this, CHANNEL_ID)
@@ -381,7 +325,6 @@ class AgentForegroundService : Service() {
             } else {
                 startForeground(NOTIFICATION_ID, notification)
             }
-            lastForegroundNotification = notification
             true
         } catch (t: Throwable) {
             Log.w(TAG, "applyForeground failed: ${t.message}")
@@ -426,23 +369,9 @@ class AgentForegroundService : Service() {
             return
         }
         Log.d(TAG, "onTaskRemoved with ${SessionActivityTracker.activeSessions.value.size} active session(s) — keeping service alive")
-        // Re-issue the foreground notification with current state so the
-        // OS sees us as a "live" foreground service after the task tear-
-        // down. Without this, OEM ROMs sometimes downgrade us to a plain
-        // background service and reclaim within ~60 s.
-        val notification = buildNotification(
-            SessionActivityTracker.activeSessions.value.size,
-            SessionActivityTracker.currentToolStatus.value,
-        )
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(
-                NOTIFICATION_ID,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK,
-            )
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
-        }
+        // Task removal is a real OEM re-anchor event, not a status tick.
+        // Force exactly one current-state publish through the same pipeline.
+        requestStatusRefresh(reanchor = true)
     }
 
     // [T-android-overlay-landscape-width-rotation-drift] A Service receives
@@ -545,24 +474,13 @@ class AgentForegroundService : Service() {
         overlayScope.launch {
             combine(
                 SessionActivityTracker.currentToolName,
-                SessionActivityTracker.currentToolStatus,
                 SessionActivityTracker.isToolRunning,
-                SessionActivityTracker.activeSessions,
+                SessionActivityTracker.notificationTimeline,
                 SessionActivityTracker.presentSessions,
-                SessionActivityTracker.lastTaskFinishedAtMs,
-            ) { values: Array<Any?> ->
-                val active = values[3] as Set<*>
-                val present = values[4] as Set<*>
-                val finished = values[5] as Long?
-                listOf(
-                    active.size,
-                    present.size,
-                    values[0],
-                    values[1],
-                    values[2],
-                    finished != null && active.isEmpty(),
-                    values[1],
-                ).joinToString("|")
+            ) { toolName, toolRunning, timeline, present ->
+                // Status text is deliberately absent: token/progress chatter is
+                // for the overlay, not a SystemUI notification reinflation.
+                listOf(toolName, toolRunning, timeline, present)
             }.distinctUntilChanged().collect {
                 requestStatusRefresh()
             }
@@ -611,7 +529,7 @@ class AgentForegroundService : Service() {
         // state.dynamicIslandEnabled comes through the combined flow and
         // capability is re-probed here, so toggling either the app switch or
         // the system Live-Updates grant hides/reveals the overlay live.
-        val diActive = DynamicIslandSupport.isDynamicIslandActive(
+        val diActive = state.hasActiveStream && DynamicIslandSupport.isDynamicIslandActive(
             this, state.dynamicIslandEnabled,
         )
         if (diActive) {
@@ -627,9 +545,7 @@ class AgentForegroundService : Service() {
             // once the chip is actually materialized (app backgrounded).
             if (lastDynamicIslandActive != true) {
                 lastDynamicIslandActive = true
-                if (SessionActivityTracker.activeSessions.value.isNotEmpty()) {
-                    refreshOngoingNotification()
-                }
+                refreshOngoingNotification()
             }
             Log.d(
                 TAG,
@@ -640,9 +556,7 @@ class AgentForegroundService : Service() {
         }
         if (lastDynamicIslandActive == true) {
             lastDynamicIslandActive = false
-            if (SessionActivityTracker.activeSessions.value.isNotEmpty()) {
-                refreshOngoingNotification()
-            }
+            refreshOngoingNotification()
         }
         // [T-android-overlay-show-if-busy] Overlay surfaces while the
         // agent is actively working — either an assistant streamJob is
@@ -759,90 +673,60 @@ class AgentForegroundService : Service() {
         if (controller.isShown) controller.hide()
     }
 
-    /**
-     * [T-android-dynamic-island] Re-post the ongoing status notification with
-     * the current session/status so a dynamic-island toggle flip switches the
-     * notification style (promoted ProgressStyle ↔ plain) without waiting for
-     * the next tool tick. Uses NotificationManager.notify on the same id — the
-     * service is already in the foreground for this id, so this updates it in
-     * place rather than posting a duplicate.
-     */
-    private fun refreshOngoingNotification() {
-        requestStatusRefresh(force = true)
-    }
+    /** Promotion changes are a state edge; they go through the same publisher. */
+    private fun refreshOngoingNotification() = requestStatusRefresh()
 
     private val notifyHandler = Handler(Looper.getMainLooper())
-    private var lastNotifyAt = 0L
-    private var lastStructuralKey: String? = null
-    private var lastFullKey: String? = null
-    private var refreshScheduled = false
+    private val notificationPolicy = ForegroundNotificationPolicy()
+    private val deferredRefresh = Runnable { requestStatusRefresh() }
 
-    private fun structuralKey(): String {
-        val active = SessionActivityTracker.activeSessions.value.size
-        val present = SessionActivityTracker.presentSessions.value.size
-        val tool = SessionActivityTracker.currentToolName.value.orEmpty()
-        val title = SessionActivityTracker.currentToolTitle.value.orEmpty()
-        val running = SessionActivityTracker.isToolRunning.value
-        val completed = SessionActivityTracker.lastTaskFinishedAtMs.value != null && active == 0
-        return "$active|$present|$tool|$title|$running|$completed|${lastDynamicIslandActive == true}"
-    }
-
-    private fun fullKey(): String =
-        structuralKey() + "|" + SessionActivityTracker.currentToolStatus.value.take(160)
-
-    private val deferredRefresh = Runnable {
-        refreshScheduled = false
-        postOngoingNotification()
-    }
-
-    /**
-     * Rebind the foreground notification only when the visible state changed.
-     * Tool switches wait at most [STRUCT_GAP_MS]; streaming status text waits
-     * [TEXT_GAP_MS]. The clock itself is a system chronometer, so it does not
-     * need a notify. Hiding the channel (IMPORTANCE_MIN) is not used — that
-     * removes the status bar / MIUI island row users expect.
-     */
-    private fun requestStatusRefresh(force: Boolean = false) {
-        val structural = structuralKey()
-        val full = fullKey()
-        if (!force && full == lastFullKey) return
-        val now = SystemClock.elapsedRealtime()
-        val gap = if (force || structural != lastStructuralKey) STRUCT_GAP_MS else TEXT_GAP_MS
-        if (force || now - lastNotifyAt >= gap) {
-            notifyHandler.removeCallbacks(deferredRefresh)
-            refreshScheduled = false
-            postOngoingNotification()
-            return
+    private fun notificationState(): ForegroundNotificationState {
+        val timeline = SessionActivityTracker.notificationTimeline.value
+        val active = timeline.activeCount
+        val app = (applicationContext as? MinisApp)?.takeIf { it.subsystemsReady() }
+        val promoted = active > 0 && DynamicIslandSupport.isDynamicIslandActive(
+            this, app?.backgroundSettingsRepository?.dynamicIslandEnabled?.value == true,
+        )
+        // A live-update chip does not show ephemeral tool output or elapsed
+        // text. The system chronometer renders time without posting anything.
+        val subtitle = when {
+            active == 0 -> getString(R.string.notif_in_session)
+            active == 1 -> getString(R.string.notif_one_task_running)
+            else -> getString(R.string.notif_n_tasks_running, active)
         }
-        if (!refreshScheduled) {
-            refreshScheduled = true
-            notifyHandler.postDelayed(deferredRefresh, gap - (now - lastNotifyAt))
-        }
+        return ForegroundNotificationState(
+            activeCount = active,
+            toolName = SessionActivityTracker.currentToolName.value,
+            isToolRunning = SessionActivityTracker.isToolRunning.value,
+            startedAtMs = timeline.startedAtMs ?: startTimeMs,
+            finishedAtMs = timeline.finishedAtMs?.takeIf { active == 0 },
+            promoted = promoted,
+            subtitle = subtitle,
+        ).stableForPromotion()
     }
 
-    private fun postOngoingNotification() {
-        try {
-            // [T-android-notif-running-count] Active streams only; presence
-            // must not inflate the running-task count.
-            val count = SessionActivityTracker.activeSessions.value.size
-            val notification = buildNotification(
-                count,
-                SessionActivityTracker.currentToolStatus.value,
-            )
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                startForeground(
-                    NOTIFICATION_ID,
-                    notification,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK,
-                )
-            } else {
-                startForeground(NOTIFICATION_ID, notification)
+    /** All status updates, mode transitions and OEM re-anchors share this path. */
+    private fun requestStatusRefresh(reanchor: Boolean = false) {
+        if (!bootstrapPosted) return
+        val state = notificationState()
+        val decision = if (reanchor) ForegroundNotificationPolicy.Decision.Publish else
+            notificationPolicy.decide(state, SystemClock.elapsedRealtime())
+        notifyHandler.removeCallbacks(deferredRefresh)
+        when (decision) {
+            ForegroundNotificationPolicy.Decision.Skip -> Unit
+            is ForegroundNotificationPolicy.Decision.Wait ->
+                notifyHandler.postDelayed(deferredRefresh, decision.delayMs)
+            ForegroundNotificationPolicy.Decision.Publish -> {
+                try {
+                    val notification = buildNotification(state)
+                    if (applyForeground(notification)) {
+                        notificationPolicy.markPublished(state, SystemClock.elapsedRealtime())
+                        Log.d(TAG, "status posted promoted=${state.promoted} active=${state.activeCount} completed=${state.completed}")
+                    }
+                } catch (t: Throwable) {
+                    Log.w(TAG, "status notification failed: ${t.message}")
+                }
             }
-            lastNotifyAt = SystemClock.elapsedRealtime()
-            lastStructuralKey = structuralKey()
-            lastFullKey = fullKey()
-        } catch (t: Throwable) {
-            Log.w(TAG, "postOngoingNotification failed: ${t.message}")
         }
     }
 
@@ -973,26 +857,11 @@ class AgentForegroundService : Service() {
         }
     }
 
-    private fun buildNotification(sessionCount: Int, toolStatus: String): Notification {
-        // [T-android-live-update-completed] The service outlives the task: it
-        // stays alive while the user is merely *present* in a chat (see
-        // SessionActivityTracker.shouldRunService), so after the agent finishes
-        // the ongoing notification / Live Update chip remains on screen. Anchor
-        // the elapsed time to the task's finish moment when there is one, so the
-        // timer freezes at the real run duration instead of counting service
-        // uptime forever — the reported bug was a completed task whose dynamic
-        // island kept ticking as though it were still running.
-        val finishedAtMs = SessionActivityTracker.lastTaskFinishedAtMs.value
-        val isCompleted = finishedAtMs != null && SessionActivityTracker.activeSessions.value.isEmpty()
-        val endMs = if (isCompleted) finishedAtMs!! else SystemClock.elapsedRealtime()
-        // Anchor to the current run's start, not the service's. The service is
-        // created once per presence window and outlives individual tasks, so
-        // startTimeMs would report "time spent in this chat" — and a second task
-        // in the same sitting would show a duration that already included the
-        // first. Fall back to startTimeMs for the presence-only case (user in a
-        // chat having never run anything), where no run anchor exists.
-        val anchorMs = SessionActivityTracker.currentRunStartedAtMs.value ?: startTimeMs
-        val elapsedMs = (endMs - anchorMs).coerceAtLeast(0L)
+    private fun buildNotification(state: ForegroundNotificationState): Notification {
+        val sessionCount = state.activeCount
+        val isCompleted = state.completed
+        val endMs = state.finishedAtMs ?: SystemClock.elapsedRealtime()
+        val elapsedMs = (endMs - state.startedAtMs).coerceAtLeast(0L)
         val elapsedSeconds = (elapsedMs / 1000).toInt()
         val minutes = elapsedSeconds / 60
         val seconds = elapsedSeconds % 60
@@ -1022,14 +891,10 @@ class AgentForegroundService : Service() {
             R.plurals.bg_service_sessions, sessionCount, sessionCount,
         )
 
-        // T-bg-overlay phase 1: enrich the ongoing notification.
-        // Title:   "Minis is using <Tool>"  (or session-count summary when idle/between turns)
-        // Text:    one-line "<sessionLabel> · <elapsed>" so the always-visible row stays compact
-        // BigText: full status string from SessionActivityTracker.currentToolStatus when expanded
-        // Progress: indeterminate while a tool is in flight (isToolRunning), hidden otherwise
-        // The system Doze-friendly setOnlyAlertOnce keeps repeated rebuilds silent.
-        val toolName = SessionActivityTracker.currentToolName.value
-        val isToolRunning = SessionActivityTracker.isToolRunning.value
+        // The row only renders the stable task snapshot: transient tool output
+        // stays in the in-app overlay. System chronometer owns elapsed time.
+        val toolName = state.toolName
+        val isToolRunning = state.isToolRunning
 
         // [T-android-live-update-completed] In the completed resting state the
         // title/status must stop describing work in progress. `toolName` is
@@ -1045,54 +910,22 @@ class AgentForegroundService : Service() {
         val collapsedText = if (isCompleted) {
             getString(R.string.bg_service_notification_text_completed, sessionLabel, timeString)
         } else {
-            // Clock is a system chronometer. Putting seconds in the text forces
-            // a RemoteViews inflate on every rebind, which is what MIUI's island
-            // fragments over a long run.
-            getString(R.string.bg_service_notification_text_live, sessionLabel, toolStatus)
+            getString(R.string.bg_service_notification_text_live, sessionLabel, state.subtitle)
         }
-        val anchorElapsed = SessionActivityTracker.currentRunStartedAtMs.value ?: startTimeMs
         val runWhenMs = System.currentTimeMillis() -
-            (SystemClock.elapsedRealtime() - anchorElapsed).coerceAtLeast(0L)
+            (SystemClock.elapsedRealtime() - state.startedAtMs).coerceAtLeast(0L)
 
-        // [T-android-dynamic-island] Short critical text — the ~7-char glyph
-        // the system shows on the always-on / compact chip. Available since
-        // Android 12 (API 31) on the native Builder, so we compute it for all
-        // branches and apply it wherever the API exists. Prefer the elapsed
-        // time (most glanceable); fall back to a tool hint.
-        val shortCritical = timeString
+        // Static chip label + system-managed chronometer: no per-second posts.
+        val shortCritical = "Minis"
 
-        // [T-android-dynamic-island] Tier 3: Android 16 (Baklava) Live Updates.
-        // When the device is capable AND the user enabled the toggle, build the
-        // ongoing notification with Notification.ProgressStyle and request
-        // promotion (FLAG_PROMOTED_ONGOING) so it surfaces on the status chip /
-        // "dynamic island". androidx.core 1.15 has none of these APIs, so this
-        // branch drops to the native Notification.Builder. Everything the
-        // promoted-notification contract requires is satisfied here: ongoing,
-        // a contentTitle, a supported style (ProgressStyle), NOT a group
-        // summary, NOT colorized, and the channel importance is LOW (not MIN).
-        // [T-android-safemode-lateinit-crash-147] `?.` protects against a null
-        // Application, NOT against an uninitialized lateinit — the safe call
-        // succeeds and then the GETTER throws
-        // UninitializedPropertyAccessException. This service can be restarted
-        // by the system with no Activity, so it can observe a MinisApp whose
-        // onCreate early-returned under safe-mode. Gate on subsystemsReady()
-        // first; a notification built without the dynamic-island style is a
-        // cosmetic downgrade, a crash here kills the FGS mid-task.
-        val minisApp = (applicationContext as? MinisApp)?.takeIf { it.subsystemsReady() }
-        val dynamicIslandUserEnabled =
-            minisApp?.backgroundSettingsRepository?.dynamicIslandEnabled?.value == true
-        val dynamicIslandOn = DynamicIslandSupport.isDynamicIslandActive(
-            this,
-            dynamicIslandUserEnabled,
-        )
-        if (dynamicIslandOn && Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
+        // Promotion is selected once from the exact state submitted to the
+        // policy. Presence-only/completed notifications always remain plain.
+        if (state.promoted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
             val promoted = buildPromotedNotification(
                 titleText = titleText,
                 collapsedText = collapsedText,
                 shortCritical = shortCritical,
                 smallIcon = smallIconRes(toolName, isCompleted),
-                isToolRunning = isToolRunning,
-                isCompleted = isCompleted,
                 contentIntent = pendingIntent,
                 stopIntent = stopPendingIntent,
                 runWhenMs = runWhenMs,
@@ -1158,9 +991,8 @@ class AgentForegroundService : Service() {
      * Notification.Builder (androidx.core 1.15 lacks these APIs). Requires
      * API >= 36 — callers gate on Build.VERSION.SDK_INT before invoking.
      *
-     * Uses Notification.ProgressStyle with an indeterminate segment while a
-     * tool is running (tools are open-ended: shell/browser/a11y rarely report
-     * determinate progress), and requests promotion via FLAG_PROMOTED_ONGOING.
+     * Uses a stable progress segment for the run. Tool switches do not
+     * mutate the progress view, which avoids repeated OEM chip inflation.
      */
     @androidx.annotation.RequiresApi(Build.VERSION_CODES.BAKLAVA)
     private fun buildPromotedNotification(
@@ -1168,8 +1000,6 @@ class AgentForegroundService : Service() {
         collapsedText: String,
         shortCritical: String,
         smallIcon: Int,
-        isToolRunning: Boolean,
-        isCompleted: Boolean,
         contentIntent: PendingIntent,
         stopIntent: PendingIntent,
         runWhenMs: Long,
@@ -1183,16 +1013,13 @@ class AgentForegroundService : Service() {
         // So the segment is NOT optional: it is what keeps the chip promoted,
         // and it is why this style survives even though we show no percentage.
         //
-        // Keep ProgressStyle fully specified. Null tracker icons,
-        // styledByProgress(false), and indeterminate+zero-progress together
-        // have crashed OEM SystemUI the moment the Live Updates chip is
-        // actually promoted (which only happens when the app is no longer
-        // the visible activity).
+        // Keep ProgressStyle fully specified. Invalid tracker icons and
+        // indeterminate+zero-progress can crash OEM SystemUI on promotion.
         val progressStyle = Notification.ProgressStyle()
             .addProgressSegment(Notification.ProgressStyle.Segment(100))
             .setProgressTrackerIcon(Icon.createWithResource(this, smallIcon))
             .setProgressIndeterminate(false)
-            .setProgress(if (isCompleted) 100 else if (isToolRunning) 50 else 0)
+            .setProgress(0)
 
         val builder = Notification.Builder(this, CHANNEL_ID)
             .setSmallIcon(smallIcon)
@@ -1200,8 +1027,8 @@ class AgentForegroundService : Service() {
             .setContentText(collapsedText)
             .setStyle(progressStyle)
             .setOngoing(true)
-            .setShowWhen(!isCompleted)
-            .setUsesChronometer(!isCompleted)
+            .setShowWhen(true)
+            .setUsesChronometer(true)
             .setWhen(runWhenMs)
             .setOnlyAlertOnce(true)
             .setContentIntent(contentIntent)
@@ -1210,19 +1037,13 @@ class AgentForegroundService : Service() {
             .setColorized(false)
             .setShortCriticalText(shortCritical)
 
-        // [T-android-live-update-completed] "Stop" is meaningless once the task
-        // has finished — there is nothing left to stop, and offering it invites
-        // a tap that does nothing visible. Reported from a device screenshot
-        // showing "任务已完成 ✓" above a live Stop button.
-        if (!isCompleted) {
-            builder.addAction(
-                Notification.Action.Builder(
-                    Icon.createWithResource(this, android.R.drawable.ic_menu_close_clear_cancel),
-                    getString(R.string.bg_service_stop_action),
-                    stopIntent,
-                ).build(),
-            )
-        }
+        builder.addAction(
+            Notification.Action.Builder(
+                Icon.createWithResource(this, android.R.drawable.ic_menu_close_clear_cancel),
+                getString(R.string.bg_service_stop_action),
+                stopIntent,
+            ).build(),
+        )
 
         // [T-android-dynamic-island] Request the always-visible "dynamic island"
         // promotion. The public builder method `setRequestPromotedOngoing(true)`

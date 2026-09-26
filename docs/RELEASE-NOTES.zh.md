@@ -1,3 +1,10 @@
+# OpenMinis-Linux 2.0.6-linux
+
+- versionCode **206**
+- 前台通知单一发布入口：消除启动重复发布、延迟回放旧通知；灵动岛只在任务运行时提升，工具与流式文字变化不再重建焦点通知，耗时改用系统 Chronometer。沙箱执行按内存压力单通道准入，空闲 Shell 按时长与数量回收。详见 `docs/github-release-2.0.6-linux.md`。
+
+---
+
 # OpenMinis-Linux 2.0.5-linux
 
 - versionCode **205**

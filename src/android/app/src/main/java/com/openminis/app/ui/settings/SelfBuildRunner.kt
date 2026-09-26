@@ -89,6 +89,6 @@ object SelfBuildRunner {
             // leaves running=true and the next Start is a no-op.
             gate.complete(Unit)
         }
-        AgentForegroundService.startService(app, 1, "self-build")
+        AgentForegroundService.startService(app)
     }
 }

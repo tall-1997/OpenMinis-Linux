@@ -26,7 +26,7 @@ object SandboxJobKeepAlive {
         SessionActivityTracker.setActive(key)
         SessionActivityTracker.updateToolStatus(preview.take(80).ifBlank { "sandbox job" })
         if (!AgentForegroundService.isRunning) {
-            AgentForegroundService.startService(context, inflight.size, preview.take(40))
+            AgentForegroundService.startService(context)
         }
     }
 
@@ -38,7 +38,7 @@ object SandboxJobKeepAlive {
         } else {
             SessionActivityTracker.updateToolStatus("sandbox jobs ${inflight.size}")
             if (!AgentForegroundService.isRunning) {
-                AgentForegroundService.startService(context, inflight.size, "sandbox jobs ${inflight.size}")
+                AgentForegroundService.startService(context)
             }
         }
     }

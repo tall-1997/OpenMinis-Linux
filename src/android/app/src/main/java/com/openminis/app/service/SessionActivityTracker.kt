@@ -81,6 +81,25 @@ object SessionActivityTracker {
     private val _currentRunStartedAtMs = MutableStateFlow<Long?>(null)
     val currentRunStartedAtMs: StateFlow<Long?> = _currentRunStartedAtMs.asStateFlow()
 
+    /** Publish notification-relevant run boundaries atomically, after all individual
+     * tracker flows have settled. Prevents a new-run chip from first rendering
+     * the previous run's anchor or a completion from briefly restarting its timer. */
+    data class NotificationTimeline(
+        val activeCount: Int = 0,
+        val startedAtMs: Long? = null,
+        val finishedAtMs: Long? = null,
+    )
+    private val _notificationTimeline = MutableStateFlow(NotificationTimeline())
+    val notificationTimeline: StateFlow<NotificationTimeline> = _notificationTimeline.asStateFlow()
+
+    private fun publishNotificationTimeline() {
+        _notificationTimeline.value = NotificationTimeline(
+            activeCount = _activeSessions.value.size,
+            startedAtMs = _currentRunStartedAtMs.value,
+            finishedAtMs = _lastTaskFinishedAtMs.value,
+        )
+    }
+
     /**
      * T-bg-overlay phase 1: tool name currently dispatched to the agent
      * (e.g. "shell_execute", "browser_use"). null when no tool is in
@@ -322,6 +341,7 @@ object SessionActivityTracker {
             _lastTaskFinishedAtMs.value = null
             _currentRunStartedAtMs.value = SystemClock.elapsedRealtime()
         }
+        publishNotificationTimeline()
         Log.d(TAG, "Session activated: $sessionId (total: ${_activeSessions.value.size})")
 
         if (wasIdle) {
@@ -371,6 +391,7 @@ object SessionActivityTracker {
                 _lastToolOutcome.value = ToolOutcome.Error
             }
         }
+        publishNotificationTimeline()
         if (!shouldRunService()) {
             stopService()
         } else {
@@ -553,11 +574,7 @@ object SessionActivityTracker {
             Log.w(TAG, "Context not initialized, cannot start service")
             return
         }
-        AgentForegroundService.startService(
-            context,
-            sessionCountForNotification(),
-            statusForNotification(),
-        )
+        AgentForegroundService.startService(context)
     }
 
     private fun updateService() {
@@ -566,52 +583,6 @@ object SessionActivityTracker {
         // The service collector applies status changes itself.
         if (AgentForegroundService.isRunning) return
         startServiceIfNeeded()
-    }
-
-    /**
-     * [T-android-notif-running-count] The notification count reflects RUNNING
-     * agent tasks only. It previously fell back to the presence count, which
-     * counted every open chat / workspace member and made one running turn
-     * look like several running sessions. Presence still keeps the service
-     * alive — it just must not inflate the running count.
-     */
-    private fun sessionCountForNotification(): Int = _activeSessions.value.size
-
-    /**
-     * Tool status fallback: when nothing is streaming, expose "In session"
-     * (or "Idle" if the user isn't even in a chat). The FG service is
-     * still running because of presence, but the notification shouldn't
-     * imply a tool is executing.
-     *
-     * T180-bg-notif: localize via context resources when the active set
-     * is non-empty — the notification reads "1 task running" / "N tasks
-     * running" instead of falling through to the per-tool English status.
-     * Tool-specific status strings (e.g. "browser_use") still surface as
-     * `_currentToolStatus.value` when set; otherwise we synthesize
-     * "%d task(s) running".
-     */
-    private fun statusForNotification(): String {
-        val ctx = appContext
-        val activeCount = _activeSessions.value.size
-        return when {
-            activeCount > 0 -> {
-                val tool = _currentToolStatus.value
-                if (tool.isNotBlank() && tool != "Idle") {
-                    tool
-                } else if (ctx != null) {
-                    if (activeCount == 1) {
-                        ctx.getString(com.openminis.app.R.string.notif_one_task_running)
-                    } else {
-                        ctx.getString(com.openminis.app.R.string.notif_n_tasks_running, activeCount)
-                    }
-                } else {
-                    if (activeCount == 1) "1 task running" else "$activeCount tasks running"
-                }
-            }
-            _presentSessions.value.isNotEmpty() ->
-                ctx?.getString(com.openminis.app.R.string.notif_in_session) ?: "In session"
-            else -> "Idle"
-        }
     }
 
     private fun stopService() {

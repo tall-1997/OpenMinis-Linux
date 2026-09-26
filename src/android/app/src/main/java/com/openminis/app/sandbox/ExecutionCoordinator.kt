@@ -7,6 +7,7 @@ import android.util.Log
 import com.openminis.app.data.repository.EnvVarRepository
 import com.openminis.app.notification.SandboxNotifyActions
 import com.openminis.app.sandbox.SandboxResourceGate
+import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.File
@@ -61,6 +62,45 @@ object ExecutionCoordinator {
      * when the same session's first command arrives concurrently.
      */
     private val globalLock = Mutex()
+    private val lastIdle = ConcurrentHashMap<String, Long>()
+    private val evictionScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var evictionJob: Job? = null
+
+    @Synchronized
+    private fun scheduleIdleReap() {
+        if (evictionJob?.isActive == true) return
+        evictionJob = evictionScope.launch {
+            while (shells.isNotEmpty()) {
+                delay(30_000)
+                reapIdleShells()
+            }
+        }
+    }
+
+    private suspend fun reapIdleShells() {
+        // Conservative process-wide guard. A background job in ANY chat pins
+        // shells until it exits. Never terminate a service to meet a cache cap.
+        if (!ShellIdleSafety.canReap()) return
+        val now = android.os.SystemClock.elapsedRealtime()
+        val prefs = com.openminis.app.data.ToolLimitPrefs
+        val idle = lastIdle.entries.sortedBy { it.value }
+        var excess = (idle.size - prefs.idleShellCount()).coerceAtLeast(0)
+        for ((id, timestamp) in idle) {
+            if (excess <= 0 && now - timestamp < prefs.idleShellMinutes() * 60_000L) continue
+            val mutex = mutexes[id] ?: continue
+            if (!mutex.tryLock()) continue
+            try {
+                if (lastIdle[id] != timestamp || !ShellIdleSafety.canReap()) continue
+                // Keep the per-session mutex: queued callers already reference it.
+                globalLock.withLock {
+                    shells.remove(id)?.stop()
+                    lastInjectedKeys.remove(id)
+                    lastIdle.remove(id)
+                }
+                excess--
+            } finally { mutex.unlock() }
+        }
+    }
 
     fun init(context: Context) {
         appContextRef = context.applicationContext
@@ -91,13 +131,16 @@ object ExecutionCoordinator {
         // ConcurrentHashMap.getOrPut is not atomic, use putIfAbsent pattern
         val mutex = mutexes.getOrPut(sessionId) { Mutex() }
 
-        return SandboxResourceGate.withCommandLock(
+        return mutex.withLock {
+        lastIdle.remove(sessionId)
+        try {
+        SandboxResourceGate.withCommandLock(
             command,
             resourceClass = resourceClass,
             pressure = { SandboxMemoryPressure.reason(appContext) },
+            limits = { SandboxMemoryPressure.executionLimits(appContext) },
             onWaiting = { lineCallback?.invoke(it) },
         ) {
-        mutex.withLock {
             val startTime = System.currentTimeMillis()
 
             // Auto-boot PRoot if not already booted
@@ -151,6 +194,10 @@ object ExecutionCoordinator {
                 exitCode = effectiveExit,
                 durationMs = durationMs,
             )
+        }
+        } finally {
+            if (shells.containsKey(sessionId)) lastIdle[sessionId] = android.os.SystemClock.elapsedRealtime()
+            scheduleIdleReap()
         }
         }
         } finally {
@@ -308,7 +355,7 @@ object ExecutionCoordinator {
 
     private fun terminateOne(sessionId: String) {
         val shell = shells.remove(sessionId)
-        mutexes.remove(sessionId)
+        lastIdle.remove(sessionId)
         // T124a: drop the snapshot too — a future shell for the same id
         // restarts from a clean baseline, so the next applyEnvironment
         // shouldn't try to `unset` keys that don't exist in the new shell.

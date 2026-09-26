@@ -97,18 +97,14 @@ object ScheduledAgentRunner {
             return null
         }
 
-        // Kick the FGS so the agent loop survives Doze / screen-off. The
-        // existing service is idempotent and reused by chat UI; we pass a
-        // generic status string so it shows up in the ongoing notification.
-        AgentForegroundService.startService(
-            context = app,
-            sessionCount = 1,
-            toolStatus = "Scheduled: ${task.label.ifBlank { "task" }}",
-        )
-
         val sessionId = withContext(Dispatchers.IO) {
             resolveSessionId(app, task)
         } ?: return null
+
+        // Only start a foreground service after the task has a valid target;
+        // an aborted scheduled run must not leave an orphan status row.
+        // The tracker becomes the notification source when dispatch starts.
+        AgentForegroundService.startService(app)
 
         AppLogger.info(
             TAG,
