@@ -55,6 +55,33 @@ object SandboxResourceGate {
             c.contains("minis-mirror")
     }
 
+    // [T-apt-ro-exempt] Provably read-only apt/dpkg QUERY forms. The apt mutex
+    // exists to protect the dpkg status database from concurrent WRITERS —
+    // serialising `apt list --installed` / `apt-cache policy` / `dpkg -l`
+    // behind a running install bought no correctness and cost every lookup a
+    // queue wait. The whitelist is deliberately narrow: compound commands,
+    // redirects/substitutions, and value-taking flags (-o APT::…= would
+    // redirect the database paths) fall back to the lock. `apt-get download`
+    // and `apt-cache gencaches` write (cwd files / cache rebuild) and stay
+    // locked on purpose.
+    private val READ_ONLY_APT_FORMS = listOf(
+        Regex("""^(?:\S*/)?apt(?:-get)?\s+(?:--?[a-z][\w-]*\s+)*(?:list|show|search|policy|depends|rdepends|pkgnames|indextargets)\b.*"""),
+        Regex("""^(?:\S*/)?apt-cache\s+(?:show|search|policy|depends|rdepends|pkgnames|stats|showpkg|showsrc|dump|dumpavail|unmet|check)\b.*"""),
+        Regex("""^(?:\S*/)?dpkg\s+(?:-l|--list|-s|--status|-L|--listfiles|-S|--search|-C|--audit|-p|--print-architecture|--print-foreign-architectures)\b.*"""),
+        Regex("""^(?:\S*/)?apt-get\s+(?:-s|--simulate|--dry-run|--just-print)\s+\S+.*"""),
+    )
+
+    /** True when [command] is an apt/dpkg query that cannot mutate package state. */
+    fun isReadOnlyPackageManager(command: String): Boolean {
+        val c = command.trim().lowercase()
+        if (c.isEmpty()) return false
+        if (c.contains(';') || c.contains('|') || c.contains('&') || c.contains('`') ||
+            c.contains('\n') || c.contains(">(") || c.contains("$(") || c.contains('>') ||
+            c.contains('<')
+        ) return false
+        return READ_ONLY_APT_FORMS.any { it.containsMatchIn(c) }
+    }
+
     /**
      * Wrap a command with resource locks to serialize conflicting operations.
      *
@@ -94,8 +121,9 @@ object SandboxResourceGate {
             onWaiting = onWaiting,
             block = block,
         )
-        return if (isPackageManager(command)) withAptLock(aptWaitMs, onWaiting) { admitted() }
-        else admitted()
+        return if (isPackageManager(command) && !isReadOnlyPackageManager(command)) {
+            withAptLock(aptWaitMs, onWaiting) { admitted() }
+        } else admitted()
     }
 
     private suspend fun <T> withAptLock(waitMs: Long, onWaiting: (String) -> Unit, block: suspend () -> T): T {
