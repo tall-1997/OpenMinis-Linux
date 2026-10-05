@@ -105,6 +105,33 @@ object ApprovalGate {
     fun approve(id: String, sessionId: String? = null) { resolve(id, true, sessionId) }
     fun deny(id: String, sessionId: String? = null) { resolve(id, false, sessionId) }
 
+    /** The filed request for [id], or null — lets a UI act with the session
+     *  the request belongs to even when the current session id has drifted
+     *  (draft `__new__…` → persisted UUID mid-turn). */
+    fun detailOf(id: String): ApprovalRequest? = approvalDetails[id]
+
+    /**
+     * [T-draft-approval-key-drift] Re-key every piece of session-scoped gate
+     * state when a draft session is persisted (`__new__…` → real UUID):
+     * in-flight requests, allow-all and per-tool grants, and the per-session
+     * broadcast flows. Without this, an allow-all granted during the draft
+     * window stops matching the very next tool call.
+     */
+    fun migrateSession(oldSid: String?, newSid: String?) {
+        if (oldSid.isNullOrBlank() || newSid.isNullOrBlank() || oldSid == newSid) return
+        if (sessionAllowAll.remove(oldSid)) sessionAllowAll.add(newSid)
+        sessionAllowedTools.remove(oldSid)?.let { tools ->
+            sessionAllowedTools.computeIfAbsent(newSid) { ConcurrentHashMap.newKeySet() }.addAll(tools)
+        }
+        approvalDetails.keys.toList().forEach { id ->
+            approvalDetails.computeIfPresent(id) { _, detail ->
+                if (detail.sessionId == oldSid) detail.copy(sessionId = newSid) else detail
+            }
+        }
+        pendingBySession.remove(oldSid)
+        refreshPendingBroadcast()
+    }
+
     private fun resolve(id: String, value: Boolean, sessionId: String? = null) {
         val detail = approvalDetails[id] ?: return
         if (sessionId != null && detail.sessionId != sessionId) return

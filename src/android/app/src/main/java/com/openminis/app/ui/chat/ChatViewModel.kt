@@ -2216,16 +2216,37 @@ class ChatViewModel(
     @Volatile private var askUserDeferred: kotlinx.coroutines.CompletableDeferred<String>? = null
 
     val pendingApprovals: StateFlow<Map<String, ApprovalGate.ApprovalRequest>> =
-        ApprovalGate.pendingApprovals(realSessionId.ifEmpty { sessionId })
+        ApprovalGate.pendingApprovals.map { all ->
+            // [T-draft-approval-key-drift] ApprovalGate.pendingApprovals(sid)
+            // snapshots its session key at PROPERTY-INIT time — for a draft
+            // session that is the `__new__…` routing id, while requests are
+            // filed under the PERSISTED activeSessionId once ensureSession
+            // runs (ChatViewModelEnsureSession). The keyed flow then filters
+            // to empty forever, the approval banner never renders, and every
+            // tool call dies in ApprovalGate's 90s timeout ("不弹申请权限
+            // 窗口，等待超时失败"). Derive from the GLOBAL flow instead and
+            // re-filter with the CURRENT id on every emission, so the key
+            // drift cannot strand a request.
+            val sid = realSessionId.ifEmpty { sessionId }
+            all.filterValues { it.sessionId == sid }
+        }.stateIn(
+            viewModelScope,
+            kotlinx.coroutines.flow.SharingStarted.Eagerly,
+            emptyMap(),
+        )
 
     fun approvePendingTool(id: String) {
-        val sid = realSessionId.ifEmpty { sessionId }
+        // [T-draft-approval-key-drift] Resolve against the session the
+        // REQUEST belongs to, not the current one: ApprovalGate's session
+        // guard silently drops a mismatch, and a request filed during the
+        // draft window predates the persisted id.
+        val sid = ApprovalGate.detailOf(id)?.sessionId ?: realSessionId.ifEmpty { sessionId }
         ApprovalGate.approve(id, sid)
         ApprovalNotifier.cancelApproval(context, id)
     }
 
     fun denyPendingTool(id: String) {
-        val sid = realSessionId.ifEmpty { sessionId }
+        val sid = ApprovalGate.detailOf(id)?.sessionId ?: realSessionId.ifEmpty { sessionId }
         ApprovalGate.deny(id, sid)
         ApprovalNotifier.cancelApproval(context, id)
     }
@@ -2242,7 +2263,7 @@ class ChatViewModel(
      * which contradicted the label the user tapped.
      */
     fun approveAllForSession(id: String) {
-        val sid = realSessionId.ifEmpty { sessionId }
+        val sid = ApprovalGate.detailOf(id)?.sessionId ?: realSessionId.ifEmpty { sessionId }
         ApprovalGate.enableSessionAllowAll(sid)
         approvePendingTool(id)
     }

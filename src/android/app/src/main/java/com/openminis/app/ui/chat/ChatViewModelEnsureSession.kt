@@ -15,6 +15,12 @@ internal suspend fun ChatViewModel.ensureSession(): String {
         permissionMode = _permissionMode.value.name,
     )
     realSessionId = session.id
+    // [T-draft-approval-key-drift] Carry any session-scoped gate state the
+    // user granted under the draft key (allow-all, per-tool grants, in-flight
+    // approval requests) over to the persisted id BEFORE the first tool call
+    // runs — otherwise a "全部允许" tapped on the draft stops matching, and
+    // an approval request filed pre-persist becomes unreachable.
+    com.openminis.app.service.ApprovalGate.migrateSession(oldSid = sessionId, newSid = session.id)
     migrateGroupChatPrefs(fromId = sessionId, toId = session.id)
     // "New Chat in Group": file the just-promoted draft into its folder.
     // Unconditional (vs iOS setFolderIfUnfiled) — the session is seconds
