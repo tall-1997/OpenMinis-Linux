@@ -53,6 +53,65 @@ rm -f "$ASSETS/alpine-minirootfs.tar.gz" "$ASSETS/alpine-minirootfs.tar"
 
 ls -lh "$ASSETS/ubuntu-base.tar.gz"
 
+# ── Preinstall the runtime essentials INTO the base rootfs ──
+#
+# Stock ubuntu-base ships ONLY glibc + apt + bash. Everything else (python3,
+# curl, ...) has been installed on-device by RootfsManager.seedNetworkTools at
+# first boot — an apt run on whatever network the phone happens to have,
+# racing the agent's own package-manager commands for the apt mutex. That is
+# the reported failure chain: slow/regional mirror → seed stalls or fails →
+# "python3: command not found" → agent retries apt → WAITING_RESOURCE queue
+# messages for minutes. Baking the essentials into the tarball makes python3
+# work out of the box and cuts first-boot apt traffic to just git/node.
+#
+# arm64-on-x86 needs binfmt; GitHub ubuntu runners ship qemu-user-static but
+# install it explicitly anyway (idempotent). A failed preinstall must NOT
+# fail the build — seedNetworkTools stays as the runtime fallback — but it
+# must be LOUD (the review's lesson: silent runCatching hid dead features
+# for weeks).
+ROOTFS_PREINSTALL=(ca-certificates curl wget python3 python3-pip python3-venv unzip psmisc)
+if [ "${ROOTFS_PREINSTALL_DISABLE:-}" = "1" ]; then
+  echo "==> ROOTFS_PREINSTALL_DISABLE=1 — keeping the stock ubuntu-base"
+else
+  echo "==> Preinstalling essentials into the rootfs: ${ROOTFS_PREINSTALL[*]}"
+  WORK="$(mktemp -d)"
+  if ! tar -xzf "$ASSETS/ubuntu-base.tar.gz" -C "$WORK"; then
+    echo "ERROR: ubuntu-base.tar.gz failed to unpack for preinstall" >&2
+    rm -rf "$WORK"
+    exit 1
+  fi
+  install_ok=0
+  sudo apt-get install -y qemu-user-static binfmt-support >/dev/null 2>&1 || true
+  if sudo cp /usr/bin/qemu-aarch64-static "$WORK/usr/bin/" 2>/dev/null; then
+    sudo cp /etc/resolv.conf "$WORK/etc/resolv.conf"
+    sudo mount --bind /dev "$WORK/dev" 2>/dev/null || true
+    sudo mount -t proc proc "$WORK/proc" 2>/dev/null || true
+    sudo mount --bind /sys "$WORK/sys" 2>/dev/null || true
+    if sudo chroot "$WORK" /bin/sh -c '
+        set -e
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update
+        apt-get install -y --no-install-recommends '"${ROOTFS_PREINSTALL[*]}"'
+        apt-get clean
+        rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    '; then
+      install_ok=1
+    fi
+    sudo umount -f "$WORK/dev" "$WORK/proc" "$WORK/sys" 2>/dev/null || true
+    sudo rm -f "$WORK/etc/resolv.conf" "$WORK/usr/bin/qemu-aarch64-static"
+  fi
+  if [ "$install_ok" -ne 1 ]; then
+    echo "WARNING: rootfs preinstall FAILED; shipping the stock ubuntu-base." >&2
+    echo "         python3 will be installed on-device by seedNetworkTools as before." >&2
+    sudo rm -rf "$WORK"
+  else
+    tar -czf "$ASSETS/ubuntu-base.tar.gz" -C "$WORK" .
+    sudo rm -rf "$WORK"
+    echo "==> rootfs now carries the essentials out of the box:"
+    ls -lh "$ASSETS/ubuntu-base.tar.gz"
+  fi
+fi
+
 SDK_TOOLS_VER="${SDK_TOOLS_VER:-35.0.2}"
 SDK_TOOLS_ZIP="$ASSETS/android-sdk-tools-aarch64.zip"
 SDK_TOOLS_URL="https://github.com/lzhiyong/android-sdk-tools/releases/download/${SDK_TOOLS_VER}/android-sdk-tools-static-aarch64.zip"

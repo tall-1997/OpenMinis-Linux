@@ -99,8 +99,18 @@ object SandboxResourceGate {
     }
 
     private suspend fun <T> withAptLock(waitMs: Long, onWaiting: (String) -> Unit, block: suspend () -> T): T {
-        if (aptMutex.isLocked) onWaiting("WAITING_RESOURCE: package manager is busy; command not started")
-        if (!awaitAptLock(waitMs)) {
+        val queuedAt = System.currentTimeMillis()
+        if (aptMutex.isLocked) {
+            // [T-aptqueue-copy] The old copy ("package manager is busy;
+            // command not started") read as a REFUSAL — users reported
+            // "老是提示 WAITING_RESOURCE" thinking commands were being
+            // dropped, while the command is in fact queued and starts the
+            // moment the holder finishes. Say that instead, and keep a
+            // per-minute heartbeat so a long queue (boot mirror+seed can
+            // hold the lock for many minutes) does not read as a hang.
+            onWaiting("WAITING_RESOURCE: 包管理器忙，命令已排队，锁释放后自动开始")
+        }
+        if (!awaitAptLock(waitMs, queuedAt, onWaiting)) {
             throw RuntimeException(
                 "Package manager queue timed out; command was not started.",
             )
@@ -113,10 +123,18 @@ object SandboxResourceGate {
     }
 
     /** tryLock so a timeout cannot leave the mutex held or cancel the holder. */
-    private suspend fun awaitAptLock(waitMs: Long): Boolean {
+    private suspend fun awaitAptLock(waitMs: Long, queuedAt: Long, onWaiting: (String) -> Unit): Boolean {
         val deadline = System.currentTimeMillis() + waitMs.coerceAtLeast(0L)
+        // One beat per waited MINUTE: a per-second ticker would flood the
+        // transcript, but total silence for 10+ minutes reads as a hang.
+        var lastBeatMinute = 0L
         while (!aptMutex.tryLock()) {
             if (waitMs > 0 && System.currentTimeMillis() >= deadline) return false
+            val minute = (System.currentTimeMillis() - queuedAt) / 60_000L
+            if (minute > 0 && minute != lastBeatMinute) {
+                lastBeatMinute = minute
+                onWaiting("WAITING_RESOURCE: 包管理器仍被占用，已排队 $minute 分钟，继续等待…")
+            }
             delay(50)
         }
         return true

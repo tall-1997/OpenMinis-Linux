@@ -35,7 +35,7 @@ internal class AdaptiveExecutionGate {
                 coroutineContext.ensureActive()
                 val now = clock()
                 check(waitMs <= 0 || lastProbe == null || now - start < waitMs) {
-                    "Execution queue timed out; command was not started"
+                    "排队超时，命令未启动（可在 设置→工具 限制 中调大队列超时）"
                 }
                 if (lastProbe == null || now - lastProbe >= 1_000L) {
                     reason = pressure()
@@ -56,9 +56,12 @@ internal class AdaptiveExecutionGate {
                     } else false
                 }
                 if (acquired) break
-                val message = "WAITING_RESOURCE: " + (reason ?: "heavy task capacity unavailable; command not started")
+                // [T-aptqueue-copy] Same copy fix as SandboxResourceGate:
+                // "command not started" read as a refusal while the command
+                // is queued and starts as soon as capacity frees up.
+                val message = "WAITING_RESOURCE: " + (reason ?: "重任务并发已满，命令排队等待资源，空闲后自动开始")
                 if (message != previous) { onWaiting(message); previous = message }
-                check(waitMs <= 0 || clock() - start < waitMs) { "Execution queue timed out; command was not started: $message" }
+                check(waitMs <= 0 || clock() - start < waitMs) { "排队超时，命令未启动: $message" }
                 delay(50)
             }
             onWaiting("RUNNING: resource admission granted")
