@@ -40,6 +40,9 @@ internal class OpenAIRequestBodies(
         val isXAI: Boolean
         val usesUnifiedReasoningEffort: Boolean
         val thinkingRuleInstanceId: String?
+        /** True when this instance points at the Zen host with no API key —
+         *  the bundled free lane, not a user's paid Zen provider. */
+        val isZenFree: Boolean
         fun resolvedServiceTier(): String?
         fun endpointURL(defaultPath: String): String
         fun azureUrl(path: String): String?
@@ -120,7 +123,19 @@ internal class OpenAIRequestBodies(
         // OpenMinis#87) — the request-parameter half of that fix was never
         // ported, so an enabled thinking level still put `reasoning_effort` on
         // the wire to api.mistral.ai.
-        if (!host.isMistral) {
+        //
+        // [T-zen-free-thinking-budget] The Zen free lane is the exception
+        // that replaces the field entirely: it ignores reasoning_effort
+        // (live-measured: `low` produced MORE reasoning than `xhigh`, and
+        // unknown fields occasionally surfaced as a 503). The only control
+        // it enforces is max_completion_tokens, so the thinking level maps
+        // to a real generation budget that REPLACES the caller's maxTokens
+        // instead of a field the gateway drops. Only the bundled keyless
+        // instance qualifies; a user's own paid Zen provider keeps the
+        // normal reasoning_effort path untouched.
+        if (host.isZenFree) {
+            zenBudgetTokens(thinkingLevel, maxTokens)?.let { body.put("max_completion_tokens", it) }
+        } else if (!host.isMistral) {
             injectThinkingParams(body, thinkingLevel, maxTokens)
         }
 
@@ -652,6 +667,43 @@ internal class OpenAIRequestBodies(
         // "mimo-v2.5" / "mimo-v2.5-pro", which the old "mimo-2.5" match missed
         // (mirrors iOS 72968c4f).
         return if (effort == "xhigh" && (lid.contains("mimo") || lid.contains("agnes"))) "high" else effort
+    }
+
+    /**
+     * [T-zen-free-thinking-budget] The generation ceiling one thinking level
+     * carries on the Zen free lane. The gateway ignores every effort field it
+     * is given and enforces ONLY max_completion_tokens, so a level here is a
+     * real, enforced budget rather than a hint — a menu that did nothing
+     * would be worse than no menu at all (design principle carried over from
+     * the desktop reference implementation).
+     *
+     * The ceiling is shared by thinking and the visible answer: a lower level
+     * shortens both. A model whose thinking cannot be switched off pays for
+     * its reasoning out of the same ceiling before the answer starts, so its
+     * rungs are doubled — measured on mimo-v2.6-flash-free over one day, 82%
+     * of output tokens were reasoning, and the un-doubled ceiling ended long
+     * turns in `length` about every third request.
+     *
+     * Returns null when this model exposes no effort menu (supportsReasoning
+     * is not true), so the caller's own maxTokens stays on the wire untouched.
+     */
+    private fun zenBudgetTokens(level: ThinkingLevel, maxTokens: Int): Int? {
+        if (host.model.supportsReasoning != true) return null
+        val capacity = host.model.maxOutputTokens ?: maxTokens
+        val ceiling = when (level) {
+            ThinkingLevel.OFF -> 2048
+            ThinkingLevel.LOW -> 2048
+            ThinkingLevel.MEDIUM -> 8192
+            ThinkingLevel.HIGH -> 16384
+            // Top rungs: the model's full output capacity.
+            ThinkingLevel.XHIGH, ThinkingLevel.MAX, ThinkingLevel.ULTRA -> null
+        }
+        val lid = host.model.id.lowercase()
+        val mustThink = lid.startsWith("mimo-v2.6") || lid.startsWith("mimo-v2.5")
+        val widened = if (ceiling == null) capacity else {
+            minOf(ceiling * if (mustThink) 2 else 1, capacity)
+        }
+        return maxOf(512, widened)
     }
 
     /**
