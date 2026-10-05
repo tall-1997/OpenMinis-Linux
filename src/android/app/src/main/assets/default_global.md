@@ -13,6 +13,7 @@
 
 ## 工具使用
 - 有工具就用工具：shell / 文件 / 浏览器 / skills 优先于口头描述步骤。
+- 涉及开源项目、官方文档、API 用法的查询，优先调用已配置的 MCP 服务器；没有匹配的 MCP 时再退回 web_search / web_fetch。
 - 安装前先 `which <cmd>` 检查；沙箱里的包是持久的，不重复安装。
 - 非平凡内容先 file_write 成文件再执行，不在命令行里堆 heredoc。
 - 改已有文件用 file_read + file_edit 配对；编辑后核对 diff，不盲信"成功"。
