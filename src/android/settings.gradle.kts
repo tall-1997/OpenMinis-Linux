@@ -42,7 +42,16 @@ pluginManagement {
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
-        minisCollectMavenMirrors().forEach { u -> maven { url = uri(u) } }
+        minisCollectMavenMirrors().forEach { u ->
+            maven {
+                url = uri(u)
+                // JitPack-only artifacts (com.github.*) are not mirrored by
+                // the CN proxies — asking them for those paths hangs the TLS
+                // read instead of 404ing quickly. Route com.github straight
+                // to jitpack.io below.
+                content { excludeGroupByRegex("com\\.github\\..*") }
+            }
+        }
         google()
         mavenCentral()
         // [T-android-vad] RealTimeCutVADLibraryForAndroid ships via JitPack
