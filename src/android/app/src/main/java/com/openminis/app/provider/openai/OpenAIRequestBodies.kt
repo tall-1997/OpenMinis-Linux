@@ -92,7 +92,18 @@ internal class OpenAIRequestBodies(
         } else {
             body.put("max_completion_tokens", maxTokens)
         }
-        body.put("stream", stream)
+        // [T-zen-stream-only-lane] The Zen free lane REFUSES stream=false with
+        // 403 FreeTierError — live-measured 2026-10-05 on-device via adb:
+        // stream=true answers 200 on the same session id, model and body, while
+        // the identical request with stream=false answers
+        // {"type":"error","error":{"type":"FreeTierError",…}} — byte-identical
+        // to a request carrying no disguise at all, which is why this read as a
+        // session-identity wall. The non-streaming caller
+        // [OpenAIProvider.sendMessageClamped] already concatenates SSE deltas
+        // into a single response, so forcing stream=true here changes nothing
+        // for the caller while passing the lane's only accepted shape.
+        val streamForced = if (host.isZenFree) true else stream
+        body.put("stream", streamForced)
 
         // [T-android-xai-priority] xAI Priority Processing, driven by the same
         // app-level Fast Mode toggle as Codex (FastModePrefs), read here at
@@ -106,7 +117,7 @@ internal class OpenAIRequestBodies(
             SamplingIdentity.of(host.provider), host.model.id, temperature, thinkingLevel.isEnabled,
         )?.let { body.put("temperature", it) }
 
-        if (stream && !host.isOpenRouter) {
+        if (streamForced && !host.isOpenRouter) {
             body.put("stream_options", JSONObject().put("include_usage", true))
         }
 
