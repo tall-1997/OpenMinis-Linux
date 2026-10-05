@@ -46,10 +46,14 @@ class SkillRepository(private val context: Context) {
         private const val LEARNED_SKILL_END = "<!-- LEARNED-SKILL-END -->"
         private const val DB_NAME = "skills.db"
         private const val DB_VERSION = 3
-        // [skill-startup-refresh] Raised from 20: with the default-enable
-        // policy the library can hold 100+ skills, and the model must see
-        // them all to use them. Descriptions are still capped at 200 chars.
-        private const val MAX_SKILLS_IN_PROMPT = 300
+        // [skill-startup-refresh] Default-enable means the library can hold
+        // 100+ skills; every listed one costs a prompt line forever.
+        // [T-prompt-slim] 300 -> 120: with the one-line format plus the
+        // existing "N more not shown" disclosure the whole library stays
+        // reachable (grep /var/minis/skills/) without spending hundreds of
+        // context lines on entries the model has not shown interest in.
+        // Descriptions are still capped at 200 chars.
+        private const val MAX_SKILLS_IN_PROMPT = 120
         private const val MAX_SKILL_DESC_LENGTH = 200
         private const val RECENT_WINDOW_MS = 7L * 24 * 3600 * 1000
         private const val RECENT_SLOTS = 10
@@ -405,20 +409,20 @@ class SkillRepository(private val context: Context) {
             hasMore = total > selected.size
         }
 
+        // [T-prompt-slim] One line per skill (was a 6-line XML block). The
+        // header below already states the shared path convention
+        // /var/minis/skills/<id>/SKILL.md, so repeating it per skill bought
+        // nothing — at 150 installed skills that alone was ~750 prompt lines.
         val xml = buildString {
-            append("<available_skills>\n")
             for (skill in selected) {
-                var desc = skill.description
+                var desc = skill.description.replace('\n', ' ').replace('\r', ' ').trim()
                 if (desc.length > MAX_SKILL_DESC_LENGTH) {
                     desc = desc.substring(0, MAX_SKILL_DESC_LENGTH) + "…"
                 }
-                append("  <skill>\n")
-                append("    <name>").append(escapeXml(skill.name)).append("</name>\n")
-                append("    <description>").append(escapeXml(desc)).append("</description>\n")
-                append("    <path>/var/minis/skills/").append(skill.id).append("/SKILL.md</path>\n")
-                append("  </skill>\n")
+                append("- ").append(escapeXml(skill.name))
+                if (desc.isNotBlank()) append(" — ").append(escapeXml(desc))
+                append("\n")
             }
-            append("</available_skills>")
         }
 
         return buildString {
@@ -428,7 +432,11 @@ class SkillRepository(private val context: Context) {
             if (hasMore) {
                 val selectedIds = selected.mapTo(HashSet(selected.size)) { it.id }
                 val omitted = enabled.filter { it.id !in selectedIds }
-                val maxUndisclosed = (100 - selected.size).coerceAtLeast(0)
+                // [T-prompt-slim] Name-disclosure budget: with the 120 cap a
+                // heavy library can omit 200+ skills — naming up to 200 of
+                // them keeps every omitted skill FINDABLE from the prompt
+                // (the rest are still one `ls /var/minis/skills/` away).
+                val maxUndisclosed = (200 - selected.size).coerceAtLeast(0)
                 val names = omitted.take(maxUndisclosed).joinToString(", ") { it.name }
                 append("\n\n")
                 append(omitted.size).append(" more skills not shown above: ").append(names)
