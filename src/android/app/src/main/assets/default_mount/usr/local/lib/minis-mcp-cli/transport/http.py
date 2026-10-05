@@ -22,6 +22,29 @@ try:
 except ImportError:  # pragma: no cover - the sh wrapper installs httpx first
     httpx = None
 
+
+def _ensure_httpx():
+    """[T-mcp-httpx-lazy-reimport] Re-resolve httpx at call time.
+
+    The daemon forks on the FIRST MCP call, which can precede the sh
+    wrapper's pip install (slow mirror, offline first call) — and a module
+    captured at import time stays None for the daemon's whole life, so every
+    remote server answered "httpx unavailable" forever, even after httpx
+    landed on disk (a --refresh only reconnects; it does not restart the
+    process). A failed import is not cached by Python, so re-importing here
+    succeeds the moment the package is installed — no daemon restart, no
+    lost session state.
+    """
+    global httpx
+    if httpx is not None:
+        return True
+    try:
+        import httpx as _httpx
+    except ImportError:
+        return False
+    httpx = _httpx
+    return True
+
 TIMEOUT_SECONDS = 300  # 5 min
 
 # $VAR and $$VAR both expand from the process env; the UI picker emits $$VAR to
@@ -220,7 +243,7 @@ class HTTPTransport:
         refresh_token = tokens.get("refresh_token")
         token_endpoint = tokens.get("token_endpoint")
         client_id = tokens.get("client_id")
-        if not (refresh_token and token_endpoint and client_id) or httpx is None:
+        if not (refresh_token and token_endpoint and client_id) or not _ensure_httpx():
             return None
         form = {
             "grant_type": "refresh_token",
@@ -262,7 +285,7 @@ class HTTPTransport:
         return new_tokens
 
     def _post(self, method, params=None, notify=False, _oauth_retried=False):
-        if httpx is None:
+        if not _ensure_httpx():
             raise MCPError("CONNECTION_ERROR", "httpx unavailable")
         body = {"jsonrpc": "2.0", "method": method}
         if not notify:

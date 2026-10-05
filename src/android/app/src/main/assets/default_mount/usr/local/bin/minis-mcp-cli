@@ -15,17 +15,27 @@ LOG="/var/minis/mcp-servers/mcp-cli.log"
 mkdir -p /var/minis/mcp-servers 2>/dev/null
 _log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG" 2>/dev/null; }
 
-# Ensure python3 is available.
+# Ensure python3 is available. hash -r first: a shell that probed python3
+# before the dpkg database landed can hold a cached "not found" (reported:
+# "apt says installed but python3: command not found" on the very first
+# shell), and bash's command cache survives until cleared.
+hash -r 2>/dev/null
 if ! command -v python3 > /dev/null 2>&1; then
   _log "Installing python3..."
   DEBIAN_FRONTEND=noninteractive apt-get install -y python3 python3-pip >> "$LOG" 2>&1
 fi
 
 # Ensure httpx is importable (used by the HTTP transport).
+#
+# [T-mcp-cli-naked-pip] Ubuntu 24.04's python3-pip ships NO /usr/bin/pip —
+# only `python3 -m pip` — so the old naked-`pip` lines BOTH failed with
+# 127, httpx never installed, and the daemon started with httpx=None
+# (every remote MCP answered "httpx unavailable"). The module-level
+# fallback in transport/http.py re-imports lazily, so installing here is
+# enough even when the daemon already forked.
 if ! python3 -c "import httpx" 2>/dev/null; then
   _log "Installing httpx..."
-  pip install --quiet httpx >> "$LOG" 2>&1 || \
-    pip install --quiet --break-system-packages httpx >> "$LOG" 2>&1
+  python3 -m pip install --quiet --break-system-packages httpx >> "$LOG" 2>&1
 fi
 
 exec python3 /usr/local/lib/minis-mcp-cli/main.py "$@"

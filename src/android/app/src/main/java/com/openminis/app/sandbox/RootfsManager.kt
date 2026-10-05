@@ -1380,7 +1380,22 @@ class RootfsManager private constructor(private val context: Context) {
 
     private fun seedNetworkToolsLocked() {
         if (!prootBinary.exists()) return
-        
+
+        // [T-apt-stale-lock-boot-sweep] Under the host aptMutex, clear the
+        // dpkg/apt locks a killed session left behind BEFORE anything tries
+        // to install — the agent's own early `apt-get install python3` is
+        // exactly the caller that would otherwise wedge on the residue.
+        runCatching {
+            val sweep = listOf(
+                prootBinary.absolutePath, "-0", "--link2symlink", "--kill-on-exit",
+                "-r", rootfsDir.absolutePath,
+                "-b", "/dev", "-b", "/proc", "-w", "/root",
+                "/bin/sh", "-c", GuestAptScript.staleLockSweep(),
+            )
+            val r = runProotWithDeadline(sweep, prootLoaderEnv(), 30)
+            Log.i(TAG, "[net-seed] stale-lock sweep exit=${r.exitCode}")
+        }.onFailure { Log.w(TAG, "[net-seed] stale-lock sweep failed", it) }
+
         // Only seed truly essential packages that are missing
         val essentials = mutableListOf<String>()
         val ca = File(rootfsDir, "etc/ssl/certs/ca-certificates.crt")

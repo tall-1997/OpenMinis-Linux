@@ -29,4 +29,38 @@ internal object GuestAptScript {
             append(joined)
         }
     }
+
+    /**
+     * [T-apt-stale-lock-boot-sweep] One-shot boot-time sweep for dpkg/apt
+     * lock files left behind by a session killed mid-install (PRoot
+     * --kill-on-exit tears down the processes but not the guest filesystem).
+     * The in-script `minis_acquire_apt_lock` only recovers locks for its own
+     * run — an `apt-get` the agent ran BEFORE any minis- script could wedge
+     * on such a residue and report a busy package manager forever.
+     *
+     * MUST run under the host [SandboxResourceGate.aptMutex]: no concurrent
+     * apt can exist then, so a lock file with NO live apt/dpkg process is
+     * stale by definition. The /proc scan is the liveness check (procps's
+     * pgrep is not guaranteed in the base rootfs).
+     */
+    fun staleLockSweep(): String = buildString {
+        append("busy=0; ")
+        append("for c in /proc/[0-9]*/comm; do read -r n < \"\$c\" 2>/dev/null || continue; ")
+        append("case \"\$n\" in apt-get|apt|dpkg) busy=1; break;; esac; done; ")
+        append("if [ \"\$busy\" = 0 ]; then ")
+        append("rm -f /var/lib/dpkg/lock /var/lib/dpkg/lock-frontend ")
+        append("/var/lib/apt/lists/lock /var/cache/apt/archives/lock && ")
+        append("echo 'apt: cleared stale dpkg locks'; ")
+        append("else echo 'apt: package manager processes alive, keeping locks'; fi; ")
+        // [T-mcp-daemon-boot-sweep] /tmp survives an app restart (guest tmpfs
+        // is not cleared), so a dead daemon's markers persist. Drop them ONLY
+        // when the recorded pid is gone: a LIVE pid is kept — the cli reuses
+        // that daemon (its idle-selfkill bounds the lifetime), while dropping
+        // its port file would just fork a duplicate.
+        append("if [ -f /tmp/minis-mcp-daemon.pid ]; then ")
+        append("p=$(cat /tmp/minis-mcp-daemon.pid 2>/dev/null); ")
+        append("if [ -z \"\$p\" ] || ! kill -0 \"\$p\" 2>/dev/null; then ")
+        append("rm -f /tmp/minis-mcp-daemon.pid /tmp/minis-mcp-daemon.port; ")
+        append("echo 'mcp: cleared stale daemon markers'; fi; fi; ")
+    }
 }

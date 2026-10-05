@@ -69,7 +69,7 @@ ls -lh "$ASSETS/ubuntu-base.tar.gz"
 # fail the build — seedNetworkTools stays as the runtime fallback — but it
 # must be LOUD (the review's lesson: silent runCatching hid dead features
 # for weeks).
-ROOTFS_PREINSTALL=(ca-certificates curl wget python3 python3-pip python3-venv unzip psmisc)
+ROOTFS_PREINSTALL=(ca-certificates curl wget python3 python3-pip python3-venv python3-httpx unzip psmisc)
 if [ "${ROOTFS_PREINSTALL_DISABLE:-}" = "1" ]; then
   echo "==> ROOTFS_PREINSTALL_DISABLE=1 — keeping the stock ubuntu-base"
 else
