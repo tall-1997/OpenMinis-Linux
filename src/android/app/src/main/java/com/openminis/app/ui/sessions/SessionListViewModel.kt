@@ -187,10 +187,28 @@ class SessionListViewModel(
      * exists to prevent. (getStringSet's return value must be copied, never
      * mutated in place.)
      */
-    private val uiPrefs = context.getSharedPreferences("session_list_ui", Context.MODE_PRIVATE)
-    val collapsedFolderIds = MutableStateFlow<Set<String>>(
-        uiPrefs.getStringSet("collapsedFolderIds", emptySet())?.toSet() ?: emptySet(),
-    )
+    /**
+     * [T-android-sessionlist-prefs-io] Lazy + first access on [Dispatchers.IO]:
+     * the FIRST SharedPreferences read loads the XML synchronously on the
+     * calling thread, and this VM is constructed on the main thread inside a
+     * Compose frame (viewModel(factory=…)). On a device whose storage layer
+     * stalls (crash-loop signature, restartCount in the dozens) that load can
+     * hang the frame for minutes — measured in the field as a 119s main-thread
+     * stall inside ViewModelProvider.create before observeSessions ever ran,
+     * which left isInitialLoadComplete false forever and the list pane black.
+     * `lazy` keeps construction off the disk entirely; [loadCollapsedFolderIds]
+     * performs the first touch on IO, after which every main-thread access
+     * returns the cached instance.
+     */
+    private val uiPrefs by lazy { context.getSharedPreferences("session_list_ui", Context.MODE_PRIVATE) }
+    val collapsedFolderIds = MutableStateFlow<Set<String>>(emptySet())
+
+    private fun loadCollapsedFolderIds() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val ids = uiPrefs.getStringSet("collapsedFolderIds", emptySet())?.toSet() ?: emptySet()
+            collapsedFolderIds.value = ids
+        }
+    }
 
     private fun setCollapsedFolders(ids: Set<String>) {
         collapsedFolderIds.value = ids
@@ -287,6 +305,11 @@ class SessionListViewModel(
     private var newTopBaselineSeeded = false
 
     init {
+        // [T-android-sessionlist-prefs-io] Kick the collapsed-folder prefs load
+        // on IO. Deliberately OUTSIDE the safe-mode await below — folder
+        // collapse state has nothing to do with the crash gate and must not
+        // wait for the user to dismiss the share dialog.
+        loadCollapsedFolderIds()
         // T-android-crash-safe-mode-v2: gate the cold-start session list
         // observer behind the safe-mode flag. The Room observable issues a
         // full SELECT on first collect; if a malformed row was contributing

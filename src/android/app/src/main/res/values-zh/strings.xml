@@ -611,6 +611,7 @@
     <string name="sessionlist_section_this_week">本周</string>
     <string name="sessionlist_section_this_month">本月</string>
     <string name="sessionlist_section_earlier">更早</string>
+    <string name="sessionlist_recovering">正在恢复…</string>
     <string name="sessionlist_select_title">选择会话</string>
     <string name="sessionlist_n_selected">已选 %1$d 项</string>
     <string name="sessionlist_select_all">全选</string>

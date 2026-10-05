@@ -47,9 +47,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
@@ -307,6 +310,14 @@ fun ChatSplitScaffold(
     // today, but a future change to the band (or a value written by a build
     // with different limits) must not resurrect an out-of-range pane.
     val context = LocalContext.current
+    // [T-android-sessionlist-prefs-io] The SharedPreferences INSTANCE is cheap
+    // (no file IO), but the FIRST getFloat/getBoolean on a cold process loads
+    // the XML synchronously on the calling thread. Both reads below used to
+    // run inside `remember` blocks on the composition frame; on a storage
+    // stall that hangs the main thread exactly like SessionListViewModel's
+    // constructor read. Keep the instance lazy and move the first value reads
+    // onto Dispatchers.IO in LaunchedEffects, with safe defaults for the first
+    // frame (default width fraction / expanded list).
     val uiPrefs = remember(context) {
         context.getSharedPreferences(UI_PREFS, android.content.Context.MODE_PRIVATE)
     }
@@ -319,12 +330,20 @@ fun ChatSplitScaffold(
     // of a window the app does not have.
     val windowWidth = with(LocalDensity.current) { currentWindowSize().width.toDp() }
     var listPaneWidth by remember(windowWidth) {
-        val default = (windowWidth * LIST_PANE_DEFAULT_FRACTION)
         mutableStateOf(
-            uiPrefs.getFloat(KEY_LIST_PANE_WIDTH, default.value)
-                .coerceIn(LIST_PANE_MIN_WIDTH.value, LIST_PANE_MAX_WIDTH.value)
-                .dp,
+            (windowWidth * LIST_PANE_DEFAULT_FRACTION)
+                .coerceIn(LIST_PANE_MIN_WIDTH, LIST_PANE_MAX_WIDTH),
         )
+    }
+    // Restore the persisted width off-frame; a default-proportion pane shows
+    // for the first frame(s) instead of blocking composition on disk.
+    LaunchedEffect(windowWidth, uiPrefs) {
+        val stored = withContext(Dispatchers.IO) {
+            uiPrefs.getFloat(KEY_LIST_PANE_WIDTH, listPaneWidth.value)
+        }
+        listPaneWidth = stored
+            .coerceIn(LIST_PANE_MIN_WIDTH.value, LIST_PANE_MAX_WIDTH.value)
+            .dp
     }
 
     // Declared before the collapse below, which reads it on first composition.
@@ -357,12 +376,22 @@ fun ChatSplitScaffold(
     // open every time the user closes a chat mid-session, overriding a choice
     // they had just made.
     var listCollapsed by remember {
-        val stored = uiPrefs.getBoolean(KEY_LIST_COLLAPSED, false)
-        val corrected = stored && initialSessionId != null
-        if (stored != corrected) {
-            uiPrefs.edit().putBoolean(KEY_LIST_COLLAPSED, corrected).apply()
+        // [T-android-sessionlist-prefs-io] Safe default for the first frame
+        // (expanded); the persisted value lands via the LaunchedEffect below
+        // without touching the XML file on the composition thread.
+        mutableStateOf(false)
+    }
+    LaunchedEffect(uiPrefs, initialSessionId) {
+        val stored = withContext(Dispatchers.IO) {
+            uiPrefs.getBoolean(KEY_LIST_COLLAPSED, false)
         }
-        mutableStateOf(corrected)
+        val corrected = stored && initialSessionId != null
+        listCollapsed = corrected
+        if (stored != corrected) {
+            withContext(Dispatchers.IO) {
+                uiPrefs.edit().putBoolean(KEY_LIST_COLLAPSED, corrected).apply()
+            }
+        }
     }
 
     // Collapsing is modelled as "two-pane with a zero-width list", not as

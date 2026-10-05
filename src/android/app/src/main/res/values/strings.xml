@@ -673,6 +673,10 @@
     <string name="sessionlist_section_this_week">This Week</string>
     <string name="sessionlist_section_this_month">This Month</string>
     <string name="sessionlist_section_earlier">Earlier</string>
+    <!-- [T-android-sessionlist-prefs-io] Transient-stall fallback label for the
+         list pane when the first DB emission hasn't arrived within the 3s
+         budget. -->
+    <string name="sessionlist_recovering">Recovering…</string>
     <string name="sessionlist_select_title">Select Sessions</string>
     <string name="sessionlist_n_selected">%1$d Selected</string>
     <string name="sessionlist_select_all">Select All</string>

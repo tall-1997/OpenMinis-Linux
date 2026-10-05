@@ -183,6 +183,7 @@ import com.openminis.app.ui.theme.minisFabContentColor
 import com.openminis.app.data.repository.ChatRepository
 import com.openminis.app.data.repository.ProviderRepository
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -805,7 +806,37 @@ fun SessionListScreen(
             // onboarding flashes on top of existing user history. Mirrors
             // iOS `didInitialLoad` on ContentView. The transition is usually
             // sub-200ms, so no spinner.
-            if (isInitialLoadComplete) Column(modifier = Modifier.fillMaxSize()) {
+            //
+            // [T-android-sessionlist-prefs-io] Timeout fallback: if the
+            // first emission hasn't arrived within 3s (e.g. main-thread
+            // stall in the VM constructor, or a hung Room query), show
+            // "正在恢复…" instead of permanent black. A stall that outlives
+            // this label is by definition a device-level freeze, not a
+            // missing emission, and the user should know we're trying.
+            var loadTimedOut by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) {
+                delay(3_000L)
+                if (!isInitialLoadComplete) loadTimedOut = true
+            }
+            if (isInitialLoadComplete || loadTimedOut) Column(modifier = Modifier.fillMaxSize()) {
+                if (!isInitialLoadComplete) {
+                    // Transient stall fallback — spin while we wait for the
+                    // Room emission. Not a permanent state.
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            CircularProgressIndicator()
+                            Spacer(Modifier.height(12.dp))
+                            Text(
+                                text = stringResource(R.string.sessionlist_recovering),
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                } else
                 if (sessions.isEmpty()) {
                     if (isSearchActive && searchQuery.isNotBlank()) {
                         Box(
