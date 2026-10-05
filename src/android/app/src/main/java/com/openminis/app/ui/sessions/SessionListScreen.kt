@@ -183,10 +183,12 @@ import com.openminis.app.ui.theme.minisFabContentColor
 import com.openminis.app.data.repository.ChatRepository
 import com.openminis.app.data.repository.ProviderRepository
 import kotlin.math.roundToInt
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.Calendar
 import java.util.Date
 import java.util.concurrent.TimeUnit
@@ -1390,7 +1392,17 @@ private fun DualFabRow(
 ) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("ui_prefs", Context.MODE_PRIVATE) }
-    var isSwapped by remember { mutableStateOf(prefs.getBoolean(PREF_FAB_SWAPPED, false)) }
+    // [T-android-sessionlist-prefs-io] The FIRST getBoolean on a cold
+    // process synchronously loads the XML on the calling thread — and this
+    // `remember` runs inside a composition frame. Same storage-stall
+    // exposure as SessionListViewModel's constructor read; default to the
+    // unswapped layout and let the persisted value land off-frame.
+    var isSwapped by remember { mutableStateOf(false) }
+    LaunchedEffect(prefs) {
+        isSwapped = withContext(Dispatchers.IO) {
+            prefs.getBoolean(PREF_FAB_SWAPPED, false)
+        }
+    }
 
     // T120: focus + IME control for the inline search field. The field appears
     // inside an AnimatedVisibility, so we drive focus from the parent and

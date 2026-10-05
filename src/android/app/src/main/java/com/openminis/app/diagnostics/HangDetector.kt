@@ -64,6 +64,18 @@ object HangDetector {
      */
     private const val MID_HANG_RESAMPLE_MS = 3_000L
 
+    /**
+     * [T-android-hangdetector-full-dump] Episodes at or above this duration
+     * also persist a full all-threads dump (names + states + stacks). The
+     * 19:48 episode on 2026-10-05 lasted 62 minutes with the main thread
+     * parked in nativePollOnce — its stack shows WHERE it is waiting but
+     * not WHAT it is waiting on (a lock, a binder call, a frozen IO
+     * thread); the holder only appears in the full dump. 15s is comfortably
+     * above any GC/sync hiccup and well below the episodes that motivated
+     * this.
+     */
+    private const val FULL_DUMP_THRESHOLD_MS = 15_000L
+
     /** Once `count >= this`, AppNavigation forces launch mode = home. */
     private const val HANG_LIMIT_FOR_BREAKER = 3
 
@@ -108,6 +120,21 @@ object HangDetector {
     private val lastLogAt = AtomicLong(0L)
 
     private var appContext: Context? = null
+
+    /**
+     * [T-android-mainthread-prefs-hang] Prefs wrapper used by [markHealthyTick],
+     * the only HangDetector prefs touch on the MAIN thread (ChatScreen calls
+     * it on a healthy cadence). A wedged filesystem on that first read would
+     * re-trip the detector via the very recovery path that exists to clear
+     * it. All other HangDetector prefs access runs on the watchdog thread or
+     * cold-start paths, where the blocking read is acceptable.
+     */
+    private val asyncPrefs by lazy {
+        com.openminis.app.crash.AsyncPrefs.create(
+            appContext ?: throw IllegalStateException("HangDetector.start not called"),
+            PREFS_NAME,
+        )
+    }
 
     /**
      * Set by the application after start. Diagnostics must not import the
@@ -170,15 +197,17 @@ object HangDetector {
      * already 0.
      */
     fun markHealthyTick() {
-        val ctx = appContext ?: return
-        val prefs = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        if (prefs.getInt(KEY_HANG_COUNT, 0) == 0) return
-        val lastHangAt = prefs.getLong(KEY_LAST_HANG_AT, 0L)
+        if (appContext == null) return
+        // [T-android-mainthread-prefs-hang] AsyncPrefs keeps this off the
+        // disk on the main thread. Before the async load lands, getInt
+        // returns 0 → early-return — the correct conservative answer (a
+        // hang count written this process is mirrored in the in-memory
+        // overrides, so a real count is never hidden).
+        if (asyncPrefs.getInt(KEY_HANG_COUNT, 0) == 0) return
+        val lastHangAt = asyncPrefs.getLong(KEY_LAST_HANG_AT, 0L)
         if (lastHangAt > 0 && System.currentTimeMillis() - lastHangAt < RESET_AFTER_QUIET_MS) return
-        prefs.edit()
-            .putInt(KEY_HANG_COUNT, 0)
-            .putLong(KEY_LAST_HANG_AT, 0L)
-            .apply()
+        asyncPrefs.putInt(KEY_HANG_COUNT, 0)
+        asyncPrefs.putLong(KEY_LAST_HANG_AT, 0L)
         // [T-android-render-breaker] Healthy again — restore full rendering.
         _renderBreakerActive.value = false
         Log.i(TAG, "hang count reset after quiet period")
@@ -400,6 +429,24 @@ object HangDetector {
         println(
             "[T-HANG-DIAG][JankDiag] sample=$label escalation=$escalation duration=${durationMs}ms top5: $top5$renderFields",
         )
+
+        // [T-android-hangdetector-full-dump] Main-thread stack alone cannot
+        // identify a lock-holder or a wedged IO thread; on long hangs also
+        // persist every thread's name/state/stack so the next stall log
+        // names a suspect instead of "main idle in nativePollOnce".
+        if (durationMs >= FULL_DUMP_THRESHOLD_MS) {
+            builder.append("----- all threads @ $ts (escalation=$escalation) -----\n")
+            val all = try {
+                Thread.getAllStackTraces()
+            } catch (t: Throwable) {
+                emptyMap<Thread, Array<StackTraceElement>>()
+            }
+            for ((thread, stack) in all.toSortedMap(compareBy { it.name })) {
+                builder.append("thread: ${thread.name} state=${thread.state} daemon=${thread.isDaemon}\n")
+                for (frame in stack.take(12)) builder.append("  at $frame\n")
+            }
+            builder.append("\n")
+        }
 
         try {
             val dir = File(ctx.filesDir, STALL_LOG_DIR).also { it.mkdirs() }
