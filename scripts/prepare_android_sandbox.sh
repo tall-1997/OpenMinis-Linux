@@ -105,7 +105,11 @@ else
     echo "         python3 will be installed on-device by seedNetworkTools as before." >&2
     sudo rm -rf "$WORK"
   else
-    tar -czf "$ASSETS/ubuntu-base.tar.gz" -C "$WORK" .
+    # The chroot's apt wrote root-owned files (etc/ssl/private is 0700 root);
+    # a runner-user tar cannot read them — re-pack as root and hand the
+    # artifact back so the later gzip integrity gate can read it.
+    sudo tar -czf "$ASSETS/ubuntu-base.tar.gz" -C "$WORK" .
+    sudo chown "$(id -un):$(id -gn)" "$ASSETS/ubuntu-base.tar.gz"
     sudo rm -rf "$WORK"
     echo "==> rootfs now carries the essentials out of the box:"
     ls -lh "$ASSETS/ubuntu-base.tar.gz"
