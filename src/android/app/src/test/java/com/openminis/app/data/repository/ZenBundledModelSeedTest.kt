@@ -105,15 +105,16 @@ class ZenBundledModelSeedTest {
     /** [T-zen-usable-free-lane] The visible list IS the usable list. */
     @Test
     fun `zenVisibleModels drops free-lane ids the upstream refuses`() {
-        // Live-measured 2026-10-05: these ids answer 403 FreeTierError /
-        // RegionError / 500 on the first call — showing them is what made the
-        // user pick a model that can never work.
+        // Live-measured 2026-10-05 with a canonical session id: three ids are
+        // retired upstream (400/500 naming the endpoint or model) and two are
+        // geo-fenced (403 RegionError). None of them can ever answer, so
+        // showing them is what made the user pick a model that never works.
         val dead = listOf(
-            "big-pickle", "ling-3.1-flash-free", "fledge-alpha-free",
-            "mimo-v2.5-free", "mimo-v2.6-flash-free", "longcat-2.5-preview-free",
-            "ling-3.0-flash-fin-free", "nemotron-3-ultra-free",
-            "nemotron-3.5-lightning-free", "muse-spark-1.3-contributor-free",
-            "jev-1.13-free", "deepseek-v4-flash-free",
+            "ling-3.0-flash-fin-free",   // 400 "Endpoint is unavailable"
+            "deepseek-v4-flash-free",    // 400 "Model is unavailable"
+            "jev-1.13-free",             // 500 upstream
+            "muse-spark-1.2-contributor-free",  // 403 RegionError
+            "muse-spark-1.3-contributor-free",  // 403 RegionError
         )
         val catalog = dead.map { LLMModel(it, it, "OpenCode Zen") } + bundledZenModels()
         val visible = zenVisibleModels(catalog)
@@ -130,14 +131,84 @@ class ZenBundledModelSeedTest {
     }
 
     @Test
+    fun `the bundled free lane covers every id measured to answer 200`() {
+        // The whole point of the fix: a keyless user picks from the free roster
+        // and every row works. Re-measured 2026-10-05, all streaming 200.
+        val measured = listOf(
+            "big-pickle", "space-bunny-free", "mimo-v2.6-flash-free", "mimo-v2.5-free",
+            "nemotron-3-ultra-free", "nemotron-3.5-lightning-free", "ling-3.1-flash-free",
+            "longcat-2.5-preview-free", "fledge-alpha-free",
+        )
+        assertEquals(
+            "bundled roster drifted from the measured-usable set",
+            measured.toSet(),
+            zenUsableFreeIds(),
+        )
+    }
+
+    @Test
     fun `zenStaleEntryIds marks only this instance's entries outside the usable set`() {
         val entries = listOf(
-            entry("zen-1", "big-pickle"),          // 403 FreeTierError — dead
-            entry("zen-1", "space-bunny-free"),    // usable — must survive
-            entry("zen-1", "claude-x"),            // paid lane — dead for keyless
-            entry("other-1", "big-pickle"),        // different instance — untouchable
+            entry("zen-1", "jev-1.13-free"),         // 500 upstream — dead
+            entry("zen-1", "big-pickle"),            // measured 200 — must survive
+            entry("zen-1", "claude-x"),              // paid lane — dead for keyless
+            entry("other-1", "big-pickle"),         // different instance — untouchable
         )
         val stale = zenStaleEntryIds("zen-1", entries)
         assertEquals(setOf(entries[0].id, entries[2].id), stale)
+    }
+
+    /**
+     * The installed app seeded only space-bunny-free and swept everything else.
+     * Now that the roster is measured-usable, the sweep must RE-ADD the other
+     * eight — otherwise every existing installation keeps seeing one model
+     * after the upgrade that ships them.
+     */
+    @Test
+    fun `the stale sweep re-seeds the full measured roster into an existing instance`() {
+        val preUpgrade = listOf(
+            entry("zen-1", "space-bunny-free"),
+            entry("zen-1", "jev-1.13-free"),
+            entry("zen-1", "muse-spark-1.3-contributor-free"),
+        )
+        val stale = zenStaleEntryIds("zen-1", preUpgrade)
+        // The dead rows go, and because a usable row survives, the instance is
+        // not emptied — so the caller re-seeds the bundle on top of it.
+        assertEquals(
+            setOf("jev-1.13-free", "muse-spark-1.3-contributor-free"),
+            stale.map { id -> preUpgrade.first { it.id == id }.baseModel.id }.toSet(),
+        )
+        assertTrue(
+            "the surviving row must keep the instance non-empty",
+            preUpgrade.any { it.id !in stale },
+        )
+    }
+
+    /**
+     * [T-zen-usable-free-lane-fallback] The models.dev fallback is a
+     * HOSTNAME-keyed catalogue, so for the Zen host it answers with every paid
+     * lane plus every refused free-lane id. Writing it back unfiltered is what
+     * put 86 rows (12 of them permanently 403/500) in front of a user picking
+     * a keyless free model, so the fallback must go through the same filter the
+     * live /v1/models fetch does.
+     */
+    @Test
+    fun `zenVisibleModels collapses a full models dev shaped catalogue to the usable set`() {
+        val catalogue = buildList {
+            addAll(bundledZenModels())
+            add(LLMModel("claude-opus-5", "Claude Opus", "OpenCode Zen"))
+            add(LLMModel("gpt-5.6", "GPT", "OpenCode Zen"))
+            add(LLMModel("gemini-3-pro", "Gemini", "OpenCode Zen"))
+            listOf(
+                "ling-3.0-flash-fin-free", "jev-1.13-free", "deepseek-v4-flash-free",
+                "muse-spark-1.2-contributor-free", "muse-spark-1.3-contributor-free",
+            ).forEach { add(LLMModel(it, it, "OpenCode Zen")) }
+        }
+        val visible = zenVisibleModels(catalogue)
+        assertEquals(
+            "only the measured-usable free lane may reach a keyless Zen instance",
+            bundledZenModels().map { it.id },
+            visible.map { it.id },
+        )
     }
 }

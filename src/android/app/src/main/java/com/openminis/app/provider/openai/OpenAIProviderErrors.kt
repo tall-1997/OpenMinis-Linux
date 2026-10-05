@@ -8,14 +8,25 @@ import org.json.JSONObject
 
 internal fun OpenAIProvider.mapHttpError(statusCode: Int, body: String, retryAfterHeader: String? = null): LLMError {
     // [T-zen-structured-error] OpenCode Zen answers with a structured body
-    // ({"error":{"type":"FreeTierError",…}}) whose type carries semantics
-    // the generic HTTP mapping cannot see. Measured 2026-10-05: 9 of 14
-    // free-lane ids answer 403 FreeTierError — the upstream (Console) serves
-    // those models' free lane only to the official OpenCode client, and the
-    // caller's key (public/anonymous) never enters into it. ModelError means
-    // the catalogue lists the id but the server refuses to serve it. Both are
-    // provider refusals where "Invalid API key" is simply false.
-    zenStructuredProviderRefusal(body)?.let { return it }
+    // ({"type":"error","error":{"type":"FreeTierError",…}}) whose type carries
+    // semantics the generic HTTP mapping cannot see. FreeTierError means the
+    // request's OpenCode session identity was rejected; ModelError means the
+    // catalogue lists the id but the server refuses to serve it; RegionError
+    // means the model is geo-fenced. All three are provider refusals where
+    // "Invalid API key" is simply false, and each has a hint worth showing.
+    //
+    // [T-zen-sniffer-host-gate] GATED ON THE ZEN HOST, deliberately. This
+    // function is the single error mapper for EVERY OpenAI-compatible provider,
+    // and `ModelError` / `RegionError` are generic type names — a relay or a
+    // self-hosted vLLM that happens to answer `{"type":"error","error":
+    // {"type":"ModelError"}}` would otherwise be captured by Zen-specific
+    // wording ("geo-fenced upstream", "Refresh the model list") that describes
+    // a service it knows nothing about. Only the Zen endpoint speaks this
+    // dialect, so only the Zen endpoint gets this mapping; every other host
+    // keeps the generic path it had before.
+    if (com.openminis.app.provider.ZenDisguise.isZenHost(basePath)) {
+        zenStructuredProviderRefusal(body)?.let { return it }
+    }
     if (statusCode == 401 || statusCode == 403) {
         // [T-llm-error-401-model-scope] A gateway fronting an upstream pool
         // answers 401 for failures in the channel IT picked, not for anything
@@ -116,14 +127,29 @@ internal fun zenStructuredProviderRefusal(body: String): LLMError? {
     val type = error.optString("type", "")
     val message = error.safeOptString("message", "").orEmpty()
     return when (type) {
+        // [T-zen-canonical-session] This refusal is NOT a service boundary, and
+        // the upstream's own wording says so misleadingly. Measured 2026-10-05:
+        // a session id that is not exactly `ses_` + 12 lowercase hex + 14
+        // Base62 produces a byte-identical 403 to a request with no disguise at
+        // all — on EVERY model, including the nine that stream 200 with a
+        // canonical id. So the useful thing to tell the user is that the request
+        // carried a bad session identity, not that no client can pass.
         "FreeTierError" -> LLMError.ProviderError(
             "FreeTierError: ${maskSecrets(message.ifBlank { "free tier refused" })} — " +
-                "the server serves this model's free lane only to the official OpenCode client; " +
-                "your key and plan are not involved. Pick another -free model (e.g. space-bunny-free).",
+                "the upstream rejected this request's OpenCode session identity, not your " +
+                "key, plan or configuration. If it persists across models, the built-in " +
+                "OpenCode Zen (Free) provider is the one to use; another free model from " +
+                "the list is worth a try.",
+        )
+        "RegionError" -> LLMError.ProviderError(
+            "RegionError: ${maskSecrets(message.ifBlank { "not available in your country" })} — " +
+                "this free model is geo-fenced upstream and cannot be reached from your " +
+                "current location. The other bundled free models have no such restriction.",
         )
         "ModelError" -> LLMError.ProviderError(
             "ModelError: ${maskSecrets(message.ifBlank { "model refused by server" })} — " +
-                "the server's catalogue lists this id but refuses to serve it.",
+                "the server's catalogue lists this id but refuses to serve it. " +
+                "Refresh the model list, or pick another of the bundled free models.",
         )
         else -> null
     }

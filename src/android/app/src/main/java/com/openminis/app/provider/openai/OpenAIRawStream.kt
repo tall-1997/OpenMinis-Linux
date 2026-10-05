@@ -222,7 +222,7 @@ internal fun OpenAIProvider.rawStreamMessage(
             )
         }
         var request = buildRequest(bodyStr)
-        if (basePath.contains("opencode.ai/zen", ignoreCase = true)) {
+        if (com.openminis.app.provider.ZenDisguise.isZenHost(basePath)) {
             request = ZenDisguise.applyToBody(request.newBuilder(), bodyStr).build()
         }
         val headerMap = mutableMapOf<String, String>()

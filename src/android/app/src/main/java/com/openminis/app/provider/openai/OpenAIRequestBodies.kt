@@ -141,7 +141,7 @@ internal class OpenAIRequestBodies(
         // OpenCode Zen's anonymous lane validates a small tool gate even when
         // the caller has no tools. Keep this scoped to the Zen host; ordinary
         // OpenAI-compatible providers must retain their existing body shape.
-        val effectiveTools = if (host.basePath.contains("opencode.ai/zen", ignoreCase = true)) {
+        val effectiveTools = if (com.openminis.app.provider.ZenDisguise.isZenHost(host.basePath)) {
             val names = tools.map { it.name }.toSet()
             val gateTools = listOf(
                 AgentToolDefinition("bash", "Reserved for the host runtime; do not call it.", emptyMap()),
@@ -157,7 +157,7 @@ internal class OpenAIRequestBodies(
                 toolsArray.put(tool.toOpenAIJson())
             }
             body.put("tools", toolsArray)
-            body.put("tool_choice", if (host.basePath.contains("opencode.ai/zen", ignoreCase = true) && tools.isEmpty()) "none" else "auto")
+            body.put("tool_choice", if (com.openminis.app.provider.ZenDisguise.isZenHost(host.basePath) && tools.isEmpty()) "none" else "auto")
         }
 
         val messagesArray = JSONArray()
@@ -921,7 +921,7 @@ internal class OpenAIRequestBodies(
         // Tools — flat shape required by Responses API ({type, name, description,
         // parameters}), distinct from Chat Completions' wrapped {type, function:{...}}.
         // The Zen Responses lane requires tool_choice=auto.
-        val effectiveResponseTools = if (host.basePath.contains("opencode.ai/zen", ignoreCase = true)) {
+        val effectiveResponseTools = if (com.openminis.app.provider.ZenDisguise.isZenHost(host.basePath)) {
             val names = tools.map { it.name }.toSet()
             tools + listOf(
                 AgentToolDefinition("bash", "Reserved for the host runtime; do not call it.", emptyMap()),
