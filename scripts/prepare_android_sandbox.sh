@@ -92,6 +92,30 @@ else
         export DEBIAN_FRONTEND=noninteractive
         apt-get update
         apt-get install -y --no-install-recommends '"${ROOTFS_PREINSTALL[*]}"'
+        # ── [T-rootfs-slim] Runtime-useless bulk, python3 left INTACT ──
+        # Every item below is dead weight the phone ships and never runs:
+        #   /usr/lib/python3*/test     — the stdlib regression suite (~25 MB);
+        #   idlelib / turtledemo       — graphical IDE/demos, no display here;
+        #   /usr/share/{doc,man,info}  — per-package docs and manual pages;
+        #   /usr/share/locale          — message catalogs beyond zh/en.
+        # KEPT deliberately: __pycache__ (deleting it slows every first
+        # python start into a full recompile), tzdata zoneinfo (python
+        # datetime local-time lookups), lib2to3 main module (some tooling
+        # imports it), all of site-packages/pip/venv/httpx.
+        # Upgrade safety: for an EXISTING install the app keeps its already
+        # extracted rootfs (no conflict); a re-extracted slim rootfs is
+        # file-identical to what dpkg considers installed minus docs/tests,
+        # which dpkg never reads at runtime — apt upgrade rewrites what a
+        # package update actually needs. Fresh installs get the slim tree
+        # directly.
+        rm -rf /usr/lib/python3*/test /usr/lib/python3*/idlelib \
+               /usr/lib/python3*/turtledemo
+        rm -rf /usr/share/doc/* /usr/share/man /usr/share/info
+        find /usr/share/locale -mindepth 1 -maxdepth 1 -type d \
+          ! -name "zh_CN*" ! -name "en*" -exec rm -rf {} + 2>/dev/null || true
+        # Smoke-assert what the runtime actually needs; a miss aborts the
+        # chroot (set -e) and the build falls back to the stock base below.
+        python3 -c "import httpx, ssl, venv; import sys; assert sys.version_info >= (3, 10)"
         apt-get clean
         rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
     '; then
