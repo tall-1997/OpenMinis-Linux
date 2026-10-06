@@ -21,6 +21,27 @@ class MemoryRepository(private val memoryDir: File) {
 
     val learnedPrefs = LearnedPrefsStore(File(memoryDir, LearnedPrefsStore.FILE_NAME))
 
+    // ── [T-prompt-cache] Fragment caches ──────────────────────────────
+    // Prompt injection reads GLOBAL.md and up to 3 daily logs every turn.
+    // The files only change when the user edits memory (Settings / session
+    // menu) or memory_write appends a daily entry — rare vs. turn frequency.
+    // Key = file fingerprint (exists + mtime + size); a cheap stat on each
+    // call decides hit vs. rebuild. Callers get a memoized instance via
+    // ChatViewModel.sessionMemoryRepo(), so the cache survives across turns
+    // instead of being re-allocated with the repository.
+    @Volatile
+    private var globalFragCacheKey: String? = null
+    @Volatile
+    private var globalFragCacheValue: String? = null
+    @Volatile
+    private var dailyFragCacheKey: String? = null
+    @Volatile
+    private var dailyFragCacheValue: String? = null
+
+    /** Stat-only fingerprint; null when the file is missing. */
+    private fun fileFingerprint(file: File): String? =
+        if (file.exists()) "${file.lastModified()}:${file.length()}" else null
+
     companion object {
         private const val TAG = "MemoryRepository"
         private const val GLOBAL_FILE = "GLOBAL.md"
@@ -388,6 +409,18 @@ class MemoryRepository(private val memoryDir: File) {
      */
     fun loadGlobalMemoryFragment(sessionScoped: Boolean = false): String? {
         val globalFile = File(memoryDir, GLOBAL_FILE)
+        // [T-prompt-cache] Stat-only fast path. Key = scope prefix +
+        // file fingerprint (null when missing). Cache hit: return previous
+        // result directly. Cache miss: full read, rebuild, store.
+        val key = (if (sessionScoped) "S" else "G") + ":" + (fileFingerprint(globalFile) ?: "missing")
+        if (globalFragCacheKey == key) return globalFragCacheValue
+        val result = loadGlobalMemoryFragmentUncached(globalFile, sessionScoped)
+        globalFragCacheKey = key
+        globalFragCacheValue = result
+        return result
+    }
+
+    private fun loadGlobalMemoryFragmentUncached(globalFile: File, sessionScoped: Boolean): String? {
         if (!globalFile.exists()) return null
         val content = readTextResilient(globalFile, "global-rules") ?: return null
         // Match iOS: literal-empty check (`!content.isEmpty`), not blank.
@@ -423,6 +456,25 @@ class MemoryRepository(private val memoryDir: File) {
      */
     fun loadRecentDailyMemoryFragment(): String? {
         val now = System.currentTimeMillis()
+        // [T-prompt-cache] Stat-only key: today's date + fingerprint of each
+        // candidate file in the 30-day lookback window. 30 stats are ~0.5 ms
+        // vs. reading + parsing 3 files of up to 200 lines each on every turn.
+        val todayStr = IsoTime.formatLocalDate(now)
+        val keyBuilder = StringBuilder().append(todayStr)
+        for (dayOffset in 0 until MAX_LOOKBACK_DAYS) {
+            val dateStr = IsoTime.formatLocalDate(now - dayOffset.toLong() * 86400_000L)
+            val fp = fileFingerprint(File(memoryDir, "$dateStr.md")) ?: "-"
+            keyBuilder.append('|').append(fp)
+        }
+        val key = keyBuilder.toString()
+        if (dailyFragCacheKey == key) return dailyFragCacheValue
+        val result = loadRecentDailyMemoryFragmentUncached(now)
+        dailyFragCacheKey = key
+        dailyFragCacheValue = result
+        return result
+    }
+
+    private fun loadRecentDailyMemoryFragmentUncached(now: Long): String? {
         val fragments = mutableListOf<String>()
         // [XSessionDiag] Names of the logs actually injected, for the diagnostic
         // line below. Collected alongside `fragments` so the log can name the

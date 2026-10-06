@@ -298,6 +298,7 @@ class MCPRepository(private val context: Context) {
 
     fun delete(id: String) {
         db.execSQL("DELETE FROM mcp_session_overrides WHERE mcp_id=?", arrayOf(id))
+        overrideRevision++
         // Secrets + guest bridge must not outlive the server entry.
         com.openminis.app.mcp.oauth.MCPOAuthStore.purge(context, id)
         _servers.value = _servers.value.filter { it.id != id }
@@ -318,6 +319,27 @@ class MCPRepository(private val context: Context) {
     }
 
     // -- Session Overrides (mirror SkillRepository) --
+
+    /** [T-prompt-cache] Bumped by every `mcp_session_overrides` mutation. */
+    @Volatile
+    private var overrideRevision: Long = 0L
+
+    /**
+     * Bulk-load all overrides for one session in a single query —
+     * same pattern as [SkillRepository.sessionOverrideMap].
+     */
+    fun sessionOverrideMap(sessionId: String): Map<String, Boolean> {
+        val map = HashMap<String, Boolean>()
+        db.rawQuery(
+            "SELECT mcp_id, is_enabled FROM mcp_session_overrides WHERE session_id=?",
+            arrayOf(sessionId),
+        ).use { cursor ->
+            while (cursor.moveToNext()) {
+                map[cursor.getString(0)] = cursor.getInt(1) == 1
+            }
+        }
+        return map
+    }
 
     fun isEnabledForSession(mcpId: String, sessionId: String): Boolean {
         val cursor = db.rawQuery(
@@ -352,10 +374,12 @@ class MCPRepository(private val context: Context) {
                 arrayOf<Any>(sessionId, mcpId, if (enabled) 1 else 0)
             )
         }
+        overrideRevision++
     }
 
     fun clearSessionOverrides(sessionId: String) {
         db.execSQL("DELETE FROM mcp_session_overrides WHERE session_id=?", arrayOf(sessionId))
+        overrideRevision++
     }
 
     /**
@@ -373,6 +397,7 @@ class MCPRepository(private val context: Context) {
             "UPDATE OR REPLACE mcp_session_overrides SET session_id=? WHERE session_id=?",
             arrayOf<Any>(toReal, fromDraft),
         )
+        overrideRevision++
     }
 
     // -- JSON Import (4 format variants, last-write-wins on name) --
@@ -439,6 +464,16 @@ class MCPRepository(private val context: Context) {
 
     // -- Prompt Fragment (Top 20) --
 
+    /** [T-prompt-cache] Fragment cache keyed by (session, servers snapshot, override rev). */
+    @Volatile
+    private var fragmentCacheServers: List<MCPServerConfig>? = null
+    @Volatile
+    private var fragmentCacheSession: String? = null
+    @Volatile
+    private var fragmentCacheRevision: Long = -1L
+    @Volatile
+    private var fragmentCacheValue: String? = null
+
     /**
      * Build the system-prompt fragment disclosing enabled MCP servers, Top
      * [MAX_MCPS_IN_PROMPT] sorted by recent-add (createdAt desc — Android has
@@ -446,16 +481,33 @@ class MCPRepository(private val context: Context) {
      * truncated at [MAX_NOTE_LENGTH] to match the skill description cap.
      * Returns null when the session has no enabled servers. Format per the
      * feature design doc §6a.
+     *
+     * [T-prompt-cache] Returns the cached fragment unless the servers list
+     * or session overrides have changed — re-queries are rare relative to
+     * turn frequency.
      */
     fun mcpPromptFragment(sessionId: String): String? {
-        val enabled = _servers.value
-            .filter { isEnabledForSession(it.id, sessionId) }
+        val servers = _servers.value
+        if (sessionId == fragmentCacheSession &&
+            servers === fragmentCacheServers &&
+            overrideRevision == fragmentCacheRevision
+        ) return fragmentCacheValue
+
+        val overrides = sessionOverrideMap(sessionId)
+        val enabled = servers
+            .filter { overrides[it.id] ?: it.enabled }
             .sortedByDescending { it.createdAt }
-        if (enabled.isEmpty()) return null
+        if (enabled.isEmpty()) {
+            fragmentCacheSession = sessionId
+            fragmentCacheServers = servers
+            fragmentCacheRevision = overrideRevision
+            fragmentCacheValue = null
+            return null
+        }
 
         val selected = enabled.take(MAX_MCPS_IN_PROMPT)
 
-        return buildString {
+        val result = buildString {
             append("Available MCP Servers (use minis-mcp-cli to discover and call):\n")
             for (s in selected) {
                 var note = s.note ?: ""
@@ -472,6 +524,11 @@ class MCPRepository(private val context: Context) {
             // localized; wording must match iOS verbatim.
             append("When adding or modifying an MCP server config (via minis-mcp-cli add / the UI), use \$\$VARNAME in env/headers/url values as a placeholder resolved at runtime from the system/App environment variables — do not hardcode secrets; reference an existing App environment variable as \$\$NAME.")
         }
+        fragmentCacheSession = sessionId
+        fragmentCacheServers = servers
+        fragmentCacheRevision = overrideRevision
+        fragmentCacheValue = result
+        return result
     }
 
     // -- Database Helper (session overrides only) --

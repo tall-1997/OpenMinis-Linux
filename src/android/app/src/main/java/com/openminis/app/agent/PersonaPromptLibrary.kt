@@ -385,6 +385,30 @@ object PersonaPromptLibrary {
 
     fun indexFile(context: Context): File = File(root(context), INDEX_NAME)
 
+    /**
+     * [T-prompt-cache] Cheap dirty-check fingerprint for the persona files
+     * that [resolve] can return: the index, every file in the library, and
+     * the per-session override. Sums (mtime XOR size) so callers can skip
+     * re-rendering the identity section without re-reading file contents.
+     */
+    fun resolvedFileFingerprint(context: Context, providerInstanceId: String?, sessionId: String?): String {
+        var acc = 0L
+        fun scan(f: File) {
+            if (f.exists()) acc = acc xor f.lastModified() xor f.length()
+        }
+        scan(indexFile(context))
+        filesDir(context).listFiles()?.forEach(::scan)
+        if (sessionId != null) {
+            scan(
+                File(
+                    com.openminis.app.sandbox.SessionWorkspace.memoryDir(context.filesDir, sessionId),
+                    SESSION_PERSONA_FILE,
+                ),
+            )
+        }
+        return "$acc|$providerInstanceId"
+    }
+
     fun loadIndex(context: Context): PersonaPromptIndex = synchronized(lock) {
         loadIndexLocked(context)
     }

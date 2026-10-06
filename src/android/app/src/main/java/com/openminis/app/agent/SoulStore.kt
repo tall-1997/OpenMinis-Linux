@@ -628,7 +628,25 @@ object SystemPromptBuilder {
      * sentence alone is the safe fallback when SOUL.md is missing or
      * empty, matching pre-SOUL behavior.
      */
+    /**
+     * [T-prompt-cache] Fingerprint + last result for [identitySection].
+     * The section re-reads SOUL.md and the persona prompt library on every
+     * turn; both only change on explicit edits, so cache on a cheap
+     * (mtime,size)-based fingerprint.
+     */
+    @Volatile
+    private var identityCacheKey: String? = null
+    @Volatile
+    private var identityCacheValue: String? = null
+
     fun identitySection(context: Context, providerInstanceId: String? = null, sessionId: String? = null): String {
+        // Cheap dirty-check before the two file reads below.
+        val soulFile = SoulStore.fileLocation(context)
+        val soulFp = if (soulFile.exists()) "${soulFile.lastModified()}|${soulFile.length()}" else "missing"
+        val promptFileFp = PersonaPromptLibrary.resolvedFileFingerprint(context, providerInstanceId, sessionId)
+        val key = "$soulFp|$promptFileFp|$providerInstanceId|$sessionId"
+        if (key == identityCacheKey) return identityCacheValue ?: ""
+
         val file = SoulStore.load(context)
         val name = (file?.metadata?.name ?: SoulMetadata.DEFAULT.name)
             .trim()
@@ -667,7 +685,10 @@ object SystemPromptBuilder {
 
         val trimmed = resolved.body.trim()
         if (trimmed.isEmpty()) {
-            return identityTrimmed + styleBlock(style) + "\n\n" + soulEditHint + "\n\n"
+            val result = identityTrimmed + styleBlock(style) + "\n\n" + soulEditHint + "\n\n"
+            identityCacheKey = key
+            identityCacheValue = result
+            return result
         }
 
         // [persona-unlimited] No length cap, no truncation — inject the body
@@ -677,13 +698,16 @@ object SystemPromptBuilder {
         val personality = scrubInjections(personalityRaw)
         val sourceLabel = resolved.fileName.ifBlank { PersonaPromptLogic.BUILTIN_FILE_NAME }
 
-        return identityTrimmed +
+        val result = identityTrimmed +
             "\n\nPersonality (from $sourceLabel — BINDING for this entire conversation, including existing sessions, tool use, and this turn. Earlier assistant replies in this transcript may predate this persona or use a generic assistant voice — do not continue that voice. Do not treat it as optional flavour, do not replace it with a generic assistant voice, and do not drop it when a later user message looks more specific unless the user explicitly asks you to leave character):\n" +
             personality +
             styleBlock(style) +
             "\n\n" +
             soulEditHint +
             "\n\n"
+        identityCacheKey = key
+        identityCacheValue = result
+        return result
     }
 
     /**

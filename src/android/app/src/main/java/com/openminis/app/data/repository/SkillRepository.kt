@@ -225,6 +225,7 @@ class SkillRepository(private val context: Context) {
     fun delete(id: String) {
         db.execSQL("DELETE FROM skills WHERE id=?", arrayOf(id))
         db.execSQL("DELETE FROM session_skill_overrides WHERE skill_id=?", arrayOf(id))
+        overrideRevision++
         val dir = File(skillsDir, id)
         dir.deleteRecursively()
         _skills.value = _skills.value.filter { it.id != id }
@@ -324,6 +325,35 @@ class SkillRepository(private val context: Context) {
 
     // -- Session Overrides --
 
+    /**
+     * [T-prompt-cache] Bumped by every mutation of the `session_skill_overrides`
+     * table ([setSessionOverride], [clearSessionOverrides],
+     * [renameSessionOverrides]). `skillPromptFragment` uses it as part of its
+     * cache key so a toggle invalidates the cached fragment instantly without
+     * any change to `_skills`.
+     */
+    @Volatile
+    private var overrideRevision: Long = 0L
+
+    /**
+     * Bulk-load all overrides for one session in a single query. The
+     * per-skill [isEnabledForSession] path costs one cursor per skill —
+     * with 200+ installed skills that was 200+ cursor round-trips on EVERY
+     * turn (fragment built per request). One query instead.
+     */
+    fun sessionOverrideMap(sessionId: String): Map<String, Boolean> {
+        val map = HashMap<String, Boolean>()
+        db.rawQuery(
+            "SELECT skill_id, is_enabled FROM session_skill_overrides WHERE session_id=?",
+            arrayOf(sessionId),
+        ).use { cursor ->
+            while (cursor.moveToNext()) {
+                map[cursor.getString(0)] = cursor.getInt(1) == 1
+            }
+        }
+        return map
+    }
+
     fun isEnabledForSession(skillId: String, sessionId: String): Boolean {
         val cursor = db.rawQuery(
             "SELECT is_enabled FROM session_skill_overrides WHERE session_id=? AND skill_id=?",
@@ -340,10 +370,12 @@ class SkillRepository(private val context: Context) {
             "INSERT OR REPLACE INTO session_skill_overrides (session_id, skill_id, is_enabled) VALUES (?, ?, ?)",
             arrayOf<Any>(sessionId, skillId, if (enabled) 1 else 0)
         )
+        overrideRevision++
     }
 
     fun clearSessionOverrides(sessionId: String) {
         db.execSQL("DELETE FROM session_skill_overrides WHERE session_id=?", arrayOf(sessionId))
+        overrideRevision++
     }
 
     /**
@@ -362,19 +394,52 @@ class SkillRepository(private val context: Context) {
             "UPDATE OR REPLACE session_skill_overrides SET session_id=? WHERE session_id=?",
             arrayOf<Any>(toReal, fromDraft),
         )
+        overrideRevision++
     }
 
     // -- Prompt Fragment --
+
+    /** [T-prompt-cache] Fragment cache keyed by (session, skills-snapshot, override rev). */
+    @Volatile
+    private var fragmentCacheSkills: List<Skill>? = null
+    @Volatile
+    private var fragmentCacheSession: String? = null
+    @Volatile
+    private var fragmentCacheRevision: Long = -1L
+    @Volatile
+    private var fragmentCacheValue: String? = null
 
     /**
      * Build the system-prompt fragment that makes skills discoverable.
      * Discloses up to [MAX_SKILLS_IN_PROMPT] skills with 3-tier priority
      * (bundled > 7-day recent > most-used), matching iOS SkillStore.
      * Returns null when the session has no enabled skills.
+     *
+     * [T-prompt-cache] The fragment changes only on skill enable/disable
+     * toggles or override writes — both rare relative to turn frequency.
+     * The cache cuts ~200 cursor round-trips per turn (one
+     * `isEnabledForSession` call per skill) down to one bulk override
+     * query on cache miss.
      */
     fun skillPromptFragment(sessionId: String): String? {
-        val enabled = _skills.value.filter { isEnabledForSession(it.id, sessionId) }
-        if (enabled.isEmpty()) return null
+        val skillsSnapshot = _skills.value
+        // Cheap cache key: session + snapshot identity + override revision.
+        // All three are dirtied instantly by the corresponding mutator.
+        if (sessionId == fragmentCacheSession &&
+            skillsSnapshot === fragmentCacheSkills &&
+            overrideRevision == fragmentCacheRevision
+        ) return fragmentCacheValue
+
+        // Bulk-load session overrides once instead of per-skill cursor.
+        val overrides = sessionOverrideMap(sessionId)
+        val enabled = skillsSnapshot.filter { overrides[it.id] ?: it.isEnabled }
+        if (enabled.isEmpty()) {
+            fragmentCacheSession = sessionId
+            fragmentCacheSkills = skillsSnapshot
+            fragmentCacheRevision = overrideRevision
+            fragmentCacheValue = null
+            return null
+        }
 
         val total = enabled.size
         val selected: List<Skill>
@@ -425,7 +490,7 @@ class SkillRepository(private val context: Context) {
             }
         }
 
-        return buildString {
+        val result = buildString {
             append("Skills:\n")
             append("Reusable instruction sets stored at /var/minis/skills/<name>/SKILL.md. Read the SKILL.md file to load full instructions before using a skill.\n\n")
             append(xml)
@@ -443,8 +508,12 @@ class SkillRepository(private val context: Context) {
                 append(". List /var/minis/skills/ or grep to search all.")
             }
         }
+        fragmentCacheSession = sessionId
+        fragmentCacheSkills = skillsSnapshot
+        fragmentCacheRevision = overrideRevision
+        fragmentCacheValue = result
+        return result
     }
-
     /**
      * Record that a skill's SKILL.md was read. Matches iOS `SkillStore.recordSkillUse`:
      * bumps `useCount` by 1 and normalizes all counts to 0–100 when any exceeds 1000,
@@ -1372,6 +1441,7 @@ class SkillRepository(private val context: Context) {
             }
             db.execSQL("DELETE FROM skills WHERE id=?", arrayOf(id))
             db.execSQL("DELETE FROM session_skill_overrides WHERE skill_id=?", arrayOf(id))
+            overrideRevision++
             next.removeAll { it.id == id }
             Log.i(TAG, "Pruned skill missing from disk: $id")
         }
@@ -1500,6 +1570,7 @@ class SkillRepository(private val context: Context) {
             ) {
                 db.execSQL("DELETE FROM skills WHERE id=?", arrayOf(id))
                 db.execSQL("DELETE FROM session_skill_overrides WHERE skill_id=?", arrayOf(id))
+                overrideRevision++
                 Log.i(TAG, "Pruned orphan skill row (no SKILL.md on disk): $id")
                 continue
             }

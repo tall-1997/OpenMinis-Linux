@@ -135,14 +135,28 @@ class ChatViewModel(
     /** The real session ID, populated on first message for drafts. */
     internal var realSessionId: String = if (isDraft) "" else sessionId
 
+    /** [T-prompt-cache] Memoized session-scoped MemoryRepository;
+     *  re-created only when the resolved session id changes (draft→real).
+     *  Avoids per-turn allocation and allows fragment caches inside
+     *  MemoryRepository to survive across consecutive prompt builds. */
+    @Volatile
+    private var sessionMemoryRepoCache: MemoryRepository? = null
+    @Volatile
+    private var sessionMemoryRepoCacheSid: String? = null
+
     /** Daily logs and session GLOBAL.md live in this chat's workspace. */
     internal fun sessionMemoryRepo(): MemoryRepository {
         val sid = com.openminis.app.sandbox.ExecutionCoordinator.ownerSessionId(
             realSessionId.ifEmpty { sessionId },
         )
-        return MemoryRepository(
+        val cached = sessionMemoryRepoCache
+        if (cached != null && sessionMemoryRepoCacheSid == sid) return cached
+        val repo = MemoryRepository(
             com.openminis.app.sandbox.SessionWorkspace.memoryDir(context.filesDir, sid),
         )
+        sessionMemoryRepoCache = repo
+        sessionMemoryRepoCacheSid = sid
+        return repo
     }
 
     companion object {
