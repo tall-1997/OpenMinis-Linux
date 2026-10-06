@@ -701,7 +701,12 @@ internal fun buildFlatChatItems(
         val hasVisibleContent = message.content.isNotEmpty() || blocks.any {
             when (it.kind) {
                 "info" -> false
-                "thinking" -> message.thinkingLevel?.isEnabled ?: true
+                // [T-android-thinking-forced-visible] A thinking block with
+                // content renders (forced-reasoning models stream reasoning
+                // even when the request level is OFF), so it counts as
+                // visible content for the typing indicator. Empty block =
+                // still waiting, same as before.
+                "thinking" -> it.content.isNotBlank()
                 "text" -> it.content.isNotEmpty()
                 else -> true // tool_use pills render immediately
             }

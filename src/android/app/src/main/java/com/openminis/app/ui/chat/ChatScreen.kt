@@ -4130,18 +4130,25 @@ fun ChatScreen(
                                 },
                             )
                             is FlatChatItem.AssistantThinking -> {
-                                // T300: hide Deep Thinking block when the user
-                                // currently has thinking turned off — even if
-                                // a forced-reasoning model (e.g. xAI Grok 4.x
-                                // via OpenRouter) still streams reasoning_-
-                                // content. Snapshot on the message wins so
-                                // toggling the level after a turn finishes
-                                // doesn't retro-hide an already-visible block;
-                                // legacy DB-restored messages (snapshot=null)
-                                // follow the chat's current level.
-                                val effectiveLevel = item.messageThinkingLevel
-                                    ?: viewModel.thinkingLevel.value
-                                if (effectiveLevel.isEnabled) {
+                                // [T-android-thinking-forced-visible] Render
+                                // the block whenever it carries CONTENT,
+                                // regardless of the session's thinking level.
+                                // T300 hid OFF-level thinking entirely, but
+                                // forced-reasoning models (xAI Grok 4.x,
+                                // MiniMax M2, several OpenRouter routes)
+                                // stream reasoning_content even when the
+                                // request carries no reasoning field — that
+                                // thinking was silently swallowed, and the
+                                // user saw "model isn't thinking". The level
+                                // is a REQUEST knob (do we ask the model to
+                                // reason), not a DISPLAY filter; content that
+                                // actually arrived is always shown. The OFF
+                                // case still gets the collapsed default
+                                // (isStreaming=false → ThinkingBlock's own
+                                // collapsed presentation), which preserves
+                                // T300's intent of not splashing unsolicited
+                                // reasoning across the chat.
+                                if (item.block.content.isNotBlank() || item.messageIsStreaming) {
                                     // [T-android-thinking-auto-collapse] Use
                                     // `isLastBlockOverall` (not `isLast` =
                                     // last-thinking-only) so the block flips

@@ -2157,6 +2157,8 @@
     <string name="web_search_engine_zhipu">智谱网页搜索</string>
     <string name="web_search_engine_custom">自定义</string>
     <string name="web_search_configured">已配置</string>
+    <string name="web_search_test">测试</string>
+    <string name="web_search_testing">测试中…</string>
     <string name="web_search_api_key">API 密钥</string>
     <string name="web_search_api_key_placeholder">粘贴该服务的 API 密钥</string>
     <string name="web_search_keyed_detail">%1$s 是一等搜索后端。粘贴密钥后打开「使用此引擎」。开启回退时，失败仍会改走无需密钥的 DuckDuckGo。</string>

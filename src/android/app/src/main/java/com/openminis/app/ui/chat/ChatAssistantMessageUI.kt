@@ -175,14 +175,13 @@ internal fun AssistantMessageView(message: ChatMessage, onRetry: (() -> Unit)? =
         message.toolBlocks.forEachIndexed { index, block ->
             when (block.kind) {
                 "thinking" -> {
-                    // T300: same per-message thinking-level gate as the
-                    // FlatChatItem path. AssistantMessageView is currently
-                    // unreferenced (legacy pre-FlatChatItem code) but the
-                    // gate stays here so any future re-introduction
-                    // doesn't silently bring back the always-render bug.
-                    val effectiveLevel = message.thinkingLevel
-                        ?: com.openminis.app.data.model.ThinkingLevel.MEDIUM
-                    if (effectiveLevel.isEnabled) {
+                    // [T-android-thinking-forced-visible] Same gate as the
+                    // FlatChatItem path: render whenever the block carries
+                    // content. Forced-reasoning models stream reasoning_
+                    // content even with the request's reasoning field unset;
+                    // hiding by level swallows that thinking and the user
+                    // sees "model isn't thinking".
+                    if (block.content.isNotBlank() || message.isStreaming) {
                         // [T-android-thinking-auto-collapse] Stream signal
                         // requires THIS block to be the trailing block of
                         // any kind, not just the last thinking — see

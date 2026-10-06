@@ -15,6 +15,7 @@ object WebSearchSettings {
     const val KEY_CUSTOM_URL = "custom_url"
     const val KEY_CUSTOM_KEY = "custom_key"
     const val KEY_CUSTOM_KEY_HEADER = "custom_key_header"
+    const val KEY_ENGINE_EXPLICIT = "engine_explicit"
     const val KEY_TAVILY = "tavily_key"
     const val KEY_BOCHA = "bocha_key"
     const val KEY_EXA = "exa_key"
@@ -44,6 +45,15 @@ object WebSearchSettings {
     fun engine(context: Context): Engine {
         val raw = prefs(context).getString(KEY_ENGINE, null)
         if (!raw.isNullOrBlank()) return Engine.fromId(raw)
+        // [T-android-websearch-engine-sticky] Auto-pick the first configured
+        // keyed engine ONLY until the user has ever made an explicit choice.
+        // Before this flag, a user who had never opened Settings → Web
+        // search but had been guided to paste a Tavily key somewhere else
+        // would see engine() silently flip from DDG to Tavily the next
+        // launch — an unexplained behavior change. Once they touch the
+        // picker (setEngine below), the flag latches and the auto-pick
+        // stops applying, so "user chose DDG then added a key" stays DDG.
+        if (prefs(context).getBoolean(KEY_ENGINE_EXPLICIT, false)) return Engine.DDG
         return firstConfigured(context) ?: Engine.DDG
     }
 
@@ -54,7 +64,13 @@ object WebSearchSettings {
     private fun firstConfigured(context: Context): Engine? = configuredKeyed(context).firstOrNull()
 
     fun setEngine(context: Context, engine: Engine) {
-        prefs(context).edit().putString(KEY_ENGINE, engine.id).apply()
+        prefs(context).edit()
+            .putString(KEY_ENGINE, engine.id)
+            // [T-android-websearch-engine-sticky] Latch the explicit-choice
+            // flag so engine() stops auto-picking the first configured
+            // keyed backend from now on.
+            .putBoolean(KEY_ENGINE_EXPLICIT, true)
+            .apply()
     }
 
     fun searxngUrl(context: Context): String =

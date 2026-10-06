@@ -9,10 +9,12 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -20,7 +22,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.openminis.app.R
 import com.openminis.app.tools.WebSearchSettings
+import com.openminis.app.tools.WebSearchTool
 import com.openminis.app.ui.components.DialogTextField
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 fun WebSearchSettingsScreen(onBack: () -> Unit) {
@@ -38,6 +44,12 @@ fun WebSearchSettingsScreen(onBack: () -> Unit) {
     var customHeader by remember { mutableStateOf(WebSearchSettings.customKeyHeader(context)) }
     var fallback by remember { mutableStateOf(WebSearchSettings.fallbackEnabled(context)) }
     var detail by remember { mutableStateOf<WebSearchSettings.Engine?>(null) }
+    // [T-android-websearch-test-button] One-shot probe result for the engine
+    // currently in detail view. Keyed by engine so switching detail pages
+    // resets the verdict; null = never tested, "…" sentinel while running.
+    var testResult by remember { mutableStateOf<Map<WebSearchSettings.Engine, String>>(emptyMap()) }
+    var testingEngine by remember { mutableStateOf<WebSearchSettings.Engine?>(null) }
+    val scope = rememberCoroutineScope()
 
     BackHandler(enabled = detail != null) { detail = null }
 
@@ -107,7 +119,34 @@ fun WebSearchSettingsScreen(onBack: () -> Unit) {
                             WebSearchSettings.setEngine(context, current)
                         }
                     },
-                    showDivider = current != WebSearchSettings.Engine.DDG,
+                    showDivider = true,
+                )
+                // [T-android-websearch-test-button] Live probe against the
+                // engine's current config. Runs WebSearchTool.testEngine on
+                // IO so a wedged endpoint shows its own timeout, not a hung
+                // UI. The verdict is deliberately the RAW engine error
+                // ("401", "key is not configured", "no results") — that is
+                // the whole point of having a test button.
+                SettingsRow(
+                    title = stringResource(R.string.web_search_test),
+                    subtitle = when {
+                        testingEngine == current -> stringResource(R.string.web_search_testing)
+                        testResult[current] != null -> testResult.getValue(current)
+                        else -> null
+                    },
+                    showChevron = false,
+                    showDivider = false,
+                    onClick = {
+                        if (testingEngine != null) return@SettingsRow
+                        testingEngine = current
+                        scope.launch {
+                            val verdict = withContext(Dispatchers.IO) {
+                                WebSearchTool.testEngine(current, context)
+                            }
+                            testResult = testResult + (current to verdict)
+                            testingEngine = null
+                        }
+                    },
                 )
                 when (current) {
                     WebSearchSettings.Engine.DDG -> { }

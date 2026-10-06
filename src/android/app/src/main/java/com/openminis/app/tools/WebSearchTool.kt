@@ -32,8 +32,13 @@ object WebSearchTool {
     fun definition(): AgentToolDefinition = AgentToolDefinition(
         name = NAME,
         description = "Search the public web and return titles, URLs, and snippets. " +
-            "Use this for facts, docs, news, and package versions instead of opening a browser. " +
-            "Follow up with browser_use only when you need to interact with a specific page. " +
+            "Use this for facts, news, and package versions instead of opening a browser. " +
+            "SCOPE — prefer the dedicated MCP server when the question belongs to its domain: " +
+            "Microsoft / Azure / .NET / Windows API docs → microsoft_learn_mcp; " +
+            "a named library / SDK / framework's official docs and code samples → context7_mcp; " +
+            "questions about a specific GitHub repository's codebase → deepwiki_mcp. " +
+            "This tool is for everything else (general facts, news, vendor-agnostic lookups), " +
+            "NOT those three domains — the MCP servers are more accurate there. " +
             "Uses Settings → Web search. First-class backends: Tavily, Bocha, Exa, Brave, Jina, Zhipu, Bing, SearXNG. " +
             "Falls back to DuckDuckGo, then suggest browser_use for a specific URL.",
         parameters = mapOf(
@@ -47,6 +52,24 @@ object WebSearchTool {
         required = listOf("tool_title", "query"),
         propertyOrdering = listOf("tool_title", "query", "max_results"),
     )
+
+    /**
+     * [T-android-websearch-test-button] One-shot connectivity probe for
+     * Settings → Web search. Runs a real query against exactly one engine
+     * (no fallback chain, no preferred-engine lookup) so the result pins
+     * the failure to THIS engine's config. Returns a short human-readable
+     * verdict: either the first result's title, or the engine's own error
+     * ("401", "no results", "key is not configured", …).
+     *
+     * Synchronous + blocking — callers must run it off the main thread.
+     */
+    fun testEngine(engine: WebSearchSettings.Engine, context: Context): String {
+        val attempt = search(engine, "OpenMinis", 3, context)
+        return when {
+            attempt.results.isNotEmpty() -> "OK: ${attempt.results.first().title}"
+            else -> "FAILED: ${attempt.error ?: "no results"}"
+        }
+    }
 
     fun execute(argsJson: String, context: Context? = null): ToolExecutionResult {
         return try {
@@ -69,7 +92,13 @@ object WebSearchTool {
                 }
                 if (WebSearchSettings.Engine.DDG !in engines) engines += WebSearchSettings.Engine.DDG
             }
-            var lastError: String? = null
+            // [T-android-websearch-error-aggregation] Every engine's failure
+            // is kept, not just the last. When the chain runs Tavily → Bocha
+            // → Brave and each dies differently (401 / timeout / quota), the
+            // user must see all three — surfacing only Brave's "quota
+            // exhausted" reads as if THAT is the only thing wrong, hiding
+            // the expired Tavily key they actually need to rotate.
+            val failures = mutableListOf<Pair<WebSearchSettings.Engine, String>>()
             var used = preferred
             var results: List<Result> = emptyList()
             for (engine in engines) {
@@ -77,10 +106,9 @@ object WebSearchTool {
                 val attempt = search(engine, query, max, context)
                 if (attempt.results.isNotEmpty()) {
                     results = attempt.results
-                    lastError = null
                     break
                 }
-                lastError = attempt.error
+                failures += engine to (attempt.error ?: "no results")
             }
             if (results.isEmpty()) {
                 val fallback = searchNoKeyFallback(query, max, context)
@@ -91,9 +119,10 @@ object WebSearchTool {
                         toolTitle = toolTitle,
                     )
                 }
+                val chain = failures.joinToString("; ") { (e, err) -> "${e.id}: $err" }
                 return ToolExecutionResult(
-                    "web_search failed for \"$query\" via ${preferred.id}: ${lastError ?: "no results"}. " +
-                        "DuckDuckGo HTML returned no cards, and the no-key Wikipedia/Bing/Mojeek fallback was also empty. " +
+                    "web_search failed for \"$query\". Engines tried: $chain. " +
+                        "The no-key Wikipedia/Bing/Mojeek fallback was also empty. " +
                         "Configure Settings → Web search, or open a known URL with browser_use.",
                     success = false,
                     toolTitle = toolTitle,
@@ -117,9 +146,21 @@ object WebSearchTool {
             when (engine) {
                 WebSearchSettings.Engine.DDG -> searchDuckDuckGo(query, max, context)
                 WebSearchSettings.Engine.SEARXNG -> {
-                    val base = context?.let { WebSearchSettings.searxngUrl(it) }.orEmpty().trimEnd('/')
-                    if (base.isEmpty()) return Attempt(emptyList(), "SearXNG URL is not configured")
-                    val endpoint = if (base.endsWith("/search")) base else "$base/search"
+                    // [T-android-websearch-searxng-url] Users paste the URL
+                    // in whatever shape their instance shows it: bare host,
+                    // host/, host/search, host/search/. Trim trailing
+                    // slashes BEFORE the /search suffix test so the
+                    // ".../search/" paste doesn't produce ".../search/search".
+                    // Also strip any existing query/fragment — appending
+                    // "?q=..." after a user-pasted "?..." yields garbage.
+                    val rawBase = context?.let { WebSearchSettings.searxngUrl(it) }.orEmpty()
+                    if (rawBase.isEmpty()) return Attempt(emptyList(), "SearXNG URL is not configured")
+                    val base = rawBase
+                        .substringBefore('?')
+                        .substringBefore('#')
+                        .trimEnd('/')
+                        .removeSuffix("/search")
+                    val endpoint = "$base/search"
                     val body = fetchUrl("$endpoint?q=${enc(query)}&format=json", context = context)
                         ?: return Attempt(emptyList(), "empty response from SearXNG")
                     val parsed = parseSearxJson(body, max)
@@ -168,7 +209,12 @@ object WebSearchTool {
                 )
                 WebSearchSettings.Engine.JINA -> keyedGet(
                     engine, context,
-                    "https://s.jina.ai/${enc(query)}",
+                    // [T-android-websearch-jina-path] s.jina.ai takes the
+                    // query as a PATH segment, not a query parameter.
+                    // URLEncoder.encode turns spaces into '+', which a path
+                    // segment reads as a literal plus sign — every
+                    // multi-word / CJK query 404'd. Percent-encode with %20.
+                    "https://s.jina.ai/${enc(query).replace("+", "%20")}",
                     headerName = "Authorization",
                     bearer = true,
                     extra = mapOf("Accept" to "application/json"),
@@ -371,7 +417,17 @@ object WebSearchTool {
         for (url in urls) {
             val html = fetchUrl(url, context = context) ?: continue
             sawBody = true
-            if (html.contains("anomaly.js") || html.contains("Unfortunately, bots use DuckDuckGo")) {
+            // [T-android-websearch-ddg-falsepositive] Only treat the page as
+            // a bot-wall when the anomaly INTERSTITIAL is the whole payload —
+            // DDG's normal result pages also reference /dist/anomaly.js as a
+            // preloaded anti-abuse script, so a bare contains() marked every
+            // successful search as "blocked" and skipped straight to the
+            // no-key fallback. The interstitial page is short and has no
+            // result cards; a real result page always carries the result
+            // container class.
+            val looksLikeWall = html.contains("Unfortunately, bots use DuckDuckGo") ||
+                (html.contains("anomaly.js") && !html.contains("class=\"result"))
+            if (looksLikeWall) {
                 last = "DuckDuckGo blocked this client. Set a backend in Settings → Web search."
                 continue
             }
@@ -454,6 +510,22 @@ object WebSearchTool {
      * after every configured engine returned empty.
      */
     private fun searchNoKeyFallback(query: String, max: Int, context: Context?): List<Result> {
+        val out = mutableListOf<Result>()
+        // [T-android-websearch-nokey-bing] The regex-scraped Bing/Mojeek
+        // HTML endpoints are near-useless as a fallback: Bing serves a
+        // consent wall / simplified page to this UA + no-cookie request far
+        // more often than result cards, and Mojeek's markup is similarly
+        // fragile. Wikipedia's OpenSearch API is the only no-key source
+        // here with a stable contract, so it is now the whole fallback.
+        // The previous two scrapers cost one HTTP round-trip each for
+        // almost always-empty results — that delay is exactly what the
+        // fallback chain exists to AVOID adding.
+        out += searchWikipedia(query, max, context)
+        return out.distinctBy { it.url }.take(max)
+    }
+
+    @Suppress("unused")
+    private fun searchNoKeyFallbackLegacy(query: String, max: Int, context: Context?): List<Result> {
         val out = mutableListOf<Result>()
         out += searchWikipedia(query, max, context)
         if (out.size < max) {

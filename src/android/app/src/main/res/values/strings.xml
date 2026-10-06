@@ -2345,6 +2345,8 @@
     <string name="web_search_engine_zhipu">Zhipu Web Search</string>
     <string name="web_search_engine_custom">Custom</string>
     <string name="web_search_configured">Configured</string>
+    <string name="web_search_test">Test</string>
+    <string name="web_search_testing">Testing…</string>
     <string name="web_search_api_key">API key</string>
     <string name="web_search_api_key_placeholder">Paste the provider API key</string>
     <string name="web_search_keyed_detail">%1$s is a first-class backend. Paste its API key, then turn on “Use this engine”. DuckDuckGo stays the no-key fallback when fallback is enabled.</string>
