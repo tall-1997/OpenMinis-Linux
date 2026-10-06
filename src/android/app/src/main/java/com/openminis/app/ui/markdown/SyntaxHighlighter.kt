@@ -8,17 +8,43 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 
 /**
+ * Color roles the highlighter paints with. Dark defaults match the VS Code
+ * dark+ scheme used since the first version; Light mirrors VS Code light+
+ * so the reusable code editor stays legible under the light app theme.
+ */
+data class HighlightPalette(
+    val keyword: Color,
+    val string: Color,
+    val comment: Color,
+    val number: Color,
+    val type: Color,
+    val default: Color,
+) {
+    companion object {
+        val Dark = HighlightPalette(
+            keyword = Color(0xFF569CD6),   // blue
+            string = Color(0xFFCE9178),    // orange
+            comment = Color(0xFF6A9955),   // green
+            number = Color(0xFFB5CEA8),    // light green
+            type = Color(0xFF4EC9B0),      // teal
+            default = Color(0xFFD4D4D4),   // light gray
+        )
+        val Light = HighlightPalette(
+            keyword = Color(0xFF0000FF),
+            string = Color(0xFFA31515),
+            comment = Color(0xFF008000),
+            number = Color(0xFF098658),
+            type = Color(0xFF267F99),
+            default = Color(0xFF1F1F1F),
+        )
+    }
+}
+
+/**
  * Lightweight syntax highlighter for code blocks.
  * Applies keyword/string/comment/number coloring for common languages.
  */
 object SyntaxHighlighter {
-
-    private val keywordColor = Color(0xFF569CD6)     // blue
-    private val stringColor = Color(0xFFCE9178)       // orange
-    private val commentColor = Color(0xFF6A9955)      // green
-    private val numberColor = Color(0xFFB5CEA8)       // light green
-    private val typeColor = Color(0xFF4EC9B0)         // teal
-    private val defaultColor = Color(0xFFD4D4D4)      // light gray
 
     private val commonKeywords = setOf(
         "if", "else", "for", "while", "return", "break", "continue", "switch", "case",
@@ -43,9 +69,17 @@ object SyntaxHighlighter {
         """(//[^\n]*|#[^\n]*|/\*[\s\S]*?\*/)|("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`)|(\b\d+\.?\d*\b)|(\b[a-zA-Z_]\w*\b)|([^\s\w]+|\s+)"""
     )
 
-    fun highlight(code: String, language: String): AnnotatedString = buildAnnotatedString {
+    /** Legacy entry point — keeps the original dark colors. */
+    fun highlight(code: String, language: String): AnnotatedString =
+        highlight(code, language, HighlightPalette.Dark)
+
+    fun highlight(
+        code: String,
+        language: String,
+        palette: HighlightPalette,
+    ): AnnotatedString = buildAnnotatedString {
         if (language.isEmpty()) {
-            pushStyle(SpanStyle(color = defaultColor))
+            pushStyle(SpanStyle(color = palette.default))
             append(code)
             pop()
             return@buildAnnotatedString
@@ -62,40 +96,40 @@ object SyntaxHighlighter {
 
             when {
                 comment != null -> {
-                    pushStyle(SpanStyle(color = commentColor))
+                    pushStyle(SpanStyle(color = palette.comment))
                     append(comment)
                     pop()
                 }
                 string != null -> {
-                    pushStyle(SpanStyle(color = stringColor))
+                    pushStyle(SpanStyle(color = palette.string))
                     append(string)
                     pop()
                 }
                 number != null -> {
-                    pushStyle(SpanStyle(color = numberColor))
+                    pushStyle(SpanStyle(color = palette.number))
                     append(number)
                     pop()
                 }
                 word != null -> {
                     val color = when {
-                        word in commonKeywords -> keywordColor
-                        word in typeKeywords -> typeColor
-                        word.first().isUpperCase() -> typeColor
-                        else -> defaultColor
+                        word in commonKeywords -> palette.keyword
+                        word in typeKeywords -> palette.type
+                        word.first().isUpperCase() -> palette.type
+                        else -> palette.default
                     }
                     pushStyle(SpanStyle(color = color))
                     append(word)
                     pop()
                 }
                 other != null -> {
-                    pushStyle(SpanStyle(color = defaultColor))
+                    pushStyle(SpanStyle(color = palette.default))
                     append(other)
                     pop()
                 }
             }
         }
         if (code.length > BoundedText.MAX_ICU_INPUT_CHARS) {
-            pushStyle(SpanStyle(color = defaultColor))
+            pushStyle(SpanStyle(color = palette.default))
             append(code.substring(BoundedText.MAX_ICU_INPUT_CHARS))
             pop()
         }
