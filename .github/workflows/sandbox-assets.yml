@@ -13,7 +13,19 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+
+      - name: Restore sandbox asset cache
+        id: cache-sandbox
+        uses: actions/cache@v4
+        with:
+          path: |
+            src/android/app/src/main/assets/ubuntu-base.tar.gz
+            src/android/app/src/main/assets/android-sdk-tools-aarch64.zip
+            src/android/app/src/main/assets/android-cmdline-tools.zip
+          key: sandbox-assets-${{ runner.os }}-${{ hashFiles('scripts/prepare_android_sandbox.sh', 'scripts/repair_vendor_zip.py', 'scripts/slim_android_cmdline_tools.py') }}
+
       - name: Prepare embedded sandbox assets
+        if: steps.cache-sandbox.outputs.cache-hit != 'true'
         run: |
           chmod +x scripts/prepare_android_sandbox.sh
           bash scripts/prepare_android_sandbox.sh

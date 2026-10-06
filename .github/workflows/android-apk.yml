@@ -22,7 +22,7 @@ env:
   ANDROID_CMAKE: "3.22.1"
   # Must match ndkVersion and minis-android-sdk-setup NDK_REV.
   ANDROID_NDK: "29.0.14206865"
-  GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=1g"
+  GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=1g"
 
 jobs:
   native-deps:
@@ -49,6 +49,16 @@ jobs:
           distribution: temurin
           java-version: ${{ env.JAVA_VERSION }}
           cache: gradle
+
+      - name: Restore Gradle caches
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/configuration-cache
+          key: gradle-${{ runner.os }}-${{ hashFiles('src/android/**/*.gradle.kts', 'src/android/gradle.properties', 'src/android/gradle/wrapper/gradle-wrapper.properties', 'src/android/build-logic/**/*.kt') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
 
       - name: Install native build dependencies
         run: |
@@ -137,10 +147,10 @@ jobs:
         run: |
           sed -i 's|org.gradle.jvmargs=.*|org.gradle.jvmargs=-Xmx6g -Dfile.encoding=UTF-8|' gradle.properties
           chmod +x gradlew
-          # 1.36.7 shipped with assembleRelease only. testDebugUnitTest pulls in
-          # kspDebug which races kspRelease on the same Room schema JSON, and
-          # also gates the APK on JVM tests that were never a release blocker.
-          ./gradlew :app:assembleRelease --no-daemon --no-parallel --stacktrace
+          # [T-ci-build-speed] The debug variant is disabled via androidComponents
+          # (app/build.gradle.kts), removing the kspDebug / kspRelease Room
+          # schema race. --parallel is safe and cuts build time.
+          ./gradlew :app:assembleRelease --parallel --stacktrace
 
       - name: Stage APK
         run: |

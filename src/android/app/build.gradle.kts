@@ -265,6 +265,19 @@ android {
     }
 }
 
+// [T-ci-build-speed] Disable the debug variant so kspDebug and kspRelease
+// never race on the same Room schema JSON (see .github/workflows/android-apk.yml
+// for the original --no-parallel workaround). Removing the race lets CI switch to
+// --parallel; local debug builds can re-enable the variant on a local branch.
+// AssembleDebug was never part of CI or release tooling.
+androidComponents {
+    beforeVariants { variantBuilder ->
+        if (variantBuilder.buildType == "debug") {
+            variantBuilder.enable = false
+        }
+    }
+}
+
 // [T-android-downgrade-compat] Room needs an explicit output directory once
 // `exportSchema = true`. The generated JSON is COMMITTED: it is what
 // MigrationTestHelper replays to prove every upgrade — and every no-op
