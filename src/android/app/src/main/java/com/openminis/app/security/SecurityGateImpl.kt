@@ -120,6 +120,12 @@ class SecurityGateImpl : SecurityGate {
             "list_dir", "grep", "grep_source", "glob" ->
                 GateCommand(name, toolArgs, Capability.FS, Reversibility.REVERSIBLE, "只读文件/目录操作，可逆")
             "web_search", "web_fetch" -> GateCommand(name, toolArgs, Capability.NET, Reversibility.REVERSIBLE, "只读网络")
+            // [T-mcp-native] In-process MCP invocation. This traffic used to ride
+            // shell_execute (minis-mcp-cli), which was not in SAFE_COMMANDS and so
+            // asked for confirmation in ASK mode; classifying as NET keeps the
+            // same approval semantics (ASK → confirm, YOYO → auto). READ_ONLY /
+            // PLAN block it below, matching the shell route's behaviour.
+            "mcp" -> GateCommand(name, toolArgs, Capability.NET, Reversibility.REVERSIBLE, "MCP 服务器调用")
             "browser_use" -> classifyBrowserUse(toolArgs)
             "ocr_image" -> GateCommand(name, toolArgs, Capability.FS, Reversibility.REVERSIBLE, "只读图片文字")
             "get_screen_time" -> GateCommand(name, toolArgs, Capability.SYSTEM, Reversibility.REVERSIBLE, "只读屏幕使用时间")
@@ -273,6 +279,7 @@ class SecurityGateImpl : SecurityGate {
         }
         if (mode == PermissionMode.READ_ONLY || mode == PermissionMode.PLAN) {
             if (cmd.toolName in WRITE_TOOLS || cmd.toolName in SHELL_TOOLS ||
+                cmd.toolName == "mcp" ||
                 (cmd.toolName == "browser_use" && !isBrowserReadOnlyAction(cmd))
             ) {
                 return Decision.Denied("只读/计划模式禁止写与执行")

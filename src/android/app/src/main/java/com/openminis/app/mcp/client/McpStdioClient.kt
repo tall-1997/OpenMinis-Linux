@@ -1,0 +1,204 @@
+package com.openminis.app.mcp.client
+
+import com.openminis.app.mcp.client.McpJsonRpc.McpError
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import java.nio.charset.StandardCharsets
+import java.util.concurrent.SynchronousQueue
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.ConcurrentHashMap
+
+/**
+ * [T-mcp-native] STDIO transport: an MCP server process running inside the
+ * PRoot guest, spoken to over line-delimited JSON-RPC on its stdin/stdout.
+ * Mirrors the in-guest daemon's `MCPStdioServer` (daemon.py): direct exec of
+ * `command + args` with the config `env` overlaid, `initialize` bounded by
+ * the per-server startup timeout, stderr drained into a ring buffer for
+ * diagnostics, one in-flight request at a time.
+ *
+ * The process is spawned through a caller-supplied proot command prefix
+ * ([SpawnSpec]) so this class stays JVM-testable with a plain
+ * `ProcessBuilder` — no Android types below the spec.
+ */
+class McpStdioClient(
+    override val serverName: String,
+    private val spawn: SpawnSpec,
+    private val startupTimeoutMs: Long = 60_000L,
+    private val callTimeoutMs: Long = 300_000L,
+) : McpClient {
+
+    /**
+     * Everything Android-specific needed to launch the guest process:
+     * the full argv prefix ending right before the server command
+     * (proot + rootfs + bind mounts), plus the environment for the host-side
+     * ProcessBuilder (PROOT_LOADER etc.) and the guest-visible env for the
+     * server itself.
+     */
+    data class SpawnSpec(
+        /** e.g. [proot, -0, --kill-on-exit, -r, rootfs, -b, ..., /bin/sh, -c, 'exec "$0" "$@"', cmd, args…] */
+        val argv: List<String>,
+        /** Host ProcessBuilder environment (PROOT_* vars). */
+        val processEnv: Map<String, String>,
+        /** Guest environment for the server process (PATH, HOME, config env…). */
+        val guestEnv: Map<String, String>,
+    )
+
+    @Volatile private var process: Process? = null
+    @Volatile private var initialized = false
+    private var writer: java.io.BufferedWriter? = null
+    private var stdout: BufferedReader? = null
+
+    private val pending = ConcurrentHashMap<Int, SynchronousQueue<JSONObject>>()
+    private val stderrTail = StringBuilder()
+    private val lock = Any()
+
+    private fun alive(): Boolean = process?.isAlive == true
+
+    private fun stderrSnapshot(): String = synchronized(stderrTail) { stderrTail.toString() }
+
+    private fun appendStderr(chunk: String) {
+        synchronized(stderrTail) {
+            stderrTail.append(chunk)
+            // Keep only the last ~2KB — enough for "why did it die" context.
+            val over = stderrTail.length - 2048
+            if (over > 0) stderrTail.delete(0, over)
+        }
+    }
+
+    private fun startProcess() {
+        stopProcess()
+        val pb = ProcessBuilder(spawn.argv)
+        pb.environment().clear()
+        pb.environment().putAll(spawn.processEnv)
+        pb.environment().putAll(spawn.guestEnv)
+        pb.redirectErrorStream(false)
+        val proc = try {
+            pb.start()
+        } catch (e: Exception) {
+            throw McpError(McpError.CONNECTION_ERROR, "failed to spawn '${spawn.argv.lastOrNull()}': ${e.message}")
+        }
+        process = proc
+        writer = proc.outputStream.bufferedWriter(StandardCharsets.UTF_8)
+        stdout = BufferedReader(InputStreamReader(proc.inputStream, StandardCharsets.UTF_8))
+
+        // Reader thread: dispatch replies by id; ignore notifications.
+        val reader = Thread({
+            try {
+                while (true) {
+                    val line = stdout?.readLine() ?: break
+                    if (line.isBlank()) continue
+                    val obj = runCatching { JSONObject(line) }.getOrNull() ?: continue
+                    val id = obj.optInt("id", Int.MIN_VALUE)
+                    if (id != Int.MIN_VALUE && (obj.has("result") || obj.has("error"))) {
+                        pending.remove(id)?.offer(obj)
+                    }
+                }
+            } catch (_: Exception) {
+            }
+        }, "mcp-stdio-$serverName-reader").apply { isDaemon = true; start() }
+
+        // Stderr drainer: bounded ring for diagnostics (daemon.py parity).
+        Thread({
+            try {
+                val err = BufferedReader(InputStreamReader(proc.errorStream, StandardCharsets.UTF_8))
+                while (true) {
+                    val l = err.readLine() ?: break
+                    appendStderr(l + "\n")
+                }
+            } catch (_: Exception) {
+            }
+        }, "mcp-stdio-$serverName-stderr").apply { isDaemon = true; start() }
+    }
+
+    private fun rpc(method: String, params: JSONObject?, timeoutMs: Long): JSONObject {
+        val proc = process ?: throw McpError(McpError.CONNECTION_ERROR, "stdio server not running")
+        if (!proc.isAlive) {
+            val err = stderrSnapshot().trim()
+            throw McpError(
+                McpError.CONNECTION_ERROR,
+                "stdio server exited before/while serving '$method'" +
+                    if (err.isNotEmpty()) " — stderr tail: $err" else "",
+            )
+        }
+        val id = McpJsonRpc.nextId()
+        val queue = SynchronousQueue<JSONObject>()
+        pending[id] = queue
+        try {
+            val payload = McpJsonRpc.request(id, method, params)
+            synchronized(lock) {
+                val w = writer ?: throw McpError(McpError.CONNECTION_ERROR, "stdin closed")
+                w.write(payload.toString())
+                w.newLine()
+                w.flush()
+            }
+            val reply = queue.poll(timeoutMs, TimeUnit.MILLISECONDS)
+                ?: throw McpError(McpError.TIMEOUT, "no reply to '$method' within ${timeoutMs / 1000}s")
+            return McpJsonRpc.unwrapResult(reply)
+        } finally {
+            pending.remove(id)
+        }
+    }
+
+    private fun notify(method: String, params: JSONObject? = null) {
+        val w = writer ?: return
+        runCatching {
+            synchronized(lock) {
+                w.write(McpJsonRpc.notification(method, params).toString())
+                w.newLine()
+                w.flush()
+            }
+        }
+    }
+
+    override fun ensureInitialized() {
+        if (initialized && alive()) return
+        synchronized(lock) {
+            if (initialized && alive()) return
+            if (!alive()) startProcess()
+            val result = rpc("initialize", McpJsonRpc.initializeParams(), startupTimeoutMs)
+            // Server may negotiate a different version; we accept whatever it
+            // answers (daemon.py parity) and keep the constant header value.
+            val proto = result.optString("protocolVersion", McpJsonRpc.PROTOCOL_VERSION)
+            notify("notifications/initialized")
+            initialized = true
+            com.openminis.app.logging.AppLogger.info(
+                "McpStdioClient",
+                "[$serverName] initialized (protocol=$proto)",
+            )
+        }
+    }
+
+    override fun listTools(): JSONArray {
+        ensureInitialized()
+        return rpc("tools/list", JSONObject(), callTimeoutMs).optJSONArray("tools") ?: JSONArray()
+    }
+
+    override fun callTool(tool: String, arguments: JSONObject): JSONObject {
+        ensureInitialized()
+        return rpc(
+            "tools/call",
+            JSONObject().apply { put("name", tool); put("arguments", arguments) },
+            callTimeoutMs,
+        )
+    }
+
+    private fun stopProcess() {
+        initialized = false
+        writer = null
+        stdout = null
+        val p = process
+        process = null
+        if (p != null && p.isAlive) {
+            runCatching { p.destroy() }
+            if (!runCatching { p.waitFor(2, TimeUnit.SECONDS) }.getOrDefault(false)) {
+                runCatching { p.destroyForcibly() }
+            }
+        }
+    }
+
+    override fun close() {
+        synchronized(lock) { stopProcess() }
+    }
+}

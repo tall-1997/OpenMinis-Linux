@@ -29,6 +29,10 @@ object AgentTools {
         memoryEnabled: Boolean = true,
         subAgentEnabled: Boolean = false,
         codeGraphEnabled: Boolean = false,
+        // [T-mcp-native] Expose the in-process `mcp` tool when an MCPRepository
+        // is wired into the session (main chats only; sub-agents/group chats
+        // keep the minis-mcp-cli shell route).
+        mcpNativeEnabled: Boolean = false,
         /** When false, expose only the core set plus [find_tools]. */
         includeLongTail: Boolean = true,
         /** Long-tail tools enabled by a prior find_tools call. */
@@ -60,6 +64,9 @@ object AgentTools {
         add(DispatchAgentsTool.definition())
         add(WolfpackTool.definition())
         add(AgentPlanTool.definition())
+        if (mcpNativeEnabled) {
+            add(McpNativeTool.definition())
+        }
         add(GoalTool.definition())
         add(ExecuteCodeTool.definition())
         add(InvokeSkillTool.definition())
@@ -108,6 +115,9 @@ object AgentTools {
                 add(memoryGetDefinition().name)
             }
             if (codeGraphEnabled) add(CodeGraphTool.NAME)
+            // [T-mcp-native] The prompt fragment announces MCP servers, so the
+            // native tool must never be long-tail-gated away when enabled.
+            if (mcpNativeEnabled) add(McpNativeTool.NAME)
             if (subAgentEnabled) {
                 add(SubAgentKind.SPAWN_AGENT)
                 add(SubAgentKind.RUN_SUBAGENT)

@@ -132,6 +132,15 @@ internal suspend fun ChatViewModel.executeTool(
             activeSessionId,
             com.openminis.app.goal.GoalManager(chatRepository),
         )
+        // [T-mcp-native] In-process MCP servers/tools/call — replaces the
+        // shell_execute → minis-mcp-cli → daemon round trip for main chats.
+        com.openminis.app.tools.McpNativeTool.NAME ->
+            com.openminis.app.tools.McpNativeTool.execute(
+                argsJson,
+                context,
+                activeSessionId,
+                mcpRepository,
+            )
         com.openminis.app.tools.InvokeSkillTool.NAME ->
             com.openminis.app.tools.InvokeSkillTool.execute(argsJson, skillRepository, activeSessionId)
         com.openminis.app.tools.SkillManageTool.NAME ->

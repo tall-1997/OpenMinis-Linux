@@ -341,6 +341,17 @@ class MCPRepository(private val context: Context) {
         return map
     }
 
+    /**
+     * [T-mcp-native] Effective per-server enabled state for a session:
+     * the session override when present, else the server config default.
+     * Used by [com.openminis.app.mcp.client.McpNativeBridge] so the native
+     * `mcp` tool honours exactly the same gating as the prompt fragment.
+     */
+    fun effectiveEnabledMap(sessionId: String): Map<String, Boolean> {
+        val overrides = sessionOverrideMap(sessionId)
+        return _servers.value.associate { it.id to (overrides[it.id] ?: it.enabled) }
+    }
+
     fun isEnabledForSession(mcpId: String, sessionId: String): Boolean {
         val cursor = db.rawQuery(
             "SELECT is_enabled FROM mcp_session_overrides WHERE session_id=? AND mcp_id=?",
@@ -508,7 +519,7 @@ class MCPRepository(private val context: Context) {
         val selected = enabled.take(MAX_MCPS_IN_PROMPT)
 
         val result = buildString {
-            append("Available MCP Servers (use minis-mcp-cli to discover and call):\n")
+            append("Available MCP Servers (prefer the native `mcp` tool; minis-mcp-cli via shell also works):\n")
             for (s in selected) {
                 var note = s.note ?: ""
                 if (note.length > MAX_NOTE_LENGTH) note = note.substring(0, MAX_NOTE_LENGTH) + "…"
@@ -517,8 +528,9 @@ class MCPRepository(private val context: Context) {
                 append("\n")
             }
             append("\n")
-            append("To use: run `minis-mcp-cli tools <server>` to see available tools,\n")
-            append("then `minis-mcp-cli call <server> <tool> [args]` to invoke.\n")
+            append("To use: call the native `mcp` tool — {\"action\":\"tools\",\"server\":\"<server>\"} to list,\n")
+            append("{\"action\":\"call\",\"server\":\"<server>\",\"tool\":\"<tool>\",\"arguments\":{…}} to invoke.\n")
+            append("Fallback (interactive terminal / unusual cases): `minis-mcp-cli tools <server>`, `minis-mcp-cli call <server> <tool> [args]`.\n")
             // [T-mcp-dollar-var-systemprompt-android] Document the $$VAR runtime
             // env placeholder (mirrors iOS 5fa9e6a9). Agent-facing English — not
             // localized; wording must match iOS verbatim.

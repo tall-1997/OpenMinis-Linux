@@ -1933,6 +1933,7 @@ class ChatViewModel(
             memoryEnabled = _memoryEnabled.value,
             subAgentEnabled = multiAgentSettings.enabled.value,
             codeGraphEnabled = true,
+            mcpNativeEnabled = mcpRepository != null,
             includeLongTail = true,
         ) + com.openminis.app.plugins.OnlinePluginStore.toolDefinitions(context)
         val matches = com.openminis.app.tools.FindTools.search(query, all, limit)
@@ -1981,6 +1982,7 @@ class ChatViewModel(
                 memoryEnabled = _memoryEnabled.value,
                 subAgentEnabled = multiAgentSettings.enabled.value,
                 codeGraphEnabled = true,
+                mcpNativeEnabled = mcpRepository != null,
                 includeLongTail = false,
                 enabledToolNames = enabledLongTailTools,
             ) + com.openminis.app.plugins.OnlinePluginStore.toolDefinitions(context)
