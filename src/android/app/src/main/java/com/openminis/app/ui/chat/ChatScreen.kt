@@ -99,6 +99,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.MergeType
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -466,6 +467,9 @@ fun ChatScreen(
      *  new-chat button), replacing this chat on the back stack. */
     onNewChat: () -> Unit = {},
     onOpenTerminal: () -> Unit = {},
+    /** [P2-git-panel] "Git 面板" from the chat "..." menu: status/commit/
+     *  history/diff for the session workspace. */
+    onOpenGitPanel: () -> Unit = {},
     /** Open the in-app terminal with [command] pre-filled at the prompt
      *  (no trailing newline — the user reviews and presses Enter manually).
      *  Wired to the top-right Terminal button on a shell_execute ToolDetailSheet. */
@@ -2589,6 +2593,18 @@ fun ChatScreen(
                                 },
                                 leadingIcon = {
                                     Icon(Icons.Default.Terminal, contentDescription = null)
+                                },
+                            )
+                            // [P2-git-panel] Git panel — desktop-style git UI
+                            // over the session workspace.
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.chat_menu_git_panel)) },
+                                onClick = {
+                                    showChatMenu = false
+                                    onOpenGitPanel()
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.MergeType, contentDescription = null)
                                 },
                             )
                             // Open Browser (iOS parity)

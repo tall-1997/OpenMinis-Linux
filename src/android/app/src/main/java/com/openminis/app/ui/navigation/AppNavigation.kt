@@ -165,6 +165,9 @@ object Routes {
     /** Chat-files browser: opens FileBrowser rooted at /var/minis for the session. */
     const val CHAT_FILES = "chat_files/{sessionId}"
     fun chatFiles(sessionId: String) = "chat_files/$sessionId"
+    /** [P2-git-panel] Git panel over the session workspace (status / commit / history / diff). */
+    const val GIT_PANEL = "git_panel/{sessionId}"
+    fun gitPanel(sessionId: String) = "git_panel/${android.net.Uri.encode(sessionId)}"
     const val MEMORY = "memory"
     /** [T-mcp-integration-android] MCP Integrations management screen. */
     const val MCP = "mcp"
@@ -1318,6 +1321,25 @@ fun AppNavigation(
                 onBack = { navController.safePopBackStack() },
                 initCommand = initCommand,
                 sessionId = sessionId,
+            )
+        }
+
+        // [P2-git-panel] Session workspace Git panel: changes / commit with
+        // AI-generated message / history / diff viewer.
+        composable(
+            Routes.GIT_PANEL,
+            arguments = listOf(
+                androidx.navigation.navArgument("sessionId") {
+                    type = androidx.navigation.NavType.StringType
+                },
+            ),
+        ) { backStackEntry ->
+            val gitSessionId = backStackEntry.arguments?.getString("sessionId")
+                ?: return@composable
+            com.openminis.app.ui.git.GitPanelRoute(
+                sessionId = gitSessionId,
+                providerRepository = providerRepository,
+                onBack = { navController.safePopBackStack() },
             )
         }
 
