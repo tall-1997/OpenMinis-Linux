@@ -226,6 +226,17 @@ android {
         jniLibs {
             pickFirsts += "lib/*/libtermux.so"
         }
+        resources {
+            // jsch (mwiede fork) and jspecify both ship an OSGi manifest under
+            // META-INF/versions/9 — mergeReleaseJavaResource fails on the
+            // duplicate. Useless on Android anyway. Both the glob and the
+            // literal path are listed so the fix holds regardless of which
+            // pattern syntax this AGP version honors.
+            excludes += listOf(
+                "META-INF/versions/*/OSGI-INF/**",
+                "META-INF/versions/9/OSGI-INF/MANIFEST.MF",
+            )
+        }
     }
 
 
