@@ -11,6 +11,8 @@ import com.openminis.app.git.GitCommitMessageGenerator
 import com.openminis.app.git.GitCli.GitFileEntry
 import com.openminis.app.git.GitCli.GitRepoInfo
 import com.openminis.app.git.GitCli.GitStatus
+import com.openminis.app.sandbox.FileChangeHub
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -58,8 +60,36 @@ class GitPanelViewModel(
 
     private val messageGenerator = GitCommitMessageGenerator(app, providerRepository)
 
+    private var fileWatchJob: Job? = null
+    private var lastAutoRefreshMs = 0L
+
     init {
         refresh()
+        observeWorkspaceChanges()
+    }
+
+    /**
+     * [T-file-hub] Live refresh: FileChangeHub watches the session workspace
+     * on the HOST side of the PRoot bind (guest writes land on the same
+     * inodes, so agent edits fire inotify), and the panel re-probes git
+     * status when working-tree files change. The coalescer already merges
+     * inotify bursts (400ms quiet window) and filters .git internals, so
+     * the panel's own git probes cannot loop back; the timestamp floor caps
+     * auto-refresh at one per 2s and a running mutation (busy) skips the
+     * slot — GitCli reloads the panel after its own mutations anyway.
+     */
+    private fun observeWorkspaceChanges() {
+        val app = getApplication<Application>()
+        if (!FileChangeHub.watch(sessionId, app)) return
+        fileWatchJob = viewModelScope.launch {
+            FileChangeHub.eventsFor(sessionId).collect {
+                val now = System.currentTimeMillis()
+                if (now - lastAutoRefreshMs < AUTO_REFRESH_FLOOR_MS) return@collect
+                if (_state.value.busy) return@collect
+                lastAutoRefreshMs = now
+                refresh()
+            }
+        }
     }
 
     fun refresh() {
@@ -189,5 +219,15 @@ class GitPanelViewModel(
 
     fun clearNotice() {
         _state.update { it.copy(notice = null) }
+    }
+
+    override fun onCleared() {
+        fileWatchJob?.cancel()
+        FileChangeHub.unwatch(sessionId)
+        super.onCleared()
+    }
+
+    companion object {
+        private const val AUTO_REFRESH_FLOOR_MS = 2_000L
     }
 }
