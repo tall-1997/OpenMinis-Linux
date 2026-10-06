@@ -18,6 +18,11 @@ import java.util.UUID
  * so once [finish] drops the member the card reappears in the timeline and the
  * user can see what finished. See ChatFlatItems.buildFlatItems'
  * `activeSubAgentToolIds`.
+ *
+ * [T-event-bus] Every lifecycle transition here is mirrored to
+ * [SubAgentEventBus], which keeps bounded per-session history — the roster
+ * forgets finished runs, the bus remembers them (parent-session awareness,
+ * lifecycle footers on sub-agent results, diagnostics).
  */
 object SubAgentActivityTracker {
 
@@ -94,6 +99,21 @@ object SubAgentActivityTracker {
             turnCap = turnCap,
         )
         _members.value = _members.value + member
+        SubAgentEventBus.publish(
+            SubAgentEvent.Spawned(
+                runId = id,
+                parentSessionId = parentSessionId,
+                parentToolId = parentToolId,
+                title = title,
+                role = role,
+                kind = kind ?: role ?: "",
+                index = index,
+                total = total,
+                model = model ?: "",
+                turnCap = turnCap,
+                atMs = System.currentTimeMillis(),
+            ),
+        )
         return id
     }
 
@@ -105,6 +125,11 @@ object SubAgentActivityTracker {
         val job = jobs.remove(id) ?: return false
         userStopped += id
         job.cancel()
+        memberById(id)?.let { m ->
+            SubAgentEventBus.publish(
+                SubAgentEvent.Stopped(id, m.parentSessionId, System.currentTimeMillis()),
+            )
+        }
         return true
     }
 
@@ -136,6 +161,13 @@ object SubAgentActivityTracker {
                 m
             }
         }
+        if (turn > 0) {
+            memberById(id)?.let { m ->
+                SubAgentEventBus.publish(
+                    SubAgentEvent.TurnStarted(id, m.parentSessionId, turn, cap, System.currentTimeMillis()),
+                )
+            }
+        }
     }
 
     /**
@@ -154,15 +186,28 @@ object SubAgentActivityTracker {
     /**
      * Drop [id] from the roster.
      *
-     * [success] and [error] are accepted for call-site readability and carry no
-     * state: the outcome is recorded on the tool result by the caller, and this
-     * object is a live view only. Keeping them would leave two parameters that
-     * look meaningful and change nothing.
+     * [T-event-bus] [success] is no longer state-free: it feeds the Completed
+     * event published to [SubAgentEventBus] BEFORE the roster entry
+     * disappears, so parent sessions and diagnostics still see the outcome
+     * afterwards. [error] stays call-site documentation only.
      */
     fun finish(id: String, success: Boolean, error: String? = null) {
         jobs.remove(id)
         userStopped.remove(id)
+        val member = memberById(id)
         _members.value = _members.value.filterNot { it.id == id }
+        if (member != null) {
+            SubAgentEventBus.publish(
+                SubAgentEvent.Completed(
+                    runId = id,
+                    parentSessionId = member.parentSessionId,
+                    success = success,
+                    turnsUsed = member.turnIndex,
+                    toolCalls = member.steps.count { it.kind == "tool" },
+                    atMs = System.currentTimeMillis(),
+                ),
+            )
+        }
     }
 
     fun setPhase(id: String, phase: String, tool: String = "") {
@@ -268,9 +313,15 @@ object SubAgentActivityTracker {
             }
             m.copy(steps = steps, phase = "执行中", currentTool = name.ifBlank { m.currentTool }, lastStep = "执行中 · $name")
         }
+        memberById(id)?.let { m ->
+            SubAgentEventBus.publish(
+                SubAgentEvent.ToolInvoked(id, m.parentSessionId, name, args.take(200), System.currentTimeMillis()),
+            )
+        }
     }
 
     fun finishTool(id: String, toolId: String, name: String, success: Boolean, output: String) {
+        val startedAt = memberById(id)?.steps?.lastOrNull { it.id == toolId }?.startedAt ?: 0L
         mutate(id) { m ->
             val steps = m.steps.toMutableList()
             val idx = steps.indexOfLast { it.id == toolId }
@@ -287,7 +338,15 @@ object SubAgentActivityTracker {
             }
             m.copy(steps = steps, phase = "思考中", currentTool = "", lastStep = "思考中")
         }
+        memberById(id)?.let { m ->
+            val durationMs = if (startedAt > 0) System.currentTimeMillis() - startedAt else 0L
+            SubAgentEventBus.publish(
+                SubAgentEvent.ToolFinished(id, m.parentSessionId, name, success, durationMs, System.currentTimeMillis()),
+            )
+        }
     }
+
+    private fun memberById(id: String): Member? = _members.value.find { it.id == id }
 
     private fun mutate(id: String, block: (Member) -> Member) {
         synchronized(this) {

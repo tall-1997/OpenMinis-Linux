@@ -601,6 +601,17 @@ private suspend fun ChatViewModel.runOneSubAgent(
                             trackerId, 0, maxTurns, "retry ${attempt - 1} → ${entry.model.displayName}",
                         )
                     }
+                    com.openminis.app.service.SubAgentEventBus.publish(
+                        com.openminis.app.service.SubAgentEvent.RetryScheduled(
+                            runId = trackerId,
+                            parentSessionId = parentSession,
+                            attempt = attempt,
+                            maxAttempts = maxAttempts,
+                            waitMs = 0L,
+                            reason = "model-rotation:${entry.model.displayName}",
+                            atMs = System.currentTimeMillis(),
+                        ),
+                    )
                 }
                 val attemptResult: ToolExecutionResult? = try {
             withContext(SubAgentLane(laneId)) {
@@ -696,7 +707,17 @@ private suspend fun ChatViewModel.runOneSubAgent(
                 status = if (result.success) ToolBlockStatus.SUCCESS else ToolBlockStatus.FAILED,
             )
             com.openminis.app.service.SubAgentActivityTracker.finish(trackerId, result.success)
-            result.copy(toolTitle = title.ifEmpty { "Sub-agent · ${entry.model.displayName}" })
+            // [T-event-bus] Parent-session awareness: the coordinator used to
+            // receive only the lane's final text — append what the bus
+            // observed for this run so turn counts, tool volume and retry
+            // storms are visible in the dispatch result itself.
+            val lifecycle = com.openminis.app.service.SubAgentEventBus.summaryFor(trackerId)
+                ?.let { s -> "\n\n[lifecycle] turns=${s.turns} toolCalls=${s.toolCalls} retries=${s.retries}" }
+                .orEmpty()
+            result.copy(
+                output = result.output + lifecycle,
+                toolTitle = title.ifEmpty { "Sub-agent · ${entry.model.displayName}" },
+            )
             }
             } catch (e: CancellationException) {
                 throw e
@@ -715,6 +736,17 @@ private suspend fun ChatViewModel.runOneSubAgent(
                             trackerId, 0, maxTurns, "retry in ${waitS}s (${e.javaClass.simpleName})",
                         )
                     }
+                    com.openminis.app.service.SubAgentEventBus.publish(
+                        com.openminis.app.service.SubAgentEvent.RetryScheduled(
+                            runId = trackerId,
+                            parentSessionId = parentSession,
+                            attempt = attempt,
+                            maxAttempts = maxAttempts,
+                            waitMs = waitS * 1000L,
+                            reason = e.javaClass.simpleName,
+                            atMs = System.currentTimeMillis(),
+                        ),
+                    )
                     delay(waitS * 1000L + Random.nextLong(0, 800))
                     null
                 } else {
