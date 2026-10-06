@@ -70,6 +70,8 @@ object FileEditTool {
                 return ToolExecutionResult("Error: File not found: $path", false, toolTitle = toolTitle)
             }
 
+            
+
             // T-tool-write-race: read, compute AND write under ONE lock.
             // readModifyWrite takes the read inside the lock, so the compute
             // always sees the bytes this write will replace.
@@ -88,8 +90,23 @@ object FileEditTool {
             //     只报错、不动文件。
             val outcome = AtomicFileWrite.readModifyWrite(file) { current ->
                 when (val r = TextReplacers.replace(current, oldString, newString, replaceAll)) {
-                    is TextReplacers.Result.Success ->
+                    is TextReplacers.Result.Success -> {
+                        // [T-file-checkpoint] Snapshot inside the SAME per-path
+                        // lock as the write, and only on the success branch: a
+                        // capture outside the lock could read bytes another
+                        // writer already replaced, and capturing before we know
+                        // the replacement matched would litter the list with
+                        // checkpoints for edits that never happened.
+                        FileCheckpointStore.capture(
+                            context, sessionId, listOf(path),
+                            label = "before file_edit", source = "file_edit",
+                        ).checkpoint?.let { cp ->
+                            com.openminis.app.logging.AppLogger.info(
+                                "FileEdit", "checkpoint ${cp.id} captured for $path",
+                            )
+                        }
                         ReplaceOutcome(r.newContent, r.count)
+                    }
                     is TextReplacers.Result.Failure ->
                         EditFailure(r.message)
                 }

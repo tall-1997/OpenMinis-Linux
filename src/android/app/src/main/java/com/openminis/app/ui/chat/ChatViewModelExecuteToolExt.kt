@@ -4,6 +4,7 @@ import com.openminis.app.data.db.AppDatabase
 import com.openminis.app.tools.CodeGraphTool
 import com.openminis.app.tools.SubAgentKind
 import com.openminis.app.tools.FileEditTool
+import com.openminis.app.tools.FileCheckpointTool
 import com.openminis.app.tools.FileReadTool
 import com.openminis.app.tools.FileWriteTool
 import com.openminis.app.tools.CronJobTool
@@ -72,6 +73,7 @@ internal suspend fun ChatViewModel.executeTool(
         }
         FileWriteTool.NAME -> FileWriteTool.execute(argsJson, activeSessionId, context).also { if (it.success) maybeReloadSkillsForPath(argsJson) }
         FileEditTool.NAME -> FileEditTool.execute(argsJson, activeSessionId, context).also { if (it.success) maybeReloadSkillsForPath(argsJson) }
+        FileCheckpointTool.NAME -> FileCheckpointTool.execute(argsJson, activeSessionId, context)
         com.openminis.app.tools.MultiEditTool.NAME -> com.openminis.app.tools.MultiEditTool.execute(argsJson, activeSessionId, context).also { if (it.success) maybeReloadSkillsForPath(argsJson) }
         com.openminis.app.tools.ListDirTool.NAME -> com.openminis.app.tools.ListDirTool.execute(argsJson, activeSessionId, context)
         com.openminis.app.tools.GrepTool.NAME, com.openminis.app.tools.GrepSourceTool.NAME ->
@@ -120,7 +122,11 @@ internal suspend fun ChatViewModel.executeTool(
             com.openminis.app.tools.WolfpackTool.toSpawnArgs(argsJson),
             toolId, toolBlocks, assistantId, currentText,
         )
-        com.openminis.app.tools.AgentPlanTool.NAME -> com.openminis.app.tools.AgentPlanTool.execute(argsJson)
+        com.openminis.app.tools.AgentPlanTool.NAME -> com.openminis.app.tools.AgentPlanTool.execute(
+            argsJson,
+            activeSessionId,
+            context,
+        )
         com.openminis.app.tools.GoalTool.NAME -> com.openminis.app.tools.GoalTool.execute(
             argsJson,
             activeSessionId,

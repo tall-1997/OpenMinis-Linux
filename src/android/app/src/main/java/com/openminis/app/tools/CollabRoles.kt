@@ -35,7 +35,9 @@ object CollabRoles {
         "web_search", "web_fetch", "memory_get",
         "search_sessions", "read_session", "browser_use", "code_graph",
     )
-    private val T_WRITER = T_READONLY + setOf("file_write", "file_edit", "multi_edit", "memory_write")
+    // file_checkpoint rides with the writers: a role that may edit files should
+    // also be able to undo its own edit without asking the lead to intervene.
+    private val T_WRITER = T_READONLY + setOf("file_write", "file_edit", "multi_edit", "memory_write", "file_checkpoint")
     private val T_BUILDER = T_WRITER + setOf("shell_execute", "shell_exec", "env_exec")
 
     val PRODUCT: List<Role> = listOf(

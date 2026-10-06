@@ -66,6 +66,22 @@ object FileWriteTool {
             val file = PRootKernel.resolveSessionHostPath(sessionId, path, context)
                 ?: return ToolExecutionResult("Error: Cannot resolve path: $path", false, toolTitle = toolTitle)
 
+            // [T-file-checkpoint] Snapshot the CURRENT bytes before they are
+            // replaced, so a bad rewrite is recoverable via file_checkpoint
+            // restore. Best-effort — a capture failure must never block the
+            // write itself. Capture only fires when the file already exists;
+            // a create has nothing to lose and restore would just delete it.
+            if (!append && file.exists() && file.isFile) {
+                FileCheckpointStore.capture(
+                    context, sessionId, listOf(path),
+                    label = "before file_write", source = "file_write",
+                ).checkpoint?.let { cp ->
+                    com.openminis.app.logging.AppLogger.info(
+                        "FileWrite", "checkpoint ${cp.id} captured for $path",
+                    )
+                }
+            }
+
             // Validate UTF-8
             try {
                 content.toByteArray(Charsets.UTF_8)

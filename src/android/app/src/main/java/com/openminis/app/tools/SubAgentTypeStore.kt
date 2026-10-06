@@ -52,7 +52,7 @@ object SubAgentTypeStore {
             systemPrompt = "你是编码员。按任务改代码、跑测试。只动任务范围内的文件。写完用 grep/测试自检。",
             skillNames = listOf("test-loop"),
             toolNames = listOf(
-                "file_read", "file_write", "file_edit", "multi_edit",
+                "file_read", "file_write", "file_edit", "multi_edit", "file_checkpoint",
                 "list_dir", "grep", "grep_source", "glob", "shell_execute", "code_graph",
             ),
             kind = SubAgentKind.WORKER,

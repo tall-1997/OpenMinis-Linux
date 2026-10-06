@@ -24,6 +24,7 @@ internal fun friendlyToolTitle(toolName: String): String = when (toolName) {
     "grep", "grep_source" -> "Grep"
     "web_fetch" -> "Fetch URL"
     "multi_edit" -> "Multi Edit"
+    "file_checkpoint" -> "Checkpoint"
     "shell_exec", "env_exec" -> "Execute Shell"
     "su_exec" -> "Host su"
     "dispatch_agents" -> "Dispatch Agents"

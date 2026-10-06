@@ -39,6 +39,7 @@ object AgentTools {
         add(FileReadTool.definition())
         add(FileWriteTool.definition())
         add(FileEditTool.definition())
+        add(FileCheckpointTool.definition())
         add(MultiEditTool.definition())
         add(ListDirTool.definition())
         add(GrepTool.definition())
@@ -97,6 +98,7 @@ object AgentTools {
             addAll(
                 listOf(
                     "shell_execute", "file_read", "file_write", "file_edit", "multi_edit",
+                    FileCheckpointTool.NAME,
                     "list_dir", "grep", "glob", "browser_use", "web_search", "web_fetch",
                     "ui_read", "ui_action", "read_image", "ask_user_question", "update_goal",
                 ),
