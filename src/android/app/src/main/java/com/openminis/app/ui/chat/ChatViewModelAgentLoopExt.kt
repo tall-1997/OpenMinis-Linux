@@ -191,6 +191,10 @@ internal suspend fun ChatViewModel.runAgentLoop(
     val goalSessionId = activeSessionId
     var goalContinuations = 0
     val goalRunRequested = goalExecutionRun
+    // [T-android-stream-drop-autocontinue] Per-run budget of silent
+    // auto-continuations after a relay-side stream cut (see the
+    // turnFinishReason == null branch below).
+    var streamDropContinuations = 0
 
 
     // Add placeholder assistant message (once). Mark as awaiting so the
@@ -1481,6 +1485,45 @@ internal suspend fun ChatViewModel.runAgentLoop(
             // which already covers it well — re-routing it here would lose
             // that recovery.
             if (turnFinishReason == null && hasVisibleContent) {
+                // [T-android-stream-drop-autocontinue] Relay-side silent cut:
+                // the SSE stream ended with no finish_reason and no [DONE]
+                // while content was already on screen. Buffet relays do this
+                // routinely (nginx proxy_read_timeout during long thinking
+                // silences, upstream caps after big tool-call turns) — the
+                // "一瞬间出现4个 Execute Shell 然后中断" pattern is exactly a
+                // cut right after the tool-call flush.
+                //
+                // The partial assistant turn is ALREADY appended to
+                // agentHistory (turn boundary above) and ALREADY persisted
+                // (persistAssistantTurnForRun just ran), so continuing is
+                // safe and lossless: append a continue-reminder and re-enter
+                // the loop. The next turn streams into the SAME assistant
+                // bubble (accumulatedText/allToolBlocks carry over), so the
+                // user sees one continuous reply instead of a banner + a
+                // manual retry that regenerates everything. Mirrors the Goal
+                // auto-continuation pattern. Budget-limited per run; the
+                // banner below only fires once the budget is exhausted.
+                if (activeRun?.isStopped != true &&
+                    streamDropContinuations < ChatViewModel.MAX_STREAM_DROP_CONTINUATIONS
+                ) {
+                    streamDropContinuations++
+                    AppLogger.warning(
+                        ChatViewModel.TAG_STREAM,
+                        "stream closed without a finish reason after ${accumulatedText.length} chars — " +
+                            "auto-continuation $streamDropContinuations/" +
+                            "${ChatViewModel.MAX_STREAM_DROP_CONTINUATIONS} " +
+                            "(turn=$turn, model=${provider.model.id}, provider=${provider.name})",
+                    )
+                    val dropReminder = "<system-reminder>The connection dropped mid-reply: your previous assistant message was cut off in transit and ends abruptly in the transcript above. Continue the task from EXACTLY where that message stopped. Do not repeat or restate any text already present there. If a sentence was cut mid-way, complete it; if you were about to call a tool, issue that tool call now; if the work was already finished, give the final answer.</system-reminder>"
+                    appendBoundedHistory(
+                        LLMMessage(
+                            role = LLMMessage.Role.USER,
+                            content = dropReminder,
+                            contentParts = listOf(AgentContentPart.Text(dropReminder)),
+                        ),
+                    )
+                    continue
+                }
                 AppLogger.warning(
                     ChatViewModel.TAG_STREAM,
                     "stream closed without a finish reason after ${accumulatedText.length} chars — " +

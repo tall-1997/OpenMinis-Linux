@@ -718,6 +718,21 @@ class ChatViewModel(
          */
         internal const val MAX_AGENT_TURNS = 200
         internal const val MAX_GOAL_CONTINUATIONS = 16
+
+        /**
+         * [T-android-stream-drop-autocontinue] How many times a run may
+         * silently re-enter the loop after the relay cut the SSE stream
+         * mid-reply (clean EOF, no finish_reason, partial content already
+         * streamed). Buffet/relay providers (nginx proxy_read_timeout,
+         * upstream caps) do this routinely during long thinking silences or
+         * right after big tool-call turns; each cut used to surface the red
+         * "连接中断" banner and force a manual retry that regenerated the
+         * turn. With auto-continuation the partial turn stays in history,
+         * a continue-reminder is appended, and the next turn streams into
+         * the SAME bubble — no progress lost, no model switch needed.
+         * The banner only appears once this budget is exhausted.
+         */
+        internal const val MAX_STREAM_DROP_CONTINUATIONS = 3
         private const val MIN_MAX_TOKENS = 1024
         /**
          * Hard ceiling on max_tokens we ever send to a provider, regardless
