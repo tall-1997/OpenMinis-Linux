@@ -619,7 +619,12 @@ object ThinkingRuleResolver {
         return minor >= 7
     }
 
-    fun geminiThinkingConfig(modelId: String, level: ThinkingLevel): JSONObject? {
+    fun geminiThinkingConfig(
+        modelId: String,
+        level: ThinkingLevel,
+        budgetTokensMax: Int? = null,
+        budgetTokensMin: Int? = null,
+    ): JSONObject? {
         // [T-gemini-tts-thinking-400 / OpenMinis#226] Specialized modalities take
         // precedence over EVERY family rule and over the requested level: these models
         // reject the thinking parameter outright, so sending one is a hard 400
@@ -689,31 +694,25 @@ object ThinkingRuleResolver {
                 }
             }
             is25Pro -> JSONObject().apply {
-                put(
-                    "thinkingBudget",
-                    when (level) {
-                        ThinkingLevel.OFF -> 128 // minimum; 0 is rejected (df8a823d)
-                        ThinkingLevel.LOW -> 2048
-                        ThinkingLevel.MEDIUM -> 8192
-                        ThinkingLevel.HIGH -> 16384
-                        ThinkingLevel.XHIGH, ThinkingLevel.MAX, ThinkingLevel.ULTRA -> 32768
-                    },
-                )
-                if (level.isEnabled) put("includeThoughts", true)
-            }
-            is25Flash -> JSONObject().apply {
-                put(
-                    "thinkingBudget",
-                    when (level) {
-                        ThinkingLevel.OFF -> 0
-                        ThinkingLevel.LOW -> 1024
-                        ThinkingLevel.MEDIUM -> 4096
-                        ThinkingLevel.HIGH -> 8192
-                        ThinkingLevel.XHIGH, ThinkingLevel.MAX, ThinkingLevel.ULTRA -> 16384
-                    },
-                )
-                if (level.isEnabled) put("includeThoughts", true)
-            }
+                    val cap = budgetTokensMax?.takeIf { it > ThinkingLadder.FLOOR }
+                        ?: ThinkingLadder.DEFAULT_CAPACITY
+                    put(
+                        "thinkingBudget",
+                        if (level == ThinkingLevel.OFF) 128 // minimum; 0 is rejected (df8a823d)
+                        else ThinkingLadder.budgetFor(level, cap),
+                    )
+                    if (level.isEnabled) put("includeThoughts", true)
+                }
+                is25Flash -> JSONObject().apply {
+                    val cap = budgetTokensMax?.takeIf { it > ThinkingLadder.FLOOR }
+                        ?: ThinkingLadder.DEFAULT_CAPACITY
+                    put(
+                        "thinkingBudget",
+                        if (level == ThinkingLevel.OFF) 0
+                        else ThinkingLadder.budgetFor(level, cap),
+                    )
+                    if (level.isEnabled) put("includeThoughts", true)
+                }
             else -> null
         }
     }

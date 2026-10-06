@@ -397,7 +397,12 @@ class GeminiProvider(
         // is described in ONE place. Behaviour is byte-for-byte unchanged — verified by
         // a reflection cross-check against this method's previous body (0 diffs across
         // 10 models x 7 levels) and pinned by ThinkingWireGeminiAnthropicSnapshotTest.
-        val cfg = ThinkingRuleResolver.geminiThinkingConfig(model.id, level)
+        val cfg = ThinkingRuleResolver.geminiThinkingConfig(
+            model.id,
+            level,
+            budgetTokensMax = model.budgetTokensMax,
+            budgetTokensMin = model.budgetTokensMin,
+        )
         com.openminis.app.logging.AppLogger.info(
             "Thinking",
             "[resolve] provider=gemini model=${model.id} level=${level.name} " +
