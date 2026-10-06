@@ -41,7 +41,7 @@ object ModelsDevApi {
     private var appContext: Context? = null
     // [T-modelsdev-id-normalization] Memoized stage-2 winner per normalized id.
     // Rebuilt whenever cacheTimestamp moves (disk load / network refresh).
-    private var cachedStage2Index: Map<String, DevModelMatch>? = null
+    private var cachedStage2Index: Stage2Index? = null
     private var cachedStage3Corpus: List<FuzzyRow>? = null
     private var stage2IndexBuiltFrom: Long? = null
     private var stage2IndexRegistryId: Int? = null
@@ -125,15 +125,52 @@ object ModelsDevApi {
      * spelling the gateway happened to use, so new models fell through to
      * provider defaults (16k output, 128k context).
      *
-     * Drop the vendor/namespace path, lowercase, unify `.` / `_` to `-`.
+     * Drop the vendor/namespace path, lowercase, and collapse EVERY run of
+     * separator punctuation to a single `-`.
+     *
+     * [T-modelsdev-separator-equivalence] The earlier version mapped only `.`
+     * and `_`, which left `grok-4.6` -> `grok-4-6` matching while `grok4.6` ->
+     * `grok4-6` missed the stage-2 index entirely. Stage 3 could not rescue it:
+     * `grok` is in [ModelAliasMatcher]'s GENERIC set (deliberately excluded so
+     * a bare brand cannot inherit another family's limits) and the leftover
+     * digits score below the acceptance bar. These are the same model and only
+     * a separator differs, so EVERY separator must be equivalent — including
+     * whitespace, `:` and the empty-separator spelling `grok46`.
+     *
      * Distinct families stay distinct (`glm-5.2` vs `glm-5.1`).
      */
     fun normalizedModelKey(id: String): String {
         val bare = id.substringAfterLast('/')
         return bare.lowercase()
-            .replace('.', '-')
-            .replace('_', '-')
+            .replace(NON_ASCII_RUN, "-")
+            .replace(SEPARATOR_RUN, "-")
+            .replace(LETTER_DIGIT_BOUNDARY, "$1-$2")
+            .replace(DIGIT_LETTER_BOUNDARY, "$1-$2")
+            .replace(SEPARATOR_RUN, "-")
+            .trim('-')
     }
+
+    /**
+     * Any run of characters that are neither a letter nor a digit: `.`, `_`,
+     * `-`, whitespace, `,`, `:`, `/` and friends. Treated identically so that
+     * the number of separators a relay happens to use cannot change which
+     * catalog entry a model resolves to.
+     */
+    private val SEPARATOR_RUN = Regex("[^\\p{L}\\p{N}]+")
+    private val LETTER_DIGIT_BOUNDARY = Regex("([\\p{L}])([\\p{N}])")
+    private val DIGIT_LETTER_BOUNDARY = Regex("([\\p{N}])([\\p{L}])")
+
+    /**
+     * [T-modelsdev-relay-noise-catalog-driven] Non-ASCII LETTER runs are relay
+     * decoration, not part of any model id: across the whole models.dev catalog
+     * (8389 ids) not one contains a CJK character, while relay ids routinely
+     * end in `破甲` / `尊享版` / `白嫖`. Treating them as separators makes
+     * `grok4.6破甲` normalize to the same key as `grok-4.6` instead of
+     * depending on a hand-maintained word list that the next relay invents
+     * past. Also covers `qwen3-max尊享版`, `kimi-k3-内部版`, and any future
+     * marker, in any position, for any family.
+     */
+    private val NON_ASCII_RUN = Regex("[^\\x00-\\x7F]+")
 
     internal data class DevModelMatch(
         val model: ModelDevEntry,
@@ -153,6 +190,14 @@ object ModelsDevApi {
         model: LLMModel,
         registry: Map<String, ProviderEntry>,
     ): DevModelMatch? {
+        // [T-modelsdev-local-models-isolated] Ollama / llama.cpp ids carry a
+        // runtime tag (`llama3.1:8b`, `qwen2.5:7b-instruct-q4`). Normalization
+        // treats `:` as a separator, so `llama3.1:8b` collided with the catalog's
+        // `meta/llama-3.1-8b` and inherited a 128k output cap for a local 8B
+        // model that never had one. Local ids must never inherit catalog
+        // limits — check BEFORE any lookup, not only before the fuzzy stage.
+        if (isLocalModelId(model.id)) return null
+
         val wanted = normalizedModelKey(model.id)
 
         for (key in providerKeyMap[model.provider].orEmpty()) {
@@ -168,11 +213,63 @@ object ModelsDevApi {
             }
         }
 
-        return stage2Index(registry)[wanted] ?: fuzzyMatch(model, registry)
+        val stage2 = stage2Index(registry)
+        stage2.byKey[wanted]?.let { return it }
+        matchDirtyTail(wanted, stage2)?.let { return it }
+        return fuzzyMatch(model, registry)
     }
 
+    /**
+     * [T-modelsdev-relay-noise-catalog-driven] True for ids addressed at a LOCAL
+     * runtime by tag rather than a catalogued endpoint.
+     */
+    internal fun isLocalModelId(id: String): Boolean {
+        val tail = id.substringAfterLast('/')
+        return ':' in tail || tail.endsWith(".gguf", ignoreCase = true)
+    }
+
+    /**
+     * Stage 2.5 — trim the relay's dirty tail off the query and look the base
+     * model up as a NORMALIZED catalog entry (not a fuzzy guess, so the match
+     * carries real catalog limits).
+     *
+     * A trailing token is dirty when the catalog never uses it. That test is
+     * data, not a guess: across all 8389 catalog ids there is NOT ONE token
+     * outside the catalog's own 895-word vocabulary, so the rule cannot discard
+     * a real variant — `free`, `fast`, `thinking`, `preview`, `turbo`, `plus`,
+     * `max`, `latest` are all real ids and all survive. Only relay inventions
+     * (`oc`, `vx`, `破甲`) fall away, shortening the query one token at a time
+     * so the LONGEST surviving prefix wins:
+     *   `kimi-k3-oc`        -> `kimi-k3`
+     *   `gpt-5.5-vx`        -> `gpt-5.5`
+     *   `gemini-3-flash-lite-preview` -> `gemini-3-flash-lite` (or deeper)
+     */
+    internal fun matchDirtyTail(
+        wanted: String,
+        stage2: Stage2Index,
+    ): DevModelMatch? {
+        if (wanted.isEmpty()) return null
+        val parts = wanted.split('-').filter { it.isNotEmpty() }
+        for (cut in parts.size - 1 downTo 1) {
+            val head = parts.take(cut).joinToString("-")
+            val tail = parts.drop(cut)
+            if (tail.any { it in stage2.vocabulary }) continue
+            stage2.byKey[head]?.let { return it }
+        }
+        return null
+    }
+
+    internal data class Stage2Index(
+        val byKey: Map<String, DevModelMatch>,
+        /**
+         * Every alphanumeric token the catalog uses anywhere. Membership is the
+         * definition of "this word belongs to a real model id".
+         */
+        val vocabulary: Set<String>,
+    )
+
     @Synchronized
-    private fun stage2Index(registry: Map<String, ProviderEntry>): Map<String, DevModelMatch> {
+    private fun stage2Index(registry: Map<String, ProviderEntry>): Stage2Index {
         val cached = cachedStage2Index
         val registryId = System.identityHashCode(registry)
         if (cached != null &&
@@ -181,14 +278,38 @@ object ModelsDevApi {
         ) {
             return cached
         }
-        val index = buildStage2Index(registry)
-        cachedStage2Index = index
-        cachedStage3Corpus = buildStage3Corpus(index)
+        val built = buildStage2(registry)
+        cachedStage2Index = built
+        cachedStage3Corpus = buildStage3Corpus(built.byKey)
         stage2IndexBuiltFrom = cacheTimestamp
         stage2IndexRegistryId = registryId
-        Log.d(TAG, "[ModelsDev] stage-2 index built: ${index.size} normalized keys")
-        return index
+        Log.d(TAG, "[ModelsDev] stage-2 index built: ${built.byKey.size} normalized keys, ${built.vocabulary.size} vocabulary tokens")
+        return built
     }
+
+    internal fun buildStage2(registry: Map<String, ProviderEntry>): Stage2Index =
+        Stage2Index(buildStage2Index(registry), buildCatalogVocabulary(registry))
+
+    /**
+     * [T-modelsdev-relay-noise-catalog-driven] Union of every alphanumeric
+     * token in every catalog id. Built from whatever registry is loaded — the
+     * bundled asset, the disk cache, or a network refresh — so the dirty-tail
+     * test always reflects the catalog actually being consulted.
+     */
+    internal fun buildCatalogVocabulary(registry: Map<String, ProviderEntry>): Set<String> {
+        val vocab = HashSet<String>()
+        for (prov in registry.values) {
+            for (id in prov.models.keys) {
+                val bare = id.substringAfterLast('/').lowercase()
+                for (m in TOKEN_RUN.findAll(bare)) {
+                    vocab.add(m.value)
+                }
+            }
+        }
+        return vocab
+    }
+
+    private val TOKEN_RUN = Regex("[0-9a-z]+")
 
     internal data class FuzzyRow(
         val match: DevModelMatch,
@@ -198,7 +319,11 @@ object ModelsDevApi {
     internal fun buildStage3Corpus(index: Map<String, DevModelMatch>): List<FuzzyRow> {
         return index.values.map { match ->
             val text = listOfNotNull(match.model.id, match.model.name).joinToString(" ")
-            FuzzyRow(match, ModelAliasMatcher.tokens(text).toSet())
+            // [T-modelsdev-relay-noise-catalog-driven] The corpus side of the
+            // score must NOT strip noise words: `free` / `fast` / `thinking` are
+            // real catalog ids, and stripping them collapses `kimi-k3-free`
+            // onto `kimi-k3` before the variant penalty can separate them.
+            FuzzyRow(match, ModelAliasMatcher.catalogTokens(text).toSet())
         }
     }
 
@@ -206,8 +331,7 @@ object ModelsDevApi {
         model: LLMModel,
         registry: Map<String, ProviderEntry>,
     ): DevModelMatch? {
-        val tail = model.id.substringAfterLast('/')
-        if (':' in tail || tail.endsWith(".gguf", ignoreCase = true)) return null
+        if (isLocalModelId(model.id)) return null
         stage2Index(registry)
         val corpus = cachedStage3Corpus.orEmpty()
         if (corpus.isEmpty()) return null
@@ -217,6 +341,7 @@ object ModelsDevApi {
             corpus,
             tokensOf = { it.tokens },
             idOf = { it.match.model.id },
+            versionCompatible = { ModelAliasMatcher.versionCompatible(model.id, it.match.model.id) },
         )?.match
     }
 
@@ -262,7 +387,21 @@ object ModelsDevApi {
                 winner = values
             }
         }
-        return declaring.firstOrNull { it.reasoningEffortValues == winner } ?: declaring.first()
+        val selected = declaring.firstOrNull { it.reasoningEffortValues == winner } ?: declaring.first()
+        // Stage-2 combines equivalent model IDs across providers. Numeric
+        // budget bounds must be safe for all of them: intersect every bound
+        // actually declared, rather than inheriting whichever provider sorts
+        // first. An empty intersection is invalid metadata, so discard it and
+        // let request paths use their standard output/request-cap fallback.
+        val declaredMins = candidates.mapNotNull { it.budgetTokensMin }
+        val declaredMaxes = candidates.mapNotNull { it.budgetTokensMax }
+        val conservativeMin = declaredMins.maxOrNull()
+        val conservativeMax = declaredMaxes.minOrNull()
+        val valid = conservativeMin == null || conservativeMax == null || conservativeMin <= conservativeMax
+        return selected.copy(
+            budgetTokensMin = if (valid) conservativeMin else null,
+            budgetTokensMax = if (valid) conservativeMax else null,
+        )
     }
 
     // MARK: - Apply models.dev data
@@ -280,6 +419,8 @@ object ModelsDevApi {
             // enriching against an entry the catalog is silent about cannot
             // overwrite a prior real answer with a meaningless `false`.
             declaresNoEffortTiers = if (devModel.declaresNoEffortTiers) true else model.declaresNoEffortTiers,
+            budgetTokensMin = devModel.budgetTokensMin ?: model.budgetTokensMin,
+            budgetTokensMax = devModel.budgetTokensMax ?: model.budgetTokensMax,
         )
     }
 
@@ -303,6 +444,8 @@ object ModelsDevApi {
                 // [OpenMinis#163] null (not false) when the catalog is silent,
                 // so "unknown" stays distinguishable from "declared none".
                 declaresNoEffortTiers = if (model.declaresNoEffortTiers) true else null,
+                budgetTokensMin = model.budgetTokensMin,
+                budgetTokensMax = model.budgetTokensMax,
             )
         }
     }
@@ -500,22 +643,47 @@ object ModelsDevApi {
         val inputModalities = parseArray("input")
         val outputModalities = parseArray("output")
 
-        // [T-reasoning-effort-data-driven] reasoning_options is an array of
-        // {type, values?, min?, max?}; pick the `effort` entry's values.
+        // [T-reasoning-effort-data-driven] and [T-modelsdev-budget-tokens]
+        // reasoning_options carries independent wire mechanisms: effort strings,
+        // toggles and numeric budget ranges. Parse both numeric bounds without
+        // treating an absent bound as zero; many providers publish max only.
         var reasoningEffortValues: List<String>? = null
+        var budgetTokensMin: Int? = null
+        var budgetTokensMax: Int? = null
         val reasoningOptions = obj.optJSONArray("reasoning_options")
+        fun bound(opt: JSONObject, key: String): Int? {
+            if (!opt.has(key) || opt.isNull(key)) return null
+            val raw = opt.opt(key)
+            return when (raw) {
+                is Number -> raw.toLong().takeIf { it in 0..Int.MAX_VALUE.toLong() }?.toInt()
+                is String -> raw.toLongOrNull()?.takeIf { it in 0..Int.MAX_VALUE.toLong() }?.toInt()
+                else -> null
+            }
+        }
         reasoningOptions?.let { arr ->
             for (i in 0 until arr.length()) {
                 val opt = arr.optJSONObject(i) ?: continue
-                if (opt.optString("type") != "effort") continue
-                val vals = opt.optJSONArray("values") ?: continue
-                val out = mutableListOf<String>()
-                for (j in 0 until vals.length()) {
-                    vals.optString(j, "").takeIf { it.isNotEmpty() }?.let { out.add(it.lowercase()) }
+                when (opt.optString("type")) {
+                    "budget_tokens" -> {
+                        budgetTokensMin = bound(opt, "min") ?: budgetTokensMin
+                        budgetTokensMax = bound(opt, "max")?.takeIf { it > 0 } ?: budgetTokensMax
+                    }
+                    "effort" -> {
+                        val vals = opt.optJSONArray("values") ?: continue
+                        val out = mutableListOf<String>()
+                        for (j in 0 until vals.length()) {
+                            vals.optString(j, "").takeIf { it.isNotEmpty() }?.let { out.add(it.lowercase()) }
+                        }
+                        reasoningEffortValues = out.takeIf { it.isNotEmpty() }
+                    }
                 }
-                reasoningEffortValues = out.takeIf { it.isNotEmpty() }
-                break
             }
+        }
+        if (budgetTokensMin != null && budgetTokensMax != null && budgetTokensMin!! > budgetTokensMax!!) {
+            // Invalid ranges are ignored as a pair and handled by the shared
+            // provider fallback chain; never emit a min greater than max.
+            budgetTokensMin = null
+            budgetTokensMax = null
         }
         // [OpenMinis#163] The catalog AFFIRMATIVELY says this model has no
         // effort tiers, as opposed to saying nothing at all. reasoningEffortValues
@@ -549,6 +717,8 @@ object ModelsDevApi {
             outputCost = obj.optJSONObject("cost")
                 ?.optDouble("output", Double.NaN)
                 ?.takeIf { !it.isNaN() },
+            budgetTokensMin = budgetTokensMin,
+            budgetTokensMax = budgetTokensMax,
         )
     }
 
@@ -641,5 +811,10 @@ object ModelsDevApi {
         // for same-day releases: sol/terra/luna all shipped 2026-07-09 and only
         // price (30 / 12 / 1.2) separates their tiers.
         val outputCost: Double?,
+        // [T-modelsdev-budget-tokens] Provider/model-specific numeric thinking
+        // budget bounds. Nullable because models.dev often publishes only one
+        // side or only the `budget_tokens` mechanism without numeric values.
+        val budgetTokensMin: Int? = null,
+        val budgetTokensMax: Int? = null,
     )
 }

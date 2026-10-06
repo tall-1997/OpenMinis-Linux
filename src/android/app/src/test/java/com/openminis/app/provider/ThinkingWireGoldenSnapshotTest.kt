@@ -252,12 +252,12 @@ openrouter/XHIGH -> {reasoning:{effort:"high"}}
 openrouter/MAX -> {reasoning:{effort:"high"}}
 openrouter/ULTRA -> {reasoning:{effort:"high"}}
 qwen/OFF -> {}
-qwen/LOW -> {enable_thinking:true,extra_body:{enable_thinking:true,thinking_budget:4096},thinking_budget:4096}
-qwen/MEDIUM -> {enable_thinking:true,extra_body:{enable_thinking:true,thinking_budget:14336},thinking_budget:14336}
-qwen/HIGH -> {enable_thinking:true,extra_body:{enable_thinking:true,thinking_budget:14336},thinking_budget:14336}
-qwen/XHIGH -> {enable_thinking:true,extra_body:{enable_thinking:true,thinking_budget:14336},thinking_budget:14336}
-qwen/MAX -> {enable_thinking:true,extra_body:{enable_thinking:true,thinking_budget:14336},thinking_budget:14336}
-qwen/ULTRA -> {enable_thinking:true,extra_body:{enable_thinking:true,thinking_budget:14336},thinking_budget:14336}
+qwen/LOW -> {enable_thinking:true,extra_body:{enable_thinking:true,thinking_budget:896},thinking_budget:896}
+qwen/MEDIUM -> {enable_thinking:true,extra_body:{enable_thinking:true,thinking_budget:1792},thinking_budget:1792}
+qwen/HIGH -> {enable_thinking:true,extra_body:{enable_thinking:true,thinking_budget:3584},thinking_budget:3584}
+qwen/XHIGH -> {enable_thinking:true,extra_body:{enable_thinking:true,thinking_budget:6272},thinking_budget:6272}
+qwen/MAX -> {enable_thinking:true,extra_body:{enable_thinking:true,thinking_budget:6272},thinking_budget:6272}
+qwen/ULTRA -> {enable_thinking:true,extra_body:{enable_thinking:true,thinking_budget:6272},thinking_budget:6272}
 qwen-tiny-max/OFF -> {}
 qwen-tiny-max/LOW -> {enable_thinking:true,extra_body:{enable_thinking:true}}
 qwen-tiny-max/MEDIUM -> {enable_thinking:true,extra_body:{enable_thinking:true}}
@@ -343,12 +343,12 @@ venice-deepseek/XHIGH -> {reasoning_effort:"high"}
 venice-deepseek/MAX -> {reasoning_effort:"max"}
 venice-deepseek/ULTRA -> {reasoning_effort:"max"}
 qwen-on-unified/OFF -> {}
-qwen-on-unified/LOW -> {enable_thinking:true,extra_body:{enable_thinking:true,thinking_budget:4096},thinking_budget:4096}
-qwen-on-unified/MEDIUM -> {enable_thinking:true,extra_body:{enable_thinking:true,thinking_budget:6144},thinking_budget:6144}
-qwen-on-unified/HIGH -> {enable_thinking:true,extra_body:{enable_thinking:true,thinking_budget:6144},thinking_budget:6144}
-qwen-on-unified/XHIGH -> {enable_thinking:true,extra_body:{enable_thinking:true,thinking_budget:6144},thinking_budget:6144}
-qwen-on-unified/MAX -> {enable_thinking:true,extra_body:{enable_thinking:true,thinking_budget:6144},thinking_budget:6144}
-qwen-on-unified/ULTRA -> {enable_thinking:true,extra_body:{enable_thinking:true,thinking_budget:6144},thinking_budget:6144}
+qwen-on-unified/LOW -> {enable_thinking:true,extra_body:{enable_thinking:true,thinking_budget:512},thinking_budget:512}
+qwen-on-unified/MEDIUM -> {enable_thinking:true,extra_body:{enable_thinking:true,thinking_budget:768},thinking_budget:768}
+qwen-on-unified/HIGH -> {enable_thinking:true,extra_body:{enable_thinking:true,thinking_budget:1536},thinking_budget:1536}
+qwen-on-unified/XHIGH -> {enable_thinking:true,extra_body:{enable_thinking:true,thinking_budget:2688},thinking_budget:2688}
+qwen-on-unified/MAX -> {enable_thinking:true,extra_body:{enable_thinking:true,thinking_budget:2688},thinking_budget:2688}
+qwen-on-unified/ULTRA -> {enable_thinking:true,extra_body:{enable_thinking:true,thinking_budget:2688},thinking_budget:2688}
 gpt5-on-dashscope/OFF -> {}
 gpt5-on-dashscope/LOW -> {reasoning_effort:"low"}
 gpt5-on-dashscope/MEDIUM -> {reasoning_effort:"medium"}
@@ -377,6 +377,6 @@ deepseek-v4-on-openrouter/HIGH -> {reasoning:{effort:"high"}}
 deepseek-v4-on-openrouter/XHIGH -> {reasoning:{effort:"xhigh"}}
 deepseek-v4-on-openrouter/MAX -> {reasoning:{effort:"max"}}
 deepseek-v4-on-openrouter/ULTRA -> {reasoning:{effort:"max"}}
-        """.trimIndent()
+""".trimIndent()
     }
 }

@@ -28,6 +28,15 @@ import org.junit.Test
  * REGRESSION: a user's paid Zen provider (apiKey != "public") must NOT
  * receive this budget treatment — it keeps the normal reasoning_effort
  * path through injectThinkingParams.
+ *
+ * [T-thinking-ladder-shared] The ladder is no longer seven absolute constants
+ * in OpenAIRequestBodies; it is [ThinkingLadder], fractions of the model's own
+ * output capacity. The expectations below are therefore a function of
+ * `maxOutputTokens`, not fixed literals — and on the four REAL Zen free models
+ * whose capacity sits near the old top rungs (big-pickle / mimo-v2.5 /
+ * mimo-v2.6 at 32000, ling-3.1 at 32768) the old table sent byte-identical
+ * numbers for XHIGH, MAX and ULTRA. Those four are pinned explicitly below:
+ * they are the regression this change exists to remove.
  */
 class ZenFreeThinkingBudgetTest {
 
@@ -139,75 +148,83 @@ class ZenFreeThinkingBudgetTest {
     // -- reasoning model: budget replaces caller maxTokens
 
     @Test
-    fun `off → 1024`() {
-        // REWRITTEN [T-zen-free-thinking-budget-ladder]: the old expectation
-        // of 2048 was wrong because OFF and LOW BOTH emitted 2048 — picking
-        // OFF instead of LOW changed nothing on the wire. OFF now sits one
-        // step BELOW LOW: it exists to leave room for the answer only.
-        val body = capture(model("big-pickle"), ThinkingLevel.OFF, 4096)
-        assertEquals(1024, body.optInt("max_completion_tokens"))
+    fun `off is the smallest rung and leaves room for the answer`() {
+        // REWRITTEN [T-thinking-ladder-shared]: 1024 was a hardcoded constant,
+        // so on a 32768-capacity model it was 1/32 of the ceiling — pure
+        // luck. OFF is now capacity/32 by construction: 1024 on a 32768
+        // model, 1000 on a 32000 one. What is asserted here is the RELATION,
+        // because that is the part that must hold everywhere.
+        val off = budgetFor(level = ThinkingLevel.OFF, maxOutputTokens = 32768)
+        val low = budgetFor(level = ThinkingLevel.LOW, maxOutputTokens = 32768)
+        assertEquals(1024, off)
+        assertTrue("OFF ($off) must be below LOW ($low)", off < low)
     }
 
     @Test
-    fun `low → 2048 and strictly above off`() {
-        // REWRITTEN: the raw 2048 is unchanged, but as a bare number it was
-        // vacuous — it happened to equal OFF's. Pin the RELATIONSHIP that was
-        // actually missing: LOW must buy reasoning room above OFF.
-        val low = budgetFor(level = ThinkingLevel.LOW)
-        val off = budgetFor(level = ThinkingLevel.OFF)
+    fun `low sits one step above off`() {
+        // REWRITTEN: the raw 2048 survives only on a 32768-capacity model,
+        // where it now happens to be exactly capacity/16. Previously LOW
+        // equalled OFF, so picking LOW over OFF changed nothing on the wire;
+        // the ladder makes the two distinct on every capacity >= 16384.
+        val low = budgetFor(level = ThinkingLevel.LOW, maxOutputTokens = 32768)
+        val off = budgetFor(level = ThinkingLevel.OFF, maxOutputTokens = 32768)
         assertEquals(2048, low)
         assertTrue("LOW ($low) must exceed OFF ($off)", low > off)
     }
 
     @Test
-    fun `medium → 8192`() {
+    fun `medium is a quarter-strength rung, not an absolute 8192`() {
+        // REWRITTEN [T-thinking-ladder-shared]: 8192 was constant, so on a
+        // 32000-capacity model it was 26% of the ceiling while on a 524288
+        // one it was 1.6% — the SAME menu entry meant wildly different things
+        // per model. MEDIUM is now capacity/8 everywhere: 4096 at 32768.
         val body = capture(model("big-pickle"), ThinkingLevel.MEDIUM, 4096)
+        assertEquals(4096, body.optInt("max_completion_tokens"))
+    }
+
+    @Test
+    fun `high is a quarter of capacity`() {
+        // REWRITTEN: 16384 was an absolute rung. On a 32768-capacity model it
+        // was HALF the ceiling and on a 16384 one it was clipped away
+        // entirely. HIGH is now capacity/4: 8192 at 32768.
+        val body = capture(model("big-pickle"), ThinkingLevel.HIGH, 4096)
         assertEquals(8192, body.optInt("max_completion_tokens"))
     }
 
     @Test
-    fun `high → 16384`() {
-        val body = capture(model("big-pickle"), ThinkingLevel.HIGH, 4096)
-        assertEquals(16384, body.optInt("max_completion_tokens"))
-    }
-
-    @Test
-    fun `xhigh → 32768 base rung, strictly above high`() {
-        // REWRITTEN [T-zen-free-thinking-budget-ladder]: XHIGH used to fall
-        // through to `null` and emit the model's FULL capacity, identical to
-        // MAX and ULTRA. It is now a 32K rung — exactly one doubling step
-        // above HIGH — so the 65536-capacity model below pays out a real
-        // 32K instead of clipping to the ceiling on the very first jump.
+    fun `xhigh is 7-16ths of capacity and strictly above high`() {
+        // REWRITTEN [T-thinking-ladder-shared]: XHIGH used to be 32768 or, if
+        // that exceeded capacity, the model's FULL capacity — identical to
+        // MAX and ULTRA, so the rung did nothing at all. It is now 7/16 of
+        // the ceiling, which is below capacity on every model we ship.
         val xhigh = budgetFor(level = ThinkingLevel.XHIGH, maxOutputTokens = 65536)
         val high = budgetFor(level = ThinkingLevel.HIGH, maxOutputTokens = 65536)
-        assertEquals(32768, xhigh)
+        assertEquals(28672, xhigh)
         assertTrue("XHIGH ($xhigh) must exceed HIGH ($high)", xhigh > high)
     }
 
     @Test
-    fun `max → 49152, strictly between xhigh and ultra`() {
+    fun `max is 11-16ths of capacity, strictly between xhigh and ultra`() {
         // REWRITTEN: MAX emitted the full 65536 capacity, the same number as
-        // XHIGH and ULTRA — the rung did nothing. It is now a 49152 rung, a
-        // ×1.5 step above XHIGH rather than a second power of two, so the
-        // reasoning ceiling keeps widening but never simply IS the capacity.
+        // XHIGH and ULTRA. It is now 11/16 of the ceiling (45056 at 65536) —
+        // the widest-but-one rung, still strictly under the ceiling.
         val max = budgetFor(level = ThinkingLevel.MAX, maxOutputTokens = 65536)
         val xhigh = budgetFor(level = ThinkingLevel.XHIGH, maxOutputTokens = 65536)
         val ultra = budgetFor(level = ThinkingLevel.ULTRA, maxOutputTokens = 65536)
-        assertEquals(49152, max)
+        assertEquals(45056, max)
         assertTrue("MAX ($max) must exceed XHIGH ($xhigh)", max > xhigh)
         assertTrue("MAX ($max) must stay below ULTRA ($ultra)", max < ultra)
     }
 
     @Test
-    fun `ultra → 73728, approaches capacity without reaching it`() {
-        // REWRITTEN: ULTRA used to be the full capacity, identical to MAX —
-        // a rung that cannot be told apart from the one below it. It is now
-        // a 73728 rung on a 131072-capacity model: the widest budget the
-        // ladder offers, deliberately short of the ceiling so the top rung
-        // is a real step rather than a second name for "capacity".
+    fun `ultra approaches capacity without reaching it`() {
+        // REWRITTEN [T-thinking-ladder-shared]: ULTRA was the bare capacity,
+        // a rung indistinguishable from MAX by construction. It is now 15/16
+        // of the ceiling (122880 on a 131072 model), so the top rung is a
+        // real step and never simply IS the capacity.
         val ultra = budgetFor(level = ThinkingLevel.ULTRA, maxOutputTokens = 131072)
         val max = budgetFor(level = ThinkingLevel.MAX, maxOutputTokens = 131072)
-        assertEquals(73728, ultra)
+        assertEquals(122880, ultra)
         assertTrue("ULTRA ($ultra) must exceed MAX ($max)", ultra > max)
         assertTrue("ULTRA ($ultra) must stay below capacity (131072)", ultra < 131072)
     }
@@ -231,117 +248,219 @@ class ZenFreeThinkingBudgetTest {
                 higher.second > lower.second,
             )
         }
-        // And nothing may exceed what the model declared it can emit.
+        // And nothing may reach what the model declared it can emit — with a
+        // proportional ladder this holds everywhere, which is what makes the
+        // ceilings below (the old top rungs) impossible to hit again.
         budgets.forEach { (lvl, v) ->
-            assertTrue("$lvl=$v must not exceed capacity 131072", v <= 131072)
+            assertTrue("$lvl=$v must stay strictly below capacity 131072", v < 131072)
         }
+    }
+
+    /**
+     * [T-zen-free-thinking-budget-ladder] THE REGRESSION THIS CHANGE EXISTS
+     * FOR. big-pickle, mimo-v2.5, mimo-v2.6 (capacity 32000) and ling-3.1
+     * (32768) are real models in the device's own Zen free catalogue, and
+     * under the old absolute table XHIGH/MAX/ULTRA all clipped to the same
+     * number on every one of them — three of the four top menu entries sent
+     * byte-identical requests.
+     */
+    @Test
+    fun `real zen free catalogue models keep every top rung distinct`() {
+        for (id in listOf("big-pickle", "mimo-v2.5-free", "mimo-v2.6-flash-free")) {
+            for (capacity in listOf(32000, 32768)) {
+                val budgets = ascendingRungs.map { level ->
+                    budgetFor(id = id, level = level, maxOutputTokens = capacity)
+                }
+                assertEquals(
+                    "$id at capacity $capacity collapsed rungs: $budgets",
+                    ascendingRungs.size,
+                    budgets.toSet().size,
+                )
+                budgets.zipWithNext().forEach { (a, b) ->
+                    assertTrue(
+                        "$id at capacity $capacity must strictly increase: $a then $b (all: $budgets)",
+                        b > a,
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * [T-zen-free-thinking-budget-ladder] The concrete numbers the picker now
+     * shows, so a later edit to the shared ladder cannot silently change what
+     * a Zen user gets at these two capacities.
+     */
+    @Test
+    fun `zen free ladder is proportional to capacity`() {
+        assertEquals(
+            listOf(1024, 2048, 4096, 8192, 14336, 22528, 30720),
+            ascendingRungs.map { budgetFor(id = "ling-3.1-flash-free", level = it, maxOutputTokens = 32768) },
+        )
+        assertEquals(
+            listOf(1000, 2000, 4000, 8000, 14000, 22000, 30000),
+            ascendingRungs.map { budgetFor(id = "big-pickle", level = it, maxOutputTokens = 32000) },
+        )
     }
 
     @Test
     fun `must-think ladder stays strictly increasing after doubling`() {
-        // [T-zen-free-thinking-budget-ladder] The must-think ×2 applies
-        // uniformly to every rung, so it cannot introduce a collapse by
-        // itself — but it is the one transform that can push a rung past
-        // capacity and clip it, so monotonicity is asserted here too rather
-        // than assumed. Capacity is 131072 here, far above every doubled
-        // rung, so nothing clips and all seven must be distinct; the
-        // clip-on-a-small-model case is pinned separately below.
+        // [T-thinking-ladder-shared] The must-think transform divides the
+        // ladder's FRACTIONS rather than multiplying the resulting budgets:
+        // `budget * 2` would push the top rungs past the ceiling, where
+        // `minOf(..., capacity)` clamps them back to one number — the exact
+        // collapse this change removes, landing on exactly the mimo models the
+        // transform exists for. Asserted at the real mimo capacity (32768),
+        // where the old `budget * 2` DID clip XHIGH/MAX/ULTRA together.
         val budgets = ascendingRungs.map { level ->
-            level to budgetFor(id = "mimo-v2.6-flash-free", level = level, maxOutputTokens = 131072)
+            level to budgetFor(id = "mimo-v2.6-flash-free", level = level, maxOutputTokens = 32768)
         }
+        val rendered = budgets.joinToString(" < ") { (lvl, v) -> "$lvl=$v" }
         budgets.zipWithNext().forEach { (a, b) ->
             assertTrue(
-                "must-think ladder must strictly increase: ${a.first}=${a.second} then ${b.first}=${b.second}",
+                "must-think ladder must strictly increase: ${a.first}=${a.second} then " +
+                    "${b.first}=${b.second} (full: $rendered)",
                 b.second > a.second,
             )
         }
+        budgets.forEach { (lvl, v) ->
+            assertTrue("$lvl=$v must stay below capacity 32768", v < 32768)
+        }
     }
 
-    // -- must-think model (mimo-v2.6): doubled rungs
+    // -- must-think model (mimo-v2.6): ladder rescaled down by one step
+
+    /**
+     * [T-thinking-ladder-shared] `multiplier = 2` DIVIDES the fractions
+     * (1/64 .. 30/64) instead of doubling the budgets (1/32 .. 60/32, which
+     * clips). On a 32768-capacity model the whole must-think ladder is
+     * therefore 512 / 1024 / 2048 / 4096 / 7168 / 11264 / 15360 — still seven
+     * distinct numbers, all strictly under the ceiling.
+     */
+    @Test
+    fun `mimo-v2p6 ladder is the rescaled proportional ladder`() {
+        val actual = ascendingRungs.map {
+            budgetFor(id = "mimo-v2.6-flash-free", level = it, maxOutputTokens = 32768)
+        }
+        assertEquals(
+            listOf(512, 1024, 2048, 4096, 7168, 11264, 15360),
+            actual,
+        )
+    }
 
     @Test
-    fun `mimo-v2p6 off → 2048 doubled`() {
-        // REWRITTEN [T-zen-free-thinking-budget-ladder]: the old 4096 came
-        // from OFF's 2048 base ×2, which is exactly the base OFF used to
-        // SHARE with LOW — the rung was not distinguishable from the one
-        // below it. OFF's base is now 1024, so the doubled rung is 2048 and
-        // still strictly under MEDIUM's 16384. The doubling itself (the
-        // measured part) is unchanged.
+    fun `mimo-v2p6 off → 512`() {
+        // REWRITTEN [T-thinking-ladder-shared]: the old expectation of 2048
+        // came from OFF's absolute 1024 base ×2, a constant that happened to
+        // be 1/32 of this model's ceiling and 1/64 of the 65536 one. OFF is
+        // now the shared ladder's floor on this capacity, doubled fractions
+        // included. What matters and is asserted below: it is still the
+        // SMALLEST rung, and clearly below MEDIUM's.
+        val off = budgetFor(id = "mimo-v2.6-flash-free", level = ThinkingLevel.OFF, maxOutputTokens = 32768)
+        val medium = budgetFor(id = "mimo-v2.6-flash-free", level = ThinkingLevel.MEDIUM, maxOutputTokens = 32768)
+        assertEquals(512, off)
+        assertTrue("OFF ($off) must stay well below MEDIUM ($medium)", off < medium)
+    }
+
+    @Test
+    fun `mimo-v2p6 medium → 2048`() {
+        // REWRITTEN: was 16384 (absolute 8192 ×2), i.e. HALF the ceiling at
+        // MEDIUM — barely a rung. Now capacity/16 = 2048, with room above it.
         val body = capture(
             model("mimo-v2.6-flash-free", maxOutputTokens = 32768),
-            ThinkingLevel.OFF,
+            ThinkingLevel.MEDIUM,
             4096,
         )
         assertEquals(2048, body.optInt("max_completion_tokens"))
     }
 
     @Test
-    fun `mimo-v2p6 medium → 16384 doubled`() {
-        val body = capture(
-            model("mimo-v2.6-flash-free", maxOutputTokens = 32768),
-            ThinkingLevel.MEDIUM,
-            4096,
-        )
-        assertEquals(16384, body.optInt("max_completion_tokens"))
-    }
-
-    @Test
-    fun `mimo-v2p6 high capped at capacity`() {
+    fun `mimo-v2p6 high stays under capacity instead of clipping to it`() {
+        // REWRITTEN [T-thinking-ladder-shared]: the old expectation was
+        // 32768 — the model's FULL capacity, reached at HIGH and then
+        // repeated at XHIGH, MAX and ULTRA. Four menu entries, one number.
+        // HIGH is now capacity/8 = 4096, and the top rung is 15360.
         val body = capture(
             model("mimo-v2.6-flash-free", maxOutputTokens = 32768),
             ThinkingLevel.HIGH,
             4096,
         )
-        assertEquals(32768, body.optInt("max_completion_tokens"))
+        assertEquals(4096, body.optInt("max_completion_tokens"))
     }
 
-    // -- must-think model (mimo-v2.5): doubled rungs
+    // -- must-think model (mimo-v2.5): same ladder as mimo-v2.6
 
     @Test
-    fun `mimo-v2p5 off → 2048 doubled`() {
+    fun `mimo-v2p5 off → 512`() {
         // REWRITTEN: same reason as the mimo-v2.6 OFF test above — the old
-        // 4096 was inherited from OFF's old shared 2048 base. Base is now
-        // 1024, doubled to 2048; the must-think ×2 is preserved.
-        val body = capture(
-            model("mimo-v2.5-free", maxOutputTokens = 32768),
-            ThinkingLevel.OFF,
-            4096,
-        )
-        assertEquals(2048, body.optInt("max_completion_tokens"))
+        // 2048/4096 came from an absolute base. Both mimo models are must-
+        // think, so they now share one ladder off one capacity.
+        val off = budgetFor(id = "mimo-v2.5-free", level = ThinkingLevel.OFF, maxOutputTokens = 32768)
+        val medium = budgetFor(id = "mimo-v2.5-free", level = ThinkingLevel.MEDIUM, maxOutputTokens = 32768)
+        assertEquals(512, off)
+        assertTrue("OFF ($off) must stay well below MEDIUM ($medium)", off < medium)
     }
 
     @Test
-    fun `mimo-v2p5 medium → 16384 doubled`() {
+    fun `mimo-v2p5 medium → 2048`() {
         val body = capture(
             model("mimo-v2.5-free", maxOutputTokens = 32768),
             ThinkingLevel.MEDIUM,
             4096,
         )
-        assertEquals(16384, body.optInt("max_completion_tokens"))
+        assertEquals(2048, body.optInt("max_completion_tokens"))
     }
 
     // -- budget clipped to model capacity
 
     @Test
     fun `budget clipped to low model capacity`() {
-        val body = capture(
+        // REWRITTEN [T-thinking-ladder-shared]: the old 1500 was
+        // `minOf(ceiling, capacity)` — the budget EQUALLED the ceiling, which
+        // means the model has no room to emit the answer at all. The shared
+        // ladder emits 512 (its floor) instead: strictly below capacity and
+        // honest about the fact that a 1500-token ceiling cannot host a real
+        // reasoning ladder. ULTRA still widens with capacity.
+        val medium = capture(
             model("big-pickle", maxOutputTokens = 1500),
             ThinkingLevel.MEDIUM,
             8192,
+        ).optInt("max_completion_tokens")
+        val ultra = capture(
+            model("big-pickle", maxOutputTokens = 1500),
+            ThinkingLevel.ULTRA,
+            8192,
+        ).optInt("max_completion_tokens")
+        assertEquals(512, medium)
+        assertTrue(
+            "a 1500-capacity model must still widen toward the ceiling: ULTRA=$ultra",
+            ultra > medium && ultra < 1500,
         )
-        assertEquals(1500, body.optInt("max_completion_tokens"))
     }
 
     // -- minimum floor
 
     @Test
-    fun `floor never below 512`() {
-        val body = capture(
+    fun `never emits zero on a tiny capacity`() {
+        // REWRITTEN [T-thinking-ladder-shared]: the old expectation of 512
+        // came from `maxOf(512, widened)`, which emitted a budget LARGER than
+        // the model's own capacity — a 200-token model was asked for 512
+        // tokens. The shared ladder degrades to `min(FLOOR, capacity - 1)`, so
+        // the lane never asks for more than the model can produce and never
+        // asks for 0 (which Gemini/DashScope reject outright).
+        val off = capture(
             model("big-pickle", maxOutputTokens = 200),
             ThinkingLevel.OFF,
             200,
+        ).optInt("max_completion_tokens")
+        assertEquals(199, off)
+        assertTrue("a 200-capacity model must still be under its ceiling", off < 200)
+        // A capacity that CAN host the floor gets the floor, not capacity-1.
+        assertEquals(
+            512,
+            capture(model("big-pickle", maxOutputTokens = 3000), ThinkingLevel.OFF, 3000)
+                .optInt("max_completion_tokens"),
         )
-        assertEquals(512, body.optInt("max_completion_tokens"))
     }
 
     // -- regression: paid Zen provider must NOT take the budget path

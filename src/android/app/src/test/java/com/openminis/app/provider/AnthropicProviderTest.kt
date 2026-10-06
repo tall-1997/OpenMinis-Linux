@@ -404,28 +404,31 @@ class AnthropicProviderTest {
 
     @Test
     fun `thinking budget stays strictly below max tokens`() {
-        // Anthropic rejects budget_tokens == max_tokens with a 400. Every level
-        // that would clamp to exactly maxTokens must pull back to maxTokens - 1.
+        // Anthropic rejects budget_tokens == max_tokens with a 400. With the
+        // proportional ladder every rung is already strictly below maxTokens;
+        // the maxTokens-1 pullback is now a belt-and-braces assertion of that
+        // API invariant, not the mechanism that used to collapse the top four
+        // levels together.
         val maxTokens = 40_000
-        // HIGH: min(maxTokens, 65536) == maxTokens here → must be maxTokens-1.
-        assertEquals(maxTokens - 1, AnthropicProvider.thinkingBudget(maxTokens, ThinkingLevel.HIGH))
-        // Top tiers take the full budget → also pulled back by one.
-        for (level in listOf(ThinkingLevel.XHIGH, ThinkingLevel.MAX, ThinkingLevel.ULTRA)) {
-            val budget = AnthropicProvider.thinkingBudget(maxTokens, level)
-            assertTrue("$level budget $budget must be < $maxTokens", budget < maxTokens)
-            assertEquals(maxTokens - 1, budget)
-        }
+        // HIGH = 1/4 of capacity, well below the ceiling.
+        assertEquals(10_000, AnthropicProvider.thinkingBudget(maxTokens, ThinkingLevel.HIGH))
+        // Every enabled level must stay strictly below maxTokens — and the top
+        // three must now be DISTINCT, which is the whole point of the ladder.
+        val top = listOf(ThinkingLevel.XHIGH, ThinkingLevel.MAX, ThinkingLevel.ULTRA)
+            .map { AnthropicProvider.thinkingBudget(maxTokens, it) }
+        top.forEach { assertTrue("budget $it must be < $maxTokens", it < maxTokens) }
+        assertEquals("XHIGH/MAX/ULTRA must be three distinct budgets", 3, top.toSet().size)
     }
 
     @Test
     fun `thinking budget keeps sub-ceiling levels intact`() {
-        // When the cap is genuinely below maxTokens the value is unchanged.
+        // Proportional to maxTokens: OFF still emits no budget at all, and each
+        // enabled rung is a fixed fraction of the request ceiling.
         val maxTokens = 100_000
         assertEquals(0, AnthropicProvider.thinkingBudget(maxTokens, ThinkingLevel.OFF))
-        assertEquals(8192, AnthropicProvider.thinkingBudget(maxTokens, ThinkingLevel.LOW))
-        assertEquals(32768, AnthropicProvider.thinkingBudget(maxTokens, ThinkingLevel.MEDIUM))
-        // HIGH caps at 65536, well under 100k → unchanged.
-        assertEquals(65536, AnthropicProvider.thinkingBudget(maxTokens, ThinkingLevel.HIGH))
+        assertEquals(6_250, AnthropicProvider.thinkingBudget(maxTokens, ThinkingLevel.LOW))
+        assertEquals(12_500, AnthropicProvider.thinkingBudget(maxTokens, ThinkingLevel.MEDIUM))
+        assertEquals(25_000, AnthropicProvider.thinkingBudget(maxTokens, ThinkingLevel.HIGH))
     }
 
     // -- ThinkingLevelCatalog: Claude Opus matching --

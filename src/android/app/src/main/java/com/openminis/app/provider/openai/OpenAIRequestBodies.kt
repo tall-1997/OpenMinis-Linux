@@ -10,6 +10,7 @@ import com.openminis.app.data.model.hasImageInput
 import com.openminis.app.provider.SamplingIdentity
 import com.openminis.app.provider.SamplingPolicy
 import com.openminis.app.provider.applyUserAgentOverride
+import com.openminis.app.provider.thinking.ThinkingLadder
 import com.openminis.app.provider.thinking.ThinkingResolveContext
 import com.openminis.app.provider.thinking.ThinkingRuleResolver
 import okhttp3.MediaType.Companion.toMediaType
@@ -691,59 +692,62 @@ internal class OpenAIRequestBodies(
      * The ceiling is shared by thinking and the visible answer: a lower level
      * shortens both. A model whose thinking cannot be switched off pays for
      * its reasoning out of the same ceiling before the answer starts, so its
-     * rungs are doubled — measured on mimo-v2.6-flash-free over one day, 82%
-     * of output tokens were reasoning, and the un-doubled ceiling ended long
+     * rungs are scaled UP — measured on mimo-v2.6-flash-free over one day, 82%
+     * of output tokens were reasoning, and the unscaled ceiling ended long
      * turns in `length` about every third request.
      *
      * Returns null when this model exposes no effort menu (supportsReasoning
      * is not true), so the caller's own maxTokens stays on the wire untouched.
      *
-     * [T-zen-free-thinking-budget-ladder] THE OLD TABLE COLLAPSED. OFF and
-     * LOW both emitted 2048, and XHIGH/MAX/ULTRA all fell through to `null`
-     * and therefore to the model's FULL capacity — so four of the seven rungs
-     * were the same number on the wire, and three of the menu entries a user
-     * can pick did literally nothing. The table below is strictly
-     * increasing; a new rung is one line here.
+     * [T-thinking-ladder-shared] The ladder itself is NOT here any more — it
+     * lives in [ThinkingLadder], shared with the Gemini / Qwen / Anthropic
+     * numeric-budget sites. The old table lived here as seven ABSOLUTE
+     * constants, which is precisely what cannot work on a lane whose models
+     * have wildly different ceilings: on big-pickle / mimo-v2.5 / mimo-v2.6
+     * (capacity 32000) and ling-3.1 (32768) — four REAL models in the device's
+     * own Zen free catalogue — the top rungs all clipped to the same number,
+     * so dragging the slider changed nothing on the wire.
      *
-     * OFF is deliberately the smallest rung and not a duplicate of LOW: it
-     * exists to leave room for the ANSWER only (short outputs, no room wasted
-     * on reasoning), while LOW must buy real reasoning room above it.
+     * WHY PROPORTIONAL. Each rung is now a FRACTION of the model's OWN output
+     * capacity (1/32, 2/32, 4/32, 8/32, 14/32, 22/32, 30/32) instead of a
+     * constant. That is what makes the ladder strictly increasing for EVERY
+     * capacity: a constant that sits below one model's ceiling is above
+     * another's, but a fraction of that same ceiling is always below it.
      *
-     * NON-REPEATING GEOMETRY. The mid rungs are exact powers of two (8K/
-     * 16K/32K) so each step is exactly ×2 and the reasoning allowance
-     * doubles per level — that doubling is the only knob this lane exposes,
-     * since the gateway drops reasoning_effort. The top rungs then step by
-     * ×1.5 instead of repeating powers of two: the reasoning ceiling should
-     * KEEP widening toward the model's limit, but must not march straight
-     * into it, so ULTRA approaches capacity without ever being pinned to it
-     * (on a 131072 model: 32768 / 49152 / 73728, none of them the ceiling).
+     * WHY THE FRACTIONS ARE UNEVEN. A linear ramp (1/7..6/7) would spend the
+     * user's tokens almost evenly. Reasoning cost grows SUPERLINEARLY with
+     * depth, so the ladder doubles early and tapers late — the same shape as
+     * the measured must-think behaviour (82% of output tokens were reasoning).
+     * ULTRA stops at 30/32 so it approaches the ceiling without ever being
+     * pinned to it. OFF is the smallest rung and deliberately not a duplicate
+     * of LOW: it exists to leave room for the ANSWER only, while LOW must buy
+     * real reasoning room above it.
      *
-     * [UNMEASURED] The prior table's reasoning allowance was small and its
-     * top rungs were indistinguishable from each other; both are fixed here.
-     * But the claim that THESE seven specific numbers raise reasoning quality
-     * on this lane is NOT measured — this gateway may just truncate
-     * differently at a bigger ceiling. Monotonic + clipped is the part that
-     * is provably right; the exact steps need an on-device sweep (reasoning
-     * tokens and `length` finish rate per level) before being called tuned.
+     * MUST-THINK IS A RESCALE, NOT A MULTIPLICATION. `multiplier = 2` divides
+     * the FRACTIONS, shifting the whole ladder down by one step's worth of
+     * headroom instead of doubling the resulting numbers. Doubling the numbers
+     * (`budget * 2`) would push XHIGH/MAX/ULTRA straight past the ceiling,
+     * where `minOf(..., capacity)` clamps them all back to the same value —
+     * reintroducing byte-for-byte the collapse this change removes, on exactly
+     * the mimo models that motivated it.
+     *
+     * [UNMEASURED] The fractions are reasoned, not swept. The claim that THESE
+     * steps raise reasoning quality on this lane is NOT measured — this
+     * gateway may just truncate differently at a bigger ceiling. Strictly
+     * increasing and strictly below capacity is the part that is provably
+     * right; the exact steps need an on-device sweep (reasoning tokens and
+     * `length` finish rate per level) before being called tuned.
      */
     private fun zenBudgetTokens(level: ThinkingLevel, maxTokens: Int): Int? {
         if (host.model.supportsReasoning != true) return null
+        // [T-thinking-ladder-shared] capacity MUST be the model's own max
+        // output tokens — scaling a ladder against the caller's arbitrary
+        // maxTokens would make the same level produce a different budget
+        // depending on who asked for it, and would destroy proportionality.
         val capacity = host.model.maxOutputTokens ?: maxTokens
-        // [T-zen-free-thinking-budget-ladder] One line per rung; strictly
-        // increasing base budgets for the non-must-think path.
-        val ceiling: Int = when (level) {
-            ThinkingLevel.OFF -> 1_024
-            ThinkingLevel.LOW -> 2_048
-            ThinkingLevel.MEDIUM -> 8_192
-            ThinkingLevel.HIGH -> 16_384
-            ThinkingLevel.XHIGH -> 32_768
-            ThinkingLevel.MAX -> 49_152
-            ThinkingLevel.ULTRA -> 73_728
-        }
         val lid = host.model.id.lowercase()
         val mustThink = lid.startsWith("mimo-v2.6") || lid.startsWith("mimo-v2.5")
-        val widened = minOf(ceiling * if (mustThink) 2 else 1, capacity)
-        return maxOf(512, widened)
+        return ThinkingLadder.budgetFor(level, capacity, if (mustThink) 2 else 1)
     }
 
     /**
@@ -770,6 +774,8 @@ internal class OpenAIRequestBodies(
             instanceId = host.thinkingRuleInstanceId,
             supportsReasoning = host.model.supportsReasoning,
             declaredEffortValues = host.model.reasoningEffortValues,
+            budgetTokensMin = host.model.budgetTokensMin,
+            budgetTokensMax = host.model.budgetTokensMax,
             // [OpenMinis#163] null (catalog silent) must read as false here —
             // only an affirmative declaration may suppress the field.
             declaresNoEffortTiers = host.model.declaresNoEffortTiers == true,

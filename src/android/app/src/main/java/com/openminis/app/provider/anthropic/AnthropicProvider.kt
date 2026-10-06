@@ -36,6 +36,7 @@ import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.util.concurrent.TimeUnit
 import com.openminis.app.provider.failOnSilentEmptyCompletion
+import com.openminis.app.provider.thinking.ThinkingLadder
 import com.openminis.app.provider.thinking.ThinkingRuleResolver
 
 class AnthropicProvider(
@@ -899,27 +900,58 @@ class AnthropicProvider(
             return major > 4 || major == 4 || (major == 3 && minor >= 7)
         }
 
-        /** Calculate thinking budget tokens based on level (legacy <=4.5 protocol). */
+        /**
+         * Calculate thinking budget tokens based on level (legacy <=4.5 protocol).
+         *
+         * [T-thinking-ladder-shared] Replaces a hardcoded absolute ladder
+         * (OFF 0 / LOW 8192 / MEDIUM 32768 / HIGH min(mt,65536) / XHIGH·MAX·ULTRA mt)
+         * that collapsed HIGH through ULTRA onto ONE number for every
+         * maxTokens <= 65536 — measured BEFORE the change:
+         *   maxTokens   8192 → 8191/8191/8191/8191/8191 (LOW..ULTRA, five identical)
+         *   maxTokens  16384 → 8192/16383/16383/16383/16383
+         *   maxTokens  32768 → 8192/32767/32767/32767/32767
+         *   maxTokens  65536 → 8192/32768/65535/65535/65535
+         *   maxTokens 131072 → 8192/32768/65536/131071/131071
+         * A user dragging High → Ultra changed nothing on the wire.
+         *
+         * WHY `maxTokens` IS THE CORRECT CAPACITY HERE, unlike the other sites:
+         * `budget_tokens` is inherently REQUEST-scoped — Anthropic validates it
+         * against the `max_tokens` of the very request that carries it, and a budget
+         * taken from a model-wide ceiling would be rejected as `budget_tokens must
+         * be less than max_tokens` the moment the two diverge. The Zen lane can
+         * scale against `LLMModel.maxOutputTokens` because its knob bounds the whole
+         * response; this one cannot, so the request's own budget is the capacity.
+         *
+         * The OFF -> 0 mapping is exact and preserved (the caller only reaches this
+         * for enabled levels, but anthropicThinkingShape and the tests do not, and
+         * OFF must never emit a budget).
+         */
         fun thinkingBudget(maxTokens: Int, level: ThinkingLevel): Int {
-            val cap = when (level) {
-                ThinkingLevel.OFF -> 0
-                ThinkingLevel.LOW -> 8192
-                ThinkingLevel.MEDIUM -> 32768
-                ThinkingLevel.HIGH -> minOf(maxTokens, 65536)
-                // [T-android-thinking-level-arch] XHIGH and above all take the
-                // full token budget (already capped to maxTokens below).
-                ThinkingLevel.XHIGH,
-                ThinkingLevel.MAX,
-                ThinkingLevel.ULTRA -> maxTokens
-            }
-            // Anthropic requires budget_tokens STRICTLY LESS THAN max_tokens; an
-            // equal value is a 400 ("thinking.budget_tokens must be less than
-            // max_tokens"). HIGH's min(maxTokens, 65536) and the top tiers both
-            // clamp to exactly maxTokens, so pull back to maxTokens-1 when they
-            // hit the ceiling. Affects the legacy budget_tokens path (pre-4.6
-            // Claude + Anthropic-compatible relays without adaptive thinking).
+            if (level == ThinkingLevel.OFF) return 0
+            // [T-thinking-ladder-shared] Non-positive maxTokens cannot host any
+            // budget (Anthropic 400s on budget_tokens >= max_tokens, and 0 is the
+            // vendor default). Previously `minOf(cap, 0)` produced 0 for every level
+            // anyway, so this preserves the value while stating the intent.
+            // [T-thinking-ladder-shared] `budgetFor` coerces into `[FLOOR, capacity-1]`
+            // BEFORE its own degenerate branch, so a capacity at or below FLOOR (512)
+            // throws instead of degrading. This subsumes the old `maxTokens < 2` guard
+            // (and the `maxTokens > 1` condition on the pullback below): a
+            // budget_tokens under the 512 floor cannot be expressed on this ladder at
+            // all, so emit none — the caller's `if (budgetTokens > 0)` gate then leaves
+            // `thinking` off entirely. Previously `minOf(cap, 0)` produced 0 for these
+            // anyway, so the returned VALUE is unchanged for every input.
+            if (maxTokens <= ThinkingLadder.FLOOR) return 0
+            val cap = ThinkingLadder.budgetFor(level, maxTokens)
+            // Anthropic requires budget_tokens STRICTLY LESS THAN max_tokens; an equal
+            // value is a 400 ("thinking.budget_tokens must be less than
+            // max_tokens"). [T-thinking-ladder-shared] ThinkingLadder already returns
+            // a value < maxTokens (its top rung is 15/16 of capacity), so this
+            // pullback is now a belt-and-braces assertion of an API invariant rather
+            // than the mechanism that was silently collapsing four levels together.
+            // It is kept deliberately: the requirement is the API's, not ours, and a
+            // future ladder change must not be able to trip a 400.
             val clamped = minOf(cap, maxTokens)
-            return if (clamped >= maxTokens && maxTokens > 1) maxTokens - 1 else clamped
+            return if (clamped >= maxTokens) maxTokens - 1 else clamped
         }
 
         /**

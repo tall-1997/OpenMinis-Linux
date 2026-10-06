@@ -19,6 +19,9 @@ data class ThinkingResolveContext(
     val instanceId: String? = null,
     val supportsReasoning: Boolean?,
     val declaredEffortValues: List<String>?,
+    /** Numeric `budget_tokens` bounds from models.dev, when the catalog has them. */
+    val budgetTokensMin: Int? = null,
+    val budgetTokensMax: Int? = null,
     /**
      * [OpenMinis#163] The catalog affirmatively declares this model has NO effort
      * tiers (it reasons, but takes no `reasoning_effort`). Distinct from
@@ -463,20 +466,94 @@ object ThinkingRuleResolver {
                 if (!ctx.level.isEnabled) return null to null
 
                 val enabled = true
-                var budget = when (ctx.level) {
-                    ThinkingLevel.LOW -> 4096
-                    ThinkingLevel.MEDIUM -> 16384
-                    ThinkingLevel.HIGH -> 32768
-                    ThinkingLevel.XHIGH, ThinkingLevel.MAX, ThinkingLevel.ULTRA -> 65536
-                    ThinkingLevel.OFF -> 0
-                }
-                if (budget > 0 && ctx.maxTokens > 0) {
-                    if (ctx.maxTokens < 2) {
-                        budget = 0
+                // [T-thinking-ladder-shared] REPLACES a hardcoded ABSOLUTE ladder
+                // (LOW 4096 / MEDIUM 16384 / HIGH 32768 / XHIGH·MAX·ULTRA 65536) that
+                // collapsed on two independent counts, both reproduced by hand before
+                // this change:
+                //
+                //  (1) XHIGH/MAX/ULTRA were byte-identical constants (65536) on every
+                //      model. At maxTokens 8192 the whole ladder above LOW collapsed.
+                //  (2) The clamp ate the MIDDLE of the ladder too, which is the
+                //      subtler half: `margin = maxOf(2048, maxTokens / 8)` is a FLAT
+                //      2048 for every maxTokens <= 24576, and `if (budget >= ceiling)`
+                //      pins every rung that reaches it to the SAME ceiling. Measured
+                //      (margin, ceiling → LOW/MED/HIGH/XH/MAX/ULTRA):
+                //        maxTokens   8192: 2048,  6144 → 4096/6144/6144/6144/6144/6144
+                //        maxTokens  16384: 2048, 14336 → 4096/14336/14336/14336/14336/14336
+                //        maxTokens  24576: 2048, 21504 → 4096/16384/21504/21504/21504/21504
+                //      i.e. at 8192 five of six levels sent one number.
+                //
+                // WHY THE LADDER IS SCALED AGAINST `ceiling`, NOT `maxTokens`:
+                // ThinkingResolveContext exposes NO model capacity — its complete field
+                // list is modelId, instanceId, supportsReasoning, declaredEffortValues,
+                // declaresNoEffortTiers, level, maxTokens, isOpenRouter,
+                // usesUnifiedReasoningEffort, isMistral, isDashScope, isXAI, offEffort.
+                // `LLMModel.maxOutputTokens` exists but is not threaded through here, and
+                // adding it would mean editing the shared data class plus its OpenAI
+                // construction site. So `maxTokens` is the only capacity in scope here —
+                // and against it, keeping the margin as a SEPARATE post-clamp does NOT
+                // work, because ThinkingLadder's top rung (15/16 of capacity) lands
+                // ABOVE `maxTokens - margin` and the `if (budget >= ceiling)` clip then
+                // re-creates exactly the collapse being fixed (verified: at maxTokens
+                // 8192 ULTRA lands ON 6144; at 4096 MAX and ULTRA both become 2048).
+                //
+                // So the margin is folded INTO the capacity instead of applied after:
+                // the ladder is generated against `ceiling` and there is no subsequent
+                // clip at all. DashScope's "budget < max_completion_tokens" requirement is
+                // then satisfied by construction (every rung is <= ceiling - 1 <
+                // maxTokens), and no second step can re-collapse two rungs. The cost is
+                // that the whole ladder shrinks by the margin (7.8% at maxTokens 32768,
+                // 12.5% at 16384) — paid uniformly, which is the opposite of the old
+                // behaviour where the margin was paid once, by the top five rungs.
+                //
+                // Verified strictly increasing AND strictly below the ceiling for
+                // maxTokens in {8192, 16384, 32768, 65536}; below `2 * floor` the ladder
+                // degrades to honest duplicates rather than a fake gradient (see
+                // ThinkingBudgetWireTest).
+                var budget = 0
+                if (ctx.maxTokens < 2) {
+                    // [T-thinking-ladder-shared] Degenerate guard PRESERVED. With
+                    // maxTokens <= 1 no positive budget can be strictly below it, and
+                    // DashScope 400s on an equal or larger value. Reached for
+                    // maxTokens 1 and, unlike the old `if (budget > 0 && maxTokens > 0)`
+                    // gate, also for 0 / negatives — which previously emitted an UNCLAMPED
+                    // 4096 against a zero budget. Strictly safer, no test pinned it.
+                    budget = 0
+                } else {
+                    val margin = maxOf(2048, ctx.maxTokens / 8)
+                    var ceiling = maxOf(1, minOf(ctx.maxTokens - margin, ctx.maxTokens - 1))
+                    // [T-modelsdev-budget-tokens] The catalog may publish an explicit
+                    // upper bound (`reasoning_options[type=budget_tokens].max`). When
+                    // present it overrides the generic request-level ceiling so that
+                    // e.g. a model whose catalog max is 32k sends a 32k-scaled budget
+                    // even when the user side asks for 128k output tokens.
+                    ctx.budgetTokensMax?.takeIf { it > 0 }?.let { bmax ->
+                        ceiling = minOf(ceiling, bmax)
+                    }
+                    // [T-thinking-ladder-shared] `ThinkingLadder` is only meaningful
+                    // when it can host its floor: `budgetFor` coerces into
+                    // `[FLOOR, capacity - 1]` before it reaches its own degenerate
+                    // branch, so a capacity at or below FLOOR (512) throws rather than
+                    // degrading. The margin is a flat 2048, so `ceiling` collapses to
+                    // 1 for every maxTokens <= 2560 — reached here whenever a caller
+                    // requests a very small completion budget. OMIT the budget instead:
+                    // with `enable_thinking:true` and no `thinking_budget` the vendor
+                    // picks its own default, which is both legal and better than the
+                    // old code's `thinking_budget: 1` (a one-token thinking budget is
+                    // not a weaker thinking mode, it is a broken one).
+                    budget = if (ceiling > ThinkingLadder.FLOOR) {
+                        ThinkingLadder.budgetFor(ctx.level, ceiling)
                     } else {
-                        val margin = maxOf(2048, ctx.maxTokens / 8)
-                        val ceiling = maxOf(1, minOf(ctx.maxTokens - margin, ctx.maxTokens - 1))
-                        if (budget >= ceiling) budget = ceiling
+                        0
+                    }
+                    // [T-modelsdev-budget-tokens] Some models (e.g. qwen3.5-4b)
+                    // declare a minimum budget in the catalog. Floor the ladder
+                    // output to at least that minimum for enabled levels, but never
+                    // exceed the capacity ceiling.
+                    if (budget > 0) {
+                        ctx.budgetTokensMin?.takeIf { it in 1 until ceiling }?.let { bmin ->
+                            budget = maxOf(budget, bmin)
+                        }
                     }
                 }
                 body.put("enable_thinking", enabled)

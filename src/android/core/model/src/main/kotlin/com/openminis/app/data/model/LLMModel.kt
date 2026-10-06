@@ -37,6 +37,14 @@ data class LLMModel(
     // Mirrors iOS ModelModality flags. When null, treat as text-in/text-out only.
     val inputModalities: List<String>? = null,
     val outputModalities: List<String>? = null,
+    // [T-modelsdev-budget-tokens] Numeric thinking-budget range from the
+    // `reasoning_options` entry whose type is `budget_tokens`. Null means the
+    // catalog did not publish that bound; request paths then fall back to the
+    // model's output limit and finally to a conservative generic capacity.
+    // Nullable defaults preserve decoding of provider configs written before
+    // these fields existed.
+    val budgetTokensMin: Int? = null,
+    val budgetTokensMax: Int? = null,
 ) {
     companion object {
         // Anthropic — mirrors iOS LLMTypes.swift allAnthropic.
