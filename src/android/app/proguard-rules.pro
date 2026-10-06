@@ -61,3 +61,14 @@
 # assembleRelease (and that mapping.txt still lists org.mozilla.javascript).
 -keep class org.mozilla.javascript.** { *; }
 -keep class org.mozilla.classfile.** { *; }
+
+# [T-ssh-backend] JSch instantiates kex/cipher/mac/signature/compression
+# implementations from its default config table via Class.forName — R8 sees
+# no call graph edge to com.jcraft.jsch.jce.* / jgss.* and strips them, so
+# every release-build connection dies with ClassNotFoundException while
+# debug (no minify) works. Same failure class as the Rhino VMBridge keep
+# above. Optional integrations (BouncyCastle, jzlib) are absent by design.
+-keep class com.jcraft.jsch.** { *; }
+-dontwarn com.jcraft.jsch.**
+-dontwarn org.bouncycastle.**
+-dontwarn com.jcraft.jzlib.**

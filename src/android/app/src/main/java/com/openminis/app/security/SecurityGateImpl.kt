@@ -82,6 +82,11 @@ class SecurityGateImpl : SecurityGate {
             "file_write", "file_edit", "multi_edit", "su_exec",
         )
         val SHELL_TOOLS = setOf("shell_exec", "shell_execute", "su_exec", "env_exec")
+        // [T-ssh-backend] ssh_exec action split. `get` sits in neither read
+        // set: it writes a LOCAL file, so READ_ONLY/PLAN block it, while its
+        // reversibility stays REVERSIBLE (workspace files are checkpointable).
+        val SSH_MUTATING_ACTIONS = setOf("exec", "put", "add_host", "remove_host", "forget_host_key")
+        val SSH_READ_ACTIONS = setOf("list_hosts", "ls", "test")
         val COORDINATOR_TOOLS = setOf(
             "spawn_agent", "run_subagent", "dispatch_agents", "wolfpack_run",
             "agent_plan", "goal", "update_goal", "cronjob", "ask_user_question", "invoke_skill",
@@ -126,6 +131,13 @@ class SecurityGateImpl : SecurityGate {
             // same approval semantics (ASK → confirm, YOYO → auto). READ_ONLY /
             // PLAN block it below, matching the shell route's behaviour.
             "mcp" -> GateCommand(name, toolArgs, Capability.NET, Reversibility.REVERSIBLE, "MCP 服务器调用")
+            // [T-ssh-backend] Remote SSH. Mutating actions touch a machine we
+            // cannot roll back → IRREVERSIBLE; probes/listings stay
+            // REVERSIBLE. Device risk rules (classifyRisk) deliberately do NOT
+            // apply: they encode Android host/guest paths, and the remote is
+            // the user's own server — ASK-mode confirmation on
+            // IRREVERSIBLE+NET carries the weight here.
+            "ssh_exec" -> classifySshExec(name, toolArgs)
             "browser_use" -> classifyBrowserUse(toolArgs)
             "ocr_image" -> GateCommand(name, toolArgs, Capability.FS, Reversibility.REVERSIBLE, "只读图片文字")
             "get_screen_time" -> GateCommand(name, toolArgs, Capability.SYSTEM, Reversibility.REVERSIBLE, "只读屏幕使用时间")
@@ -280,6 +292,7 @@ class SecurityGateImpl : SecurityGate {
         if (mode == PermissionMode.READ_ONLY || mode == PermissionMode.PLAN) {
             if (cmd.toolName in WRITE_TOOLS || cmd.toolName in SHELL_TOOLS ||
                 cmd.toolName == "mcp" ||
+                (cmd.toolName == "ssh_exec" && !isSshReadOnlyAction(cmd)) ||
                 (cmd.toolName == "browser_use" && !isBrowserReadOnlyAction(cmd))
             ) {
                 return Decision.Denied("只读/计划模式禁止写与执行")
@@ -375,7 +388,7 @@ class SecurityGateImpl : SecurityGate {
                 }
             }
             if (cmd.capability == Capability.NET && authority.net == NetPolicy.RESTRICTED &&
-                cmd.toolName in setOf("web_fetch", "web_search", "download_file")
+                cmd.toolName in setOf("web_fetch", "web_search", "download_file", "ssh_exec")
             ) {
                 return Decision.Denied("权威围栏禁止出网")
             }
@@ -552,6 +565,22 @@ class SecurityGateImpl : SecurityGate {
         "file_read", "file_write", "file_edit", "multi_edit", "list_dir", "glob", "grep", "grep_source" -> {
             try { JSONObject(cmd.toolArgs).optString("path", cmd.toolArgs) } catch (_: Exception) { cmd.toolArgs }
         }
+        "ssh_exec" -> {
+            try {
+                val a = JSONObject(cmd.toolArgs)
+                buildString {
+                    append(a.optString("action", ""))
+                    val h = a.optString("host", "")
+                    if (h.isNotBlank()) append(' ').append(h)
+                    val c = a.optString("command", "")
+                    val rp = a.optString("remote_path", "")
+                    when {
+                        c.isNotBlank() -> append(": ").append(c)
+                        rp.isNotBlank() -> append(": ").append(rp)
+                    }
+                }
+            } catch (_: Exception) { cmd.toolArgs }
+        }
         // args carry a `paths` ARRAY, not `path`. Left on the default branch
         // it would fall through as the raw JSON blob and be read as a command
         // string, so prefix/path rules would match against `{...}` instead of
@@ -591,6 +620,28 @@ class SecurityGateImpl : SecurityGate {
             else -> "致命违规操作"
         }
     }
+
+    private fun classifySshExec(name: String, toolArgs: String): GateCommand {
+        val action = sshAction(toolArgs)
+        return when {
+            action in SSH_MUTATING_ACTIONS ->
+                GateCommand(name, toolArgs, Capability.NET, Reversibility.IRREVERSIBLE, "SSH 远程执行/变更")
+            action == "get" ->
+                GateCommand(name, toolArgs, Capability.NET, Reversibility.REVERSIBLE, "SSH 下载远端文件到工作区")
+            else -> GateCommand(name, toolArgs, Capability.NET, Reversibility.REVERSIBLE, "SSH 远程只读")
+        }
+    }
+
+    /**
+     * list_hosts / ls / test have no local or remote side effects (test
+     * authenticates but changes nothing). Missing/unknown action parses as
+     * "" → NOT read-only: conservative, the tool errors on it anyway.
+     */
+    private fun isSshReadOnlyAction(cmd: GateCommand): Boolean =
+        sshAction(cmd.toolArgs) in SSH_READ_ACTIONS
+
+    private fun sshAction(toolArgs: String): String =
+        try { JSONObject(toolArgs).optString("action", "").lowercase() } catch (_: Exception) { "" }
 
     private fun isBrowserReadOnlyAction(cmd: GateCommand): Boolean {
         val action = try { JSONObject(cmd.toolArgs).optString("action", "").lowercase() } catch (_: Exception) { "" }

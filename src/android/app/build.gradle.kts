@@ -411,6 +411,15 @@ dependencies {
     implementation("org.mozilla:rhino:1.7.14")
     implementation("com.squareup.okhttp3:okhttp-sse:4.12.0")
 
+    // [T-ssh-backend] JSch (mwiede maintained fork) — pure-Java SSH/SFTP
+    // client for the remote execution backend. Chosen over sshj: no
+    // BouncyCastle requirement (sshj drags bcprov, which collides with the
+    // Android platform's stripped BC provider), modern algorithms built in
+    // (rsa-sha2, ssh-ed25519, chacha20-poly1305), and a long Android track
+    // record. Runs in the host app process, so guest paths must be resolved
+    // to host paths before SFTP transfers.
+    implementation("com.github.mwiede:jsch:0.2.26")
+
     // Kotlinx Serialization
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
 

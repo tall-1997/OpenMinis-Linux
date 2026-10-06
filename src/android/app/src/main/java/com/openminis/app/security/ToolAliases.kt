@@ -31,6 +31,12 @@ object ToolAliases {
         "describe_image" to "read_image",
         "code_exec" to "execute_code",
         "AskUserQuestion" to "ask_user_question",
+
+        // [T-ssh-backend] Models habitually reach for the client names.
+        "ssh" to "ssh_exec",
+        "sftp" to "ssh_exec",
+        "scp" to "ssh_exec",
+        "remote_exec" to "ssh_exec",
     )
 
     fun canonical(raw: String): String {

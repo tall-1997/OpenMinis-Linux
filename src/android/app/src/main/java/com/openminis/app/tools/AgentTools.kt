@@ -83,6 +83,11 @@ object AgentTools {
         add(SessionLookupTool.readDefinition())
         add(AskUserQuestion.definition())
         add(CronJobTool.definition())
+        // [T-ssh-backend] Remote SSH exec/SFTP. Unconditional — the backend
+        // needs no repository wiring (hosts live in the encrypted
+        // SshConfigStore; empty state self-documents via list_hosts). Kept
+        // OUT of alwaysOn: long-tail, discovered via find_tools("ssh").
+        add(SshTool.definition())
         if (memoryEnabled) {
             add(memoryWriteDefinition())
             add(memoryGetDefinition())

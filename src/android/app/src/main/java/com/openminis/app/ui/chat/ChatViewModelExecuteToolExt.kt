@@ -141,6 +141,11 @@ internal suspend fun ChatViewModel.executeTool(
                 activeSessionId,
                 mcpRepository,
             )
+
+        // [T-ssh-backend] Remote SSH exec/SFTP. Blocking JSch I/O is confined
+        // to Dispatchers.IO inside the tool.
+        com.openminis.app.tools.SshTool.NAME ->
+            com.openminis.app.tools.SshTool.execute(argsJson, activeSessionId, context)
         com.openminis.app.tools.InvokeSkillTool.NAME ->
             com.openminis.app.tools.InvokeSkillTool.execute(argsJson, skillRepository, activeSessionId)
         com.openminis.app.tools.SkillManageTool.NAME ->
