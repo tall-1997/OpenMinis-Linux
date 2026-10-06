@@ -9,6 +9,7 @@ import okhttp3.mockwebserver.MockWebServer
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -112,18 +113,50 @@ class ZenFreeThinkingBudgetTest {
         assertEquals(false, body.has("reasoning_effort"))
     }
 
+    /**
+     * Capture only the numeric `max_completion_tokens` the free lane puts on
+     * the wire for one (model, level) pair, so the ladder tests read as a
+     * table instead of eight copies of the MockWebServer boilerplate.
+     */
+    private fun budgetFor(
+        id: String = "big-pickle",
+        level: ThinkingLevel,
+        maxOutputTokens: Int? = 131072,
+    ): Int = capture(model(id, maxOutputTokens = maxOutputTokens), level, 4096)
+        .optInt("max_completion_tokens")
+
+    /** Every rung, ascending — the order the picker offers them in. */
+    private val ascendingRungs = listOf(
+        ThinkingLevel.OFF,
+        ThinkingLevel.LOW,
+        ThinkingLevel.MEDIUM,
+        ThinkingLevel.HIGH,
+        ThinkingLevel.XHIGH,
+        ThinkingLevel.MAX,
+        ThinkingLevel.ULTRA,
+    )
+
     // -- reasoning model: budget replaces caller maxTokens
 
     @Test
-    fun `off → 2048`() {
+    fun `off → 1024`() {
+        // REWRITTEN [T-zen-free-thinking-budget-ladder]: the old expectation
+        // of 2048 was wrong because OFF and LOW BOTH emitted 2048 — picking
+        // OFF instead of LOW changed nothing on the wire. OFF now sits one
+        // step BELOW LOW: it exists to leave room for the answer only.
         val body = capture(model("big-pickle"), ThinkingLevel.OFF, 4096)
-        assertEquals(2048, body.optInt("max_completion_tokens"))
+        assertEquals(1024, body.optInt("max_completion_tokens"))
     }
 
     @Test
-    fun `low → 2048`() {
-        val body = capture(model("big-pickle"), ThinkingLevel.LOW, 4096)
-        assertEquals(2048, body.optInt("max_completion_tokens"))
+    fun `low → 2048 and strictly above off`() {
+        // REWRITTEN: the raw 2048 is unchanged, but as a bare number it was
+        // vacuous — it happened to equal OFF's. Pin the RELATIONSHIP that was
+        // actually missing: LOW must buy reasoning room above OFF.
+        val low = budgetFor(level = ThinkingLevel.LOW)
+        val off = budgetFor(level = ThinkingLevel.OFF)
+        assertEquals(2048, low)
+        assertTrue("LOW ($low) must exceed OFF ($off)", low > off)
     }
 
     @Test
@@ -139,45 +172,107 @@ class ZenFreeThinkingBudgetTest {
     }
 
     @Test
-    fun `xhigh → model capacity`() {
-        val body = capture(
-            model("big-pickle", maxOutputTokens = 32768),
-            ThinkingLevel.XHIGH,
-            4096,
-        )
-        assertEquals(32768, body.optInt("max_completion_tokens"))
+    fun `xhigh → 32768 base rung, strictly above high`() {
+        // REWRITTEN [T-zen-free-thinking-budget-ladder]: XHIGH used to fall
+        // through to `null` and emit the model's FULL capacity, identical to
+        // MAX and ULTRA. It is now a 32K rung — exactly one doubling step
+        // above HIGH — so the 65536-capacity model below pays out a real
+        // 32K instead of clipping to the ceiling on the very first jump.
+        val xhigh = budgetFor(level = ThinkingLevel.XHIGH, maxOutputTokens = 65536)
+        val high = budgetFor(level = ThinkingLevel.HIGH, maxOutputTokens = 65536)
+        assertEquals(32768, xhigh)
+        assertTrue("XHIGH ($xhigh) must exceed HIGH ($high)", xhigh > high)
     }
 
     @Test
-    fun `max → model capacity`() {
-        val body = capture(
-            model("big-pickle", maxOutputTokens = 65536),
-            ThinkingLevel.MAX,
-            4096,
-        )
-        assertEquals(65536, body.optInt("max_completion_tokens"))
+    fun `max → 49152, strictly between xhigh and ultra`() {
+        // REWRITTEN: MAX emitted the full 65536 capacity, the same number as
+        // XHIGH and ULTRA — the rung did nothing. It is now a 49152 rung, a
+        // ×1.5 step above XHIGH rather than a second power of two, so the
+        // reasoning ceiling keeps widening but never simply IS the capacity.
+        val max = budgetFor(level = ThinkingLevel.MAX, maxOutputTokens = 65536)
+        val xhigh = budgetFor(level = ThinkingLevel.XHIGH, maxOutputTokens = 65536)
+        val ultra = budgetFor(level = ThinkingLevel.ULTRA, maxOutputTokens = 65536)
+        assertEquals(49152, max)
+        assertTrue("MAX ($max) must exceed XHIGH ($xhigh)", max > xhigh)
+        assertTrue("MAX ($max) must stay below ULTRA ($ultra)", max < ultra)
     }
 
     @Test
-    fun `ultra → model capacity`() {
-        val body = capture(
-            model("big-pickle", maxOutputTokens = 131072),
-            ThinkingLevel.ULTRA,
-            4096,
-        )
-        assertEquals(131072, body.optInt("max_completion_tokens"))
+    fun `ultra → 73728, approaches capacity without reaching it`() {
+        // REWRITTEN: ULTRA used to be the full capacity, identical to MAX —
+        // a rung that cannot be told apart from the one below it. It is now
+        // a 73728 rung on a 131072-capacity model: the widest budget the
+        // ladder offers, deliberately short of the ceiling so the top rung
+        // is a real step rather than a second name for "capacity".
+        val ultra = budgetFor(level = ThinkingLevel.ULTRA, maxOutputTokens = 131072)
+        val max = budgetFor(level = ThinkingLevel.MAX, maxOutputTokens = 131072)
+        assertEquals(73728, ultra)
+        assertTrue("ULTRA ($ultra) must exceed MAX ($max)", ultra > max)
+        assertTrue("ULTRA ($ultra) must stay below capacity (131072)", ultra < 131072)
+    }
+
+    // -- general invariant: the whole ladder is strictly increasing
+
+    @Test
+    fun `ladder is strictly increasing across all seven levels`() {
+        // [T-zen-free-thinking-budget-ladder] The invariant the per-rung
+        // tests above each check one slice of. Capacity 131072 is large
+        // enough that no rung clips, so any collapse anywhere in the table
+        // shows up as a repeated number here.
+        val budgets = ascendingRungs.map { level ->
+            level to budgetFor(level = level, maxOutputTokens = 131072)
+        }
+        val rendered = budgets.joinToString(" < ") { (lvl, v) -> "$lvl=$v" }
+        budgets.zipWithNext().forEach { (lower, higher) ->
+            assertTrue(
+                "ladder must strictly increase: ${lower.first}=${lower.second} " +
+                    "then ${higher.first}=${higher.second} (full: $rendered)",
+                higher.second > lower.second,
+            )
+        }
+        // And nothing may exceed what the model declared it can emit.
+        budgets.forEach { (lvl, v) ->
+            assertTrue("$lvl=$v must not exceed capacity 131072", v <= 131072)
+        }
+    }
+
+    @Test
+    fun `must-think ladder stays strictly increasing after doubling`() {
+        // [T-zen-free-thinking-budget-ladder] The must-think ×2 applies
+        // uniformly to every rung, so it cannot introduce a collapse by
+        // itself — but it is the one transform that can push a rung past
+        // capacity and clip it, so monotonicity is asserted here too rather
+        // than assumed. Capacity is 131072 here, far above every doubled
+        // rung, so nothing clips and all seven must be distinct; the
+        // clip-on-a-small-model case is pinned separately below.
+        val budgets = ascendingRungs.map { level ->
+            level to budgetFor(id = "mimo-v2.6-flash-free", level = level, maxOutputTokens = 131072)
+        }
+        budgets.zipWithNext().forEach { (a, b) ->
+            assertTrue(
+                "must-think ladder must strictly increase: ${a.first}=${a.second} then ${b.first}=${b.second}",
+                b.second > a.second,
+            )
+        }
     }
 
     // -- must-think model (mimo-v2.6): doubled rungs
 
     @Test
-    fun `mimo-v2p6 off → 4096 doubled`() {
+    fun `mimo-v2p6 off → 2048 doubled`() {
+        // REWRITTEN [T-zen-free-thinking-budget-ladder]: the old 4096 came
+        // from OFF's 2048 base ×2, which is exactly the base OFF used to
+        // SHARE with LOW — the rung was not distinguishable from the one
+        // below it. OFF's base is now 1024, so the doubled rung is 2048 and
+        // still strictly under MEDIUM's 16384. The doubling itself (the
+        // measured part) is unchanged.
         val body = capture(
             model("mimo-v2.6-flash-free", maxOutputTokens = 32768),
             ThinkingLevel.OFF,
             4096,
         )
-        assertEquals(4096, body.optInt("max_completion_tokens"))
+        assertEquals(2048, body.optInt("max_completion_tokens"))
     }
 
     @Test
@@ -203,13 +298,16 @@ class ZenFreeThinkingBudgetTest {
     // -- must-think model (mimo-v2.5): doubled rungs
 
     @Test
-    fun `mimo-v2p5 off → 4096 doubled`() {
+    fun `mimo-v2p5 off → 2048 doubled`() {
+        // REWRITTEN: same reason as the mimo-v2.6 OFF test above — the old
+        // 4096 was inherited from OFF's old shared 2048 base. Base is now
+        // 1024, doubled to 2048; the must-think ×2 is preserved.
         val body = capture(
             model("mimo-v2.5-free", maxOutputTokens = 32768),
             ThinkingLevel.OFF,
             4096,
         )
-        assertEquals(4096, body.optInt("max_completion_tokens"))
+        assertEquals(2048, body.optInt("max_completion_tokens"))
     }
 
     @Test

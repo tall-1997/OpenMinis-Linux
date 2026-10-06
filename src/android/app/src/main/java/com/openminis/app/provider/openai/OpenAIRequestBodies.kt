@@ -697,23 +697,52 @@ internal class OpenAIRequestBodies(
      *
      * Returns null when this model exposes no effort menu (supportsReasoning
      * is not true), so the caller's own maxTokens stays on the wire untouched.
+     *
+     * [T-zen-free-thinking-budget-ladder] THE OLD TABLE COLLAPSED. OFF and
+     * LOW both emitted 2048, and XHIGH/MAX/ULTRA all fell through to `null`
+     * and therefore to the model's FULL capacity — so four of the seven rungs
+     * were the same number on the wire, and three of the menu entries a user
+     * can pick did literally nothing. The table below is strictly
+     * increasing; a new rung is one line here.
+     *
+     * OFF is deliberately the smallest rung and not a duplicate of LOW: it
+     * exists to leave room for the ANSWER only (short outputs, no room wasted
+     * on reasoning), while LOW must buy real reasoning room above it.
+     *
+     * NON-REPEATING GEOMETRY. The mid rungs are exact powers of two (8K/
+     * 16K/32K) so each step is exactly ×2 and the reasoning allowance
+     * doubles per level — that doubling is the only knob this lane exposes,
+     * since the gateway drops reasoning_effort. The top rungs then step by
+     * ×1.5 instead of repeating powers of two: the reasoning ceiling should
+     * KEEP widening toward the model's limit, but must not march straight
+     * into it, so ULTRA approaches capacity without ever being pinned to it
+     * (on a 131072 model: 32768 / 49152 / 73728, none of them the ceiling).
+     *
+     * [UNMEASURED] The prior table's reasoning allowance was small and its
+     * top rungs were indistinguishable from each other; both are fixed here.
+     * But the claim that THESE seven specific numbers raise reasoning quality
+     * on this lane is NOT measured — this gateway may just truncate
+     * differently at a bigger ceiling. Monotonic + clipped is the part that
+     * is provably right; the exact steps need an on-device sweep (reasoning
+     * tokens and `length` finish rate per level) before being called tuned.
      */
     private fun zenBudgetTokens(level: ThinkingLevel, maxTokens: Int): Int? {
         if (host.model.supportsReasoning != true) return null
         val capacity = host.model.maxOutputTokens ?: maxTokens
-        val ceiling = when (level) {
-            ThinkingLevel.OFF -> 2048
-            ThinkingLevel.LOW -> 2048
-            ThinkingLevel.MEDIUM -> 8192
-            ThinkingLevel.HIGH -> 16384
-            // Top rungs: the model's full output capacity.
-            ThinkingLevel.XHIGH, ThinkingLevel.MAX, ThinkingLevel.ULTRA -> null
+        // [T-zen-free-thinking-budget-ladder] One line per rung; strictly
+        // increasing base budgets for the non-must-think path.
+        val ceiling: Int = when (level) {
+            ThinkingLevel.OFF -> 1_024
+            ThinkingLevel.LOW -> 2_048
+            ThinkingLevel.MEDIUM -> 8_192
+            ThinkingLevel.HIGH -> 16_384
+            ThinkingLevel.XHIGH -> 32_768
+            ThinkingLevel.MAX -> 49_152
+            ThinkingLevel.ULTRA -> 73_728
         }
         val lid = host.model.id.lowercase()
         val mustThink = lid.startsWith("mimo-v2.6") || lid.startsWith("mimo-v2.5")
-        val widened = if (ceiling == null) capacity else {
-            minOf(ceiling * if (mustThink) 2 else 1, capacity)
-        }
+        val widened = minOf(ceiling * if (mustThink) 2 else 1, capacity)
         return maxOf(512, widened)
     }
 

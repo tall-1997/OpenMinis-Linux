@@ -56,6 +56,150 @@ object ThinkingLevelCatalog {
         val lid = modelId.lowercase()
         return rules.firstOrNull { it.match(lid) }?.max
     }
+
+    // ── [T-thinking-levels-data-driven] how many generic rungs reach the wire ──
+    //
+    // The rules above answer "how high may the ceiling GO?". This table answers
+    // the question the picker actually has to answer: "which of the generic
+    // levels produce a DIFFERENT request for THIS model?". They are separate
+    // questions and they disagree for most families — a ceiling of XHIGH is a
+    // promise about reachability, a ladder is a promise about distinctness, and
+    // offering XHIGH, MAX and ULTRA to a model that maps all three onto one
+    // `thinking_budget` number is a slider that provably changes nothing.
+    //
+    // [T-thinking-levels-data-driven] Written as ONE ordered table rather than
+    // scattered `if (id.contains(...))` branches so a new family is added in a
+    // single obvious place: first match wins, so NoControl families must stay
+    // ABOVE their collapsing siblings (see "2.5-flash-lite" below, which
+    // contains "gemini-2.5-flash").
+    private data class LadderRule(val match: (String) -> Boolean, val ladder: WireLadder)
+
+    /**
+     * How the generic LOW→MAX ladder survives translation to this model's wire.
+     *
+     * Deliberately NOT modelled here: the Anthropic `budget_tokens` collapse
+     * (HIGH/XHIGH/MAX/ULTRA all land on `maxTokens` once `maxTokens <= 65536`).
+     * `maxTokens` is a property of the REQUEST, not of the model, and which
+     * Anthropic shape is used (legacy budget vs 4.6+ adaptive effort, where XHIGH
+     * also folds into "max") depends on which provider path emits it — none of
+     * which is visible from an [LLMModel]. Keying an id rule here would silently
+     * cap the ~2090 relay-hosted Claude entries that declare their own effort
+     * tiers, which are a different wire path entirely. Likewise the Zen FREE
+     * lane, whose only control surface is `zenBudgetTokens` on a provider with
+     * `isZenFree` — a provider property (baseUrl + apiKey), not a model one.
+     */
+    sealed interface WireLadder {
+        /** Every generic rung that the model declares is a distinct wire value. */
+        data object Distinct : WireLadder
+
+
+        /**
+         * Rungs above [lastDistinct] are folded onto [lastDistinct] by the wire
+         * path, so the ladder stops there instead of advertising a no-op.
+         */
+        data class CollapsesAbove(val lastDistinct: ThinkingLevel) : WireLadder
+
+        /**
+         * Nothing is emitted at all — every level produces byte-identical
+         * requests, so the honest answer is "offer no levels" (which leaves the
+         * legacy id-rule ceiling in place, exactly as before).
+         */
+        data object NoControl : WireLadder
+    }
+
+    private val ladderRules: List<LadderRule> = listOf(
+        // [T-thinking-levels-data-driven] Families that reason but expose no
+        // effort tiers at all: a plain boolean switch (models.dev
+        // "reasoning_options: toggle") or nothing whatsoever. Spoken,
+        // transcribable, embedded and image models emit no thinking field in any
+        // branch, so every level collapses into the same request. Gemini
+        // 2.5 Flash-Lite has no `thinkingConfig` support at all. MUST precede
+        // the Gemini 2.5 rule below — these ids contain it.
+        //
+        // Matched as a DELIMITED TOKEN, not as a substring or a suffix.
+        // The suffix form silently missed the real catalog ids, which carry the
+        // marker in the middle and a version after it: "text-embedding-004",
+        // "text-embedding-3-large", "gemini-embedding-001", "qwen3-embedding-8b".
+        // A token test is also immune to a false positive like a hypothetical
+        // "imagery-embed" — only a complete segment counts.
+        LadderRule(
+            { id -> id.hyphenTokens().any { it in NO_CONTROL_TOKENS } },
+            WireLadder.NoControl,
+        ),
+        // MiMo / Agnes: [T-android-xhigh-effort-clamp] demotes "xhigh" → "high"
+        // because the backend 400s on it, and the catalog rule above caps the
+        // family at HIGH. So HIGH/XHIGH/MAX/ULTRA are one wire value. Matches the
+        // FAMILY, not one spelling: docs say "mimo-2.5", the live API serves
+        // "mimo-v2.5" / "mimo-v2.5-pro" (mirrors iOS 72968c4f).
+        LadderRule(
+            { it.contains("mimo") || it.contains("agnes") },
+            WireLadder.CollapsesAbove(ThinkingLevel.HIGH),
+        ),
+        // ByteDance seed (Volcano Ark "seed-1.6…"/"seed-2.0…", OpenRouter
+        // "bytedance-seed/…"): "Invalid reasoning_effort: xhigh" — same shape as
+        // MiMo, one rung lower than the generic default.
+        LadderRule(
+            { it.contains("seed-") || it.contains("bytedance-seed") },
+            WireLadder.CollapsesAbove(ThinkingLevel.HIGH),
+        ),
+        // [T-thinking-levels-data-driven] Gemini 2.5 Pro / Flash drive a NUMERIC
+        // `generationConfig.thinkingConfig.thinkingBudget`, not an effort string:
+        // OFF/LOW/MEDIUM/HIGH land on distinct budgets, but every level at or
+        // above XHIGH saturates the model's top budget (2.5 Pro 16384, Flash
+        // 8192). Three rungs, one number. (Gemini 3.x speaks `thinkingLevel`
+        // strings instead, so it is deliberately absent here.)
+        LadderRule(
+            { it.contains("gemini-2.5-pro") || it.contains("gemini-2.5-flash") },
+            WireLadder.CollapsesAbove(ThinkingLevel.HIGH),
+        ),
+        // Qwen / DashScope `thinking_budget` (sent at the root AND inside
+        // `extra_body`): same shape as Gemini — the budget is clamped against
+        // max_completion_tokens and the top rungs all saturate it, so LOW /
+        // MEDIUM / HIGH are distinct and nothing above HIGH is.
+        LadderRule(
+            { it.contains("qwen") },
+            WireLadder.CollapsesAbove(ThinkingLevel.HIGH),
+        ),
+    )
+
+    /**
+     * Hyphen-delimited segments of a model id, lowercased, with any
+     * `provider/` or `owner/` path prefix kept as its own segment so that a
+     * marker in the routing prefix cannot be mistaken for one in the model
+     * name. Splitting on the delimiter rather than matching a substring is what
+     * lets one rule cover every real spelling of a family marker.
+     */
+    private fun String.hyphenTokens(): Set<String> =
+        lowercase().split('-', '/', '.', '_').filter { it.isNotEmpty() }.toSet()
+
+    /**
+     * Complete segments that mark a model as having NO thinking control on any
+     * wire path. Add a family by adding one entry here — never by writing a
+     * new `endsWith` branch.
+     */
+    private val NO_CONTROL_TOKENS = setOf(
+        "tts",      // spoken output
+        "image",    // image generation
+        "embedding",
+        "embed",
+        "vision",
+        // Gemini 2.5 Flash-Lite ships no `thinkingConfig` support at all. It is
+        // listed here rather than as a `contains("flash-lite")` branch because
+        // the id carries a DOT ("gemini-2.5-flash-lite"), so "flash-lite" is
+        // not even a token — "lite" is the segment that survives splitting.
+        // Every other Gemini tier (pro / flash) DOES take a thinkingBudget, so
+        // "lite" must not be broadened into a `contains` test.
+        "lite",
+    )
+
+    /**
+     * Null means "no family opinion" — the generic declared-tier mapping applies
+     * unchanged, which is what the OpenAI Chat / Anthropic adaptive families
+     * want: their ladder really does top out at whatever the model declares, so
+     * `["high","max"]` correctly yields HIGH + MAX, two distinct wire values.
+     */
+    fun declaredWireLadder(modelId: String): WireLadder? =
+        ladderRules.firstOrNull { it.match(modelId.lowercase()) }?.ladder
 }
 
 /**
@@ -120,6 +264,21 @@ val LLMModel.catalogMaxThinkingLevel: ThinkingLevel
  * OFF wire value is chosen by the resolver's off-effort handling, not here.
  * `none`/`minimal` are likewise OFF-ish tiers owned by that toggle.
  *
+ * [T-thinking-levels-data-driven] ULTRA is likewise never included, and that is
+ * by design rather than an omission: ULTRA is a client-side "MAX +
+ * orchestration" concept, never a wire effort (see
+ * [com.openminis.app.provider.thinking.ThinkingRuleResolver.wireEffort], where
+ * both MAX and ULTRA serialize as `"max"`). A second rung spelling the same wire
+ * value would be precisely the lie this function exists to stop telling.
+ *
+ * The declared tiers say WHICH generic levels are legal; they say nothing about
+ * whether those levels produce different bytes. Families whose wire path folds
+ * its top rungs together — numeric thinking budgets (Gemini 2.5, Qwen), a
+ * per-family tier cap (MiMo/Agnes, ByteDance seed), or no control field at all
+ * (`-tts` / `-image` / `-embedding` / `-vision` / `2.5-flash-lite`) — are
+ * described in [ThinkingLevelCatalog.declaredWireLadder] and truncated here, at
+ * the last rung that is genuinely distinct.
+ *
  * Mirrors iOS `LLMModel.selectableThinkingLevels`; the mapping list is kept in
  * the same weakest→strongest order because callers take [lastOrNull] as the
  * ceiling.
@@ -136,7 +295,18 @@ val LLMModel.selectableThinkingLevels: List<ThinkingLevel>
             "max" to ThinkingLevel.MAX,
         )
         val set = declared.map { it.lowercase() }.toSet()
-        return mapping.filter { set.contains(it.first) }.map { it.second }
+        val tiers = mapping.filter { set.contains(it.first) }.map { it.second }
+        val ladder = ThinkingLevelCatalog.declaredWireLadder(id) ?:
+            ThinkingLevelCatalog.WireLadder.Distinct
+        return when (ladder) {
+            // Nothing is emitted for this family — every level is the same
+            // request, so offering a gradient would be fabricating one. Empty
+            // leaves [catalogMaxThinkingLevel] on its legacy id-rule ceiling.
+            ThinkingLevelCatalog.WireLadder.NoControl -> emptyList()
+            is ThinkingLevelCatalog.WireLadder.CollapsesAbove ->
+                tiers.takeWhile { it.rank <= ladder.lastDistinct.rank }
+            ThinkingLevelCatalog.WireLadder.Distinct -> tiers
+        }
     }
 
 /**
