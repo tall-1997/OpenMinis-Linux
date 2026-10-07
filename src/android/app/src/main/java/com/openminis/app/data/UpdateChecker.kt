@@ -496,22 +496,20 @@ object UpdateChecker {
     fun verifyApkSignature(context: Context, apk: File): Boolean {
         return try {
             val pm = context.packageManager
-            val installedCerts = packageCertificates {
-                if (Build.VERSION.SDK_INT >= 28) {
-                    pm.getPackageInfo(context.packageName, PackageManager.GET_SIGNING_CERTIFICATES)
-                } else {
-                    @Suppress("DEPRECATION")
-                    pm.getPackageInfo(context.packageName, PackageManager.GET_SIGNATURES)
-                }
+            val installedInfo = if (Build.VERSION.SDK_INT >= 28) {
+                pm.getPackageInfo(context.packageName, PackageManager.GET_SIGNING_CERTIFICATES)
+            } else {
+                @Suppress("DEPRECATION")
+                pm.getPackageInfo(context.packageName, PackageManager.GET_SIGNATURES)
             }
+            val installedCerts = packageCertificates(installedInfo)
             val archiveInfo = if (Build.VERSION.SDK_INT >= 28) {
                 pm.getPackageArchiveInfo(apk.path, PackageManager.GET_SIGNING_CERTIFICATES)
             } else {
                 @Suppress("DEPRECATION")
                 pm.getPackageArchiveInfo(apk.path, PackageManager.GET_SIGNATURES)
             }
-            if (archiveInfo == null) return false
-            val archiveCerts = packageCertificates { archiveInfo }
+            val archiveCerts = packageCertificates(archiveInfo)
             if (installedCerts.isEmpty() || archiveCerts.isEmpty()) return false
             val installedDigest = installedCerts.map(::certSha256).toSet()
             val archiveDigest = archiveCerts.map(::certSha256).toSet()
@@ -529,15 +527,11 @@ object UpdateChecker {
         }
     }
 
-    /** Extract signer certificates from a PackageInfo on any API level. */
+    /** Extract signer certificates from a [PackageInfo] on any API level; null/empty on failure. */
     private fun packageCertificates(
-        infoProvider: () -> android.content.pm.PackageInfo,
+        info: android.content.pm.PackageInfo?,
     ): List<android.content.pm.Signature> {
-        val info = try {
-            infoProvider()
-        } catch (_: Exception) {
-            return emptyList()
-        }
+        if (info == null) return emptyList()
         return if (Build.VERSION.SDK_INT >= 28) {
             val si = info.signingInfo ?: return emptyList()
             val certs = si.apkContentsSigners ?: si.signingCertificateHistory
