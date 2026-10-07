@@ -952,6 +952,14 @@ class MinisApp : Application(), ImageLoaderFactory {
             }
         }
 
+        // Built-in MCP server (loopback 127.0.0.1:8765). Boots immediately
+        // when the user enabled it in Settings; the toggle also drives
+        // start/stop at runtime.
+        runCatching {
+            com.openminis.app.mcp.server.McpServerManager.init(this)
+            com.openminis.app.mcp.server.McpServerManager.bootIfEnabled()
+        }.onFailure { Log.w("MinisApp", "MCP server init failed: ${it.message}") }
+
         // T268: one-shot migration of pre-T266 internal alarms into the
         // system Clock app. Pre-T266 builds wrote alarms into Minis's own
         // SharedPreferences + AlarmManager; T266 retired that path but old

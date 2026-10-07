@@ -19,7 +19,10 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import kotlinx.coroutines.launch
+import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Extension
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material3.AlertDialog
@@ -52,6 +55,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.openminis.app.R
 import com.openminis.app.data.repository.MCPRepository
+import com.openminis.app.mcp.server.McpHttpServer
+import com.openminis.app.mcp.server.McpServerConfigStore
+import com.openminis.app.mcp.server.McpServerManager
 import com.openminis.app.ui.components.DialogTextField
 import com.openminis.app.ui.components.MinisTextButton
 
@@ -88,6 +94,20 @@ fun MCPIntegrationsScreen(
     // mode (matches iOS). null = the sheet is for adding a new server.
     var editServer by remember { mutableStateOf<MCPRepository.MCPServerConfig?>(null) }
     var deleteId by remember { mutableStateOf<String?>(null) }
+
+    // ─── 内置 MCP Server（实验）─────────────────────────────────────────────
+    // Manager is a process-wide object; its config store is created in init()
+    // (MinisApp.onCreate), so it is non-null here in practice. Null-safe reads
+    // fall back to defaults when the screen is shown before init.
+    val mcpStore = remember { McpServerManager.configStore() }
+    val mcpConfig = mcpStore?.config?.collectAsState()?.value
+        ?: McpServerConfigStore.Config()
+    val mcpState by McpServerManager.state.collectAsState()
+    var showPortDialog by remember { mutableStateOf(false) }
+    var showTokenDialog by remember { mutableStateOf(false) }
+    var showShellPolicyDialog by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
 
     SettingsScaffold(
         title = stringResource(R.string.mcp_title),
@@ -181,6 +201,69 @@ fun MCPIntegrationsScreen(
                 }
             }
         }
+        // ─── 内置 MCP Server（实验）──────────────────────────────────────────
+        val builtInPort = mcpConfig.port
+        SettingsSection(
+            header = "内置 MCP Server（实验）",
+            footer = null,
+        ) {
+            SettingsSwitchRow(
+                title = "启用内置 MCP Server",
+                subtitle = when (mcpState.status) {
+                    McpServerManager.Status.RUNNING -> "运行中（端口 $builtInPort），已处理 $mcpState.handledRequests 个请求"
+                    McpServerManager.Status.ERROR -> "错误：${mcpState.error ?: "未知原因"}"
+                    McpServerManager.Status.STOPPED -> "已停止 · 监听 127.0.0.1:$builtInPort"
+                },
+                icon = Icons.Outlined.Dns,
+                checked = mcpConfig.enabled,
+                onCheckedChange = { checked ->
+                    if (checked) {
+                        mcpStore?.setEnabled(true)
+                        if (!McpServerManager.start()) {
+                            mcpStore?.setEnabled(false)
+                            android.widget.Toast.makeText(
+                                context,
+                                "启动失败：${McpServerManager.state.value.error ?: "未知原因"}",
+                                android.widget.Toast.LENGTH_SHORT,
+                            ).show()
+                        }
+                    } else {
+                        mcpStore?.setEnabled(false)
+                        McpServerManager.stop()
+                    }
+                },
+            )
+            SettingsRow(
+                title = "端口",
+                subtitle = "当前端口：$builtInPort（1024–65535）",
+                icon = Icons.Outlined.Terminal,
+                onClick = { showPortDialog = true },
+            )
+            SettingsRow(
+                title = "访问令牌（Bearer Token）",
+                subtitle = mcpConfig.token?.let { "已配置 · " + it.take(4) + "****" + it.takeLast(4) }
+                    ?: "未生成（客户端将无法通过鉴权，建议生成）",
+                icon = Icons.Outlined.Key,
+                onClick = { showTokenDialog = true },
+            )
+            SettingsRow(
+                title = "Shell 策略",
+                subtitle = if (mcpConfig.shellPolicy == McpServerConfigStore.SHELL_POLICY_STRICT)
+                    "strict：仅放行只读与安全命令，其余返回需要确认的错误"
+                else
+                    "auto：放行除高危外全部命令",
+                icon = Icons.Outlined.Info,
+                onClick = { showShellPolicyDialog = true },
+            )
+            SettingsRow(
+                title = "PC 端连接",
+                subtitle = "先执行 adb reverse tcp:$builtInPort tcp:$builtInPort，然后在 MCP 客户端添加 " +
+                    "http://127.0.0.1:$builtInPort/mcp（Streamable HTTP，需 Bearer token）",
+                icon = Icons.Outlined.Language,
+                showChevron = false,
+                showDivider = false,
+            )
+        }
         Spacer(Modifier.height(24.dp))
     }
 
@@ -221,6 +304,124 @@ fun MCPIntegrationsScreen(
             },
             dismissButton = {
                 MinisTextButton(onClick = { deleteId = null }) { Text(stringResource(R.string.cancel)) }
+            },
+        )
+    }
+
+    // ─── 内置 Server：端口修改对话框 ─────────────────────────────────────────
+    if (showPortDialog) {
+        var portText by remember(showPortDialog) { mutableStateOf(mcpConfig.port.toString()) }
+        AlertDialog(
+            onDismissRequest = { showPortDialog = false },
+            title = { Text("修改端口") },
+            text = {
+                Column {
+                    Text(
+                        "1024–65535。修改后需重新启动 Server 生效。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    DialogTextField(
+                        value = portText,
+                        onValueChange = { portText = it.filter { c -> c.isDigit() }.take(5) },
+                        singleLine = true,
+                    )
+                }
+            },
+            confirmButton = {
+                MinisTextButton(onClick = {
+                    val p = portText.toIntOrNull()
+                    if (p != null && p in McpHttpServer.MIN_PORT..McpHttpServer.MAX_PORT) {
+                        mcpStore?.setPort(p)
+                        showPortDialog = false
+                        if (mcpState.status == McpServerManager.Status.RUNNING) {
+                            McpServerManager.restart()
+                        }
+                    }
+                }) { Text("保存") }
+            },
+            dismissButton = {
+                MinisTextButton(onClick = { showPortDialog = false }) { Text(stringResource(R.string.cancel)) }
+            },
+        )
+    }
+
+    // ─── 内置 Server：Token 对话框 ──────────────────────────────────────
+    if (showTokenDialog) {
+        val currentToken = mcpConfig.token
+        AlertDialog(
+            onDismissRequest = { showTokenDialog = false },
+            title = { Text("访问令牌") },
+            text = {
+                Column {
+                    Text(
+                        currentToken?.let { it.take(4) + "****" + it.takeLast(4) } ?: "（未生成）",
+                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                    )
+                    Text(
+                        "完整令牌仅显示一次，请复制保存。客户端请求头需携带 Authorization: Bearer <token>。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            },
+            confirmButton = {
+                Row {
+                    MinisTextButton(onClick = {
+                        val newToken = mcpStore?.regenerateToken()
+                        if (newToken != null) {
+                            clipboard.setText(androidx.compose.ui.text.AnnotatedString(newToken))
+                            android.widget.Toast.makeText(context, "已重新生成并复制", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    }) { Text("重新生成") }
+                    currentToken?.let {
+                        MinisTextButton(onClick = {
+                            clipboard.setText(androidx.compose.ui.text.AnnotatedString(it))
+                            android.widget.Toast.makeText(context, context.getString(R.string.mcp_export_copied), android.widget.Toast.LENGTH_SHORT).show()
+                        }) { Text("复制") }
+                    }
+                }
+            },
+            dismissButton = {
+                MinisTextButton(onClick = { showTokenDialog = false }) { Text(stringResource(R.string.cancel)) }
+            },
+        )
+    }
+
+    // ─── 内置 Server：Shell 策略对话框 ────────────────────────────────
+    if (showShellPolicyDialog) {
+        AlertDialog(
+            onDismissRequest = { showShellPolicyDialog = false },
+            title = { Text("Shell 策略") },
+            text = {
+                Column {
+                    Text(
+                        "shell_exec 工具的放行范围，立即生效（无需重启）。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                        SegmentedButton(
+                            selected = mcpConfig.shellPolicy == McpServerConfigStore.SHELL_POLICY_AUTO,
+                            onClick = {
+                                mcpStore?.setShellPolicy(McpServerConfigStore.SHELL_POLICY_AUTO)
+                            },
+                            shape = SegmentedButtonDefaults.itemShape(0, 2),
+                        ) { Text("auto") }
+                        SegmentedButton(
+                            selected = mcpConfig.shellPolicy == McpServerConfigStore.SHELL_POLICY_STRICT,
+                            onClick = {
+                                mcpStore?.setShellPolicy(McpServerConfigStore.SHELL_POLICY_STRICT)
+                            },
+                            shape = SegmentedButtonDefaults.itemShape(1, 2),
+                        ) { Text("strict") }
+                    }
+                }
+            },
+            confirmButton = {
+                MinisTextButton(onClick = { showShellPolicyDialog = false }) { Text("完成") }
             },
         )
     }
