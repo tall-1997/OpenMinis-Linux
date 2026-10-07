@@ -10,7 +10,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Build
@@ -19,6 +21,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -30,6 +33,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
@@ -49,6 +53,9 @@ import com.openminis.app.R
 import com.openminis.app.data.PendingUpdateStore
 import com.openminis.app.data.UpdateChecker
 import com.openminis.app.data.UpdateDownloadManager
+import com.openminis.app.data.UpdateSourceRegistry
+import com.openminis.app.data.UpdateSourceRegistry.ProbeResult
+import com.openminis.app.data.UpdateSourceRegistry.UpdateSource
 import kotlinx.coroutines.launch
 import com.openminis.app.ui.components.MinisButton
 import com.openminis.app.ui.components.MinisTextButton
@@ -78,6 +85,15 @@ fun CheckUpdateSection() {
     // geo-block know what to do without hunting for the URL themselves.
     var showReleasesLink by remember { mutableStateOf(false) }
     var update by remember { mutableStateOf<UpdateChecker.CheckResult.UpdateAvailable?>(null) }
+    // [T-update-source-choice] The user's download source pick for the
+    // currently shown update, plus live probe results. Selection persists
+    // via UpdateSourceRegistry so the next update pre-selects it.
+    var selectedSourceId by remember { mutableStateOf(UpdateSourceRegistry.preferredSourceId(context)) }
+    var probeResults by remember { mutableStateOf<List<ProbeResult>>(emptyList()) }
+    var probingSources by remember { mutableStateOf(false) }
+    // [T-update-rolling-channel] Opt-in toggle for the rolling prerelease
+    // channel; persisted, default off so stable users never see CI builds.
+    var includeRolling by remember { mutableStateOf(UpdateSourceRegistry.includeRolling(context)) }
     // Download progress is mirrored from UpdateDownloadManager's process-wide
     // StateFlow so the download survives leaving this screen (background
     // tolerant). Re-entering simply re-collects the live state.
@@ -162,6 +178,24 @@ fun CheckUpdateSection() {
         }
     }
 
+    // Probe every download source as soon as an update dialog is shown so
+    // the list can annotate reachability + latency while the user reads the
+    // changelog. Re-runs for each new update (asset URL changes per release).
+    LaunchedEffect(update?.apkUrl) {
+        val url = update?.apkUrl ?: return@LaunchedEffect
+        probingSources = true
+        probeResults = UpdateSourceRegistry.probeSources(url)
+        probingSources = false
+        // Default the selection to the user's saved pick, else the fastest
+        // reachable source — a hint, not a decision: the user can override.
+        if (selectedSourceId == null || probeResults.none { it.sourceId == selectedSourceId }) {
+            selectedSourceId = (
+                probeResults.filter { it.reachable }.minByOrNull { it.latencyMs }?.sourceId
+                    ?: UpdateSourceRegistry.SOURCES.firstOrNull()?.id
+                )
+        }
+    }
+
     // Housekeeping on every entry: drop stale/installed APKs from the private
     // updates dir so old installers don't pile up.
     LaunchedEffect(Unit) {
@@ -176,7 +210,7 @@ fun CheckUpdateSection() {
     // the persisted records still drive the install path.
     LaunchedEffect(Unit) {
         if (update == null && PendingUpdateStore.hasPendingWork(context)) {
-            val r = UpdateChecker.check(context)
+            val r = UpdateChecker.check(context, includeRolling)
             if (r is UpdateChecker.CheckResult.UpdateAvailable) update = r
         }
     }
@@ -189,7 +223,14 @@ fun CheckUpdateSection() {
         if (!UpdateChecker.canInstall(context)) return@LaunchedEffect
         PendingUpdateStore.clearPendingIntent(context)
         pendingIntent = null
-        UpdateDownloadManager.start(context, intent.apkUrl, intent.targetVersionName, intent.apkSize)
+        UpdateDownloadManager.start(
+            context,
+            intent.apkUrl,
+            intent.targetVersionName,
+            intent.apkSize,
+            intent.apkSha256,
+            intent.sourceId,
+        )
     }
 
     // Download finished — fire the installer, but only when permission is
@@ -239,7 +280,7 @@ fun CheckUpdateSection() {
                     statusMessage = null
                     showReleasesLink = false
                     scope.launch {
-                        when (val r = UpdateChecker.check(context)) {
+                        when (val r = UpdateChecker.check(context, includeRolling)) {
                             is UpdateChecker.CheckResult.UpdateAvailable -> {
                                 update = r
                                 statusMessage = null
@@ -263,6 +304,49 @@ fun CheckUpdateSection() {
                     }
                 }
             },
+        )
+        // [T-update-rolling-channel] Opt-in for the rolling prerelease
+        // channel (android-latest, CI builds). Off by default.
+        com.openminis.app.ui.settings.SettingsSwitchRow(
+            title = stringResource(R.string.check_update_include_rolling),
+            subtitle = stringResource(R.string.check_update_include_rolling_sub),
+            checked = includeRolling,
+            onCheckedChange = { checked ->
+                includeRolling = checked
+                UpdateSourceRegistry.setIncludeRolling(context, checked)
+                // Re-run the check so the dialog reflects the new channel
+                // immediately instead of on the next manual tap.
+                if (!checking) {
+                    checking = true
+                    statusMessage = null
+                    scope.launch {
+                        when (val r = UpdateChecker.check(context, checked)) {
+                            is UpdateChecker.CheckResult.UpdateAvailable -> {
+                                update = r
+                                statusMessage = null
+                            }
+                            UpdateChecker.CheckResult.UpToDate -> {
+                                update = null
+                                statusMessage = context.getString(R.string.check_update_up_to_date)
+                            }
+                            UpdateChecker.CheckResult.NoReleaseAvailable ->
+                                statusMessage = context.getString(R.string.check_update_no_release)
+                            is UpdateChecker.CheckResult.NoApkAsset ->
+                                statusMessage = context.getString(R.string.check_update_no_apk_asset, r.tagName)
+                            UpdateChecker.CheckResult.Forbidden -> {
+                                statusMessage = context.getString(R.string.update_error_forbidden_with_link)
+                                showReleasesLink = true
+                            }
+                            UpdateChecker.CheckResult.NetworkUnreachable ->
+                                statusMessage = context.getString(R.string.update_error_network_unreachable)
+                            is UpdateChecker.CheckResult.Error ->
+                                statusMessage = context.getString(R.string.check_update_error, r.message)
+                        }
+                        checking = false
+                    }
+                }
+            },
+            showDivider = true,
         )
         SettingsRow(
             icon = Icons.Outlined.Build,
@@ -339,6 +423,14 @@ fun CheckUpdateSection() {
             probing = dlState.probing,
             activeNode = dlState.activeNode,
             downloadActive = dlState.running,
+            sources = UpdateSourceRegistry.SOURCES,
+            probeResults = probeResults,
+            probingSources = probingSources,
+            selectedSourceId = selectedSourceId,
+            onSelectSource = { id ->
+                selectedSourceId = id
+                UpdateSourceRegistry.setPreferredSourceId(context, id)
+            },
             onDownload = {
                 // Ask for install permission BEFORE the download, not after.
                 //
@@ -351,10 +443,20 @@ fun CheckUpdateSection() {
                 // device that can actually install it and the installer fires
                 // straight off `dlState.doneFile` with no round trip.
                 if (UpdateChecker.canInstall(context)) {
-                    // Kick off the mirror-accelerated, resumable, background
+                    // Kick off the source-selected, resumable, background
                     // downloader. It owns a process-wide scope, so leaving the
                     // screen does not cancel it; re-entering re-collects state.
-                    UpdateDownloadManager.start(context, u.apkUrl, u.versionName, u.apkSizeBytes)
+                    // The source choice + asset digest travel with the
+                    // request: the digest gates the finished file, the source
+                    // id orders the fallback chain.
+                    UpdateDownloadManager.start(
+                        context,
+                        u.apkUrl,
+                        u.versionName,
+                        u.apkSizeBytes,
+                        u.apkSha256,
+                        selectedSourceId,
+                    )
                 } else {
                     // Persist the request so the trip to Settings — and a
                     // process kill while there — cannot lose it. The
@@ -366,6 +468,8 @@ fun CheckUpdateSection() {
                             apkUrl = u.apkUrl,
                             apkSize = u.apkSizeBytes,
                             requestedAtMs = System.currentTimeMillis(),
+                            apkSha256 = u.apkSha256,
+                            sourceId = selectedSourceId,
                         ),
                     )
                     pendingIntent = PendingUpdateStore.getPendingIntent(context)
@@ -382,6 +486,27 @@ fun CheckUpdateSection() {
                 if (!dlState.running) {
                     update = null
                     uiError = null
+                }
+            },
+        )
+    }
+
+    // [T-update-metered-guard] The download was parked because the active
+    // network is metered. Ask before burning the user's data plan; confirming
+    // replays the exact request with allowMetered=true.
+    if (dlState.needsMeteredConfirm) {
+        AlertDialog(
+            onDismissRequest = { UpdateDownloadManager.dismissMeteredConfirm() },
+            title = { Text(stringResource(R.string.check_update_metered_title)) },
+            text = { Text(stringResource(R.string.check_update_metered_body)) },
+            confirmButton = {
+                MinisButton(onClick = { UpdateDownloadManager.confirmMetered(context) }) {
+                    Text(stringResource(R.string.check_update_metered_confirm))
+                }
+            },
+            dismissButton = {
+                MinisTextButton(onClick = { UpdateDownloadManager.dismissMeteredConfirm() }) {
+                    Text(stringResource(R.string.check_update_metered_cancel))
                 }
             },
         )
@@ -447,6 +572,11 @@ private fun UpdateDialog(
     probing: Boolean,
     activeNode: String?,
     downloadActive: Boolean,
+    sources: List<UpdateSource>,
+    probeResults: List<ProbeResult>,
+    probingSources: Boolean,
+    selectedSourceId: String?,
+    onSelectSource: (String) -> Unit,
     onDownload: () -> Unit,
     onInstall: () -> Unit,
     onOpenSettings: () -> Unit,
@@ -497,6 +627,59 @@ private fun UpdateDialog(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                // [T-update-source-choice] The user picks the download source;
+                // the app no longer silently races mirrors. Each row carries a
+                // live reachability annotation so the choice is informed.
+                if (!downloadActive && downloadProgress == null) {
+                    Column {
+                        Text(
+                            stringResource(R.string.check_update_source_header).uppercaseForDisplay(),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        sources.forEach { src ->
+                            val probe = probeResults.firstOrNull { it.sourceId == src.id }
+                            val selected = selectedSourceId == src.id
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { onSelectSource(src.id) }
+                                    .padding(vertical = 4.dp),
+                            ) {
+                                RadioButton(
+                                    selected = selected,
+                                    onClick = { onSelectSource(src.id) },
+                                )
+                                Column(modifier = Modifier.padding(start = 4.dp)) {
+                                    Text(
+                                        text = sourceLabel(src),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                    )
+                                    val status = when {
+                                        probingSources || probe == null ->
+                                            stringResource(R.string.check_update_source_probing)
+                                        probe.reachable ->
+                                            stringResource(R.string.check_update_source_latency, probe.latencyMs)
+                                        else ->
+                                            stringResource(R.string.check_update_source_unreachable)
+                                    }
+                                    Text(
+                                        text = status,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = if (probe?.reachable == false) {
+                                            MaterialTheme.colorScheme.error
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
                 if (probing) {
                     Text(
                         stringResource(R.string.check_update_probing),
@@ -578,4 +761,12 @@ private fun UpdateDialog(
             }
         },
     )
+}
+
+/** Display name for a download source id; falls back to the raw id. */
+@Composable
+private fun sourceLabel(source: UpdateSource): String = when (source.id) {
+    "github-direct" -> stringResource(R.string.check_update_source_github)
+    "gh-proxy" -> stringResource(R.string.check_update_source_ghproxy)
+    else -> source.id
 }

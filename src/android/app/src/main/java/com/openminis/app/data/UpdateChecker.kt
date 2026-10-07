@@ -2,6 +2,7 @@ package com.openminis.app.data
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
@@ -61,6 +62,10 @@ object UpdateChecker {
             val changelog: String,
             val apkUrl: String,
             val apkSizeBytes: Long,
+            /** GitHub asset sha256 (hex, no prefix) — null when the API omitted it. */
+            val apkSha256: String? = null,
+            /** True when this candidate is the rolling prerelease channel. */
+            val isRolling: Boolean = false,
         ) : CheckResult()
         data object UpToDate : CheckResult()
         // The repo has zero non-draft releases (or 404'd entirely).
@@ -96,6 +101,12 @@ object UpdateChecker {
      * `/releases/latest`), pick the highest-version non-draft release that
      * carries an APK asset, and decide whether the user should upgrade.
      *
+     * [includeRolling] gates the rolling prerelease channel (`android-latest`):
+     * false (default) considers only tagged releases, true lets the rolling
+     * build compete on versionCode. The toggle lives in the update section
+     * ([UpdateSourceRegistry.includeRolling]) so opting into CI builds is an
+     * explicit user decision, not a default.
+     *
      * T133: switched from `/releases/latest` to `/releases` because
      * `/releases/latest` excludes prereleases by GitHub design — our
      * `0.1 preview` release is flagged as a prerelease, so the old endpoint
@@ -105,7 +116,7 @@ object UpdateChecker {
      * All network work happens on [Dispatchers.IO]; safe to call from any
      * coroutine scope.
      */
-    suspend fun check(context: Context? = null): CheckResult = withContext(Dispatchers.IO) {
+    suspend fun check(context: Context? = null, includeRolling: Boolean = false): CheckResult = withContext(Dispatchers.IO) {
         val url = "https://api.github.com/repos/$OWNER/$REPO/releases?per_page=30"
         AppLogger.info(TAG, "GET $url (local=${BuildConfig.VERSION_NAME})")
         try {
@@ -147,7 +158,7 @@ object UpdateChecker {
                     val tag = r.optString("tag_name")
                     if (tag.isEmpty()) continue
                     val releaseBody = if (r.isNull("body")) "" else r.optString("body", "")
-                    val (apkUrl, apkSize, apkUpdatedAtMs) = findApkAsset(r.optJSONArray("assets"))
+                    val (apkUrl, apkSize, apkUpdatedAtMs, apkSha256) = findApkAsset(r.optJSONArray("assets"))
                     candidates += UpdateVersionLogic.ReleaseCandidate(
                         tagName = tag,
                         versionName = UpdateVersionLogic.normalizeTag(tag),
@@ -158,6 +169,7 @@ object UpdateChecker {
                         apkUpdatedAtMs = apkUpdatedAtMs,
                         bodyVersionCode = UpdateVersionLogic.parseVersionCodeFromBody(releaseBody),
                         bodyVersionName = UpdateVersionLogic.parseVersionNameFromBody(releaseBody),
+                        apkSha256 = apkSha256,
                     )
                 }
                 AppLogger.info(
@@ -166,6 +178,16 @@ object UpdateChecker {
                 )
                 if (candidates.isEmpty()) {
                     return@withContext CheckResult.NoReleaseAvailable
+                }
+
+                // [T-update-source-choice] Rolling prereleases only compete
+                // when the user opted in. Without this filter the rolling
+                // build's versionCode would always beat the newest tagged
+                // release and every stable user would be nudged onto CI builds.
+                val eligible = if (includeRolling) {
+                    candidates
+                } else {
+                    candidates.filterNot { UpdateVersionLogic.isRollingTag(it.tagName) }
                 }
 
                 // [T-android-updatechecker-localver-normalize] Normalize the
@@ -195,7 +217,7 @@ object UpdateChecker {
                 )
 
                 val upgradeCandidate = UpdateVersionLogic.pickUpgrade(
-                    candidates,
+                    eligible,
                     localVer,
                     localCode,
                     localLastUpdateMs,
@@ -214,6 +236,8 @@ object UpdateChecker {
                         changelog = UpdateVersionLogic.resolveChangelog(upgradeCandidate, candidates),
                         apkUrl = upgradeCandidate.apkUrl!!,
                         apkSizeBytes = upgradeCandidate.apkSize,
+                        apkSha256 = upgradeCandidate.apkSha256,
+                        isRolling = UpdateVersionLogic.isRollingTag(upgradeCandidate.tagName),
                     )
                 }
 
@@ -255,9 +279,9 @@ object UpdateChecker {
     /** Public so UI can deep-link users to manual download when GitHub is blocked. */
     const val RELEASES_URL: String = ProjectRepo.RELEASES_URL
 
-    /** Returns (downloadUrl, sizeBytes, updatedAtMs) for the first .apk asset. */
-    private fun findApkAsset(assets: JSONArray?): Triple<String?, Long, Long> {
-        if (assets == null) return Triple(null, 0L, 0L)
+    /** Returns (downloadUrl, sizeBytes, updatedAtMs, sha256Hex) for the first .apk asset. */
+    private fun findApkAsset(assets: JSONArray?): AssetInfo {
+        if (assets == null) return AssetInfo(null, 0L, 0L, null)
         for (i in 0 until assets.length()) {
             val a = assets.optJSONObject(i) ?: continue
             val name = a.optString("name").lowercase()
@@ -265,12 +289,25 @@ object UpdateChecker {
                 val u = a.optString("browser_download_url").ifEmpty { null }
                 if (u != null) {
                     val updated = UpdateVersionLogic.parseGithubTime(a.optString("updated_at", ""))
-                    return Triple(u, a.optLong("size", 0), updated)
+                    // GitHub assets carry `digest: "sha256:<hex>"` since 2024.
+                    // Strip the algorithm prefix — consumers compare bare hex.
+                    val digest = a.optString("digest", "")
+                        .removePrefix("sha256:")
+                        .takeIf { it.length == 64 && it.all { c -> c.isLetterOrDigit() } }
+                    return AssetInfo(u, a.optLong("size", 0), updated, digest)
                 }
             }
         }
-        return Triple(null, 0L, 0L)
+        return AssetInfo(null, 0L, 0L, null)
     }
+
+    /** Parsed .apk asset fields. */
+    private data class AssetInfo(
+        val url: String?,
+        val size: Long,
+        val updatedAtMs: Long,
+        val sha256: String?,
+    )
 
     /**
      * Stream the APK from [url] into `${cacheDir}/shared/minis-update.apk`,
@@ -434,7 +471,86 @@ object UpdateChecker {
             PendingUpdateStore.clearPending(context)
             return null
         }
+        // [T-update-signature-gate] Third gate before the installer intent:
+        // the APK must be signed by the SAME certificate as the running
+        // install. sha256 proves the bytes are intact; only this comparison
+        // proves the package is ours. A differently-signed package would
+        // install fine once and then brick the NEXT update
+        // (INSTALL_FAILED_UPDATE_INCOMPATIBLE) — catching it here keeps the
+        // update channel self-healing.
+        if (!verifyApkSignature(context, file)) {
+            AppLogger.warning(TAG, "pending APK failed signature gate; clearing")
+            PendingUpdateStore.clearPending(context)
+            return null
+        }
         return ResumableInstall(file = file, alreadyLaunched = pending.installLaunchedAtMs > 0L)
+    }
+
+    /**
+     * Compare the staged APK's signing certificate digest against the
+     * running install's. minSdk 26: API 28+ reads SigningInfo via
+     * GET_SIGNING_CERTIFICATES; 26/27 fall back to the deprecated
+     * GET_SIGNATURES path. Both sides use the same extraction, so the
+     * comparison is symmetric on every API level.
+     */
+    fun verifyApkSignature(context: Context, apk: File): Boolean {
+        return try {
+            val pm = context.packageManager
+            val installedCerts = packageCertificates {
+                if (Build.VERSION.SDK_INT >= 28) {
+                    pm.getPackageInfo(context.packageName, PackageManager.GET_SIGNING_CERTIFICATES)
+                } else {
+                    @Suppress("DEPRECATION")
+                    pm.getPackageInfo(context.packageName, PackageManager.GET_SIGNATURES)
+                }
+            }
+            val archiveInfo = if (Build.VERSION.SDK_INT >= 28) {
+                pm.getPackageArchiveInfo(apk.path, PackageManager.GET_SIGNING_CERTIFICATES)
+            } else {
+                @Suppress("DEPRECATION")
+                pm.getPackageArchiveInfo(apk.path, PackageManager.GET_SIGNATURES)
+            }
+            if (archiveInfo == null) return false
+            val archiveCerts = packageCertificates { archiveInfo }
+            if (installedCerts.isEmpty() || archiveCerts.isEmpty()) return false
+            val installedDigest = installedCerts.map(::certSha256).toSet()
+            val archiveDigest = archiveCerts.map(::certSha256).toSet()
+            val match = installedDigest == archiveDigest
+            if (!match) {
+                AppLogger.warning(
+                    TAG,
+                    "signature mismatch: installed=$installedDigest archive=$archiveDigest",
+                )
+            }
+            match
+        } catch (e: Exception) {
+            AppLogger.error(TAG, "verifyApkSignature failed: ${e.javaClass.simpleName}: ${e.message}")
+            false
+        }
+    }
+
+    /** Extract signer certificates from a PackageInfo on any API level. */
+    private fun packageCertificates(
+        infoProvider: () -> android.content.pm.PackageInfo,
+    ): List<android.content.pm.Signature> {
+        val info = try {
+            infoProvider()
+        } catch (_: Exception) {
+            return emptyList()
+        }
+        return if (Build.VERSION.SDK_INT >= 28) {
+            val si = info.signingInfo ?: return emptyList()
+            val certs = si.apkContentsSigners ?: si.signingCertificateHistory
+            certs?.toList().orEmpty()
+        } else {
+            @Suppress("DEPRECATION")
+            info.signatures?.toList().orEmpty()
+        }
+    }
+
+    private fun certSha256(sig: android.content.pm.Signature): String {
+        val md = java.security.MessageDigest.getInstance("SHA-256")
+        return md.digest(sig.toByteArray()).joinToString("") { "%02x".format(it) }
     }
 
     fun installApk(context: Context, apk: File): Boolean {

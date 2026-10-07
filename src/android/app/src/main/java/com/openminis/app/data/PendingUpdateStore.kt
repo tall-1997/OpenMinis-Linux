@@ -70,12 +70,16 @@ object PendingUpdateStore {
     /**
      * A download the user asked for that is waiting on install permission.
      * Written before handing off to system Settings, consumed on return.
+     * [apkSha256]/[sourceId] are persisted so the resumed download keeps the
+     * integrity gate and the user's source choice across the Settings trip.
      */
     data class PendingIntent(
         val targetVersionName: String,
         val apkUrl: String,
         val apkSize: Long,
         val requestedAtMs: Long,
+        val apkSha256: String? = null,
+        val sourceId: String? = null,
     )
 
     private var prefs: SharedPreferences? = null
@@ -135,6 +139,8 @@ object PendingUpdateStore {
             put("apkUrl", intent.apkUrl)
             put("apkSize", intent.apkSize)
             put("requestedAtMs", intent.requestedAtMs)
+            if (intent.apkSha256 != null) put("apkSha256", intent.apkSha256) else put("apkSha256", JSONObject.NULL)
+            if (intent.sourceId != null) put("sourceId", intent.sourceId) else put("sourceId", JSONObject.NULL)
         }
         requirePrefs(context).edit().putString(KEY_INTENT, json.toString()).apply()
         AppLogger.info(TAG, "setPendingIntent version=${intent.targetVersionName} size=${intent.apkSize}")
@@ -154,6 +160,8 @@ object PendingUpdateStore {
             apkUrl = obj.optString("apkUrl"),
             apkSize = obj.optLong("apkSize"),
             requestedAtMs = obj.optLong("requestedAtMs"),
+            apkSha256 = obj.optString("apkSha256", "").takeIf { it.isNotEmpty() && it != "null" },
+            sourceId = obj.optString("sourceId", "").takeIf { it.isNotEmpty() && it != "null" },
         )
         if (intent.apkUrl.isBlank() || System.currentTimeMillis() - intent.requestedAtMs > MAX_AGE_MS) {
             AppLogger.info(TAG, "pending intent expired/blank; clearing")

@@ -25,6 +25,8 @@ object UpdateVersionLogic {
         val apkUpdatedAtMs: Long,
         val bodyVersionCode: Int?,
         val bodyVersionName: String?,
+        /** GitHub asset sha256 (bare hex) — null when the API omitted the digest. */
+        val apkSha256: String? = null,
     )
 
     fun isRollingTag(tag: String): Boolean =
