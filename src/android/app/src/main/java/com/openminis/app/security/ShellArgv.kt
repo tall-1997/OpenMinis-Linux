@@ -239,3 +239,89 @@ private fun collectRiskUnits(segment: String, depth: Int, units: MutableList<Str
     }
     units += segment
 }
+
+/**
+ * Deletion targets that wipe [path] wholesale: the directory itself, or a bare
+ * glob of everything directly inside it. Anything *underneath* it is not a
+ * wholesale target — that is the whole point of the distinction.
+ */
+private fun wholesaleTargets(path: String): Set<String> =
+    if (path == "/") {
+        setOf("/", "//", "/*", "/.", "/..")
+    } else {
+        val p = path.trimEnd('/')
+        setOf(p, "$p/", "$p/*", "$p/.")
+    }
+
+/**
+ * Start of the target arguments when [argv] is an `rm` invocation, or -1 when
+ * it is not one.
+ *
+ * Only argv[0] counts as the program, plus wrapper heads that [riskUnits] may
+ * not have peeled yet. Scanning for "any token equal to rm" instead would make
+ * `echo rm /` look like a root deletion.
+ */
+private fun rmArgStart(argv: List<String>): Int {
+    var offset = 0
+    repeat(MAX_UNWRAP_DEPTH + 1) {
+        val tok = argv.getOrNull(offset)?.substringAfterLast('/') ?: return -1
+        if (tok == "rm") return offset + 1
+        if (tok !in WRAPPER_HEADS) return -1
+        val rel = wrappedProgramIndex(argv.drop(offset))
+        if (rel <= 0) return -1
+        offset += rel
+    }
+    return -1
+}
+
+/**
+ * True when some `rm` in [command] deletes [path] wholesale — the directory
+ * itself, or everything directly inside it — rather than a path underneath it.
+ *
+ * [T-rm-root-false-positive] Substring matching cannot answer this question,
+ * because every absolute path begins with `/`. The old
+ * `contains("rm -rf /")` check therefore also fired on routine cleanups like
+ * `rm -rf /sdcard/Download/tmp`, `rm -rf /tmp/x; echo done` and
+ * `cd /a && rm -rf /a/b`, hard-denying them with exit 126 ("禁止删除根目录")
+ * in EVERY permission mode — YOYO included. Both the user and the agent were
+ * locked out of ordinary workspace cleanup, and the only workaround was to
+ * obscure the command (`cd` into the directory and use relative paths) to slip
+ * past a check that was never about the actual target.
+ *
+ * This walks argv instead. Wrappers (`env`, `sudo`, `busybox`, `timeout`,
+ * `xargs`, `find -exec`) are peeled by [riskUnits] and [rmArgStart] before the
+ * targets are inspected, so tightening the match does not open a bypass:
+ * `busybox rm -rf /` is still caught, `rm -rf /sdcard/x` is not.
+ *
+ * Targets that cannot be resolved statically (`rm -rf "$DIR"`,
+ * `rm -rf $(echo /)`) are deliberately NOT reported. No substring check ever
+ * caught those either, and the permission / confirm layers still see the raw
+ * command, so this is not a regression — it keeps the refusal honest instead of
+ * pretending to cover cases it cannot evaluate.
+ */
+fun rmDeletesPath(command: String, path: String): Boolean {
+    val targets = wholesaleTargets(path)
+    for (unit in riskUnits(command)) {
+        val argv = tokenizeCommand(unit)
+        val start = rmArgStart(argv)
+        if (start < 0) continue
+        var pastSeparator = false
+        for (i in start until argv.size) {
+            val arg = argv[i]
+            when {
+                // After `--` every remaining token is an operand, even one that
+                // looks like a flag.
+                pastSeparator -> if (arg.trim('"', '\'') in targets) return true
+                arg == "--" -> pastSeparator = true
+                // Options never name a target: a path operand cannot start with
+                // '-', so flags (glued or separate) are simply skipped.
+                arg.length > 1 && arg.startsWith("-") -> Unit
+                else -> if (arg.trim('"', '\'') in targets) return true
+            }
+        }
+    }
+    return false
+}
+
+/** `rm` wiping the filesystem root itself (slash, slash-glob, dot, dot-dot). */
+fun rmTargetsRoot(command: String): Boolean = rmDeletesPath(command, "/")

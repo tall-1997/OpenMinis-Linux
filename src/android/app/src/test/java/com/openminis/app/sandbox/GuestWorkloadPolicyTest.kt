@@ -162,6 +162,100 @@ class GuestWorkloadPolicyTest {
         }
     }
 
+    /**
+     * [T-rm-root-false-positive] The regression this whole fix exists for.
+     *
+     * `contains("rm -rf /")` matched every absolute path, so ordinary cleanup
+     * was refused with exit 126 in every mode and the only workaround was to
+     * hide the target (`cd` in, use relative paths). These are the exact shapes
+     * that were denied in the field, including the app's own notification
+     * CLEANUP script and a `grep` whose pattern mentioned the string.
+     */
+    @Test
+    fun legitimateAbsolutePathsAreNotRefusedAsRootDeletion() {
+        for (command in listOf(
+            "rm -rf /sdcard/Download/dbcheck",
+            "rm -rf /tmp/x; echo done",
+            "rm -rf /sdcard/Download/dbcheck && rm -f /sdcard/Download/installed-base.apk",
+            "rm -rf /tmp/* /var/tmp/* 2>/dev/null || true",
+            "rm -rf /var/minis/workspace/build",
+            "rm -rf /data/local/tmp/probe",
+            "grep -rn 'rm -rf /' src/",
+            "echo \"rm -rf /\"",
+        )) {
+            assertNull("must not be refused: $command", GuestWorkloadPolicy.hostRefusal(command))
+        }
+    }
+
+    /**
+     * `mkfs` was matched as a substring, so any command merely containing the
+     * word was refused as a block-device write. It is an argv token now. The
+     * `of=/dev/` and redirect arms stay substring checks — what they match is a
+     * literal device path, not an ordinary word.
+     */
+    @Test
+    fun blockDeviceMatchIsProgramLevelNotSubstring() {
+        assertNull(GuestWorkloadPolicy.blockDeviceRefusal("man mkfs"))
+        assertNull(GuestWorkloadPolicy.blockDeviceRefusal("man mkfs.ext4"))
+        assertNull(GuestWorkloadPolicy.blockDeviceRefusal("echo 'never run mkfs.ext4 here'"))
+        assertNull(GuestWorkloadPolicy.blockDeviceRefusal("cat /var/log/mkfs-history.log"))
+        // Reading a device node into a file is not a block-device write.
+        assertNull(GuestWorkloadPolicy.blockDeviceRefusal("cat /dev/block/mmcblk0 > /tmp/img"))
+        assertNull(GuestWorkloadPolicy.blockDeviceRefusal("ls /dev/block"))
+        for (command in listOf(
+            "mkfs.ext4 /dev/block/sda",
+            "/sbin/mkfs.f2fs /dev/block/mmcblk0",
+            // riskUnits must peel wrappers, or this becomes a trivial bypass.
+            "sudo mkfs.ext4 /dev/block/sda",
+            "busybox mkfs.ext4 /dev/block/sda",
+            "dd if=/dev/zero of=/dev/block/sda",
+            "dd if=/dev/zero of=/dev/mmcblk0",
+            "cat img > /dev/block/mmcblk0",
+            // [T-blockdev-redirect-space] spaced, appending and fd-prefixed forms.
+            "cat img >/dev/block/mmcblk0",
+            "echo x >> /dev/mmcblk0p1",
+            "cat y 2> /dev/block/by-name/boot",
+        )) {
+            assertNotNull("must stay refused: $command", GuestWorkloadPolicy.blockDeviceRefusal(command))
+        }
+    }
+
+    /**
+     * [T-yoyo-root-deletion] YOYO means "full-auto except fatal-confirm", and
+     * the gate turns a root deletion into a mustPrompt confirmation. Refusing it
+     * again in the guest executor made that approval a dead end: the user tapped
+     * through and the command still died with exit 126. The guest rootfs is also
+     * rebuildable, so the relaxation is recoverable.
+     *
+     * Block-device writes are NOT part of the relaxation in any mode — a
+     * rewritten partition table bricks the device with no undo surface.
+     */
+    @Test
+    fun yoyoRelaxesRootDeletionButNeverBlockDevice() {
+        assertNull(
+            "YOYO guest executor must not re-refuse a confirmed root deletion",
+            GuestWorkloadPolicy.hostRefusal("rm -rf /", allowRootDeletion = true),
+        )
+        assertNotNull(
+            "ASK must still hard-refuse a root deletion",
+            GuestWorkloadPolicy.hostRefusal("rm -rf /", allowRootDeletion = false),
+        )
+        assertNotNull(
+            "default must stay strict for callers that do not opt in",
+            GuestWorkloadPolicy.hostRefusal("rm -rf /"),
+        )
+        for (command in listOf("mkfs.ext4 /dev/block/sda", "dd if=/dev/zero of=/dev/block/sda")) {
+            assertNotNull(
+                "block device stays refused even under YOYO: $command",
+                GuestWorkloadPolicy.hostRefusal(command, allowRootDeletion = true),
+            )
+        }
+        // Host `su` runs against the phone, not the sandbox: SuOffloadHandler
+        // must keep the default. This asserts the two arms are separable.
+        assertNotNull(GuestWorkloadPolicy.rootDeletionRefusal("rm -rf /"))
+        assertNull(GuestWorkloadPolicy.rootDeletionRefusal("rm -rf /tmp/x"))
+    }
+
     @Test
     fun boundedBufferSetsTruncatedOnlyAfterACharIsDropped() {
         val buf = BoundedOutputBuffer(headChars = 4, tailChars = 4)

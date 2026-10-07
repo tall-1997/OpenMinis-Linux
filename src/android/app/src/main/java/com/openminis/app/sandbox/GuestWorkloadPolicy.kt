@@ -183,26 +183,91 @@ internal object GuestWorkloadPolicy {
     }
 
     /**
+     * Block-device writes. Refused in EVERY permission mode: a rewritten
+     * partition table or a `dd` onto a `/dev/block` device bricks it, and no
+     * confirmation dialog can undo that.
+     *
+     * [T-rm-root-false-positive] `mkfs` is matched at the PROGRAM position, not
+     * as a substring and not as any token: `contains("mkfs")` fired on commands
+     * that merely mentioned the word, and scanning every argv slot would refuse
+     * `man mkfs` for having it as an argument. [riskUnits] peels wrappers first,
+     * so `sudo mkfs.ext4 …` is still caught.
+     *
+     * [T-blockdev-redirect-space] The redirect arm was `contains(">/dev/block")`
+     * / `contains(">/dev/mmc")`, which only matched a *glued* redirect.
+     * `cat img > /dev/block/mmcblk0` — the same write with the conventional
+     * space — walked straight through. It is a regex now, and also covers `>>`,
+     * an fd prefix (`2>`) and the other device families.
+     *
+     * The `of=` arm stays a substring check: its spelling does not vary, and
+     * what it matches is a literal device path, not an ordinary word.
+     */
+    fun blockDeviceRefusal(command: String): String? {
+        val c = command.lowercase().replace(Regex("\\s+"), " ")
+        val formatsDevice = com.openminis.app.security.riskUnits(command).any { unit ->
+            val head = com.openminis.app.security.tokenizeCommand(unit)
+                .firstOrNull()
+                ?.substringAfterLast('/')
+            head == "mkfs" || (head != null && head.startsWith("mkfs."))
+        }
+        val writesDeviceNode = Regex("""\d?>>?\s*/dev/(?:block|mmc|sd[a-z]|nvme|disk|mapper)""")
+            .containsMatchIn(c)
+        return if (formatsDevice || c.contains("of=/dev/") || writesDeviceNode) {
+            "命令未启动（exit 126）：禁止在宿主上操作块设备。"
+        } else {
+            null
+        }
+    }
+
+    /**
+     * `rm` wiping the filesystem root, judged on argv — see
+     * [com.openminis.app.security.rmTargetsRoot].
+     *
+     * [T-rm-root-false-positive] The old `contains("rm -rf /")` /
+     * `contains("rm -fr /")` pair matched EVERY absolute path, because they all
+     * begin with `/`. Routine cleanups such as `rm -rf /sdcard/Download/tmp`,
+     * `rm -rf /tmp/x; echo done` and `rm -rf /var/log/app && ls` were therefore
+     * hard-denied with exit 126 ("禁止删除根目录") in every mode, YOYO included.
+     * The only workaround was to disguise the command — `cd` into the directory
+     * and use relative paths — which trained both the user and the agent to
+     * route around the gate instead of trusting it. The sibling regex
+     * (`\brm\s+-[a-z]*f[a-z]*\s+/\s*$`) was already correct but required the
+     * target to end the command line, so the substring arm did all the damage.
+     */
+    fun rootDeletionRefusal(command: String): String? =
+        if (com.openminis.app.security.rmTargetsRoot(command)) {
+            "命令未启动（exit 126）：禁止删除根目录。"
+        } else {
+            null
+        }
+
+    /**
      * Irreversible host damage that no confirmation makes acceptable, because
      * the user has no surface to undo it.
      *
      * An unscoped walk is deliberately NOT here: slowness has its own brakes,
      * and refusing it outright made a read-only command unavailable.
+     *
+     * [T-yoyo-root-deletion] [allowRootDeletion] drops ONLY the root-deletion
+     * arm, and only the guest executor passes it, only under YOYO. YOYO's
+     * contract is "full-auto except fatal-confirm", and SecurityGateImpl now
+     * turns this same command into a mustPrompt confirmation — so refusing it
+     * again at the executor made the approval a dead end: the user tapped
+     * through and the command still died with exit 126. Two hard limits keep
+     * this from being a blanket bypass:
+     *
+     *  - block-device writes ([blockDeviceRefusal]) are refused in every mode;
+     *    a brashed device cannot be confirmed back to life.
+     *  - host `su` never passes true. There the root being deleted is the
+     *    phone's, not the sandbox's, and the blast radius is unrecoverable.
+     *
+     * Under YOYO in the guest, `rm -rf /` destroys a rebuildable rootfs; that
+     * is the one case the user has explicitly pre-authorised by picking the
+     * mode and then tapping the confirmation.
      */
-    fun hostRefusal(command: String): String? {
-        val c = command.lowercase().replace(Regex("\\s+"), " ")
-        if (c.contains("mkfs") || c.contains("of=/dev/") || c.contains(">/dev/block") ||
-            c.contains(">/dev/mmc")
-        ) {
-            return "命令未启动（exit 126）：禁止在宿主上操作块设备。"
-        }
-        if (Regex("""\brm\s+-[a-z]*f[a-z]*\s+/\s*$""").containsMatchIn(c) ||
-            c.contains("rm -rf /") || c.contains("rm -fr /")
-        ) {
-            return "命令未启动（exit 126）：禁止删除根目录。"
-        }
-        return null
-    }
+    fun hostRefusal(command: String, allowRootDeletion: Boolean = false): String? =
+        blockDeviceRefusal(command)
+            ?: if (allowRootDeletion) null else rootDeletionRefusal(command)
 
     private val READ_ONLY_TOKENS = setOf(
         "ls", "cat", "head", "tail", "pwd", "echo", "printf", "df", "stat", "file",
