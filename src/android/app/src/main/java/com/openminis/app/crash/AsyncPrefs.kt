@@ -22,6 +22,11 @@ import java.util.concurrent.atomic.AtomicBoolean
  * available and are immediately mirrored into an in-memory override map, so
  * reads-after-writes within the same process always see the written value.
  *
+ * [T-asyncprefs-replay] Writes that land BEFORE the load completes are queued
+ * in the override map and replayed into SharedPreferences once it resolves —
+ * they used to exist only in memory and vanish on process death. If the load
+ * itself failed, the next write schedules one async retry.
+ *
  * Used today by HangDetector.markHealthyTick, which ChatScreen calls on the
  * main thread at a healthy cadence — the one HangDetector prefs touch that
  * cannot tolerate a storage stall.
@@ -36,8 +41,10 @@ class AsyncPrefs private constructor(
     private var prefs: SharedPreferences? = null
     private val loadComplete = java.util.concurrent.CountDownLatch(1)
     // In-memory overrides written before the backing prefs finished loading,
-    // so a read immediately after a write returns the written value.
+    // so a read immediately after a write returns the written value. Replayed
+    // to disk once the load resolves ([T-asyncprefs-replay]).
     private val overrides = java.util.concurrent.ConcurrentHashMap<String, Any>()
+    private val retryInFlight = AtomicBoolean(false)
 
     /** Start the background load. Idempotent. */
     fun warm() {
@@ -46,6 +53,7 @@ class AsyncPrefs private constructor(
             {
                 try {
                     prefs = context.getSharedPreferences(name, Context.MODE_PRIVATE)
+                    prefs?.let { replayOverrides(it) }
                 } catch (t: Throwable) {
                     Log.w(TAG, "prefs load failed for $name: ${t.message}")
                 } finally {
@@ -81,12 +89,54 @@ class AsyncPrefs private constructor(
 
     fun putInt(key: String, value: Int) {
         overrides[key] = value
-        prefs?.edit()?.putInt(key, value)?.apply()
+        val p = prefs
+        if (p != null) p.edit().putInt(key, value).apply() else retryLoad()
     }
 
     fun putLong(key: String, value: Long) {
         overrides[key] = value
-        prefs?.edit()?.putLong(key, value)?.apply()
+        val p = prefs
+        if (p != null) p.edit().putLong(key, value).apply() else retryLoad()
+    }
+
+    /**
+     * [T-asyncprefs-replay] Flush everything queued in [overrides] to disk.
+     * Idempotent; concurrent putX calls write the same values either way.
+     */
+    private fun replayOverrides(p: SharedPreferences) {
+        if (overrides.isEmpty()) return
+        val ed = p.edit()
+        for ((k, v) in overrides) when (v) {
+            is Int -> ed.putInt(k, v)
+            is Long -> ed.putLong(k, v)
+        }
+        ed.apply()
+    }
+
+    /**
+     * [T-asyncprefs-replay] The initial load can fail (storage wedged at
+     * boot). Without a retry, writes would live only in [overrides] forever.
+     * One retry at a time, off the caller's thread; it replays everything
+     * queued so far. Skipped while the initial load is still running — that
+     * path replays on its own.
+     */
+    private fun retryLoad() {
+        if (loadComplete.count > 0) return
+        if (!retryInFlight.compareAndSet(false, true)) return
+        Thread(
+            {
+                try {
+                    val p = context.getSharedPreferences(name, Context.MODE_PRIVATE)
+                    prefs = p
+                    replayOverrides(p)
+                } catch (t: Throwable) {
+                    Log.w(TAG, "prefs load retry failed for $name: ${t.message}")
+                } finally {
+                    retryInFlight.set(false)
+                }
+            },
+            "AsyncPrefs-$name-retry",
+        ).apply { isDaemon = true }.start()
     }
 
     companion object {
