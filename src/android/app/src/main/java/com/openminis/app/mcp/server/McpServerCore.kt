@@ -35,7 +35,7 @@ object McpServerCore {
         val method: String,
         val params: JSONObject?,
         val headers: Map<String, String>,
-        val id: Int?, // null for notifications
+        val id: Any?, // null for notifications; may be Int, String, or null
     )
 
     data class Response(
@@ -75,7 +75,7 @@ object McpServerCore {
         method: String,
         params: JSONObject?,
         headers: Map<String, String>,
-        id: Int?,
+        id: Any?,
         dispatcher: ToolDispatcher,
         authToken: String?,
         serverVersion: String = "0.0.0",
@@ -110,7 +110,7 @@ object McpServerCore {
 
     // ─── Method handlers ───────────────────────────────────────────────────
 
-    private fun handleInitialize(params: JSONObject?, id: Int?, serverVersion: String): Response {
+    private fun handleInitialize(params: JSONObject?, id: Any?, serverVersion: String): Response {
         val result = JSONObject().apply {
             put("protocolVersion", PROTOCOL_VERSION)
             put("capabilities", JSONObject().apply {
@@ -124,11 +124,11 @@ object McpServerCore {
         return jsonRpcResult(id, result)
     }
 
-    private fun handlePing(id: Int?): Response {
+    private fun handlePing(id: Any?): Response {
         return jsonRpcResult(id, JSONObject())
     }
 
-    private fun handleToolsList(dispatcher: ToolDispatcher, id: Int?): Response {
+    private fun handleToolsList(dispatcher: ToolDispatcher, id: Any?): Response {
         val tools = dispatcher.listTools()
         val result = JSONObject().apply {
             put("tools", tools)
@@ -136,7 +136,7 @@ object McpServerCore {
         return jsonRpcResult(id, result)
     }
 
-    private fun handleToolsCall(params: JSONObject?, dispatcher: ToolDispatcher, id: Int?): Response {
+    private fun handleToolsCall(params: JSONObject?, dispatcher: ToolDispatcher, id: Any?): Response {
         if (params == null) {
             return rpcError(id, ErrorCode.INVALID_PARAMS, "Missing params")
         }
@@ -168,7 +168,7 @@ object McpServerCore {
         return null
     }
 
-    fun jsonRpcResult(id: Int?, result: JSONObject): Response {
+    fun jsonRpcResult(id: Any?, result: JSONObject): Response {
         if (id == null) {
             // Notification — no response body per JSON-RPC 2.0
             return Response(202, "", "text/plain")
@@ -198,7 +198,7 @@ object McpServerCore {
         return Response(httpStatus, envelope.toString(), "application/json")
     }
 
-    fun rpcError(id: Int?, code: Int, message: String, httpStatus: Int = 200, data: Any? = null): Response {
+    fun rpcError(id: Any?, code: Int, message: String, httpStatus: Int = 200, data: Any? = null): Response {
         if (id == null) {
             // Notification error — still nothing to return per spec
             return Response(202, "", "text/plain")
@@ -286,7 +286,7 @@ object McpServerCore {
             val method = obj.optString("method", "")
             if (method.isEmpty()) return null
             val params = obj.optJSONObject("params")
-            val id = if (obj.has("id") && !obj.isNull("id")) obj.optInt("id") else null
+            val id: Any? = if (obj.has("id") && !obj.isNull("id")) obj.opt("id") else null
             Request(method, params, emptyMap(), id)
         }.getOrNull()
     }
@@ -302,6 +302,8 @@ object McpServerCore {
             401 -> "Unauthorized"
             404 -> "Not Found"
             405 -> "Method Not Allowed"
+            413 -> "Payload Too Large"
+            431 -> "Request Header Fields Too Large"
             500 -> "Internal Server Error"
             else -> "Unknown"
         })

@@ -55,7 +55,11 @@ class McpServerConfigStore(context: Context) {
 
     fun setEnabled(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_ENABLED, enabled).apply()
-        _config.value = load()
+        if (enabled && secretPrefs.getString(KEY_TOKEN, null).isNullOrBlank()) {
+            regenerateToken()
+        } else {
+            _config.value = load()
+        }
     }
 
     fun setPort(port: Int) {

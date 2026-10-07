@@ -5,8 +5,8 @@ import android.util.Log
 import com.openminis.app.mcp.server.McpServerCore.ErrorCode
 import com.openminis.app.sandbox.SessionWorkspace
 import org.json.JSONObject
-import java.io.BufferedReader
-import java.io.InputStreamReader
+import java.io.BufferedInputStream
+import java.io.ByteArrayOutputStream
 import java.io.PrintWriter
 import java.net.InetAddress
 import java.net.ServerSocket
@@ -43,6 +43,12 @@ class McpHttpServer(
         const val DEFAULT_PORT = 8765
         const val MIN_PORT = 1024
         const val MAX_PORT = 65535
+
+        /** Max JSON-RPC body accepted; a larger Content-Length gets a 413. */
+        const val MAX_BODY_BYTES = 4 * 1024 * 1024
+
+        /** Max header block size before the connection is dropped. */
+        private const val MAX_HEADER_BYTES = 64 * 1024
 
         fun validPort(port: Int): Boolean = port in MIN_PORT..MAX_PORT
     }
@@ -116,11 +122,24 @@ class McpHttpServer(
     private fun handleConnection(socket: Socket) {
         try {
             socket.soTimeout = 30_000
-            val reader = BufferedReader(InputStreamReader(socket.getInputStream(), Charsets.UTF_8))
+            // Single BufferedInputStream for the whole connection: header bytes
+            // and body bytes are read from the same stream, so a byte can never
+            // be swallowed by a char-level decoder buffer (the old
+            // BufferedReader+InputStreamReader read by *chars* while
+            // Content-Length counts *bytes*, which broke multi-byte UTF-8 and
+            // could read past the body into the next pipelined request).
+            val input = BufferedInputStream(socket.getInputStream())
             val writer = PrintWriter(socket.getOutputStream(), false, Charsets.UTF_8)
 
-            // Read the request: request line + headers, then Content-Length body.
-            val requestLine = reader.readLine() ?: run {
+            // ── Read request line + headers as bytes until CRLF CRLF ──
+            val headerBytes = readHeaderBlock(input, writer, socket)
+            if (headerBytes == null) return
+
+            val headerText = String(headerBytes, Charsets.UTF_8)
+            val lines = headerText.split("\r\n")
+            val requestLine = lines.firstOrNull() ?: run {
+                writer.print(McpServerCore.buildHttpResponse(McpServerCore.Response(400, "bad request")))
+                writer.flush()
                 socket.close()
                 return
             }
@@ -135,24 +154,39 @@ class McpHttpServer(
             val path = parts[1]
 
             val headers = mutableMapOf<String, String>()
-            while (true) {
-                val line = reader.readLine() ?: break
-                if (line.isEmpty()) break
+            for (line in lines.drop(1)) {
                 val idx = line.indexOf(':')
                 if (idx > 0) {
                     headers[line.substring(0, idx).trim().lowercase()] = line.substring(idx + 1).trim()
                 }
             }
-            val contentLength = headers["content-length"]?.toIntOrNull() ?: 0
-            val body = if (contentLength > 0) {
-                val buf = CharArray(contentLength)
+
+            // ── Body: Content-Length is a *byte* count; validate then read ──
+            val contentLengthRaw = headers["content-length"]
+            val contentLength = contentLengthRaw?.toLongOrNull()
+            if (contentLength == null && contentLengthRaw != null) {
+                writer.print(McpServerCore.buildHttpResponse(McpServerCore.Response(400, "bad content-length")))
+                writer.flush()
+                socket.close()
+                return
+            }
+            if ((contentLength ?: 0L) > MAX_BODY_BYTES) {
+                // 413 without allocating anything near the declared size.
+                writer.print(McpServerCore.buildHttpResponse(
+                    McpServerCore.Response(413, "body too large", "text/plain")))
+                writer.flush()
+                socket.close()
+                return
+            }
+            val body = if (contentLength != null && contentLength > 0) {
+                val buf = ByteArray(contentLength.toInt())
                 var read = 0
-                while (read < contentLength) {
-                    val n = reader.read(buf, read, contentLength - read)
+                while (read < buf.size) {
+                    val n = input.read(buf, read, buf.size - read)
                     if (n < 0) break
                     read += n
                 }
-                String(buf, 0, read)
+                String(buf, 0, read, Charsets.UTF_8)
             } else {
                 ""
             }
@@ -164,6 +198,52 @@ class McpHttpServer(
             Log.w(TAG, "connection error: ${e.message}")
         } finally {
             runCatching { socket.close() }
+        }
+    }
+
+    /**
+     * Read the request line + headers up to and including the terminating
+     * CRLF CRLF. Returns the header bytes (excluding the final blank line),
+     * or null when the header block is malformed or exceeds [MAX_HEADER_BYTES]
+     * (in which case a 400/431 response has already been written).
+     *
+     * Reads byte-by-byte through the [BufferedInputStream]: cheap because the
+     * stream buffers underneath, and it guarantees no byte beyond the header
+     * terminator is consumed — everything after CRLF CRLF belongs to the body.
+     */
+    private fun readHeaderBlock(
+        input: BufferedInputStream,
+        writer: PrintWriter,
+        socket: Socket,
+    ): ByteArray? {
+        val out = ByteArrayOutputStream()
+        var state = 0 // 0..3: chars of "\r\n\r\n" matched so far
+        while (true) {
+            val b = input.read()
+            if (b < 0) {
+                // EOF before end of headers.
+                runCatching { socket.close() }
+                return null
+            }
+            if (out.size() >= MAX_HEADER_BYTES) {
+                writer.print(McpServerCore.buildHttpResponse(
+                    McpServerCore.Response(431, "header block too large", "text/plain")))
+                writer.flush()
+                runCatching { socket.close() }
+                return null
+            }
+            out.write(b)
+            state = when {
+                state == 0 && b == '\r'.code -> 1
+                state == 1 && b == '\n'.code -> 2
+                state == 2 && b == '\r'.code -> 3
+                state == 3 && b == '\n'.code -> {
+                    val bytes = out.toByteArray()
+                    return bytes.copyOf(bytes.size - 4) // drop trailing CRLFCRLF
+                }
+                b == '\r'.code -> 1
+                else -> 0
+            }
         }
     }
 
@@ -190,7 +270,7 @@ class McpHttpServer(
                     return McpServerCore.rpcErrorNullId(ErrorCode.INVALID_REQUEST, "missing 'method'")
                 }
                 val params = parsed.optJSONObject("params")
-                val id = if (parsed.has("id") && !parsed.isNull("id")) parsed.optInt("id") else null
+                val id: Any? = if (parsed.has("id") && !parsed.isNull("id")) parsed.opt("id") else null
 
                 val response = McpServerCore.handle(
                     method = rpcMethod,
@@ -209,7 +289,7 @@ class McpHttpServer(
         }
     }
 
-    private fun rpcErrorResponse(id: Int?, code: Int, message: String): McpServerCore.Response =
+    private fun rpcErrorResponse(id: Any?, code: Int, message: String): McpServerCore.Response =
         McpServerCore.rpcError(id, code, message)
 }
 

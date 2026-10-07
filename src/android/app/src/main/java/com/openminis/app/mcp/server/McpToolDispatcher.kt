@@ -44,6 +44,44 @@ class McpToolDispatcher(
             "当前 shell 策略为 strict，命令需要用户确认（MCP 通道无法弹确认）。" +
                 "可在 设置 → MCP → 内置 Server 把 shell 策略切到 auto。"
 
+        /** Maximum coordinate value accepted for ui_action tap/long_press/swipe. */
+        const val MAX_COORD = 20_000
+
+        /** Allowed ui_action action names. */
+        val UI_ACTIONS = setOf("tap", "long_press", "type", "swipe", "scroll", "back", "open_app", "open_url")
+
+        /** Allowed scroll directions. */
+        val SCROLL_DIRECTIONS = setOf("up", "down", "left", "right")
+
+        /**
+         * Validate a screen coordinate coming from JSON. Accepts only true
+         * integers (JSON numbers without a fraction, or numeric strings) in
+         * [0, MAX_COORD]; rejects everything else with a reason instead of
+         * silently substituting an empty string.
+         */
+        fun validateCoord(raw: Any?, coordName: String): Pair<Int?, String?> {
+            if (raw == null || raw == JSONObject.NULL) return null to "missing '$coordName' coordinate"
+            val d: Double = when (raw) {
+                is Number -> raw.toDouble()
+                is String -> raw.toDoubleOrNull()
+                    ?: return null to "'$coordName' is not a number: '$raw'"
+                else -> return null to "'$coordName' has unexpected type: ${raw::class.simpleName}"
+            }
+            if (d != d.toLong().toDouble()) return null to "'$coordName' is not an integer: $d"
+            val i = d.toInt()
+            if (i < 0) return null to "'$coordName' is negative: $i"
+            if (i > MAX_COORD) return null to "'$coordName' exceeds maximum $MAX_COORD: $i"
+            return i to null
+        }
+
+        /**
+         * Shell-escape a value into a single-quoted POSIX word:
+         * wrap in single quotes and turn each embedded quote into '\''.
+         * Every string interpolated into a shell command must go through this.
+         */
+        fun shellEscape(value: String): String =
+            "'" + value.replace("'", "'\\''") + "'"
+
         fun text(content: String): JSONObject = JSONObject().apply {
             put("type", "text")
             put("text", content)
@@ -295,14 +333,51 @@ class McpToolDispatcher(
     // ─── ui_read ───────────────────────────────────────────────────────────
 
     private fun uiRead(): McpServerCore.CallResult {
-        val script = """
+        val command = """
             if [ -x /usr/local/bin/android-a11y-cli ]; then
               android-a11y-cli read-screen 2>&1 | head -c 6000 || true
             else
               echo "android-a11y-cli not available in sandbox"
             fi
         """.trimIndent()
-        return runHostShell(script)
+
+        // Gate the assembled command string exactly like shell_exec:
+        // classify → decide → audit; denied / need-confirm map to -32001.
+        val argsJson = JSONObject().put("command", command).toString()
+        val gateCommand = gate.classify("ui_read", argsJson)
+        val mode = shellMode()
+        val decision = gate.decide(gateCommand, mode)
+        gate.audit(gateCommand, decision, null)
+        when (decision) {
+            is Decision.Denied -> {
+                return McpServerCore.CallResult(
+                    JSONArray().put(text("SecurityGate denied: ${decision.reason}")),
+                    isError = true,
+                    errorCode = McpServerCore.ErrorCode.GATE_DENIED,
+                    errorData = decision.reason,
+                )
+            }
+            is Decision.NeedConfirm -> {
+                val preview = decision.preview.take(240).ifBlank { decision.reason }
+                val policyHint = if (mode == PermissionMode.ASK) " $SHELL_STRICT_HINT" else ""
+                return McpServerCore.CallResult(
+                    JSONArray().put(
+                        text(
+                            "This command requires user approval which is not available on the " +
+                                "MCP server channel. Reason: ${decision.reason}. Preview: $preview.$policyHint",
+                        ),
+                    ),
+                    isError = true,
+                    errorCode = McpServerCore.ErrorCode.GATE_DENIED,
+                    errorData = decision.reason,
+                )
+            }
+            is Decision.Allow -> {
+                // proceed
+            }
+        }
+
+        return executeInGuest(command, 30)
     }
 
     // ─── ui_action ─────────────────────────────────────────────────────────
@@ -311,28 +386,73 @@ class McpToolDispatcher(
         val action = arguments.optString("action", "").lowercase()
         if (action.isEmpty()) {
             return McpServerCore.CallResult(
-                JSONArray().put(text("Error: 'action' is required (tap/type/swipe/scroll/back/open_app/open_url/long_press)")),
+                JSONArray().put(text("Error: 'action' is required (${UI_ACTIONS.joinToString("/")})")),
+                isError = true,
+            )
+        }
+        if (action !in UI_ACTIONS) {
+            return McpServerCore.CallResult(
+                JSONArray().put(text("Error: unknown action '$action'. Allowed: ${UI_ACTIONS.joinToString(", ")}")),
                 isError = true,
             )
         }
 
-        fun num(key: String): String = arguments.opt(key).let { v ->
-            if (v == JSONObject.NULL || v == null) "" else v.toString()
-        }
-
+        // Build the command string with validateCoord + shellEscape on every
+        // user-supplied value. Coordinates must be true integers in [0, MAX_COORD];
+        // direction is validated against SCROLL_DIRECTIONS; strings are
+        // single-quote-escaped.
         val cmd: String = when (action) {
-            "tap" -> "android-a11y-cli tap ${num("x")} ${num("y")}"
-            "long_press" -> "android-a11y-cli long-press ${num("x")} ${num("y")}"
-            "type" -> "android-a11y-cli type '" + arguments.optString("text").replace("'", "'\\''") + "'"
-            "swipe" -> "android-a11y-cli swipe ${num("x")} ${num("y")} ${num("x2")} ${num("y2")}"
-            "scroll" -> "android-a11y-cli scroll ${arguments.optString("direction", "down")}"
+            "tap" -> {
+                val (x, xErr) = validateCoord(arguments.opt("x"), "x")
+                val (y, yErr) = validateCoord(arguments.opt("y"), "y")
+                val err = xErr ?: yErr
+                if (err != null) return McpServerCore.CallResult(
+                    JSONArray().put(text("Error: $err")), isError = true)
+                "android-a11y-cli tap ${shellEscape(x!!.toString())} ${shellEscape(y!!.toString())}"
+            }
+            "long_press" -> {
+                val (x, xErr) = validateCoord(arguments.opt("x"), "x")
+                val (y, yErr) = validateCoord(arguments.opt("y"), "y")
+                val err = xErr ?: yErr
+                if (err != null) return McpServerCore.CallResult(
+                    JSONArray().put(text("Error: $err")), isError = true)
+                "android-a11y-cli long-press ${shellEscape(x!!.toString())} ${shellEscape(y!!.toString())}"
+            }
+            "type" -> {
+                val textVal = arguments.optString("text", "")
+                "android-a11y-cli type ${shellEscape(textVal)}"
+            }
+            "swipe" -> {
+                val (x, xErr) = validateCoord(arguments.opt("x"), "x")
+                val (y, yErr) = validateCoord(arguments.opt("y"), "y")
+                val (x2, x2Err) = validateCoord(arguments.opt("x2"), "x2")
+                val (y2, y2Err) = validateCoord(arguments.opt("y2"), "y2")
+                val err = xErr ?: yErr ?: x2Err ?: y2Err
+                if (err != null) return McpServerCore.CallResult(
+                    JSONArray().put(text("Error: $err")), isError = true)
+                "android-a11y-cli swipe ${shellEscape(x!!.toString())} ${shellEscape(y!!.toString())} ${shellEscape(x2!!.toString())} ${shellEscape(y2!!.toString())}"
+            }
+            "scroll" -> {
+                val direction = arguments.optString("direction", "down").lowercase()
+                if (direction !in SCROLL_DIRECTIONS) {
+                    return McpServerCore.CallResult(
+                        JSONArray().put(text(
+                            "Error: invalid direction '$direction'. Allowed: ${SCROLL_DIRECTIONS.joinToString(", ")}")),
+                        isError = true,
+                    )
+                }
+                "android-a11y-cli scroll ${shellEscape(direction)}"
+            }
             "back" -> "android-a11y-cli back"
-            "open_app" -> "android-shizuku-cli launch '" + arguments.optString("package_name").replace("'", "'\\''") + "'"
-            "open_url" -> "android-open '" + arguments.optString("url").replace("'", "'\\''") + "'"
-            else -> return McpServerCore.CallResult(
-                JSONArray().put(text("Error: unknown action '$action'")),
-                isError = true,
-            )
+            "open_app" -> {
+                val pkg = arguments.optString("package_name", "")
+                "android-shizuku-cli launch ${shellEscape(pkg)}"
+            }
+            "open_url" -> {
+                val url = arguments.optString("url", "")
+                "android-open ${shellEscape(url)}"
+            }
+            else -> error("unreachable: action validated above")
         }
 
         val script = """
@@ -342,25 +462,77 @@ class McpToolDispatcher(
               echo "android-a11y-cli not available in sandbox"
             fi
         """.trimIndent()
-        return runHostShell(script)
+
+        // SecurityGate: classify → decide → audit on the assembled command.
+        val argsJson = JSONObject().put("command", script).toString()
+        val gateCommand = gate.classify("ui_action", argsJson)
+        val mode = shellMode()
+        val decision = gate.decide(gateCommand, mode)
+        gate.audit(gateCommand, decision, null)
+        when (decision) {
+            is Decision.Denied -> {
+                return McpServerCore.CallResult(
+                    JSONArray().put(text("SecurityGate denied: ${decision.reason}")),
+                    isError = true,
+                    errorCode = McpServerCore.ErrorCode.GATE_DENIED,
+                    errorData = decision.reason,
+                )
+            }
+            is Decision.NeedConfirm -> {
+                val preview = decision.preview.take(240).ifBlank { decision.reason }
+                val policyHint = if (mode == PermissionMode.ASK) " $SHELL_STRICT_HINT" else ""
+                return McpServerCore.CallResult(
+                    JSONArray().put(
+                        text(
+                            "This command requires user approval which is not available on the " +
+                                "MCP server channel. Reason: ${decision.reason}. Preview: $preview.$policyHint",
+                        ),
+                    ),
+                    isError = true,
+                    errorCode = McpServerCore.ErrorCode.GATE_DENIED,
+                    errorData = decision.reason,
+                )
+            }
+            is Decision.Allow -> {
+                // proceed
+            }
+        }
+
+        return executeInGuest(script, 30)
     }
 
-    private fun runHostShell(script: String): McpServerCore.CallResult {
-        return runCatching {
-            val process = ProcessBuilder("/bin/bash", "-c", script)
-                .redirectErrorStream(true)
-                .start()
-            val out = process.inputStream.bufferedReader().readText()
-            process.waitFor()
-            McpServerCore.CallResult(
-                JSONArray().put(text(out.trim().ifBlank { "(no output)" })),
-            )
+    /**
+     * Execute a shell command inside the PRoot guest via [ExecutionCoordinator],
+     * exactly like [shellExec]. Replaces the old runHostShell, which used a host
+     * ProcessBuilder("/bin/bash") — stock Android has no /bin/bash on the host,
+     * and the android-a11y-cli binary lives inside the guest rootfs, so the host
+     * path could never work on a real device.
+     *
+     * ExecutionCoordinator.execute is a suspend function that needs no coroutine
+     * context from the caller (runBlocking suffices, same as shellExec) and runs
+     * commands for SESSION_ID ("mcp-server") — the workspace dirs for that id
+     * are materialized at server start via ensureMcpServerWorkspace.
+     */
+    private fun executeInGuest(script: String, timeoutSec: Int = 30): McpServerCore.CallResult {
+        val result = runCatching {
+            runBlocking {
+                ExecutionCoordinator.execute(
+                    sessionId = SESSION_ID,
+                    command = script,
+                    timeout = timeoutSec * 1000L,
+                )
+            }
         }.getOrElse {
-            McpServerCore.CallResult(
-                JSONArray().put(text("Error: ${it.message}")),
+            return McpServerCore.CallResult(
+                JSONArray().put(text("Execution failed: ${it.message}")),
                 isError = true,
             )
         }
+        val output = if (result.output.isNotBlank()) result.output.trim() else "(no output)"
+        return McpServerCore.CallResult(
+            JSONArray().put(text(output)),
+            isError = result.exitCode != 0,
+        )
     }
 
     // ─── file_read ────────────────────────────────────────────────────────

@@ -276,6 +276,65 @@ class McpHttpServerTest {
         }
     }
 
+    // ─── Bug C: byte-level body reading ───────────────────────────────────
+
+    @Test
+    fun `post with multibyte utf8 body round trips without timeout`() {
+        val server = newServer()
+        val port = startOnFreePort(server)
+        try {
+            // body has 2 CJK chars (each 3 bytes in UTF-8) — byte count (60)
+            // exceeds char count (58), which the old char-based reader could
+            // not satisfy and stalled until soTimeout.
+            val body = """{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"shell_exec","arguments":{"command":"中文"}}}"""
+            val bytes = body.toByteArray(Charsets.UTF_8)
+            val headers = "POST /mcp HTTP/1.1\r\nHost: 127.0.0.1:$port\r\n" +
+                "Content-Type: application/json\r\nContent-Length: ${bytes.size}\r\n\r\n"
+            val raw = rawRoundTrip(port, headers + body)
+            assertTrue("expected echo with CJK in [$raw]", raw.contains("echo:shell_exec:中文"))
+        } finally {
+            server.stop()
+        }
+    }
+
+    @Test
+    fun `post with oversized content length gets 413 and closes`() {
+        val server = newServer()
+        val port = startOnFreePort(server)
+        try {
+            val header = "POST /mcp HTTP/1.1\r\nHost: 127.0.0.1:$port\r\n" +
+                "Content-Type: application/json\r\nContent-Length: 2000000000\r\n\r\n"
+            val raw = rawRoundTrip(port, header)
+            assertTrue("expected 413 in [$raw]", raw.startsWith("HTTP/1.1 413"))
+        } finally {
+            server.stop()
+        }
+    }
+
+    @Test
+    fun `post with string id round trips the string id`() {
+        val server = newServer()
+        val port = startOnFreePort(server)
+        try {
+            val body = """{"jsonrpc":"2.0","id":"abc-xyz","method":"ping"}"""
+            var raw = ""
+            run {
+                repeat(20) {
+                    raw = post(port, "/mcp", body)
+                    if (raw.contains("\"result\"")) return@run
+                    Thread.sleep(50)
+                }
+            }
+            assertTrue(raw.contains("HTTP/1.1 200 OK"))
+            val jsonStart = raw.indexOf('{')
+            assertTrue("jsonStart=$jsonStart raw=[$raw]", jsonStart > 0)
+            val parsed = JSONObject(raw.substring(jsonStart))
+            assertEquals("abc-xyz", parsed.getString("id"))
+        } finally {
+            server.stop()
+        }
+    }
+
     // ─── CORS / 构造响应（纯函数面） ──────────────────────────────────────
 
     @Test
