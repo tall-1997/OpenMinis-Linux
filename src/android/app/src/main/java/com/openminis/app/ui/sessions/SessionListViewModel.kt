@@ -159,6 +159,20 @@ class SessionListViewModel(
      */
     val searchSnippets = MutableStateFlow<Map<String, String>>(emptyMap())
 
+    /**
+     * [T-android-search-jump] Session id → id of the FIRST message whose
+     * content matched the query (the same row `searchSnippets` quotes).
+     * Populated/cleared together with the snippets; absent entry = title-only
+     * match, so the tap opens the session at the tail with no jump.
+     *
+     * SessionListScreen stashes this into DeepLinkCoordinator right before
+     * opening the session; ChatScreen pages older history until the row is
+     * loaded, scrolls to it and pulses a highlight. The map is the ONLY
+     * bridge — the anchor never rides inside ChatSessionEntity (which the
+     * list also renders for non-search contexts).
+     */
+    val searchAnchors = MutableStateFlow<Map<String, String>>(emptyMap())
+
     // The list to actually show: search results when searching, otherwise all sessions
     val displayedSessions: StateFlow<List<ChatSessionEntity>> = combine(
         _allSessions, searchResults, searchQuery, isSearchActive
@@ -367,12 +381,14 @@ class SessionListViewModel(
                         // need a snippet — we only walk messages when the
                         // title doesn't contain the query.
                         val snips = withContext(Dispatchers.IO) {
-                            buildContentSnippets(results, q)
+                            buildContentHits(results, q)
                         }
-                        searchSnippets.value = snips
+                        searchSnippets.value = snips.snippets
+                        searchAnchors.value = snips.anchors
                     } else {
                         searchResults.value = emptyList()
                         searchSnippets.value = emptyMap()
+                        searchAnchors.value = emptyMap()
                     }
                     isSearching.value = false
                 }
@@ -1142,29 +1158,45 @@ class SessionListViewModel(
     fun hasProviders(): Boolean = providerRepository.instances.isNotEmpty()
 
     /**
-     * For every session whose title does NOT contain [query] (case-insensitive),
-     * scan its messages to find the first hit in extracted text content and
-     * build a ~100-char snippet around it. Sessions with no content hit are
-     * omitted from the result map — the row will fall back to its existing
-     * lastMessage preview without highlighting.
+     * [T-android-search-jump] Snippet + message anchor for every session
+     * whose title does NOT contain [query] (case-insensitive): scan its
+     * messages to find the first hit in extracted text content and build a
+     * ~100-char snippet around it. Sessions with no content hit are omitted
+     * — the row falls back to its existing lastMessage preview.
+     *
+     * The matched row's id rides along as the anchor: `findFirstMessageSnippet`
+     * already selects it, so the anchor costs nothing here and saves ChatScreen
+     * a re-query when the tap lands.
      *
      * Runs on Dispatchers.IO; caller is responsible for thread switching.
      */
-    private suspend fun buildContentSnippets(
+    internal data class ContentHits(
+        val snippets: Map<String, String>,
+        val anchors: Map<String, String>,
+    )
+
+    private suspend fun buildContentHits(
         sessions: List<ChatSessionEntity>,
         query: String,
-    ): Map<String, String> {
-        if (query.isBlank() || sessions.isEmpty()) return emptyMap()
+    ): ContentHits {
+        if (query.isBlank() || sessions.isEmpty()) return ContentHits(emptyMap(), emptyMap())
         val q = query.lowercase()
-        val out = HashMap<String, String>()
+        val snippets = HashMap<String, String>()
+        val anchors = HashMap<String, String>()
         for (session in sessions) {
             val title = session.title.orEmpty()
             if (title.lowercase().contains(q)) continue
             val hit = chatRepository.dao.findFirstMessageSnippet(session.id, query, 50, query.length + 100)
             var foundSnippet: String? = hit?.headText?.replace('\n', ' ')?.replace('\r', ' ')
             if (!foundSnippet.isNullOrBlank()) foundSnippet = "…$foundSnippet…"
-            if (foundSnippet != null) out[session.id] = foundSnippet
+            if (foundSnippet != null) {
+                snippets[session.id] = foundSnippet
+                // headText non-null implies the row exists, but the id is the
+                // anchor's whole value — never publish a blank one.
+                val anchorId = hit?.id
+                if (!anchorId.isNullOrBlank()) anchors[session.id] = anchorId
+            }
         }
-        return out
+        return ContentHits(snippets, anchors)
     }
 }

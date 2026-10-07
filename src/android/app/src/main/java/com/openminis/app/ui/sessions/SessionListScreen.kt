@@ -543,6 +543,10 @@ fun SessionListScreen(
     val searchQuery by viewModel.searchQuery.collectAsState()
     val isSearching by viewModel.isSearching.collectAsState()
     val searchSnippets by viewModel.searchSnippets.collectAsState()
+    // [T-android-search-jump] Session id → matched message id, collected so
+    // the click handler below can read the CURRENT map without a second
+    // subscription (the guarded lambda is rebuilt per recomposition anyway).
+    val searchAnchors by viewModel.searchAnchors.collectAsState()
     val regeneratingIds by viewModel.regeneratingIds.collectAsState()
     val providerConfig by providerRepository.config.collectAsState()
     val hasProviders = providerConfig.instances.isNotEmpty()
@@ -593,8 +597,18 @@ fun SessionListScreen(
     // when the interruption is actually resolved (Resume tapped / new message
     // sent / loop completed), and the ChatViewModel re-asserts it on load if the
     // session is still interrupted. Clearing here just caused a flicker.
+    // [T-android-search-jump] A tap on a CONTENT-matched search result stashes
+    // the matched message id before the pane opens, so ChatScreen can page
+    // older history, jump to the row and pulse a highlight instead of landing
+    // at the tail. Title-only matches (no anchor) and non-search taps pass
+    // through untouched. The stash is consumed by ChatScreen's
+    // (sessionId, revision)-keyed effect — see DeepLinkCoordinator.SearchFocus.
     val onSessionClickGuarded: (String) -> Unit = { id ->
         exitSearchIfQueryBlank()
+        searchAnchors[id]?.let { messageId ->
+            com.openminis.app.deeplink.DeepLinkCoordinator
+                .setPendingSearchFocus(id, messageId)
+        }
         onSessionClick(id)
     }
     val onNewChatGuarded: (String) -> Unit = { id -> exitSearchIfQueryBlank(); onNewChat(id) }

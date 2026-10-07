@@ -84,4 +84,49 @@ object DeepLinkCoordinator {
         _pendingChatAction.value = null
         return current
     }
+
+    /**
+     * [T-android-search-jump] Search-result → matched-message jump.
+     *
+     * SessionListScreen stashes the message id the search actually matched
+     * (from `searchAnchors`) right before it opens the session; ChatScreen
+     * consumes it, pages older history until the row is loaded, scrolls to
+     * it and pulses a highlight. Without the anchor the tap just opens the
+     * session at the tail — the user then re-searches by eye, which is the
+     * exact friction this removes.
+     *
+     * Consume is SESSION-GUARDED, unlike the one-shots above: the pane
+     * navigator can keep the previous chat's composition alive for a frame
+     * while it swaps to the tapped session, and an unguarded consume would
+     * let that stale ChatScreen steal the pending focus (its effect is also
+     * keyed on [searchFocusRevision], so it re-runs on the same tick). A
+     * mismatched session returns null WITHOUT clearing — the real target's
+     * ChatScreen still finds the value waiting.
+     *
+     * The revision counter exists for the same-session case: tapping a
+     * search result for the chat that is ALREADY in the detail pane changes
+     * no contentKey, so no recomposition happens and a plain
+     * LaunchedEffect(sessionId) would never re-run. ChatScreen keys its
+     * effect on (sessionId, revision) so a re-tap still jumps.
+     */
+    data class SearchFocus(val sessionId: String, val messageId: String)
+
+    private val _pendingSearchFocus = MutableStateFlow<SearchFocus?>(null)
+    val pendingSearchFocus: StateFlow<SearchFocus?> = _pendingSearchFocus.asStateFlow()
+
+    private val _searchFocusRevision = MutableStateFlow(0)
+    val searchFocusRevision: StateFlow<Int> = _searchFocusRevision.asStateFlow()
+
+    fun setPendingSearchFocus(sessionId: String, messageId: String) {
+        _pendingSearchFocus.value = SearchFocus(sessionId, messageId)
+        _searchFocusRevision.value += 1
+    }
+
+    /** Only a consumer for the SAME session may take (and clear) the value. */
+    fun consumePendingSearchFocus(forSessionId: String): SearchFocus? {
+        val current = _pendingSearchFocus.value ?: return null
+        if (current.sessionId != forSessionId) return null
+        _pendingSearchFocus.value = null
+        return current
+    }
 }

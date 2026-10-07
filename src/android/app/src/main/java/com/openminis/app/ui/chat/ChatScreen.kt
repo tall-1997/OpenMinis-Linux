@@ -3078,6 +3078,117 @@ fun ChatScreen(
                     mutableStateOf<List<FlatChatItem>>(emptyList())
                 }
 
+                // [T-android-search-jump] Shared row-count prefix: the number
+                // of synthetic LazyColumn items declared BEFORE the message
+                // rows (compact-progress, resume banner). Both the up-button
+                // turn walk and the search-focus jump mirror a flat
+                // oldest-first index into a lazy index through
+                // ChatHistoryWindow.lazyIndexOfOldestFirstKey, which needs
+                // this prefix — it used to live as a private copy inside the
+                // up-button lambda; two hand-maintained copies of the same
+                // banner bookkeeping is exactly how they drift. Declared
+                // before both consumers: local funs are only visible from
+                // their declaration point onward.
+                fun historyItemsBeforeMessages(): Int {
+                    var count = 0
+                    if (compactProgress != null) count++
+                    val lastAssistantHasError = messages
+                        .lastOrNull { it.role == "assistant" }
+                        ?.error
+                        ?.isNotBlank() == true
+                    if (canResume && !isStreaming && error == null && !lastAssistantHasError) count++
+                    return count
+                }
+
+                // [T-android-search-jump] Search-result → matched-message
+                // jump. SessionListScreen stashed the matched message id in
+                // DeepLinkCoordinator before opening this session; consume it,
+                // page older history until the row is loaded, land it at the
+                // visual top and pulse a highlight.
+                //
+                // Keyed on (sessionId, searchFocusRevision), not just
+                // sessionId: tapping a search result for the chat ALREADY in
+                // the detail pane changes no contentKey, so no recomposition
+                // happens — the revision counter is what re-triggers the
+                // effect for a same-session re-tap. The consume itself is
+                // session-guarded (see DeepLinkCoordinator.SearchFocus), so a
+                // stale ChatScreen composition for another session can never
+                // steal this tap's focus.
+                var searchFocusMessageId by remember(sessionId) { mutableStateOf<String?>(null) }
+                var searchFocusActive by remember(sessionId) { mutableStateOf(false) }
+                val searchFocusRevision by com.openminis.app.deeplink.DeepLinkCoordinator
+                    .searchFocusRevision
+                    .collectAsState()
+                LaunchedEffect(sessionId, searchFocusRevision) {
+                    val focus = com.openminis.app.deeplink.DeepLinkCoordinator
+                        .consumePendingSearchFocus(sessionId) ?: return@LaunchedEffect
+                    // Cold open is async — wait for the first message window
+                    // to publish before deciding whether paging is needed.
+                    withTimeoutOrNull(4000) {
+                        snapshotFlow { viewModel.uiMessages.value }.first { it.isNotEmpty() }
+                    } ?: return@LaunchedEffect
+                    // The matched row may sit ABOVE the loaded window (cold
+                    // open is a tail). Page older history until the message is
+                    // present — one page per iteration, bounded, the same
+                    // contract as the up-button's window-edge walk. A live
+                    // stream refuses paging (loadOlderPage checks
+                    // isStreaming); the loop then breaks and the fallback
+                    // below logs instead of scrolling blind.
+                    var pages = 0
+                    while (pages < 60) {
+                        if (viewModel.uiMessages.value.any { it.id == focus.messageId }) break
+                        if (!viewModel.hasOlderMessages.value) break
+                        if (!viewModel.loadOlderPage()) break
+                        pages++
+                    }
+                    // The flatten runs on Dispatchers.Default and publishes
+                    // between frames — wait for a row of the target message
+                    // to exist before resolving its index.
+                    withFrameNanos { }
+                    withTimeoutOrNull(800) {
+                        snapshotFlow { flatItems }.first { list ->
+                            list.any { FlatKeys.parse(it.key)?.messageId == focus.messageId }
+                        }
+                    }
+                    val flatIdx = flatItems.indexOfFirst {
+                        FlatKeys.parse(it.key)?.messageId == focus.messageId
+                    }
+                    if (flatIdx < 0) {
+                        AppLogger.warning(
+                            "ChatSearchFocus",
+                            "no flat row for message ${focus.messageId} — staying put",
+                        )
+                        return@LaunchedEffect
+                    }
+                    val landIndex = ChatHistoryWindow.lazyIndexOfOldestFirstKey(
+                        oldestFirstCount = flatItems.size,
+                        keyIndexInOldestFirst = flatIdx,
+                        itemsBeforeMessages = historyItemsBeforeMessages(),
+                    )
+                    searchFocusMessageId = focus.messageId
+                    searchFocusActive = true
+                    // Two-step calibrated landing, same as the up-button walk:
+                    // position once to materialise the row, read its size, then
+                    // place the matched row's top edge just under the header.
+                    tracedScrollToItem("SEARCH-FOCUS/land", landIndex, 0)
+                    val targetKey = flatItems[flatIdx].key
+                    val rowSize = listState.layoutInfo.visibleItemsInfo
+                        .firstOrNull { it.key == targetKey }?.size ?: 0
+                    val vpH = listState.layoutInfo.viewportSize.height
+                    val topOffset = rowSize - vpH + listState.layoutInfo.beforeContentPadding
+                    tracedScrollToItem("SEARCH-FOCUS/top", landIndex, topOffset)
+                    // The jump landed — the matched row is the reading anchor
+                    // now, so the down-FAB shows and no follower moves the
+                    // viewport out from under the highlight.
+                    scrollPolicy.landReading(targetKey, topOffset)
+                    // Hold the pulse, then fade it out. Clearing `active`
+                    // (rather than the id) keeps the highlight state reusable:
+                    // a same-session re-tap re-enters this effect and
+                    // re-lights it without fighting a stale id.
+                    kotlinx.coroutines.delay(2400)
+                    searchFocusActive = false
+                }
+
     // [T-android-scrollbtn-turn-walk] Up-button action: walk backwards through
     // the conversation one USER turn at a time (iOS `scrollToPreviousUserTurn`).
     //   - First tap: scroll to the user message of the turn the viewport is
@@ -3175,17 +3286,8 @@ fun ChatScreen(
         // Direct index resolution — no scanning. flatItems is oldest-first;
         // the LazyColumn declares compact/resume items BEFORE the message
         // items and the pill after, so a flat index mirrors into a lazy index
-        // via lazyIndexOfOldestFirstKey.
-        fun historyItemsBeforeMessages(): Int {
-            var count = 0
-            if (compactProgress != null) count++
-            val lastAssistantHasError = messages
-                .lastOrNull { it.role == "assistant" }
-                ?.error
-                ?.isNotBlank() == true
-            if (canResume && !isStreaming && error == null && !lastAssistantHasError) count++
-            return count
-        }
+        // via lazyIndexOfOldestFirstKey. The banner prefix comes from the
+        // shared historyItemsBeforeMessages() above the two jump sites.
         val flatIdx = flatItems.indexOfFirst { it.key == targetKey }
         val landIndex = if (flatIdx >= 0) {
             ChatHistoryWindow.lazyIndexOfOldestFirstKey(
@@ -3912,9 +4014,37 @@ fun ChatScreen(
                             }
                         }
                         val isNewestItem = item == flatItems.lastOrNull()
+                        // [T-android-search-jump] Pulse highlight for the
+                        // search-focus row(s). A message flattens into several
+                        // rows (text / mdblock / thinking / tool) — matching on
+                        // the parsed messageId lights the whole message, which
+                        // reads as one highlighted block. animateFloatAsState
+                        // gives a soft 0→0.3→0 fade; the modifier is only
+                        // attached while visible so idle rows pay nothing.
+                        val searchFocusId = searchFocusMessageId
+                        val isSearchFocusRow = searchFocusId != null &&
+                            FlatKeys.parse(item.key)?.messageId == searchFocusId
+                        val searchFocusAlpha by androidx.compose.animation.core.animateFloatAsState(
+                            targetValue = if (isSearchFocusRow && searchFocusActive) 0.30f else 0f,
+                            animationSpec = androidx.compose.animation.core.tween(
+                                durationMillis = 600,
+                            ),
+                            label = "searchFocusHighlight",
+                        )
                         Box(
                             modifier = Modifier
                                 .alpha(rowAlpha)
+                                .then(
+                                    if (searchFocusAlpha > 0.01f) {
+                                        Modifier.background(
+                                            MaterialTheme.colorScheme.primary.copy(
+                                                alpha = searchFocusAlpha,
+                                            ),
+                                        )
+                                    } else {
+                                        Modifier
+                                    },
+                                )
                                 .then(
                                     if (isNewestItem) {
                                         Modifier.onPlaced {
