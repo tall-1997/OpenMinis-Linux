@@ -177,6 +177,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import com.openminis.app.ui.markdown.LocalCodeBlockRunState
+import com.openminis.app.ui.markdown.LocalMarkdownCodeRunner
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -2161,6 +2163,12 @@ fun ChatScreen(
         // minis://attachments/* lookups don't rely on the global bindMounts
         // map (which is last-writer-wins across sessions).
         LocalMarkdownSessionId provides sessionId,
+        // [▶ 运行] 代码块执行链路：动作经 LocalMarkdownCodeRunner 注入
+        // （StreamingMarkdownRenderBlock / MarkdownText 的按钮消费），
+        // 状态（运行中集合）经 LocalCodeBlockRunState 注入。一次 provide
+        // 覆盖聊天流全部渲染路径，免去逐 StreamingMarkdownText 调用点穿参。
+        LocalMarkdownCodeRunner provides viewModel::runCodeBlockInline,
+        LocalCodeBlockRunState provides viewModel.codeBlockRunState.collectAsState().value,
     ) {
     Scaffold(
         containerColor = ChatColors.background,

@@ -30,6 +30,9 @@ import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.CheckBox
 import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.IconButton
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PlayCircleFilled
@@ -89,12 +92,20 @@ fun MarkdownText(
     modifier: Modifier = Modifier,
     color: Color = MaterialTheme.colorScheme.onSurface,
     style: TextStyle = MaterialTheme.typography.bodyMedium,
+    /**
+     * 「▶ 运行」回调：(fence 语言, 代码正文) -> Unit。
+     *
+     * 为 null（默认）时所有代码块都不显示运行按钮，现有调用点无需改动。
+     * 是否显示按钮由 [CodeBlockRunRouter.isSupported] 判定 —— 语言不可识别
+     * 就干脆不渲染，而不是给一个点了必失败的按钮。
+     */
+    onRunCode: ((lang: String, code: String) -> Unit)? = null,
 ) {
     val parsed = remember(markdown) { MarkdownParser.parseWithMath(markdown) }
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         for (block in parsed.blocks) {
-            BlockContent(block, color, style, parsed.mathSpans)
+            BlockContent(block, color, style, parsed.mathSpans, onRunCode)
         }
     }
 }
@@ -105,11 +116,12 @@ private fun BlockContent(
     color: Color,
     baseStyle: TextStyle,
     mathSpans: List<MarkdownParser.MathSpan> = emptyList(),
+    onRunCode: ((lang: String, code: String) -> Unit)? = null,
 ) {
     when (block) {
         is MarkdownParser.Block.Heading -> HeadingBlock(block, color)
         is MarkdownParser.Block.Paragraph -> ParagraphBlock(block.content, color, baseStyle, mathSpans)
-        is MarkdownParser.Block.CodeBlock -> CodeBlockView(block)
+        is MarkdownParser.Block.CodeBlock -> CodeBlockView(block, onRunCode)
         is MarkdownParser.Block.Blockquote -> BlockquoteView(block, color, baseStyle, mathSpans)
         is MarkdownParser.Block.BulletList -> BulletListView(block, color, baseStyle)
         is MarkdownParser.Block.NumberedList -> NumberedListView(block, color, baseStyle)
@@ -198,10 +210,29 @@ private fun ParagraphBlock(
 // -- Code Block --
 
 @Composable
-private fun CodeBlockView(block: MarkdownParser.Block.CodeBlock) {
+private fun CodeBlockView(
+    block: MarkdownParser.Block.CodeBlock,
+    onRunCode: ((lang: String, code: String) -> Unit)? = null,
+) {
     val context = LocalContext.current
     val codeColor = Color(0xFF4EC9B0) // Green code text
     val bgColor = MaterialTheme.colorScheme.surfaceContainerHighest
+    // Button shows only when a handler exists AND the fence language is one
+    // the router can actually execute. Empty / unknown fences (java, rust,
+    // plain ```) render exactly as before — no button, no dead end.
+    // Handler resolves from the explicit parameter first, then the
+    // CompositionLocal (LocalMarkdownCodeRunner) that ChatScreen provides
+    // once for the whole chat surface.
+    val localRunner = LocalMarkdownCodeRunner.current
+    val runnable = isRunnableCodeBlock(block.language, onRunCode != null || localRunner != null)
+    // Running state is keyed by the code text itself: the VM publishes the
+    // set of code blocks currently executing and ChatScreen provides it. A
+    // default empty set keeps MarkdownText usable everywhere else.
+    val running = if (runnable) {
+        LocalCodeBlockRunState.current.contains(block.code)
+    } else {
+        false
+    }
 
     Column(
         modifier = Modifier
@@ -221,7 +252,34 @@ private fun CodeBlockView(block: MarkdownParser.Block.CodeBlock) {
                 text = block.language.ifEmpty { "code" },
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f, fill = false),
             )
+            if (runnable) {
+                if (running) {
+                    Box(
+                        modifier = Modifier.size(28.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                } else {
+                    IconButton(
+                        onClick = { (onRunCode ?: localRunner)?.invoke(block.language, block.code) },
+                        modifier = Modifier.size(28.dp),
+                    ) {
+                        Icon(
+                            Icons.Filled.PlayArrow,
+                            contentDescription = "运行 ${block.language} 代码",
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
+            }
             IconButton(
                 onClick = {
                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager

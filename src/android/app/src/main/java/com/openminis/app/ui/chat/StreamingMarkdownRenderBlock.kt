@@ -16,11 +16,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import com.openminis.app.ui.markdown.LocalCodeBlockRunState
+import com.openminis.app.ui.markdown.LocalMarkdownCodeRunner
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -106,6 +110,21 @@ internal fun RenderBlock(block: MdBlock) {
                     copied = false
                 }
             }
+            // [▶ 运行] 按钮仅在「块已完结 + 语言可跑 + 有回调」时出现：
+            //   - LocalLiveIncremental / LocalAppendOnlyFade 只在流式尾部块上
+            //     为 true（见 StreamingMarkdownBlockBody / StreamingMarkdownTextBody
+            //     的 live 分支）——尾块正是还在增长的未闭合 fence（parse 层
+            //     对未闭合 fence 也产出 CodeBlock），跑半截代码等于执行前缀，
+            //     所以跟复制按钮不同，这里必须等块冻结。
+            //   - 回调经 LocalMarkdownCodeRunner 注入（ChatScreen 全局
+            //     provide viewModel::runCodeBlockInline）；null 时按钮不渲染，
+            //     本渲染器的其它使用方零改动。
+            val codeRunner = LocalMarkdownCodeRunner.current
+            val showRun = codeRunner != null &&
+                CodeBlockRunRouter.isSupported(block.language) &&
+                !LocalLiveIncremental.current &&
+                !LocalAppendOnlyFade.current
+            val running = showRun && LocalCodeBlockRunState.current.contains(block.code)
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -126,6 +145,24 @@ internal fun RenderBlock(block: MdBlock) {
                         color = MdCodeLangColor,
                         modifier = Modifier.weight(1f),
                     )
+                    if (showRun) {
+                        if (running) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = Color(0xFF34C759),
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription = "运行 ${block.language.ifEmpty { "code" }} 代码",
+                                tint = Color(0xFF34C759),
+                                modifier = Modifier
+                                    .size(16.dp)
+                                    .clickable { codeRunner?.invoke(block.language, block.code) },
+                            )
+                        }
+                    }
                     Icon(
                         imageVector = if (copied) Icons.Default.Check else Icons.Default.ContentCopy,
                         contentDescription = if (copied) "已复制" else "复制代码",

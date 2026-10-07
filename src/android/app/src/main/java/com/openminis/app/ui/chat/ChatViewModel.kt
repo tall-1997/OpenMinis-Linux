@@ -1362,6 +1362,15 @@ class ChatViewModel(
     override val isStreaming: StateFlow<Boolean> = _isStreaming.asStateFlow()
 
     /**
+     * 「▶ 运行」进行中的代码块正文集合。key = 代码原文（渲染层经
+     * LocalCodeBlockRunState 消费，见 ui/markdown/CodeBlockRunState.kt；
+     * markdown block id 在重解析时会变，代码正文才是稳定 key）。
+     * 写入方：ChatViewModelCodeRunExt.runCodeBlockInline。
+     */
+    internal val _codeBlockRunState = MutableStateFlow<Set<String>>(emptySet())
+    val codeBlockRunState: StateFlow<Set<String>> = _codeBlockRunState.asStateFlow()
+
+    /**
      * T261: tool detail sheet visibility, persistent across LazyColumn
      * recomposition / item disposal so a streaming tool's sheet doesn't
      * snap shut when its pill scrolls out of viewport. Stable key = tool
