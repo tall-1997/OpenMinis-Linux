@@ -162,5 +162,53 @@ class EventListenerTests(unittest.TestCase):
         t.stop_event_listener()
 
 
+    def test_concurrent_start_spawns_single_listener(self):
+        # [T-mcp-sse-listener-race] start_event_listener is a check-then-start;
+        # without its lock two tool-call threads both see "no live listener" and
+        # spawn duplicate GET SSE streams, the second overwriting the first's
+        # stop event (an orphan that can never be stopped).
+        release = threading.Event()
+        stream_calls = []
+
+        class _BlockingStream:
+            status_code = 200
+
+            def __enter__(self_inner):
+                return self_inner
+
+            def __exit__(self_inner, *exc):
+                return False
+
+            def iter_lines(self_inner):
+                release.wait(5.0)
+                return iter([])
+
+        def fake_stream(method, url, **kwargs):
+            stream_calls.append(url)
+            return _BlockingStream()
+
+        http_mod.httpx.stream = fake_stream
+        t = self._make_transport()
+
+        barrier = threading.Barrier(8, timeout=5)
+
+        def go():
+            barrier.wait()
+            t.start_event_listener()
+
+        threads = [threading.Thread(target=go) for _ in range(8)]
+        for th in threads:
+            th.start()
+        for th in threads:
+            th.join(5)
+        self.assertTrue(t._listener_thread.is_alive())
+        release.set()
+        t.stop_event_listener()
+        t._listener_thread.join(5)
+        self.assertEqual(1, len(stream_calls),
+                         "concurrent start_event_listener spawned %d SSE streams"
+                         % len(stream_calls))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

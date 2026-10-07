@@ -205,6 +205,9 @@ class HTTPTransport:
         # _session_id because a stateless server never sets _session_id yet
         # still must not be re-initialized.
         self._initialized = False
+        # [T-mcp-sse-listener-race] Guards the check-then-start in
+        # start_event_listener and the teardown in stop_event_listener.
+        self._listener_lock = threading.Lock()
 
     def _next_id(self):
         self._id += 1
@@ -403,6 +406,10 @@ class HTTPTransport:
         stale/unknown."""
         self._session_id = None
         self._initialized = False
+        # [T-mcp-sse-listener-race] The GET SSE stream is bound to the dead
+        # session's id; tear it down so the next call re-arms a fresh one
+        # instead of waiting for the server to EOF the orphan.
+        self.stop_event_listener()
 
     @staticmethod
     def _is_session_error(err):
@@ -442,26 +449,32 @@ class HTTPTransport:
     # → JSON-RPC -32601 (this client implements no sampling/roots features).
 
     def start_event_listener(self, on_notification=None, on_server_request=None):
-        if getattr(self, "_listener_thread", None) and self._listener_thread.is_alive():
-            return
-        self._listener_stop = threading.Event()
-        self._listener_thread = threading.Thread(
-            target=self._event_listener,
-            args=(on_notification, on_server_request),
-            daemon=True,
-        )
-        self._listener_thread.start()
+        # [T-mcp-sse-listener-race] Check-then-start must be atomic: the daemon
+        # arms this from tool-call threads, and two concurrent starts used to
+        # spawn duplicate GET SSE streams whose first stop event was then
+        # overwritten — the orphan thread could never be stopped.
+        with self._listener_lock:
+            if getattr(self, "_listener_thread", None) and self._listener_thread.is_alive():
+                return
+            self._listener_stop = threading.Event()
+            self._listener_thread = threading.Thread(
+                target=self._event_listener,
+                args=(on_notification, on_server_request),
+                daemon=True,
+            )
+            self._listener_thread.start()
 
     def stop_event_listener(self):
-        stop = getattr(self, "_listener_stop", None)
-        if stop is not None:
-            stop.set()
-        resp = getattr(self, "_listener_resp", None)
-        if resp is not None:
-            try:
-                resp.close()
-            except Exception:
-                pass
+        with self._listener_lock:
+            stop = getattr(self, "_listener_stop", None)
+            if stop is not None:
+                stop.set()
+            resp = getattr(self, "_listener_resp", None)
+            if resp is not None:
+                try:
+                    resp.close()
+                except Exception:
+                    pass
 
     def _listener_headers(self):
         headers = dict(self.headers)

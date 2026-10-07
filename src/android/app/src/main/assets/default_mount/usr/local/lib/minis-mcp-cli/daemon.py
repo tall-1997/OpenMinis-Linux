@@ -306,14 +306,18 @@ class MCPHTTPSession:
         with self._lock:
             self.last_activity = time.time()
             tools = self._transport.list_tools()
-        self._ensure_event_listener()
+            # [T-mcp-sse-listener-race] Ensure INSIDE the session lock: two
+            # concurrent calls used to race the check-then-start and could
+            # spawn two GET SSE threads, the second overwriting the first's
+            # stop event (an unkillable duplicate stream).
+            self._ensure_event_listener()
         return tools
 
     def call_tool(self, tool, arguments):
         with self._lock:
             self.last_activity = time.time()
             result = self._transport.call_tool(tool, arguments)
-        self._ensure_event_listener()
+            self._ensure_event_listener()  # [T-mcp-sse-listener-race] see list_tools
         return result
 
     def ping(self):
