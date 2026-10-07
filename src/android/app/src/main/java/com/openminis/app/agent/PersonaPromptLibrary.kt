@@ -388,13 +388,20 @@ object PersonaPromptLibrary {
     /**
      * [T-prompt-cache] Cheap dirty-check fingerprint for the persona files
      * that [resolve] can return: the index, every file in the library, and
-     * the per-session override. Sums (mtime XOR size) so callers can skip
-     * re-rendering the identity section without re-reading file contents.
+     * the per-session override.
+     *
+     * [T-prompt-cache-fingerprint] Was `acc = acc xor mtime xor size`. XOR is
+     * commutative and self-cancelling: two files swapping (mtime,size) pairs
+     * — or any even number of identical deltas — hashed to the SAME value and
+     * a stale identity section kept being served. Now an ordered, path-keyed
+     * SHA-256 digest of the stat tuples, plus the in-process revision counter
+     * so library mutations inside the mtime granularity still invalidate.
+     * Still stat-only (no content reads): the library can hold many files.
      */
     fun resolvedFileFingerprint(context: Context, providerInstanceId: String?, sessionId: String?): String {
-        var acc = 0L
+        val lines = mutableListOf<String>()
         fun scan(f: File) {
-            if (f.exists()) acc = acc xor f.lastModified() xor f.length()
+            if (f.exists()) lines += "${f.path}|${f.lastModified()}|${f.length()}"
         }
         scan(indexFile(context))
         filesDir(context).listFiles()?.forEach(::scan)
@@ -406,7 +413,13 @@ object PersonaPromptLibrary {
                 ),
             )
         }
-        return "$acc|$providerInstanceId"
+        lines.sort()
+        val digest = runCatching {
+            val md = java.security.MessageDigest.getInstance("SHA-256")
+            md.update(lines.joinToString("\n").toByteArray())
+            md.digest().joinToString("") { "%02x".format(it) }.take(16)
+        }.getOrDefault(lines.joinToString(","))
+        return "$digest|${_revision.value}|$providerInstanceId"
     }
 
     fun loadIndex(context: Context): PersonaPromptIndex = synchronized(lock) {

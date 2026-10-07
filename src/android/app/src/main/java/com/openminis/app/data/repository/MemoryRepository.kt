@@ -38,13 +38,39 @@ class MemoryRepository(private val memoryDir: File) {
     @Volatile
     private var dailyFragCacheValue: String? = null
 
-    /** Stat-only fingerprint; null when the file is missing. */
-    private fun fileFingerprint(file: File): String? =
-        if (file.exists()) "${file.lastModified()}:${file.length()}" else null
+    /**
+     * Fingerprint = stat + short content digest; null when the file is missing.
+     *
+     * [T-prompt-cache-fingerprint] Stat-only (mtime+length) missed same-length
+     * edits landing inside the mtime granularity, so a rewritten GLOBAL.md
+     * could keep serving a stale prompt fragment. These files are a few KB —
+     * hashing them per turn is noise next to the LLM call the fragment feeds.
+     * Content beyond [HASH_CAP_BYTES] is not hashed; the length term still
+     * catches growth past the cap.
+     */
+    internal fun fileFingerprint(file: File): String? {
+        if (!file.exists()) return null
+        val digest = runCatching {
+            val md = java.security.MessageDigest.getInstance("SHA-256")
+            file.inputStream().use { ins ->
+                val buf = ByteArray(8192)
+                var total = 0
+                while (total < HASH_CAP_BYTES) {
+                    val n = ins.read(buf, 0, minOf(buf.size, HASH_CAP_BYTES - total))
+                    if (n <= 0) break
+                    md.update(buf, 0, n)
+                    total += n
+                }
+            }
+            md.digest().joinToString("") { "%02x".format(it) }.take(16)
+        }.getOrDefault("")
+        return "${file.lastModified()}:${file.length()}:$digest"
+    }
 
     companion object {
         private const val TAG = "MemoryRepository"
         private const val GLOBAL_FILE = "GLOBAL.md"
+        private const val HASH_CAP_BYTES = 256 * 1024
 
         /**
          * [T-global-md-seed] Default GLOBAL.md content for first-run seeding.
