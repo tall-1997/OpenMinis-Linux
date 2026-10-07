@@ -3,9 +3,11 @@ package com.openminis.app.tools
 import android.content.Context
 import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.model.AgentToolParam
+import com.openminis.app.logging.AppLogger
 import com.openminis.app.sandbox.ExecutionCoordinator
 import com.openminis.app.sandbox.SessionWorkspace
 import java.io.File
+import java.io.IOException
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.locks.ReentrantLock
@@ -24,6 +26,7 @@ import org.json.JSONObject
  * supports editing individual items without advancing a hidden cursor.
  */
 object AgentPlanStore {
+    private const val TAG = "AgentPlanStore"
     private const val DIR_NAME = "agent-plan"
     private const val FILE_NAME = "plans.json"
     private const val MAX_PLANS = 100
@@ -60,30 +63,55 @@ object AgentPlanStore {
     private fun loadLocked(sessionId: String, context: Context?): MutableList<Plan> {
         val k = key(sessionId)
         memory[k]?.let { return it }
-        val loaded = runCatching {
-            val f = file(context, k)
-            if (f != null && f.isFile) {
-                json.decodeFromString<List<Plan>>(f.readText()).toMutableList()
-            } else mutableListOf()
-        }.getOrElse { mutableListOf() }
+        val f = file(context, k)
+        val loaded: MutableList<Plan> = if (f == null || !f.isFile) {
+            mutableListOf()
+        } else {
+            // [T-plan-store-silent-loss] A corrupt or unreadable board used to
+            // decode to an empty list — and the next add() overwrote the file,
+            // silently destroying every persisted plan. Surface it instead:
+            // execute() turns the throw into a tool error, and the log line
+            // names the file to inspect or delete.
+            val text = AtomicFileWrite.read(f)
+                ?: throw IOException("cannot read plan file ${f.absolutePath}")
+            runCatching { decodePlans(text) }.getOrElse { e ->
+                AppLogger.error(TAG, "plan file corrupt at ${f.absolutePath}: ${e.message}")
+                throw IOException(
+                    "plan file ${f.name} is corrupt (${e.message}); delete it to start a fresh board",
+                    e,
+                )
+            }
+        }
         memory[k] = loaded
         return loaded
     }
 
     private fun saveLocked(sessionId: String, context: Context?, plans: List<Plan>) {
         val k = key(sessionId)
-        memory[k] = plans.toMutableList()
-        val f = file(context, k) ?: return
-        f.parentFile?.mkdirs()
-        val tmp = File(f.parentFile, ".${f.name}.tmp")
-        runCatching {
-            tmp.writeText(json.encodeToString(plans.take(MAX_PLANS)))
-            if (!tmp.renameTo(f)) {
-                f.delete()
-                check(tmp.renameTo(f)) { "cannot replace ${f.name}" }
-            }
-        }.onFailure { tmp.delete() }
+        val trimmed = plans.take(MAX_PLANS).toMutableList()
+        val f = file(context, k)
+        if (f == null) {
+            // No context (unit tests / headless callers): memory-only board.
+            memory[k] = trimmed
+            return
+        }
+        // [T-plan-store-silent-loss] A failed persist used to be swallowed —
+        // the tool reported success while the board lived only in RAM and
+        // vanished with the process. AtomicFileWrite verifies the write and
+        // keeps the previous file on failure; throw so execute() returns an
+        // explicit tool error and memory only advances after bytes land.
+        if (AtomicFileWrite.write(f, encodePlans(plans)) == null) {
+            AppLogger.error(TAG, "plan board persist failed for session $k (${f.absolutePath})")
+            throw IOException("failed to persist plan board; previous file kept, change is in-memory only")
+        }
+        memory[k] = trimmed
     }
+
+    internal fun decodePlans(text: String): MutableList<Plan> =
+        json.decodeFromString<List<Plan>>(text).toMutableList()
+
+    internal fun encodePlans(plans: List<Plan>): String =
+        json.encodeToString(plans.take(MAX_PLANS))
 
     fun list(sessionId: String, context: Context?): List<Plan> = lock(sessionId).withLock {
         loadLocked(sessionId, context).sortedBy { it.position }

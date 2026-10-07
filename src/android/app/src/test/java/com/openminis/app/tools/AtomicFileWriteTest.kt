@@ -1,6 +1,7 @@
 package com.openminis.app.tools
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -218,5 +219,32 @@ class AtomicFileWriteTest {
         assertEquals(0xBB.toByte(), onDisk[1])
         assertEquals(0xBF.toByte(), onDisk[2])
         assertEquals("\uFEFFgoodbye world", String(onDisk, Charsets.UTF_8))
+    }
+
+    // ── [T-checkpoint-restore-atomic] moveIntoPlace ──
+
+    @Test
+    fun moveIntoPlaceReplacesTargetAndRemovesTmp() {
+        val target = File(tmp.root, "t.txt").apply { writeText("old") }
+        val staged = File(tmp.root, "t.tmp").apply { writeText("new-bytes") }
+        assertTrue(AtomicFileWrite.moveIntoPlace(staged, target))
+        assertEquals("new-bytes", target.readText())
+        assertFalse(staged.exists())
+    }
+
+    @Test
+    fun moveIntoPlaceFailureKeepsPreviousBytes() {
+        // The old checkpoint-restore dance deleted the target before the retry
+        // rename; when the retry failed too, the only copy was gone. This must
+        // never happen: failure returns false and the previous bytes survive.
+        val target = File(tmp.root, "k.txt").apply { writeText("precious") }
+        val staged = File(tmp.root, "k.tmp").apply { writeText("replacement") }
+        AtomicFileWrite.failReplaceForTest = true
+        try {
+            assertFalse(AtomicFileWrite.moveIntoPlace(staged, target))
+        } finally {
+            AtomicFileWrite.failReplaceForTest = false
+        }
+        assertEquals("precious", target.readText())
     }
 }

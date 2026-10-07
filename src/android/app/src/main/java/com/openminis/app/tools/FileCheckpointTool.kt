@@ -186,9 +186,13 @@ object FileCheckpointStore {
                     // half-written file where a good one used to be.
                     val tmp = File(host.parentFile, ".restore-${cp.id}-$i.tmp")
                     src.inputStream().use { ins -> tmp.outputStream().use { outs -> ins.copyTo(outs) } }
-                    if (!tmp.renameTo(host)) {
-                        host.delete()
-                        check(tmp.renameTo(host)) { "cannot replace ${e.path}" }
+                    // [T-checkpoint-restore-atomic] Never delete the live file
+                    // to force a rename through: when the retry also failed,
+                    // the user's only copy was gone. moveIntoPlace keeps the
+                    // previous bytes and reports failure instead.
+                    if (!AtomicFileWrite.moveIntoPlace(tmp, host)) {
+                        tmp.delete()
+                        error("cannot replace ${e.path}; previous content kept")
                     }
                     lines += "restored ${e.path} (${e.bytes} bytes)"
                 } else {

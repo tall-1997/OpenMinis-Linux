@@ -161,4 +161,25 @@ class AgentPlanToolTest {
         assertTrue(r.success)
         assertEquals(0, AgentPlanStore.list(sidA, null).size)
     }
+
+    // ── [T-plan-store-silent-loss] persistence failure must be loud ──
+
+    @Test
+    fun decodePlansRejectsCorruptJson() {
+        // A corrupt board used to decode to an empty list, and the next add()
+        // overwrote the file — silently destroying every persisted plan.
+        try {
+            AgentPlanStore.decodePlans("{not a plan board")
+            org.junit.Assert.fail("corrupt plan file must throw, not reset to empty")
+        } catch (e: Exception) {
+            assertTrue(e.message?.isNotEmpty() == true)
+        }
+    }
+
+    @Test
+    fun encodePlansCapsAtMaxPlans() {
+        val plans = (1..150).map { AgentPlanStore.Plan(title = "t$it") }
+        val decoded = AgentPlanStore.decodePlans(AgentPlanStore.encodePlans(plans))
+        assertEquals(100, decoded.size)
+    }
 }

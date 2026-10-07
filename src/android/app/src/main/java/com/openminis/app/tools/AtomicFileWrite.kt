@@ -143,6 +143,31 @@ object AtomicFileWrite {
         }
     }
 
+    /**
+     * Move an already-written [tmp] file onto [file] atomically, under the
+     * same per-path lock every other writer takes.
+     *
+     * [T-checkpoint-restore-atomic] Callers that hand-roll `renameTo` tend to
+     * "fix" a failed rename with `target.delete(); rename again` — and when
+     * the retry also fails, the only copy of the user's file is gone. This
+     * never deletes the target first: rename, or copy-over as a fallback, or
+     * return false with the previous bytes intact.
+     */
+    fun moveIntoPlace(tmp: File, file: File): Boolean {
+        val lock = lockFor(file)
+        lock.lock()
+        try {
+            if (!replaceSibling(tmp, file)) {
+                AppLogger.error(TAG, "replace ${tmp.name} -> ${file.name} failed; previous bytes kept")
+                return false
+            }
+            if (tmp.exists()) tmp.delete()
+            return true
+        } finally {
+            lock.unlock()
+        }
+    }
+
     private fun writeLocked(file: File, content: String, append: Boolean): Long? {
         val parent = file.parentFile
         if (parent != null && !parent.exists()) {
