@@ -107,6 +107,8 @@ object AgentTools {
         }
         if (subAgentEnabled) {
             add(runSubAgentDefinition())
+            // [T-subagent-background] Collection surface for detached waves.
+            add(CheckAgentTool.definition())
         }
         }
         // [T-find-tools] With long-tail loading, the main session schema starts
@@ -138,6 +140,10 @@ object AgentTools {
                 add(SubAgentKind.RUN_SUBAGENT)
                 add(WolfpackTool.NAME)
                 add(DispatchAgentsTool.NAME)
+                // A background dispatch hands the model a dispatch_id and tells
+                // it to call check_agent; gating that tool behind find_tools
+                // would strand the wave it was supposed to collect.
+                add(CheckAgentTool.NAME)
             }
         }
         return (all.filter { it.name in alwaysOn || it.name in enabledToolNames } + FindTools.definition())
@@ -206,7 +212,9 @@ Prefer ONE spawn_agent call with a tasks[] array. You choose how many tasks the 
 
 kind: explore (read-only recon, shell inspection allowed), plan (read-only design), worker (can write), general-purpose (fallback when the slice does not fit the others). Parallel workers MUST set non-overlapping write_paths, or write_paths=none if they must not write.
 
-Each task prompt MUST be self-contained with ## Task / ## Expected result / ## Constraints / ## Workflow / ## Collaboration. Omit max_turns to auto-size (simple ≈ 10, complex 40–60). token_budget is optional: omit it for no token cap. Dependent phases: wait, verify Expected result, then dispatch the next wave. A single-task call may still pass prompt at the top level.""",
+Each task prompt MUST be self-contained with ## Task / ## Expected result / ## Constraints / ## Workflow / ## Collaboration. Omit max_turns to auto-size (simple ≈ 10, complex 40–60). token_budget is optional: omit it for no token cap. Dependent phases: wait, verify Expected result, then dispatch the next wave. A single-task call may still pass prompt at the top level.
+
+background=true detaches the wave: this call returns a dispatch_id at once instead of blocking, the lanes keep running, and you collect them later with check_agent. Use it for long waves you do not need before your next step — then actually collect them, an uncollected wave is wasted work. Every lane is filed on the agent_plan board automatically, so progress survives an interruption.""",
             parameters = mapOf(
                 "tasks" to AgentToolParam(
                     type = "array",
@@ -226,10 +234,16 @@ Each task prompt MUST be self-contained with ## Task / ## Expected result / ## C
                 "write_paths" to AgentToolParam("string", "Comma-separated Linux path prefixes this worker may modify, or none. Required for parallel workers."),
                 "max_turns" to AgentToolParam("integer", "Omit to auto-size: simple ≈ 10, complex 40–60."),
                 "thinking_level" to AgentToolParam("string", "Default ULTRA; clamped to model ceiling.", enumValues = listOf("OFF", "LOW", "MEDIUM", "HIGH", "XHIGH", "MAX", "ULTRA")),
+                "background" to AgentToolParam(
+                    "boolean",
+                    "true = return a dispatch_id immediately and let the lanes run detached; collect " +
+                        "them later with check_agent. Default false: this call blocks until every lane " +
+                        "finishes and returns their reports inline.",
+                ),
             ),
             required = emptyList(),
             propertyOrdering = listOf(
-                "tasks", "tool_title", "prompt", "kind", "write_paths", "role", "skills", "model", "max_turns", "thinking_level",
+                "tasks", "tool_title", "prompt", "kind", "write_paths", "role", "skills", "model", "max_turns", "thinking_level", "background",
             ),
         )
     }

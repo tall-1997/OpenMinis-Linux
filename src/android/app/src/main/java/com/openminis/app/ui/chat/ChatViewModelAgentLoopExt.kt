@@ -190,6 +190,8 @@ internal suspend fun ChatViewModel.runAgentLoop(
     val goalManager = com.openminis.app.goal.GoalManager(chatRepository)
     val goalSessionId = activeSessionId
     var goalContinuations = 0
+    // [T-subagent-background] Bounded nudges for uncollected detached waves.
+    var subAgentCollectNudges = 0
     val goalRunRequested = goalExecutionRun
     // [T-android-stream-drop-autocontinue] Per-run budget of silent
     // auto-continuations after a relay-side stream cut (see the
@@ -1442,6 +1444,76 @@ internal suspend fun ChatViewModel.runAgentLoop(
                 )
                 goalContinuations++
                 AppLogger.info(ChatViewModel.TAG_STREAM, "Goal auto-continuation $goalContinuations/${ChatViewModel.MAX_GOAL_CONTINUATIONS} (session=$goalSessionId)")
+                continue
+            }
+        }
+
+        // [T-subagent-background] The model is about to end the turn while a
+        // detached wave it started still owes a result: lanes in flight, or a
+        // finished wave whose reports nobody collected. Ending here is exactly
+        // how background work gets abandoned — the user reads a confident final
+        // answer while the lanes keep burning tokens and their output dies in
+        // the registry. Nudge (bounded by MAX_SUBAGENT_COLLECT_NUDGES) so the
+        // model either collects, or tells the user plainly that work is still
+        // running, which dispatch id it is, and how to pick it up later.
+        if (toolCalls.isEmpty() &&
+            subAgentCollectNudges < ChatViewModel.MAX_SUBAGENT_COLLECT_NUDGES &&
+            activeRun?.isStopped != true
+        ) {
+            val batchRegistry = com.openminis.app.tools.SubAgentBatchRegistry
+            val pending = runCatching {
+                batchRegistry.unfinished(goalSessionId, context)
+            }.getOrElse { e ->
+                AppLogger.warning(ChatViewModel.TAG_STREAM, "sub-agent registry read failed: ${e.message}")
+                emptyList()
+            }
+            if (pending.isNotEmpty()) {
+                val nudge = buildString {
+                    append("<system-reminder>\n")
+                    append(batchRegistry.renderPending(pending))
+                    append('\n')
+                    pending.forEach { b ->
+                        append("- dispatch ").append(b.id.take(8)).append(": ")
+                        append(
+                            if (b.complete) {
+                                "finished, reports NOT collected yet"
+                            } else {
+                                "${b.running}/${b.lanes.size} lane(s) still running"
+                            },
+                        )
+                        append(" (").append(b.done).append(" done, ").append(b.failed).append(" failed)\n")
+                    }
+                    append(
+                        "\nDo not end the turn as if nothing had been dispatched. Call check_agent now: " +
+                            "op=await with timeout_sec to wait for running lanes, op=collect to read the finished " +
+                            "reports, then fold those results into your answer. If a lane genuinely cannot finish " +
+                            "in time, say so explicitly — name the dispatch id, state that it is still running, and " +
+                            "tell the user it can be collected later with check_agent.",
+                    )
+                    append("\n</system-reminder>")
+                }
+                // Same shape as the Goal continuation above: persist this turn's
+                // assistant output first, otherwise history would carry two
+                // consecutive user messages and providers reject the sequence.
+                val turnParts = buildTurnParts(allToolBlocks, turnStartBlockIndex, allToolInputs)
+                val blockMeta = allToolBlocks.filter { it.kind == "tool_use" }.associateBy { it.id }
+                persistAssistantTurnForRun(
+                    checkNotNull(activeRun) { "Agent loop has no persistence owner" }, turnParts, lastUsage, turnReasoningContent, blockMeta, accumulatedText,
+                )
+                if (activeRun?.isStopped == true) { loopExitedNormally = true; break }
+                appendBoundedHistory(
+                    LLMMessage(
+                        role = LLMMessage.Role.USER,
+                        content = nudge,
+                        contentParts = listOf(AgentContentPart.Text(nudge)),
+                    ),
+                )
+                subAgentCollectNudges++
+                AppLogger.info(
+                    ChatViewModel.TAG_STREAM,
+                    "sub-agent collect nudge $subAgentCollectNudges/${ChatViewModel.MAX_SUBAGENT_COLLECT_NUDGES} " +
+                        "(session=$goalSessionId, dispatches=${pending.size})",
+                )
                 continue
             }
         }

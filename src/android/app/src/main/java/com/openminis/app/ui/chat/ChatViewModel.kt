@@ -720,6 +720,17 @@ class ChatViewModel(
         internal const val MAX_GOAL_CONTINUATIONS = 16
 
         /**
+         * [T-subagent-background] How many times one run may nudge the model to
+         * collect a detached sub-agent wave before letting the turn end. Two,
+         * not one: the first nudge often lands while lanes are still in flight,
+         * so the model awaits, times out, and needs a second chance to say so
+         * honestly. Capped because a nudge the model keeps ignoring must never
+         * become an infinite loop — when it runs out, the post-loop footer
+         * reports the dispatch ids to the user instead.
+         */
+        internal const val MAX_SUBAGENT_COLLECT_NUDGES = 2
+
+        /**
          * [T-android-stream-drop-autocontinue] How many times a run may
          * silently re-enter the loop after the relay cut the SSE stream
          * mid-reply (clean EOF, no finish_reason, partial content already

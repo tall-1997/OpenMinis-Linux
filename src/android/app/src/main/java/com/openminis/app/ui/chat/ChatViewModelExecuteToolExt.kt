@@ -127,6 +127,11 @@ internal suspend fun ChatViewModel.executeTool(
             activeSessionId,
             context,
         )
+        // [T-subagent-background] Inspect / wait for / collect detached waves.
+        // Suspends only for op=await, which polls the registry under a bounded
+        // timeout; every other op returns immediately.
+        com.openminis.app.tools.CheckAgentTool.NAME ->
+            com.openminis.app.tools.CheckAgentTool.execute(argsJson, activeSessionId, context)
         com.openminis.app.tools.GoalTool.NAME -> com.openminis.app.tools.GoalTool.execute(
             argsJson,
             activeSessionId,

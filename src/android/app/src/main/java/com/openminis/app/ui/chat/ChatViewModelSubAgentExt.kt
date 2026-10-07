@@ -19,13 +19,16 @@ import com.openminis.app.tools.SubAgentRunner
 import com.openminis.app.tools.SubAgentTokenBudget
 import com.openminis.app.tools.ToolExecutionResult
 import com.openminis.app.tools.SubAgentKind
+import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -33,7 +36,30 @@ import kotlinx.coroutines.withContext
 import kotlin.random.Random
 
 /** Per-retry backoff (seconds). Index 0 = wait before attempt 2, etc. */
-private val SUBAGENT_BACKOFF_S = intArrayOf(2, 5)
+// [T-subagent-429-selfheal] The ladder used to be {2, 5} — sized for a
+// transient stream blip, not a provider rate-limit window, which is typically
+// 60s. With three attempts the whole retry budget was spent in ten seconds, so
+// a 429 during a concurrent wave still surfaced as a dead lane.
+private val SUBAGENT_BACKOFF_S = intArrayOf(2, 5, 15, 30)
+
+/** Ceiling on one backoff wait, even when Retry-After asks for longer. */
+private const val MAX_BACKOFF_S = 60
+
+/**
+ * Stagger between lanes of the same wave. Fanning out N requests at the same
+ * millisecond against one provider is the cheapest way to manufacture the 429
+ * that then kills a lane; a few hundred ms of spread costs nothing.
+ */
+private const val SPAWN_STAGGER_MS = 400L
+
+/**
+ * Backoff for [attempt] (1-based, the attempt that just failed), never below
+ * the provider's own Retry-After and never above [MAX_BACKOFF_S].
+ */
+internal fun backoffSeconds(attempt: Int, retryAfterSeconds: Int): Int {
+    val ladder = SUBAGENT_BACKOFF_S[(attempt - 1).coerceIn(0, SUBAGENT_BACKOFF_S.size - 1)]
+    return maxOf(ladder, retryAfterSeconds).coerceAtMost(MAX_BACKOFF_S)
+}
 
 private fun parseThinkingLevel(raw: String?, max: ThinkingLevel): ThinkingLevel {
     val requested = raw?.trim()?.takeIf { it.isNotEmpty() }
@@ -301,6 +327,12 @@ internal suspend fun ChatViewModel.executeRunSubAgent(
         parallelWriters: Int = 1,
         waveIndex: Int = 0,
         waveSize: Int = 1,
+        /**
+         * [T-subagent-background] Detach the wave: hand the model a dispatch id
+         * immediately and let the lanes run on [viewModelScope] while the parent
+         * loop keeps thinking. Results are collected later with `check_agent`.
+         */
+        background: Boolean = false,
     ): ToolExecutionResult {
         if (!multiAgentSettings.enabled.value) {
             return ToolExecutionResult("Multi-agent dispatch is disabled in Settings → Multi-agent.", false)
@@ -332,6 +364,17 @@ internal suspend fun ChatViewModel.executeRunSubAgent(
                 false,
             )
         }
+        // [T-subagent-background] Detach when the caller says so, or when the
+        // model asked for it in the arguments. Providers disagree on how a
+        // boolean arrives — a real JSON bool from OpenAI-shaped ones, the string
+        // "true" from others — so accept both spellings rather than silently
+        // ignoring half of them.
+        val detached = background || runCatching {
+            org.json.JSONObject(argsJson).let { o ->
+                o.optBoolean("background", false) ||
+                    o.optString("background", "").equals("true", ignoreCase = true)
+            }
+        }.getOrDefault(false)
         val writersHere = spawns.count { SubAgentKind.canWrite(it.kind) }
         val writerTotal = maxOf(parallelWriters, writersHere)
         val sem = limiter ?: Semaphore(
@@ -345,6 +388,56 @@ internal suspend fun ChatViewModel.executeRunSubAgent(
         // user experiences as lost work.
         val requestedCap = spawns.mapNotNull { it.tokenBudget }.minOrNull()
         val sharedBudget = requestedCap?.let { SubAgentTokenBudget(SubAgentTokenBudget.clamp(it)) }
+        // [T-subagent-plan-autolog] A wave used to leave no durable trace unless
+        // the model happened to call agent_plan first — so an interrupted
+        // dispatch lost both the task list and how far each lane got. File the
+        // board here instead of relying on the model to remember. A failed
+        // add() must not abort the dispatch: runCatching, board stays
+        // best-effort, the wave is the deliverable.
+        val ownerSession = realSessionId.ifBlank { sessionId }.ifBlank { activeSessionId }
+        val autoPlan = spawns.size > 1 || detached
+        val planIds: List<String?> = if (autoPlan) {
+            spawns.mapIndexed { i, s ->
+                runCatching {
+                    com.openminis.app.tools.AgentPlanStore.add(
+                        ownerSession,
+                        context,
+                        title = "子代理 ${i + 1}/${spawns.size} · ${s.title.ifBlank { s.kind }}",
+                        description = s.prompt.trim().take(200),
+                        status = "active",
+                    ).id
+                }.getOrNull()
+            }
+        } else {
+            spawns.map { null }
+        }
+        val batch = com.openminis.app.tools.SubAgentBatchRegistry.begin(
+            sessionId = ownerSession,
+            context = context,
+            toolId = toolId,
+            assistantId = assistantId,
+            background = detached,
+            seeds = spawns.mapIndexed { i, s ->
+                com.openminis.app.tools.SubAgentBatchRegistry.LaneSeed(
+                    index = i + 1,
+                    kind = s.kind,
+                    title = s.title.ifBlank { s.kind },
+                    prompt = s.prompt,
+                    planId = planIds[i],
+                )
+            },
+        )
+        if (detached) {
+            return launchDetachedSubAgentBatch(
+                batch = batch,
+                ownerSession = ownerSession,
+                spawns = spawns,
+                toolId = toolId,
+                writerTotal = writerTotal,
+                sem = sem,
+                sharedBudget = sharedBudget,
+            )
+        }
         if (spawns.size == 1) {
             val total = waveSize.coerceAtLeast(1)
             val index = if (total > 1) waveIndex + 1 else 1
@@ -363,6 +456,8 @@ internal suspend fun ChatViewModel.executeRunSubAgent(
                                 total = total,
                                 cardIndex = null,
                                 tokenBudget = sharedBudget,
+                                batchId = batch.id,
+                                batchSession = ownerSession,
                             )
                         }
                     } catch (e: CancellationException) {
@@ -395,6 +490,8 @@ internal suspend fun ChatViewModel.executeRunSubAgent(
                                     total = spawns.size,
                                     cardIndex = i + 1,
                                     tokenBudget = sharedBudget,
+                                    batchId = batch.id,
+                                    batchSession = ownerSession,
                                 )
                             }
                         } catch (e: CancellationException) {
@@ -436,6 +533,95 @@ internal suspend fun ChatViewModel.executeRunSubAgent(
         )
     }
 
+/**
+ * [T-subagent-background] Run a wave detached from the calling tool.
+ *
+ * The parent loop gets a dispatch id back immediately and keeps thinking; the
+ * lanes run on viewModelScope, which outlives this tool call and the current
+ * agent turn. Progress stays visible through the sub-agent chip bar
+ * (SubAgentActivityTracker) and queryable with `check_agent`; the registry also
+ * persists lane state, so a wave cut short by process death comes back as
+ * `stopped` instead of disappearing without a trace.
+ *
+ * Deliberately no parent tool block: by the time a detached lane reports, the
+ * main transcript has moved on, and writing into a stale MutableList would
+ * corrupt a block that is already persisted.
+ */
+private fun ChatViewModel.launchDetachedSubAgentBatch(
+        batch: com.openminis.app.tools.SubAgentBatchRegistry.Batch,
+        ownerSession: String,
+        spawns: List<ChatSubAgentSpawn>,
+        toolId: String,
+        writerTotal: Int,
+        sem: Semaphore,
+        sharedBudget: SubAgentTokenBudget?,
+    ): ToolExecutionResult {
+        viewModelScope.launch(SupervisorJob() + Dispatchers.Default) {
+            try {
+                supervisorScope {
+                    spawns.mapIndexed { i, spawn ->
+                        async {
+                            try {
+                                sem.withPermit {
+                                    runOneSubAgent(
+                                        spawn = spawn,
+                                        toolId = toolId,
+                                        toolBlocks = null,
+                                        assistantId = "",
+                                        currentText = "",
+                                        parallelWriters = writerTotal,
+                                        index = i + 1,
+                                        total = spawns.size,
+                                        cardIndex = null,
+                                        tokenBudget = sharedBudget,
+                                        batchId = batch.id,
+                                        batchSession = ownerSession,
+                                    )
+                                }
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (t: Throwable) {
+                                // One dead lane must not cancel its siblings.
+                                Log.w(
+                                    ChatViewModel.TAG,
+                                    "background lane ${i + 1}/${spawns.size} failed: ${t.message}",
+                                )
+                                ToolExecutionResult(
+                                    "Sub-agent ${i + 1} failed: ${t.javaClass.simpleName}: ${t.message}",
+                                    false,
+                                )
+                            }
+                        }
+                    }.awaitAll()
+                }
+            } catch (e: CancellationException) {
+                Log.i(ChatViewModel.TAG, "background dispatch ${batch.id.take(8)} cancelled")
+            } finally {
+                multiAgentSettings.clearSlotThinkingLevels()
+            }
+        }
+        val summary = spawns.mapIndexed { i, s ->
+            "  ${i + 1}. [${s.kind}] ${s.title.ifBlank { s.prompt.trim().take(60) }}"
+        }.joinToString("\n")
+        return ToolExecutionResult(
+            output = "Dispatched ${spawns.size} sub-agent(s) in the BACKGROUND — dispatch_id=${batch.id.take(8)}.\n" +
+                "$summary\n\n" +
+                "They are running now; this call did NOT wait for them. Continue with other work, then " +
+                "call check_agent with dispatch_id=${batch.id.take(8)} — op=status for a snapshot, " +
+                "op=await to block until they finish, op=collect for their reports. Each lane is also " +
+                "filed on the agent_plan board, so progress survives an interruption.",
+            success = true,
+            toolTitle = "后台子代理 ${spawns.size}",
+        )
+    }
+
+/**
+ * [T-subagent-plan-autolog] Bookkeeping shell around the lane body. Whatever the
+ * inner loop hands back — a report, a budget-exhaustion partial, a final
+ * failure — the registry and the plan board learn about it here, so a lane
+ * cannot finish without its progress being recorded. Cancellation is recorded
+ * as `stopped` and then rethrown.
+ */
 private suspend fun ChatViewModel.runOneSubAgent(
         spawn: ChatSubAgentSpawn,
         toolId: String,
@@ -447,6 +633,93 @@ private suspend fun ChatViewModel.runOneSubAgent(
         index: Int,
         total: Int,
         tokenBudget: SubAgentTokenBudget? = null,
+        batchId: String? = null,
+        batchSession: String = "",
+    ): ToolExecutionResult {
+        val ownerSession = batchSession.ifBlank {
+            realSessionId.ifBlank { sessionId }.ifBlank { activeSessionId }
+        }
+        val outcome = try {
+            runOneSubAgentInner(
+                spawn = spawn,
+                toolId = toolId,
+                toolBlocks = toolBlocks,
+                assistantId = assistantId,
+                currentText = currentText,
+                parallelWriters = parallelWriters,
+                cardIndex = cardIndex,
+                index = index,
+                total = total,
+                tokenBudget = tokenBudget,
+                batchId = batchId,
+                batchSession = ownerSession,
+            )
+        } catch (e: CancellationException) {
+            recordLaneOutcome(ownerSession, batchId, index, null, stopped = true, error = e.message)
+            throw e
+        }
+        recordLaneOutcome(ownerSession, batchId, index, outcome, stopped = false, error = null)
+        return outcome
+    }
+
+/**
+ * Mirror a finished lane onto the registry and its plan item. Best-effort by
+ * design: bookkeeping must never turn a completed lane into a failed one.
+ */
+private fun ChatViewModel.recordLaneOutcome(
+        sessionId: String,
+        batchId: String?,
+        index: Int,
+        outcome: ToolExecutionResult?,
+        stopped: Boolean,
+        error: String?,
+    ) {
+        if (batchId == null) return
+        val registry = com.openminis.app.tools.SubAgentBatchRegistry
+        val lane = runCatching { registry.get(sessionId, context, batchId) }
+            .getOrNull()?.lanes?.find { it.index == index } ?: return
+        val success = outcome?.success == true
+        runCatching {
+            registry.markFinished(
+                sessionId = sessionId,
+                context = context,
+                batchId = batchId,
+                index = index,
+                success = success,
+                output = outcome?.output.orEmpty(),
+                error = error ?: if (!success && !stopped) outcome?.output?.trim()?.take(300) else null,
+                attempts = lane.attempts,
+                stopped = stopped,
+            )
+        }
+        val planId = lane.planId ?: return
+        val status = if (success) "done" else "failed"
+        runCatching {
+            com.openminis.app.tools.AgentPlanStore.update(
+                sessionId,
+                context,
+                planId,
+                null,
+                outcome?.output?.trim()?.take(200),
+                status,
+            )
+        }
+    }
+
+private suspend fun ChatViewModel.runOneSubAgentInner(
+        spawn: ChatSubAgentSpawn,
+        toolId: String,
+        toolBlocks: MutableList<AssistantBlock>?,
+        assistantId: String,
+        currentText: String,
+        parallelWriters: Int,
+        cardIndex: Int? = null,
+        index: Int,
+        total: Int,
+        tokenBudget: SubAgentTokenBudget? = null,
+        /** [T-subagent-plan-autolog] Wave this lane belongs to, for the registry. */
+        batchId: String? = null,
+        batchSession: String = "",
     ): ToolExecutionResult {
         val prompt = spawn.prompt
         val role = spawn.role
@@ -527,7 +800,9 @@ private suspend fun ChatViewModel.runOneSubAgent(
         // "sub-agents cannot spawn further sub-agents" until the app was killed.
         subAgentDepth.incrementAndGet()
         return try {
-        val parentSession = realSessionId.ifBlank { sessionId }.ifBlank { activeSessionId }
+        val parentSession = batchSession.ifBlank {
+            realSessionId.ifBlank { sessionId }.ifBlank { activeSessionId }
+        }
         val laneId = kotlin.coroutines.coroutineContext[SubAgentLane]?.id
             ?: SubAgentLane.idFor(parentSession, System.nanoTime())
         val trackerId = com.openminis.app.service.SubAgentActivityTracker.start(
@@ -545,6 +820,12 @@ private suspend fun ChatViewModel.runOneSubAgent(
         com.openminis.app.service.SubAgentActivityTracker.attachJob(trackerId, subAgentJob)
         return try {
             withContext(subAgentJob) {
+            // [T-subagent-429-selfheal] Fan-out used to fire every lane in the
+            // same millisecond, which is the cheapest way to provoke the very
+            // rate limit that then killed one of them. Spread the wave.
+            if (total > 1 && index > 1) {
+                delay(SPAWN_STAGGER_MS * (index - 1) + Random.nextLong(0, 150))
+            }
             // Bounded retry with pool-endpoint rotation. Sub-agent failures are
             // mostly transient upstream errors (429 / truncated stream); the main
             // session already retries those, sub-agents used to die on first blip.
@@ -570,17 +851,57 @@ private suspend fun ChatViewModel.runOneSubAgent(
                     if (rotated != null) {
                         rotated
                     } else {
+                        // [T-subagent-429-selfheal] "Nothing to rotate to" used
+                        // to be treated as "nothing left to try": a 429 on a
+                        // single-provider pool returned a final failure at once,
+                        // discarding the remaining attempt budget. That is why a
+                        // concurrent wave lost exactly one member at random —
+                        // whichever lane hit the rate limit first — while its
+                        // siblings finished normally. Rotation and retry are
+                        // separate questions: with no alternative bucket, wait
+                        // out the cooldown on the same entry and keep going.
                         val last = lastError
-                        val noSameKey = last is LLMError.RateLimited ||
+                        val rateLimited = last is LLMError.RateLimited ||
                             (last as? LLMError)?.isFallbackable == true
-                        if (noSameKey) {
-                            com.openminis.app.service.SubAgentActivityTracker.finish(trackerId, false, last?.message)
-                            return@withContext ToolExecutionResult(
-                                "Sub-agent failed after ${attempt - 1} attempt(s): ${last?.message ?: last?.javaClass?.simpleName}",
-                                false,
+                        if (rateLimited && attempt < maxAttempts) {
+                            val waitS = backoffSeconds(
+                                attempt,
+                                (last as? LLMError.RateLimited)?.retryAfterSeconds ?: 0,
                             )
+                            Log.i(
+                                ChatViewModel.TAG,
+                                "Sub-agent 429 lane=$laneId no rotation target; cooling down ${waitS}s on ${baseEntry.model.displayName} (attempt $attempt/$maxAttempts)",
+                            )
+                            runCatching {
+                                com.openminis.app.service.SubAgentActivityTracker.updateProgress(
+                                    trackerId, 0, maxTurns, "rate-limited; retry in ${waitS}s",
+                                )
+                            }
+                            com.openminis.app.service.SubAgentEventBus.publish(
+                                com.openminis.app.service.SubAgentEvent.RetryScheduled(
+                                    runId = trackerId,
+                                    parentSessionId = parentSession,
+                                    attempt = attempt,
+                                    maxAttempts = maxAttempts,
+                                    waitMs = waitS * 1000L,
+                                    reason = "rate-limit-cooldown",
+                                    atMs = System.currentTimeMillis(),
+                                ),
+                            )
+                            delay(waitS * 1000L + Random.nextLong(0, 800))
                         }
                         baseEntry
+                    }
+                }
+                // [T-subagent-plan-autolog] Publish the attempt before it runs:
+                // a lane that dies mid-call still shows which model and which
+                // attempt it was on, instead of a stale `pending`.
+                if (batchId != null) {
+                    runCatching {
+                        com.openminis.app.tools.SubAgentBatchRegistry.markRunning(
+                            parentSession, context, batchId, index, trackerId,
+                            entry.model.displayName, attempt,
+                        )
                     }
                 }
                 val provider = providerForModelEntry(entry)
@@ -728,9 +1049,13 @@ private suspend fun ChatViewModel.runOneSubAgent(
                 val retryable = (e as? LLMError)?.isRetryable ?: isUpstreamTruncation(e)
                 Log.w(ChatViewModel.TAG, "Sub-agent lane=$laneId attempt=$attempt/$maxAttempts retryable=$retryable err=${e.message}")
                 if (retryable && attempt < maxAttempts) {
-                    val backoffS = SUBAGENT_BACKOFF_S[(attempt - 1).coerceAtMost(SUBAGENT_BACKOFF_S.size - 1)]
-                    val retryAfter = (e as? LLMError.RateLimited)?.retryAfterSeconds ?: 0
-                    val waitS = maxOf(backoffS, retryAfter)
+                    // Same ladder as the rotation path, and capped: an uncapped
+                    // Retry-After could park a lane (holding its concurrency
+                    // permit) for minutes while siblings waited on it.
+                    val waitS = backoffSeconds(
+                        attempt,
+                        (e as? LLMError.RateLimited)?.retryAfterSeconds ?: 0,
+                    )
                     runCatching {
                         com.openminis.app.service.SubAgentActivityTracker.updateProgress(
                             trackerId, 0, maxTurns, "retry in ${waitS}s (${e.javaClass.simpleName})",
