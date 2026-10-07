@@ -56,6 +56,12 @@ import com.openminis.app.data.UpdateDownloadManager
 import com.openminis.app.data.UpdateSourceRegistry
 import com.openminis.app.data.UpdateSourceRegistry.ProbeResult
 import com.openminis.app.data.UpdateSourceRegistry.UpdateSource
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.launch
 import com.openminis.app.ui.components.MinisButton
 import com.openminis.app.ui.components.MinisTextButton
@@ -94,6 +100,17 @@ fun CheckUpdateSection() {
     // [T-update-rolling-channel] Opt-in toggle for the rolling prerelease
     // channel; persisted, default off so stable users never see CI builds.
     var includeRolling by remember { mutableStateOf(UpdateSourceRegistry.includeRolling(context)) }
+    // [T-update-wifi-only] Standing preference: never download over metered
+    // networks, no confirmation dialog. Persisted, default off.
+    var wifiOnly by remember { mutableStateOf(UpdateDownloadManager.isWifiOnlyPreferred(context)) }
+    // [T-update-download-fgs] Ask for notification permission at the moment
+    // of user intent (tapping Download), not on screen entry. A refusal does
+    // NOT block the download — the FGS still runs, Android 13+ just hides
+    // its notification. One ask, never nagged again.
+    val notifPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { }
+
     // Download progress is mirrored from UpdateDownloadManager's process-wide
     // StateFlow so the download survives leaving this screen (background
     // tolerant). Re-entering simply re-collects the live state.
@@ -305,6 +322,18 @@ fun CheckUpdateSection() {
                 }
             },
         )
+        // [T-update-wifi-only] Never download updates over metered
+        // networks. Refuses outright at start() — stronger than the metered
+        // confirmation dialog, which this toggle bypasses entirely.
+        com.openminis.app.ui.settings.SettingsSwitchRow(
+            title = stringResource(R.string.check_update_wifi_only),
+            subtitle = stringResource(R.string.check_update_wifi_only_sub),
+            checked = wifiOnly,
+            onCheckedChange = { checked ->
+                wifiOnly = checked
+                UpdateDownloadManager.setWifiOnlyPreferred(context, checked)
+            },
+        )
         // [T-update-rolling-channel] Opt-in for the rolling prerelease
         // channel (android-latest, CI builds). Off by default.
         com.openminis.app.ui.settings.SettingsSwitchRow(
@@ -443,6 +472,18 @@ fun CheckUpdateSection() {
                 // device that can actually install it and the installer fires
                 // straight off `dlState.doneFile` with no round trip.
                 if (UpdateChecker.canInstall(context)) {
+                    // [T-update-download-fgs] One-time ask at the moment of
+                    // intent. Refusal doesn't block anything — the download
+                    // and its foreground service run regardless; Android 13+
+                    // merely hides the progress notification.
+                    if (Build.VERSION.SDK_INT >= 33 &&
+                        ContextCompat.checkSelfPermission(
+                            context,
+                            Manifest.permission.POST_NOTIFICATIONS,
+                        ) != PackageManager.PERMISSION_GRANTED
+                    ) {
+                        notifPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    }
                     // Kick off the source-selected, resumable, background
                     // downloader. It owns a process-wide scope, so leaving the
                     // screen does not cancel it; re-entering re-collects state.

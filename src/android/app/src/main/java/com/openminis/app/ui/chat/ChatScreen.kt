@@ -743,7 +743,12 @@ fun ChatScreen(
     // can position the cursor (e.g. AFTER the leading "/" when the slash
     // button inserts it) — a plain String overload would reset cursor to 0
     // on every external write.
-    var inputFieldValue by remember {
+    // [T-update-download-fgs] rememberSaveable: a process death during a
+    // background update download used to wipe a half-typed message. The
+    // TextFieldValue saver preserves text AND selection across recreation.
+    var inputFieldValue by androidx.compose.runtime.saveable.rememberSaveable(
+        stateSaver = androidx.compose.ui.text.input.TextFieldValue.Saver,
+    ) {
         mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(""))
     }
     var showExpandedEditor by remember { mutableStateOf(false) }

@@ -86,6 +86,15 @@
     <string name="check_update_active_node">Downloading via %1$s</string>
     <string name="check_update_include_rolling">Include rolling prerelease channel</string>
     <string name="check_update_include_rolling_sub">Also consider CI builds (android-latest) when checking for updates</string>
+    <string name="check_update_wifi_only">Download updates over Wi-Fi only</string>
+    <string name="check_update_wifi_only_sub">Never start an update download on a metered network (no confirmation prompt)</string>
+    <string name="update_notif_channel">Update downloads</string>
+    <string name="update_notif_title">Downloading update</string>
+    <string name="update_notif_done_title">Update downloaded</string>
+    <string name="update_notif_done_body">Tap to install</string>
+    <string name="update_notif_failed_title">Update download failed</string>
+    <string name="update_notif_progress">Downloading %1$s of %2$s</string>
+    <string name="update_notif_indeterminate">Preparing download…</string>
     <string name="check_update_source_header">Download source</string>
     <string name="check_update_source_github">GitHub direct</string>
     <string name="check_update_source_ghproxy">gh-proxy.com mirror</string>

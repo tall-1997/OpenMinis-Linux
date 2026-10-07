@@ -78,6 +78,15 @@
     <string name="check_update_active_node">正在通过 %1$s 下载</string>
     <string name="check_update_include_rolling">包含滚动预发布通道</string>
     <string name="check_update_include_rolling_sub">检查更新时同时考虑 CI 构建（android-latest）</string>
+    <string name="check_update_wifi_only">仅通过 Wi-Fi 下载更新</string>
+    <string name="check_update_wifi_only_sub">绝不在计量网络（移动数据）上开始更新下载，无需确认弹窗</string>
+    <string name="update_notif_channel">更新下载</string>
+    <string name="update_notif_title">正在下载更新</string>
+    <string name="update_notif_done_title">更新已下载</string>
+    <string name="update_notif_done_body">点按安装</string>
+    <string name="update_notif_failed_title">更新下载失败</string>
+    <string name="update_notif_progress">已下载 %1$s / %2$s</string>
+    <string name="update_notif_indeterminate">正在准备下载…</string>
     <string name="check_update_source_header">下载源</string>
     <string name="check_update_source_github">GitHub 直连</string>
     <string name="check_update_source_ghproxy">gh-proxy.com 镜像</string>

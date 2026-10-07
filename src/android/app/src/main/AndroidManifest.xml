@@ -21,6 +21,12 @@
          policy, not an OS runtime check, and Minis ships as a sideload.
     -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!-- [T-update-download-fgs] Transient dataSync slot held only while an
+         update APK is streaming (minutes, self-releasing). The 6h/24h
+         cumulative cap that killed AgentForegroundService (see
+         T-android-fgs-timeout-crash) cannot bite a service that stops itself
+         the moment the download leaves the running state. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <!-- T50: PARTIAL_WAKE_LOCK held by AgentForegroundService while sessions
          are streaming so Doze + OEM CPU throttling don't stall long shell
          tools after screen-off. -->
@@ -475,6 +481,15 @@
             android:name=".service.AgentForegroundService"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
+
+        <!-- [T-update-download-fgs] Update download progress + process
+             survival. dataSync is semantically correct here (it IS a data
+             transfer) and the service is strictly transient — see the
+             FOREGROUND_SERVICE_DATA_SYNC permission comment. -->
+        <service
+            android:name=".data.UpdateDownloadService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
 
         <!-- Alarm broadcast receiver (also handles BOOT_COMPLETED for re-scheduling)
              [T-android-alarm-receiver-nonexported] exported=false: BOOT_COMPLETED is a

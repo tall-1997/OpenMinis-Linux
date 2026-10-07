@@ -55,6 +55,8 @@ object UpdateDownloadManager {
     private const val TAG = "UpdateDownloadManager"
     private const val PROGRESS_NOTIFY_MIN_MS = 400L
     private const val ETAG_SUFFIX = ".etag"
+    private const val UPDATE_PREFS = "update_download_prefs"
+    private const val KEY_WIFI_ONLY = "wifi_only"
 
     private val client = OkHttpClient.Builder()
         // [T-doh-resolver-fallback] A failed APK download is expensive enough
@@ -154,6 +156,14 @@ object UpdateDownloadManager {
 
         lastRequest = StartRequest(apkUrl, versionName, expectedSizeBytes, expectedSha256, preferredSourceId)
 
+        // [T-update-wifi-only] The user's standing preference outranks the
+        // confirmation flow: refuse outright, with an error the UI shows.
+        if (isWifiOnlyPreferred(appCtx) && isActiveNetworkMetered(appCtx)) {
+            val msg = "Wi-Fi only is enabled; metered network active"
+            AppLogger.info(TAG, msg)
+            _state.value = DownloadState(running = false, error = msg)
+            return
+        }
         // [T-update-metered-guard] Refuse to silently stream 130 MB over a
         // metered connection. The UI observes needsMeteredConfirm and asks.
         if (!allowMetered && isActiveNetworkMetered(appCtx)) {
@@ -166,15 +176,30 @@ object UpdateDownloadManager {
         // plus the installer's extraction working set — check for 2x up front
         // instead of dying at 95% with ENOSPC.
         if (expectedSizeBytes > 0L) {
+            val needed = expectedSizeBytes * 2L
+            // Fast path: if even the optimistic estimate says no, don't
+            // bother writing a probe file.
             val usable = outDir.usableSpace
-            if (usable < expectedSizeBytes * 2L) {
-                val msg = "insufficient space: need ~${expectedSizeBytes * 2L / (1024L * 1024L)} MB, free ${usable / (1024L * 1024L)} MB"
+            if (usable < needed) {
+                val msg = "insufficient space: need ~${needed / (1024L * 1024L)} MB, free ${usable / (1024L * 1024L)} MB"
+                AppLogger.warning(TAG, msg)
+                _state.value = DownloadState(running = false, error = msg)
+                return
+            }
+            // Honest path: the estimate lies on shared/reserved volumes —
+            // actually write the bytes before committing to a 130 MB stream.
+            if (!probeWritableSpace(outDir, needed)) {
+                val msg = "insufficient space: could not write ${needed / (1024L * 1024L)} MB (probe failed)"
                 AppLogger.warning(TAG, msg)
                 _state.value = DownloadState(running = false, error = msg)
                 return
             }
         }
 
+        // [T-update-download-fgs] Hold a dataSync foreground slot + mirror
+        // progress into a notification while the download runs, so leaving
+        // the app neither kills the process nor hides the progress.
+        UpdateDownloadService.ensureStarted(appCtx)
         _state.value = DownloadState(running = true, probing = true, progress = 0f)
         job = scope.launch {
             try {
@@ -254,6 +279,50 @@ object UpdateDownloadManager {
         java.net.URI(url).host ?: url
     } catch (_: Exception) {
         url
+    }
+
+    /**
+     * [T-update-wifi-only] User preference: never download updates over a
+     * metered network, no confirmation dialog. Stronger than the metered
+     * guard (which asks); this one refuses outright.
+     */
+    fun isWifiOnlyPreferred(context: Context): Boolean =
+        context.getSharedPreferences(UPDATE_PREFS, Context.MODE_PRIVATE)
+            .getBoolean(KEY_WIFI_ONLY, false)
+
+    fun setWifiOnlyPreferred(context: Context, value: Boolean) {
+        context.getSharedPreferences(UPDATE_PREFS, Context.MODE_PRIVATE)
+            .edit().putBoolean(KEY_WIFI_ONLY, value).apply()
+    }
+
+    /**
+     * [T-update-space-probe] usableSpace/freeSpace report what the
+     * filesystem *claims*; shared volumes (emulated storage) and OEM
+     * reserved blocks make them optimistic. The only honest check is to
+     * actually write the bytes. We probe with the full 2x requirement
+     * (download copy + installer extraction working set) in 1 MB chunks
+     * and delete the probe immediately — a few seconds of flash wear for
+     * a guarantee ENOSPC can't ambush us at 95%.
+     */
+    private fun probeWritableSpace(dir: File, neededBytes: Long): Boolean {
+        val probe = File(dir, ".space-probe")
+        return try {
+            RandomAccessFile(probe, "rw").use { raf ->
+                val buf = ByteArray(1024 * 1024)
+                var written = 0L
+                while (written < neededBytes) {
+                    val chunk = minOf(buf.size.toLong(), neededBytes - written).toInt()
+                    raf.write(buf, 0, chunk)
+                    written += chunk
+                }
+            }
+            true
+        } catch (e: Exception) {
+            AppLogger.warning(TAG, "space probe failed at needed=$neededBytes: ${e.javaClass.simpleName}")
+            false
+        } finally {
+            runCatching { probe.delete() }
+        }
     }
 
     private fun isActiveNetworkMetered(context: Context): Boolean = try {
@@ -392,7 +461,26 @@ object UpdateDownloadManager {
                         etagFile.delete()
                     }
                 }
-                206 -> { /* honored, resume from existing */ }
+                206 -> {
+                    // Content-Range must start exactly at our existing
+                    // length. A server that answers 206 with a body from
+                    // byte 0 (non-compliant mirror) would splice a full
+                    // copy onto the .part tail; sha256 catches it only
+                    // after wasting a full transfer. Refuse up front.
+                    val cr = resp.header("Content-Range")
+                    val start = cr?.let { h ->
+                        Regex("bytes (\\d+)-").find(h)?.groupValues?.get(1)?.toLongOrNull()
+                    }
+                    if (existing > 0 && start != null && start != existing) {
+                        AppLogger.warning(
+                            TAG,
+                            "206 Content-Range starts at $start but .part has $existing bytes; refusing splice",
+                        )
+                        partFile.delete()
+                        etagFile.delete()
+                        throw IntegrityException("server resumed from wrong offset ($start != $existing)")
+                    }
+                }
                 416 -> {
                     // Range not satisfiable. That means the part is complete only
                     // when its length matches the published asset. A shorter part
