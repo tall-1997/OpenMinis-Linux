@@ -42,7 +42,6 @@ class MessageSortOrderMigrationTest {
             raw.execSQL("INSERT INTO messages(id,session_id,role,parts_json,created_at,sort_order) VALUES ('a','s','user','a',50,2)")
             raw.version = 20
         }
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
         val config = SupportSQLiteOpenHelper.Configuration.builder(context)
             .name(file.absolutePath)
             .callback(object : SupportSQLiteOpenHelper.Callback(20) {

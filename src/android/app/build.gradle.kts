@@ -244,6 +244,14 @@ android {
         unitTests.isReturnDefaultValues = true
     }
 
+    // [T-androidtest-release] This project has no debug buildType, and AGP
+    // hangs androidTest on debug by default — which silently meant the
+    // androidTest sourceSet (MessageVersionMigrationTest, archive-tx tests)
+    // had NO compile task at all: assembleAndroidTest was an empty UP-TO-DATE
+    // shell and syntax errors in those files were invisible. Point the test
+    // build type at release so the androidTest compile task exists.
+    testBuildType = "release"
+
     // [T-android-downgrade-compat] MigrationTestHelper loads the exported
     // schema JSON from the TEST APK's assets, not from the project directory —
     // without this it fails with "Cannot find the schema file in the assets
