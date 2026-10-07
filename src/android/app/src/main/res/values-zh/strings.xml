@@ -2208,6 +2208,8 @@
     <string name="web_search_bing_key">Bing 订阅密钥</string>
     <string name="web_search_fallback">失败时回退 DuckDuckGo</string>
     <string name="web_search_fallback_sub">所选引擎失败时再试 DuckDuckGo</string>
+    <string name="web_search_keyless">免 key 国内兜底链</string>
+    <string name="web_search_keyless_sub">全部引擎失败后依次试 搜狗 → Bing RSS → 百度，最后 Wikipedia</string>
     <string name="web_search_fallback_footer">仍然没有结果时会提示用 browser_use 打开已知网址。</string>
     <string name="chat_card_share_title">分享对话卡片</string>
     <string name="chat_card_theme_dark">深色</string>

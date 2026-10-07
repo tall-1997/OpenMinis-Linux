@@ -111,6 +111,23 @@ object WebSearchTool {
                 failures += engine to (attempt.error ?: "no results")
             }
             if (results.isEmpty()) {
+                // Key-free Chinese chain (Sogou → Bing RSS → Baidu) first —
+                // it is the whole point of the fallback on CN networks where
+                // DuckDuckGo is unreachable; Wikipedia is encyclopedia-only
+                // and stays the last resort.
+                val keyless =
+                    if (context?.let { WebSearchSettings.keylessFallbackEnabled(it) } != false) {
+                        searchKeylessCnChain(query, max, context)
+                    } else {
+                        null
+                    }
+                if (keyless != null && keyless.second.isNotEmpty()) {
+                    return ToolExecutionResult(
+                        format(query, keyless.second, "no-key-${keyless.first}"),
+                        success = true,
+                        toolTitle = toolTitle,
+                    )
+                }
                 val fallback = searchNoKeyFallback(query, max, context)
                 if (fallback.isNotEmpty()) {
                     return ToolExecutionResult(
@@ -122,7 +139,8 @@ object WebSearchTool {
                 val chain = failures.joinToString("; ") { (e, err) -> "${e.id}: $err" }
                 return ToolExecutionResult(
                     "web_search failed for \"$query\". Engines tried: $chain. " +
-                        "The no-key Wikipedia/Bing/Mojeek fallback was also empty. " +
+                        "The keyless Sogou/Bing-RSS/Baidu chain and the Wikipedia fallback " +
+                        "were also empty. " +
                         "Configure Settings → Web search, or open a known URL with browser_use.",
                     success = false,
                     toolTitle = toolTitle,
@@ -493,11 +511,20 @@ object WebSearchTool {
 
     private fun format(query: String, results: List<Result>, engine: String = "ddg"): String = buildString {
         appendLine("web_search ($engine) results for \"$query\" (${results.size}):")
+        appendLine("When citing sources in your answer, use the [N] numbering below.")
         results.forEachIndexed { i, r ->
             appendLine()
-            appendLine("${i + 1}. ${r.title}")
+            appendLine("[${i + 1}] ${r.title}")
             appendLine("   ${r.url}")
             if (r.snippet.isNotBlank()) appendLine("   ${r.snippet}")
+        }
+        // Trailing source list — cheap “citation cards” at the data layer:
+        // the model can mirror [N] + title + URL into its answer and the
+        // chat renderer turns the URLs into tappable links.
+        appendLine()
+        appendLine("---参考资料---")
+        results.forEachIndexed { i, r ->
+            appendLine("[${i + 1}] ${r.title} — ${r.url}")
         }
     }
 
@@ -510,7 +537,6 @@ object WebSearchTool {
      * after every configured engine returned empty.
      */
     private fun searchNoKeyFallback(query: String, max: Int, context: Context?): List<Result> {
-        val out = mutableListOf<Result>()
         // [T-android-websearch-nokey-bing] The regex-scraped Bing/Mojeek
         // HTML endpoints are near-useless as a fallback: Bing serves a
         // consent wall / simplified page to this UA + no-cookie request far
@@ -520,6 +546,9 @@ object WebSearchTool {
         // The previous two scrapers cost one HTTP round-trip each for
         // almost always-empty results — that delay is exactly what the
         // fallback chain exists to AVOID adding.
+        // (The keyless CN chain runs BEFORE this in execute(); Wikipedia
+        // is the encyclopedia-shaped last resort.)
+        val out = mutableListOf<Result>()
         out += searchWikipedia(query, max, context)
         return out.distinctBy { it.url }.take(max)
     }
@@ -545,6 +574,34 @@ object WebSearchTool {
             )
         }
         return out.distinctBy { it.url }.take(max)
+    }
+
+    /**
+     * Runs [KeylessSearchSources.chain] in order and returns the first
+     * source that produced results, as (source label, hits). Every fetch
+     * carries a desktop UA because Sogou/Baidu serve different markup to
+     * mobile clients. Exceptions never escape — a dead source just moves
+     * the chain along.
+     */
+    private fun searchKeylessCnChain(
+        query: String,
+        max: Int,
+        context: Context?,
+    ): Pair<String, List<Result>>? {
+        for (source in KeylessSearchSources.chain) {
+            val hits = try {
+                val body = fetchUrl(
+                    source.urlFor(query),
+                    KeylessSearchSources.desktopHeaders(query),
+                    context,
+                ) ?: continue
+                source.parse(body, max)
+            } catch (_: Exception) {
+                continue
+            }
+            if (hits.isNotEmpty()) return source.label to hits
+        }
+        return null
     }
 
     private fun searchWikipedia(query: String, max: Int, context: Context?): List<Result> {

@@ -2396,6 +2396,8 @@
     <string name="web_search_bing_key">Bing subscription key</string>
     <string name="web_search_fallback">Fallback to DuckDuckGo</string>
     <string name="web_search_fallback_sub">If the selected engine fails, retry DuckDuckGo</string>
+    <string name="web_search_keyless">Keyless CN fallback chain</string>
+    <string name="web_search_keyless_sub">After every engine fails, try Sogou → Bing RSS → Baidu, then Wikipedia</string>
     <string name="web_search_fallback_footer">Empty results still recommend browser_use on a known URL.</string>
     <string name="chat_card_share_title">Share conversation card</string>
     <string name="chat_card_theme_dark">Dark</string>

@@ -43,6 +43,7 @@ fun WebSearchSettingsScreen(onBack: () -> Unit) {
     var customKey by remember { mutableStateOf(WebSearchSettings.customKey(context)) }
     var customHeader by remember { mutableStateOf(WebSearchSettings.customKeyHeader(context)) }
     var fallback by remember { mutableStateOf(WebSearchSettings.fallbackEnabled(context)) }
+    var keyless by remember { mutableStateOf(WebSearchSettings.keylessFallbackEnabled(context)) }
     var detail by remember { mutableStateOf<WebSearchSettings.Engine?>(null) }
     // [T-android-websearch-test-button] One-shot probe result for the engine
     // currently in detail view. Keyed by engine so switching detail pages
@@ -104,6 +105,16 @@ fun WebSearchSettingsScreen(onBack: () -> Unit) {
                     onCheckedChange = {
                         fallback = it
                         WebSearchSettings.setFallbackEnabled(context, it)
+                    },
+                    showDivider = true,
+                )
+                SettingsSwitchRow(
+                    title = stringResource(R.string.web_search_keyless),
+                    subtitle = stringResource(R.string.web_search_keyless_sub),
+                    checked = keyless,
+                    onCheckedChange = {
+                        keyless = it
+                        WebSearchSettings.setKeylessFallbackEnabled(context, it)
                     },
                     showDivider = false,
                 )

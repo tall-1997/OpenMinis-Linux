@@ -22,6 +22,7 @@ object WebSearchSettings {
     const val KEY_BRAVE = "brave_key"
     const val KEY_JINA = "jina_key"
     const val KEY_ZHIPU = "zhipu_key"
+    const val KEY_KEYLESS_CN = "keyless_cn"
 
     enum class Engine(val id: String, val needsKey: Boolean = false) {
         DDG("ddg"),
@@ -141,6 +142,19 @@ object WebSearchSettings {
 
     fun setFallbackEnabled(context: Context, enabled: Boolean) {
         prefs(context).edit().putBoolean(KEY_FALLBACK, enabled).apply()
+    }
+
+    /**
+     * Key-free Chinese chain (Sogou → Bing RSS → Baidu) tried after every
+     * configured engine failed. Default ON — it only ever runs when the
+     * whole keyed chain plus DuckDuckGo returned nothing, so it cannot
+     * spend quota or shadow the user's chosen backend.
+     */
+    fun keylessFallbackEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_KEYLESS_CN, true)
+
+    fun setKeylessFallbackEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_KEYLESS_CN, enabled).apply()
     }
 
     private fun prefs(context: Context) =
