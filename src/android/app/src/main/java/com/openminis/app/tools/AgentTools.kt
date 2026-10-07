@@ -11,6 +11,15 @@ import com.openminis.app.data.model.AgentToolParam
  */
 object AgentTools {
 
+    /**
+     * [T-a11y-skill] System-prompt guidance for the recorded-skill loop.
+     * Assembled by ChatViewModelPromptExt into the "Available tools" section —
+     * the fragment lives here (next to the tool registration it describes) so
+     * the prompt text cannot drift from the schema.
+     */
+    const val UI_SKILL_PROMPT_FRAGMENT: String =
+        "- ui_skill: Repetitive device operations (固定的打开→搜索→点击流程) — first ui_skill match/replay a previously recorded skill; fall back to ui_read + ui_action only when replay fails. Record new flows via Settings → Accessibility → 录制场景 then ui_skill save."
+
     fun makeAgentTools(
         supportsImageInput: Boolean = true,
         // [T-android-vision-group / GH#182] When the main model can't natively
@@ -50,6 +59,7 @@ object AgentTools {
         add(GlobTool.definition())
         add(UiReadTool.definition())
         add(UiActionTool.definition())
+        add(UiSkillTool.definition())
         if (supportsImageInput || visionGroupConfigured) {
             add(ReadImageTool.definition())
         }
