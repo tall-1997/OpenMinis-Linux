@@ -401,7 +401,11 @@ class GeminiProvider(
             model.id,
             level,
             budgetTokensMax = model.budgetTokensMax,
-            budgetTokensMin = model.budgetTokensMin,
+            // [T-gemini-budget-min-dead] budgetTokensMin intentionally NOT
+            // passed: the Gemini wire API has no minimum-thinking field
+            // (thinkingBudget is a single value, 3.x uses thinkingLevel), so
+            // models.dev's declared min is a catalog bound, not a wire
+            // constraint. The parameter used to exist and was never consumed.
         )
         com.openminis.app.logging.AppLogger.info(
             "Thinking",

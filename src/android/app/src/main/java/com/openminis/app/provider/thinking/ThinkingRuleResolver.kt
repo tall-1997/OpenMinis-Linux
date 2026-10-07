@@ -623,7 +623,10 @@ object ThinkingRuleResolver {
         modelId: String,
         level: ThinkingLevel,
         budgetTokensMax: Int? = null,
-        budgetTokensMin: Int? = null,
+        // [T-gemini-budget-min-dead] No budgetTokensMin here: the Gemini wire
+        // API has no minimum-thinking field (2.5 sends a single thinkingBudget,
+        // 3.x sends thinkingLevel). The parameter used to exist and was never
+        // consumed — models.dev's declared min is a catalog bound, not wire.
     ): JSONObject? {
         // [T-gemini-tts-thinking-400 / OpenMinis#226] Specialized modalities take
         // precedence over EVERY family rule and over the requested level: these models

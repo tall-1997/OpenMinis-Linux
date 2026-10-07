@@ -4,6 +4,7 @@ import com.openminis.app.data.model.ThinkingLevel
 import com.openminis.app.provider.thinking.ThinkingRuleResolver
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Test
 
 /**
@@ -326,5 +327,21 @@ anthropic/not-a-claude/MAX/mt65536 -> {budget_tokens=45056}
 anthropic/not-a-claude/ULTRA/mt8192 -> {budget_tokens=7680}
 anthropic/not-a-claude/ULTRA/mt65536 -> {budget_tokens=61440}
 """.trimIndent()
+    }
+
+    @Test
+    fun geminiThinkingConfigNeverEmitsMinField() {
+        // [T-gemini-budget-min-dead] The Gemini wire has no minimum-thinking
+        // field (2.5 sends one thinkingBudget, 3.x sends thinkingLevel), so
+        // geminiThinkingConfig no longer accepts budgetTokensMin at all and
+        // must never emit a min-shaped key. Pin both properties.
+        for (m in geminiModels) {
+            for (lv in ThinkingLevel.values()) {
+                val cfg = ThinkingRuleResolver.geminiThinkingConfig(m, lv, budgetTokensMax = 8192) ?: continue
+                for (k in cfg.keys()) {
+                    assertFalse("gemini config key '$k' looks like a min-budget field", k.lowercase().contains("min"))
+                }
+            }
+        }
     }
 }
