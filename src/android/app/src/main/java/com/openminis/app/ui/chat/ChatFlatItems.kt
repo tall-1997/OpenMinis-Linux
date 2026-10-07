@@ -68,8 +68,6 @@ internal sealed class FlatChatItem {
         val messageId: String,
         val speakerName: String = "",
         val speakerVendor: String = "",
-        // [T-cuplivo-turn-chrome] per-message timestamp for the header.
-        val createdAt: Long = 0L,
         private val keySuffix: String = "",
     ) : FlatChatItem() {
         override val key = FlatKeys.of(FlatKeys.KIND_HEADER, messageId) + keySuffix
@@ -197,8 +195,6 @@ internal sealed class FlatChatItem {
         val block: AssistantBlock,
         val isLast: Boolean,
         val messageIsStreaming: Boolean,
-        // [T-cuplivo-process-card] position inside the turn's process run.
-        val segmentPos: ProcessSegmentPos = ProcessSegmentPos.Only,
         // T300: thinking level captured at the message's creation. Null
         // for assistant messages restored from DB (legacy / pre-T300) —
         // the renderer falls back to the chat's current level.
@@ -239,8 +235,6 @@ internal sealed class FlatChatItem {
         val messageId: String,
         val block: AssistantBlock,
         val allToolBlocks: List<AssistantBlock>,
-        // [T-cuplivo-process-card] position inside the turn's process run.
-        val segmentPos: ProcessSegmentPos = ProcessSegmentPos.Only,
         /** True if this is the last cancelled tool in its message — only one Retry button per message. */
         val isLastCancelled: Boolean = false,
         private val keySuffix: String = "",
@@ -534,7 +528,6 @@ internal fun buildFlatChatItems(
                 message.id,
                 message.speakerName.orEmpty(),
                 message.speakerVendor.orEmpty(),
-                createdAt = message.createdAt,
             )))
         }
         blocks.forEachIndexed { index, block ->
@@ -737,21 +730,7 @@ internal fun buildFlatChatItems(
             out.add(dedupe(FlatChatItem.AssistantError(message.id, it)))
         }
     }
-    // [T-cuplivo-process-card] Stamp segment positions onto contiguous
-    // thinking/tool runs so each item paints its slice of the shared card.
-    return assignProcessPositions(
-        items = out,
-        isProcess = {
-            it is FlatChatItem.AssistantThinking || it is FlatChatItem.AssistantToolUse
-        },
-        withPos = { item, pos ->
-            when (item) {
-                is FlatChatItem.AssistantThinking -> item.copy(segmentPos = pos)
-                is FlatChatItem.AssistantToolUse -> item.copy(segmentPos = pos)
-                else -> item
-            }
-        },
-    )
+    return out
 }
 
 internal fun shouldShowToolUseRow(block: AssistantBlock, showCompletedToolCards: Boolean): Boolean {

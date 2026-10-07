@@ -212,7 +212,6 @@ internal fun ChatViewModel.sendMessage(
                 attachmentNames = prepared.attachmentNames + (pasted?.uiNames ?: emptyList()),
                 attachmentUris = prepared.nonImageUris + (pasted?.uiUris ?: emptyList()),
                 sourceDbIds = listOf(persistedUser.id),
-                createdAt = persistedUser.createdAt,
             )
             _messages.value = trimLoadedWindow(_messages.value + userMsg)
             notePersistedUiRow(persistedUser.id, persistedUser.id)

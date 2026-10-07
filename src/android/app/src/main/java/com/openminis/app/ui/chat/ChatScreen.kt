@@ -1906,10 +1906,6 @@ fun ChatScreen(
     var showFloatingToolBar by remember { mutableStateOf(appearancePrefs.getBoolean(com.openminis.app.ui.settings.KEY_SHOW_FLOATING_TOOL_BAR, true)) }
     var showCompletedToolCards by remember { mutableStateOf(appearancePrefs.getBoolean(com.openminis.app.ui.settings.KEY_SHOW_COMPLETED_TOOL_CARDS, false)) }
     var foldAiProcess by remember { mutableStateOf(appearancePrefs.getBoolean(com.openminis.app.ui.settings.KEY_FOLD_AI_PROCESS, false)) }
-    // [T-cuplivo-experimental-layout] Live flag for the experimental chat
-    // layout (composer card + left-aligned top bar here; message components
-    // read the same pref directly). Default OFF.
-    var experimentalLayout by remember { mutableStateOf(appearancePrefs.getBoolean(com.openminis.app.ui.settings.KEY_EXPERIMENTAL_CHAT_LAYOUT, false)) }
     var showSubAgentBar by remember { mutableStateOf(appearancePrefs.getBoolean(com.openminis.app.ui.settings.KEY_SHOW_SUBAGENT_BAR, true)) }
     // Live roster of running sub-agents. The top bar renders these; the session
     // page hides a sub-agent transcript card only while its run is in this set,
@@ -1936,7 +1932,6 @@ fun ChatScreen(
             showFloatingToolBar = sp.getBoolean(com.openminis.app.ui.settings.KEY_SHOW_FLOATING_TOOL_BAR, true)
             showCompletedToolCards = sp.getBoolean(com.openminis.app.ui.settings.KEY_SHOW_COMPLETED_TOOL_CARDS, false)
             foldAiProcess = sp.getBoolean(com.openminis.app.ui.settings.KEY_FOLD_AI_PROCESS, false)
-            experimentalLayout = sp.getBoolean(com.openminis.app.ui.settings.KEY_EXPERIMENTAL_CHAT_LAYOUT, false)
             showSubAgentBar = sp.getBoolean(com.openminis.app.ui.settings.KEY_SHOW_SUBAGENT_BAR, true)
             autoFocusAfterReply = sp.getBoolean(com.openminis.app.ui.settings.KEY_AUTO_FOCUS_AFTER_REPLY, true)
             showChatTitlePill = sp.getBoolean(com.openminis.app.ui.settings.KEY_SHOW_CHAT_TITLE, true)
@@ -1954,7 +1949,6 @@ fun ChatScreen(
                     com.openminis.app.ui.settings.KEY_SHOW_FLOATING_TOOL_BAR -> showFloatingToolBar = sp.getBoolean(key, true)
                     com.openminis.app.ui.settings.KEY_SHOW_COMPLETED_TOOL_CARDS -> showCompletedToolCards = sp.getBoolean(key, false)
                     com.openminis.app.ui.settings.KEY_FOLD_AI_PROCESS -> foldAiProcess = sp.getBoolean(key, false)
-                    com.openminis.app.ui.settings.KEY_EXPERIMENTAL_CHAT_LAYOUT -> experimentalLayout = sp.getBoolean(key, false)
                     com.openminis.app.ui.settings.KEY_SHOW_SUBAGENT_BAR -> showSubAgentBar = sp.getBoolean(key, true)
                     com.openminis.app.ui.settings.KEY_AUTO_FOCUS_AFTER_REPLY -> autoFocusAfterReply = sp.getBoolean(key, true)
                     com.openminis.app.ui.settings.KEY_SHOW_CHAT_TITLE -> showChatTitlePill = sp.getBoolean(key, true)
@@ -2184,11 +2178,8 @@ fun ChatScreen(
                 title = {
                     // iOS-style centered layout: "Minis Ultra" + group row + provider·model row
                     Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            // [T-cuplivo-experimental-layout] left-aligned title
-                            .then(if (experimentalLayout) Modifier.padding(start = 12.dp) else Modifier),
-                        contentAlignment = if (experimentalLayout) Alignment.CenterStart else Alignment.Center,
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.Center,
                     ) {
                         val noFontPad = androidx.compose.ui.text.TextStyle(
                             platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false),
@@ -2204,7 +2195,7 @@ fun ChatScreen(
                             }
                         }
                         Column(
-                            horizontalAlignment = if (experimentalLayout) Alignment.Start else Alignment.CenterHorizontally,
+                            horizontalAlignment = Alignment.CenterHorizontally,
                             modifier = Modifier
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(Color.Red.copy(alpha = 0.35f * fallbackPulseAlpha.value))
@@ -2216,7 +2207,7 @@ fun ChatScreen(
                                 // behind. Horizontal 32dp keeps the fallback
                                 // pulse highlight comfortably padded around
                                 // the longest title.
-                                .padding(horizontal = if (experimentalLayout) 8.dp else 32.dp, vertical = 2.dp),
+                                .padding(horizontal = 32.dp, vertical = 2.dp),
                         ) {
                             // Nav title: current session title when one
                             // exists and the toggle is on, else fall back to
@@ -2240,8 +2231,7 @@ fun ChatScreen(
                             }
                             Text(
                                 text = displayTitle,
-                                // [T-cuplivo-experimental-layout] 17sp left-aligned title
-                                fontSize = if (experimentalLayout) 17.sp else 16.sp,
+                                fontSize = 16.sp,
                                 lineHeight = 19.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = ChatColors.primaryText,
@@ -2412,12 +2402,6 @@ fun ChatScreen(
                                                 modelName.ifEmpty { providerName }
                                             },
                                             fontSize = 11.sp,
-                                            // [T-cuplivo-experimental-layout] cuplivo mono meta line
-                                            fontFamily = if (experimentalLayout) {
-                                                androidx.compose.ui.text.font.FontFamily.Monospace
-                                            } else {
-                                                null
-                                            },
                                             lineHeight = 13.sp,
                                             color = ChatColors.tertiaryText,
                                             maxLines = 1,
@@ -4055,7 +4039,7 @@ fun ChatScreen(
                                 },
                             )
                             } // close UserBubble SideEffect + UserMessageBubble block
-                            is FlatChatItem.AssistantHeader -> AssistantHeader(item.speakerName, item.speakerVendor, item.createdAt)
+                            is FlatChatItem.AssistantHeader -> AssistantHeader(item.speakerName, item.speakerVendor)
                             is FlatChatItem.AssistantText -> BoundsTrackedBlock(
                                 messageId = item.messageId,
                                 slotKey = "text:${item.block.id}",
@@ -4197,17 +4181,14 @@ fun ChatScreen(
                                     // edge ThinkingBlock's LaunchedEffect
                                     // hooks for auto-collapse, matching iOS
                                     // ThinkingBlockView semantics.
-                                    ProcessCardSegment(item.segmentPos) {
-                                        ThinkingBlock(
-                                            block = item.block,
-                                            isStreaming = item.isLastBlockOverall && item.messageIsStreaming,
-                                            isLast = item.isLast,
-                                        )
-                                    }
+                                    ThinkingBlock(
+                                        block = item.block,
+                                        isStreaming = item.isLastBlockOverall && item.messageIsStreaming,
+                                        isLast = item.isLast,
+                                    )
                                 }
                             }
-                            is FlatChatItem.AssistantToolUse -> ProcessCardSegment(item.segmentPos) {
-                                ToolCallPill(
+                            is FlatChatItem.AssistantToolUse -> ToolCallPill(
                                 block = item.block,
                                 allToolBlocks = item.allToolBlocks,
                                 onRetry = if (item.isLastCancelled && !isStreaming && !canResume) ({ safeMutate { viewModel.retryLast() } }) else null,
@@ -4251,7 +4232,6 @@ fun ChatScreen(
                                     ).show()
                                 },
                             )
-                            }
                             is FlatChatItem.AssistantInfo -> FallbackInfoBlock(
                                 block = item.block,
                                 // Only the compact-divider info block should
@@ -5434,19 +5414,6 @@ fun ChatScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        // [T-cuplivo-experimental-layout] cuplivo input card:
-                        // 24dp-radius 1dp-border card around the composer
-                        // (transparent fill — the page bg shows through).
-                        .then(
-                            if (experimentalLayout) Modifier
-                                .padding(horizontal = 10.dp)
-                                .border(
-                                    1.dp,
-                                    ChatColors.processCardLine,
-                                    RoundedCornerShape(24.dp),
-                                )
-                            else Modifier
-                        )
                         .drawBehind {
                             val radiusPx = 20.dp.toPx()
                             val canvas = drawContext.canvas.nativeCanvas

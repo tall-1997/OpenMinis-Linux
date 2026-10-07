@@ -919,8 +919,6 @@
     <string name="appearance_auto_expand_thinking_title">Expand Thinking While Streaming</string>
     <string name="appearance_auto_expand_thinking_footer">When on, a new thinking block expands automatically while the model is reasoning and collapses when it finishes. When off, thinking blocks stay collapsed — tap one to read it. Fold AI process (off by default) collapses finished thinking and tools into a summary as they complete; tap the summary to expand.</string>
     <string name="appearance_fold_ai_process_title">Fold AI process</string>
-    <string name="appearance_experimental_layout_title">Experimental chat layout</string>
-    <string name="appearance_experimental_layout_subtitle">Turn headers with avatars and timestamps, visible message actions, and a unified process card for thinking and tool calls. Work in progress — turn off to restore the classic layout.</string>
     <string name="appearance_fold_ai_process_subtitle">Collapse thinking and tools into a summary as soon as they finish, even mid-reply. Only the current in-progress piece stays expanded. Tap the summary to expand. In-flight tools still show on the overlay.</string>
     <!-- [T-android-monet-dynamic-color] Opt-in: identity is the iOS-parity
          palette, so wallpaper tinting must not be the default. -->

@@ -3015,7 +3015,6 @@ class ChatViewModel(
         _messages.value = trimLoadedWindow(_messages.value + ChatMessage(
             id = "sysinfo_${System.currentTimeMillis()}",
             role = "system",
-            createdAt = System.currentTimeMillis(),
             content = "",
             toolBlocks = listOf(block),
         ))
@@ -4609,7 +4608,6 @@ class ChatViewModel(
         val chatMsg = ChatMessage(
             id = "queued_msg_${prompt.id}",
             role = "user",
-            createdAt = System.currentTimeMillis(),
             content = trimmed,
             imageUris = imageUris,
             attachmentNames = attachmentNames,
@@ -5716,9 +5714,6 @@ class ChatViewModel(
                 attachmentUris = restoredAttachmentUris,
                 toolBlocks = blocks,
                 sourceDbIds = listOf(entity.id),
-                // [T-cuplivo-turn-chrome] surface DB created_at as the
-                // per-message timestamp in the new turn headers.
-                createdAt = entity.createdAt,
                 speakerName = speakerName,
                 speakerVendor = speakerVendor,
                 // [T-error-persist-android] Restore the persisted terminal error

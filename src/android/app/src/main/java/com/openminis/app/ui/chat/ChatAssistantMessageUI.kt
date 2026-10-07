@@ -41,8 +41,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Psychology
-import androidx.compose.material.icons.filled.Lightbulb
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -96,11 +94,7 @@ import com.openminis.app.ui.theme.ChatColors
 import com.openminis.app.ui.components.MinisTextButton
 
 @Composable
-internal fun AssistantHeader(
-    speakerName: String? = null,
-    speakerVendor: String? = null,
-    createdAt: Long = 0L,
-) {
+internal fun AssistantHeader(speakerName: String? = null, speakerVendor: String? = null) {
     // [T-soul-md] Identity header = icon + SOUL.md-driven `name`.
     //
     // [T-android-soul-custom-icon] The icon is now the user-settable
@@ -115,60 +109,42 @@ internal fun AssistantHeader(
     val namedSpeaker = speakerName?.takeIf { it.isNotBlank() }
     val soulMeta by com.openminis.app.agent.SoulStore.cachedMetadata.collectAsState()
     val displayName = namedSpeaker ?: soulMeta.name.ifBlank { com.openminis.app.agent.SoulMetadata.DEFAULT.name }
-    // [T-cuplivo-experimental-layout] Off → pre-redesign 18dp-icon header.
-    if (!com.openminis.app.ui.settings.experimentalChatLayoutEnabled(LocalContext.current)) {
-        AssistantHeaderLegacy(speakerName, speakerVendor)
-        return
-    }
-    // [T-cuplivo-turn-chrome] cuplivo-style header: circular avatar +
-    // monospace name with a monospace timestamp underneath.
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             // [T-android-user-assistant-spacing-16] top=10 so the
             // User→Assistant boundary reads ~16dp: user-bubble bottom(4) +
             // LazyColumn spacedBy(2) + this top(10) = 16. The header→body gap
-            // inside the turn is unaffected (that's this row's bottom=6).
-            .padding(top = 10.dp, bottom = 6.dp),
+            // inside the turn is unaffected (that's this row's bottom=2).
+            .padding(top = 10.dp, bottom = 2.dp),
     ) {
         val sparkleGradient = Brush.linearGradient(
             colors = listOf(SparkleColor1, SparkleColor2),
         )
-        TurnAvatar {
-            if (namedSpeaker != null) {
-                VendorMark(
-                    vendor = speakerVendor?.takeIf { it.isNotBlank() }
-                        ?: com.openminis.app.tools.GroupChat.vendorKey(null, namedSpeaker),
-                    fallbackName = namedSpeaker,
-                )
-            } else {
-                com.openminis.app.ui.settings.SoulIconGlyph(
-                    icon = soulMeta.icon,
-                    sizeDp = 20.dp,
-                    emojiSp = 16.sp,
-                    sparkleTint = sparkleGradient,
-                )
-            }
-        }
-        Spacer(modifier = Modifier.width(8.dp))
-        Column {
-            Text(
-                text = displayName,
-                fontSize = 13.5.sp,
-                fontWeight = FontWeight.SemiBold,
-                fontFamily = FontFamily.Monospace,
-                color = ChatColors.primaryText.copy(alpha = 0.85f),
+        // 18.dp, matching the previous Icon exactly: the row height feeds a
+        // measured-height estimate in the message list, so the icon stays
+        // square and same-sized whichever branch renders.
+        if (namedSpeaker != null) {
+            VendorMark(
+                vendor = speakerVendor?.takeIf { it.isNotBlank() }
+                    ?: com.openminis.app.tools.GroupChat.vendorKey(null, namedSpeaker),
+                fallbackName = namedSpeaker,
             )
-            val ts = formatTurnTimestamp(createdAt)
-            if (ts.isNotEmpty()) {
-                Text(
-                    text = ts,
-                    fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace,
-                    color = ChatColors.metaText,
-                )
-            }
+        } else {
+        com.openminis.app.ui.settings.SoulIconGlyph(
+            icon = soulMeta.icon,
+            sizeDp = 18.dp,
+            emojiSp = 15.sp,
+            sparkleTint = sparkleGradient,
+        )
         }
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = displayName,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
     }
 }
 
@@ -469,556 +445,6 @@ internal fun ToolCallPill(
     onRerunFromHere: (() -> Unit)? = null,
     onCopyDetails: (() -> Unit)? = null,
 ) {
-    // [T-cuplivo-experimental-layout] Off → legacy 36dp capsule pill.
-    if (!com.openminis.app.ui.settings.experimentalChatLayoutEnabled(LocalContext.current)) {
-        ToolCallPillLegacy(
-            block = block,
-            allToolBlocks = allToolBlocks,
-            onRetry = onRetry,
-            onStop = onStop,
-            onOpenTerminalWithCommand = onOpenTerminalWithCommand,
-            onOpenDetail = onOpenDetail,
-            onRerunFromHere = onRerunFromHere,
-            onCopyDetails = onCopyDetails,
-        )
-        return
-    }
-    // T-android-jank-profile: this log was firing on every ToolCallPill
-    // recomposition (every streaming token while a tool call is live),
-    // showing up as 1.6% main thread time in profiles. Logs at composable
-    // top level multiply with the number of pills × recompose rate. Gate
-    // behind BuildConfig.DEBUG so production builds skip the string-build
-    // entirely, and the rest of release builds don't pay for it.
-    if (com.openminis.app.BuildConfig.DEBUG && false) {
-        android.util.Log.d("ToolChain[UI]", "ToolCallPill render: id=${block.id} name=${block.toolName} title=${block.toolTitle} status=${block.toolStatus} contentLen=${block.content.length} argsLen=${block.toolArgs.length}")
-    }
-
-    // PENDING shares RUNNING's spinner affordance — tool JSON is received but
-    // execution hasn't flipped the block to RUNNING yet (brief gap). TIMEOUT
-    // shares FAILED's error styling but the icon mapping distinguishes them.
-    val isRunning = block.toolStatus == ToolBlockStatus.RUNNING ||
-        block.toolStatus == ToolBlockStatus.STREAMING ||
-        block.toolStatus == ToolBlockStatus.PENDING
-    val isDone = block.toolStatus == ToolBlockStatus.SUCCESS
-    val isFailed = block.toolStatus == ToolBlockStatus.FAILED ||
-        block.toolStatus == ToolBlockStatus.TIMEOUT
-    val isCancelled = block.toolStatus == ToolBlockStatus.CANCELLED
-
-    val toolAccent = toolAccentColor(block.toolName)
-    val toolIcon = toolIconFor(block.toolName)
-
-    // Icon color: tool color when running/done, error/cancel colors on failure
-    val iconTint = when {
-        isFailed -> ToolErrorColor
-        isCancelled -> ToolCancelColor
-        isDone -> ToolCheckColor
-        else -> toolAccent
-    }
-
-    // iOS: always shows tool-type icon, only changes color based on status
-    val displayIcon = toolIcon
-
-    // Duration text (iOS: "0.4s" format)
-    val durationText = if (block.durationMs > 0 && !isRunning) {
-        val seconds = block.durationMs / 1000.0
-        if (seconds < 10) String.format("%.1fs", seconds)
-        else String.format("%.0fs", seconds)
-    } else null
-
-    // T125: drop the spinner that used to replace the tool icon while
-    // running. iOS only animates a left→right shimmer sweep across the
-    // pill background and keeps the typed icon visible — the spinner
-    // both fought the icon for attention and looked stylistically off
-    // next to the iOS counterpart. The bottom FloatingToolStatusBar
-    // still shows a CircularProgressIndicator (that is the running-tool
-    // status surface, where a spinner reads correctly).
-    val shimmerTranslate = if (isRunning) {
-        val transition = rememberInfiniteTransition(label = "toolPillShimmer")
-        transition.animateFloat(
-            initialValue = -1f,
-            targetValue = 2f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 2800, easing = LinearEasing),
-            ),
-            label = "toolPillShimmerTranslate",
-        )
-    } else null
-
-    // [T-android-tool-bubble-longpress-menu] Long-press menu state, scoped
-    // to this pill. The DropdownMenu is anchored to the pill via the Box
-    // wrapper below so it opens beneath the tapped bubble.
-    var showToolMenu by remember { mutableStateOf(false) }
-
-    // [T-cuplivo-process-card] The capsule pill becomes one timeline item
-    // inside the shared lavender process card (segment wrapper applied by
-    // ChatScreen). Inline body: file tools show `path · N lines` + a filename
-    // chip, shell tools show the command + last output lines.
-    val inlineInfo = remember(block.id, block.toolArgs, block.content) { toolInlineInfo(block) }
-    val statusMeta = buildString {
-        when {
-            isFailed -> append("failed")
-            isCancelled -> append("cancelled")
-            isDone -> append(
-                if (block.toolName.contains("shell", true) || block.toolName.contains("exec", true)) {
-                    "exit 0"
-                } else {
-                    "ok"
-                },
-            )
-            else -> append("…")
-        }
-        if (durationText != null) append(" · ").append(durationText)
-    }
-    Box(modifier = Modifier.fillMaxWidth()) {
-        ProcessItemScaffold(
-            icon = displayIcon,
-            iconTint = iconTint,
-            title = block.toolTitle.ifEmpty { block.toolName },
-            meta = if (isRunning) null else statusMeta,
-            chevron = if (isRunning) null else Icons.AutoMirrored.Filled.KeyboardArrowRight,
-            onHeaderClick = { onOpenDetail(block.id) },
-            onHeaderLongClick = if (onRerunFromHere != null || onCopyDetails != null) {
-                { showToolMenu = true }
-            } else {
-                null
-            },
-            trailing = {
-                if (isRunning) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Spacer(modifier = Modifier.width(6.dp))
-                        StreamingDotsText()
-                        if (onStop != null) {
-                            Spacer(modifier = Modifier.width(6.dp))
-                            ToolStopButton(onStop = onStop)
-                        }
-                    }
-                }
-            },
-            body = if (inlineInfo.isEmpty || isRunning) {
-                null
-            } else {
-                {
-                    if (inlineInfo.command != null || inlineInfo.outputTail.isNotEmpty()) {
-                        ProcessCommandBody(inlineInfo)
-                    } else {
-                        ProcessFileBody(inlineInfo)
-                    }
-                }
-            },
-        )
-        // [T-android-tool-bubble-longpress-menu] Long-press menu anchored to
-        // the item. Items mirror the user-bubble menu's style (MinisMenu +
-        // DropdownMenuItem + leading icon).
-        val toolMenuWidthDp = minOf(220, LocalConfiguration.current.screenWidthDp).dp
-        MinisMenu(
-            expanded = showToolMenu,
-            onDismissRequest = { showToolMenu = false },
-            offset = androidx.compose.ui.unit.DpOffset(0.dp, 6.dp),
-            modifier = Modifier.widthIn(max = toolMenuWidthDp),
-            minWidth = toolMenuWidthDp,
-        ) {
-            if (onRerunFromHere != null) {
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.tool_longpress_rerun_from_here)) },
-                    onClick = { showToolMenu = false; onRerunFromHere() },
-                    leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                )
-            }
-            if (onCopyDetails != null) {
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.tool_longpress_copy_details)) },
-                    onClick = { showToolMenu = false; onCopyDetails() },
-                    leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                )
-            }
-        }
-    }
-}
-
-// iOS-style bouncing dots (3 dots, easeInOut, staggered delay)
-// [T-android-split-chat] BouncingDots / StreamingDotsText / TypingIndicator
-// moved verbatim to ChatIndicators.kt (same package, now `internal`).
-
-// ─── Thinking Block (iOS: collapsible "Deep Thinking" section, blue tint) ────
-
-@Composable
-internal fun ThinkingBlock(block: AssistantBlock, isStreaming: Boolean, isLast: Boolean = true) {
-    // [T-cuplivo-experimental-layout] Off → legacy blue-outlined thinking card.
-    if (!com.openminis.app.ui.settings.experimentalChatLayoutEnabled(LocalContext.current)) {
-        ThinkingBlockLegacy(block, isStreaming, isLast)
-        return
-    }
-    // Per-block expand state, keyed by block.id so the user's manual toggle on
-    // an earlier (finished) thinking block survives recomposition while a
-    // later block is still streaming. The previous LaunchedEffect snapped
-    // every non-last block back to collapsed on each `isLast` flip, which
-    // fought the user's tap and produced a flicker that read as "tapping the
-    // earlier block shows the streaming block's content."
-    // [T-thinking-auto-expand-toggle] The initial auto-expand of a new
-    // streaming block is gated on the Appearance setting (default ON =
-    // historical behavior). When the user turned it off, a new streaming block
-    // starts collapsed; a manual header tap still expands it (setting
-    // userTouched, so neither the stream-end auto-collapse nor anything else
-    // fights the user). Read once at mount — mirrors iOS ThinkingBlockView,
-    // where the same UserDefaults gate sits at the one-shot auto-expand site.
-    val context = LocalContext.current
-    val autoExpandThinking = remember { autoExpandThinkingEnabled(context) }
-    var expanded by remember(block.id) { mutableStateOf(autoExpandThinking && isLast && isStreaming) }
-    var userTouched by remember(block.id) { mutableStateOf(false) }
-    LaunchedEffect(block.id, isStreaming) {
-        // One-shot auto-collapse when streaming for this block ends, but only
-        // if the user hasn't taken control of its state yet.
-        if (!isStreaming && !userTouched) expanded = false
-    }
-    val thinkingBlue = Color(0xFF007AFF)
-    val charCount = block.content.length
-    val charLabel = when {
-        charCount >= 1000 -> "${charCount / 1000}K"
-        else -> "$charCount"
-    }
-    // [T-thinking-render-perf-android] Compose `Text` measures/lays out the
-    // ENTIRE string even when only ~300dp is visible, so a 200k-char thinking
-    // block froze the UI (and a per-token recomposition re-measured all 200k
-    // each tick). Two tiers guard this:
-    //  • > HARD_CAP: the inline scroller can't render it at all — show a
-    //    "View full content" entry that opens a native TextView dialog
-    //    (Android TextView handles large text far better than Compose Text).
-    //  • otherwise: render only the last WINDOW chars (tail) — capping layout
-    //    cost to O(WINDOW) regardless of total length.
-    val thinkingWindowSize = 8000
-    val thinkingHardCap = 100_000
-    val overHardCap = charCount > thinkingHardCap
-    var showFullContent by remember(block.id) { mutableStateOf(false) }
-
-    val thinkingDurationMeta = when {
-        isStreaming -> charLabel
-        block.durationMs > 0 -> String.format("(%.1fs)", block.durationMs / 1000.0)
-        else -> charLabel
-    }
-    ProcessItemScaffold(
-        icon = Icons.Default.Lightbulb,
-        iconTint = ChatColors.primaryText.copy(alpha = 0.8f),
-        title = stringResource(R.string.chat_thinking_header),
-        meta = thinkingDurationMeta,
-        chevron = if (overHardCap) {
-            null
-        } else if (expanded) {
-            Icons.Default.KeyboardArrowDown
-        } else {
-            Icons.AutoMirrored.Filled.KeyboardArrowRight
-        },
-        onHeaderClick = {
-            userTouched = true
-            // [T-thinking-render-perf-android] Over the hard cap the
-            // inline scroller is bypassed entirely; tapping the header
-            // opens the native full-content viewer instead of toggling
-            // the (never-shown) inline expansion.
-            if (overHardCap) showFullContent = true
-            else expanded = !expanded
-        },
-        trailing = if (isStreaming && block.toolStatus != ToolBlockStatus.SUCCESS) {
-            {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(12.dp),
-                    color = ChatColors.metaText,
-                    strokeWidth = 1.5.dp,
-                )
-            }
-        } else {
-            null
-        },
-        body = {
-        // Expanded content. Mirrors iOS ThinkingBlockView (AssistantBlockView.swift:648):
-        // an inner scroller capped at 300dp, auto-follow to the bottom while the
-        // block is streaming, manual drag at any time, and pause-on-user-scroll
-        // so a user reading earlier reasoning isn't yanked back to the tail by
-        // the next token.
-        AnimatedVisibility(visible = expanded && !overHardCap) {
-            val scrollState = rememberScrollState()
-            // [T-thinking-render-perf-android] Render only the tail window so
-            // Compose lays out at most `thinkingWindowSize` chars. `remember`
-            // keyed on the length recomputes the substring on each token, but
-            // the cost is O(window) not O(total). Snap the cut to the next
-            // newline (within 200 chars) so we don't start mid-line.
-            val isTruncated = charCount > thinkingWindowSize
-            val displayContent = remember(charCount) {
-                if (isTruncated) {
-                    val full = block.content
-                    val start = charCount - thinkingWindowSize
-                    val nl = full.indexOf('\n', start)
-                    if (nl in start until start + 200) full.substring(nl + 1)
-                    else full.substring(start)
-                } else {
-                    block.content
-                }
-            }
-            // [T-android-thinking-inner-scroll] Pause auto-follow once the user
-            // scrolls away from the bottom; resume it when they return. iOS
-            // pulls the user back unconditionally — but that fights every
-            // touch on Compose's smaller pause-threshold scroller, so we
-            // honor the user's drag the way the outer chat list does.
-            // [T-android-scroll-policy] Renamed from `userScrolledAway` — same
-            // name, unrelated concept: this is the auto-follow switch of the
-            // thinking block's OWN inner scroll container, not the timeline's
-            // reading state (which lives in ChatScrollPolicy).
-            var innerAutoFollowPaused by remember(block.id) { mutableStateOf(false) }
-            LaunchedEffect(scrollState, block.id) {
-                snapshotFlow {
-                    Triple(
-                        scrollState.value,
-                        scrollState.maxValue,
-                        scrollState.isScrollInProgress,
-                    )
-                }.collect { (v, max, dragging) ->
-                    // A nonzero gap from the bottom while the user is actively
-                    // dragging counts as "they took control". We don't flip
-                    // back until the gap closes — gives them room to scroll
-                    // up briefly without ping-ponging.
-                    val gap = (max - v).coerceAtLeast(0)
-                    when {
-                        dragging && gap > 4 -> innerAutoFollowPaused = true
-                        gap <= 4 -> innerAutoFollowPaused = false
-                    }
-                }
-            }
-            // Auto-follow: on every content growth, scroll to the new bottom.
-            // `snapshotFlow { block.content.length }` is recomposition-cheap
-            // and only ticks when the block's text actually grew.
-            LaunchedEffect(scrollState, block.id, isStreaming) {
-                if (!isStreaming) return@LaunchedEffect
-                snapshotFlow { block.content.length }
-                    .collect {
-                        if (innerAutoFollowPaused) return@collect
-                        // scrollTo (not animateScrollTo) — animating fights
-                        // back-to-back token ticks; iOS uses a 0.15s linear
-                        // animation, but Compose's animateScrollTo cancels
-                        // any in-flight scroll, so streaming bursts get
-                        // jankier than a direct snap.
-                        scrollState.scrollTo(scrollState.maxValue)
-                    }
-            }
-            Column(
-                modifier = Modifier
-                    .padding(top = 6.dp)
-                    .heightIn(max = 300.dp)
-                    .verticalScroll(scrollState),
-            ) {
-                if (isTruncated) {
-                    Text(
-                        text = stringResource(
-                            R.string.thinking_truncated_hint,
-                            displayContent.length / 1000,
-                            charCount / 1000,
-                        ),
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                    )
-                }
-                Text(
-                    text = displayContent,
-                    fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
-                    lineHeight = 19.sp,
-                )
-            }
-        }
-
-        // [T-thinking-render-perf-android] Hard-cap full-content viewer. A
-        // native TextView (selectable, scrollable) renders arbitrarily large
-        // thinking text without the Compose `Text` measure freeze.
-        if (overHardCap && showFullContent) {
-            ThinkingFullContentDialog(
-                content = block.content,
-                onDismiss = { showFullContent = false },
-            )
-        }
-        },
-    )
-}
-
-@Composable
-internal fun ProcessSummaryBar(
-    thinkingCount: Int,
-    toolCount: Int,
-    expanded: Boolean,
-    hasFailure: Boolean,
-    onToggle: () -> Unit,
-) {
-    val accent = if (hasFailure) Color(0xFFFF3B30) else Color(0xFF007AFF)
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp)
-            .background(accent.copy(alpha = 0.06f), RoundedCornerShape(12.dp))
-            .border(0.5.dp, accent.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
-            .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onToggle)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-    ) {
-        Icon(
-            imageVector = Icons.Default.Psychology,
-            contentDescription = null,
-            tint = accent,
-            modifier = Modifier.size(14.dp),
-        )
-        Spacer(modifier = Modifier.width(6.dp))
-        Text(
-            text = stringResource(R.string.chat_process_summary_title),
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = accent,
-        )
-        Spacer(modifier = Modifier.weight(1f))
-        Text(
-            text = stringResource(R.string.chat_process_summary_meta, thinkingCount, toolCount),
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Medium,
-            fontFamily = FontFamily.Monospace,
-            color = accent.copy(alpha = 0.6f),
-        )
-        Spacer(modifier = Modifier.width(4.dp))
-        Icon(
-            imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-            contentDescription = if (expanded) "Collapse" else "Expand",
-            tint = accent.copy(alpha = 0.5f),
-            modifier = Modifier.size(14.dp),
-        )
-    }
-}
-
-/**
- * [T-thinking-render-perf-android] Full-screen viewer for thinking content
- * that exceeds the inline hard cap. Wraps a native Android [android.widget.TextView]
- * (inside a scroller) — it lays out very large strings far more cheaply than
- * Compose `Text`, and stays selectable.
- */
-@Composable
-private fun ThinkingFullContentDialog(content: String, onDismiss: () -> Unit) {
-    val textColor = MaterialTheme.colorScheme.onSurface
-    androidx.compose.ui.window.Dialog(
-        onDismissRequest = onDismiss,
-        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
-    ) {
-        Surface(modifier = Modifier.fillMaxSize()) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                ) {
-                    Text(
-                        text = stringResource(R.string.chat_thinking_header),
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFF007AFF),
-                    )
-                    Spacer(modifier = Modifier.weight(1f))
-                    MinisTextButton(onClick = onDismiss) {
-                        Text(text = stringResource(android.R.string.ok))
-                    }
-                }
-                androidx.compose.ui.viewinterop.AndroidView(
-                    factory = { ctx ->
-                        android.widget.ScrollView(ctx).apply {
-                            addView(
-                                android.widget.TextView(ctx).apply {
-                                    textSize = 13f
-                                    setTextColor(textColor.toArgb())
-                                    setTextIsSelectable(true)
-                                    setPadding(36, 24, 36, 48)
-                                    text = content
-                                }
-                            )
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                )
-            }
-        }
-    }
-}
-
-// ===== [T-cuplivo-experimental-layout] legacy variants (pre-redesign visuals) =====
-// Restored verbatim from git HEAD (f0e30f1-base) so the experimental cuplivo
-// layout can be toggled off in Settings → Appearance without losing the old UI.
-
-@Composable
-internal fun AssistantHeaderLegacy(speakerName: String? = null, speakerVendor: String? = null) {
-    // [T-soul-md] Identity header = icon + SOUL.md-driven `name`.
-    //
-    // [T-android-soul-custom-icon] The icon is now the user-settable
-    // `SoulMetadata.icon` (emoji or transparent PNG), falling back to the
-    // canonical sparkle gradient when unset — so a user who never touches it
-    // sees exactly the previous rendering.
-    //
-    // Deliberately the SAME composable the settings card uses. On iOS these
-    // two surfaces were written separately and the chat one silently failed
-    // to pick up image icons; sharing the renderer makes that class of
-    // divergence impossible rather than merely unlikely.
-    val namedSpeaker = speakerName?.takeIf { it.isNotBlank() }
-    val soulMeta by com.openminis.app.agent.SoulStore.cachedMetadata.collectAsState()
-    val displayName = namedSpeaker ?: soulMeta.name.ifBlank { com.openminis.app.agent.SoulMetadata.DEFAULT.name }
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            // [T-android-user-assistant-spacing-16] top=10 so the
-            // User→Assistant boundary reads ~16dp: user-bubble bottom(4) +
-            // LazyColumn spacedBy(2) + this top(10) = 16. The header→body gap
-            // inside the turn is unaffected (that's this row's bottom=2).
-            .padding(top = 10.dp, bottom = 2.dp),
-    ) {
-        val sparkleGradient = Brush.linearGradient(
-            colors = listOf(SparkleColor1, SparkleColor2),
-        )
-        // 18.dp, matching the previous Icon exactly: the row height feeds a
-        // measured-height estimate in the message list, so the icon stays
-        // square and same-sized whichever branch renders.
-        if (namedSpeaker != null) {
-            VendorMark(
-                vendor = speakerVendor?.takeIf { it.isNotBlank() }
-                    ?: com.openminis.app.tools.GroupChat.vendorKey(null, namedSpeaker),
-                fallbackName = namedSpeaker,
-            )
-        } else {
-        com.openminis.app.ui.settings.SoulIconGlyph(
-            icon = soulMeta.icon,
-            sizeDp = 18.dp,
-            emojiSp = 15.sp,
-            sparkleTint = sparkleGradient,
-        )
-        }
-        Spacer(modifier = Modifier.width(6.dp))
-        Text(
-            text = displayName,
-            fontSize = 16.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-    }
-}
-
-@Composable
-internal fun ToolCallPillLegacy(
-    block: AssistantBlock,
-    allToolBlocks: List<AssistantBlock> = listOf(block),
-    onRetry: (() -> Unit)? = null,
-    onStop: (() -> Unit)? = null,
-    onOpenTerminalWithCommand: (String) -> Unit = {},
-    // T261: detail open routes through ChatViewModel so the sheet survives
-    // LazyColumn item disposal. Default no-op for the legacy
-    // AssistantMessageView call site (currently dead code).
-    onOpenDetail: (String) -> Unit = {},
-    // [T-android-tool-bubble-longpress-menu] Long-press actions. Null
-    // disables the corresponding menu item (e.g. re-run is null while
-    // streaming or when there's no preceding user turn to re-run from).
-    onRerunFromHere: (() -> Unit)? = null,
-    onCopyDetails: (() -> Unit)? = null,
-) {
     // T-android-jank-profile: this log was firing on every ToolCallPill
     // recomposition (every streaming token while a tool call is live),
     // showing up as 1.6% main thread time in profiles. Logs at composable
@@ -1239,8 +665,14 @@ internal fun ToolCallPillLegacy(
     }
 }
 
+// iOS-style bouncing dots (3 dots, easeInOut, staggered delay)
+// [T-android-split-chat] BouncingDots / StreamingDotsText / TypingIndicator
+// moved verbatim to ChatIndicators.kt (same package, now `internal`).
+
+// ─── Thinking Block (iOS: collapsible "Deep Thinking" section, blue tint) ────
+
 @Composable
-internal fun ThinkingBlockLegacy(block: AssistantBlock, isStreaming: Boolean, isLast: Boolean = true) {
+internal fun ThinkingBlock(block: AssistantBlock, isStreaming: Boolean, isLast: Boolean = true) {
     // Per-block expand state, keyed by block.id so the user's manual toggle on
     // an earlier (finished) thinking block survives recomposition while a
     // later block is still streaming. The previous LaunchedEffect snapped
@@ -1468,6 +900,112 @@ internal fun ThinkingBlockLegacy(block: AssistantBlock, isStreaming: Boolean, is
                 content = block.content,
                 onDismiss = { showFullContent = false },
             )
+        }
+    }
+}
+
+@Composable
+internal fun ProcessSummaryBar(
+    thinkingCount: Int,
+    toolCount: Int,
+    expanded: Boolean,
+    hasFailure: Boolean,
+    onToggle: () -> Unit,
+) {
+    val accent = if (hasFailure) Color(0xFFFF3B30) else Color(0xFF007AFF)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .background(accent.copy(alpha = 0.06f), RoundedCornerShape(12.dp))
+            .border(0.5.dp, accent.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onToggle)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+    ) {
+        Icon(
+            imageVector = Icons.Default.Psychology,
+            contentDescription = null,
+            tint = accent,
+            modifier = Modifier.size(14.dp),
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = stringResource(R.string.chat_process_summary_title),
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = accent,
+        )
+        Spacer(modifier = Modifier.weight(1f))
+        Text(
+            text = stringResource(R.string.chat_process_summary_meta, thinkingCount, toolCount),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            fontFamily = FontFamily.Monospace,
+            color = accent.copy(alpha = 0.6f),
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Icon(
+            imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+            contentDescription = if (expanded) "Collapse" else "Expand",
+            tint = accent.copy(alpha = 0.5f),
+            modifier = Modifier.size(14.dp),
+        )
+    }
+}
+
+/**
+ * [T-thinking-render-perf-android] Full-screen viewer for thinking content
+ * that exceeds the inline hard cap. Wraps a native Android [android.widget.TextView]
+ * (inside a scroller) — it lays out very large strings far more cheaply than
+ * Compose `Text`, and stays selectable.
+ */
+@Composable
+private fun ThinkingFullContentDialog(content: String, onDismiss: () -> Unit) {
+    val textColor = MaterialTheme.colorScheme.onSurface
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Surface(modifier = Modifier.fillMaxSize()) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                ) {
+                    Text(
+                        text = stringResource(R.string.chat_thinking_header),
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF007AFF),
+                    )
+                    Spacer(modifier = Modifier.weight(1f))
+                    MinisTextButton(onClick = onDismiss) {
+                        Text(text = stringResource(android.R.string.ok))
+                    }
+                }
+                androidx.compose.ui.viewinterop.AndroidView(
+                    factory = { ctx ->
+                        android.widget.ScrollView(ctx).apply {
+                            addView(
+                                android.widget.TextView(ctx).apply {
+                                    textSize = 13f
+                                    setTextColor(textColor.toArgb())
+                                    setTextIsSelectable(true)
+                                    setPadding(36, 24, 36, 48)
+                                    text = content
+                                }
+                            )
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                )
+            }
         }
     }
 }

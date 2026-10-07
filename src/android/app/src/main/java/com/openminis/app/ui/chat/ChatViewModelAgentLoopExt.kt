@@ -215,7 +215,6 @@ internal suspend fun ChatViewModel.runAgentLoop(
                 id = assistantId, role = "assistant", content = "", isStreaming = true,
                 isAwaitingModelResponse = true,
                 thinkingLevel = turnThinkingLevel,
-                createdAt = System.currentTimeMillis(),
             ))
         }
     }
@@ -350,7 +349,6 @@ internal suspend fun ChatViewModel.runAgentLoop(
                     }
                     _messages.value = trimLoadedWindow(_messages.value + ChatMessage(
                         id = freshAssistantId,
-                        createdAt = System.currentTimeMillis(),
                         role = "assistant",
                         content = "",
                         isStreaming = true,
