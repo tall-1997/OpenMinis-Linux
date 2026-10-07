@@ -841,6 +841,8 @@
     <string name="appearance_auto_expand_thinking_title">流式输出时展开思考</string>
     <string name="appearance_auto_expand_thinking_footer">开启后，模型思考时新的思考块会自动展开，思考结束后自动折叠。关闭后，思考块保持折叠状态——点击即可查看。AI 过程折叠（默认关闭）会在思考或工具一完成就把它们收进摘要，点摘要可展开。</string>
     <string name="appearance_fold_ai_process_title">AI 过程折叠</string>
+    <string name="appearance_experimental_layout_title">实验性对话布局</string>
+    <string name="appearance_experimental_layout_subtitle">带头像与时间戳的轮次标题、消息下可见操作行、思考与工具调用合并进统一过程卡。实验性功能——关闭即恢复经典布局。</string>
     <string name="appearance_fold_ai_process_subtitle">思考和工具一完成就收进摘要，不必等整段回复结束。只有当前进行中的那一块保持展开。点摘要可展开。进行中的工具仍会显示在底部工具条。</string>
     <string name="appearance_monet_title">动态取色</string>
     <string name="appearance_monet_subtitle">整体配色跟随系统壁纸（Material You）：表面、卡片、聊天气泡与图标一起着色，红色等语义色保留。需要 Android 12 及以上。</string>

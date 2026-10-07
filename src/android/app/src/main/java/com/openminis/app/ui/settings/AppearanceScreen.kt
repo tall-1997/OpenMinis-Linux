@@ -33,6 +33,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardReturn
 import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.BrightnessAuto
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
@@ -108,6 +109,12 @@ const val KEY_AUTO_EXPAND_THINKING = "chat.autoExpandThinking"  // Boolean, defa
 // Collapse thinking + tool process into a summary after the turn finishes
 // (streaming stays expanded). Default off. Read live in ChatScreen.
 const val KEY_FOLD_AI_PROCESS = "chat.foldAiProcess"  // Boolean, default false
+// [T-cuplivo-experimental-layout] EXPERIMENTAL cuplivo-style chat layout:
+// turn headers (avatar+name+mono timestamp), visible user action row,
+// unified lavender process card for thinking+tools. Default OFF — the
+// legacy visuals stay authoritative until the experiment graduates. Read
+// synchronously at composition time by the gated chat components.
+const val KEY_EXPERIMENTAL_CHAT_LAYOUT = "chat.experimentalCuplivoLayout"  // Boolean, default false
 // Material You wallpaper dynamic color. Default OFF: the app's identity is the
 // iOS-parity palette with measured contrast, so wallpaper tinting is opt-in.
 const val KEY_DYNAMIC_COLOR = "chat.dynamicColor"  // Boolean, default false
@@ -154,6 +161,10 @@ fun showChatTitleEnabled(context: Context): Boolean =
  *  user taps it. */
 fun autoExpandThinkingEnabled(context: Context): Boolean =
     getAppearancePrefs(context).getBoolean(KEY_AUTO_EXPAND_THINKING, true)
+
+/** [T-cuplivo-experimental-layout] EXPERIMENTAL cuplivo chat layout. Default OFF. */
+fun experimentalChatLayoutEnabled(context: Context): Boolean =
+    getAppearancePrefs(context).getBoolean(KEY_EXPERIMENTAL_CHAT_LAYOUT, false)
 
 /** Font scale levels matching iOS: XS(-2) Small(-1) Default(0) Medium(1) Large(2) XL(3) */
 /**
@@ -277,6 +288,7 @@ fun AppearanceScreen(
     var autoFocusAfterReply by remember { mutableStateOf(prefs.getBoolean(KEY_AUTO_FOCUS_AFTER_REPLY, true)) }
     var autoExpandThinking by remember { mutableStateOf(prefs.getBoolean(KEY_AUTO_EXPAND_THINKING, true)) }
     var foldAiProcess by remember { mutableStateOf(prefs.getBoolean(KEY_FOLD_AI_PROCESS, false)) }
+    var experimentalLayout by remember { mutableStateOf(prefs.getBoolean(KEY_EXPERIMENTAL_CHAT_LAYOUT, false)) }
     // Material You is an Android 12+ framework capability (minSdk is 26), so the
     // row renders disabled below S instead of promising something it cannot do.
     val monetSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
@@ -550,6 +562,18 @@ fun AppearanceScreen(
                 onCheckedChange = {
                     foldAiProcess = it
                     prefs.edit().putBoolean(KEY_FOLD_AI_PROCESS, it).apply()
+                },
+                showDivider = true,
+            )
+            SettingsSwitchRow(
+                icon = Icons.Outlined.AutoAwesome,
+                iconColor = tilePurple,
+                title = stringResource(R.string.appearance_experimental_layout_title),
+                subtitle = stringResource(R.string.appearance_experimental_layout_subtitle),
+                checked = experimentalLayout,
+                onCheckedChange = {
+                    experimentalLayout = it
+                    prefs.edit().putBoolean(KEY_EXPERIMENTAL_CHAT_LAYOUT, it).apply()
                 },
                 showDivider = false,
             )

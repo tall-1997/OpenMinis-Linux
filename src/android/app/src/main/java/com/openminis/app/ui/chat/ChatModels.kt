@@ -82,6 +82,11 @@ data class ChatMessage(
     val speakerName: String? = null,
     /** Vendor key for the speaker mark. Empty on ordinary assistant turns. */
     val speakerVendor: String? = null,
+    // [T-cuplivo-turn-chrome] Wall-clock ms of message creation, surfaced in
+    // the turn header (mono timestamp under the speaker name, cuplivo-style).
+    // Load path fills it from messages.created_at; live send/stream paths
+    // stamp System.currentTimeMillis(). 0 = unknown → header hides the row.
+    val createdAt: Long = 0L,
 ) {
     /**
      * [T-bridge-message-ui-leak-android] True when this UI message is the

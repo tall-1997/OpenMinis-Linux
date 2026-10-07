@@ -123,6 +123,10 @@ internal fun UserMessageBubble(
         // proportional sizing; prevents single-line messages from spanning the
         // full row and losing their "trailing bubble" shape).
         val bubbleMaxWidth = this.maxWidth * 0.8f
+        // [T-cuplivo-turn-chrome] Wrap the turn in a Column: right-aligned
+        // name+timestamp+avatar header above, visible action row below.
+        Column(modifier = Modifier.fillMaxWidth()) {
+            UserTurnHeader(createdAt = message.createdAt)
     Row(
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -348,6 +352,13 @@ internal fun UserMessageBubble(
             }
         }
     }
+            UserActionRow(
+                onCopy = onCopy,
+                onRetry = onRetry,
+                onEdit = onEdit,
+                onMore = { showMenu = true },
+            )
+        }
     }
 }
 

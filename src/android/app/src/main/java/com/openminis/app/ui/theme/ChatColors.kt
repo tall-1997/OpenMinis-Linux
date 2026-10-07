@@ -57,6 +57,12 @@ data class ChatPalette(
     val sheetHeaderBorder: Color,
     val fabAccent: Color,
     val fabOnAccent: Color,
+    // [T-cuplivo-process-card] Unified turn-process card (thinking + tool
+    // timeline items share ONE lavender container with connector lines).
+    val processCardBg: Color,
+    val processCardLine: Color,
+    val avatarBg: Color,
+    val metaText: Color,
 )
 
 val LightChatPalette = ChatPalette(
@@ -95,6 +101,10 @@ val LightChatPalette = ChatPalette(
     sheetHeaderBorder = Color(0x1A000000),
     fabAccent = Color(0xFFB7AF96),
     fabOnAccent = Color.White,
+    processCardBg = Color(0xFFECEEF8),
+    processCardLine = Color(0xFFC9CDDE),
+    avatarBg = Color(0xFFE3E6F5),
+    metaText = Color(0xFF8A8F9E),
 )
 
 // T153: Android-specific dark palette tweaks. iOS borrows the system
@@ -154,6 +164,10 @@ val DarkChatPalette = ChatPalette(
     sheetHeaderBorder = Color(0x33FFFFFF),
     fabAccent = Color(0xFF504C42),
     fabOnAccent = Color.White,
+    processCardBg = Color(0xFF232532),
+    processCardLine = Color(0xFF3A3D4D),
+    avatarBg = Color(0xFF2A2D3D),
+    metaText = Color(0xFF8E93A3),
 )
 
 val LocalChatPalette = compositionLocalOf { LightChatPalette }
