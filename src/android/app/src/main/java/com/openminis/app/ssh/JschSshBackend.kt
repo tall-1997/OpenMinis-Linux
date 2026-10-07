@@ -10,9 +10,12 @@ import com.jcraft.jsch.JSchException
 import com.jcraft.jsch.Session
 import com.jcraft.jsch.SftpException
 import com.jcraft.jsch.UserInfo
+import com.openminis.app.tools.AtomicFileWrite
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.InputStream
+import java.io.OutputStream
+import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -132,9 +135,43 @@ class JschSshBackend(
         val cfg = resolve(hostRef)
         val session = acquire(cfg)
         return withSftp(cfg, session) { ch ->
-            localFile.parentFile?.mkdirs()
-            localFile.outputStream().use { out -> ch.get(remotePath, out) }
-            localFile.length()
+            stageDownload({ out -> ch.get(remotePath, out) }, localFile)
+        }
+    }
+
+    /**
+     * Stage an SFTP download into a unique sibling temp file and only then
+     * swap it onto [localFile].
+     *
+     * The old implementation opened `localFile.outputStream()` directly,
+     * which truncates the target to zero bytes BEFORE the first byte of the
+     * transfer arrives — so a mid-transfer failure (network drop,
+     * SftpException, full disk) destroyed the previous download. Now the
+     * temp file absorbs the partial data, [AtomicFileWrite.moveIntoPlace]
+     * does the rename-or-copy swap (never deleting the target first), and
+     * the temp file is removed on every path. The error surface is
+     * unchanged: transfer failures propagate to the caller as before.
+     */
+    internal fun stageDownload(transfer: (OutputStream) -> Unit, localFile: File): Long {
+        localFile.parentFile?.mkdirs()
+        // Unique + clearly not the real artifact: `report.pdf` never becomes
+        // `report.pdf.minis-sftp-1a2b3c4d.tmp` in a listing that matters.
+        val tmp = File(
+            localFile.parentFile,
+            localFile.name + STAGE_PREFIX + UUID.randomUUID().toString().substring(0, 8) + STAGE_SUFFIX,
+        )
+        try {
+            tmp.outputStream().use { out -> transfer(out) }
+            if (!AtomicFileWrite.moveIntoPlace(tmp, localFile)) {
+                throw SshFailure.Protocol(
+                    "could not replace ${localFile.name} with the downloaded copy; previous file kept",
+                )
+            }
+            return localFile.length()
+        } finally {
+            // Every failure path (transfer threw, replace refused) must leave
+            // no half-written staging file behind.
+            if (tmp.exists()) runCatching { tmp.delete() }
         }
     }
 
@@ -376,6 +413,9 @@ class JschSshBackend(
         const val MAX_CAPTURE = 200_000
         private const val MAX_POOL = 6
         private const val POLL_MS = 25L
+        /** Sibling staging prefix/suffix for downloads — never a real artifact name. */
+        internal const val STAGE_PREFIX = ".minis-sftp-"
+        internal const val STAGE_SUFFIX = ".tmp"
     }
 }
 
