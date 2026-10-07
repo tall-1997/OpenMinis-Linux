@@ -4,6 +4,16 @@ internal enum class NotificationSurface {
     /** AOSP SystemUI. Tool identity is stripped; run boundaries still publish. */
     PROMOTED,
     /**
+     * [T-android-hyperos-island] Xiaomi HyperOS speaking the first-party
+     * `miui.focus.param` island protocol. The shade row keeps OEM_QUIET
+     * discipline (no chronometer, no progress, static text) — the island
+     * itself renders from the JSON extras, and updates flow through the
+     * official same-id + `updatable=true` path, so unlike [PROMOTED] the
+     * tool name is *kept*: it is the island's big-island text, and the
+     * policy's 20s cosmetic gap already throttles multi-tool churn.
+     */
+    HYPER_OS_FOCUS,
+    /**
      * Forked SystemUI. One static row per run. A chronometer, progress bar,
      * or promoted template is what their island re-inflates until SystemUI dies.
      */
@@ -31,6 +41,7 @@ internal data class ForegroundNotificationState(
      */
     fun normalized(): ForegroundNotificationState = when (surface) {
         NotificationSurface.PROMOTED -> copy(toolName = null, isToolRunning = false)
+        NotificationSurface.HYPER_OS_FOCUS -> copy(isToolRunning = false)
         NotificationSurface.OEM_QUIET -> copy(
             activeCount = if (activeCount > 0) 1 else 0,
             toolName = null,

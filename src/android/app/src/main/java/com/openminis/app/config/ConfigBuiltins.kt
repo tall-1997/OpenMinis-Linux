@@ -514,12 +514,14 @@ internal object ConfigBuiltins {
         // path stays registered (help/list still describe it) but every read
         // and write is refused with `feature_unavailable`.
         //
-        // Capability = Android 16+ AND the per-app Live-Updates grant, probed
-        // via the same DynamicIslandSupport the UI uses. The grant can be
-        // revoked at runtime, so the probe runs at REGISTRATION time here and
-        // the registry is rebuilt on the paths that re-register — matching how
-        // the UI re-probes on resume. Mirrors iOS gating background.liveActivity
-        // on isLiveActivitySupported (dba46d42).
+        // Capability = Android 16+ with the per-app Live-Updates grant, OR a
+        // Xiaomi HyperOS host speaking the OS3 小米超级岛 protocol
+        // (HyperOsIsland) — probed via the same DynamicIslandSupport the UI
+        // uses. Grants can be revoked at runtime, so the probe runs at
+        // REGISTRATION time here and the registry is rebuilt on the paths
+        // that re-register — matching how the UI re-probes on resume.
+        // Mirrors iOS gating background.liveActivity on
+        // isLiveActivitySupported (dba46d42).
         //
         // Writes go through the same SharedPreferences file+key the repository
         // reads (background_settings / dynamicIslandEnabled), so a change made
@@ -528,7 +530,8 @@ internal object ConfigBuiltins {
         val dynamicIslandField = PrefsBoolField(
             path = "background.dynamicIsland",
             displayName = "Live Updates (dynamic island)",
-            description = "Show agent progress in the Android 16 Live Updates status chip.",
+            description = "Show agent progress on the Android 16 Live Updates status chip " +
+                "or the Xiaomi HyperOS 超级岛.",
             prefs = prefs,
             key = "dynamicIslandEnabled",
             defaultValue = false,
@@ -540,7 +543,8 @@ internal object ConfigBuiltins {
                 UnavailableField(
                     dynamicIslandField,
                     "Live Updates requires Android 16 or newer plus the per-app " +
-                        "Live Updates permission; this device doesn't support it.",
+                        "Live Updates permission, or a Xiaomi HyperOS device with " +
+                        "超级岛 support; this device supports neither.",
                 )
             }
         )

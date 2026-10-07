@@ -152,6 +152,16 @@ fun BackgroundSettingsScreen(onBack: () -> Unit) {
                         Settings.canDrawOverlays(context)
                 dynamicIslandCapable =
                     com.openminis.app.service.DynamicIslandSupport.isDynamicIslandCapable(context)
+                // [T-android-hyperos-island] The HyperOS focus-notification
+                // permission is a binder call — refresh it off the main
+                // thread so the island toggle reflects a grant the user
+                // just made in system settings without an app restart.
+                if (com.openminis.app.service.HyperOsIsland.isHyperOsHost()) {
+                    val appCtx = context.applicationContext
+                    Thread {
+                        com.openminis.app.service.HyperOsIsland.refreshFocusPermission(appCtx)
+                    }.apply { isDaemon = true }.start()
+                }
                 refreshNotificationPermission()
             }
         }
@@ -290,6 +300,14 @@ fun BackgroundSettingsScreen(onBack: () -> Unit) {
             )
             BgFooter(
                 when {
+                    // [T-android-hyperos-island] HyperOS speaks its own
+                    // first-party island protocol — the AOSP OEM warning
+                    // below is about promoted templates, which we never
+                    // send there, so it must not scare HyperOS users.
+                    com.openminis.app.service.HyperOsIsland.isHyperOsHost() && dynamicIslandCapable ->
+                        stringResource(R.string.settings_dynamic_island_hyperos_footer)
+                    com.openminis.app.service.HyperOsIsland.isHyperOsHost() ->
+                        stringResource(R.string.settings_dynamic_island_hyperos_unsupported)
                     !com.openminis.app.service.DynamicIslandSupport.allowsLiveNotificationTemplates() ->
                         stringResource(R.string.settings_dynamic_island_oem_footer)
                     !dynamicIslandCapable ->

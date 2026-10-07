@@ -97,4 +97,54 @@ class ForegroundNotificationPolicyTest {
         val nextRun = state(started = 20_000L).copy(surface = NotificationSurface.OEM_QUIET).normalized()
         assertEquals(ForegroundNotificationPolicy.Decision.Publish, policy.decide(nextRun, 20_000L))
     }
+
+    // [T-android-hyperos-island] The HyperOS focus surface: the tool label
+    // IS the island's big-island text, so it must survive normalization
+    // (unlike PROMOTED); only the shade-row-only isToolRunning flag strips.
+
+    @Test fun hyperOsFocusKeepsToolNameForIslandText() {
+        val shell = state(tool = "shell_execute")
+            .copy(surface = NotificationSurface.HYPER_OS_FOCUS)
+            .normalized()
+        val browser = state(tool = "browser_use")
+            .copy(surface = NotificationSurface.HYPER_OS_FOCUS)
+            .normalized()
+        assertEquals("shell_execute", shell.toolName)
+        assertEquals("browser_use", browser.toolName)
+        assertEquals(false, shell.isToolRunning)
+        org.junit.Assert.assertNotEquals(shell, browser)
+    }
+
+    @Test fun hyperOsFocusToolChangeUsesTheLongCoalescingWindow() {
+        val policy = ForegroundNotificationPolicy()
+        val first = state(tool = "shell_execute")
+            .copy(surface = NotificationSurface.HYPER_OS_FOCUS)
+            .normalized()
+        policy.markPublished(first, 1_000L)
+        val browser = state(tool = "browser_use")
+            .copy(surface = NotificationSurface.HYPER_OS_FOCUS)
+            .normalized()
+        // 20s gap (promoted flag drives it), not the 5s plain gap: island
+        // updates are re-binds on forked SystemUI, so multi-tool churn must
+        // not spam them.
+        assertEquals(ForegroundNotificationPolicy.Decision.Wait(18_000L), policy.decide(browser, 3_000L))
+        assertEquals(ForegroundNotificationPolicy.Decision.Publish, policy.decide(browser, 21_000L))
+    }
+
+    @Test fun hyperOsFocusRunBoundariesAreImmediate() {
+        val policy = ForegroundNotificationPolicy()
+        val running = state(tool = "shell_execute")
+            .copy(surface = NotificationSurface.HYPER_OS_FOCUS)
+            .normalized()
+        policy.markPublished(running, 1_000L)
+        val done = state(active = 0, finished = 900L, tool = null)
+            .copy(surface = NotificationSurface.HYPER_OS_FOCUS)
+            .normalized()
+        assertEquals(ForegroundNotificationPolicy.Decision.Publish, policy.decide(done, 1_100L))
+        policy.markPublished(done, 1_100L)
+        val nextRun = state(started = 2_000L)
+            .copy(surface = NotificationSurface.HYPER_OS_FOCUS)
+            .normalized()
+        assertEquals(ForegroundNotificationPolicy.Decision.Publish, policy.decide(nextRun, 2_000L))
+    }
 }

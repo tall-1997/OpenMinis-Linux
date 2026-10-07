@@ -166,6 +166,16 @@ class AgentForegroundService : Service() {
     private var hasCompletionPending = false
     private var wasBusy = false
 
+    // [T-android-hyperos-island] Background executor for the HyperOS
+    // canShowFocus binder probe (the official guide marks it 耗时操作 —
+    // never on the main thread). Daemon single-thread: probes are rare
+    // (service start + foreground transitions, throttled to 30s inside
+    // HyperOsIsland.refreshFocusPermission).
+    private val islandProbeExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { r ->
+        Thread(r, "mi-island-probe").apply { isDaemon = true }
+    }
+    private var lastIsForegroundForIslandProbe = false
+
     override fun onCreate() {
         super.onCreate()
         // Safe-mode bail-out. When CrashFrequencyDetector tripped in
@@ -189,6 +199,15 @@ class AgentForegroundService : Service() {
             return
         }
         acquireWakeLock()
+        // [T-android-hyperos-island] Populate the focus-notification
+        // permission cache before the first overlay/island decision in
+        // nearly all cases: the service starts when a stream starts, and
+        // the probe lands within one binder round-trip.
+        islandProbeExecutor.execute {
+            if (HyperOsIsland.refreshFocusPermission(this)) {
+                notifyHandler.post { requestStatusRefresh() }
+            }
+        }
         startOverlayObserver()
         Log.d(TAG, "Service created")
     }
@@ -539,6 +558,20 @@ class AgentForegroundService : Service() {
         val controller = overlayController ?: return
         val hasPerm = controller.hasOverlayPermission()
 
+        // [T-android-hyperos-island] Foreground transition = the user just
+        // came back from system settings, where they may have granted or
+        // revoked the HyperOS focus-notification permission. Re-probe off
+        // the main thread (throttled); a value flip re-evaluates the
+        // island/overlay mutual exclusion on the next status pass.
+        if (state.isForeground && !lastIsForegroundForIslandProbe) {
+            islandProbeExecutor.execute {
+                if (HyperOsIsland.refreshFocusPermission(this)) {
+                    notifyHandler.post { requestStatusRefresh() }
+                }
+            }
+        }
+        lastIsForegroundForIslandProbe = state.isForeground
+
         // [T-android-dynamic-island] MUTUAL EXCLUSION (critical): when the
         // Android 16 Live Updates "dynamic island" surface is the active status
         // UI — i.e. the user enabled the toggle AND the device is capable
@@ -710,10 +743,18 @@ class AgentForegroundService : Service() {
         // left the island switch off. HyperOS still lifts an IMPORTANCE_LOW
         // ongoing row into its own island.
         val liveTemplates = SystemUiHost.allowsLiveNotificationTemplates()
-        val promoted = liveTemplates && active > 0 && DynamicIslandSupport.isDynamicIslandActive(
+        // [T-android-hyperos-island] On HyperOS the first-party miui.focus
+        // protocol replaces the AOSP promoted path. islandActive covers both
+        // surfaces (it drives the policy's 20s cosmetic gap and the
+        // enter/leave-live-update immediate publish); `surface` picks which
+        // builder renders it.
+        val hyperOsHost = !liveTemplates && HyperOsIsland.isHyperOsHost()
+        val islandActive = active > 0 && DynamicIslandSupport.isDynamicIslandActive(
             this, userWantsIsland,
         )
+        val promoted = islandActive
         val surface = when {
+            hyperOsHost && islandActive -> NotificationSurface.HYPER_OS_FOCUS
             !liveTemplates -> NotificationSurface.OEM_QUIET
             promoted -> NotificationSurface.PROMOTED
             else -> NotificationSurface.PLAIN
@@ -921,8 +962,25 @@ class AgentForegroundService : Service() {
             R.plurals.bg_service_sessions, sessionCount, sessionCount,
         )
 
+        if (state.surface == NotificationSurface.HYPER_OS_FOCUS) {
+            return buildHyperOsFocusNotification(
+                state = state,
+                isCompleted = isCompleted,
+                sessionLabel = sessionLabel,
+                timeString = timeString,
+                contentIntent = pendingIntent,
+                stopPendingIntent = stopPendingIntent,
+            )
+        }
+
         if (state.surface == NotificationSurface.OEM_QUIET) {
-            return buildOemQuietNotification(isCompleted, pendingIntent, stopPendingIntent)
+            return buildOemQuietNotification(
+                isCompleted = isCompleted,
+                sessionLabel = sessionLabel,
+                timeString = timeString,
+                contentIntent = pendingIntent,
+                stopIntent = stopPendingIntent,
+            )
         }
 
         // The row only renders the stable task snapshot: transient tool output
@@ -1147,8 +1205,117 @@ class AgentForegroundService : Service() {
      * No chronometer, no progress, no promoted style, no changing text.
      * Their island can mirror this once; it has nothing left to tick.
      */
+    /**
+     * [T-android-hyperos-island] HyperOS 小米超级岛 notification: a native
+     * builder (no compat wrapper — parcelable extras go straight into
+     * miui.focus.pics / miui.focus.actions) carrying the miui.focus.param
+     * JSON. The shade row keeps OEM_QUIET discipline — static when, no
+     * chronometer, no progress — because the forked-SystemUI re-inflation
+     * hazard [SystemUiHost] guards against is about the shade row, not the
+     * island pipeline, which Xiaomi renders from the JSON on its own.
+     *
+     * Update path is the official one: same notification id +
+     * `updatable=true` in the JSON; the policy's 20s cosmetic gap throttles
+     * tool-name churn on the big island.
+     */
+    private fun buildHyperOsFocusNotification(
+        state: ForegroundNotificationState,
+        isCompleted: Boolean,
+        sessionLabel: String,
+        timeString: String,
+        contentIntent: PendingIntent,
+        stopPendingIntent: PendingIntent,
+    ): Notification {
+        val toolName = state.toolName
+        // Same title semantics as the plain row: completed → "Task
+        // completed", tool in flight → its display label, else the app name.
+        val titleText = when {
+            isCompleted -> getString(R.string.bg_service_notification_title_completed)
+            toolName != null -> toolDisplayLabel(toolName)
+            else -> getString(R.string.bg_service_notification_title)
+        }
+        val collapsedText = if (isCompleted) {
+            getString(R.string.bg_service_notification_text_completed, sessionLabel, timeString)
+        } else {
+            getString(R.string.bg_service_notification_text_live, sessionLabel, state.subtitle)
+        }
+
+        // 模板库 guidance: big-island text ≤4 CJK chars, longer text
+        // degrades to small font then clips. The tool display label and
+        // "Task completed" are the short forms; the subtitle ("1 task
+        // running") is the trailing small word.
+        val content = HyperOsIsland.IslandContent(
+            business = "agent",
+            ticker = "Minis",
+            aodTitle = "Minis",
+            bigTitle = titleText,
+            bigContent = state.subtitle,
+            baseTitle = titleText,
+            baseContent = collapsedText,
+        )
+        val focusJson = HyperOsIsland.buildFocusParamJson(content)
+
+        val interruptIntent = Intent(this, AgentForegroundService::class.java).apply {
+            action = ACTION_INTERRUPT
+        }
+        val interruptPendingIntent = PendingIntent.getService(
+            this, 2, interruptIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
+        val statusIcon = android.graphics.drawable.Icon.createWithResource(
+            this, statusIconRes(isCompleted),
+        )
+        val builder = Notification.Builder(this, CHANNEL_ID)
+            .setSmallIcon(statusIcon)
+            .setContentTitle(titleText)
+            .setContentText(collapsedText)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setShowWhen(false)
+            .setContentIntent(contentIntent)
+            .setCategory(Notification.CATEGORY_SERVICE)
+
+        // Shade-row actions double as island buttons: miui.focus.actions
+        // maps the JSON's action keys to these parcelables. No Stop once
+        // there is nothing left to stop — same rule as the plain row.
+        val islandActions = mutableMapOf<String, Notification.Action>()
+        if (!isCompleted) {
+            val stopAction = Notification.Action.Builder(
+                statusIcon,
+                getString(R.string.bg_service_stop_action),
+                stopPendingIntent,
+            ).build()
+            builder.addAction(stopAction)
+            islandActions[HyperOsIsland.ACTION_STOP] = stopAction
+
+            val interruptAction = Notification.Action.Builder(
+                statusIcon,
+                "Pause",
+                interruptPendingIntent,
+            ).build()
+            builder.addAction(interruptAction)
+            islandActions[HyperOsIsland.ACTION_INTERRUPT] = interruptAction
+        }
+
+        HyperOsIsland.attachFocusExtras(
+            builder = builder,
+            json = focusJson,
+            icons = mapOf(
+                HyperOsIsland.PIC_SMALL to statusIcon,
+                HyperOsIsland.PIC_BIG to statusIcon,
+                HyperOsIsland.PIC_TICKER to statusIcon,
+                HyperOsIsland.PIC_AOD to statusIcon,
+            ),
+            islandActions = islandActions,
+        )
+        return builder.build()
+    }
+
     private fun buildOemQuietNotification(
         isCompleted: Boolean,
+        sessionLabel: String,
+        timeString: String,
         contentIntent: PendingIntent,
         stopIntent: PendingIntent,
     ): Notification {
@@ -1157,8 +1324,11 @@ class AgentForegroundService : Service() {
         } else {
             getString(R.string.bg_service_notification_title)
         }
+        // [T-android-hyperos-island] Fix: the completed row used the TITLE
+        // string ("Task completed") as its body text — a copy-paste slip
+        // from the title branch above. Use the real completed body.
         val text = if (isCompleted) {
-            getString(R.string.bg_service_notification_title_completed)
+            getString(R.string.bg_service_notification_text_completed, sessionLabel, timeString)
         } else {
             getString(R.string.notif_one_task_running)
         }

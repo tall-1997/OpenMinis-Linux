@@ -1473,6 +1473,9 @@
     <string name="settings_dynamic_island_footer">在 Android 16 状态胶囊上显示实时的助手状态。开启后将取代悬浮窗，避免同时出现两个状态指示。</string>
     <string name="settings_dynamic_island_oem_footer">此系统自带灵动岛，会把计时器、进度条和实时提升通知反复建成系统界面里的视图。开久了会把系统界面撑崩并重启。开启后仍显示任务状态，并取代悬浮窗，但不再向系统岛投递计时、进度和提升标记。</string>
     <string name="settings_dynamic_island_unsupported">当前系统版本暂不支持实时更新（需 Android 16 及以上并已开启该功能）。</string>
+    <!-- [T-android-hyperos-island] Xiaomi HyperOS first-party island footer. -->
+    <string name="settings_dynamic_island_hyperos_footer">在小米澎湃OS超级岛上显示助手状态。需要在系统设置中为本应用开启焦点通知权限；未开启时超级岛不显示，改用安静的通知栏常驻行。</string>
+    <string name="settings_dynamic_island_hyperos_unsupported">当前小米系统未提供超级岛协议（需要支持超级岛的澎湃OS版本）。</string>
     <string name="agent_loop_section_title">Minis Ultra 运行时可调用的模型</string>
     <string name="agent_loop_section_footer">在 Minis Ultra 任务中，Agent 会调用这些模型来完成生图、总结等子任务 —— 也就是它自身模型做不到的工作。也可在终端通过 minis-model-use 调用。只有这些对 Agent 可见。</string>
     <string name="agent_loop_section_empty_hint">尚未添加模型或分组</string>

@@ -1601,6 +1601,9 @@
     <string name="settings_dynamic_island_footer">Show live Agent status on the Android 16 status chip. When on, this replaces the floating overlay so you don\'t see two status indicators at once.</string>
     <string name="settings_dynamic_island_oem_footer">This system\'s own island rebuilds timers, progress bars and live-update notifications inside the system UI. Left running, that leaks until the system UI restarts. The switch still shows task status and replaces the floating overlay, but does not send a timer, progress bar or promotion flag.</string>
     <string name="settings_dynamic_island_unsupported">Your current system version doesn\'t support Live Updates yet (requires Android 16+ with the feature enabled).</string>
+    <!-- [T-android-hyperos-island] Xiaomi HyperOS first-party island footer. -->
+    <string name="settings_dynamic_island_hyperos_footer">Shows agent status on the Xiaomi HyperOS 超级岛. Requires the focus-notification permission for this app (system settings → notifications); without it the island stays off and a quiet notification row is used instead.</string>
+    <string name="settings_dynamic_island_hyperos_unsupported">This Xiaomi system doesn\'t expose the 超级岛 protocol (requires HyperOS with island support).</string>
 
     <!-- T182 agent loop section i18n -->
     <string name="agent_loop_section_title">Models Minis Ultra Can Call at Runtime</string>
