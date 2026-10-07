@@ -1826,4 +1826,9 @@
     <string name="settings_evolution_state_on">目前開啟</string>
     <string name="settings_evolution_state_off">目前關閉</string>
     <string name="gate_approval_allow_all">本工作階段全部允許</string>
+    <string name="db_quarantine_title">資料庫已自動修復</string>
+    <string name="db_quarantine_body">本機資料庫在 %1$s 的啟動完整性檢查中未通過，無法安全開啟。你的聊天與設定並未刪除：損毀的檔案已被移出，應用以全新的空資料庫啟動。</string>
+    <string name="db_quarantine_copy_at">損毀副本保留於：\n%1$s</string>
+    <string name="db_quarantine_keep">保留副本</string>
+    <string name="db_quarantine_delete">刪除損毀副本</string>
 </resources>

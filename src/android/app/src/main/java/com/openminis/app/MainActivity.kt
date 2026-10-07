@@ -543,6 +543,20 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
+            // [T-db-startup-integrity-gate] If the startup gate quarantined a
+            // corrupt database on this boot, say so once — above whatever the
+            // normal content is — and let the user keep or delete the copy.
+            var pendingDbReport by remember {
+                mutableStateOf(
+                    com.openminis.app.data.db.DatabaseHealthCheck.pendingReport(this@MainActivity)
+                )
+            }
+            pendingDbReport?.let { report ->
+                com.openminis.app.ui.DatabaseQuarantineDialog(
+                    report = report,
+                    onDismiss = { pendingDbReport = null },
+                )
+            }
             val prefs = remember { getAppearancePrefs(this) }
             var themeMode by remember { mutableIntStateOf(prefs.getInt(KEY_THEME_MODE, 0)) }
             var appBaseLevel by remember { mutableIntStateOf(prefs.getInt(KEY_FONT_APP_BASE, 0)) }

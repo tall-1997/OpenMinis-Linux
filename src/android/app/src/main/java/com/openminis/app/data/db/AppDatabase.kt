@@ -569,7 +569,23 @@ abstract class AppDatabase : RoomDatabase() {
 
         fun getInstance(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
-                INSTANCE ?: Room.databaseBuilder(
+                INSTANCE ?: run {
+                // [T-db-startup-integrity-gate] quick_check BEFORE Room opens
+                // the file. A corrupt database is quarantined (renamed aside,
+                // never opened, never silently erased) and the app starts on
+                // a fresh empty database; MainActivity surfaces the pending
+                // failure report so the user learns where their data copy is.
+                when (val gate = DatabaseHealthCheck.ensureHealthyOrQuarantined(
+                    context.applicationContext, "minis.db"
+                )) {
+                    is DatabaseHealthCheck.Outcome.QuarantineFailed ->
+                        throw IllegalStateException(
+                            "minis.db failed integrity check and could not be " +
+                                "quarantined: ${gate.reason}"
+                        )
+                    else -> Unit
+                }
+                Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
                     "minis.db"
@@ -591,6 +607,7 @@ abstract class AppDatabase : RoomDatabase() {
                     )
                     .build()
                     .also { INSTANCE = it }
+                }
             }
         }
     }
