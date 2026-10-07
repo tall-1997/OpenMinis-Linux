@@ -7,7 +7,6 @@ import android.os.Bundle
 import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
-import org.json.JSONArray
 import org.json.JSONObject
 
 /**
@@ -55,14 +54,19 @@ internal object HyperOsIsland {
     const val EXTRA_FOCUS_ACTIONS = "miui.focus.actions"
 
     // ---- Pic keys referenced by the JSON, backed by miui.focus.pics entries ----
+    // 模板库 rule: every icon the JSON references must be a COLOR content
+    // icon (square, >=88*88px). A status-bar small icon is a white alpha
+    // mask — on the island it renders as an invisible white blob, which is
+    // exactly the "应用图标没有" symptom. Callers pass the launcher icon.
     const val PIC_SMALL = "miui.focus.pic_small"
     const val PIC_BIG = "miui.focus.pic_big"
     const val PIC_TICKER = "miui.focus.pic_ticker"
     const val PIC_AOD = "miui.focus.pic_aod"
 
-    // ---- Island action keys, backed by miui.focus.actions entries ----
+    // ---- Island action key, backed by a miui.focus.actions entry ----
+    // hintInfo carries ONE actionInfo (按钮组件3), so the island gets one
+    // button; the shade row keeps its own two addAction buttons.
     const val ACTION_STOP = "miui.focus.action_stop"
-    const val ACTION_INTERRUPT = "miui.focus.action_interrupt"
 
     /**
      * Build signals for [isHyperOsHost]. Split out so JVM tests can inject
@@ -231,6 +235,8 @@ internal object HyperOsIsland {
         val baseTitle: String,
         /** OS2 focus-notification supplementary text. */
         val baseContent: String,
+        /** hintInfo (按钮组件3) title — the short status line above the button. */
+        val hintTitle: String,
         /** Same notification id + updatable=true is the official update path. */
         val updatable: Boolean = true,
         /** First appearance renders expanded (大岛); updates stay collapsed. */
@@ -242,6 +248,14 @@ internal object HyperOsIsland {
      * 模版接入示例 exactly (smallIslandArea carries only picInfo — that is
      * the shape the guide itself ships; adding unverified fields risks a
      * strict parser dropping the whole payload).
+     *
+     * Island button lives in `hintInfo` (按钮组件3, param_v2 root, next to
+     * baseInfo — that is where the official sample puts it). Its
+     * actionInfo.action references a `miui.focus.actions` Bundle entry by
+     * key (方式一: the system renders that Action's Icon + Title). There is
+     * NO root-level `actions` array in the protocol — that field belongs to
+     * the progress component, and shipping it at the root renders stray
+     * blank buttons on the big island.
      *
      * Deliberately absent: timerInfo / progressInfo. HyperOS's own island
      * pipeline handles those, but the shade row must stay static — the same
@@ -277,9 +291,13 @@ internal object HyperOsIsland {
             .put("type", 1)
             .put("title", content.baseTitle)
             .put("content", content.baseContent)
-        val actions = JSONArray()
-            .put(JSONObject().put("action", ACTION_STOP))
-            .put(JSONObject().put("action", ACTION_INTERRUPT))
+        val hintInfo = JSONObject()
+            .put("type", 1)
+            .put("title", content.hintTitle)
+            .put(
+                "actionInfo",
+                JSONObject().put("action", ACTION_STOP),
+            )
         val paramV2 = JSONObject()
             .put("protocol", 1)
             .put("business", content.business)
@@ -294,7 +312,7 @@ internal object HyperOsIsland {
             .put("aodPic", PIC_AOD)
             .put("param_island", paramIsland)
             .put("baseInfo", baseInfo)
-            .put("actions", actions)
+            .put("hintInfo", hintInfo)
         return JSONObject().put("param_v2", paramV2).toString()
     }
 
@@ -309,8 +327,13 @@ internal object HyperOsIsland {
      * equivalent to the guide's post-build `notification.extras.putString`.
      *
      * @param json from [buildFocusParamJson]
-     * @param icons pic-key → Icon; keys not referenced by the JSON are ignored
-     * @param islandActions action-key → Notification.Action
+     * @param icons pic-key → Icon; keys not referenced by the JSON are ignored.
+     *        MUST be color content icons (launcher-grade), never white
+     *        alpha-mask status-bar icons — those render invisible on the
+     *        island.
+     * @param islandActions action-key → Notification.Action; the Action's
+     *        Icon is what the island button renders (方式一), so it must be a
+     *        color icon too.
      */
     fun attachFocusExtras(
         builder: Notification.Builder,

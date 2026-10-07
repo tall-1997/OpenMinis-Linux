@@ -1252,6 +1252,7 @@ class AgentForegroundService : Service() {
             bigContent = state.subtitle,
             baseTitle = titleText,
             baseContent = collapsedText,
+            hintTitle = state.subtitle,
         )
         val focusJson = HyperOsIsland.buildFocusParamJson(content)
 
@@ -1263,6 +1264,17 @@ class AgentForegroundService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
+        // 模板库 rule: miui.focus.pics icons must be COLOR content icons
+        // (square, >=88*88px). The status-bar small icon is a white alpha
+        // mask — on the island it renders as an invisible white blob (the
+        // "应用图标没有" symptom on HyperOS 4). The launcher icon is the
+        // color icon every app ships; it also matches the protocol's
+        // picInfo.type=1 fallback ("系统直接展示应用桌面图标").
+        val launcherIcon = android.graphics.drawable.Icon.createWithResource(
+            this, applicationInfo.icon,
+        )
+        // White alpha-mask small icon for the shade row only — the shade
+        // tints it; the island must never see it (see launcherIcon note).
         val statusIcon = android.graphics.drawable.Icon.createWithResource(
             this, statusIconRes(isCompleted),
         )
@@ -1276,36 +1288,38 @@ class AgentForegroundService : Service() {
             .setContentIntent(contentIntent)
             .setCategory(Notification.CATEGORY_SERVICE)
 
-        // Shade-row actions double as island buttons: miui.focus.actions
-        // maps the JSON's action keys to these parcelables. No Stop once
-        // there is nothing left to stop — same rule as the plain row.
+        // Shade-row buttons keep the white status icon — the shade tints
+        // small icons itself. The island button is separate: hintInfo carries
+        // ONE actionInfo, so only Stop goes to the island (方式一: the system
+        // renders the miui.focus.actions Action's Icon + Title — color icon,
+        // real label). No Stop once there is nothing left to stop.
         val islandActions = mutableMapOf<String, Notification.Action>()
         if (!isCompleted) {
             val stopAction = Notification.Action.Builder(
-                statusIcon,
+                launcherIcon,
                 getString(R.string.bg_service_stop_action),
                 stopPendingIntent,
             ).build()
             builder.addAction(stopAction)
             islandActions[HyperOsIsland.ACTION_STOP] = stopAction
 
+            // Shade-row only: hintInfo has no slot for a second button.
             val interruptAction = Notification.Action.Builder(
                 statusIcon,
                 "Pause",
                 interruptPendingIntent,
             ).build()
             builder.addAction(interruptAction)
-            islandActions[HyperOsIsland.ACTION_INTERRUPT] = interruptAction
         }
 
         HyperOsIsland.attachFocusExtras(
             builder = builder,
             json = focusJson,
             icons = mapOf(
-                HyperOsIsland.PIC_SMALL to statusIcon,
-                HyperOsIsland.PIC_BIG to statusIcon,
-                HyperOsIsland.PIC_TICKER to statusIcon,
-                HyperOsIsland.PIC_AOD to statusIcon,
+                HyperOsIsland.PIC_SMALL to launcherIcon,
+                HyperOsIsland.PIC_BIG to launcherIcon,
+                HyperOsIsland.PIC_TICKER to launcherIcon,
+                HyperOsIsland.PIC_AOD to launcherIcon,
             ),
             islandActions = islandActions,
         )

@@ -73,6 +73,7 @@ class HyperOsIslandTest {
         bigContent = "1 task running",
         baseTitle = "Shell",
         baseContent = "1 session | 1 task running",
+        hintTitle = "1 task running",
     )
 
     private fun v2(c: HyperOsIsland.IslandContent = content()): JSONObject =
@@ -115,10 +116,19 @@ class HyperOsIslandTest {
         assertEquals("Shell", base.getString("title"))
         assertEquals("1 session | 1 task running", base.getString("content"))
 
-        val actions = v2.getJSONArray("actions")
-        assertEquals(2, actions.length())
-        assertEquals(HyperOsIsland.ACTION_STOP, actions.getJSONObject(0).getString("action"))
-        assertEquals(HyperOsIsland.ACTION_INTERRUPT, actions.getJSONObject(1).getString("action"))
+        // Island button: hintInfo (按钮组件3) at param_v2 root, ONE
+        // actionInfo referencing the miui.focus.actions Bundle. There is
+        // deliberately NO root-level `actions` array — that field belongs
+        // to the progress component and renders stray blank buttons when
+        // shipped at the root.
+        val hint = v2.getJSONObject("hintInfo")
+        assertEquals(1, hint.getInt("type"))
+        assertEquals("1 task running", hint.getString("title"))
+        assertEquals(
+            HyperOsIsland.ACTION_STOP,
+            hint.getJSONObject("actionInfo").getString("action"),
+        )
+        assertFalse(v2.has("actions"))
     }
 
     @Test fun focusParamJsonEscapesQuotesNewlinesAndUnicode() {
@@ -130,6 +140,7 @@ class HyperOsIslandTest {
             bigContent = "line\nbreak",
             baseTitle = "标题",
             baseContent = "内容",
+            hintTitle = "状态\"行\"",
         )
         val v2 = v2(tricky)
         assertEquals("a\"b", v2.getString("business"))
