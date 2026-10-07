@@ -175,9 +175,22 @@ class SecurityGateImpl : SecurityGate {
         val systemPaths = listOf(
             "/system", "/system_ext", "/vendor", "/product", "/odm", "/boot", "/recovery",
         ) + APP_DATA_ROOTS
-        val destructiveOps = listOf("rm ", "rm\t", "dd ", "wipe", "format", "shred")
-        if (systemPaths.any { p -> argv.any { it == p || it.startsWith("$p/") } || joined.contains(p) } &&
-            destructiveOps.any { joined.contains(it) || raw.contains(it) }
+        // [T-rm-root-false-positive] Both halves are argv-level now. The old
+        // `joined.contains(p)` arm made `/data` match `/database` and `/product`
+        // match `/production`, so an unrelated absolute path plus any `rm `
+        // token anywhere on the line (including inside an `echo "…"` argument,
+        // via the `raw.contains` arm) was classified FATAL. Assignment forms
+        // (`of=/system/img`) are still caught — the value is split off the key.
+        if (systemPaths.any { p ->
+                argv.any { tok ->
+                    val v = tok.substringAfter('=', tok)
+                    v == p || v.startsWith("$p/")
+                }
+            } &&
+            argv.any { tok ->
+                val base = tok.substringAfterLast('/')
+                base == "rm" || base == "dd" || base == "wipe" || base == "format" || base == "shred"
+            }
         ) {
             return RiskLevel.FATAL_BANNED
         }
@@ -322,9 +335,11 @@ class SecurityGateImpl : SecurityGate {
             )
         }
 
-        // Irreversible host damage is refused outright — no mode makes a
-        // block-device write or `rm -rf /` acceptable, and the user has no
-        // surface to undo it.
+        // Irreversible host damage. A block-device write is refused outright in
+        // EVERY mode — the user has no surface to undo a rewritten partition
+        // table. Root deletion is a separate arm just below and does follow the
+        // mode, because unlike a bricked device a wiped sandbox rootfs can be
+        // rebuilt, and YOYO already promises "full-auto except fatal-confirm".
         //
         // Host `su` is a permission question, so it follows the mode. YOYO
         // means "run it": 2.0.10 asked on every `su` even under YOYO, which
@@ -336,7 +351,29 @@ class SecurityGateImpl : SecurityGate {
         // the wall clock, output rate and resident window are the brakes for
         // that. Refusing it made a read-only command unavailable.
         if (cmd.toolName in SHELL_TOOLS) {
-            GuestWorkloadPolicy.hostRefusal(command)?.let {
+            // [T-yoyo-root-deletion] Block-device writes stay refused in every
+            // mode: a rewritten partition table bricks the device and there is
+            // no surface to undo it. Root deletion now follows the mode.
+            //
+            // YOYO's contract is "full-auto except fatal-confirm", which [5]
+            // above already honours for FATAL_BANNED. hostRefusal ignored the
+            // mode entirely, so the two arms contradicted each other: `rm -rf /`
+            // was a confirmable FATAL via classifySegment but a flat exit 126
+            // via hostRefusal, depending on which one ran first. Under YOYO it
+            // becomes a mustPrompt confirmation that the session's allow-all
+            // cannot swallow; ASK keeps the hard deny, staying strictly
+            // stricter than YOYO.
+            GuestWorkloadPolicy.blockDeviceRefusal(command)?.let {
+                return Decision.Denied(it, hard = true)
+            }
+            GuestWorkloadPolicy.rootDeletionRefusal(command)?.let {
+                if (mode == PermissionMode.ALLOW_ALL) {
+                    return Decision.NeedConfirm(
+                        it,
+                        "⚠️ 不可逆操作：删除文件系统根目录\n\nYOYO 模式下仍需你确认一次，确认后会真正执行。\n\n${preview(cmd)}",
+                        mustPrompt = true,
+                    )
+                }
                 return Decision.Denied(it, hard = true)
             }
             if (GuestWorkloadPolicy.requiresFreshConfirm(command) &&
@@ -614,9 +651,15 @@ class SecurityGateImpl : SecurityGate {
                 "禁止写入系统分区 ($command)"
             listOf("parted", "fdisk", "mkfs", "/dev/block/", "fastboot", "flash_image").any { norm.contains(it) } ->
                 "禁止操作分区表/块设备"
-            norm.contains("rm -rf /") -> "禁止删除根目录"
-            norm.contains("rm -rf /data") && !norm.contains("/data/data/") && !norm.contains("/data/local/") ->
-                "禁止删除 /data 整体"
+            // [T-rm-root-false-positive] argv-level, matching classifySegment.
+            // `norm.contains("rm -rf /")` described `rm -rf /sdcard/x` as
+            // "deleting the root directory", and `contains("rm -rf /data")`
+            // fired on `/database` — mislabelling the violation the user was
+            // actually being asked about. rmDeletesPath only reports a wholesale
+            // target, so the old `/data/data/` and `/data/local/` carve-outs are
+            // subsumed: deleting a path *under* /data never matches.
+            rmTargetsRoot(fatal) -> "禁止删除根目录"
+            rmDeletesPath(fatal, "/data") -> "禁止删除 /data 整体"
             else -> "致命违规操作"
         }
     }

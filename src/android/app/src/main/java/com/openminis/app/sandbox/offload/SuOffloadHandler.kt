@@ -87,6 +87,9 @@ class SuOffloadHandler : NativeOffloadHandler {
     }
 
     private fun exec(command: String, timeoutMs: Long, request: NativeOffloadRequest): NativeOffloadResult {
+        // Host `su` runs on the phone itself, not in the rebuildable sandbox, so
+        // a root deletion here means the device. This arm deliberately ignores
+        // YOYO: allowRootDeletion stays false, unlike the guest executor.
         GuestWorkloadPolicy.hostRefusal(command)?.let {
             return NativeOffloadResult(126, it + "\n")
         }

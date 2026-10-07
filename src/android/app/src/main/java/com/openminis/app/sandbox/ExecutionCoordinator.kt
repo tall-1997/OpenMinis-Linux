@@ -136,7 +136,17 @@ object ExecutionCoordinator {
         return mutex.withLock {
         lastIdle.remove(sessionId)
         try {
-        val refused = GuestWorkloadPolicy.hostRefusal(command) ?: DiskPressure.refusal(appContext, command)
+        // [T-yoyo-root-deletion] Under YOYO the gate has already shown a
+        // mustPrompt confirmation for a root deletion before the command reaches
+        // this executor, so refusing it again here made that approval a dead
+        // end: the user tapped through and the command still died with exit 126.
+        // The guest rootfs is also rebuildable (`minis-dev-setup`), unlike a host
+        // partition. Block-device writes stay refused in every mode.
+        val yoyo = com.openminis.app.security.SecurityGateHolder
+            .activeSessionMode(sessionId)
+            .isYoyo()
+        val refused = GuestWorkloadPolicy.hostRefusal(command, allowRootDeletion = yoyo)
+            ?: DiskPressure.refusal(appContext, command)
             ?: run {
                 // [T-memory-poison-guard] 工具路径之外的同一配额：/var/minis/memory
                 // bind 的宿主目录就是本会话的 memory 目录，直接 shell 写语法在
