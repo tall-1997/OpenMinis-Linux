@@ -1,0 +1,82 @@
+name: PR Checks
+
+# Regression gate for every pull request. Modeled on cuplivo's pr-check.yml
+# (format + l10n + analyze + test on each PR), adapted to this repo:
+#   * compileReleaseKotlin — type-checks main sources (fast fail before tests)
+#   * testReleaseUnitTest — the full JVM suite (only variant; debug is
+#     disabled via androidComponents, see app/build.gradle.kts)
+#   * check_new_untranslated.py — rejects PRs that add a user-visible
+#     string without translating it into every shipped locale.
+# The heavy assemble/NDK/sandbox-assets path stays in android-apk.yml; this
+# workflow deliberately avoids it so PR feedback stays under ~20 minutes.
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-check-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  JAVA_VERSION: "17"
+  ANDROID_PLATFORM: "android-36"
+  ANDROID_BUILD_TOOLS: "35.0.0"
+  GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g"
+
+jobs:
+  checks:
+    name: Compile / Unit tests / L10n gate
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Full history so the l10n diff against the PR base works.
+          fetch-depth: 0
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: gradle
+
+      - name: Install Android SDK
+        run: |
+          set -e
+          curl -fsSL -o /tmp/cmdline-tools.zip \
+            "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip"
+          sudo mkdir -p /usr/local/lib/android/sdk/cmdline-tools
+          sudo unzip -q /tmp/cmdline-tools.zip -d /tmp/sdk
+          sudo mv /tmp/sdk/cmdline-tools /usr/local/lib/android/sdk/cmdline-tools/latest
+          yes | /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --licenses >/dev/null || true
+          /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager \
+            "platforms;${ANDROID_PLATFORM}" "build-tools;${ANDROID_BUILD_TOOLS}"
+
+      - name: Compile Kotlin (release variant)
+        working-directory: src/android
+        env:
+          ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+        run: |
+          sed -i 's|org.gradle.jvmargs=.*|org.gradle.jvmargs=-Xmx4g -Dfile.encoding=UTF-8|' gradle.properties
+          chmod +x gradlew
+          ./gradlew :app:compileReleaseKotlin --parallel --stacktrace
+
+      - name: Unit tests (release variant)
+        working-directory: src/android
+        env:
+          ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+        run: ./gradlew :app:testReleaseUnitTest --parallel --stacktrace
+
+      - name: No new untranslated strings
+        if: github.event_name == 'pull_request'
+        run: |
+          python3 scripts/ci/check_new_untranslated.py \
+            "${{ github.event.pull_request.base.sha }}" \
+            "${{ github.sha }}"
