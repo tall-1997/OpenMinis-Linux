@@ -91,8 +91,11 @@ fun GitPanelScreen(
                         Text(stringResource(R.string.git_panel_title))
                         val repo = state.repo
                         if (repo != null && repo.isRepo) {
+                            val label = repo.relativeRoot.ifBlank {
+                                repo.root.substringAfterLast('/').ifBlank { repo.root }
+                            }
                             Text(
-                                "${repo.branch.ifBlank { "HEAD" }} · ${repo.root}",
+                                "${repo.branch.ifBlank { "HEAD" }} · $label",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,

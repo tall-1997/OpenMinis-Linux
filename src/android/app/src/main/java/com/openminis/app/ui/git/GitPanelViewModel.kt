@@ -102,8 +102,9 @@ class GitPanelViewModel(
                 }
                 return@launch
             }
-            val status = runCatching { GitCli.status(sessionId) }.getOrNull()
-            val log = runCatching { GitCli.log(sessionId) }.getOrDefault(emptyList())
+            val root = repo.root
+            val status = runCatching { GitCli.status(sessionId, root) }.getOrNull()
+            val log = runCatching { GitCli.log(sessionId, root = root) }.getOrDefault(emptyList())
             _state.update {
                 it.copy(
                     loading = false,
@@ -124,11 +125,13 @@ class GitPanelViewModel(
     }
 
     fun toggleStage(entry: GitFileEntry) {
-        mutate { GitCli.setStaged(sessionId, entry, staged = !entry.staged) }
+        val root = _state.value.repo?.root
+        mutate { GitCli.setStaged(sessionId, entry, staged = !entry.staged, root = root) }
     }
 
     fun stageAll() {
-        mutate { GitCli.stageAll(sessionId) }
+        val root = _state.value.repo?.root
+        mutate { GitCli.stageAll(sessionId, root) }
     }
 
     private fun mutate(op: suspend () -> String?) {
@@ -142,8 +145,9 @@ class GitPanelViewModel(
 
     /** Re-read status (and log after commits) and fold in the error, if any. */
     private suspend fun reloadAfterMutation(error: String?) {
-        val status = runCatching { GitCli.status(sessionId) }.getOrNull()
-        val log = runCatching { GitCli.log(sessionId) }.getOrDefault(emptyList())
+        val root = _state.value.repo?.root
+        val status = runCatching { GitCli.status(sessionId, root) }.getOrNull()
+        val log = runCatching { GitCli.log(sessionId, root = root) }.getOrDefault(emptyList())
         _state.update {
             it.copy(busy = false, status = status, log = log, notice = error)
         }
@@ -153,7 +157,8 @@ class GitPanelViewModel(
         if (_state.value.generating || _state.value.busy) return
         viewModelScope.launch {
             _state.update { it.copy(generating = true, notice = null) }
-            val staged = runCatching { GitCli.stagedDiff(sessionId) }.getOrDefault("")
+            val staged = runCatching { GitCli.stagedDiff(sessionId, _state.value.repo?.root) }
+                .getOrDefault("")
             if (staged.isBlank()) {
                 _state.update {
                     it.copy(generating = false, notice = "stage some changes first")
@@ -176,7 +181,9 @@ class GitPanelViewModel(
         if (message.isEmpty() || _state.value.busy) return
         viewModelScope.launch {
             _state.update { it.copy(busy = true, notice = null) }
-            val outcome: CommitOutcome = runCatching { GitCli.commit(sessionId, message) }
+            val outcome: CommitOutcome = runCatching {
+                GitCli.commit(sessionId, message, _state.value.repo?.root)
+            }
                 .getOrElse { CommitOutcome(false, it.message ?: "commit failed") }
             if (outcome.ok) {
                 _state.update { it.copy(draftMessage = "") }
@@ -190,7 +197,9 @@ class GitPanelViewModel(
             _state.update {
                 it.copy(diff = GitDiffView(entry.path, loading = true, content = ""))
             }
-            val content = runCatching { GitCli.fileDiff(sessionId, entry) }
+            val content = runCatching {
+                GitCli.fileDiff(sessionId, entry, _state.value.repo?.root)
+            }
                 .getOrDefault("(diff unavailable)")
             _state.update {
                 it.copy(diff = GitDiffView(entry.path, loading = false, content = content))
@@ -203,7 +212,9 @@ class GitPanelViewModel(
             _state.update {
                 it.copy(diff = GitDiffView("${commit.shortHash} ${commit.subject}", loading = true, content = ""))
             }
-            val content = runCatching { GitCli.commitDiff(sessionId, commit.hash) }
+            val content = runCatching {
+                GitCli.commitDiff(sessionId, commit.hash, _state.value.repo?.root)
+            }
                 .getOrDefault("(diff unavailable)")
             _state.update {
                 it.copy(

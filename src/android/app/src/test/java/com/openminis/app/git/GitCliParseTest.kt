@@ -250,4 +250,62 @@ class GitCliParseTest {
         assertEquals(e, e.copy())
         assertFalse(e.equals(e.copy(staged = false)))
     }
+
+    // ------------------------------------------------- nested repo discovery
+
+    @Test
+    fun `discover parses immediate-child repo names in order`() {
+        val out = "./OpenMinis-Linux/.git\n./notes/.git\n"
+        assertEquals(listOf("OpenMinis-Linux", "notes"), GitCli.parseDiscover(out))
+    }
+
+    @Test
+    fun `discover ignores blank lines cwd itself and stray text`() {
+        val out = "\n./a/.git\n./.git\nnot-a-path\n./b with space/.git\n"
+        assertEquals(listOf("a", "b with space"), GitCli.parseDiscover(out))
+    }
+
+    @Test
+    fun `discover on empty output yields no candidates`() {
+        assertTrue(GitCli.parseDiscover("").isEmpty())
+        assertTrue(GitCli.parseDiscover("cfg\t\t\n").isEmpty())
+    }
+
+    @Test
+    fun `git prefix is bare without root and quoted with one`() {
+        assertEquals("git", GitCli.gitPrefix(null))
+        assertEquals("git", GitCli.gitPrefix(""))
+        assertEquals("git -C '/var/w/r'", GitCli.gitPrefix("/var/w/r"))
+        assertEquals("git -C '/a b/'", GitCli.gitPrefix("/a b/"))
+    }
+
+    @Test
+    fun `probe and status commands carry the resolved root`() {
+        assertFalse(GitCli.probeCmd().contains("-C"))
+        assertTrue(GitCli.probeCmd("r").contains("git -C 'r' rev-parse --is-inside-work-tree"))
+        // cfg lookup must resolve against the same repo, not the shell cwd
+        assertTrue(GitCli.probeCmd("r").contains("\$(git -C 'r' config user.name"))
+        assertEquals(
+            "git -C 'r' -c core.quotepath=false status --porcelain -b",
+            GitCli.statusCmd("r"),
+        )
+        assertTrue(GitCli.logCmd(5, "r").startsWith("git -C 'r' -c core.quotepath=false log -n 5"))
+        assertTrue(GitCli.buildCommitCommand("QQ==", "r").contains("git -C 'r' commit -F"))
+        // default stays cwd-bound so existing callers and tests are unaffected
+        assertEquals(GitCli.statusCmd(), GitCli.statusCmd(null))
+    }
+
+    @Test
+    fun `probe error text drops shell watchdog noise`() {
+        val out = "cfg\t\t\n" +
+            "/bin/bash: line 39: 14394 Killed\n" +
+            "( sleep 600; kill -TERM -$$ 2> /dev/null; sleep 3; kill -KILL -$$ 2> /dev/null )\n"
+        val info = GitCli.parseProbe(out, exitCode = 128)
+        assertFalse(info.isRepo)
+        // everything was noise → fall back to the exit code, not raw stderr
+        assertEquals("exit=128", info.error)
+
+        val mixed = GitCli.parseProbe("fatal: not a git repository\n/bin/bash: line 1: 9 Killed\n", 128)
+        assertEquals("fatal: not a git repository", mixed.error)
+    }
 }
