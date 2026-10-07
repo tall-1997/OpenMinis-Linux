@@ -3124,9 +3124,22 @@ fun ChatScreen(
                         .consumePendingSearchFocus(sessionId) ?: return@LaunchedEffect
                     // Cold open is async — wait for the first message window
                     // to publish before deciding whether paging is needed.
+                    // Collect the StateFlow DIRECTLY: snapshotFlow only re-runs
+                    // when Compose snapshot state read inside its block
+                    // changes, and `uiMessages.value` reads none — a
+                    // snapshotFlow here emits once and never again, so on a
+                    // cold open (messages still loading) the wait hung to the
+                    // 4s timeout and silently bailed: the "tap a search hit,
+                    // nothing happens" symptom.
                     withTimeoutOrNull(4000) {
-                        snapshotFlow { viewModel.uiMessages.value }.first { it.isNotEmpty() }
-                    } ?: return@LaunchedEffect
+                        viewModel.uiMessages.first { it.isNotEmpty() }
+                    } ?: run {
+                        AppLogger.warning(
+                            "ChatSearchFocus",
+                            "message window never published within 4s — staying put",
+                        )
+                        return@LaunchedEffect
+                    }
                     // The matched row may sit ABOVE the loaded window (cold
                     // open is a tail). Page older history until the message is
                     // present — one page per iteration, bounded, the same
