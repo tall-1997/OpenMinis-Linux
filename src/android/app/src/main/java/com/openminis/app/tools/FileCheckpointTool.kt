@@ -54,7 +54,30 @@ object FileCheckpointStore {
     private fun root(filesDir: File, sessionId: String): File =
         File(SessionWorkspace.base(filesDir, ExecutionCoordinator.ownerSessionId(sessionId)), DIR)
 
-    private fun dirFor(filesDir: File, sessionId: String, id: String): File = File(root(filesDir, sessionId), id)
+    private fun dirFor(filesDir: File, sessionId: String, id: String): File {
+        // [T-checkpoint-id-guard] The id arrives from the model (op=drop /
+        // op=restore) and lands straight in a path that deleteRecursively()
+        // then acts on: ".." would walk out of the checkpoint root and wipe
+        // the whole session workspace, "../.." the session collection. Only
+        // the format capture() generates is accepted, and the resolved
+        // directory is re-checked to sit inside the root.
+        require(validId(id)) { "invalid checkpoint id '$id'" }
+        val rootDir = root(filesDir, sessionId)
+        val dir = File(rootDir, id)
+        require(dir.canonicalFile.parentFile == rootDir.canonicalFile) {
+            "checkpoint id escapes the root: '$id'"
+        }
+        return dir
+    }
+
+    /** capture() mints ids as UUID.randomUUID().toString().take(8). */
+    private fun validId(id: String): Boolean =
+        id.length == 8 && id.all { it in '0'..'9' || it in 'a'..'f' }
+
+    /** Payload files are named "<index>.bin" by capture(). */
+    internal fun validPayloadName(name: String): Boolean =
+        name.length >= 5 && name.endsWith(".bin") &&
+            name.dropLast(4).all { it in '0'..'9' }
 
     /**
      * Path resolution uses the RAW session id (a lane agent must map guest
@@ -180,6 +203,16 @@ object FileCheckpointStore {
             }
             try {
                 if (e.existed && e.payloadName != null) {
+                    // [T-checkpoint-id-guard] The manifest is data on disk;
+                    // its payload name is only trusted after the same shape
+                    // capture() writes is confirmed, so a hand-edited
+                    // manifest cannot point the restore outside the payload
+                    // directory.
+                    if (!validPayloadName(e.payloadName!!)) {
+                        lines += "failed ${e.path}: manifest payload name is malformed"
+                        failed = true
+                        continue
+                    }
                     val src = File(File(dirFor(filesDir, sessionId, cp.id), PAYLOAD), e.payloadName)
                     host.parentFile?.mkdirs()
                     // temp+rename so a crash mid-restore cannot leave a
@@ -228,7 +261,11 @@ object FileCheckpointStore {
             ?.sortedByDescending { it.createdAt }
             ?: emptyList()
 
-    fun drop(filesDir: File, sessionId: String, id: String): Boolean = dirFor(filesDir, sessionId, id).deleteRecursively()
+    fun drop(filesDir: File, sessionId: String, id: String): Boolean =
+        // [T-checkpoint-id-guard] Reject before dirFor(): an invalid id must
+        // read as "no such checkpoint", not as an exception the caller has to
+        // translate.
+        if (!validId(id)) false else dirFor(filesDir, sessionId, id).deleteRecursively()
 
     /** Best-effort: keep the newest [MAX_CHECKPOINTS], delete the rest. */
     private fun prune(filesDir: File, sessionId: String, keepId: String) {

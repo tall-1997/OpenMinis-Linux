@@ -151,4 +151,55 @@ class FileCheckpointStoreTest {
         assertTrue("snapshot must sit under the session base dir", base.isDirectory)
         assertFalse("and never in the shared workspace tree", File(filesDir, "workspace/.checkpoints").exists())
     }
+
+    @Test
+    fun dropRejectsTraversalIdsInsteadOfDeletingTheWorkspace() {
+        // [T-checkpoint-id-guard] ".." resolves to the session base itself and
+        // "../.." to the session collection; deleteRecursively() on either
+        // would eat live session data, so the ids must be refused flat out.
+        writeTarget("precious")
+        val cp = FileCheckpointStore.capture(filesDir, session, listOf("/a.txt"), resolver("/a.txt" to target)).checkpoint!!
+        val base = File(SessionWorkspace.base(filesDir, session), ".checkpoints")
+
+        assertFalse(FileCheckpointStore.drop(filesDir, session, ".."))
+        assertFalse(FileCheckpointStore.drop(filesDir, session, "../.."))
+        assertFalse(FileCheckpointStore.drop(filesDir, session, "."))
+        assertFalse(FileCheckpointStore.drop(filesDir, session, "a/../b"))
+        assertTrue("well-formed but unknown ids delete nothing and report success (deleteRecursively on a missing dir)",
+            FileCheckpointStore.drop(filesDir, session, "00000000"))
+
+        assertTrue("session workspace must survive every refused drop", target.isFile)
+        assertEquals("precious", target.readText())
+        assertTrue("checkpoint pool must survive every refused drop", File(base, cp.id).isDirectory)
+    }
+
+    @Test
+    fun restoreRejectsTraversalIdsWithoutThrowing() {
+        writeTarget("v1")
+        FileCheckpointStore.capture(filesDir, session, listOf("/a.txt"), resolver("/a.txt" to target))
+        for (bad in listOf("..", "../..", "a/../b", "........", "ABCDEF12", "1234567", "123456789")) {
+            val r = FileCheckpointStore.restore(filesDir, session, bad, resolver("/a.txt" to target))
+            assertFalse("'$bad' must not resolve", r.found)
+            assertTrue("'$bad' must be reported, not thrown", r.lines.single().contains(bad))
+        }
+        assertEquals("v1", target.readText())
+    }
+
+    @Test
+    fun tamperedManifestPayloadNameFailsClosed() {
+        writeTarget("v1")
+        val cp = FileCheckpointStore.capture(filesDir, session, listOf("/a.txt"), resolver("/a.txt" to target)).checkpoint!!
+        // A hand-edited manifest must not be able to point the restore at a
+        // payload outside the checkpoint directory.
+        val manifest = File(File(File(SessionWorkspace.base(filesDir, session), ".checkpoints"), cp.id), "manifest.json")
+        val json = org.json.JSONObject(manifest.readText())
+        json.getJSONArray("entries").getJSONObject(0).put("payload", "../evil")
+        manifest.writeText(json.toString())
+
+        writeTarget("v2")
+        val r = FileCheckpointStore.restore(filesDir, session, cp.id, resolver("/a.txt" to target))
+        assertFalse(r.lines.toString(), r.success)
+        assertTrue(r.lines.toString(), r.lines.any { it.contains("malformed") })
+        assertEquals("v2", target.readText())
+    }
 }
