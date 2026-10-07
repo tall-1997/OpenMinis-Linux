@@ -1,6 +1,7 @@
 package com.openminis.app.mcp.client
 
 import com.openminis.app.mcp.client.McpJsonRpc.McpError
+import com.openminis.app.network.withDohDns
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -55,6 +56,10 @@ class McpHttpClient(
         private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
 
         fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
+            // [T-doh-resolver-fallback] MCP servers are user-entered hostnames
+            // (often on a LAN or a tailnet), i.e. the most likely to be
+            // unresolvable via a public DoH source but reachable via system DNS.
+            .withDohDns()
             .connectTimeout(CONNECT_TIMEOUT_S, TimeUnit.SECONDS)
             .readTimeout(READ_TIMEOUT_S, TimeUnit.SECONDS)
             .writeTimeout(WRITE_TIMEOUT_S, TimeUnit.SECONDS)

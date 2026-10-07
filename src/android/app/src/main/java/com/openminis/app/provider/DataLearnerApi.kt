@@ -3,6 +3,7 @@ package com.openminis.app.provider
 import android.content.Context
 import android.util.Log
 import com.openminis.app.data.model.LLMModel
+import com.openminis.app.network.withDohDns
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -30,6 +31,10 @@ object DataLearnerApi {
     private const val MAX_BACKGROUND_FILLS = 6
 
     private val httpClient = OkHttpClient.Builder()
+        // [T-doh-resolver-fallback] DoH when the system resolver cannot name
+        // the host at all — an UnknownHostException here is unrecoverable by
+        // the retry layer, since every retry re-runs the same failed lookup.
+        .withDohDns()
         .connectTimeout(8, TimeUnit.SECONDS)
         .readTimeout(8, TimeUnit.SECONDS)
         .followRedirects(true)

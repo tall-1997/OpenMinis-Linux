@@ -3,6 +3,7 @@ package com.openminis.app.data
 import android.content.Context
 import com.openminis.app.BuildConfig
 import com.openminis.app.logging.AppLogger
+import com.openminis.app.network.withDohDns
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -61,6 +62,10 @@ object UpdateDownloadManager {
     )
 
     private val client = OkHttpClient.Builder()
+        // [T-doh-resolver-fallback] A failed APK download after a long mirror
+        // probe is expensive enough that a name-resolution fix is worth taking.
+        // probeClient below is derived via newBuilder(), so it inherits this.
+        .withDohDns()
         .connectTimeout(12, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
         .callTimeout(0, TimeUnit.MILLISECONDS) // no overall cap; big files stream a while

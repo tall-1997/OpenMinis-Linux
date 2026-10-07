@@ -9,6 +9,7 @@ import androidx.core.content.FileProvider
 import com.openminis.app.BuildConfig
 import com.openminis.app.ProjectRepo
 import com.openminis.app.logging.AppLogger
+import com.openminis.app.network.withDohDns
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -83,6 +84,9 @@ object UpdateChecker {
     }
 
     private val client = OkHttpClient.Builder()
+        // [T-doh-resolver-fallback] Update checks run unattended in the
+        // background, often on a network the app has not touched yet.
+        .withDohDns()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
         .build()

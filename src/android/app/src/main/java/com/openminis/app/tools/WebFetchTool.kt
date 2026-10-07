@@ -2,6 +2,7 @@ package com.openminis.app.tools
 
 import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.model.AgentToolParam
+import com.openminis.app.network.guardedDohDns
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
@@ -18,7 +19,10 @@ object WebFetchTool {
 
     private val client: OkHttpClient by lazy {
         OkHttpClient.Builder()
-            .dns(FetchUrlGuard.publicInternetDns())
+            // [T-doh-resolver-fallback] Composed, NOT replaced: the SSRF guard must keep
+            // veto power over every address OkHttp would dial (incl. redirects),
+            // while still getting the DoH fallback when system DNS is dead.
+            .dns(guardedDohDns { !FetchUrlGuard.isUnsafeAddress(it) })
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .followRedirects(true)

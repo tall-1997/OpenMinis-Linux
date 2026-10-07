@@ -5,6 +5,7 @@ import android.net.Uri
 import android.util.Log
 import androidx.browser.customtabs.CustomTabsIntent
 import com.openminis.app.data.repository.ProviderRepository
+import com.openminis.app.network.withDohDns
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -147,6 +148,9 @@ object OpenRouterOAuthManager {
     }
 
     private val client = OkHttpClient.Builder()
+        // [T-doh-resolver-fallback] Keep the token exchange reachable when the
+        // system resolver cannot name openrouter.ai.
+        .withDohDns()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
         .build()

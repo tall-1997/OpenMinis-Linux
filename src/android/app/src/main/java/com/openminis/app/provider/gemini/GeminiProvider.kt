@@ -48,6 +48,9 @@ class GeminiProvider(
         get() = ProviderKeyGate.key(basePath, apiKey, model.id)
 
     private val client = OkHttpClient.Builder()
+        // [T-doh-resolver-fallback] See [DohDns] — a custom Gemini endpoint is
+        // an arbitrary hostname and benefits from the fallback resolver.
+        .dns(com.openminis.app.network.DohDns)
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(10, TimeUnit.MINUTES)
         .writeTimeout(30, TimeUnit.SECONDS)

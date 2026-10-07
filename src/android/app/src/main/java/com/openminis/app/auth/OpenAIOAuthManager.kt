@@ -281,6 +281,10 @@ class OpenAIOAuthManager(context: Context, instanceId: String) : OAuthManager(co
      */
     private val systemAwareHttpClient: okhttp3.OkHttpClient by lazy {
         okhttp3.OkHttpClient.Builder()
+            // [T-doh-resolver-fallback] Resolver fallback for the token
+            // exchange. Must stay ahead of the proxySelector below, which is
+            // load-bearing for this client.
+            .dns(com.openminis.app.network.DohDns)
             .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
             .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
             .proxySelector(ProxySelector.getDefault())

@@ -6,6 +6,7 @@ import com.openminis.app.data.model.LLMModel
 import com.openminis.app.data.model.applyUnrecognizedModelDefaults
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.openminis.app.network.withDohDns
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
@@ -47,6 +48,10 @@ object ModelsDevApi {
     private var stage2IndexRegistryId: Int? = null
 
     private val client = OkHttpClient.Builder()
+        // [T-doh-resolver-fallback] The catalog fetch is the app's first call on
+        // a cold start; when the system resolver is poisoned this is exactly
+        // where the user sees an empty model picker.
+        .withDohDns()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
         .build()

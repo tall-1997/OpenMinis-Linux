@@ -4,6 +4,7 @@ import android.util.Base64
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.openminis.app.network.withDohDns
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
@@ -35,6 +36,9 @@ open class VoiceProvider(
 
         /** TTS responses can be large and slow — generous timeouts (iOS: 120s). */
         val httpClient: OkHttpClient = OkHttpClient.Builder()
+            // [T-doh-resolver-fallback] TTS/STT endpoints are hostnames; a
+            // poisoned resolver must not silently disable voice.
+            .withDohDns()
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(120, TimeUnit.SECONDS)
             .writeTimeout(120, TimeUnit.SECONDS)

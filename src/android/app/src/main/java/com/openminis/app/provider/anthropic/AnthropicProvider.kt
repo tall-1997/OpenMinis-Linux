@@ -85,6 +85,10 @@ class AnthropicProvider(
     private val isCustomEndpoint: Boolean = basePath != "https://api.anthropic.com"
 
     private val client = OkHttpClient.Builder()
+        // [T-doh-resolver-fallback] A custom base URL means an arbitrary host;
+        // when the system resolver cannot name it, every provider-level retry
+        // re-runs the same failed lookup and the chat just never starts.
+        .dns(com.openminis.app.network.DohDns)
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(10, TimeUnit.MINUTES)
         .writeTimeout(30, TimeUnit.SECONDS)

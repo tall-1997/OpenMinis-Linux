@@ -456,6 +456,10 @@ class OpenAIProvider private constructor(
     // through AppLogger.info at the OkHttpEvents tag with the call's
     // identity hash so concurrent streams can be disambiguated.
     internal val client = OkHttpClient.Builder()
+        // [T-doh-resolver-fallback] Custom/OpenRouter endpoints are arbitrary
+        // hostnames, so this is the path most exposed to a resolver that
+        // cannot name them. Must stay above the connection pool comment below.
+        .dns(com.openminis.app.network.DohDns)
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(600, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)
