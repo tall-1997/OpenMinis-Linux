@@ -1,11 +1,13 @@
 package com.openminis.app.data.repository
 
+import androidx.room.withTransaction
 import android.database.sqlite.SQLiteBlobTooBigException
 import com.openminis.app.data.body.BodyStore
 import com.openminis.app.data.body.BudgetDecision
 import com.openminis.app.data.body.PreviewBudget
 import com.openminis.app.data.body.ResourceLimits
 import com.openminis.app.data.display.DisplayParts
+import com.openminis.app.data.db.AppDatabase
 import com.openminis.app.data.db.ChatDao
 import com.openminis.app.data.db.GoalDao
 import com.openminis.app.data.db.SessionGoalEntity
@@ -33,6 +35,10 @@ class ChatRepository(
     // [T-msg-version-archive] Optional so JVM tests that never truncate keep
     // constructing with the old three-arg shape.
     private val versionDao: MessageVersionDao? = null,
+    // [T-archive-truncate-txn] Database handle so archive+truncate can run
+    // in one Room transaction; null keeps the JVM-test old shapes working
+    // (they then get the sequential fallback, still fail-closed).
+    private val db: AppDatabase? = null,
 ) {
     fun observeSessions(): Flow<List<ChatSessionEntity>> = dao.observeSessions()
 
@@ -781,38 +787,67 @@ class ChatRepository(
         // [T-msg-version-archive] Snapshot the doomed rows into
         // message_versions BEFORE deleting them — re-generating a reply must
         // archive the old version, not destroy it (cuplivo parity).
-        // Best-effort: an archiving failure must never block the retry.
-        versionDao?.let { vdao ->
-            runCatching {
-                val doomed = dao.rowsFrom(sessionId, keepCount)
-                if (doomed.isNotEmpty()) {
-                    val nowMs = System.currentTimeMillis()
-                    val versions = doomed.map { row ->
-                        MessageVersionEntity(
-                            id = UUID.randomUUID().toString(),
-                            messageId = row.id,
-                            sessionId = row.sessionId,
-                            versionIndex = vdao.maxVersionIndex(row.id) + 1,
-                            role = row.role,
-                            partsJson = row.partsJson,
-                            bodyRef = row.bodyRef,
-                            bodySha = row.bodySha,
-                            reasoningContent = row.reasoningContent,
-                            errorInfo = row.errorInfo,
-                            modelId = row.modelId,
-                            modelDisplayName = row.modelDisplayName,
-                            sourceCreatedAt = row.createdAt,
-                            archivedAt = nowMs,
-                        )
-                    }
-                    vdao.insertAll(versions)
-                }
-            }.onFailure {
-                AppLogger.warning("ChatRepository", "[T-msg-version-archive] archiving failed (delete proceeds): ${it.message}")
-            }
+        // [T-archive-truncate-txn] Archiving and truncation run in ONE Room
+        // transaction, and an archiving failure ABORTS the truncation. The
+        // old code logged "delete proceeds" and dropped the messages anyway
+        // — exactly the data loss the archive was built to prevent. (A row
+        // too large for the CursorWindow makes rowsFrom throw; the safe
+        // outcome there is a kept message, not an unarchived delete.)
+        val vdao = versionDao
+        if (vdao == null) {
+            dao.deleteMessagesAfter(sessionId, keepCount)
+            return
         }
-        dao.deleteMessagesAfter(sessionId, keepCount)
+        val archived = runCatching { archiveVersionsFor(vdao, sessionId, keepCount) }
+        val versions = archived.getOrNull()
+        if (versions == null) {
+            AppLogger.error(
+                "ChatRepository",
+                "[T-msg-version-archive] archiving failed; truncation ABORTED so no message is lost without its archive: " +
+                    "${archived.exceptionOrNull()?.message}",
+            )
+            return
+        }
+        val dbRef = db
+        if (dbRef != null) {
+            dbRef.withTransaction {
+                if (versions.isNotEmpty()) vdao.insertAll(versions)
+                dao.deleteMessagesAfter(sessionId, keepCount)
+            }
+        } else {
+            if (versions.isNotEmpty()) vdao.insertAll(versions)
+            dao.deleteMessagesAfter(sessionId, keepCount)
+        }
     }
+
+    private suspend fun archiveVersionsFor(
+        vdao: MessageVersionDao,
+        sessionId: String,
+        keepCount: Int,
+    ): List<MessageVersionEntity> {
+        val doomed = dao.rowsFrom(sessionId, keepCount)
+        if (doomed.isEmpty()) return emptyList()
+        val nowMs = System.currentTimeMillis()
+        return doomed.map { it.toVersionEntity(vdao, nowMs) }
+    }
+
+    private suspend fun MessageEntity.toVersionEntity(vdao: MessageVersionDao, nowMs: Long): MessageVersionEntity =
+        MessageVersionEntity(
+            id = UUID.randomUUID().toString(),
+            messageId = id,
+            sessionId = sessionId,
+            versionIndex = vdao.maxVersionIndex(id) + 1,
+            role = role,
+            partsJson = partsJson,
+            bodyRef = bodyRef,
+            bodySha = bodySha,
+            reasoningContent = reasoningContent,
+            errorInfo = errorInfo,
+            modelId = modelId,
+            modelDisplayName = modelDisplayName,
+            sourceCreatedAt = createdAt,
+            archivedAt = nowMs,
+        )
 
     /**
      * Rewrite a single message row's parts_json in place. Used by
@@ -822,6 +857,24 @@ class ChatRepository(
      */
     suspend fun updateMessageParts(id: String, partsJson: String) {
         val meta = dao.bodyMeta(id) ?: return
+        // [T-archive-trimmed-parts] The rerun-from-tool-block cut rewrites the
+        // kept assistant row IN PLACE; the pre-cut parts sit below the
+        // truncation cutoff, so deleteMessagesAfter never archives them.
+        // Snapshot them here, and abort the rewrite when archiving fails —
+        // a failed archive must not turn into silent data loss.
+        versionDao?.let { vdao ->
+            runCatching {
+                dao.messageById(id)?.let { row ->
+                    vdao.insertAll(listOf(row.toVersionEntity(vdao, System.currentTimeMillis())))
+                }
+            }.onFailure {
+                AppLogger.error(
+                    "ChatRepository",
+                    "[T-msg-version-archive] archiving the trimmed row failed; rewrite ABORTED: ${it.message}",
+                )
+                throw it
+            }
+        }
         val stored = storeBody(partsJson, requireOffload = partsJson.toByteArray(Charsets.UTF_8).size > ResourceLimits.INLINE_BODY_BYTES)
         if (stored.ref == null && stored.bodyBytes > ResourceLimits.INLINE_BODY_BYTES) {
             throw IllegalStateException("Unable to store oversized message body")

@@ -618,6 +618,18 @@ interface ChatDao {
     @Query("SELECT id, body_bytes, body_ref FROM messages WHERE id = :id")
     suspend fun bodyMeta(id: String): MessageBodyMeta?
 
+    // [T-archive-trimmed-parts] Full-row read for archiving a row that is
+    // about to be rewritten in place (updateMessageParts). Same explicit
+    // projection as rowsFrom — never SELECT * (ResourceBoundaryTest).
+    @Query(
+        "SELECT id, session_id, role, parts_json, created_at, token_usage, sort_order, " +
+            "reasoning_content, stream_interrupt_count, updated_at, error_info, " +
+            "model_id, model_display_name, provider_type, provider_instance_id, " +
+            "body_bytes, body_ref, body_sha, preview " +
+            "FROM messages WHERE id = :id"
+    )
+    suspend fun messageById(id: String): MessageEntity?
+
     @Query("SELECT substr(COALESCE(preview, parts_json), 1, 65536) FROM messages WHERE id = :id")
     suspend fun messagePartsJson(id: String): String?
 
