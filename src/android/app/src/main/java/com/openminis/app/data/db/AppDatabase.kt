@@ -20,8 +20,9 @@ import com.openminis.app.data.db.CodeEdgeEntity
         CodeSymbolEntity::class,
         CodeEdgeEntity::class,
         SessionGoalEntity::class,
+        MessageVersionEntity::class,
     ],
-    version = 21, // keep DatabaseVersionGuard.CODE_DB_VERSION in lockstep
+    version = 22, // keep DatabaseVersionGuard.CODE_DB_VERSION in lockstep
     // [T-android-downgrade-compat] Kept ON so MigrationTestHelper and CI can
     // validate every migration (and its downgrade counterpart) against the
     // committed schema json. Without it the upgrade/downgrade chain has no
@@ -33,6 +34,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun webAppShortcutDao(): WebAppShortcutDao
     abstract fun codeIndexDao(): CodeIndexDao
     abstract fun goalDao(): GoalDao
+    abstract fun messageVersionDao(): MessageVersionDao
 
     companion object {
         @Volatile
@@ -545,6 +547,48 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** [T-msg-version-archive] message_versions — see MessageVersionEntity. */
+        val MIGRATION_21_22 = object : Migration(21, 22) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """CREATE TABLE IF NOT EXISTS `message_versions` (
+                        `id` TEXT NOT NULL,
+                        `message_id` TEXT NOT NULL,
+                        `session_id` TEXT NOT NULL,
+                        `version_index` INTEGER NOT NULL,
+                        `role` TEXT NOT NULL,
+                        `parts_json` TEXT,
+                        `body_ref` TEXT,
+                        `body_sha` TEXT,
+                        `reasoning_content` TEXT,
+                        `error_info` TEXT,
+                        `model_id` TEXT,
+                        `model_display_name` TEXT,
+                        `source_created_at` INTEGER NOT NULL,
+                        `archived_at` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`),
+                        FOREIGN KEY(`session_id`) REFERENCES `sessions`(`id`)
+                            ON UPDATE NO ACTION ON DELETE CASCADE
+                    )""".trimIndent()
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS " +
+                        "`index_message_versions_message_id_version_index` " +
+                        "ON `message_versions` (`message_id`, `version_index`)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_message_versions_session_id` " +
+                        "ON `message_versions` (`session_id`)"
+                )
+            }
+        }
+
+        val MIGRATION_22_21 = object : Migration(22, 21) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("DROP TABLE IF EXISTS `message_versions`")
+            }
+        }
+
         val MIGRATION_16_17 = object : Migration(16, 17) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.addColumnIfMissing("sessions", "permission_mode", "TEXT")
@@ -604,6 +648,7 @@ abstract class AppDatabase : RoomDatabase() {
                         MIGRATION_18_19, MIGRATION_19_18,
                         MIGRATION_19_20, MIGRATION_20_19,
                         MIGRATION_20_21, MIGRATION_21_20,
+                        MIGRATION_21_22, MIGRATION_22_21,
                     )
                     .build()
                     .also { INSTANCE = it }

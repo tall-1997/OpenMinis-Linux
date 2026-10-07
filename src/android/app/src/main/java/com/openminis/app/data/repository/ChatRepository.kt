@@ -12,6 +12,8 @@ import com.openminis.app.data.db.SessionGoalEntity
 import com.openminis.app.data.db.ChatSessionEntity
 import com.openminis.app.data.db.FolderEntity
 import com.openminis.app.data.db.MessageEntity
+import com.openminis.app.data.db.MessageVersionDao
+import com.openminis.app.data.db.MessageVersionEntity
 import com.openminis.app.data.db.PersistedMessageStatus
 import com.openminis.app.data.model.ModelAttributionSnapshot
 import com.openminis.app.logging.AppLogger
@@ -28,6 +30,9 @@ class ChatRepository(
     internal val dao: ChatDao,
     internal val goalDao: GoalDao,
     private val filesDir: File? = null,
+    // [T-msg-version-archive] Optional so JVM tests that never truncate keep
+    // constructing with the old three-arg shape.
+    private val versionDao: MessageVersionDao? = null,
 ) {
     fun observeSessions(): Flow<List<ChatSessionEntity>> = dao.observeSessions()
 
@@ -772,8 +777,42 @@ class ChatRepository(
         return result
     }
 
-    suspend fun deleteMessagesAfter(sessionId: String, keepCount: Int) =
+    suspend fun deleteMessagesAfter(sessionId: String, keepCount: Int) {
+        // [T-msg-version-archive] Snapshot the doomed rows into
+        // message_versions BEFORE deleting them — re-generating a reply must
+        // archive the old version, not destroy it (cuplivo parity).
+        // Best-effort: an archiving failure must never block the retry.
+        versionDao?.let { vdao ->
+            runCatching {
+                val doomed = dao.rowsFrom(sessionId, keepCount)
+                if (doomed.isNotEmpty()) {
+                    val nowMs = System.currentTimeMillis()
+                    val versions = doomed.map { row ->
+                        MessageVersionEntity(
+                            id = UUID.randomUUID().toString(),
+                            messageId = row.id,
+                            sessionId = row.sessionId,
+                            versionIndex = vdao.maxVersionIndex(row.id) + 1,
+                            role = row.role,
+                            partsJson = row.partsJson,
+                            bodyRef = row.bodyRef,
+                            bodySha = row.bodySha,
+                            reasoningContent = row.reasoningContent,
+                            errorInfo = row.errorInfo,
+                            modelId = row.modelId,
+                            modelDisplayName = row.modelDisplayName,
+                            sourceCreatedAt = row.createdAt,
+                            archivedAt = nowMs,
+                        )
+                    }
+                    vdao.insertAll(versions)
+                }
+            }.onFailure {
+                AppLogger.warning("ChatRepository", "[T-msg-version-archive] archiving failed (delete proceeds): ${it.message}")
+            }
+        }
         dao.deleteMessagesAfter(sessionId, keepCount)
+    }
 
     /**
      * Rewrite a single message row's parts_json in place. Used by

@@ -454,6 +454,23 @@ interface ChatDao {
     @Query("DELETE FROM messages WHERE session_id = :sessionId AND sort_order >= :keepCount")
     suspend fun deleteMessagesAfter(sessionId: String, keepCount: Int)
 
+    /**
+     * [T-msg-version-archive] Raw rows (no preview substitution) that
+     * [deleteMessagesAfter] is about to remove, so the caller can archive
+     * them into `message_versions` first.
+     */
+    // NOTE: explicit column list (never SELECT *) — ResourceBoundaryTest
+    // forbids star/raw projections on the messages table. All columns are
+    // listed because the archived version needs the full row.
+    @Query(
+        "SELECT id, session_id, role, parts_json, created_at, token_usage, sort_order, " +
+            "reasoning_content, stream_interrupt_count, updated_at, error_info, " +
+            "model_id, model_display_name, provider_type, provider_instance_id, " +
+            "body_bytes, body_ref, body_sha, preview " +
+            "FROM messages WHERE session_id = :sessionId AND sort_order >= :cutoff ORDER BY sort_order ASC"
+    )
+    suspend fun rowsFrom(sessionId: String, cutoff: Int): List<MessageEntity>
+
     @Query("SELECT COUNT(*) FROM messages")
     suspend fun totalMessageCount(): Int
 

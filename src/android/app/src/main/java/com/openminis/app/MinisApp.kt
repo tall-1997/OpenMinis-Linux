@@ -469,7 +469,9 @@ class MinisApp : Application(), ImageLoaderFactory {
             )
         }
         appContainer.database = AppDatabase.getInstance(this)
-        appContainer.chatRepository = ChatRepository(database.chatDao(), database.goalDao(), filesDir)
+        appContainer.chatRepository = ChatRepository(
+            database.chatDao(), database.goalDao(), filesDir, database.messageVersionDao(),
+        )
         // [T-android-startup-splash-hang] The workspace-owner warmup moved OFF
         // this thread. It used to be a `runBlocking(Dispatchers.IO)` right here,
         // which meant the first Room open, any pending schema migrations and a
