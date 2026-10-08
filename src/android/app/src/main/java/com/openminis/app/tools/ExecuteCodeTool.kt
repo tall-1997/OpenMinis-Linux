@@ -7,6 +7,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import org.mozilla.javascript.BaseFunction
+import org.mozilla.javascript.ClassShutter
 import org.mozilla.javascript.Context
 import org.mozilla.javascript.ContextFactory
 import org.mozilla.javascript.Scriptable
@@ -14,6 +15,11 @@ import org.mozilla.javascript.ScriptableObject
 
 /**
  * Rhino JS orchestration sandbox. Only print() returns to the model.
+ *
+ * The script has NO Java interop: the context installs a deny-all
+ * [ClassShutter] and a safe standard scope, so `java.*`, `Packages` and
+ * `new java.io.File(...)` are all undefined. Do not "fix" this by switching
+ * back to initStandardObjects() — see the comment in execute().
  *
  * Adapted from XINCODE-Public CodeExecTool (GPL-3.0-or-later).
  */
@@ -95,7 +101,24 @@ object ExecuteCodeTool {
             }
             val cx = factory.enterContext()
             try {
-                val scope = cx.initStandardObjects()
+                // [T-execute-code-java-interop] Rhino's LiveConnect hands the
+                // script `java.*` / `Packages` / `new java.io.File(...)` for
+                // free — verified against rhino-1.7.14: `new java.io.
+                // FileOutputStream(p)` writes and `Runtime.getRuntime().exec`
+                // runs a shell. That made the "read-only JS orchestration"
+                // claim false and, because execute_code sits in SubAgentKind's
+                // READ_ONLY_ALLOW, let an explore/plan lane — the fence whose
+                // whole point is that it cannot write — write anywhere the app
+                // UID can reach, without any gate in between (the tool is
+                // classified as a REVERSIBLE SYSTEM read).
+                //
+                // initSafeStandardObjects() + a deny-all ClassShutter remove
+                // the interop bridge entirely while keeping the ES5 surface the
+                // prelude needs (JSON, Array/String methods, closures). Deny-all
+                // rather than an allow-list: the script has no legitimate Java
+                // object to touch, so the smallest hole is no hole.
+                cx.setClassShutter(ClassShutter { false })
+                val scope = cx.initSafeStandardObjects()
                 val printFn = object : BaseFunction() {
                     override fun call(
                         cx: Context,
