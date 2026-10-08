@@ -866,7 +866,7 @@
     <string name="appearance_monet_title">动态取色</string>
     <string name="appearance_monet_subtitle">整体配色跟随系统壁纸（Material You）：表面、卡片、聊天气泡与图标一起着色，红色等语义色保留。需要 Android 12 及以上。</string>
     <string name="chat_process_summary_title">AI 过程</string>
-    <string name="chat_process_summary_meta">思考 %1$d · 工具 %2$d</string>
+    <string name="chat_process_summary_meta">思考 %1$d · 工具 %2$d%3$s</string>
     <string name="appearance_section_font_size">字体大小</string>
     <string name="appearance_font_size_footer">调整聊天输入、消息内容和应用文本的字体大小。更改立即生效。</string>
     <string name="appearance_font_scale_title">字体缩放</string>

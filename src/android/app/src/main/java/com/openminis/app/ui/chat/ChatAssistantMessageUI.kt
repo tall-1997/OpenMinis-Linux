@@ -904,12 +904,30 @@ internal fun ThinkingBlock(block: AssistantBlock, isStreaming: Boolean, isLast: 
     }
 }
 
+/**
+ * [T-process-summary-duration] Formats an aggregated process duration for the
+ * fold-bar suffix. Mirrors the OmniBot run-group header granularity: whole
+ * seconds under a minute, m+s under an hour, h+m beyond. Returns null for
+ * non-positive totals so the bar simply omits the suffix (blocks without a
+ * recorded duration must not render "0s").
+ */
+internal fun formatProcessDuration(totalMs: Long): String? {
+    if (totalMs <= 0L) return null
+    val totalSeconds = totalMs / 1000L
+    return when {
+        totalSeconds < 60L -> "${totalSeconds}s"
+        totalSeconds < 3600L -> "${totalSeconds / 60L}m ${totalSeconds % 60L}s"
+        else -> "${totalSeconds / 3600L}h ${totalSeconds % 3600L / 60L}m"
+    }
+}
+
 @Composable
 internal fun ProcessSummaryBar(
     thinkingCount: Int,
     toolCount: Int,
     expanded: Boolean,
     hasFailure: Boolean,
+    totalMs: Long = 0L,
     onToggle: () -> Unit,
 ) {
     val accent = if (hasFailure) Color(0xFFFF3B30) else Color(0xFF007AFF)
@@ -938,12 +956,14 @@ internal fun ProcessSummaryBar(
             color = accent,
         )
         Spacer(modifier = Modifier.weight(1f))
+        val durationSuffix = formatProcessDuration(totalMs)?.let { " · $it" } ?: ""
         Text(
-            text = stringResource(R.string.chat_process_summary_meta, thinkingCount, toolCount),
+            text = stringResource(R.string.chat_process_summary_meta, thinkingCount, toolCount, durationSuffix ?: ""),
             fontSize = 11.sp,
             fontWeight = FontWeight.Medium,
             fontFamily = FontFamily.Monospace,
             color = accent.copy(alpha = 0.6f),
+            maxLines = 1,
         )
         Spacer(modifier = Modifier.width(4.dp))
         Icon(

@@ -224,6 +224,9 @@ internal sealed class FlatChatItem {
         val expanded: Boolean,
         val hasFailure: Boolean,
         val processTools: List<ProcessToolRef> = emptyList(),
+        /** [T-process-summary-duration] Summed block durations (tool + thinking) for the fold-bar
+         *  "· 47s" suffix. 0 when no block carried a duration — the bar then omits the suffix. */
+        val totalMs: Long = 0L,
         private val keySuffix: String = "",
     ) : FlatChatItem() {
         override val key = FlatKeys.of(FlatKeys.KIND_PROCESS, messageId) + keySuffix
@@ -678,6 +681,7 @@ internal fun buildFlatChatItems(
                     it.kind == "tool_use" && it.toolStatus == ToolBlockStatus.FAILED
                 },
                 processTools = processToolRefs(blocks),
+                totalMs = blocks.sumOf { it.durationMs },
             )))
         }
 

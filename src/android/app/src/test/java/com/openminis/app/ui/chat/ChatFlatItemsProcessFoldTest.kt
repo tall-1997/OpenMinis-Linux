@@ -2,6 +2,7 @@ package com.openminis.app.ui.chat
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -358,5 +359,50 @@ class ChatFlatItemsProcessFoldTest {
             ),
         )
         assertTrue("running tool must be in the list while expanded", running.contains("tool:bash"))
+    }
+
+    // ── [T-process-summary-duration] aggregated fold-bar duration ──
+
+    @Test
+    fun `folded summary sums block durations`() {
+        val items = buildFlatChatItems(
+            listOf(
+                assistant(
+                    blocks = listOf(
+                        thinking("t1"),
+                        tool("a").copy(durationMs = 1500L),
+                        tool("b").copy(durationMs = 3200L),
+                        text(id = "tx1", content = "done"),
+                    ),
+                ),
+            ),
+            showCompletedToolCards = false,
+            foldAiProcess = true,
+        )
+        val summary = items.filterIsInstance<FlatChatItem.AssistantProcessSummary>().single()
+        assertEquals(4700L, summary.totalMs)
+    }
+
+    @Test
+    fun `summary total is zero when no block recorded a duration`() {
+        val items = buildFlatChatItems(
+            listOf(assistant(blocks = listOf(thinking(), tool(), text()))),
+            showCompletedToolCards = false,
+            foldAiProcess = true,
+        )
+        val summary = items.filterIsInstance<FlatChatItem.AssistantProcessSummary>().single()
+        assertEquals(0L, summary.totalMs)
+        assertNull(formatProcessDuration(summary.totalMs))
+    }
+
+    @Test
+    fun `process duration formats as seconds minutes and hours`() {
+        assertNull(formatProcessDuration(0L))
+        assertNull(formatProcessDuration(-5L))
+        assertEquals("47s", formatProcessDuration(47_000L))
+        assertEquals("1m 23s", formatProcessDuration(83_000L))
+        assertEquals("1h 5m", formatProcessDuration(3_900_000L))
+        // 59.9s truncates to whole seconds, never rounds up to "60s"
+        assertEquals("59s", formatProcessDuration(59_900L))
     }
 }
