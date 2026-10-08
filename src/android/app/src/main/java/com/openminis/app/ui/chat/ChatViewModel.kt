@@ -135,6 +135,15 @@ class ChatViewModel(
     /** The real session ID, populated on first message for drafts. */
     internal var realSessionId: String = if (isDraft) "" else sessionId
 
+    /**
+     * [T-android-tts-scene-announcements] Speech sink for scene announcements,
+     * injected by the UI layer (which owns the TTS engine binding). The agent
+     * loop hands phrases to it at lifecycle boundaries; null = no engine
+     * bound yet, announcements degrade to silence. Never crashes the loop.
+     */
+    @Volatile
+    var announcementSink: ((String) -> Unit)? = null
+
     /** [T-prompt-cache] Memoized session-scoped MemoryRepository;
      *  re-created only when the resolved session id changes (draft→real).
      *  Avoids per-turn allocation and allows fragment caches inside

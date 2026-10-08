@@ -513,6 +513,24 @@ fun ChatScreen(
     // splice. Opening starts on the newest rows. Older pages prepend. Rows after
     // the loaded cursor are attached automatically, so the tail is not left
     // behind a second control.
+    // [T-android-tts-scene-announcements] Bind the announcement sink for as
+    // long as this screen is composed. The engine binding lives in
+    // ReadAloudPlayer/TextToSpeechManager (UI layer); the ViewModel only sees
+    // the (String) -> Unit sink and never the engine itself. Cleared on
+    // dispose so a popped screen stops announcing.
+    val announcementTts = remember {
+        com.openminis.app.speech.TextToSpeechManager()
+    }
+    DisposableEffect(viewModel, announcementTts) {
+        // Engine binding is lazy; speak() before init settles is buffered in
+        // the manager's preInitQueue and replayed once the engine is up.
+        announcementTts.init(context)
+        viewModel.announcementSink = announcementTts::speak
+        onDispose {
+            viewModel.announcementSink = null
+            announcementTts.shutdown()
+        }
+    }
     val messages by viewModel.uiMessages.collectAsState()
     val hasOlderMessages by viewModel.hasOlderMessages.collectAsState()
     val hasNewerMessages by viewModel.hasNewerMessages.collectAsState()

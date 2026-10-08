@@ -2273,4 +2273,14 @@ internal suspend fun ChatViewModel.runAgentLoop(
     }
     // [T-context-ring] Refresh the live token ring after the turn settles.
     refreshContextUsage()
+
+    // [T-android-tts-scene-announcements] Loop converged — announce to the
+    // user if they opted in (scene pref, default off). The sink is owned by
+    // the UI layer; every failure mode (no engine bound, engine not yet
+    // initialized, pref off) is swallowed inside the coordinator.
+    runCatching {
+        val sink = announcementSink ?: return@runCatching
+        com.openminis.app.speech.VoiceAnnouncementCoordinator(sink)
+            .onScene(context, com.openminis.app.speech.AnnouncementScene.IDLE_AGENT_DONE)
+    }
 }
