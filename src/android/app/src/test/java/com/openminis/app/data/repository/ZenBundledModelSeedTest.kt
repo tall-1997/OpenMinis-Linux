@@ -102,23 +102,43 @@ class ZenBundledModelSeedTest {
         }
     }
 
-    /** [T-zen-usable-free-lane] The visible list IS the usable list. */
+    /**
+     * [T-zen-free-lane-follow] The visible list FOLLOWS the catalogue's free
+     * lane; the only free ids that leave it are the ones with live
+     * retirement evidence in the dead record. Advertised-but-flaky rows
+     * (429 quota, 500 upstream) stay — the upstream advertises them, the
+     * user can hide them, and a transient blip must not delete a row.
+     */
     @Test
-    fun `zenVisibleModels drops free-lane ids the upstream refuses`() {
-        // Live-measured 2026-10-05 with a canonical session id: three ids are
-        // retired upstream (400/500 naming the endpoint or model) and two are
-        // geo-fenced (403 RegionError). None of them can ever answer, so
-        // showing them is what made the user pick a model that never works.
-        val dead = listOf(
-            "ling-3.0-flash-fin-free",   // 400 "Endpoint is unavailable"
-            "deepseek-v4-flash-free",    // 400 "Model is unavailable"
-            "jev-1.13-free",             // 500 upstream
-            "muse-spark-1.2-contributor-free",  // 403 RegionError
-            "muse-spark-1.3-contributor-free",  // 403 RegionError
-        )
-        val catalog = dead.map { LLMModel(it, it, "OpenCode Zen") } + bundledZenModels()
-        val visible = zenVisibleModels(catalog)
-        assertEquals(bundledZenModels().map { it.id }, visible.map { it.id })
+    fun `zenVisibleModels drops only dead-recorded free ids`() {
+        val catalog = listOf(
+            LLMModel("ling-3.0-flash-fin-free", "x", "OpenCode Zen"),   // retired: 400 endpoint-unavailable
+            LLMModel("jev-1.13-free", "x", "OpenCode Zen"),              // flaky: 500 — stays
+            LLMModel("muse-spark-1.2-contributor-free", "x", "OpenCode Zen"), // flaky: 429 — stays
+        ) + bundledZenModels()
+        val dead = setOf("ling-3.0-flash-fin-free")
+        val visible = zenVisibleModels(catalog, dead)
+        val expected = (catalog.map { it.id } - dead).sorted()
+        assertEquals(expected, visible.map { it.id }.sorted())
+    }
+
+    @Test
+    fun `zenVisibleModels follows new free ids the catalogue starts advertising`() {
+        // The whole point of [T-zen-free-lane-follow]: upstream opens a new
+        // free lane and it appears on the next refresh — no app release.
+        val catalog = bundledZenModels() + LLMModel("brand-new-lane-free", "Brand New", "OpenCode Zen")
+        assertTrue(zenVisibleModels(catalog).any { it.id == "brand-new-lane-free" })
+    }
+
+    @Test
+    fun `isZenFreeLaneId matches the free-lane id shape`() {
+        assertTrue(isZenFreeLaneId("big-pickle"))
+        assertTrue(isZenFreeLaneId("anything-free"))
+        assertTrue(isZenFreeLaneId("muse-spark-1.2-contributor-free"))
+        assertFalse(isZenFreeLaneId("claude-opus-5"))
+        assertFalse(isZenFreeLaneId("gpt-5.6"))
+        assertFalse(isZenFreeLaneId("freestyle"))
+        assertFalse(isZenFreeLaneId(""))
     }
 
     @Test
@@ -149,53 +169,58 @@ class ZenBundledModelSeedTest {
     }
 
     @Test
-    fun `zenStaleEntryIds marks only this instance's entries outside the usable set`() {
+    fun `zenStaleEntryIds sweeps paid-lane and dead rows, spares flaky and custom`() {
+        val custom = entry("zen-1", "claude-x").copy(isCustom = true) // user's own call — untouchable
         val entries = listOf(
-            entry("zen-1", "jev-1.13-free"),         // 500 upstream — dead
-            entry("zen-1", "big-pickle"),            // measured 200 — must survive
-            entry("zen-1", "claude-x"),              // paid lane — dead for keyless
-            entry("other-1", "big-pickle"),         // different instance — untouchable
+            entry("zen-1", "jev-1.13-free"),   // free-lane, flaky 500 — survives now
+            entry("zen-1", "big-pickle"),      // measured 200 — survives
+            entry("zen-1", "claude-x"),        // paid lane — swept
+            custom,                              // user-added paid id — SPARED
+            entry("other-1", "claude-x"),     // different instance — untouchable
         )
-        val stale = zenStaleEntryIds("zen-1", entries)
-        assertEquals(setOf(entries[0].id, entries[2].id), stale)
+        val stale = zenStaleEntryIds("zen-1", entries, deadIds = setOf("big-pickle"))
+        // big-pickle is dead-recorded here, so it goes; jev stays; the custom
+        // row and the foreign row never move.
+        assertEquals(setOf(entries[2].id, entries[1].id), stale)
     }
 
     /**
-     * The installed app seeded only space-bunny-free and swept everything else.
-     * Now that the roster is measured-usable, the sweep must RE-ADD the other
-     * eight — otherwise every existing installation keeps seeing one model
-     * after the upgrade that ships them.
+     * The installed app seeded only space-bunny-free and swept everything
+     * else. The sweep must leave the live free-lane rows alone so the caller
+     * re-seeds the bundle on top of a non-empty instance — and the dead
+     * record is what evicts the retired ones, not a shipped table.
      */
     @Test
-    fun `the stale sweep re-seeds the full measured roster into an existing instance`() {
+    fun `the stale sweep keeps flaky free rows and evicts only the dead`() {
         val preUpgrade = listOf(
             entry("zen-1", "space-bunny-free"),
             entry("zen-1", "jev-1.13-free"),
             entry("zen-1", "muse-spark-1.3-contributor-free"),
         )
-        val stale = zenStaleEntryIds("zen-1", preUpgrade)
-        // The dead rows go, and because a usable row survives, the instance is
-        // not emptied — so the caller re-seeds the bundle on top of it.
+        val stale = zenStaleEntryIds(
+            "zen-1",
+            preUpgrade,
+            deadIds = setOf("muse-spark-1.3-contributor-free"),
+        )
         assertEquals(
-            setOf("jev-1.13-free", "muse-spark-1.3-contributor-free"),
-            stale.map { id -> preUpgrade.first { it.id == id }.baseModel.id }.toSet(),
+            setOf(preUpgrade[2].id),
+            stale,
         )
-        assertTrue(
-            "the surviving row must keep the instance non-empty",
-            preUpgrade.any { it.id !in stale },
-        )
+        // The surviving rows keep the instance non-empty, so the caller's
+        // re-seed tops up rather than rescues.
+        assertTrue(preUpgrade.any { it.id !in stale })
     }
 
     /**
      * [T-zen-usable-free-lane-fallback] The models.dev fallback is a
      * HOSTNAME-keyed catalogue, so for the Zen host it answers with every paid
-     * lane plus every refused free-lane id. Writing it back unfiltered is what
-     * put 86 rows (12 of them permanently 403/500) in front of a user picking
-     * a keyless free model, so the fallback must go through the same filter the
-     * live /v1/models fetch does.
+     * lane plus every advertised free-lane id. Writing it back unfiltered is
+     * what put 86 rows in front of a user picking a keyless free model, so
+     * the fallback must go through the same filter the live /v1/models
+     * fetch does — free lane minus the dead record, not a shipped table.
      */
     @Test
-    fun `zenVisibleModels collapses a full models dev shaped catalogue to the usable set`() {
+    fun `zenVisibleModels collapses a full models dev shaped catalogue to the free lane`() {
         val catalogue = buildList {
             addAll(bundledZenModels())
             add(LLMModel("claude-opus-5", "Claude Opus", "OpenCode Zen"))
@@ -206,11 +231,13 @@ class ZenBundledModelSeedTest {
                 "muse-spark-1.2-contributor-free", "muse-spark-1.3-contributor-free",
             ).forEach { add(LLMModel(it, it, "OpenCode Zen")) }
         }
-        val visible = zenVisibleModels(catalogue)
+        val dead = setOf("ling-3.0-flash-fin-free", "deepseek-v4-flash-free")
+        val visible = zenVisibleModels(catalogue, dead)
+        val expectedFreeLane = catalogue.map { it.id }.filter { isZenFreeLaneId(it) } - dead
         assertEquals(
-            "only the measured-usable free lane may reach a keyless Zen instance",
-            bundledZenModels().map { it.id },
-            visible.map { it.id },
+            "only the catalogue's live free lane may reach a keyless Zen instance",
+            expectedFreeLane.sorted(),
+            visible.map { it.id }.sorted(),
         )
     }
 }

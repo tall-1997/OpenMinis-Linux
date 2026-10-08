@@ -25,6 +25,18 @@ internal fun OpenAIProvider.mapHttpError(statusCode: Int, body: String, retryAft
     // dialect, so only the Zen endpoint gets this mapping; every other host
     // keeps the generic path it had before.
     if (com.openminis.app.provider.ZenDisguise.isZenHost(basePath)) {
+        // [T-zen-free-lane-follow] Retirement evidence, recorded BEFORE the
+        // structured mapping so both dialect shapes reach it: the structured
+        // {"type":"error","error":{"type":"ModelError"…}} refusal AND the
+        // bare {"error":{"type":"server_error","message":"…Endpoint is
+        // unavailable"}} body that answers 503 (measured on exo-free). Only
+        // the free lane is recorded — a paid Zen instance keeps its full
+        // catalogue and its own error surface. FreeTierError is deliberately
+        // NOT retirement evidence: it answers EVERY model when the session
+        // identity is malformed, and recording it would nuke the whole lane.
+        if (isZenFree && zenRetirementEvidence(body)) {
+            com.openminis.app.provider.ZenFreeLaneHealth.recordDead(model.id)
+        }
         zenStructuredProviderRefusal(body)?.let { return it }
     }
     if (statusCode == 401 || statusCode == 403) {
@@ -116,6 +128,39 @@ internal fun OpenAIProvider.mapError(error: Throwable): LLMError = mapThrowableT
  * user-visible verbatim, so it goes through [maskSecrets] like every other
  * server-provided string in this file.
  */
+/**
+ * [T-zen-free-lane-follow] Whether an error body is per-model retirement
+ * evidence on the Zen host — the trigger for [com.openminis.app.provider.
+ * ZenFreeLaneHealth.recordDead].
+ *
+ * Three dialects, all measured on the live lane:
+ *  - `error.type == "ModelError"` — 401 "Model X is not supported"
+ *    (mimo-v2.5-free, deepseek-v4-flash-free, hy3-free);
+ *  - `error.type == "RegionError"` — geo-fenced upstream (the muse pair,
+ *    2026-10-05);
+ *  - `error.message` containing "is unavailable" — "Endpoint is
+ *    unavailable" on 400 (ling-3.0-flash-fin-free) and on 503 wrapped in a
+ *    bare server_error body without the outer `{"type":"error"}` envelope
+ *    (exo-free), plus the older "Model X is unavailable" 400 shape.
+ *
+ * Deliberately NOT evidence: FreeTierError (session identity, answers every
+ * model), FreeUsageLimitError (429 — the model works, the quota doesn't),
+ * and bare 500s (upstream broken, may heal). Those keep their rows; the
+ * user hides them if they don't want them.
+ */
+internal fun zenRetirementEvidence(body: String): Boolean {
+    val json = try {
+        JSONObject(body)
+    } catch (_: Exception) {
+        return false
+    }
+    val error = json.optJSONObject("error") ?: return false
+    val type = error.optString("type", "")
+    if (type == "ModelError" || type == "RegionError") return true
+    val message = error.safeOptString("message", "").orEmpty()
+    return message.contains("is unavailable", ignoreCase = true)
+}
+
 internal fun zenStructuredProviderRefusal(body: String): LLMError? {
     val json = try {
         JSONObject(body)
