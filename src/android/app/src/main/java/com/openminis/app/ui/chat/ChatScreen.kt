@@ -6467,6 +6467,7 @@ fun ChatScreen(
                         if (showExpandedEditor) {
                             LongTextEditorDialog(
                                 text = inputText,
+                                codeMode = false,
                                 onTextChange = { next ->
                                     viewModel.setInputText(next)
                                     inputFieldValue = androidx.compose.ui.text.input.TextFieldValue(

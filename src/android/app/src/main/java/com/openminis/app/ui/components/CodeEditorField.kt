@@ -70,6 +70,12 @@ fun CodeEditorField(
     currentMatchIndex: Int = -1,
     verticalScrollState: ScrollState = rememberScrollState(),
     horizontalScrollState: ScrollState = rememberScrollState(),
+    /** [T-composer-plain-expand] Gutter is a code affordance; plain-text hosts
+     *  (the expanded composer) pass false. */
+    showLineNumbers: Boolean = true,
+    /** [T-composer-plain-expand] Monospace 14sp is the code identity; plain-text
+     *  hosts use the composer body face (16.5sp) instead. */
+    monospace: Boolean = true,
 ) {
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val palette = if (isDark) {
@@ -86,18 +92,30 @@ fun CodeEditorField(
         PrecomputedTransformation(annotated, value.text)
     }
 
-    val editorStyle = remember(baseColor) {
-        TextStyle(
-            fontFamily = FontFamily.Monospace,
-            fontSize = 14.sp,
-            lineHeight = EditorLineHeightSp,
-            color = baseColor,
-            platformStyle = PlatformTextStyle(includeFontPadding = false),
-        )
+    val editorStyle = remember(baseColor, monospace) {
+        if (monospace) {
+            TextStyle(
+                fontFamily = FontFamily.Monospace,
+                fontSize = 14.sp,
+                lineHeight = EditorLineHeightSp,
+                color = baseColor,
+                platformStyle = PlatformTextStyle(includeFontPadding = false),
+            )
+        } else {
+            // Matches the collapsed composer field so the expand/collapse
+            // transition does not visually jump between typefaces.
+            TextStyle(
+                fontFamily = FontFamily.Default,
+                fontSize = 16.5.sp,
+                lineHeight = 24.sp,
+                color = baseColor,
+                platformStyle = PlatformTextStyle(includeFontPadding = false),
+            )
+        }
     }
 
     Row(modifier = modifier.fillMaxWidth()) {
-        if (!softWrap) {
+        if (!softWrap && showLineNumbers) {
             LineNumberGutter(
                 text = value.text,
                 scrollState = verticalScrollState,

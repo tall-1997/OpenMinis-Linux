@@ -54,6 +54,13 @@ import com.openminis.app.ui.components.UndoableEditorState
  * The parent stays the source of truth for the raw text ([onTextChange] is
  * called on every edit); selection, search and undo state live here so the
  * collapsed composer is unaffected.
+ *
+ * [codeMode] selects the identity: `true` is the code editor (gutter,
+ * monospace, syntax highlighting, language picker); `false` is a plain
+ * large text input — the expanded composer — which keeps undo/redo, search
+ * and the wrap toggle but drops every code affordance. The composer expand
+ * button passes `false`: users tapping it want a bigger box to type prose
+ * in, not an IDE.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -61,6 +68,7 @@ fun LongTextEditorDialog(
     text: String,
     onTextChange: (String) -> Unit,
     onDismiss: () -> Unit,
+    codeMode: Boolean = true,
 ) {
     var fieldValue by remember {
         mutableStateOf(TextFieldValue(text, selection = TextRange(text.length)))
@@ -77,8 +85,10 @@ fun LongTextEditorDialog(
     var searchVisible by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
     var matchIndex by remember { mutableIntStateOf(-1) }
-    var softWrap by remember { mutableStateOf(false) }
-    var language by remember { mutableStateOf(CodeEditorLogic.detectLanguage(text)) }
+    var softWrap by remember { mutableStateOf(!codeMode) }
+    var language by remember {
+        mutableStateOf(if (codeMode) CodeEditorLogic.detectLanguage(text) else "text")
+    }
     var languageMenuOpen by remember { mutableStateOf(false) }
 
     val matches = remember(fieldValue.text, query) {
@@ -179,32 +189,34 @@ fun LongTextEditorDialog(
                                     },
                                 )
                             }
-                            IconButton(onClick = { languageMenuOpen = true }) {
-                                Icon(
-                                    Icons.Filled.Code,
-                                    contentDescription = stringResource(R.string.code_editor_language),
-                                )
-                                DropdownMenu(
-                                    expanded = languageMenuOpen,
-                                    onDismissRequest = { languageMenuOpen = false },
-                                ) {
-                                    CodeEditorLogic.LANGUAGE_OPTIONS.forEach { option ->
-                                        DropdownMenuItem(
-                                            text = { Text(option) },
-                                            onClick = {
-                                                language = option
-                                                languageMenuOpen = false
-                                            },
-                                            trailingIcon = {
-                                                if (option == language) {
-                                                    Icon(
-                                                        Icons.Filled.Code,
-                                                        contentDescription = null,
-                                                        tint = MaterialTheme.colorScheme.primary,
-                                                    )
-                                                }
-                                            },
-                                        )
+                            if (codeMode) {
+                                IconButton(onClick = { languageMenuOpen = true }) {
+                                    Icon(
+                                        Icons.Filled.Code,
+                                        contentDescription = stringResource(R.string.code_editor_language),
+                                    )
+                                    DropdownMenu(
+                                        expanded = languageMenuOpen,
+                                        onDismissRequest = { languageMenuOpen = false },
+                                    ) {
+                                        CodeEditorLogic.LANGUAGE_OPTIONS.forEach { option ->
+                                            DropdownMenuItem(
+                                                text = { Text(option) },
+                                                onClick = {
+                                                    language = option
+                                                    languageMenuOpen = false
+                                                },
+                                                trailingIcon = {
+                                                    if (option == language) {
+                                                        Icon(
+                                                            Icons.Filled.Code,
+                                                            contentDescription = null,
+                                                            tint = MaterialTheme.colorScheme.primary,
+                                                        )
+                                                    }
+                                                },
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -244,9 +256,11 @@ fun LongTextEditorDialog(
                         softWrap = softWrap,
                         searchMatches = matches,
                         currentMatchIndex = matchIndex,
+                        showLineNumbers = codeMode,
+                        monospace = codeMode,
                     )
                     Spacer(Modifier.height(4.dp))
-                    EditorStatusBar(fieldValue, language)
+                    EditorStatusBar(fieldValue, language, showLanguage = codeMode)
                 }
             }
         }
@@ -254,7 +268,11 @@ fun LongTextEditorDialog(
 }
 
 @Composable
-private fun EditorStatusBar(fieldValue: TextFieldValue, language: String) {
+private fun EditorStatusBar(
+    fieldValue: TextFieldValue,
+    language: String,
+    showLanguage: Boolean = true,
+) {
     val (line, column) = CodeEditorLogic.lineAndColumn(fieldValue.text, fieldValue.selection.start)
     val lines = CodeEditorLogic.lineCount(fieldValue.text)
     Row(
@@ -275,10 +293,12 @@ private fun EditorStatusBar(fieldValue: TextFieldValue, language: String) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.weight(1f))
-        Text(
-            text = language,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.primary,
-        )
+        if (showLanguage) {
+            Text(
+                text = language,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
     }
 }
