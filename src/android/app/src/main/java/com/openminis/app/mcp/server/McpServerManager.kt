@@ -18,12 +18,17 @@ object McpServerManager {
 
     private const val TAG = "McpServerManager"
 
+    /** How many ports past the configured one start() tries when it is in use. */
+    private const val PORT_FALLBACK_SPAN = 9
+
     enum class Status { STOPPED, RUNNING, ERROR }
 
     data class ServerState(
         val status: Status = Status.STOPPED,
         val error: String? = null,
         val handledRequests: Long = 0,
+        /** Port actually bound; differs from the configured port after a fallback. Null unless RUNNING. */
+        val actualPort: Int? = null,
     )
 
     private val _state = MutableStateFlow(ServerState())
@@ -33,6 +38,10 @@ object McpServerManager {
     private var configStore: McpServerConfigStore? = null
     private var server: McpHttpServer? = null
     private var dispatcher: McpToolDispatcher? = null
+
+    /** Port the running server actually bound (configured port + fallback offset). */
+    @Volatile
+    private var actualPortField: Int? = null
 
     /** App version reported in the MCP initialize serverInfo. */
     private var serverVersion: String = "0.0.0"
@@ -87,15 +96,33 @@ object McpServerManager {
             onRequestHandled = { started?.let { publishState(it) } },
         )
         started = s
-        val ok = s.start(effectivePort)
-        if (ok) {
-            server = s
-            _state.value = ServerState(Status.RUNNING, handledRequests = s.handledRequestCount)
-            Log.i(TAG, "server started on port $effectivePort")
-        } else {
-            _state.value = ServerState(Status.ERROR, s.lastError ?: "failed to start")
+        // [T-mcp-port-fallback] The configured port can be squatted by another
+        // local app (a competing MCP hub binding the documented default, for
+        // one). Try the requested port, then up to PORT_FALLBACK_SPAN
+        // successors; McpNativeBridge follows the actual port via
+        // BuiltinLoopbackResolver, so client entries stay wired.
+        var boundPort = -1
+        var candidate = effectivePort
+        while (candidate <= effectivePort + PORT_FALLBACK_SPAN && McpHttpServer.validPort(candidate)) {
+            if (s.start(candidate)) {
+                boundPort = candidate
+                break
+            }
+            if (!s.lastBindConflict) break // non-bind failure — don't hammer on
+            candidate++
         }
-        return ok
+        if (boundPort > 0) {
+            server = s
+            actualPortField = boundPort
+            _state.value = ServerState(Status.RUNNING, handledRequests = s.handledRequestCount, actualPort = boundPort)
+            if (boundPort != effectivePort) {
+                Log.w(TAG, "port $effectivePort in use; built-in MCP server fell back to $boundPort")
+            }
+            Log.i(TAG, "server started on port $boundPort")
+            return true
+        }
+        _state.value = ServerState(Status.ERROR, s.lastError ?: "failed to start")
+        return false
     }
 
     @Synchronized
@@ -114,12 +141,14 @@ object McpServerManager {
         server?.stop()
         server = null
         dispatcher = null
+        actualPortField = null
     }
 
     private fun publishState(server: McpHttpServer) {
         _state.value = ServerState(
             status = Status.RUNNING,
             handledRequests = server.handledRequestCount,
+            actualPort = actualPortField,
         )
     }
 
@@ -137,6 +166,9 @@ object McpServerManager {
     }
 
     fun currentPort(): Int = configStore?.config?.value?.port ?: McpHttpServer.DEFAULT_PORT
+
+    /** Port the running server actually bound (may differ from [currentPort] after a fallback). Null when not running. */
+    fun actualPort(): Int? = actualPortField.takeIf { _state.value.status == Status.RUNNING }
 
     fun configStore(): McpServerConfigStore? = configStore
 }

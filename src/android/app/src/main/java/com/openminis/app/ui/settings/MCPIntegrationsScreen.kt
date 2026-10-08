@@ -210,7 +210,14 @@ fun MCPIntegrationsScreen(
             SettingsSwitchRow(
                 title = "启用内置 MCP Server",
                 subtitle = when (mcpState.status) {
-                    McpServerManager.Status.RUNNING -> "运行中（端口 $builtInPort），已处理 $mcpState.handledRequests 个请求"
+                    McpServerManager.Status.RUNNING -> {
+                        val actual = mcpState.actualPort ?: builtInPort
+                        if (actual != builtInPort) {
+                            "运行中（实际端口 $actual · 配置 $builtInPort 被占用已顺延），已处理 ${mcpState.handledRequests} 个请求"
+                        } else {
+                            "运行中（端口 $actual），已处理 ${mcpState.handledRequests} 个请求"
+                        }
+                    }
                     McpServerManager.Status.ERROR -> "错误：${mcpState.error ?: "未知原因"}"
                     McpServerManager.Status.STOPPED -> "已停止 · 监听 127.0.0.1:$builtInPort"
                 },

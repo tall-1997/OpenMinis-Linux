@@ -9,6 +9,7 @@ import com.openminis.app.logging.AppLogger
 import com.openminis.app.mcp.client.McpJsonRpc.McpError
 import com.openminis.app.mcp.oauth.MCPOAuthStore
 import com.openminis.app.mcp.oauth.MCPTokenBridge
+import com.openminis.app.mcp.server.McpServerManager
 import com.openminis.app.sandbox.PRootKernel
 import com.openminis.app.sandbox.RootfsManager
 import okhttp3.FormBody
@@ -183,6 +184,33 @@ object McpNativeBridge {
         cfg.oauth?.clientId, cfg.oauth?.mode, cfg.startupTimeoutSeconds,
     ).joinToString("|")
 
+    /**
+     * Cache-key fragment for the built-in-server wiring (see
+     * [BuiltinLoopbackResolver]): the effective URL while wired,
+     * "builtin-stopped" while the entry targets the built-in port but the
+     * server is down, and "external" otherwise. Any transition rebuilds
+     * the client.
+     */
+    private fun loopbackFingerprint(context: Context, cfg: MCPServerConfig): String {
+        if (cfg.isStdio) return "no-url"
+        val raw = cfg.url ?: return "no-url"
+        val expanded = runCatching { McpJsonRpc.expandEnv(raw, envResolver(context)) }.getOrDefault(raw)
+        return when (val w = builtinWiring(expanded)) {
+            is BuiltinLoopbackResolver.Outcome.Wired -> "wired:${w.effectiveUrl}"
+            BuiltinLoopbackResolver.Outcome.ServerNotRunning -> "builtin-stopped"
+            BuiltinLoopbackResolver.Outcome.NotBuiltin -> "external"
+        }
+    }
+
+    /** Current wiring outcome for an env-expanded URL against the built-in MCP server. */
+    private fun builtinWiring(url: String): BuiltinLoopbackResolver.Outcome =
+        BuiltinLoopbackResolver.resolve(
+            url = url,
+            configuredPort = McpServerManager.currentPort(),
+            actualPort = McpServerManager.actualPort(),
+            running = McpServerManager.state.value.status == McpServerManager.Status.RUNNING,
+        )
+
     private fun clientFor(
         context: Context,
         repo: MCPRepository,
@@ -190,7 +218,10 @@ object McpNativeBridge {
         server: String,
     ): Pair<McpClient, MCPServerConfig> {
         val cfg = resolveConfig(repo, sessionId, server)
-        val fp = fingerprint(cfg)
+        // Include the built-in loopback wiring in the cache key: a port hop
+        // or the server starting/stopping must rebuild the client, not reuse
+        // a stale URL or a client without the built-in token.
+        val fp = fingerprint(cfg) + "|" + loopbackFingerprint(context, cfg)
         val cached = clients[cfg.id]
         if (cached != null && cached.fingerprint == fp) return cached.client to cfg
         // Config changed (or first use): rebuild. A dead stdio process also
@@ -204,15 +235,34 @@ object McpNativeBridge {
     private fun buildClient(context: Context, cfg: MCPServerConfig): McpClient {
         val resolve = envResolver(context)
         return if (!cfg.isStdio) {
-            val url = cfg.url?.let { McpJsonRpc.expandEnv(it, resolve) }
+            var url = cfg.url?.let { McpJsonRpc.expandEnv(it, resolve) }
                 ?: throw McpError(McpError.PROTOCOL_ERROR, "http server '${cfg.id}' has no url")
             val headers = cfg.headers.mapValues { (_, v) -> McpJsonRpc.expandEnv(v, resolve) }
+            // [T-mcp-loopback-wiring] An entry pointing at the built-in
+            // server's configured loopback port follows the port the server
+            // actually bound (it falls back when the port is squatted) and
+            // carries the built-in bearer token — no hand-copied headers.
+            val builtin = builtinWiring(url)
+            when (builtin) {
+                is BuiltinLoopbackResolver.Outcome.Wired -> url = builtin.effectiveUrl
+                BuiltinLoopbackResolver.Outcome.ServerNotRunning -> throw McpError(
+                    McpError.CONNECTION_ERROR,
+                    "built-in MCP server is not running — enable it in Settings → MCP, then retry",
+                )
+                BuiltinLoopbackResolver.Outcome.NotBuiltin -> Unit
+            }
             McpHttpClient(
                 cfg.id,
                 url,
                 headers,
-                oauthTokenProvider(context, cfg) ?: { null },
-                oauthConfigured = cfg.oauth != null,
+                if (builtin is BuiltinLoopbackResolver.Outcome.Wired) {
+                    // Live read: a token regenerated in Settings applies to
+                    // the next request without rebuilding the client.
+                    { McpServerManager.configStore()?.currentToken() }
+                } else {
+                    oauthTokenProvider(context, cfg) ?: { null }
+                },
+                oauthConfigured = cfg.oauth != null && builtin !is BuiltinLoopbackResolver.Outcome.Wired,
                 http = httpClient,
             )
         } else {

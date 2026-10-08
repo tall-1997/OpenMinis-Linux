@@ -348,4 +348,40 @@ class McpHttpServerTest {
         assertTrue(mna.contains("Allow: POST, OPTIONS"))
         assertTrue(mna.startsWith("HTTP/1.1 405 Method Not Allowed"))
     }
+
+    // ─── 端口占用（bind conflict）─────────────────────────────────────────
+
+    @Test
+    fun `start on an occupied port fails and flags a bind conflict`() {
+        val squatter = ServerSocket(0, 1, java.net.InetAddress.getByName("127.0.0.1"))
+        val squattedPort = squatter.localPort
+        val server = newServer()
+        try {
+            assertFalse(server.start(squattedPort))
+            assertTrue("expected lastBindConflict=true", server.lastBindConflict)
+            assertTrue("expected an error message, got ${server.lastError}", server.lastError != null)
+        } finally {
+            server.stop()
+            squatter.close()
+        }
+    }
+
+    @Test
+    fun `same instance retries cleanly after a bind conflict`() {
+        val squatter = ServerSocket(0, 1, java.net.InetAddress.getByName("127.0.0.1"))
+        val squattedPort = squatter.localPort
+        val server = newServer()
+        try {
+            assertFalse(server.start(squattedPort))
+            assertTrue(server.lastBindConflict)
+            squatter.close()
+            // The manager's fallback loop reuses the same instance — a retry
+            // on a free port must succeed and clear the flag.
+            val port = startOnFreePort(server)
+            assertTrue(port > 0)
+            assertFalse(server.lastBindConflict)
+        } finally {
+            server.stop()
+        }
+    }
 }

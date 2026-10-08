@@ -8,6 +8,7 @@ import org.json.JSONObject
 import java.io.BufferedInputStream
 import java.io.ByteArrayOutputStream
 import java.io.PrintWriter
+import java.net.BindException
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
@@ -63,6 +64,11 @@ class McpHttpServer(
     var lastError: String? = null
         private set
 
+    /** True when the last start() failed because the port was already in use. */
+    @Volatile
+    var lastBindConflict: Boolean = false
+        private set
+
     private val handledRequests = AtomicLong(0)
 
     val handledRequestCount: Long get() = handledRequests.get()
@@ -70,6 +76,7 @@ class McpHttpServer(
     @Synchronized
     fun start(port: Int): Boolean {
         if (running.get()) return true
+        lastBindConflict = false
         return try {
             val socket = ServerSocket(port, 10, InetAddress.getByName("127.0.0.1"))
             serverSocket = socket
@@ -86,6 +93,7 @@ class McpHttpServer(
             true
         } catch (e: Exception) {
             lastError = e.message
+            lastBindConflict = e is BindException
             Log.w(TAG, "Failed to start MCP server on port $port: ${e.message}")
             running.set(false)
             runCatching { serverSocket?.close() }
