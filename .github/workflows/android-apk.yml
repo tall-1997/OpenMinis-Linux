@@ -145,7 +145,14 @@ jobs:
           ANDROID_NDK_HOME: /usr/local/lib/android/sdk/ndk/${{ env.ANDROID_NDK }}
           ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
         run: |
+          # gradle.properties is phone-tuned: 2g daemons + 1 worker. On a CI
+          # runner a cold full compile OOMs the Kotlin daemon at 2g (IR
+          # lowering, execIncrementalCompiler) and workers.max=1 neuters
+          # --parallel. Restore what every green run before cb6307f actually
+          # used: Kotlin daemon inheriting the 6g Gradle heap, 4 workers.
           sed -i 's|org.gradle.jvmargs=.*|org.gradle.jvmargs=-Xmx6g -Dfile.encoding=UTF-8|' gradle.properties
+          sed -i 's|kotlin.daemon.jvmargs=.*|kotlin.daemon.jvmargs=-Xmx6g|' gradle.properties
+          sed -i 's|org.gradle.workers.max=.*|org.gradle.workers.max=4|' gradle.properties
           chmod +x gradlew
           # [T-ci-build-speed] The debug variant is disabled via androidComponents
           # (app/build.gradle.kts), removing the kspDebug / kspRelease Room

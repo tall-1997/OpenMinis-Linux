@@ -64,7 +64,11 @@ jobs:
         env:
           ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
         run: |
+          # Phone-tuned gradle.properties leaks into CI: 2g Kotlin daemon OOMs
+          # on cold compile, workers.max=1 neuters --parallel. See android-apk.yml.
           sed -i 's|org.gradle.jvmargs=.*|org.gradle.jvmargs=-Xmx4g -Dfile.encoding=UTF-8|' gradle.properties
+          sed -i 's|kotlin.daemon.jvmargs=.*|kotlin.daemon.jvmargs=-Xmx4g|' gradle.properties
+          sed -i 's|org.gradle.workers.max=.*|org.gradle.workers.max=4|' gradle.properties
           chmod +x gradlew
           ./gradlew :app:compileReleaseKotlin --parallel --stacktrace
 
