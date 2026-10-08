@@ -2593,27 +2593,43 @@ internal const val ZEN_BUNDLED_ENDPOINT = "https://opencode.ai/zen/v1"
  * disguised client (CLI user agent, `x-opencode-client`, a canonical `ses_`
  * session id, the bash/read gate tools, `Authorization: Bearer public`). Each
  * id below was then re-probed three times on independent session ids.
+ * Re-measured again 2026-10-08 (same shape) plus a third-party cross-check
+ * against the `dsh-opencode-free-models` plugin's shape (official CLI UA,
+ * `Bearer public`, NO session headers) — see the note below the table.
  *
- * | id | result |
- * | --- | --- |
- * | big-pickle | **200 ×3** (plus 13/14 on a 14-id sweep) |
- * | space-bunny-free | **200 ×3** |
- * | mimo-v2.6-flash-free | **200 ×3** |
- * | mimo-v2.5-free | **200 ×3** |
- * | nemotron-3-ultra-free | **200 ×3** |
- * | nemotron-3.5-lightning-free | **200 ×3** |
- * | longcat-2.5-preview-free | **200 ×3** |
- * | fledge-alpha-free | **200 ×3** |
- * | ling-3.1-flash-free | 200, then 429 ×2 — rate-limited, not refused |
- * | ling-3.0-flash-fin-free | 400 "Endpoint is unavailable" (upstream retired) |
- * | deepseek-v4-flash-free | 400 "Model is unavailable" (upstream retired) |
- * | jev-1.13-free | 500 (upstream broken) |
- * | muse-spark-1.2 / 1.3-contributor-free | 403 RegionError (geo-fenced; also Responses-only) |
+ * | id | 2026-10-05 | 2026-10-08 |
+ * | --- | --- | --- |
+ * | big-pickle | **200 ×3** (plus 13/14 on a 14-id sweep) | **200** |
+ * | space-bunny-free | **200 ×3** | (not re-probed; quota budget) |
+ * | mimo-v2.6-flash-free | **200 ×3** | (not re-probed; quota budget) |
+ * | mimo-v2.5-free | **200 ×3** | (not re-probed; quota budget) |
+ * | nemotron-3-ultra-free | **200 ×3** | **200** (mid-stream upstream overload once) |
+ * | nemotron-3.5-lightning-free | **200 ×3** | (not re-probed; quota budget) |
+ * | longcat-2.5-preview-free | **200 ×3** | (not re-probed; quota budget) |
+ * | fledge-alpha-free | **200 ×3** | **200** after a cooldown |
+ * | ling-3.1-flash-free | 200, then 429 ×2 — rate-limited | **200** (quota recovered) |
+ * | ling-3.0-flash-fin-free | 400 "Endpoint is unavailable" | 400, same message (retired) |
+ * | deepseek-v4-flash-free | 400 "Model is unavailable" | 401 ModelError "not supported" (retired) |
+ * | jev-1.13-free | 500 (upstream broken) | 500, same (broken) |
+ * | muse-spark-1.2-contributor-free | 403 RegionError (geo-fenced) | 429 FreeUsageLimitError all day — geo gate no longer reproduces; passes identity, never a 200 |
+ * | muse-spark-1.3-contributor-free | 403 RegionError (geo-fenced) | 500 internal (broken) |
+ * | hy3-free | — (not advertised then) | 401 ModelError "not supported" — advertised by the third-party plugin's static list, refused upstream |
  *
- * The three upstream failures are genuine retirements — their messages name the
- * endpoint or model, not the client. The muse pair clears the identity gate and
- * is refused only on geography, so it is treated as measured-dead rather than
- * advertised: a geo-fenced row fails for most of the world.
+ * The upstream failures are genuine retirements — their messages name the
+ * endpoint or model, not the client. The muse pair is kept out on the
+ * 200-or-nothing rule: 1.2 clears every gate today but never answered a
+ * completion (rate-limited all day), and a row that only ever 429s cannot be
+ * shipped as usable.
+ *
+ * 2026-10-08 cross-check against `dsh-opencode-free-models` (a DeepSeek
+ * Harness plugin driving the same lane): its exact wire shape — official CLI
+ * user agent `opencode/1.18.18 ai-sdk/...`, `Bearer public`, and NO session
+ * headers — answers **403 FreeTierError** on every model today, so the
+ * plugin's users are currently refused upstream. The same request with our
+ * canonical `ses_` session headers returns 200. That is live third-party
+ * evidence for the session-id gate documented in
+ * [com.openminis.app.provider.ZenDisguise]: the UA is not the key; the
+ * canonical session id is.
  *
  * What made this list look like one row for a day was a MALFORMED session id in
  * [com.openminis.app.provider.ZenDisguise], not an upstream policy: a 23- or
