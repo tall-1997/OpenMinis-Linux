@@ -276,6 +276,22 @@
     <string name="plugin_market_footer_mcp">One-tap add to MCP Integrations. Skills stay under Settings → Skills.</string>
     <string name="plugin_market_section_online">Online APIs</string>
     <string name="plugin_market_footer_online">Remote OpenAPI-lite tools. Requests are SSRF-checked; API keys never enter the model context.</string>
+    <string name="plugin_market_section_local">Local tools</string>
+    <string name="plugin_market_local_footer">Command-template tools you author: the agent calls them like built-in tools, {{param}} placeholders are substituted at call time, and execution goes through the sandbox shell gate.</string>
+    <string name="plugin_market_local_empty">No local tools yet. Tap New local tool below to write a command template.</string>
+    <string name="plugin_market_local_add">New local tool</string>
+    <string name="plugin_market_local_add_hint">Command template with {{param}} placeholders</string>
+    <string name="plugin_market_local_edit">Edit local tool</string>
+    <string name="plugin_market_local_name">Tool name</string>
+    <string name="plugin_market_local_name_invalid">Letters, digits and underscore only; cannot start with a digit.</string>
+    <string name="plugin_market_local_desc">Description (shown to the model)</string>
+    <string name="plugin_market_local_command">Command template</string>
+    <string name="plugin_market_local_params">Params (one per line)</string>
+    <string name="plugin_market_local_params_hint">Format: name|description|default — a param with a default is optional.</string>
+    <string name="plugin_market_local_enabled">Enabled</string>
+    <string name="plugin_market_local_disabled">Disabled</string>
+    <string name="plugin_market_local_delete">Delete</string>
+    <string name="plugin_market_local_save">Save</string>
     <string name="plugin_market_live">Live catalog · %1$d plugins</string>
     <string name="plugin_market_cached">Offline cache · %1$d plugins</string>
     <string name="plugin_market_loading">Loading catalog…</string>
@@ -934,7 +950,6 @@
     <string name="appearance_show_subagent_bar">Sub-agent live chips</string>
     <string name="appearance_show_mic_button_title">Show mic button</string>
     <string name="appearance_show_mic_button_subtitle">Voice input button in the composer. Voice mode itself is always reachable from the app icon.</string>
-    <string name="chat_paste_clipboard_image">Paste image from clipboard</string>
     <string name="appearance_show_plan_banner">Plan-discussion banner</string>
     <string name="appearance_section_auto_focus_after_reply">Auto-Focus Input After Reply</string>
     <string name="appearance_auto_focus_after_reply_title">Auto-Focus Input After Reply</string>
@@ -2595,4 +2610,5 @@
     <string name="db_quarantine_copy_at">Damaged copy kept at:\n%1$s</string>
     <string name="db_quarantine_keep">Keep the copy</string>
     <string name="db_quarantine_delete">Delete the damaged copy</string>
+    <string name="chat_paste_clipboard_image">Paste image from clipboard</string>
 </resources>

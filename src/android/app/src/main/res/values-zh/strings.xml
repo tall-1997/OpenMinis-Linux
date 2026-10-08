@@ -242,6 +242,22 @@
     <string name="plugin_market_footer_mcp">一键加入 MCP 集成。技能仍在「设置 → 技能」。</string>
     <string name="plugin_market_section_online">在线 API</string>
     <string name="plugin_market_footer_online">远程 OpenAPI 轻量工具。出站经 SSRF 校验；API Key 不会进入模型上下文。</string>
+    <string name="plugin_market_section_local">本地工具</string>
+    <string name="plugin_market_local_footer">自己编写的命令模板工具：模型像内置工具一样调用，{{param}} 占位符在调用时替换，执行走沙箱 shell 门禁。</string>
+    <string name="plugin_market_local_empty">还没有本地工具。点下方「新建本地工具」写一个命令模板。</string>
+    <string name="plugin_market_local_add">新建本地工具</string>
+    <string name="plugin_market_local_add_hint">带 {{param}} 占位符的命令模板</string>
+    <string name="plugin_market_local_edit">编辑本地工具</string>
+    <string name="plugin_market_local_name">工具名</string>
+    <string name="plugin_market_local_name_invalid">仅字母、数字、下划线，不能以数字开头。</string>
+    <string name="plugin_market_local_desc">描述（模型可见）</string>
+    <string name="plugin_market_local_command">命令模板</string>
+    <string name="plugin_market_local_params">参数（每行一个）</string>
+    <string name="plugin_market_local_params_hint">格式：名称|描述|默认值 — 有默认值的参数为可选。</string>
+    <string name="plugin_market_local_enabled">启用</string>
+    <string name="plugin_market_local_disabled">已停用</string>
+    <string name="plugin_market_local_delete">删除</string>
+    <string name="plugin_market_local_save">保存</string>
     <string name="plugin_market_live">在线目录 · %1$d 个插件</string>
     <string name="plugin_market_cached">离线缓存 · %1$d 个插件</string>
     <string name="plugin_market_loading">正在加载目录…</string>
@@ -856,7 +872,6 @@
     <string name="appearance_show_subagent_bar">子代理实时芯片</string>
     <string name="appearance_show_mic_button_title">显示麦克风按钮</string>
     <string name="appearance_show_mic_button_subtitle">输入框的语音输入按钮。语音模式本身始终可从应用图标进入。</string>
-    <string name="chat_paste_clipboard_image">粘贴剪贴板图片</string>
     <string name="appearance_show_plan_banner">计划讨论横幅</string>
     <string name="appearance_section_auto_focus_after_reply">回复后自动聚焦输入框</string>
     <string name="appearance_auto_focus_after_reply_title">回复后自动聚焦输入框</string>
@@ -2410,4 +2425,5 @@
     <string name="db_quarantine_copy_at">损坏副本保留在：\n%1$s</string>
     <string name="db_quarantine_keep">保留副本</string>
     <string name="db_quarantine_delete">删除损坏副本</string>
+    <string name="chat_paste_clipboard_image">粘贴剪贴板图片</string>
 </resources>

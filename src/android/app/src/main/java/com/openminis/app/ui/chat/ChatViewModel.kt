@@ -1964,7 +1964,8 @@ class ChatViewModel(
             codeGraphEnabled = true,
             mcpNativeEnabled = mcpRepository != null,
             includeLongTail = true,
-        ) + com.openminis.app.plugins.OnlinePluginStore.toolDefinitions(context)
+        ) + com.openminis.app.plugins.OnlinePluginStore.toolDefinitions(context) +
+            com.openminis.app.plugins.LocalToolPluginStore.agentToolDefinitions(context)
         val matches = com.openminis.app.tools.FindTools.search(query, all, limit)
         enableDiscoveredTools(matches.map { it.definition.name })
         return com.openminis.app.tools.ToolExecutionResult(
@@ -1993,6 +1994,7 @@ class ChatViewModel(
                 (if (_memoryEnabled.value) 4L else 0L) or
                 (if (multiAgentSettings.enabled.value) 8L else 0L) or
                 (com.openminis.app.plugins.OnlinePluginStore.toolDefinitionsStamp(context) shl 4) xor
+                (com.openminis.app.plugins.LocalToolPluginStore.toolsStamp(context) shl 20) xor
                 enabledStamp
             agentToolsMemo?.takeIf { agentToolsMemoStamp == stamp }?.let { return it }
             val built = AgentTools.makeAgentTools(
@@ -2014,7 +2016,8 @@ class ChatViewModel(
                 mcpNativeEnabled = mcpRepository != null,
                 includeLongTail = false,
                 enabledToolNames = enabledLongTailTools,
-            ) + com.openminis.app.plugins.OnlinePluginStore.toolDefinitions(context)
+            ) + com.openminis.app.plugins.OnlinePluginStore.toolDefinitions(context) +
+                com.openminis.app.plugins.LocalToolPluginStore.agentToolDefinitions(context)
             agentToolsMemo = built
             agentToolsMemoStamp = stamp
             return built

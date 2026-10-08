@@ -68,6 +68,42 @@ object LocalToolPluginStore {
     fun find(context: Context, name: String): LocalToolDef? =
         load(context).firstOrNull { it.enabled && it.name == name }
 
+    // ─── agent surface ─────────────────────────────────────────────────
+
+    /**
+     * Agent-facing definitions for the ENABLED local tools. Appended to the
+     * tool list in ChatViewModel.agentTools (same slot as the online plugin
+     * tools); execution dispatches in ChatViewModelExecuteToolExt.executeTool,
+     * which materializes the {{param}} template and runs the command through
+     * the normal sandbox shell pipeline.
+     */
+    fun agentToolDefinitions(context: Context): List<com.openminis.app.data.model.AgentToolDefinition> =
+        toAgentDefinitions(load(context))
+
+    /** Pure mapping — unit-testable without a Context. */
+    fun toAgentDefinitions(tools: List<LocalToolDef>): List<com.openminis.app.data.model.AgentToolDefinition> =
+        tools.filter { it.enabled }.map { def ->
+            com.openminis.app.data.model.AgentToolDefinition(
+                name = def.name,
+                description = def.description.ifBlank {
+                    "Locally-defined command-template tool. Command: ${def.command.take(120)}"
+                },
+                parameters = def.params.associate { p ->
+                    p.name to com.openminis.app.data.model.AgentToolParam(
+                        type = "string",
+                        description = p.description.ifBlank { p.name },
+                    )
+                },
+                required = def.params.filter { it.required && it.defaultValue == null }.map { it.name },
+                propertyOrdering = def.params.map { it.name },
+            )
+        }
+
+    /** Cheap change stamp for tool-list memoization: hash of the raw JSON, no parse. */
+    fun toolsStamp(context: Context): Long =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString(KEY, null)?.hashCode()?.toLong() ?: 0L
+
     // ─── JSON codec ────────────────────────────────────────────────────
 
     internal fun parse(text: String): List<LocalToolDef> {

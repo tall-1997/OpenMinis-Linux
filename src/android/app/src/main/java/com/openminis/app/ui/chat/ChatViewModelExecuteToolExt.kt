@@ -225,12 +225,21 @@ internal suspend fun ChatViewModel.executeTool(
         else -> if (com.openminis.app.plugins.OnlineApiTool.isOnline(name)) {
             com.openminis.app.plugins.OnlineApiTool.execute(name, argsJson, context)
         } else {
-            ToolExecutionResult(
-                "Unknown tool: $name",
-                false,
-                errorCode = com.openminis.app.tools.ToolErrorCode.UNKNOWN_TOOL,
-                recoveryHint = "Use find_tools to discover which tools are available for this task.",
-            )
+            // [T-local-tool-plugins] User-defined command-template tools:
+            // dispatch by name, materialize {{param}} placeholders, then run
+            // the assembled command through the normal shell pipeline (the
+            // SecurityGate still audits the materialized command there).
+            val localTool = com.openminis.app.plugins.LocalToolPluginStore.find(context, canonical)
+            if (localTool != null) {
+                executeLocalTool(localTool, argsJson, toolId, toolBlocks, assistantId, currentText)
+            } else {
+                ToolExecutionResult(
+                    "Unknown tool: $name",
+                    false,
+                    errorCode = com.openminis.app.tools.ToolErrorCode.UNKNOWN_TOOL,
+                    recoveryHint = "Use find_tools to discover which tools are available for this task.",
+                )
+            }
         }
     }
     if (!result.success) {
@@ -243,4 +252,53 @@ internal suspend fun ChatViewModel.executeTool(
         return result.copy(output = ToolOutputPolicy.apply(result.output, toolId))
     }
     return result
+}
+
+/**
+ * [T-local-tool-plugins] Execute a user-defined command-template tool:
+ * substitute `{{param}}` placeholders with the call arguments, then hand the
+ * materialized command to [executeShellCommand] so the local tool inherits
+ * the full shell pipeline — SecurityGate audit, offload execution, output
+ * policy, tool-block lifecycle.
+ */
+private suspend fun ChatViewModel.executeLocalTool(
+    tool: com.openminis.app.plugins.LocalToolPluginStore.LocalToolDef,
+    argsJson: String,
+    toolId: String,
+    toolBlocks: MutableList<AssistantBlock>,
+    assistantId: String,
+    currentText: String,
+): ToolExecutionResult {
+    val args = runCatching { JSONObject(argsJson) }.getOrNull() ?: JSONObject()
+    // Only params the model actually supplied — materialize applies defaults
+    // and flags missing required ones.
+    val argMap = tool.params.mapNotNull { p ->
+        if (args.has(p.name)) p.name to args.optString(p.name) else null
+    }.toMap()
+    return when (val m = com.openminis.app.plugins.LocalToolPluginStore.materialize(tool, argMap)) {
+        is com.openminis.app.plugins.LocalToolPluginStore.MaterializeResult.Ok -> {
+            val shellArgs = JSONObject()
+                .put("command", m.command)
+                .put("tool_title", tool.name)
+            executeShellCommand(shellArgs.toString(), toolId, toolBlocks, assistantId, currentText)
+        }
+        is com.openminis.app.plugins.LocalToolPluginStore.MaterializeResult.MissingParam ->
+            ToolExecutionResult(
+                "local tool '${tool.name}' is missing required param '${m.param}'.",
+                false,
+                errorCode = com.openminis.app.tools.ToolErrorCode.INVALID_ARGUMENTS,
+                recoveryHint = "Provide '${m.param}' in the tool call arguments.",
+                toolTitle = tool.name,
+            )
+        is com.openminis.app.plugins.LocalToolPluginStore.MaterializeResult.UnsafeParam ->
+            ToolExecutionResult(
+                "param '${m.param}' of local tool '${tool.name}' carries shell metacharacters " +
+                    "(semicolon, pipe, ampersand, dollar, backtick, redirect or newline) and was refused.",
+                false,
+                errorCode = com.openminis.app.tools.ToolErrorCode.INVALID_ARGUMENTS,
+                recoveryHint = "Pass a plain value without shell metacharacters, or have the tool " +
+                    "author quote the placeholder in the template.",
+                toolTitle = tool.name,
+            )
+    }
 }
