@@ -1928,7 +1928,7 @@ fun ChatScreen(
     var toolPreviewEnabled by remember { mutableStateOf(appearancePrefs.getBoolean(com.openminis.app.ui.settings.KEY_TOOL_PREVIEW, true)) }
     var showFloatingToolBar by remember { mutableStateOf(appearancePrefs.getBoolean(com.openminis.app.ui.settings.KEY_SHOW_FLOATING_TOOL_BAR, true)) }
     var showCompletedToolCards by remember { mutableStateOf(appearancePrefs.getBoolean(com.openminis.app.ui.settings.KEY_SHOW_COMPLETED_TOOL_CARDS, false)) }
-    var foldAiProcess by remember { mutableStateOf(appearancePrefs.getBoolean(com.openminis.app.ui.settings.KEY_FOLD_AI_PROCESS, false)) }
+    var foldAiProcess by remember { mutableStateOf(appearancePrefs.getBoolean(com.openminis.app.ui.settings.KEY_FOLD_AI_PROCESS, com.openminis.app.ui.settings.DEFAULT_FOLD_AI_PROCESS)) }
     var showSubAgentBar by remember { mutableStateOf(appearancePrefs.getBoolean(com.openminis.app.ui.settings.KEY_SHOW_SUBAGENT_BAR, true)) }
     // Live roster of running sub-agents. The top bar renders these; the session
     // page hides a sub-agent transcript card only while its run is in this set,
@@ -1954,7 +1954,7 @@ fun ChatScreen(
             toolPreviewEnabled = sp.getBoolean(com.openminis.app.ui.settings.KEY_TOOL_PREVIEW, true)
             showFloatingToolBar = sp.getBoolean(com.openminis.app.ui.settings.KEY_SHOW_FLOATING_TOOL_BAR, true)
             showCompletedToolCards = sp.getBoolean(com.openminis.app.ui.settings.KEY_SHOW_COMPLETED_TOOL_CARDS, false)
-            foldAiProcess = sp.getBoolean(com.openminis.app.ui.settings.KEY_FOLD_AI_PROCESS, false)
+            foldAiProcess = sp.getBoolean(com.openminis.app.ui.settings.KEY_FOLD_AI_PROCESS, com.openminis.app.ui.settings.DEFAULT_FOLD_AI_PROCESS)
             showSubAgentBar = sp.getBoolean(com.openminis.app.ui.settings.KEY_SHOW_SUBAGENT_BAR, true)
             autoFocusAfterReply = sp.getBoolean(com.openminis.app.ui.settings.KEY_AUTO_FOCUS_AFTER_REPLY, true)
             showChatTitlePill = sp.getBoolean(com.openminis.app.ui.settings.KEY_SHOW_CHAT_TITLE, true)
@@ -1971,7 +1971,7 @@ fun ChatScreen(
                     com.openminis.app.ui.settings.KEY_TOOL_PREVIEW -> toolPreviewEnabled = sp.getBoolean(key, true)
                     com.openminis.app.ui.settings.KEY_SHOW_FLOATING_TOOL_BAR -> showFloatingToolBar = sp.getBoolean(key, true)
                     com.openminis.app.ui.settings.KEY_SHOW_COMPLETED_TOOL_CARDS -> showCompletedToolCards = sp.getBoolean(key, false)
-                    com.openminis.app.ui.settings.KEY_FOLD_AI_PROCESS -> foldAiProcess = sp.getBoolean(key, false)
+                    com.openminis.app.ui.settings.KEY_FOLD_AI_PROCESS -> foldAiProcess = sp.getBoolean(key, com.openminis.app.ui.settings.DEFAULT_FOLD_AI_PROCESS)
                     com.openminis.app.ui.settings.KEY_SHOW_SUBAGENT_BAR -> showSubAgentBar = sp.getBoolean(key, true)
                     com.openminis.app.ui.settings.KEY_AUTO_FOCUS_AFTER_REPLY -> autoFocusAfterReply = sp.getBoolean(key, true)
                     com.openminis.app.ui.settings.KEY_SHOW_CHAT_TITLE -> showChatTitlePill = sp.getBoolean(key, true)
@@ -4310,6 +4310,7 @@ fun ChatScreen(
                                 toolCount = item.toolCount,
                                 expanded = item.expanded,
                                 hasFailure = item.hasFailure,
+                                totalMs = item.totalMs,
                                 onToggle = {
                                     val id = item.messageId
                                     expandedProcessIds = if (id in expandedProcessIds) {

@@ -106,8 +106,13 @@ const val KEY_SHOW_CHAT_TITLE = "appearance.show_chat_title"  // Boolean, defaul
 // value. Read at block-mount time in ThinkingBlock.
 const val KEY_AUTO_EXPAND_THINKING = "chat.autoExpandThinking"  // Boolean, default true
 // Collapse thinking + tool process into a summary after the turn finishes
-// (streaming stays expanded). Default off. Read live in ChatScreen.
-const val KEY_FOLD_AI_PROCESS = "chat.foldAiProcess"  // Boolean, default false
+// (streaming stays expanded). Default ON since the OmniBot-parity pass: the
+// folded form (summary bar + floating overlay for in-flight tools) is the
+// primary presentation; the fully-expanded stream is opt-in. Existing users
+// who ever toggled the switch keep their stored value (getBoolean only falls
+// back to the default when the key is absent).
+const val KEY_FOLD_AI_PROCESS = "chat.foldAiProcess"
+const val DEFAULT_FOLD_AI_PROCESS = true
 // Material You wallpaper dynamic color. Default OFF: the app's identity is the
 // iOS-parity palette with measured contrast, so wallpaper tinting is opt-in.
 const val KEY_DYNAMIC_COLOR = "chat.dynamicColor"  // Boolean, default false
@@ -276,7 +281,7 @@ fun AppearanceScreen(
     var showSubAgentBar by remember { mutableStateOf(prefs.getBoolean(KEY_SHOW_SUBAGENT_BAR, true)) }
     var autoFocusAfterReply by remember { mutableStateOf(prefs.getBoolean(KEY_AUTO_FOCUS_AFTER_REPLY, true)) }
     var autoExpandThinking by remember { mutableStateOf(prefs.getBoolean(KEY_AUTO_EXPAND_THINKING, true)) }
-    var foldAiProcess by remember { mutableStateOf(prefs.getBoolean(KEY_FOLD_AI_PROCESS, false)) }
+    var foldAiProcess by remember { mutableStateOf(prefs.getBoolean(KEY_FOLD_AI_PROCESS, DEFAULT_FOLD_AI_PROCESS)) }
     // Material You is an Android 12+ framework capability (minSdk is 26), so the
     // row renders disabled below S instead of promising something it cannot do.
     val monetSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
