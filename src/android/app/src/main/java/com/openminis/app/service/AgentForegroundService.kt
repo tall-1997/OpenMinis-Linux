@@ -126,15 +126,23 @@ class AgentForegroundService : Service() {
 
     private var startTimeMs: Long = 0L
     /**
-     * Partial wake lock acquired while the foreground service is alive.
-     * Required because Android can put the CPU to sleep even with a
-     * foreground service running — Doze can suspend non-FGS background
-     * threads, and on some OEM ROMs (MIUI, EMUI, ColorOS) the CPU
-     * throttles aggressively after screen-off. Without this lock, long
-     * shell commands can stall mid-stream when the device sleeps.
+     * Partial wake lock held ONLY while real work is in flight — an active
+     * agent stream ([SessionActivityTracker.activeSessions]) or a running
+     * tool ([SessionActivityTracker.isToolRunning]). Required because
+     * Android can put the CPU to sleep even with a foreground service
+     * running — Doze can suspend non-FGS background threads, and on some
+     * OEM ROMs (MIUI, EMUI, ColorOS) the CPU throttles aggressively after
+     * screen-off. Without this lock, long shell commands can stall
+     * mid-stream when the device sleeps.
      *
-     * Held only while the service runs; released in [onDestroy] so we
-     * never leak across orientation changes or process restarts.
+     * [Issue #2 — battery drain] The T166 presence keep-alive (user sits
+     * in a chat, no stream running) deliberately does NOT hold this lock:
+     * the foreground service alone already biases the OOM killer at
+     * adj=200, and a presence-held PARTIAL_WAKE_LOCK kept the SoC awake
+     * for the whole time the app sat backgrounded with a chat open —
+     * screen off, zero work, battery draining, phone hot. The lock is
+     * driven by [startWakeLockObserver]'s collector and released on the
+     * idle edge; [onDestroy] releases it deterministically as a backstop.
      */
     private var wakeLock: PowerManager.WakeLock? = null
 
@@ -198,7 +206,7 @@ class AgentForegroundService : Service() {
             Log.w(TAG, "foreground unavailable or safe-mode ON — skipping overlay/wake-lock bring-up")
             return
         }
-        acquireWakeLock()
+        startWakeLockObserver()
         // [T-android-hyperos-island] Populate the focus-notification
         // permission cache before the first overlay/island decision in
         // nearly all cases: the service starts when a stream starts, and
@@ -801,6 +809,28 @@ class AgentForegroundService : Service() {
         }
     }
 
+    /**
+     * [Issue #2 — battery drain] Drives the partial wake lock from real
+     * work state: acquired the moment a stream or tool starts, released on
+     * the idle edge. StateFlow combine emits current values immediately, so
+     * a service started mid-work (sandbox job, scheduled run, START_STICKY
+     * revival) still acquires on the first collection.
+     */
+    private fun startWakeLockObserver() {
+        overlayScope.launch {
+            combine(
+                SessionActivityTracker.activeSessions,
+                SessionActivityTracker.isToolRunning,
+            ) { active, toolRunning -> active.isNotEmpty() || toolRunning }
+                .distinctUntilChanged()
+                .collect { hasWork -> updateWakeLock(hasWork) }
+        }
+    }
+
+    private fun updateWakeLock(hasWork: Boolean) {
+        if (hasWork) acquireWakeLock() else releaseWakeLock()
+    }
+
     private fun acquireWakeLock() {
         if (wakeLock != null) return
         try {
@@ -810,8 +840,10 @@ class AgentForegroundService : Service() {
                 "minis:inference",
             ).apply {
                 setReferenceCounted(false)
-                // No timeout — release happens deterministically in onDestroy
-                // when SessionActivityTracker reports zero active sessions.
+                // No timeout — a hard cap would drop the lock mid-run on a
+                // legitimately long turn (scheduled overnight agents run for
+                // hours). The idle edge in startWakeLockObserver's collector
+                // and onDestroy are the release paths.
                 acquire()
             }
             wakeLockHeld = true
