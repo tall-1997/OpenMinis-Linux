@@ -56,14 +56,15 @@ class McpToolDispatcherExtendedTest {
     // ─── listTools surface ────────────────────────────────────────────────
 
     @Test
-    fun `listTools exposes all twelve tools`() {
+    fun `listTools exposes all fourteen tools`() {
         val tools = dispatcher().listTools()
-        assertEquals(12, tools.length())
+        assertEquals(14, tools.length())
         val names = (0 until tools.length()).map { tools.getJSONObject(it).getString("name") }
         assertEquals(
             listOf(
                 "device_info", "shell_exec", "ui_read", "ui_action", "file_read",
-                "file_write", "schedule_task_create", "schedule_task_list",
+                "file_write", "file_transfer_pull", "file_transfer_push",
+                "schedule_task_create", "schedule_task_list",
                 "schedule_task_update", "schedule_task_delete",
                 "alarm_reminder_create", "context_apps_query",
             ),

@@ -69,14 +69,15 @@ class McpToolDispatcherTest {
     // ─── listTools ────────────────────────────────────────────────────────
 
     @Test
-    fun `listTools exposes exactly the twelve tools with schemas`() {
+    fun `listTools exposes exactly the fourteen tools with schemas`() {
         val tools = dispatcher(FakeGate()).listTools()
-        assertEquals(12, tools.length())
+        assertEquals(14, tools.length())
         val names = (0 until tools.length()).map { tools.getJSONObject(it).getString("name") }
         assertEquals(
             listOf(
                 "device_info", "shell_exec", "ui_read", "ui_action", "file_read",
-                "file_write", "schedule_task_create", "schedule_task_list",
+                "file_write", "file_transfer_pull", "file_transfer_push",
+                "schedule_task_create", "schedule_task_list",
                 "schedule_task_update", "schedule_task_delete",
                 "alarm_reminder_create", "context_apps_query",
             ),

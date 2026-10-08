@@ -245,6 +245,39 @@ class McpToolDispatcher(
             )
             put(
                 JSONObject().apply {
+                    put("name", "file_transfer_pull")
+                    put(
+                        "description",
+                        "Read a binary or text file from the Linux filesystem and return it base64-encoded with size and sha256. Same path restrictions as file_read; max 8 MB per call.",
+                    )
+                    put("inputSchema", JSONObject().apply {
+                        put("type", "object")
+                        put("properties", JSONObject().apply {
+                            put("path", JSONObject().apply { put("type", "string") })
+                        })
+                        put("required", JSONArray().put("path"))
+                    })
+                },
+            )
+            put(
+                JSONObject().apply {
+                    put("name", "file_transfer_push")
+                    put(
+                        "description",
+                        "Write base64-encoded content to a file on the Linux filesystem (binary-safe). Same path restrictions as file_write; max 8 MB decoded per call.",
+                    )
+                    put("inputSchema", JSONObject().apply {
+                        put("type", "object")
+                        put("properties", JSONObject().apply {
+                            put("path", JSONObject().apply { put("type", "string") })
+                            put("content_base64", JSONObject().apply { put("type", "string") })
+                        })
+                        put("required", JSONArray().put("path").put("content_base64"))
+                    })
+                },
+            )
+            put(
+                JSONObject().apply {
                     put("name", "schedule_task_create")
                     put(
                         "description",
@@ -355,6 +388,8 @@ class McpToolDispatcher(
             "ui_action" -> uiAction(arguments)
             "file_read" -> fileRead(arguments)
             "file_write" -> fileWrite(arguments)
+            "file_transfer_pull" -> fileTransferPull(arguments)
+            "file_transfer_push" -> fileTransferPush(arguments)
             "schedule_task_create" -> scheduleTaskCreate(arguments)
             "schedule_task_list" -> scheduleTaskList()
             "schedule_task_update" -> scheduleTaskUpdate(arguments)
@@ -801,6 +836,148 @@ class McpToolDispatcher(
             if (append) file.appendText(content) else file.writeText(content)
             McpServerCore.CallResult(
                 JSONArray().put(text("[wrote $normalized | ${content.length} chars | ${if (append) "appended" else "overwritten"}]")),
+            )
+        }.getOrElse {
+            McpServerCore.CallResult(
+                JSONArray().put(text("Error writing file: ${it.message}")),
+                isError = true,
+            )
+        }
+    }
+
+    // ─── file_transfer_pull / file_transfer_push ──────────────────────────
+
+    /** Max bytes per transfer direction — base64 inflates by 4/3, so an 8 MB
+     *  payload arrives as ~10.7 MB of JSON; keep both under control. */
+    private val maxTransferBytes = 8L * 1024 * 1024
+
+    private fun fileTransferPull(arguments: JSONObject): McpServerCore.CallResult {
+        val rawPath = arguments.optString("path", "").ifEmpty {
+            return McpServerCore.CallResult(
+                JSONArray().put(text("Error: 'path' is required")),
+                isError = true,
+            )
+        }
+        validateFilePath(rawPath)?.let { reason ->
+            return McpServerCore.CallResult(
+                JSONArray().put(text("Path denied: $reason")),
+                isError = true,
+                errorCode = McpServerCore.ErrorCode.PATH_DENIED,
+                errorData = reason,
+            )
+        }
+        val normalized = normalizePath(rawPath)
+        val ctx = context
+            ?: return McpServerCore.CallResult(
+                JSONArray().put(text("Error: no host context available")),
+                isError = true,
+            )
+        val file: File = PRootKernel.resolveSessionHostPath(SESSION_ID, normalized, ctx)
+            ?: return McpServerCore.CallResult(
+                JSONArray().put(text("Error: cannot resolve path '$normalized' (rootfs-only guest path?)")),
+                isError = true,
+            )
+        if (!file.exists()) {
+            return McpServerCore.CallResult(
+                JSONArray().put(text("Error: file not found: $normalized")),
+                isError = true,
+            )
+        }
+        if (file.isDirectory) {
+            return McpServerCore.CallResult(
+                JSONArray().put(text("Error: path is a directory: $normalized")),
+                isError = true,
+            )
+        }
+        if (file.length() > maxTransferBytes) {
+            return McpServerCore.CallResult(
+                JSONArray().put(text("Error: file is ${file.length()} bytes, exceeds $maxTransferBytes byte limit")),
+                isError = true,
+            )
+        }
+        return runCatching {
+            val bytes = file.readBytes()
+            val sha = java.security.MessageDigest.getInstance("SHA-256")
+                .digest(bytes)
+                .joinToString("") { "%02x".format(it) }
+            // Structured payload so the client can machine-parse instead of
+            // scraping text: a header line then the base64 block.
+            val b64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+            McpServerCore.CallResult(
+                JSONArray().put(
+                    text("[path: $normalized | size: ${bytes.size} | sha256: $sha]\n$b64"),
+                ),
+            )
+        }.getOrElse {
+            McpServerCore.CallResult(
+                JSONArray().put(text("Error reading file: ${it.message}")),
+                isError = true,
+            )
+        }
+    }
+
+    private fun fileTransferPush(arguments: JSONObject): McpServerCore.CallResult {
+        val rawPath = arguments.optString("path", "").ifEmpty {
+            return McpServerCore.CallResult(
+                JSONArray().put(text("Error: 'path' is required")),
+                isError = true,
+            )
+        }
+        val b64 = arguments.optString("content_base64", "")
+        if (b64.isEmpty()) {
+            return McpServerCore.CallResult(
+                JSONArray().put(text("Error: 'content_base64' is required")),
+                isError = true,
+            )
+        }
+        // Reject before decode: base64 length maps 4:3 to bytes, so the byte
+        // cap can be enforced on the encoded length without allocating.
+        if (b64.length > (maxTransferBytes * 4 / 3 + 4)) {
+            return McpServerCore.CallResult(
+                JSONArray().put(text("Error: content exceeds $maxTransferBytes byte limit (base64 length ${b64.length})")),
+                isError = true,
+            )
+        }
+        validateFilePath(rawPath)?.let { reason ->
+            return McpServerCore.CallResult(
+                JSONArray().put(text("Path denied: $reason")),
+                isError = true,
+                errorCode = McpServerCore.ErrorCode.PATH_DENIED,
+                errorData = reason,
+            )
+        }
+        val normalized = normalizePath(rawPath)
+        val ctx = context
+            ?: return McpServerCore.CallResult(
+                JSONArray().put(text("Error: no host context available")),
+                isError = true,
+            )
+        val file: File = PRootKernel.resolveSessionHostPath(SESSION_ID, normalized, ctx)
+            ?: return McpServerCore.CallResult(
+                JSONArray().put(text("Error: cannot resolve path '$normalized' (rootfs-only guest path?)")),
+                isError = true,
+            )
+        if (file.isDirectory) {
+            return McpServerCore.CallResult(
+                JSONArray().put(text("Error: path is a directory: $normalized")),
+                isError = true,
+            )
+        }
+        return runCatching {
+            val bytes = android.util.Base64.decode(b64, android.util.Base64.NO_WRAP)
+            if (bytes.size > maxTransferBytes) {
+                return McpServerCore.CallResult(
+                    JSONArray().put(text("Error: decoded content is ${bytes.size} bytes, exceeds $maxTransferBytes limit")),
+                    isError = true,
+                )
+            }
+            file.parentFile?.mkdirs()
+            file.writeBytes(bytes)
+            val sha = java.security.MessageDigest.getInstance("SHA-256")
+                .digest(bytes)
+                .joinToString("") { "%02x".format(it) }
+            McpServerCore.CallResult(
+                JSONArray().put(text("[wrote $normalized | ${bytes.size} bytes | sha256: $sha]")),
             )
         }.getOrElse {
             McpServerCore.CallResult(
