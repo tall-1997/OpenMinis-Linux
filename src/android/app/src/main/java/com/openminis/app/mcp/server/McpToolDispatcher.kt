@@ -5,6 +5,13 @@ import android.os.BatteryManager
 import android.os.Build
 import com.openminis.app.sandbox.ExecutionCoordinator
 import com.openminis.app.sandbox.PRootKernel
+import com.openminis.app.scheduled.CronScheduler
+import com.openminis.app.scheduled.ScheduledRepeatMode
+import com.openminis.app.scheduled.ScheduledTask
+import com.openminis.app.scheduled.ScheduledTaskManager
+import android.content.pm.PackageManager
+import java.util.Calendar
+import java.util.UUID
 import com.openminis.app.security.Decision
 import com.openminis.app.security.PermissionMode
 import com.openminis.app.security.SecurityGate
@@ -37,6 +44,8 @@ class McpToolDispatcher(
     companion object {
         const val SESSION_ID = "mcp-server"
         const val MAX_FILE_READ_CHARS = 80_000
+        /** Max chars accepted by file_write per call (256 KB). */
+        const val MAX_FILE_WRITE_CHARS = 262_144
         val FILE_READ_PREFIXES = listOf("/var/minis/", "/sdcard/")
 
         /** Strict-policy hint appended to shell_exec gate denial messages. */
@@ -213,6 +222,128 @@ class McpToolDispatcher(
                     })
                 },
             )
+            put(
+                JSONObject().apply {
+                    put("name", "file_write")
+                    put(
+                        "description",
+                        "Write a UTF-8 text file to the Linux filesystem. Restricted to /var/minis/ and /sdcard/ prefixes; max 256 KB per call.",
+                    )
+                    put("inputSchema", JSONObject().apply {
+                        put("type", "object")
+                        put("properties", JSONObject().apply {
+                            put("path", JSONObject().apply { put("type", "string") })
+                            put("content", JSONObject().apply { put("type", "string") })
+                            put("append", JSONObject().apply {
+                                put("type", "boolean")
+                                put("description", "Append to the file instead of overwriting (default false).")
+                            })
+                        })
+                        put("required", JSONArray().put("path").put("content"))
+                    })
+                },
+            )
+            put(
+                JSONObject().apply {
+                    put("name", "schedule_task_create")
+                    put(
+                        "description",
+                        "Create a scheduled task that fires an agent prompt. Schedule: '30m', '2h', '1d' (once) or 'every 30m' / 'every 2h' / 'every 1d' (repeating).",
+                    )
+                    put("inputSchema", JSONObject().apply {
+                        put("type", "object")
+                        put("properties", JSONObject().apply {
+                            put("name", JSONObject().apply { put("type", "string") })
+                            put("schedule", JSONObject().apply { put("type", "string") })
+                            put("prompt", JSONObject().apply { put("type", "string") })
+                        })
+                        put("required", JSONArray().put("schedule").put("prompt"))
+                    })
+                },
+            )
+            put(
+                JSONObject().apply {
+                    put("name", "schedule_task_list")
+                    put("description", "List all scheduled tasks with id, name, schedule, next trigger, and enabled state.")
+                    put("inputSchema", JSONObject().apply {
+                        put("type", "object")
+                        put("properties", JSONObject().apply {})
+                    })
+                },
+            )
+            put(
+                JSONObject().apply {
+                    put("name", "schedule_task_update")
+                    put(
+                        "description",
+                        "Enable or disable a scheduled task by id (accepts a unique id prefix).",
+                    )
+                    put("inputSchema", JSONObject().apply {
+                        put("type", "object")
+                        put("properties", JSONObject().apply {
+                            put("id", JSONObject().apply { put("type", "string") })
+                            put("enabled", JSONObject().apply { put("type", "boolean") })
+                        })
+                        put("required", JSONArray().put("id").put("enabled"))
+                    })
+                },
+            )
+            put(
+                JSONObject().apply {
+                    put("name", "schedule_task_delete")
+                    put(
+                        "description",
+                        "Delete a scheduled task by id (accepts a unique id prefix).",
+                    )
+                    put("inputSchema", JSONObject().apply {
+                        put("type", "object")
+                        put("properties", JSONObject().apply {
+                            put("id", JSONObject().apply { put("type", "string") })
+                        })
+                        put("required", JSONArray().put("id"))
+                    })
+                },
+            )
+            put(
+                JSONObject().apply {
+                    put("name", "alarm_reminder_create")
+                    put(
+                        "description",
+                        "Create a one-shot reminder that runs an agent prompt after a delay. Equivalent to a schedule_task with a 'once' schedule.",
+                    )
+                    put("inputSchema", JSONObject().apply {
+                        put("type", "object")
+                        put("properties", JSONObject().apply {
+                            put("delay_sec", JSONObject().apply {
+                                put("type", "integer")
+                                put("description", "Seconds from now until the reminder fires (60-86400).")
+                            })
+                            put("message", JSONObject().apply {
+                                put("type", "string")
+                                put("description", "Agent prompt to run when the reminder fires.")
+                            })
+                            put("name", JSONObject().apply { put("type", "string") })
+                        })
+                        put("required", JSONArray().put("delay_sec").put("message"))
+                    })
+                },
+            )
+            put(
+                JSONObject().apply {
+                    put("name", "context_apps_query")
+                    put(
+                        "description",
+                        "List launchable apps on this device (label + package name). Optional 'filter' substring matches label or package, case-insensitive. Optional 'limit' caps results (default 50, max 200).",
+                    )
+                    put("inputSchema", JSONObject().apply {
+                        put("type", "object")
+                        put("properties", JSONObject().apply {
+                            put("filter", JSONObject().apply { put("type", "string") })
+                            put("limit", JSONObject().apply { put("type", "integer") })
+                        })
+                    })
+                },
+            )
         }
     }
 
@@ -223,6 +354,13 @@ class McpToolDispatcher(
             "ui_read" -> uiRead()
             "ui_action" -> uiAction(arguments)
             "file_read" -> fileRead(arguments)
+            "file_write" -> fileWrite(arguments)
+            "schedule_task_create" -> scheduleTaskCreate(arguments)
+            "schedule_task_list" -> scheduleTaskList()
+            "schedule_task_update" -> scheduleTaskUpdate(arguments)
+            "schedule_task_delete" -> scheduleTaskDelete(arguments)
+            "alarm_reminder_create" -> alarmReminderCreate(arguments)
+            "context_apps_query" -> contextAppsQuery(arguments)
             else -> McpServerCore.CallResult(
                 JSONArray().put(text("Unknown tool: $name")),
                 isError = true,
@@ -608,6 +746,346 @@ class McpToolDispatcher(
         }.getOrElse {
             McpServerCore.CallResult(
                 JSONArray().put(text("Error reading file: ${it.message}")),
+                isError = true,
+            )
+        }
+    }
+
+    // ─── file_write ───────────────────────────────────────────────────────
+
+    private fun fileWrite(arguments: JSONObject): McpServerCore.CallResult {
+        val rawPath = arguments.optString("path", "").ifEmpty {
+            return McpServerCore.CallResult(
+                JSONArray().put(text("Error: 'path' is required")),
+                isError = true,
+            )
+        }
+        val content = arguments.optString("content", "")
+        if (content.length > MAX_FILE_WRITE_CHARS) {
+            return McpServerCore.CallResult(
+                JSONArray().put(text("Error: content exceeds $MAX_FILE_WRITE_CHARS chars (got ${content.length})")),
+                isError = true,
+            )
+        }
+        val append = arguments.optBoolean("append", false)
+
+        validateFilePath(rawPath)?.let { reason ->
+            return McpServerCore.CallResult(
+                JSONArray().put(text("Path denied: $reason")),
+                isError = true,
+                errorCode = McpServerCore.ErrorCode.PATH_DENIED,
+                errorData = reason,
+            )
+        }
+
+        val normalized = normalizePath(rawPath)
+        val ctx = context
+            ?: return McpServerCore.CallResult(
+                JSONArray().put(text("Error: no host context available")),
+                isError = true,
+            )
+        val file: File = PRootKernel.resolveSessionHostPath(SESSION_ID, normalized, ctx)
+            ?: return McpServerCore.CallResult(
+                JSONArray().put(text("Error: cannot resolve path '$normalized' (rootfs-only guest path?)")),
+                isError = true,
+            )
+        if (file.isDirectory) {
+            return McpServerCore.CallResult(
+                JSONArray().put(text("Error: path is a directory: $normalized")),
+                isError = true,
+            )
+        }
+
+        return runCatching {
+            file.parentFile?.mkdirs()
+            if (append) file.appendText(content) else file.writeText(content)
+            McpServerCore.CallResult(
+                JSONArray().put(text("[wrote $normalized | ${content.length} chars | ${if (append) "appended" else "overwritten"}]")),
+            )
+        }.getOrElse {
+            McpServerCore.CallResult(
+                JSONArray().put(text("Error writing file: ${it.message}")),
+                isError = true,
+            )
+        }
+    }
+
+    // ─── schedule_task_* / alarm_reminder_* ───────────────────────────────
+
+    /** Resolve the ScheduledTaskManager, or an error result when no context. */
+    private fun taskManager(): Pair<ScheduledTaskManager?, McpServerCore.CallResult?> {
+        val ctx = context ?: return null to McpServerCore.CallResult(
+            JSONArray().put(text("Error: no host context available")),
+            isError = true,
+        )
+        return ScheduledTaskManager(ctx) to null
+    }
+
+    private fun scheduleTaskCreate(arguments: JSONObject): McpServerCore.CallResult {
+        val schedule = arguments.optString("schedule", "").trim()
+        val prompt = arguments.optString("prompt", "").trim()
+        if (prompt.isEmpty()) {
+            return McpServerCore.CallResult(
+                JSONArray().put(text("Error: 'prompt' is required")),
+                isError = true,
+            )
+        }
+        val parsed = CronScheduler.parseSchedule(schedule)
+            ?: return McpServerCore.CallResult(
+                JSONArray().put(
+                    text("Error: schedule must look like '30m', '2h', '1d', or 'every 30m'/'every 2h'/'every 1d'"),
+                ),
+                isError = true,
+            )
+        val (manager, err) = taskManager()
+        if (manager == null) return err!!
+        return runCatching { createScheduledTask(manager, schedule, prompt, arguments.optString("name", "").trim()) }
+            .getOrElse {
+                McpServerCore.CallResult(
+                    JSONArray().put(text("Error creating task: ${it.message}")),
+                    isError = true,
+                )
+            }
+    }
+
+    private fun alarmReminderCreate(arguments: JSONObject): McpServerCore.CallResult {
+        val delaySec = arguments.optInt("delay_sec", 0)
+        if (delaySec < 60 || delaySec > 86_400) {
+            return McpServerCore.CallResult(
+                JSONArray().put(text("Error: 'delay_sec' must be 60-86400")),
+                isError = true,
+            )
+        }
+        val message = arguments.optString("message", "").trim()
+        if (message.isEmpty()) {
+            return McpServerCore.CallResult(
+                JSONArray().put(text("Error: 'message' is required")),
+                isError = true,
+            )
+        }
+        val (manager, err) = taskManager()
+        if (manager == null) return err!!
+        return runCatching {
+            val now = System.currentTimeMillis()
+            val fireAt = now + delaySec * 1000L
+            val cal = Calendar.getInstance().apply { timeInMillis = fireAt }
+            val task = ScheduledTask(
+                id = UUID.randomUUID().toString(),
+                label = arguments.optString("name", "").trim().ifBlank { message.take(32) },
+                timeOfDayHour = cal.get(Calendar.HOUR_OF_DAY),
+                timeOfDayMinute = cal.get(Calendar.MINUTE),
+                repeatMode = ScheduledRepeatMode.ONCE,
+                prompt = message,
+                fireAtMs = fireAt,
+                createdAt = now,
+            )
+            val saved = manager.create(task)
+            McpServerCore.CallResult(
+                JSONArray().put(
+                    text(
+                        JSONObject().apply {
+                            put("ok", true)
+                            put("id", saved.id)
+                            put("name", saved.label)
+                            put("fireAtMs", saved.fireAtMs ?: fireAt)
+                            put("repeat", "ONCE")
+                        }.toString(2),
+                    ),
+                ),
+            )
+        }.getOrElse {
+            McpServerCore.CallResult(
+                JSONArray().put(text("Error creating reminder: ${it.message}")),
+                isError = true,
+            )
+        }
+    }
+
+    private fun createScheduledTask(
+        manager: ScheduledTaskManager,
+        schedule: String,
+        prompt: String,
+        name: String,
+    ): McpServerCore.CallResult {
+        val parsed = CronScheduler.parseSchedule(schedule)
+            ?: return McpServerCore.CallResult(
+                JSONArray().put(text("Error: bad schedule '$schedule'")),
+                isError = true,
+            )
+        val now = System.currentTimeMillis()
+        val fireAt = now + parsed.firstDelayMs
+        val cal = Calendar.getInstance().apply { timeInMillis = fireAt }
+        val interval = parsed.kind == "interval"
+        val task = ScheduledTask(
+            id = UUID.randomUUID().toString(),
+            label = name.ifBlank { prompt.take(32) },
+            timeOfDayHour = cal.get(Calendar.HOUR_OF_DAY),
+            timeOfDayMinute = cal.get(Calendar.MINUTE),
+            repeatMode = if (interval) ScheduledRepeatMode.INTERVAL else ScheduledRepeatMode.ONCE,
+            prompt = prompt,
+            intervalMinutes = parsed.intervalMinutes,
+            fireAtMs = fireAt,
+            createdAt = now,
+        )
+        val saved = manager.create(task)
+        return McpServerCore.CallResult(
+            JSONArray().put(
+                text(
+                    JSONObject().apply {
+                        put("ok", true)
+                        put("id", saved.id)
+                        put("name", saved.label)
+                        put("schedule", schedule)
+                        put("fireAtMs", saved.fireAtMs ?: fireAt)
+                        put("repeat", saved.repeatMode.name)
+                        if (saved.id != task.id) put("already_existed", true)
+                    }.toString(2),
+                ),
+            ),
+        )
+    }
+
+    private fun scheduleTaskList(): McpServerCore.CallResult {
+        val (manager, err) = taskManager()
+        if (manager == null) return err!!
+        return runCatching {
+            val tasks = manager.list()
+            val arr = JSONArray()
+            for (t in tasks) {
+                arr.put(
+                    JSONObject().apply {
+                        put("id", t.id)
+                        put("name", t.label)
+                        put("enabled", t.enabled)
+                        put("repeat", t.repeatMode.name)
+                        if (t.intervalMinutes > 0) put("intervalMinutes", t.intervalMinutes)
+                        if (t.fireAtMs != null) put("fireAtMs", t.fireAtMs)
+                        put("nextTriggerMs", t.nextTriggerMs() ?: JSONObject.NULL)
+                        put("prompt", t.prompt.take(200))
+                    },
+                )
+            }
+            McpServerCore.CallResult(
+                JSONArray().put(text(JSONObject().put("count", tasks.size).put("tasks", arr).toString(2))),
+            )
+        }.getOrElse {
+            McpServerCore.CallResult(
+                JSONArray().put(text("Error listing tasks: ${it.message}")),
+                isError = true,
+            )
+        }
+    }
+
+    private fun scheduleTaskUpdate(arguments: JSONObject): McpServerCore.CallResult {
+        val idRaw = arguments.optString("id", "").trim()
+        if (idRaw.isEmpty()) {
+            return McpServerCore.CallResult(
+                JSONArray().put(text("Error: 'id' is required")),
+                isError = true,
+            )
+        }
+        val enabled = arguments.optBoolean("enabled", true)
+        val (manager, err) = taskManager()
+        if (manager == null) return err!!
+        return runCatching {
+            val id = manager.resolveId(idRaw)
+                ?: return McpServerCore.CallResult(
+                    JSONArray().put(text("Error: no task matches id/prefix '$idRaw'")),
+                    isError = true,
+                )
+            manager.setEnabled(id, enabled)
+            McpServerCore.CallResult(
+                JSONArray().put(text("[$id ${if (enabled) "enabled" else "disabled"}]")),
+            )
+        }.getOrElse {
+            McpServerCore.CallResult(
+                JSONArray().put(text("Error updating task: ${it.message}")),
+                isError = true,
+            )
+        }
+    }
+
+    private fun scheduleTaskDelete(arguments: JSONObject): McpServerCore.CallResult {
+        val idRaw = arguments.optString("id", "").trim()
+        if (idRaw.isEmpty()) {
+            return McpServerCore.CallResult(
+                JSONArray().put(text("Error: 'id' is required")),
+                isError = true,
+            )
+        }
+        val (manager, err) = taskManager()
+        if (manager == null) return err!!
+        return runCatching {
+            val id = manager.resolveId(idRaw)
+                ?: return McpServerCore.CallResult(
+                    JSONArray().put(text("Error: no task matches id/prefix '$idRaw'")),
+                    isError = true,
+                )
+            val deleted = manager.delete(id)
+            McpServerCore.CallResult(
+                JSONArray().put(text(if (deleted) "[deleted $id]" else "[no task $id]")),
+                isError = !deleted,
+            )
+        }.getOrElse {
+            McpServerCore.CallResult(
+                JSONArray().put(text("Error deleting task: ${it.message}")),
+                isError = true,
+            )
+        }
+    }
+
+    // ─── context_apps_query ───────────────────────────────────────────────
+
+    private fun contextAppsQuery(arguments: JSONObject): McpServerCore.CallResult {
+        val ctx = context
+            ?: return McpServerCore.CallResult(
+                JSONArray().put(text("Error: no host context available")),
+                isError = true,
+            )
+        val filter = arguments.optString("filter", "").trim().lowercase()
+        val limit = arguments.optInt("limit", 50).coerceIn(1, 200)
+        return runCatching {
+            val pm = ctx.packageManager
+            val launcher = android.content.Intent(
+                android.content.Intent.ACTION_MAIN,
+                null,
+            ).addCategory(android.content.Intent.CATEGORY_LAUNCHER)
+            val apps = pm.queryIntentActivities(launcher, 0)
+                .asSequence()
+                .map { it.activityInfo }
+                .filter { it.packageName != ctx.packageName }
+                .map { info ->
+                    val label = runCatching { info.loadLabel(pm).toString() }.getOrDefault(info.packageName)
+                    Triple(label, info.packageName, info.name)
+                }
+                .filter { (label, pkg, _) ->
+                    filter.isEmpty() ||
+                        label.lowercase().contains(filter) ||
+                        pkg.lowercase().contains(filter)
+                }
+                .sortedBy { (label, _, _) -> label.lowercase() }
+                .take(limit)
+                .toList()
+            val arr = JSONArray()
+            for ((label, pkg, activity) in apps) {
+                arr.put(
+                    JSONObject().apply {
+                        put("label", label)
+                        put("package", pkg)
+                        put("activity", activity)
+                    },
+                )
+            }
+            McpServerCore.CallResult(
+                JSONArray().put(
+                    text(
+                        JSONObject().put("count", apps.size).put("apps", arr).toString(2),
+                    ),
+                ),
+            )
+        }.getOrElse {
+            McpServerCore.CallResult(
+                JSONArray().put(text("Error querying apps: ${it.message}")),
                 isError = true,
             )
         }
