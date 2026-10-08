@@ -253,7 +253,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.outlined.Forum
-import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
@@ -1932,10 +1931,6 @@ fun ChatScreen(
     var foldAiProcess by remember { mutableStateOf(appearancePrefs.getBoolean(com.openminis.app.ui.settings.KEY_FOLD_AI_PROCESS, com.openminis.app.ui.settings.DEFAULT_FOLD_AI_PROCESS)) }
     // [T-composer-mic-toggle] Composer mic visibility (default OFF).
     var showMicButton by remember { mutableStateOf(appearancePrefs.getBoolean(com.openminis.app.ui.settings.KEY_SHOW_MIC_BUTTON, com.openminis.app.ui.settings.DEFAULT_SHOW_MIC_BUTTON)) }
-    // [T-composer-clipboard-image] Non-null while the system clipboard
-    // holds an image (API 33+). Probed description-only on resume and
-    // composer focus — no clipboard-access toast until the user pastes.
-    var clipboardImage by remember { mutableStateOf<android.net.Uri?>(null) }
     var showSubAgentBar by remember { mutableStateOf(appearancePrefs.getBoolean(com.openminis.app.ui.settings.KEY_SHOW_SUBAGENT_BAR, true)) }
     // Live roster of running sub-agents. The top bar renders these; the session
     // page hides a sub-agent transcript card only while its run is in this set,
@@ -1990,10 +1985,6 @@ fun ChatScreen(
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
                 applyAppearancePrefs(appearancePrefs)
-                // [T-composer-clipboard-image] Screenshot → switch back
-                // to the app is the main paste path; refresh the probe
-                // here. Description-only — no access toast.
-                clipboardImage = com.openminis.app.ui.chat.ClipboardImagePaste.currentImageUri(context)
             }
         }
         appearancePrefs.registerOnSharedPreferenceChangeListener(listener)
@@ -5753,29 +5744,6 @@ fun ChatScreen(
                             }
                         }
                     }
-                    // [T-composer-clipboard-image] Paste-image chip: shows
-                    // while the clipboard holds an image; tapping copies
-                    // the bytes into a durable private attachment (the
-                    // clip URI itself dangles once the clipboard is
-                    // overwritten, so the copy must happen at paste time).
-                    if (clipboardImage != null) {
-                        androidx.compose.material3.AssistChip(
-                            onClick = {
-                                if (com.openminis.app.ui.chat.ClipboardImagePaste.paste(context, viewModel)) {
-                                    clipboardImage = null
-                                }
-                            },
-                            label = { Text(stringResource(R.string.chat_paste_clipboard_image)) },
-                            leadingIcon = {
-                                Icon(
-                                    Icons.Outlined.Image,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp),
-                                )
-                            },
-                            modifier = Modifier.padding(start = 12.dp, top = 2.dp, bottom = 2.dp),
-                        )
-                    }
                     if (attachments.isNotEmpty()) {
                         LazyRow(
                             modifier = Modifier
@@ -6050,6 +6018,21 @@ fun ChatScreen(
                             }
                             true
                         }
+                        // [T-composer-clipboard-image] Native image paste:
+                        // Compose 1.9's canPaste is clip-ENTRY based, so the
+                        // system paste button already appears for image-only
+                        // clips. The wrapper intercepts the paste tap — image
+                        // in clipboard → attach; otherwise normal text paste.
+                        // Replaces the old always-visible paste chip.
+                        val composerDefaultToolbar = androidx.compose.ui.platform.LocalTextToolbar.current
+                        val imagePasteToolbar = remember(composerDefaultToolbar) {
+                            com.openminis.app.ui.chat.ComposerImagePaste.toolbar(composerDefaultToolbar) {
+                                com.openminis.app.ui.chat.ClipboardImagePaste.paste(context, viewModel)
+                            }
+                        }
+                        androidx.compose.runtime.CompositionLocalProvider(
+                            androidx.compose.ui.platform.LocalTextToolbar provides imagePasteToolbar,
+                        ) {
                         BasicTextField(
                             value = inputFieldValue,
                             onValueChange = { tfv ->
@@ -6427,6 +6410,7 @@ fun ChatScreen(
                                 )
                             },
                         )
+                        }
                     }
 
                     // Button row below text field (iOS layout: + / ... mic send)

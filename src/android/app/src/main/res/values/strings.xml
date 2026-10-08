@@ -2610,5 +2610,4 @@
     <string name="db_quarantine_copy_at">Damaged copy kept at:\n%1$s</string>
     <string name="db_quarantine_keep">Keep the copy</string>
     <string name="db_quarantine_delete">Delete the damaged copy</string>
-    <string name="chat_paste_clipboard_image">Paste image from clipboard</string>
 </resources>

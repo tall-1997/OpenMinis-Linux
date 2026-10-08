@@ -2425,5 +2425,4 @@
     <string name="db_quarantine_copy_at">损坏副本保留在：\n%1$s</string>
     <string name="db_quarantine_keep">保留副本</string>
     <string name="db_quarantine_delete">删除损坏副本</string>
-    <string name="chat_paste_clipboard_image">粘贴剪贴板图片</string>
 </resources>

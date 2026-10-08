@@ -13,9 +13,9 @@ import java.util.UUID
  *
  * Android 13+ (API 33) lets the system clipboard hold an image clip — the
  * screenshot "copy" action and other apps' "copy image" both produce one.
- * Compose's text paste path only ever sees text, so the image needs its own
- * entry point: a chip above the composer that appears while the clipboard
- * holds an image.
+ * Compose 1.9's paste gating is clip-ENTRY based, so the composer's own
+ * long-press menu already offers Paste for image-only clips; the toolbar
+ * wrapper (see [ComposerImagePaste]) routes that tap into [paste].
  *
  * Two deliberate constraints:
  *  • Detection reads [ClipboardManager.primaryClipDescription] only — reading
