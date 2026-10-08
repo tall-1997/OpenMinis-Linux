@@ -854,6 +854,9 @@
     <string name="appearance_show_completed_tool_cards">在对话中显示已完成的工具卡片</string>
     <string name="appearance_show_completed_tool_cards_subtitle">默认关闭。进行中的工具仍会显示。</string>
     <string name="appearance_show_subagent_bar">子代理实时芯片</string>
+    <string name="appearance_show_mic_button_title">显示麦克风按钮</string>
+    <string name="appearance_show_mic_button_subtitle">输入框的语音输入按钮。语音模式本身始终可从应用图标进入。</string>
+    <string name="chat_paste_clipboard_image">粘贴剪贴板图片</string>
     <string name="appearance_show_plan_banner">计划讨论横幅</string>
     <string name="appearance_section_auto_focus_after_reply">回复后自动聚焦输入框</string>
     <string name="appearance_auto_focus_after_reply_title">回复后自动聚焦输入框</string>

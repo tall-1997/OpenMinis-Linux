@@ -932,6 +932,9 @@
     <string name="appearance_show_completed_tool_cards">Completed tool cards in transcript</string>
     <string name="appearance_show_completed_tool_cards_subtitle">Off by default. Running tools still show.</string>
     <string name="appearance_show_subagent_bar">Sub-agent live chips</string>
+    <string name="appearance_show_mic_button_title">Show mic button</string>
+    <string name="appearance_show_mic_button_subtitle">Voice input button in the composer. Voice mode itself is always reachable from the app icon.</string>
+    <string name="chat_paste_clipboard_image">Paste image from clipboard</string>
     <string name="appearance_show_plan_banner">Plan-discussion banner</string>
     <string name="appearance_section_auto_focus_after_reply">Auto-Focus Input After Reply</string>
     <string name="appearance_auto_focus_after_reply_title">Auto-Focus Input After Reply</string>

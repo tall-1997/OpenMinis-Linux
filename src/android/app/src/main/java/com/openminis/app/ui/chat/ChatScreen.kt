@@ -253,6 +253,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.outlined.Forum
+import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
@@ -1929,6 +1930,12 @@ fun ChatScreen(
     var showFloatingToolBar by remember { mutableStateOf(appearancePrefs.getBoolean(com.openminis.app.ui.settings.KEY_SHOW_FLOATING_TOOL_BAR, true)) }
     var showCompletedToolCards by remember { mutableStateOf(appearancePrefs.getBoolean(com.openminis.app.ui.settings.KEY_SHOW_COMPLETED_TOOL_CARDS, false)) }
     var foldAiProcess by remember { mutableStateOf(appearancePrefs.getBoolean(com.openminis.app.ui.settings.KEY_FOLD_AI_PROCESS, com.openminis.app.ui.settings.DEFAULT_FOLD_AI_PROCESS)) }
+    // [T-composer-mic-toggle] Composer mic visibility (default OFF).
+    var showMicButton by remember { mutableStateOf(appearancePrefs.getBoolean(com.openminis.app.ui.settings.KEY_SHOW_MIC_BUTTON, com.openminis.app.ui.settings.DEFAULT_SHOW_MIC_BUTTON)) }
+    // [T-composer-clipboard-image] Non-null while the system clipboard
+    // holds an image (API 33+). Probed description-only on resume and
+    // composer focus — no clipboard-access toast until the user pastes.
+    var clipboardImage by remember { mutableStateOf<android.net.Uri?>(null) }
     var showSubAgentBar by remember { mutableStateOf(appearancePrefs.getBoolean(com.openminis.app.ui.settings.KEY_SHOW_SUBAGENT_BAR, true)) }
     // Live roster of running sub-agents. The top bar renders these; the session
     // page hides a sub-agent transcript card only while its run is in this set,
@@ -1972,6 +1979,7 @@ fun ChatScreen(
                     com.openminis.app.ui.settings.KEY_SHOW_FLOATING_TOOL_BAR -> showFloatingToolBar = sp.getBoolean(key, true)
                     com.openminis.app.ui.settings.KEY_SHOW_COMPLETED_TOOL_CARDS -> showCompletedToolCards = sp.getBoolean(key, false)
                     com.openminis.app.ui.settings.KEY_FOLD_AI_PROCESS -> foldAiProcess = sp.getBoolean(key, com.openminis.app.ui.settings.DEFAULT_FOLD_AI_PROCESS)
+                    com.openminis.app.ui.settings.KEY_SHOW_MIC_BUTTON -> showMicButton = sp.getBoolean(key, com.openminis.app.ui.settings.DEFAULT_SHOW_MIC_BUTTON)
                     com.openminis.app.ui.settings.KEY_SHOW_SUBAGENT_BAR -> showSubAgentBar = sp.getBoolean(key, true)
                     com.openminis.app.ui.settings.KEY_AUTO_FOCUS_AFTER_REPLY -> autoFocusAfterReply = sp.getBoolean(key, true)
                     com.openminis.app.ui.settings.KEY_SHOW_CHAT_TITLE -> showChatTitlePill = sp.getBoolean(key, true)
@@ -1982,6 +1990,10 @@ fun ChatScreen(
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
                 applyAppearancePrefs(appearancePrefs)
+                // [T-composer-clipboard-image] Screenshot → switch back
+                // to the app is the main paste path; refresh the probe
+                // here. Description-only — no access toast.
+                clipboardImage = com.openminis.app.ui.chat.ClipboardImagePaste.currentImageUri(context)
             }
         }
         appearancePrefs.registerOnSharedPreferenceChangeListener(listener)
@@ -5741,6 +5753,29 @@ fun ChatScreen(
                             }
                         }
                     }
+                    // [T-composer-clipboard-image] Paste-image chip: shows
+                    // while the clipboard holds an image; tapping copies
+                    // the bytes into a durable private attachment (the
+                    // clip URI itself dangles once the clipboard is
+                    // overwritten, so the copy must happen at paste time).
+                    if (clipboardImage != null) {
+                        androidx.compose.material3.AssistChip(
+                            onClick = {
+                                if (com.openminis.app.ui.chat.ClipboardImagePaste.paste(context, viewModel)) {
+                                    clipboardImage = null
+                                }
+                            },
+                            label = { Text(stringResource(R.string.chat_paste_clipboard_image)) },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Outlined.Image,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                            },
+                            modifier = Modifier.padding(start = 12.dp, top = 2.dp, bottom = 2.dp),
+                        )
+                    }
                     if (attachments.isNotEmpty()) {
                         LazyRow(
                             modifier = Modifier
@@ -6932,7 +6967,15 @@ fun ChatScreen(
                         // RECOVERABLE states, explained inside the panel with a
                         // link to the relevant settings rather than by silently
                         // removing the control.
-                        if (com.openminis.app.speech.SpeechRecognitionManager.hasMicrophoneHardware) {
+                        // [T-composer-mic-toggle] Hidden by default (Appearance
+                        // → Chat Interface → "Show mic button"). Voice mode is
+                        // the escape hatch: while the voice panel is active the
+                        // button ALWAYS renders — it is the only way back to the
+                        // keyboard, and gating an exit on a preference would
+                        // strand the user in voice mode.
+                        val micVisible = com.openminis.app.speech.SpeechRecognitionManager.hasMicrophoneHardware &&
+                            (showMicButton || com.openminis.app.ui.chat.voice.VoiceModePrefs.isVoiceActive)
+                        if (micVisible) {
                             MicButton(
                                 isRecording = !com.openminis.app.ui.chat.voice.VoiceModePrefs.isVoiceActive &&
                                     (sttState == com.openminis.app.speech.RecognitionState.RECORDING ||
@@ -6963,56 +7006,89 @@ fun ChatScreen(
                         val hasContent = hasText || attachments.isNotEmpty()
                         val showStop = isStreaming && !hasContent
                         if (showStop) {
+                            // [T-composer-running-ring] Constant 46dp container
+                            // with an indeterminate ring while a run is in
+                            // flight: the composer row height never changes
+                            // between idle and streaming (the ring appears
+                            // around the 38dp button instead of resizing it),
+                            // so the message list does not jump.
                             Box(
-                                modifier = Modifier
-                                    .size(38.dp)
-                                    .background(Color(0xFFFF3B30), CircleShape)
-                                    .clip(CircleShape)
-                                    .clickable { viewModel.cancelStream() },
+                                modifier = Modifier.size(46.dp),
                                 contentAlignment = Alignment.Center,
                             ) {
-                                Icon(
-                                    Icons.Default.Stop,
-                                    contentDescription = stringResource(R.string.cd_stop),
-                                    tint = Color.White,
-                                    modifier = Modifier.size(20.dp),
+                                androidx.compose.material3.CircularProgressIndicator(
+                                    modifier = Modifier.size(46.dp),
+                                    strokeWidth = 2.dp,
+                                    color = Color(0xFFFF3B30),
                                 )
+                                Box(
+                                    modifier = Modifier
+                                        .size(38.dp)
+                                        .background(Color(0xFFFF3B30), CircleShape)
+                                        .clip(CircleShape)
+                                        .clickable { viewModel.cancelStream() },
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Icon(
+                                        Icons.Default.Stop,
+                                        contentDescription = stringResource(R.string.cd_stop),
+                                        tint = Color.White,
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
                             }
                         } else {
                             // Streaming with content → Send-into-queue; Idle with content → Send.
                             // Idle without text or attachments → disabled.
                             val canActivate = hasContent
+                            // [T-composer-running-ring] Same constant 46dp
+                            // container as the Stop branch so the composer row
+                            // height is identical in every state; the ring only
+                            // renders while a run is in flight (send-into-queue
+                            // mode), and the 38dp button stays fully tappable.
                             Box(
-                                modifier = Modifier
-                                    .size(38.dp)
-                                    .background(
-                                        if (canActivate) ChatColors.sendButton
-                                        else ChatColors.sendButtonDisabled,
-                                        CircleShape,
-                                    )
-                                    .clip(CircleShape)
-                                    .clickable(enabled = canActivate) {
-                                        // T-drag-send-queue: route through the
-                                        // shared send-or-enqueue handler. Same
-                                        // semantics as before: slash short-
-                                        // circuit, snapshot text, clear input
-                                        // + focus, then sendMessage (which
-                                        // routes to enqueuePrompt when
-                                        // _isStreaming is true), then re-pin
-                                        // the list to index 0 with a 100ms
-                                        // re-pin to catch the late-mounting
-                                        // "thinking" indicator.
-                                        performSendOrEnqueue(inputText)
-                                    },
+                                modifier = Modifier.size(46.dp),
                                 contentAlignment = Alignment.Center,
                             ) {
-                                Icon(
-                                    Icons.Default.ArrowUpward,
-                                    contentDescription = stringResource(R.string.cd_send),
-                                    tint = if (canActivate) ChatColors.background
-                                    else ChatColors.primaryText.copy(alpha = 0.5f),
-                                    modifier = Modifier.size(20.dp),
-                                )
+                                if (isStreaming) {
+                                    androidx.compose.material3.CircularProgressIndicator(
+                                        modifier = Modifier.size(46.dp),
+                                        strokeWidth = 2.dp,
+                                        color = ChatColors.sendButton,
+                                    )
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .size(38.dp)
+                                        .background(
+                                            if (canActivate) ChatColors.sendButton
+                                            else ChatColors.sendButtonDisabled,
+                                            CircleShape,
+                                        )
+                                        .clip(CircleShape)
+                                        .clickable(enabled = canActivate) {
+                                            // T-drag-send-queue: route through the
+                                            // shared send-or-enqueue handler. Same
+                                            // semantics as before: slash short-
+                                            // circuit, snapshot text, clear input
+                                            // + focus, then sendMessage (which
+                                            // routes to enqueuePrompt when
+                                            // _isStreaming is true), then re-pin
+                                            // the list to index 0 with a 100ms
+                                            // re-pin to catch the late-mounting
+                                            // "thinking" indicator.
+                                            performSendOrEnqueue(inputText)
+                                        },
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Icon(
+                                        Icons.Default.ArrowUpward,
+                                        contentDescription = stringResource(R.string.cd_send),
+                                        tint = if (canActivate) ChatColors.background
+                                        else ChatColors.primaryText.copy(alpha = 0.5f),
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
                             }
                         }
                     }

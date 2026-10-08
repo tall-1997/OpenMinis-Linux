@@ -1855,4 +1855,7 @@
     <string name="db_quarantine_copy_at">損毀副本保留於：\n%1$s</string>
     <string name="db_quarantine_keep">保留副本</string>
     <string name="db_quarantine_delete">刪除損毀副本</string>
+    <string name="appearance_show_mic_button_title">顯示麥克風按鈕</string>
+    <string name="appearance_show_mic_button_subtitle">輸入框的語音輸入按鈕。語音模式本身始終可從應用圖示進入。</string>
+    <string name="chat_paste_clipboard_image">貼上剪貼簿圖片</string>
 </resources>

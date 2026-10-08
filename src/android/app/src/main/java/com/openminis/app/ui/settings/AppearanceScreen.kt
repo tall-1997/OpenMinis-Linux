@@ -35,6 +35,7 @@ import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.BrightnessAuto
+import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.DarkMode
@@ -90,7 +91,11 @@ const val KEY_KEEP_SCREEN_AWAKE = "keepScreenAwakeDuringTasks"  // Boolean, defa
 const val KEY_TOOL_PREVIEW = "tool_preview"        // Boolean, default true
 const val KEY_SHOW_FLOATING_TOOL_BAR = "chat.showFloatingToolBar"  // Boolean, default true
 const val KEY_SHOW_COMPLETED_TOOL_CARDS = "chat.showCompletedToolCards"  // Boolean, default false
-const val KEY_SHOW_SUBAGENT_BAR = "chat.showSubAgentBar"  // Boolean, default true
+const val KEY_SHOW_SUBAGENT_BAR = "chat.showSubAgentBar"
+// [T-composer-mic-toggle] Single source for the sub-agent bar default
+// (mirrors DEFAULT_SHOW_MIC_BUTTON) so the setting row and the
+// ChatScreen read can never drift apart.
+const val DEFAULT_SHOW_SUB_AGENT_BAR = true
 // Whether the composer should request focus when a reply finishes. Default
 // ON (iOS parity); entering or switching sessions never requests focus.
 const val KEY_AUTO_FOCUS_AFTER_REPLY = "chat.autoFocusAfterReply"  // Boolean, default true
@@ -113,6 +118,15 @@ const val KEY_AUTO_EXPAND_THINKING = "chat.autoExpandThinking"  // Boolean, defa
 // back to the default when the key is absent).
 const val KEY_FOLD_AI_PROCESS = "chat.foldAiProcess"
 const val DEFAULT_FOLD_AI_PROCESS = true
+// [T-composer-mic-toggle] Show the composer's mic (voice input) button.
+// Default OFF: in practice the mic is rarely used and it competes for the
+// same bottom-row slot as the paste-image chip and edit pill. Voice mode
+// itself is unaffected — the app-icon "voice chat" quick action and the
+// START_VOICE deep link still enter the panel; and once voice mode IS
+// active the mic button re-appears regardless (it is the only way back to
+// the keyboard), so hiding it can never strand the user in voice mode.
+const val KEY_SHOW_MIC_BUTTON = "chat.showMicButton"
+const val DEFAULT_SHOW_MIC_BUTTON = false
 // Material You wallpaper dynamic color. Default OFF: the app's identity is the
 // iOS-parity palette with measured contrast, so wallpaper tinting is opt-in.
 const val KEY_DYNAMIC_COLOR = "chat.dynamicColor"  // Boolean, default false
@@ -278,7 +292,8 @@ fun AppearanceScreen(
     var toolPreview by remember { mutableStateOf(prefs.getBoolean(KEY_TOOL_PREVIEW, true)) }
     var showFloatingToolBar by remember { mutableStateOf(prefs.getBoolean(KEY_SHOW_FLOATING_TOOL_BAR, true)) }
     var showCompletedToolCards by remember { mutableStateOf(prefs.getBoolean(KEY_SHOW_COMPLETED_TOOL_CARDS, false)) }
-    var showSubAgentBar by remember { mutableStateOf(prefs.getBoolean(KEY_SHOW_SUBAGENT_BAR, true)) }
+    var showSubAgentBar by remember { mutableStateOf(prefs.getBoolean(KEY_SHOW_SUBAGENT_BAR, DEFAULT_SHOW_SUB_AGENT_BAR)) }
+    var showMicButton by remember { mutableStateOf(prefs.getBoolean(KEY_SHOW_MIC_BUTTON, DEFAULT_SHOW_MIC_BUTTON)) }
     var autoFocusAfterReply by remember { mutableStateOf(prefs.getBoolean(KEY_AUTO_FOCUS_AFTER_REPLY, true)) }
     var autoExpandThinking by remember { mutableStateOf(prefs.getBoolean(KEY_AUTO_EXPAND_THINKING, true)) }
     var foldAiProcess by remember { mutableStateOf(prefs.getBoolean(KEY_FOLD_AI_PROCESS, DEFAULT_FOLD_AI_PROCESS)) }
@@ -521,6 +536,17 @@ fun AppearanceScreen(
                 onCheckedChange = {
                     showSubAgentBar = it
                     prefs.edit().putBoolean(KEY_SHOW_SUBAGENT_BAR, it).apply()
+                },
+            )
+            SettingsSwitchRow(
+                icon = Icons.Outlined.Mic,
+                iconColor = tileTeal,
+                title = stringResource(R.string.appearance_show_mic_button_title),
+                subtitle = stringResource(R.string.appearance_show_mic_button_subtitle),
+                checked = showMicButton,
+                onCheckedChange = {
+                    showMicButton = it
+                    prefs.edit().putBoolean(KEY_SHOW_MIC_BUTTON, it).apply()
                 },
                 showDivider = false,
             )
