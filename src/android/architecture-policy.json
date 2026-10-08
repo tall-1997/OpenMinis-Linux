@@ -1,0 +1,78 @@
+{
+  "_doc": [
+    "OpenMinis 架构治理策略（policy 即代码，对齐 taixu 的 architecture-policy 思路）。",
+    "本文件是根任务 architectureCheck 的唯一事实源：新增模块 / 调整依赖必须同步登记，",
+    "否则依赖白名单检查会失败（防止未声明的模块依赖悄悄混入构建）。",
+    "",
+    "字段说明：",
+    "- modules[].id: 模块标识（点分命名，如 core.model）",
+    "- modules[].path: 模块目录（相对仓库根 src/android，/ 分隔）",
+    "- modules[].requires: 允许依赖的模块 id 白名单（解析 build.gradle.kts 中所有 project(\":...\") 引用）",
+    "- modules[].forbidBuildScript: 构建脚本中禁止出现的字符串（如模型层禁平台插件）",
+    "- groups: 批量圈定模块集合，供 importBans 引用",
+    "- importBans: 源码 import 黑名单（逐行匹配 src/main 下 .kt，pattern 为 Java 正则）",
+    "- global.maxFileLines: 单文件行数上限；存量超限文件登记在基线文件中（棘轮：只许下调不许上涨）",
+    "- global.baselineFile: 棘轮基线文件路径；用 architectureBaselineSync 任务维护",
+    "- global.forbidCycles: 模块依赖图必须无环"
+  ],
+  "version": 1,
+  "global": {
+    "maxFileLines": 400,
+    "forbidCycles": true,
+    "baselineFile": ".architecture-baseline.json"
+  },
+  "groups": {
+    "pureKotlin": ["core.model", "core.common", "harness", "provider.api", "hostcapability.api"]
+  },
+  "importBans": [
+    {
+      "id": "pure-kotlin-layer",
+      "pattern": "^import\\s+(android|androidx)\\.",
+      "groups": ["pureKotlin"],
+      "message": "JVM 层模块必须保持 Pure Kotlin，严禁引入 android/androidx（需要平台能力请走构造参数注入，调用方传值）"
+    }
+  ],
+  "modules": [
+    {
+      "id": "app",
+      "path": "app",
+      "requires": ["core.model", "core.common", "provider.api", "hostcapability.api"]
+    },
+    {
+      "id": "core.model",
+      "path": "core/model",
+      "requires": [],
+      "forbidBuildScript": ["android.library", "androidx."],
+      "_doc": "纯 Kotlin 数据模型：依赖白名单为空 + 构建脚本禁平台插件 + import 禁 android/androidx"
+    },
+    {
+      "id": "core.common",
+      "path": "core/common",
+      "requires": [],
+      "forbidBuildScript": ["android.library", "androidx."],
+      "_doc": "通用工具层不依赖任何兄弟模块，防止核心层反向耦合"
+    },
+    {
+      "id": "harness",
+      "path": "harness",
+      "requires": ["core.model", "core.common"],
+      "forbidBuildScript": ["android.library", "androidx."],
+      "_doc": "Agent 可靠性工具层：JVM 库（对齐 core/model 的纯 Kotlin 模式），仅允许依赖同为纯 Kotlin 的模块"
+    },
+    {
+      "id": "provider.api",
+      "path": "provider/api",
+      "requires": ["core.model"]
+    },
+    {
+      "id": "hostcapability.api",
+      "path": "hostcapability/api",
+      "requires": []
+    },
+    {
+      "id": "benchmark",
+      "path": "benchmark",
+      "requires": []
+    }
+  ]
+}
