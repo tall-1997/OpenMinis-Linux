@@ -79,6 +79,7 @@ rootProject.name = "MinisUltra"
 include(":app")
 include(":core:model")
 include(":core:common")
+include(":harness")
 include(":provider:api")
 include(":hostcapability:api")
 include(":benchmark")
