@@ -10,6 +10,7 @@ import android.content.pm.ServiceInfo
 import android.net.Uri
 import android.os.Build
 import android.os.IBinder
+import android.text.format.Formatter
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -66,7 +67,10 @@ class UpdateDownloadService : Service() {
         // startForegroundService contract gives us ~5s to do this or the
         // system ANRs us. Indeterminate progress until the first state
         // emission lands (the manager emits immediately on collect).
-        startInForeground(progress = -1f, doneFile = null, error = null)
+        startInForeground(
+            progress = -1f, doneFile = null, error = null,
+            downloadedBytes = 0L, totalBytes = -1L,
+        )
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -78,12 +82,18 @@ class UpdateDownloadService : Service() {
                     // confirmation, or idle. Post a final notification for
                     // done/failed, then get out of the foreground slot.
                     if (st.doneFile != null || st.error != null) {
-                        updateNotification(progress = st.progress, doneFile = st.doneFile, error = st.error)
+                        updateNotification(
+                            progress = st.progress, doneFile = st.doneFile, error = st.error,
+                            downloadedBytes = st.downloadedBytes, totalBytes = st.totalBytes,
+                        )
                     }
                     stopSelf()
                     return@collect
                 }
-                updateNotification(progress = st.progress, doneFile = null, error = null)
+                updateNotification(
+                    progress = st.progress, doneFile = null, error = null,
+                    downloadedBytes = st.downloadedBytes, totalBytes = st.totalBytes,
+                )
             }
         }
         return START_NOT_STICKY
@@ -96,8 +106,14 @@ class UpdateDownloadService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    private fun startInForeground(progress: Float, doneFile: File?, error: String?) {
-        val notification = buildNotification(progress, doneFile, error)
+    private fun startInForeground(
+        progress: Float,
+        doneFile: File?,
+        error: String?,
+        downloadedBytes: Long,
+        totalBytes: Long,
+    ) {
+        val notification = buildNotification(progress, doneFile, error, downloadedBytes, totalBytes)
         if (Build.VERSION.SDK_INT >= 29) {
             startForeground(NOTIF_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
         } else {
@@ -105,12 +121,30 @@ class UpdateDownloadService : Service() {
         }
     }
 
-    private fun updateNotification(progress: Float, doneFile: File?, error: String?) {
+    private fun updateNotification(
+        progress: Float,
+        doneFile: File?,
+        error: String?,
+        downloadedBytes: Long,
+        totalBytes: Long,
+    ) {
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        nm.notify(NOTIF_ID, buildNotification(progress, doneFile, error))
+        nm.notify(NOTIF_ID, buildNotification(progress, doneFile, error, downloadedBytes, totalBytes))
     }
 
-    private fun buildNotification(progress: Float, doneFile: File?, error: String?): android.app.Notification {
+    // [T-update-download-fgs] The progress body is the ONLY string in this
+    // service with positional format specifiers. update_notif_progress has
+    // TWO of them (%1$s bytes / %2$s total); passing fewer args than the
+    // string declares throws MissingFormatArgumentException from inside
+    // onStartCommand and kills the process — exactly the 2.0.50 crash. The
+    // StringFormatArgSafetyTest source scan keeps every call site honest.
+    private fun buildNotification(
+        progress: Float,
+        doneFile: File?,
+        error: String?,
+        downloadedBytes: Long,
+        totalBytes: Long,
+    ): android.app.Notification {
         val ctx = this
         val deepLink = Uri.parse("minis://settings")
         val launchIntent = Intent(Intent.ACTION_VIEW, deepLink).apply {
@@ -145,7 +179,11 @@ class UpdateDownloadService : Service() {
                 builder
                     .setContentTitle(ctx.getString(R.string.update_notif_title))
                     .setContentText(
-                        if (pct >= 0) ctx.getString(R.string.update_notif_progress, pct)
+                        if (pct >= 0) ctx.getString(
+                            R.string.update_notif_progress,
+                            Formatter.formatFileSize(ctx, downloadedBytes.coerceAtLeast(0L)),
+                            if (totalBytes > 0) Formatter.formatFileSize(ctx, totalBytes) else "?",
+                        )
                         else ctx.getString(R.string.update_notif_indeterminate),
                     )
                     .setProgress(100, if (pct >= 0) pct else 0, pct < 0)
