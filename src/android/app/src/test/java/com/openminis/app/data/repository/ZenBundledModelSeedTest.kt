@@ -133,9 +133,11 @@ class ZenBundledModelSeedTest {
     @Test
     fun `the bundled free lane covers every id measured to answer 200`() {
         // The whole point of the fix: a keyless user picks from the free roster
-        // and every row works. Re-measured 2026-10-05, all streaming 200.
+        // and every row works. Re-measured 2026-10-08: mimo-v2.5-free answered
+        // 401 "Model is not supported" and was de-advertised from the live
+        // catalogue, so it left the roster — the other eight still stream 200.
         val measured = listOf(
-            "big-pickle", "space-bunny-free", "mimo-v2.6-flash-free", "mimo-v2.5-free",
+            "big-pickle", "space-bunny-free", "mimo-v2.6-flash-free",
             "nemotron-3-ultra-free", "nemotron-3.5-lightning-free", "ling-3.1-flash-free",
             "longcat-2.5-preview-free", "fledge-alpha-free",
         )

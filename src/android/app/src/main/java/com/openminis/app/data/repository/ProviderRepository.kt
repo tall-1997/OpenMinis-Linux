@@ -2602,7 +2602,7 @@ internal const val ZEN_BUNDLED_ENDPOINT = "https://opencode.ai/zen/v1"
  * | big-pickle | **200 ×3** (plus 13/14 on a 14-id sweep) | **200** |
  * | space-bunny-free | **200 ×3** | (not re-probed; quota budget) |
  * | mimo-v2.6-flash-free | **200 ×3** | (not re-probed; quota budget) |
- * | mimo-v2.5-free | **200 ×3** | (not re-probed; quota budget) |
+ * | mimo-v2.5-free | **200 ×3** | **401 ModelError "not supported"** — retired upstream AND de-advertised from the live catalogue; removed from the bundle |
  * | nemotron-3-ultra-free | **200 ×3** | **200** (mid-stream upstream overload once) |
  * | nemotron-3.5-lightning-free | **200 ×3** | (not re-probed; quota budget) |
  * | longcat-2.5-preview-free | **200 ×3** | (not re-probed; quota budget) |
@@ -2645,7 +2645,6 @@ internal fun bundledZenModels(): List<LLMModel> = listOf(
     LLMModel("big-pickle", "Big Pickle (Free)", "OpenCode Zen", 128000, 8192, true),
     LLMModel("space-bunny-free", "Space Bunny (Free)", "OpenCode Zen", 128000, 8192, true),
     LLMModel("mimo-v2.6-flash-free", "MiMo v2.6 Flash (Free)", "OpenCode Zen", 128000, 8192, true),
-    LLMModel("mimo-v2.5-free", "MiMo v2.5 (Free)", "OpenCode Zen", 128000, 8192, true),
     LLMModel("nemotron-3-ultra-free", "Nemotron 3 Ultra (Free)", "OpenCode Zen", 128000, 8192, true),
     LLMModel("nemotron-3.5-lightning-free", "Nemotron 3.5 Lightning (Free)", "OpenCode Zen", 128000, 8192, true),
     LLMModel("ling-3.1-flash-free", "Ling 3.1 Flash (Free)", "OpenCode Zen", 128000, 8192, true),
@@ -2664,7 +2663,8 @@ internal fun zenUsableFreeIds(): Set<String> = bundledZenModels().map { it.id }.
 
 /**
  * Filter for a Zen instance's live /models refresh. The upstream catalogue
- * advertises 86 ids — 13 free, the rest paid lanes a keyless ("public")
+ * advertises 87 ids — 13 free (2026-10-08: muse-spark-1.2-contributor-free in,
+ * mimo-v2.5-free out), the rest paid lanes a keyless ("public")
  * instance can never drive. The visible list is the measured-usable free set
  * ([zenUsableFreeIds]), which is what the picker offers and what the bundled
  * instance is seeded with.
