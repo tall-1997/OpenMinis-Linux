@@ -11,14 +11,20 @@
 >
 > **验证基线修正**：原写「基线 5220 tests」从未被复现。实测口径为
 > `:app:testReleaseUnitTest` = **2893**（359 个结果 XML）+ `:harness:test` = **143**，
-> 均 0 失败（2026-10-09，c28a10e 之后：app **2927** / harness **155**）。
-> 后续每批以这两个数为新基线。**P0-2（子代理租约与结果裁定）与 P0-3 均已闭环。**
+> 均 0 失败（2026-10-09，63fbb89 之后：app **2883** / harness **212**；计数变化
+> 是 P0-1 搬家不是增删）。**P0-2 / P0-3 已闭环；P1-4 于 `69d2320` 闭环。**
 > 后续每批以这两个数为新基线。**P0-3（统一重试/恢复层）已于 `62fc977` 闭环。**
 
 ## 模块策略（已定）
 
 taixu `harness/` 是 **Android 库**（依赖 Room/OkHttp/Ktor/Koin，14 文件引 `android.*`）。
 我方 `:harness` 做成 **JVM 库**（对齐 `:core:model` / `:core:common` 既有模式，用 `minis.kotlin.library` 约定插件）。
+
+> **P0-1 第一刀**（`63fbb89`）：已纯的四件 + 四套测试整体迁进 :harness
+> （InterruptedTailDetector / ToolLoopDetector + 拆出的 ToolCallFingerprint /
+> MessageTransformers / ReasoningTagVariants），AppLogger 换 HarnessLog。
+> 剩余 P0-1 = agent 循环 / 工具派发 / 上下文治理本体，与 Context/Uri/Room/Compose
+> 深耦合，需先抽 Android 接缝（批次三），不在本批假装做完。
 
 | 类 | 处理 |
 |---|---|
@@ -58,9 +64,11 @@ taixu `harness/` 是 **Android 库**（依赖 Room/OkHttp/Ktor/Koin，14 文件�
       写路径租约（SubagentLaneRunner）未移植——我方 WritePathGuard 前缀校验仍在，
       租约语义留待批次三编排器
 - [ ] 2.4 `compaction/`（1011 行，替换 `android.util.Log`）
-      前置已落地：`SessionTreeStore` + `SessionTreeRepository` 接缝 + `HarnessLog`
-      （`2b61fa7`，12 例自定验收测试）。仍缺 ProviderClient /
-      ContextWindowPolicy 接缝—— compaction 的投影要读 provider 形状。
+      **策略半已接线**（`69d2320`）：ContextWindowPolicy 缺的三件（分桶估算 /
+      巨型用户消息截断 / 4MB 请求体硬限 + 实测 schema 预留）移植并接进
+      effectiveAgentHistory 与 Anthropic 序列化出口。**compaction/ 本体替换明确
+      推迟**：我方压缩带 marker 分离 / digest 注入 / detached anchor 等上游没有的
+      语义，整换是退化；等 ProviderClient 接缝存在后再评
 - [ ] 2.5 `prompt/`（1233 行，Context 注入）
 - [x] 2.6 `queue/PromptQueueManager.kt`（135 行）（`ebd0b59`，**已接线**）
       **超出计划**：不止 Room 接口化——做了文件持久化 + 完整宿主接线
@@ -87,4 +95,4 @@ taixu `harness/` 是 **Android 库**（依赖 Room/OkHttp/Ktor/Koin，14 文件�
 
 每批结束跑 `./gradlew :app:testReleaseUnitTest` + `:harness:test` +
 `:architectureCheck`，确认零失败、棘轮不越线。每批独立 commit。
-当前基线：app **2927** / harness **155**（c28a10e）。
+当前基线：app **2883** / harness **212**（63fbb89）。
