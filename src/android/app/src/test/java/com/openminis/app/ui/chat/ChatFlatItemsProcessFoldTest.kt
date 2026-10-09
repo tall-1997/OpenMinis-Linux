@@ -6,6 +6,12 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+/**
+ * [T-process-run-card] The unified process card owns the whole process of a
+ * turn while folding is ON: live phase header, chronological entries, and a
+ * collapsed bar once reply text streams. These tests pin the flat-item
+ * projection semantics (what the list emits, in which order, folded how).
+ */
 class ChatFlatItemsProcessFoldTest {
 
     private fun thinking(id: String = "th1") =
@@ -47,7 +53,7 @@ class ChatFlatItemsProcessFoldTest {
             is FlatChatItem.AssistantHeader -> "header"
             is FlatChatItem.AssistantText -> "text"
             is FlatChatItem.AssistantMarkdownBlock -> "md"
-            is FlatChatItem.AssistantProcessSummary -> "summary"
+            is FlatChatItem.ProcessRunCard -> "card"
             is FlatChatItem.AssistantThinking -> "thinking"
             is FlatChatItem.AssistantToolUse -> "tool:${item.block.toolName}"
             is FlatChatItem.AssistantInfo -> "info"
@@ -57,14 +63,17 @@ class ChatFlatItemsProcessFoldTest {
         }
     }
 
+    private fun card(items: List<FlatChatItem>): FlatChatItem.ProcessRunCard =
+        items.filterIsInstance<FlatChatItem.ProcessRunCard>().single()
+
     @Test
-    fun `fold off keeps thinking tools and text with no summary`() {
+    fun `fold off keeps thinking tools and text with no card`() {
         val items = buildFlatChatItems(
             listOf(assistant(blocks = listOf(thinking(), tool(), text()))),
             showCompletedToolCards = true,
             foldAiProcess = false,
         )
-        assertFalse(kinds(items).contains("summary"))
+        assertFalse(kinds(items).contains("card"))
         assertTrue(kinds(items).contains("thinking"))
         assertTrue(kinds(items).contains("tool:bash"))
         assertTrue(kinds(items).contains("md"))
@@ -86,13 +95,16 @@ class ChatFlatItemsProcessFoldTest {
             showCompletedToolCards = false,
             foldAiProcess = true,
         )
-        val k = kinds(items)
-        assertEquals(listOf("header", "md", "md", "summary"), k)
-        val summary = items.filterIsInstance<FlatChatItem.AssistantProcessSummary>().single()
-        assertEquals(1, summary.thinkingCount)
-        assertEquals(1, summary.toolCount)
-        assertFalse(summary.expanded)
-        assertFalse(summary.hasFailure)
+        // The card is emitted right after the header: under reverseLayout +
+        // asReversed that is the visual TOP of the turn, so a finished turn
+        // reads card-first, reply below.
+        assertEquals(listOf("header", "card", "md", "md"), kinds(items))
+        val c = card(items)
+        assertEquals(listOf("th1", "tool1"), c.blocks.map { it.id })
+        assertFalse(c.expanded)
+        assertFalse(c.hasFailure)
+        assertFalse(c.isRunning)
+        assertEquals(ProcessPhaseKind.DONE, c.phaseKind)
         val blocks = items.filterIsInstance<FlatChatItem.AssistantMarkdownBlock>()
         assertFalse(blocks[0].showTranslate)
         assertTrue(blocks[1].showTranslate)
@@ -124,19 +136,28 @@ class ChatFlatItemsProcessFoldTest {
     }
 
     @Test
-    fun `fold on live thinking stays expanded until a later block arrives`() {
+    fun `fold on live thinking auto-expands the card with no standalone row`() {
+        // Auto rule: running + no reply text => expanded. The card owns the
+        // live thinking block (its live entry ticks), so the standalone
+        // thinking row is gone — one surface, not two.
         val items = buildFlatChatItems(
             listOf(assistant(streaming = true, blocks = listOf(thinking()))),
             showCompletedToolCards = false,
             foldAiProcess = true,
         )
         val k = kinds(items)
-        assertFalse(k.contains("summary"))
-        assertTrue(k.contains("thinking"))
+        assertEquals(listOf("card"), k)
+        val c = card(items)
+        assertTrue(c.expanded)
+        assertTrue(c.isRunning)
+        assertEquals(ProcessPhaseKind.THINKING, c.phaseKind)
+        assertEquals("th1", c.blocks.single().id)
     }
 
     @Test
-    fun `fold on streaming collapses finished thinking while current tool stays`() {
+    fun `fold on streaming collapses once reply text arrives`() {
+        // Reply text streaming => the card auto-collapses ("一段运行完成后
+        // 输出内容时折叠中间的过程"). The running tool rides inside the card.
         val items = buildFlatChatItems(
             listOf(
                 assistant(
@@ -148,26 +169,55 @@ class ChatFlatItemsProcessFoldTest {
             foldAiProcess = true,
         )
         val k = kinds(items)
-        assertTrue(k.contains("summary"))
-        assertFalse(k.contains("thinking"))
-        assertTrue(k.contains("tool:bash"))
-        assertTrue(k.contains("md"))
+        assertEquals(listOf("header", "card", "md"), k)
+        val c = card(items)
+        assertFalse(c.expanded)
+        assertTrue(c.isRunning)
+        assertEquals(ProcessPhaseKind.TOOL, c.phaseKind)
+        assertEquals("bash", c.phaseToolName)
+        assertEquals(listOf("th1", "tool1"), c.blocks.map { it.id })
     }
 
     @Test
-    fun `tap expand restores thinking and completed tools`() {
+    fun `manual collapse overrides the auto-expand of a live turn`() {
+        val items = buildFlatChatItems(
+            listOf(assistant(streaming = true, blocks = listOf(thinking()))),
+            showCompletedToolCards = false,
+            foldAiProcess = true,
+            collapsedProcessIds = setOf("m1"),
+        )
+        assertFalse(card(items).expanded)
+    }
+
+    @Test
+    fun `manual expand overrides the auto-collapse of a finished turn`() {
         val items = buildFlatChatItems(
             listOf(assistant(blocks = listOf(thinking(), tool(), text()))),
             showCompletedToolCards = false,
             foldAiProcess = true,
             expandedProcessIds = setOf("m1"),
         )
+        val c = card(items)
+        assertTrue(c.expanded)
+        // Expanded card carries the entries; the standalone rows stay
+        // suppressed — the card is the single process surface.
         val k = kinds(items)
-        assertTrue(k.contains("summary"))
-        assertTrue(k.contains("thinking"))
-        assertTrue(k.contains("tool:bash"))
-        assertTrue(k.contains("md"))
-        assertTrue(items.filterIsInstance<FlatChatItem.AssistantProcessSummary>().single().expanded)
+        assertEquals(listOf("header", "card", "md"), k)
+        assertEquals(listOf("th1", "tool1"), c.blocks.map { it.id })
+    }
+
+    @Test
+    fun `collapsed card still keeps completed process out of the list`() {
+        val k = kinds(
+            buildFlatChatItems(
+                listOf(assistant(blocks = listOf(thinking(), tool(), text()))),
+                showCompletedToolCards = false,
+                foldAiProcess = true,
+            ),
+        )
+        assertFalse(k.contains("thinking"))
+        assertFalse(k.contains("tool:bash"))
+        assertTrue(k.contains("card"))
     }
 
     @Test
@@ -187,11 +237,14 @@ class ChatFlatItemsProcessFoldTest {
             foldAiProcess = true,
         )
         val k = kinds(items)
-        assertTrue(k.contains("summary"))
+        assertTrue(k.contains("card"))
+        // Interactive prompt: must stay reachable outside the card.
         assertTrue(k.contains("tool:ask_user_question"))
         assertFalse(k.contains("tool:bash"))
         assertFalse(k.contains("thinking"))
         assertTrue(k.contains("md"))
+        // And the card does not swallow it either.
+        assertFalse(card(items).blocks.any { it.id == "q" })
     }
 
     @Test
@@ -206,20 +259,19 @@ class ChatFlatItemsProcessFoldTest {
             foldAiProcess = true,
         )
         val k = kinds(items)
-        assertFalse(k.contains("summary"))
+        assertFalse(k.contains("card"))
         assertTrue(k.contains("info"))
     }
 
     @Test
-    fun `failed tool is flagged on the summary`() {
+    fun `failed tool is flagged on the card`() {
         val items = buildFlatChatItems(
             listOf(assistant(blocks = listOf(tool(status = ToolBlockStatus.FAILED)))),
             foldAiProcess = true,
         )
-        val summary = items.filterIsInstance<FlatChatItem.AssistantProcessSummary>().single()
-        assertTrue(summary.hasFailure)
-        assertEquals(1, summary.toolCount)
-        assertEquals(0, summary.thinkingCount)
+        val c = card(items)
+        assertTrue(c.hasFailure)
+        assertEquals(1, c.blocks.size)
     }
 
     @Test
@@ -230,10 +282,33 @@ class ChatFlatItemsProcessFoldTest {
             foldAiProcess = true,
         )
         val k = kinds(items)
-        assertTrue(k.contains("summary"))
+        assertTrue(k.contains("card"))
         assertFalse(k.contains("thinking"))
         assertFalse(k.contains("tool:bash"))
         assertTrue(k.contains("md"))
+        // Reply text already arrived => auto-collapsed even though awaiting.
+        assertFalse(card(items).expanded)
+    }
+
+    @Test
+    fun `turn error rides inside the card instead of a standalone banner`() {
+        val msg = assistant(blocks = listOf(tool())).let { it.copy(error = "boom") }
+        val items = buildFlatChatItems(listOf(msg), foldAiProcess = true)
+        val k = kinds(items)
+        assertFalse(k.contains("error"))
+        assertEquals("boom", card(items).errorText)
+    }
+
+    @Test
+    fun `task description comes from the preceding user message`() {
+        val items = buildFlatChatItems(
+            listOf(
+                ChatMessage(id = "u1", role = "user", content = "\n  帮我分析这个样本\n第二行忽略"),
+                assistant(blocks = listOf(tool(), text())),
+            ),
+            foldAiProcess = true,
+        )
+        assertEquals("帮我分析这个样本", card(items).taskDescription)
     }
 
     @Test
@@ -247,15 +322,14 @@ class ChatFlatItemsProcessFoldTest {
     }
 
     @Test
-    fun `folded summary still exposes tool chips for detail`() {
+    fun `card blocks still expose tools for the detail sheet`() {
         val items = buildFlatChatItems(
             listOf(assistant(blocks = listOf(thinking(), tool(id = "tool1", name = "bash"), text()))),
             foldAiProcess = true,
         )
-        val summary = items.filterIsInstance<FlatChatItem.AssistantProcessSummary>().single()
-        assertEquals(1, summary.processTools.size)
-        assertEquals("tool1", summary.processTools.single().id)
-        assertEquals("bash", summary.processTools.single().title)
+        val toolBlock = card(items).blocks.single { it.kind == "tool_use" }
+        assertEquals("tool1", toolBlock.id)
+        assertEquals("bash", toolBlock.toolName)
     }
 
     @Test
@@ -272,99 +346,56 @@ class ChatFlatItemsProcessFoldTest {
 
     // ── [T-android-fold-expanded-duplicate] ──────────────────────────────
     //
-    // The overlay exists to surface process activity the in-list rows are
-    // currently hiding. Once the turn's fold bar is expanded those rows are
-    // back in the list at their own positions, so the same running tool must
-    // not ALSO be pinned to the viewport bottom — one card in two places that
-    // do not correspond to each other.
+    // The overlay exists to surface process activity the card is currently
+    // HIDING. Once the card is expanded its entries show the running tool
+    // at its chronological position, so the same tool must not ALSO be
+    // pinned to the viewport bottom.
 
     @Test
-    fun `an expanded turn does not also float its running tool`() {
+    fun `an expanded card does not also float its running tool`() {
         val running = tool(id = "t2", status = ToolBlockStatus.RUNNING)
         assertTrue(
-            "collapsed: the list hides it, so the overlay must carry it",
+            "collapsed: the card hides it, so the overlay must carry it",
             isFloatingProcessTool(running, foldAiProcess = true, processExpanded = false),
         )
         assertFalse(
-            "expanded: the list already shows it in place",
+            "expanded: the card already shows it in place",
             isFloatingProcessTool(running, foldAiProcess = true, processExpanded = true),
         )
     }
 
     @Test
-    fun `expansion is irrelevant to the overlay when fold is off`() {
-        // With fold off the in-list rows are governed by showCompletedToolCards,
-        // not by a fold bar, so the overlay's behaviour must not change.
-        val done = tool(status = ToolBlockStatus.SUCCESS)
-        val running = tool(id = "t2", status = ToolBlockStatus.RUNNING)
-        assertTrue(isFloatingProcessTool(done, foldAiProcess = false, processExpanded = true))
-        assertTrue(isFloatingProcessTool(running, foldAiProcess = false, processExpanded = true))
-    }
-
-    @Test
-    fun `expanding restores thinking and tool rows at their own positions`() {
-        val blocks = listOf(
-            thinking(),
-            tool(id = "tool1", name = "bash", status = ToolBlockStatus.SUCCESS),
-            text(),
+    fun `effective expansion resolves auto and manual states`() {
+        // Auto: running + no reply text.
+        assertTrue(
+            effectiveProcessExpanded("m1", isRunning = true, hasReplyText = false, expandedIds = emptySet(), collapsedIds = emptySet()),
         )
-        val expanded = buildFlatChatItems(
-            listOf(assistant(blocks = blocks)),
-            showCompletedToolCards = false,
-            foldAiProcess = true,
-            expandedProcessIds = setOf("m1"),
+        // Auto collapse once reply text streams.
+        assertFalse(
+            effectiveProcessExpanded("m1", isRunning = true, hasReplyText = true, expandedIds = emptySet(), collapsedIds = emptySet()),
         )
-        val k = kinds(expanded)
-
-        assertTrue("thinking must come back", k.contains("thinking"))
-        assertTrue("completed tool must come back", k.contains("tool:bash"))
-        assertTrue("fold bar stays", k.contains("summary"))
-
-        // Position correspondence: out is oldest-first, so within the turn the
-        // chronological order must be thinking -> tool -> reply text, with the
-        // fold bar appended last (visually below the reply under reverseLayout).
-        assertEquals(
-            listOf("header", "thinking", "tool:bash", "md", "summary"),
-            k.filter { it in setOf("header", "thinking", "tool:bash", "md", "summary") },
+        // Finished turns stay collapsed.
+        assertFalse(
+            effectiveProcessExpanded("m1", isRunning = false, hasReplyText = true, expandedIds = emptySet(), collapsedIds = emptySet()),
+        )
+        // Manual expand wins over auto.
+        assertTrue(
+            effectiveProcessExpanded("m1", isRunning = false, hasReplyText = true, expandedIds = setOf("m1"), collapsedIds = emptySet()),
+        )
+        // Manual collapse wins over auto-expand.
+        assertFalse(
+            effectiveProcessExpanded("m1", isRunning = true, hasReplyText = false, expandedIds = emptySet(), collapsedIds = setOf("m1")),
+        )
+        // Manual expand beats manual collapse (expanded checked first).
+        assertTrue(
+            effectiveProcessExpanded("m1", isRunning = false, hasReplyText = true, expandedIds = setOf("m1"), collapsedIds = setOf("m1")),
         )
     }
 
-    @Test
-    fun `collapsed fold still keeps completed process out of the list`() {
-        val k = kinds(
-            buildFlatChatItems(
-                listOf(assistant(blocks = listOf(thinking(), tool(), text()))),
-                showCompletedToolCards = false,
-                foldAiProcess = true,
-            ),
-        )
-        assertFalse(k.contains("thinking"))
-        assertFalse(k.contains("tool:bash"))
-        assertTrue(k.contains("summary"))
-    }
+    // ── [T-process-summary-duration] aggregated card duration ──
 
     @Test
-    fun `a running tool stays in the list at its position when expanded`() {
-        // The card the user is watching must not teleport: while the turn is
-        // expanded the in-list row is the only copy, so it holds its place
-        // through RUNNING -> SUCCESS instead of jumping between the overlay and
-        // the list.
-        val blocks = listOf(thinking(), tool(id = "t2", status = ToolBlockStatus.RUNNING), text())
-        val running = kinds(
-            buildFlatChatItems(
-                listOf(assistant(streaming = true, blocks = blocks)),
-                showCompletedToolCards = false,
-                foldAiProcess = true,
-                expandedProcessIds = setOf("m1"),
-            ),
-        )
-        assertTrue("running tool must be in the list while expanded", running.contains("tool:bash"))
-    }
-
-    // ── [T-process-summary-duration] aggregated fold-bar duration ──
-
-    @Test
-    fun `folded summary sums block durations`() {
+    fun `card sums block durations`() {
         val items = buildFlatChatItems(
             listOf(
                 assistant(
@@ -379,20 +410,18 @@ class ChatFlatItemsProcessFoldTest {
             showCompletedToolCards = false,
             foldAiProcess = true,
         )
-        val summary = items.filterIsInstance<FlatChatItem.AssistantProcessSummary>().single()
-        assertEquals(4700L, summary.totalMs)
+        assertEquals(4700L, card(items).totalMs)
     }
 
     @Test
-    fun `summary total is zero when no block recorded a duration`() {
+    fun `card total is zero when no block recorded a duration`() {
         val items = buildFlatChatItems(
             listOf(assistant(blocks = listOf(thinking(), tool(), text()))),
             showCompletedToolCards = false,
             foldAiProcess = true,
         )
-        val summary = items.filterIsInstance<FlatChatItem.AssistantProcessSummary>().single()
-        assertEquals(0L, summary.totalMs)
-        assertNull(formatProcessDuration(summary.totalMs))
+        assertEquals(0L, card(items).totalMs)
+        assertNull(formatProcessDuration(card(items).totalMs))
     }
 
     @Test

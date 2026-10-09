@@ -216,22 +216,59 @@ internal sealed class FlatChatItem {
         override fun withKeySuffix(suffix: String): FlatChatItem = copy(keySuffix = suffix)
     }
 
-    /** Collapsed thinking+tools header. Same decoration family as ThinkingBlock. */
-    data class AssistantProcessSummary(
+    /**
+     * [T-process-run-card] Unified "work process" card — ONE collapsible
+     * surface that owns the whole process of an assistant turn while
+     * folding is ON: a live phase header (spinner + "正在思考中…"),
+     * entries appended chronologically as the agent works (tool rows with
+     * a 查看 button, thinking rows, the turn error), and a collapsed bar
+     * ("工作过程 · 已调用 N 个工具 · 47s").
+     *
+     * Replaces the old AssistantProcessSummary fold bar + the in-list live
+     * thinking row + the in-flight tool pills: those three surfaces fought
+     * for attention and the user saw "everything piled together, no sense
+     * of what is running". The card is emitted directly after the
+     * AssistantHeader row, so under reverseLayout + asReversed it renders
+     * at the visual TOP of the turn — the running state reads as the
+     * turn's header and the reply text streams in below it.
+     *
+     * Auto-expand: while the turn is live AND no reply text has arrived
+     * the card is expanded (live process view). The moment reply text
+     * starts streaming the card auto-collapses — "一段运行完成后输出内容
+     * 时折叠中间的过程" — and finished turns stay collapsed. Manual taps
+     * override via expandedProcessIds / collapsedProcessIds.
+     *
+     * [blocks] is compared by REFERENCE in equals: AssistantBlock is a
+     * data class whose equals walks full content strings, and the flat
+     * rebuild fires per streaming tick — a content-based equals would
+     * re-compare kilobytes of tool output on every token.
+     */
+    class ProcessRunCard(
         val messageId: String,
-        val thinkingCount: Int,
-        val toolCount: Int,
+        val blocks: List<AssistantBlock>,
+        val isRunning: Boolean,
+        val phaseKind: ProcessPhaseKind,
+        val phaseToolName: String,
         val expanded: Boolean,
         val hasFailure: Boolean,
-        val processTools: List<ProcessToolRef> = emptyList(),
-        /** [T-process-summary-duration] Summed block durations (tool + thinking) for the fold-bar
-         *  "· 47s" suffix. 0 when no block carried a duration — the bar then omits the suffix. */
-        val totalMs: Long = 0L,
+        /** Summed block durations for the collapsed "· 47s" suffix. 0 when
+         *  no block recorded a duration — the bar then omits the suffix. */
+        val totalMs: Long,
+        /** One-line task description from the preceding user message. */
+        val taskDescription: String = "",
+        /** Turn-level error (message.error) rendered as a red row inside
+         *  the card while the card is showing. */
+        val errorText: String = "",
         private val keySuffix: String = "",
     ) : FlatChatItem() {
         override val key = FlatKeys.of(FlatKeys.KIND_PROCESS, messageId) + keySuffix
         override val contentType = "process"
-        override fun withKeySuffix(suffix: String): FlatChatItem = copy(keySuffix = suffix)
+        override fun withKeySuffix(suffix: String): FlatChatItem = ProcessRunCard(
+            messageId, blocks, isRunning, phaseKind, phaseToolName, expanded,
+            hasFailure, totalMs, taskDescription, errorText, suffix,
+        )
+        override fun equals(other: Any?): Boolean = this === other
+        override fun hashCode(): Int = messageId.hashCode()
     }
 
     data class AssistantToolUse(
@@ -379,6 +416,11 @@ internal fun buildFlatChatItems(
     showCompletedToolCards: Boolean = true,
     foldAiProcess: Boolean = false,
     expandedProcessIds: Set<String> = emptySet(),
+    // [T-process-run-card] Manual-collapse overrides: a turn the user
+    // explicitly folded while it was live (auto-expanded). Auto state
+    // applies when the id is in neither set — see
+    // [effectiveProcessExpanded].
+    collapsedProcessIds: Set<String> = emptySet(),
     activeSubAgentToolIds: Set<String> = emptySet(),
 ): List<FlatChatItem> {
     val out = mutableListOf<FlatChatItem>()
@@ -486,51 +528,92 @@ internal fun buildFlatChatItems(
         // Only the last cancelled tool_use in the message gets the Retry button —
         // retryLast() re-runs the whole turn, so one button is enough.
         val lastCancelledToolId = blocks.lastOrNull { it.kind == "tool_use" && it.toolStatus == ToolBlockStatus.CANCELLED }?.id
-        val thinkingCount = blocks.count { it.kind == "thinking" }
-        val toolCount = blocks.count { it.kind == "tool_use" }
-        val processExpanded = message.id in expandedProcessIds
-        // Fold completed thinking/tools as soon as they finish — even while
-        // the turn is still live. Only the currently streaming thinking
-        // block (last block overall) and in-flight tools stay expanded.
-        // Waiting for the whole turn / tool-loop to end was the old gate.
-        val liveThinkingId = liveThinkingBlockId(message.isStreaming, blocks)
-        val hasFoldableProcess = blocks.any { block ->
-            when (block.kind) {
-                "thinking" -> block.id != liveThinkingId
-                "tool_use" -> !isAlwaysVisibleProcessTool(block) &&
-                    !isInFlightProcessTool(block)
-                else -> false
+        // [T-process-run-card] The unified process card replaces the old
+        // fold-bar + live-thinking-row + in-flight-tool-pill trio. While
+        // folding is ON the card owns EVERY thinking/tool block of the
+        // turn: live phase header (spinner + "正在思考中…"), entries
+        // appended chronologically as the agent works, and a collapsed
+        // bar ("工作过程 · 已调用 N 个工具 · 47s") once reply text streams.
+        val isTurnRunning = message.isStreaming || message.isAwaitingModelResponse
+        val turnHasReplyText = hasReplyText(message)
+        val processExpanded = effectiveProcessExpanded(
+            messageId = message.id,
+            isRunning = isTurnRunning,
+            hasReplyText = turnHasReplyText,
+            expandedIds = expandedProcessIds,
+            collapsedIds = collapsedProcessIds,
+        )
+        val processCardBlocks = if (foldAiProcess && !isSystem) {
+            blocks.filter { block ->
+                block.kind == "thinking" ||
+                    (block.kind == "tool_use" && !isAlwaysVisibleProcessTool(block))
             }
+        } else {
+            emptyList()
         }
-        val showProcessSummary = foldAiProcess && !isSystem && hasFoldableProcess
+        val showProcessCard = processCardBlocks.isNotEmpty()
+        // The translate logic keeps the old predicate family (fold on +
+        // process present ⇒ whole-reply translation of the last text
+        // block); for finished turns this equals the old
+        // hasFoldableProcess, and live turns never translate.
+        val showProcessSummary = showProcessCard
         val replyText = AssistantReplyText.joined(blocks)
-        // [T-android-fold-toolonly-blank] A turn whose entire visible payload
-        // is completed thinking/tool cards collapses into the process summary.
-        // Emitting the AssistantHeader row above an otherwise empty turn left
-        // header padding + spacedBy(2.dp) rendered as a large blank band in the
-        // reverse-layout list. Compute whether anything besides the summary
-        // will actually render and skip the header when it will not.
-        val headerVisibleInBlocks = blocks.any { block ->
-            when (block.kind) {
-                "text" -> block.content.isNotEmpty()
-                "info" -> true
-                "thinking" -> !showProcessSummary || processExpanded || block.id == liveThinkingId
-                "tool_use" -> shouldShowProcessToolRow(
-                    block,
-                    showCompletedToolCards = showCompletedToolCards,
-                    showProcessSummary = showProcessSummary,
-                    processExpanded = processExpanded,
-                )
-                else -> false
+        // [T-process-run-card] One-line task description from the preceding
+        // user message — the expanded card shows it so a scrolled-back
+        // process card still says WHAT this run was about.
+        val taskDescription = if (idx > 0) {
+            val prev = messages[idx - 1]
+            if (prev.role == "user") {
+                prev.content.lineSequence()
+                    .firstOrNull { it.isNotBlank() }?.trim()?.take(64).orEmpty()
+            } else ""
+        } else ""
+        if (!isSystem && !isResumeContinuation) {
+            // [T-android-fold-toolonly-blank] A turn whose entire visible
+            // payload is the process card (no text/info/error/interactive
+            // tool) hides the header row: header padding + spacedBy above
+            // an otherwise card-only turn read as a blank band in the
+            // reverse-layout list. The card alone carries the turn.
+            val headerVisibleInBlocks = blocks.any { block ->
+                when (block.kind) {
+                    "text" -> block.content.isNotEmpty()
+                    "info" -> true
+                    "tool_use" -> isAlwaysVisibleProcessTool(block)
+                    else -> false
+                }
+            }
+            val headerHiddenByFold = showProcessCard && !headerVisibleInBlocks &&
+                message.content.isBlank() && message.error == null
+            if (!headerHiddenByFold) {
+                out.add(dedupe(FlatChatItem.AssistantHeader(
+                    message.id,
+                    message.speakerName.orEmpty(),
+                    message.speakerVendor.orEmpty(),
+                )))
             }
         }
-        val headerHiddenByFold = showProcessSummary && !headerVisibleInBlocks &&
-            message.content.isBlank() && message.error == null
-        if (!isSystem && !isResumeContinuation && !headerHiddenByFold) {
-            out.add(dedupe(FlatChatItem.AssistantHeader(
-                message.id,
-                message.speakerName.orEmpty(),
-                message.speakerVendor.orEmpty(),
+        // [T-process-run-card] Emitted directly after the header so under
+        // reverseLayout + asReversed it renders at the visual TOP of the
+        // turn — the running state reads as the turn's header and the
+        // reply text streams in below it (the old summary bar sat below
+        // the reply, where a running turn showed nothing at the top).
+        if (showProcessCard) {
+            out.add(dedupe(FlatChatItem.ProcessRunCard(
+                messageId = message.id,
+                blocks = processCardBlocks,
+                isRunning = isTurnRunning,
+                phaseKind = processPhaseKind(message),
+                phaseToolName = processPhaseToolName(message),
+                expanded = processExpanded,
+                hasFailure = processCardBlocks.any { block ->
+                    block.kind == "tool_use" && (
+                        block.toolStatus == ToolBlockStatus.FAILED ||
+                            block.toolStatus == ToolBlockStatus.TIMEOUT
+                        )
+                },
+                totalMs = blocks.sumOf { it.durationMs },
+                taskDescription = taskDescription,
+                errorText = message.error.orEmpty(),
             )))
         }
         blocks.forEachIndexed { index, block ->
@@ -631,7 +714,11 @@ internal fun buildFlatChatItems(
                     }
                 }
                 "thinking" -> {
-                    if (!showProcessSummary || processExpanded || block.id == liveThinkingId) {
+                    // [T-process-run-card] While the card is showing it owns
+                    // every thinking block (the live one included — the
+                    // card's live entry ticks "思考中 (2.6s)"); the
+                    // standalone row only renders when folding is OFF.
+                    if (!showProcessCard) {
                         out.add(dedupe(FlatChatItem.AssistantThinking(
                             messageId = message.id,
                             block = block,
@@ -646,44 +733,32 @@ internal fun buildFlatChatItems(
                     messageId = message.id,
                     block = block,
                 )))
-                else -> if (shouldShowProcessToolRow(
-                        block,
-                        showCompletedToolCards = showCompletedToolCards,
-                        showProcessSummary = showProcessSummary,
-                        processExpanded = processExpanded,
-                    )
-                ) {
-                    out.add(dedupe(FlatChatItem.AssistantToolUse(
-                        messageId = message.id,
-                        block = block,
-                        allToolBlocks = toolPillBlocks,
-                        isLastCancelled = block.id == lastCancelledToolId,
-                    )))
+                else -> {
+                    // [T-process-run-card] With the card showing, tool pills
+                    // are suppressed except ask_user_question (an
+                    // interactive prompt, not process history — it must
+                    // stay reachable outside the card).
+                    val emitToolRow = if (showProcessCard) {
+                        isAlwaysVisibleProcessTool(block)
+                    } else {
+                        shouldShowToolUseRow(block, showCompletedToolCards)
+                    }
+                    if (emitToolRow) {
+                        out.add(dedupe(FlatChatItem.AssistantToolUse(
+                            messageId = message.id,
+                            block = block,
+                            allToolBlocks = toolPillBlocks,
+                            isLastCancelled = block.id == lastCancelledToolId,
+                        )))
+                    }
                 }
             }
         }
 
-        // [T-android-fold-bar-order] The process summary (fold bar) is added
-        // AFTER the content blocks, not before them. The chat LazyColumn is
-        // `reverseLayout=true` — index 0 is the NEWEST item and rows render
-        // bottom-up — so list order and visual order are INVERTED. Adding the
-        // summary first put it at the visual TOP of the turn, above the reply
-        // text; a long reply then scrolled it straight out of the viewport with
-        // no way to reach the fold bar. Appending it here puts it visually
-        // BELOW the reply, next to the content it summarises.
-        if (showProcessSummary) {
-            out.add(dedupe(FlatChatItem.AssistantProcessSummary(
-                messageId = message.id,
-                thinkingCount = thinkingCount,
-                toolCount = toolCount,
-                expanded = processExpanded,
-                hasFailure = blocks.any {
-                    it.kind == "tool_use" && it.toolStatus == ToolBlockStatus.FAILED
-                },
-                processTools = processToolRefs(blocks),
-                totalMs = blocks.sumOf { it.durationMs },
-            )))
-        }
+        // [T-process-run-card] The old fold bar was emitted here (after the
+        // content blocks, visually below the reply). The unified card now
+        // renders at the visual TOP of the turn — see the emission right
+        // after the AssistantHeader above.
 
         // Typing indicator: show while streaming and either (a) no visible
         // content has arrived yet, or (b) we're in the network gap waiting
@@ -715,7 +790,9 @@ internal fun buildFlatChatItems(
                 else -> true // tool_use pills render immediately
             }
         }
-        if (message.isStreaming && (!hasVisibleContent || message.isAwaitingModelResponse)) {
+        if (message.isStreaming && !showProcessCard &&
+            (!hasVisibleContent || message.isAwaitingModelResponse)
+        ) {
             out.add(dedupe(FlatChatItem.AssistantTyping(message.id)))
         }
 
@@ -729,8 +806,10 @@ internal fun buildFlatChatItems(
             )))
         }
 
-        // Inline error banner
-        message.error?.let {
+        // Inline error banner. [T-process-run-card] While the card is
+        // showing the turn error rides INSIDE it (red row under the
+        // entries) so the failure reads as part of the process.
+        if (!showProcessCard) message.error?.let {
             out.add(dedupe(FlatChatItem.AssistantError(message.id, it)))
         }
     }
@@ -752,97 +831,3 @@ internal fun isSubAgentTranscriptCard(block: AssistantBlock): Boolean =
     block.kind == "tool_use" && (
         block.toolName in SUB_AGENT_TRANSCRIPT_TOOLS || "#sub-" in block.id
     )
-
-internal fun isAlwaysVisibleProcessTool(block: AssistantBlock): Boolean =
-    block.kind == "tool_use" && block.toolName == "ask_user_question"
-
-internal fun shouldShowProcessToolRow(
-    block: AssistantBlock,
-    showCompletedToolCards: Boolean,
-    showProcessSummary: Boolean,
-    processExpanded: Boolean,
-): Boolean {
-    if (isAlwaysVisibleProcessTool(block)) return true
-    if (showProcessSummary) {
-        // Expanded process lists thinking + tools in-thread. The fold bar no
-        // longer carries tool chips, so hiding completed tools here would
-        // make them unreachable.
-        if (processExpanded) return true
-        // Keep the in-progress tool visible; completed ones live in the summary.
-        return isInFlightProcessTool(block)
-    }
-    return shouldShowToolUseRow(block, showCompletedToolCards)
-}
-
-private val IN_FLIGHT_PROCESS_TOOL_STATUSES = setOf(
-    ToolBlockStatus.STREAMING,
-    ToolBlockStatus.PENDING,
-    ToolBlockStatus.RUNNING,
-)
-
-internal fun isInFlightProcessTool(block: AssistantBlock): Boolean =
-    block.kind == "tool_use" && block.toolStatus in IN_FLIGHT_PROCESS_TOOL_STATUSES
-
-internal fun liveThinkingBlockId(isStreaming: Boolean, blocks: List<AssistantBlock>): String? {
-    if (!isStreaming) return null
-    val last = blocks.lastOrNull() ?: return null
-    return if (last.kind == "thinking") last.id else null
-}
-
-/** Compact identity for a folded process-summary chip. */
-internal data class ProcessToolRef(
-    val id: String,
-    val title: String,
-    val status: ToolBlockStatus?,
-)
-
-internal fun processToolRefs(blocks: List<AssistantBlock>): List<ProcessToolRef> =
-    blocks.filter { it.kind == "tool_use" }.map { block ->
-        ProcessToolRef(
-            id = block.id,
-            title = block.toolTitle.ifEmpty { block.toolName }.ifEmpty { "tool" },
-            status = block.toolStatus,
-        )
-    }
-
-/** Tool-use rows that belong in the detail sheet (completed or live). */
-internal fun isDetailProcessTool(block: AssistantBlock): Boolean {
-    if (block.toolStatus == null) return false
-    if (block.kind == "thinking" || block.kind == "info") return false
-    return true
-}
-
-internal fun assistantToolUseBlocks(messages: List<ChatMessage>): List<AssistantBlock> =
-    messages.asSequence()
-        .filter { it.role == "assistant" }
-        .flatMap { it.toolBlocks.asSequence() }
-        .filter(::isDetailProcessTool)
-        .toList()
-
-/**
- * Whether [block] belongs on the floating tool overlay. When
- * [foldAiProcess] is on, completed tools fold into the in-list summary
- * and must not linger as a second "computer" strip — that was why the
- * Appearance switch looked like a no-op.
- *
- * The overlay subset is *not* the source of truth for ToolDetailSheet:
- * completed tools must remain openable after they leave the overlay.
- *
- * [T-android-fold-expanded-duplicate] [processExpanded] is the fold bar for
- * this block's turn being open. The overlay exists to surface process activity
- * that the in-list rows are currently HIDING; once the turn is expanded those
- * rows are back in the list at their own chronological positions, so pinning a
- * second copy of the same running tool to the viewport bottom shows one card in
- * two places that do not correspond to each other. The list wins — it is the
- * one that is positionally anchored to the turn.
- */
-internal fun isFloatingProcessTool(
-    block: AssistantBlock,
-    foldAiProcess: Boolean,
-    processExpanded: Boolean = false,
-): Boolean {
-    if (!isDetailProcessTool(block)) return false
-    if (foldAiProcess && processExpanded) return false
-    if (foldAiProcess && block.toolStatus !in IN_FLIGHT_PROCESS_TOOL_STATUSES) return false
-    return true
-}

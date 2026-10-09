@@ -2997,19 +2997,22 @@ fun ChatScreen(
                 // view; we mirror that semantically by checking the same
                 // filter on both sources.
                 val streamingById by viewModel.streamingById.collectAsState()
-                // [T-android-fold-expanded-duplicate] Hoisted above
-                // `hasFloatingTools` — same composable scope, so this is a pure
-                // move, not a new state holder. The padding reservation and the
-                // overlay it reserves room for have to agree about whether the
-                // turn is expanded, otherwise the layout keeps 65dp of empty
-                // space for a bar that no longer renders.
+                // [T-process-run-card] Manual expand/collapse overrides of
+                // the card's auto rule (see effectiveProcessExpanded in
+                // ChatProcessFoldLogic.kt). Padding reservation and overlay
+                // must agree on expansion, else 65dp of empty space stays.
                 var expandedProcessIds by remember(sessionId) { mutableStateOf(emptySet<String>()) }
-                val hasFloatingTools = remember(messages, streamingById, foldAiProcess, expandedProcessIds) {
+                var collapsedProcessIds by remember(sessionId) { mutableStateOf(emptySet<String>()) }
+                val hasFloatingTools = remember(messages, streamingById, foldAiProcess, expandedProcessIds, collapsedProcessIds) {
                     val merged = if (streamingById.isEmpty()) messages
                                  else mergeStreamingOverlay(messages, streamingById)
                     merged.any { msg ->
                         msg.role == "assistant" && msg.toolBlocks.any { tb ->
-                            isFloatingProcessTool(tb, foldAiProcess, msg.id in expandedProcessIds)
+                            isFloatingProcessTool(
+                                tb,
+                                foldAiProcess,
+                                processExpandedFor(msg, expandedProcessIds, collapsedProcessIds),
+                            )
                         }
                     }
                 }
@@ -3465,6 +3468,7 @@ fun ChatScreen(
                                         showCompletedToolCards = showCompletedToolCards,
                                         foldAiProcess = foldAiProcess,
                                         expandedProcessIds = expandedProcessIds,
+                                        collapsedProcessIds = collapsedProcessIds,
                                         activeSubAgentToolIds = if (showSubAgentBar) activeSubAgentToolIds else emptySet(),
                                     )
                                 }
@@ -3552,6 +3556,7 @@ fun ChatScreen(
                                         showCompletedToolCards = showCompletedToolCards,
                                         foldAiProcess = foldAiProcess,
                                         expandedProcessIds = expandedProcessIds,
+                                        collapsedProcessIds = collapsedProcessIds,
                                         activeSubAgentToolIds = if (showSubAgentBar) activeSubAgentToolIds else emptySet(),
                                     )
                                 }
@@ -3676,7 +3681,7 @@ fun ChatScreen(
                     is FlatChatItem.AssistantText -> grayedMap[messageId] == true
                     is FlatChatItem.AssistantMarkdownBlock -> grayedMap[messageId] == true
                     is FlatChatItem.AssistantThinking -> grayedMap[messageId] == true
-                    is FlatChatItem.AssistantProcessSummary -> grayedMap[messageId] == true
+                    is FlatChatItem.ProcessRunCard -> grayedMap[messageId] == true
                     is FlatChatItem.AssistantToolUse -> grayedMap[messageId] == true
                     is FlatChatItem.AssistantInfo -> false  // system rows never grayed
                     is FlatChatItem.AssistantTyping -> false
@@ -4302,20 +4307,16 @@ fun ChatScreen(
                                     }
                                 }
                             }
-                            is FlatChatItem.AssistantProcessSummary -> ProcessSummaryBar(
-                                thinkingCount = item.thinkingCount,
-                                toolCount = item.toolCount,
-                                expanded = item.expanded,
-                                hasFailure = item.hasFailure,
-                                totalMs = item.totalMs,
+                            is FlatChatItem.ProcessRunCard -> ProcessRunCard(
+                                item = item,
                                 onToggle = {
-                                    val id = item.messageId
-                                    expandedProcessIds = if (id in expandedProcessIds) {
-                                        expandedProcessIds - id
-                                    } else {
-                                        expandedProcessIds + id
-                                    }
+                                    val (e, c) = nextProcessToggleState(item, expandedProcessIds, collapsedProcessIds)
+                                    expandedProcessIds = e
+                                    collapsedProcessIds = c
                                 },
+                                // T261: detail sheet must survive LazyColumn
+                                // item disposal — open goes via the ViewModel.
+                                onOpenTool = { viewModel.openToolDetail(it) },
                             )
                             is FlatChatItem.AssistantThinking -> {
                                 // [T-android-thinking-forced-visible] Render
@@ -4564,7 +4565,7 @@ fun ChatScreen(
                 // closes the detail state because the id "doesn't exist").
                 var lastToolBlocks by remember { mutableStateOf<List<AssistantBlock>>(emptyList()) }
                 var detailToolBlocks by remember { mutableStateOf<List<AssistantBlock>>(emptyList()) }
-                LaunchedEffect(messages, foldAiProcess, showSubAgentBar, expandedProcessIds) {
+                LaunchedEffect(messages, foldAiProcess, showSubAgentBar, expandedProcessIds, collapsedProcessIds) {
                     kotlinx.coroutines.flow.combine(
                         kotlinx.coroutines.flow.flowOf(messages),
                         viewModel.streamingById,
@@ -4575,13 +4576,10 @@ fun ChatScreen(
                         // reply, not to every tool in the session. Keep the
                         // complete list separately for historical details.
                         val latestReply = merged.lastOrNull { it.role == "assistant" }
-                        // [T-android-fold-expanded-duplicate] An expanded turn
-                        // already renders this tool in the list at its own
-                        // position, so the viewport-pinned strip would be a
-                        // second copy of the same card in a place that does not
-                        // correspond to the turn.
-                        val latestExpanded = latestReply?.id
-                            ?.let { id -> id in expandedProcessIds } == true
+                        // [T-android-fold-expanded-duplicate] Expanded card
+                        // already shows the tool in place — no pinned copy.
+                        val latestExpanded = latestReply
+                            ?.let { processExpandedFor(it, expandedProcessIds, collapsedProcessIds) } == true
                         val overlay = latestReply?.toolBlocks.orEmpty()
                             .filter {
                                 isFloatingProcessTool(it, foldAiProcess, processExpanded = latestExpanded)

@@ -921,60 +921,6 @@ internal fun formatProcessDuration(totalMs: Long): String? {
     }
 }
 
-@Composable
-internal fun ProcessSummaryBar(
-    thinkingCount: Int,
-    toolCount: Int,
-    expanded: Boolean,
-    hasFailure: Boolean,
-    totalMs: Long = 0L,
-    onToggle: () -> Unit,
-) {
-    val accent = if (hasFailure) Color(0xFFFF3B30) else Color(0xFF007AFF)
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp)
-            .background(accent.copy(alpha = 0.06f), RoundedCornerShape(12.dp))
-            .border(0.5.dp, accent.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
-            .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onToggle)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-    ) {
-        Icon(
-            imageVector = Icons.Default.Psychology,
-            contentDescription = null,
-            tint = accent,
-            modifier = Modifier.size(14.dp),
-        )
-        Spacer(modifier = Modifier.width(6.dp))
-        Text(
-            text = stringResource(R.string.chat_process_summary_title),
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = accent,
-        )
-        Spacer(modifier = Modifier.weight(1f))
-        val durationSuffix = formatProcessDuration(totalMs)?.let { " · $it" } ?: ""
-        Text(
-            text = stringResource(R.string.chat_process_summary_meta, thinkingCount, toolCount, durationSuffix ?: ""),
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Medium,
-            fontFamily = FontFamily.Monospace,
-            color = accent.copy(alpha = 0.6f),
-            maxLines = 1,
-        )
-        Spacer(modifier = Modifier.width(4.dp))
-        Icon(
-            imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-            contentDescription = if (expanded) "Collapse" else "Expand",
-            tint = accent.copy(alpha = 0.5f),
-            modifier = Modifier.size(14.dp),
-        )
-    }
-}
-
 /**
  * [T-thinking-render-perf-android] Full-screen viewer for thinking content
  * that exceeds the inline hard cap. Wraps a native Android [android.widget.TextView]

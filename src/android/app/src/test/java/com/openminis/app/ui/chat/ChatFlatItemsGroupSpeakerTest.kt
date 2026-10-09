@@ -1,6 +1,7 @@
 package com.openminis.app.ui.chat
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ChatFlatItemsGroupSpeakerTest {
@@ -45,7 +46,11 @@ class ChatFlatItemsGroupSpeakerTest {
             ),
         )
         val live = buildFlatChatItems(listOf(running), foldAiProcess = true)
-        assertEquals(true, live.any { it is FlatChatItem.AssistantToolUse })
+        // [T-process-run-card] With folding on, the live tool rides inside
+        // the ProcessRunCard instead of a standalone AssistantToolUse row.
+        val liveCard = live.filterIsInstance<FlatChatItem.ProcessRunCard>().single()
+        assertEquals("t1", liveCard.blocks.single().id)
+        assertTrue(liveCard.isRunning)
 
         val done = buildFlatChatItems(
             listOf(running.copy(isStreaming = false, content = "结论", toolBlocks = emptyList())),
