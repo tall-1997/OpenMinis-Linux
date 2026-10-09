@@ -76,6 +76,43 @@ class SubagentClaimBridgeTest {
     }
 
     @Test
+    fun `adjudicated report keeps legacy text when no claim block`() {
+        val plain = "纯文本报告，没有协议块。"
+        assertEquals(plain, SubagentClaimBridge.adjudicatedReport(plain, receipts()))
+    }
+
+    @Test
+    fun `adjudicated report swaps protocol block for the verdict section`() {
+        val out = SubagentClaimBridge.adjudicatedReport(reportWithClaim, receipts())
+        assertTrue(out.startsWith("报告正文"))
+        assertFalse(out.contains("acceptance_criteria"))
+        assertTrue(out.contains("完成主张核验"))
+        assertTrue(out.contains("partial"))
+    }
+
+    @Test
+    fun `lane tool call records blocked attempts too`() = kotlinx.coroutines.runBlocking {
+        val sink = mutableListOf<SubagentClaimBridge.LaneToolReceipt>()
+        val denied = SubagentClaimBridge.laneToolCall(sink, "file_write", """{"path":"x"}""") {
+            com.openminis.app.tools.ToolExecutionResult("Error: worker cannot write", false)
+        }
+        assertFalse(denied.success)
+        assertEquals(1, sink.size)
+        assertFalse(sink.single().success)
+        assertEquals("file_write", sink.single().toolName)
+    }
+
+    @Test
+    fun `adjudicateLaneOutcome passes null through and rewrites success reports`() {
+        assertNull(SubagentClaimBridge.adjudicateLaneOutcome(null, receipts()))
+        val outcome = com.openminis.app.tools.ToolExecutionResult(reportWithClaim, true)
+        val rewritten = SubagentClaimBridge.adjudicateLaneOutcome(outcome, receipts())!!
+        assertFalse(rewritten.output.contains("acceptance_criteria"))
+        assertTrue(rewritten.output.contains("完成主张核验"))
+        assertTrue(rewritten.success)
+    }
+
+    @Test
     fun `transcript pairs calls with results`() {
         val messages = SubagentClaimBridge.transcriptOf(receipts())
         assertEquals(6, messages.size)

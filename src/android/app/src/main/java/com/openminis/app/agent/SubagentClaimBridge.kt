@@ -81,6 +81,44 @@ object SubagentClaimBridge {
     }
 
     /**
+     * lane 工具调用的收口包装：执行原 lambda 并把（调用 id / 工具名 / 参数 / 成败）
+     * 记进轨迹清单。被拦下的调用（kind/role/type 黑名单）也记——host 凭据要反映
+     * lane 真实尝试过什么，「被拒的写」正是 files 条目不该被背书的证据。
+     */
+    suspend fun laneToolCall(
+        sink: MutableList<LaneToolReceipt>,
+        name: String,
+        argsJson: String,
+        block: suspend () -> com.openminis.app.tools.ToolExecutionResult,
+    ): com.openminis.app.tools.ToolExecutionResult {
+        val result = block()
+        sink += LaneToolReceipt(
+            callId = "lane-${sink.size + 1}",
+            toolName = name,
+            argsJson = argsJson,
+            success = result.success,
+        )
+        return result
+    }
+
+    /**
+     * 把裁定结果折进 lane 报告：无合法 claim 块原样返回（fail-open）；有则换成
+     * 剔除协议块的干净报告 + 父汇总裁定段。父模型经 spawn_agent 返回值或
+     * check_agent collect 读到的就是这份，原始 claim JSON 不进父上下文。
+     */
+    fun adjudicatedReport(reportText: String, receipts: List<LaneToolReceipt>): String {
+        val adjudication = adjudicateLaneReport(reportText, receipts) ?: return reportText
+        return adjudication.cleanReport + "\n\n" + adjudication.adjudicationSection
+    }
+
+    /** [adjudicatedReport] 的 ToolExecutionResult 形态；outcome 为 null 原样返回。 */
+    fun adjudicateLaneOutcome(
+        outcome: com.openminis.app.tools.ToolExecutionResult?,
+        receipts: List<LaneToolReceipt>,
+    ): com.openminis.app.tools.ToolExecutionResult? =
+        outcome?.copy(output = adjudicatedReport(outcome.output, receipts))
+
+    /**
      * 一站式裁定。无合法 claim 块返回 null（调用方保持旧行为）。
      * 返回的 [LaneAdjudication.cleanReport] 已剔除协议块——原始 JSON 不进父上下文。
      */

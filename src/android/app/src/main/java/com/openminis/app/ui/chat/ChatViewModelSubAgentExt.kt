@@ -616,11 +616,8 @@ private fun ChatViewModel.launchDetachedSubAgentBatch(
     }
 
 /**
- * [T-subagent-plan-autolog] Bookkeeping shell around the lane body. Whatever the
- * inner loop hands back — a report, a budget-exhaustion partial, a final
- * failure — the registry and the plan board learn about it here, so a lane
- * cannot finish without its progress being recorded. Cancellation is recorded
- * as `stopped` and then rethrown.
+ * [T-subagent-plan-autolog] Bookkeeping shell around the lane body: whatever the inner loop
+ * hands back, the registry and plan board learn about it here; cancellation rethrows as `stopped`.
  */
 private suspend fun ChatViewModel.runOneSubAgent(
         spawn: ChatSubAgentSpawn,
@@ -639,6 +636,7 @@ private suspend fun ChatViewModel.runOneSubAgent(
         val ownerSession = batchSession.ifBlank {
             realSessionId.ifBlank { sessionId }.ifBlank { activeSessionId }
         }
+        val laneReceipts = mutableListOf<com.openminis.app.agent.SubagentClaimBridge.LaneToolReceipt>()
         val outcome = try {
             runOneSubAgentInner(
                 spawn = spawn,
@@ -653,12 +651,13 @@ private suspend fun ChatViewModel.runOneSubAgent(
                 tokenBudget = tokenBudget,
                 batchId = batchId,
                 batchSession = ownerSession,
+                receiptsSink = laneReceipts,
             )
         } catch (e: CancellationException) {
             recordLaneOutcome(ownerSession, batchId, index, null, stopped = true, error = e.message)
             throw e
         }
-        recordLaneOutcome(ownerSession, batchId, index, outcome, stopped = false, error = null)
+        recordLaneOutcome(ownerSession, batchId, index, com.openminis.app.agent.SubagentClaimBridge.adjudicateLaneOutcome(outcome, laneReceipts), stopped = false, error = null)
         return outcome
     }
 
@@ -720,6 +719,7 @@ private suspend fun ChatViewModel.runOneSubAgentInner(
         /** [T-subagent-plan-autolog] Wave this lane belongs to, for the registry. */
         batchId: String? = null,
         batchSession: String = "",
+        receiptsSink: MutableList<com.openminis.app.agent.SubagentClaimBridge.LaneToolReceipt> = mutableListOf(),
     ): ToolExecutionResult {
         val prompt = spawn.prompt
         val role = spawn.role
@@ -988,7 +988,7 @@ private suspend fun ChatViewModel.runOneSubAgentInner(
                         ),
                     ),
                     maxTokens = (entry.model.maxOutputTokens ?: 4096).coerceIn(256, 8192),
-                    executeTool = { name, json ->
+                    executeTool = { name, json -> com.openminis.app.agent.SubagentClaimBridge.laneToolCall(receiptsSink, name, json) {
                         if (SubAgentKind.blocks(kind, name)) {
                             ToolExecutionResult("Error: $kind sub-agent cannot use $name.", false)
                         } else if (com.openminis.app.tools.CollabRoles.toolsFor(context, role)?.let { name !in it } == true) {
@@ -1003,7 +1003,7 @@ private suspend fun ChatViewModel.runOneSubAgentInner(
                         } else {
                             executeTool(name, json, "", mutableListOf(), "", "")
                         }
-                    },
+                    } },
                     onStep = { turn, toolName -> onStep(turn, toolName) },
                     onUi = { event -> publishSubAgentUi(trackerId, event) },
                     kind = kind,
