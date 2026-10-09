@@ -53,8 +53,8 @@ class ThinkPrefixStreamParserCaseTest {
 
     private object ReasoningTagVariantsPresence {
         val sharedTableNames: List<String> =
-            com.openminis.app.text.ReasoningTagVariants.NAMES
+            com.openminis.app.harness.text.ReasoningTagVariants.NAMES
         val antThinkingPresent: Boolean =
-            com.openminis.app.text.ReasoningTagVariants.OPEN_TAGS.any { it.equals("<antThinking>", ignoreCase = true) }
+            com.openminis.app.harness.text.ReasoningTagVariants.OPEN_TAGS.any { it.equals("<antThinking>", ignoreCase = true) }
     }
 }

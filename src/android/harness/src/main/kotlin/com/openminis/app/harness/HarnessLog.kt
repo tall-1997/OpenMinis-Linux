@@ -17,5 +17,12 @@ object HarnessLog {
 
     fun w(message: String, throwable: Throwable? = null) = sink("W", message, throwable)
 
+    fun d(message: String, throwable: Throwable? = null) = sink("D", message, throwable)
+
+    /** (tag, message) 形态：从 app AppLogger 迁来的调用点保持原样。 */
+    fun w(tag: String, message: String) = sink("W", "[$tag] $message", null)
+
+    fun d(tag: String, message: String) = sink("D", "[$tag] $message", null)
+
     fun e(message: String, throwable: Throwable? = null) = sink("E", message, throwable)
 }

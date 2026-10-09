@@ -1,4 +1,4 @@
-package com.openminis.app.agent
+package com.openminis.app.harness.agent
 
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMMessage

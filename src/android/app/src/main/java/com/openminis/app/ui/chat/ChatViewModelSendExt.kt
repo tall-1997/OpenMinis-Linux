@@ -244,9 +244,9 @@ internal fun ChatViewModel.sendMessage(
                 .hostDir(context.filesDir, activeSessionId, "workspace")
             dir.absolutePath.takeIf { dir.isDirectory }
         }.getOrNull()
-        val modelBody = com.openminis.app.agent.MessageTransformerChain.applyUser(
+        val modelBody = com.openminis.app.harness.agent.MessageTransformerChain.applyUser(
             modelBodyRaw,
-            com.openminis.app.agent.UserTransformContext(workspaceHint = workspaceHint),
+            com.openminis.app.harness.agent.UserTransformContext(workspaceHint = workspaceHint),
         )
 
         val userContentParts = mutableListOf<AgentContentPart>()

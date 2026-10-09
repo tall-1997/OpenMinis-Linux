@@ -1,6 +1,6 @@
-package com.openminis.app.agent
+package com.openminis.app.harness.agent
 
-import com.openminis.app.logging.AppLogger
+import com.openminis.app.harness.HarnessLog
 import org.json.JSONArray
 import org.json.JSONObject
 import java.security.MessageDigest
@@ -96,14 +96,14 @@ class ToolLoopDetector(private val config: ToolLoopConfig = ToolLoopConfig()) {
      * when `result.level == CRITICAL`.
      */
     fun check(toolName: String, params: Map<String, Any?>): LoopCheckResult {
-        val argsHash = argsHashFor(toolName, params)
+        val argsHash = ToolCallFingerprint.argsHash(toolName, params)
 
         // 1. unknown_tool_repeat — most specific signal, runs first.
         val unknownStreak = countUnknownStreakFromTail(toolName)
         if (unknownStreak >= config.unknownToolThreshold) {
             val msg = "[LOOP BLOCKED] CRITICAL: attempted unavailable tool '$toolName' " +
                 "$unknownStreak times. Stop retrying that missing tool and answer without it."
-            AppLogger.warning("ToolLoopDetector",
+            HarnessLog.w("ToolLoopDetector",
                 "CRITICAL unknown_tool_repeat tool=$toolName streak=$unknownStreak")
             return LoopCheckResult(Level.CRITICAL, msg)
         }
@@ -116,7 +116,7 @@ class ToolLoopDetector(private val config: ToolLoopConfig = ToolLoopConfig()) {
             val msg = "[LOOP BLOCKED] CRITICAL: $toolName has repeated identical " +
                 "no-progress outcomes $noProgressStreak times. Session execution " +
                 "blocked by global circuit breaker."
-            AppLogger.warning("ToolLoopDetector",
+            HarnessLog.w("ToolLoopDetector",
                 "CRITICAL global_circuit_breaker tool=$toolName streak=$noProgressStreak")
             return LoopCheckResult(Level.CRITICAL, msg)
         }
@@ -127,7 +127,7 @@ class ToolLoopDetector(private val config: ToolLoopConfig = ToolLoopConfig()) {
             if (noProgressStreak >= config.criticalThreshold) {
                 val msg = "[LOOP BLOCKED] CRITICAL: Called $toolName $noProgressStreak " +
                     "times with identical no-progress results. Session execution blocked."
-                AppLogger.warning("ToolLoopDetector",
+                HarnessLog.w("ToolLoopDetector",
                     "CRITICAL known_poll_no_progress tool=$toolName streak=$noProgressStreak")
                 return LoopCheckResult(Level.CRITICAL, msg)
             }
@@ -135,7 +135,7 @@ class ToolLoopDetector(private val config: ToolLoopConfig = ToolLoopConfig()) {
                 val msg = "[LOOP WARNING] You have called $toolName $noProgressStreak " +
                     "times with no progress. Stop polling and either (1) increase wait " +
                     "time, or (2) report the task as failed."
-                AppLogger.debug("ToolLoopDetector",
+                HarnessLog.d("ToolLoopDetector",
                     "WARNING known_poll_no_progress tool=$toolName streak=$noProgressStreak")
                 return LoopCheckResult(Level.WARNING, msg, "poll:$toolName:$argsHash")
             }
@@ -149,7 +149,7 @@ class ToolLoopDetector(private val config: ToolLoopConfig = ToolLoopConfig()) {
                 val msg = "[LOOP WARNING] You have called $toolName $totalCount times " +
                     "with identical arguments. If this is not making progress, stop " +
                     "retrying and report the task as failed."
-                AppLogger.debug("ToolLoopDetector",
+                HarnessLog.d("ToolLoopDetector",
                     "WARNING generic_repeat tool=$toolName count=$totalCount")
                 return LoopCheckResult(Level.WARNING, msg, "repeat:$toolName:$argsHash")
             }
@@ -173,8 +173,8 @@ class ToolLoopDetector(private val config: ToolLoopConfig = ToolLoopConfig()) {
         errorMessage: String? = null,
         toolCallId: String? = null,
     ): LoopCheckResult {
-        val argsHash = argsHashFor(toolName, params)
-        val resultHash = resultHashFor(result, errorMessage)
+        val argsHash = ToolCallFingerprint.argsHash(toolName, params)
+        val resultHash = ToolCallFingerprint.resultHash(result, errorMessage)
         val unknownToolName = extractUnknownToolName(errorMessage)
 
         history.addLast(ToolCallRecord(
@@ -281,103 +281,6 @@ class ToolLoopDetector(private val config: ToolLoopConfig = ToolLoopConfig()) {
 
     // ─── hashing / parsing primitives ────────────────────────────────────────
 
-    private fun argsHashFor(toolName: String, params: Map<String, Any?>): String {
-        // Drop UI/telemetry-only fields the model freely varies — most notably
-        // `tool_title`, which models routinely counter-suffix ("Read X #1",
-        // "#2", ...). Without this filter every logically identical call hashes
-        // unique and the repeat/circuit-breaker strategies all silently fail.
-        val filtered = if (params.keys.any { it in ARGS_HASH_IGNORED_KEYS }) {
-            params.filterKeys { it !in ARGS_HASH_IGNORED_KEYS }
-        } else {
-            params
-        }
-        return sha256("$toolName:${stableJson(filtered)}")
-    }
-
-    /**
-     * Stable JSON: keys sorted alphabetically at every nesting level so that
-     * a Map<"b" → 2, "a" → 1> hashes identically to one inserted "a" → 1, "b" → 2.
-     */
-    private fun stableJson(value: Any?): String = buildString { appendStable(value) }
-
-    private fun StringBuilder.appendStable(value: Any?) {
-        when (value) {
-            null -> append("null")
-            is Map<*, *> -> {
-                append('{')
-                value.entries
-                    .map { it.key?.toString().orEmpty() to it.value }
-                    .sortedBy { it.first }
-                    .forEachIndexed { i, (k, v) ->
-                        if (i > 0) append(',')
-                        append(JSONObject.quote(k)); append(':'); appendStable(v)
-                    }
-                append('}')
-            }
-            is List<*> -> {
-                append('[')
-                value.forEachIndexed { i, v ->
-                    if (i > 0) append(',')
-                    appendStable(v)
-                }
-                append(']')
-            }
-            is Array<*> -> appendStable(value.toList())
-            is String -> append(JSONObject.quote(value))
-            is Number, is Boolean -> append(value.toString())
-            is JSONObject -> appendStable(value.toMap())
-            is JSONArray -> appendStable(value.toList())
-            else -> append(JSONObject.quote(value.toString()))
-        }
-    }
-
-    private fun JSONObject.toMap(): Map<String, Any?> {
-        val out = HashMap<String, Any?>(length())
-        val keys = keys()
-        while (keys.hasNext()) {
-            val k = keys.next()
-            out[k] = unwrap(get(k))
-        }
-        return out
-    }
-
-    private fun JSONArray.toList(): List<Any?> {
-        val out = ArrayList<Any?>(length())
-        for (i in 0 until length()) out.add(unwrap(get(i)))
-        return out
-    }
-
-    private fun unwrap(v: Any?): Any? = when (v) {
-        JSONObject.NULL -> null
-        is JSONObject -> v.toMap()
-        is JSONArray -> v.toList()
-        else -> v
-    }
-
-    /**
-     * Hash only the success/failure-bearing parts of a tool result. We
-     * deliberately fold the entire output text in too — the spec calls for
-     * stripping noise like timestamps/requestIds, but the platform's tool
-     * results don't carry those at this layer (the underlying tools already
-     * sanitize them). If a future tool starts leaking volatile fields, prune
-     * them here rather than at every call site.
-     */
-    private fun resultHashFor(result: String?, errorMessage: String?): String {
-        val payload = buildString {
-            append("err=")
-            append(errorMessage ?: "")
-            append("out=")
-            append(result ?: "")
-        }
-        return sha256(payload)
-    }
-
-    /**
-     * Two patterns cover the wording variations seen across providers:
-     *   "unknown tool: foobar"          → group 1 = "foobar"
-     *   "tool 'foobar' not found"       → group 1 = "foobar"
-     * Both case-insensitive; quoting and surrounding whitespace tolerated.
-     */
     private fun extractUnknownToolName(errorMessage: String?): String? {
         if (errorMessage.isNullOrBlank()) return null
         UNKNOWN_TOOL_RE_1.find(errorMessage)?.groupValues?.getOrNull(1)?.let { return it }
@@ -385,17 +288,6 @@ class ToolLoopDetector(private val config: ToolLoopConfig = ToolLoopConfig()) {
         return null
     }
 
-    private fun sha256(s: String): String {
-        val md = MessageDigest.getInstance("SHA-256")
-        val bytes = md.digest(s.toByteArray(Charsets.UTF_8))
-        val sb = StringBuilder(bytes.size * 2)
-        for (b in bytes) {
-            val v = b.toInt() and 0xFF
-            sb.append(HEX[v ushr 4])
-            sb.append(HEX[v and 0x0F])
-        }
-        return sb.toString()
-    }
 
     companion object {
         /**
@@ -403,7 +295,6 @@ class ToolLoopDetector(private val config: ToolLoopConfig = ToolLoopConfig()) {
          * (a required UI label that models commonly counter-suffix). Add new
          * entries here if other purely-cosmetic fields ever leak into params.
          */
-        private val ARGS_HASH_IGNORED_KEYS: Set<String> = setOf("tool_title")
 
         private val UNKNOWN_TOOL_RE_1 = Regex(
             """unknown tool[:\s]+["']?([a-zA-Z0-9_.\-]+)["']?""",
@@ -413,6 +304,5 @@ class ToolLoopDetector(private val config: ToolLoopConfig = ToolLoopConfig()) {
             """tool\s+["']?([a-zA-Z0-9_.\-]+)["']?\s+(?:not found|is not available)""",
             RegexOption.IGNORE_CASE,
         )
-        private val HEX = "0123456789abcdef".toCharArray()
     }
 }

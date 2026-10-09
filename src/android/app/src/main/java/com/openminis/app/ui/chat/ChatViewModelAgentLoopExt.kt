@@ -3,7 +3,7 @@ package com.openminis.app.ui.chat
 import android.util.Log
 import androidx.lifecycle.viewModelScope
 import com.openminis.app.R
-import com.openminis.app.agent.Level
+import com.openminis.app.harness.agent.Level
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMError
 import com.openminis.app.data.model.LLMMessage

@@ -56,15 +56,15 @@ internal class ThinkPrefixStreamParser {
 
     private companion object {
         // [T-universal-think-tag] Universal reasoning-tag prefix set, built
-        // from the SHARED table (com.openminis.app.text.ReasoningTagVariants)
+        // from the SHARED table (com.openminis.app.harness.text.ReasoningTagVariants)
         // — the history stripper and this parser carried two diverging copies
         // once (6 vs 9 spellings), so paired blocks of the missing spellings
         // survived history replay while the live stream stripped them. Each
         // vendor spelling is documented there.
         // Longest-first so e.g. "<thinking>" wins over "<think>" when both could
         // prefix-match the same incoming bytes ("<thinkin…").
-        val OPEN_VARIANTS: List<String> = com.openminis.app.text.ReasoningTagVariants.OPEN_TAGS
-        val CLOSE_VARIANTS: List<String> = com.openminis.app.text.ReasoningTagVariants.CLOSE_TAGS
+        val OPEN_VARIANTS: List<String> = com.openminis.app.harness.text.ReasoningTagVariants.OPEN_TAGS
+        val CLOSE_VARIANTS: List<String> = com.openminis.app.harness.text.ReasoningTagVariants.CLOSE_TAGS
         init {
             require(OPEN_VARIANTS.size == CLOSE_VARIANTS.size) { "tag variant table must stay aligned" }
         }

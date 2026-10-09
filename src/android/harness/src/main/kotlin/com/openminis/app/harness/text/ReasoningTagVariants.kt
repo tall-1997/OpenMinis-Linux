@@ -1,4 +1,4 @@
-package com.openminis.app.text
+package com.openminis.app.harness.text
 
 /**
  * [T-universal-think-tag] Single source of truth for the reasoning-tag

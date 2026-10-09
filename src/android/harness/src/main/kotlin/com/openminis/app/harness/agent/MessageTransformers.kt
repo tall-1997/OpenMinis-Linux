@@ -1,4 +1,4 @@
-package com.openminis.app.agent
+package com.openminis.app.harness.agent
 
 import java.io.File
 
@@ -77,7 +77,7 @@ object MessageTransformerChain {
      * `<|thinking|>…<|/thinking|>` forms, case-insensitive, across newlines.
      *
      * [T-universal-think-tag-history] The variant list comes from the shared
-     * [com.openminis.app.text.ReasoningTagVariants] table — the stripper and
+     * [com.openminis.app.harness.text.ReasoningTagVariants] table — the stripper and
      * the stream parser once carried two diverging copies, and paired blocks
      * spelled `<antThinking>`/`<inner_thought>`/`<scratchpad>` survived the
      * history path while the live stream stripped them ("刷新后思考块原文重现").
@@ -92,13 +92,13 @@ object MessageTransformerChain {
     private object ReasoningTagStripper : MessageTransformer {
         override val id = "reasoning-tag-strip"
 
-        private val names = com.openminis.app.text.ReasoningTagVariants.ALTERNATION
+        private val names = com.openminis.app.harness.text.ReasoningTagVariants.ALTERNATION
 
         private val namedBlocks = Regex(
             """(?s)<\s*($names)\s*>(.*?)</\s*\1\s*>""",
             RegexOption.IGNORE_CASE,
         )
-        private val specialNames = com.openminis.app.text.ReasoningTagVariants.SPECIAL_NAMES.joinToString("|")
+        private val specialNames = com.openminis.app.harness.text.ReasoningTagVariants.SPECIAL_NAMES.joinToString("|")
         private val specialTokenBlocks = Regex(
             """(?s)<\|($specialNames)\|>(.*?)<\|/\1\|>""",
             RegexOption.IGNORE_CASE,
