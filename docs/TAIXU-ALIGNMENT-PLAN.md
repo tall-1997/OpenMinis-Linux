@@ -11,7 +11,7 @@
 >
 > **验证基线修正**：原写「基线 5220 tests」从未被复现。实测口径为
 > `:app:testReleaseUnitTest` = **2893**（359 个结果 XML）+ `:harness:test` = **143**，
-> 均 0 失败（2026-10-09，6eb3f4b 之后：app **2892** / harness **233**）。
+> 均 0 失败（2026-10-09：app **2892** / harness **236**）。
 > 后续每批以这两个数为新基线。**P0-3（统一重试/恢复层）已于 `62fc977` 闭环。**
 
 ## 模块策略（已定）
@@ -29,7 +29,10 @@ taixu `harness/` 是 **Android 库**（依赖 Room/OkHttp/Ktor/Koin，14 文件�
 > 磁盘运行时台账（FileHarnessRuntimePersistence 单文件五表）+ 循环转移挂点 +
 > 崩溃窗口恢复链（台账合成 → DanglingToolCallPlanner）。
 > **批次三接缝二/三**（`6eb3f4b`）：ToolExecutorPort（每轮实例捕获 UI 上下文）+
-> ConversationPort（有界历史口径，恢复链已消费）落地。剩 UiEventSink（接缝四）。
+> ConversationPort（有界历史口径，恢复链已消费）落地。
+> **接缝四 + 循环片段一**：UiEventSink 落地即被消费——两条执行前拒绝路径
+> （preflight 校验拒/截断拒）纯逻辑半边迁 harness/agent/ToolCallPreflight，
+> AgentLoopExt 2285→2255 首次因迁移收缩。四道接缝齐。
 > 剩余 P0-1 = agent 循环 / 工具派发 / 上下文治理本体，需 ConversationPort /
 > ToolExecutorPort / UiEventSink 等后续接缝，仍在批次三。
 
@@ -103,4 +106,4 @@ taixu `harness/` 是 **Android 库**（依赖 Room/OkHttp/Ktor/Koin，14 文件�
 
 每批结束跑 `./gradlew :app:testReleaseUnitTest` + `:harness:test` +
 `:architectureCheck`，确认零失败、棘轮不越线。每批独立 commit。
-当前基线：app **2892** / harness **233**（6eb3f4b）。
+当前基线：app **2892** / harness **236**。
