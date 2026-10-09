@@ -10,8 +10,8 @@
 > 的口径**不算能力补齐**，只是「可复用件已入库」。接线清单见各条备注。
 >
 > **验证基线修正**：原写「基线 5220 tests」从未被复现。实测口径为
-> `:app:testReleaseUnitTest` = **2893**（359 个结果 XML）+ `:harness:test` = **130**，
-> 均 0 失败（2026-10-09，6b0d8bc 之后）。后续每批以这两个数为新基线。
+> `:app:testReleaseUnitTest` = **2893**（359 个结果 XML）+ `:harness:test` = **142**，
+> 均 0 失败（2026-10-09，2b61fa7 之后）。后续每批以这两个数为新基线。
 
 ## 模块策略（已定）
 
@@ -52,7 +52,9 @@ taixu `harness/` 是 **Android 库**（依赖 Room/OkHttp/Ktor/Koin，14 文件�
       阻塞：闭包分析显示它拖入 SubagentOrchestrator + ToolExecutor（41x），
       需先接口化或排到第三批之后。
 - [ ] 2.4 `compaction/`（1011 行，替换 `android.util.Log`）
-      阻塞：闭包拖入 ProviderClient / ContextWindowPolicy / SessionTreeStore。
+      前置已落地：`SessionTreeStore` + `SessionTreeRepository` 接缝 + `HarnessLog`
+      （`2b61fa7`，12 例自定验收测试）。仍缺 ProviderClient /
+      ContextWindowPolicy 接缝—— compaction 的投影要读 provider 形状。
 - [ ] 2.5 `prompt/`（1233 行，Context 注入）
 - [x] 2.6 `queue/PromptQueueManager.kt`（135 行）（`ebd0b59`，**已接线**）
       **超出计划**：不止 Room 接口化——做了文件持久化 + 完整宿主接线
@@ -77,4 +79,4 @@ taixu `harness/` 是 **Android 库**（依赖 Room/OkHttp/Ktor/Koin，14 文件�
 
 每批结束跑 `./gradlew :app:testReleaseUnitTest` + `:harness:test` +
 `:architectureCheck`，确认零失败、棘轮不越线。每批独立 commit。
-当前基线：app **2893** / harness **130**（6b0d8bc）。
+当前基线：app **2893** / harness **142**（2b61fa7）。
