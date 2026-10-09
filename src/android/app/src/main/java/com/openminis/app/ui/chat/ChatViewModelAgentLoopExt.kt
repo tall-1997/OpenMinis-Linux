@@ -55,6 +55,8 @@ internal suspend fun ChatViewModel.runAgentLoop(
     withContext(Dispatchers.IO) {
         rebuildAgentHistoryFromDatabase(activeSessionId)
     }
+    // [T-checkpoint-rewind] 每轮起点开检查点（实现见 ChatCheckpointExt.kt）。
+    beginCheckpointTurn()
     AppLogger.info(ChatViewModel.TAG_STREAM, "runAgentLoop ENTER provider=${provider.javaClass.simpleName} historySize=${agentHistory.size}")
     // [T-generation-run] 每轮生成落账：崩溃后可定位半截流归属哪个会话/模型。
     // 成功时 finish(DONE)；失败路径不落 FINISH，留 RUNNING 由
@@ -136,23 +138,19 @@ internal suspend fun ChatViewModel.runAgentLoop(
     activeRun?.associateSession(activeSessionId)
     activeRun?.attachAssistantMessage(assistantId)
 
-    // T94 fix 2: throttle text-delta UI updates to ~20fps (50ms).
-    // Pre-T94 the LLMStreamChunk.Text branch hopped to Dispatchers.Main
-    // for every chunk — Anthropic SSE on a slow turn fires 50-100 deltas
-    // per second, each one triggering a full _messages.value reassignment
-    // and a Compose recomposition of the whole chat list. The combined
-    // Main-thread cost is what saturated the touch-event queue and
-    // produced the "Waited 5001ms for MotionEvent" ANRs we saw on
-    // host.example.com. We coalesce deltas in `pendingChunkText` and only
-    // flip the UI on a 50ms timer; the per-stream end and per-retry
-    // rollback paths flush whatever's pending so no characters are lost.
-    // T256: tiered streaming throttle, mirrors iOS AIChatViewModel.swift
-    // 6135-6155. The fixed 50ms window saturated the Pixel 4a UI thread
-    // (95p frame 77ms / 29% janky). 6-segment ladder lets short replies
-    // stay snappy (150ms ≈ 6.5 fps which is fine for <500-char snippets)
-    // while long-form output (>32k chars) drops to 0.5-2s gates.
-    // Newline fast-path keeps short messages flowing at human-readable
-    // pace while still avoiding the per-token recompose storm.
+    // T94 fix 2: throttle text-delta UI updates (~20fps, 50ms). Pre-T94 every
+    // LLMStreamChunk.Text hopped to Dispatchers.Main — Anthropic SSE fires
+    // 50-100 deltas/s on a slow turn, each triggering a full _messages.value
+    // reassignment and a whole-list recompose; the Main-thread cost saturated
+    // the touch-event queue ("Waited 5001ms for MotionEvent" ANRs). Deltas
+    // coalesce in `pendingChunkText`; stream-end / retry-rollback flush
+    // whatever's pending so no characters are lost.
+    // T256: tiered throttle, mirrors iOS AIChatViewModel.swift 6135-6155. The
+    // fixed 50ms window saturated the Pixel 4a UI thread (95p frame 77ms /
+    // 29% janky). A 6-segment ladder keeps short replies snappy (150ms ≈
+    // 6.5fps, fine for <500-char snippets) while long-form output (>32k
+    // chars) drops to 0.5-2s gates; a newline fast-path still avoids the
+    // per-token recompose storm.
     var lastUiUpdateMs = 0L
     var lastFlushedLen = 0
     // T307: per-delta String += chunk.text on Pixel-class heaps was O(n²)

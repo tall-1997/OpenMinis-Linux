@@ -439,6 +439,9 @@ class ChatRepository(
         if (dir != null) {
             runCatching { ExecutionCoordinator.sessionDidTerminate(id) }
             SessionWorkspace.deleteEntire(dir, id)
+            // [T-checkpoint-rewind] 轮次检查点随会话一起消亡：内存态 + 磁盘
+            // （异步写队列与删除在同一串行执行器上排队，见 CheckpointStore.dropSession）。
+            runCatching { com.openminis.app.checkpoint.CheckpointBridge.dropSession(dir, id) }
         }
     }
 
@@ -949,8 +952,7 @@ class ChatRepository(
         // dump — Issue #17) cannot land an oversize blob into a Room row
         // that later fails CursorWindow's 2 MB ceiling on read. We keep
         // the row in the same parts_json shape (text part) so downstream
-        // parsers — UI rendering and JSON-array consumers in DAO/search
-        // — never break on the truncated payload.
+        // parsers never break on the truncated payload.
         val message = MessageEntity(
             id = UUID.randomUUID().toString(),
             sessionId = sessionId,
@@ -974,15 +976,10 @@ class ChatRepository(
         // [T-android-preview-flicker-toolresult] Only overwrite the preview
         // when this row actually yields one. A tool-result row is
         // `[{"type":"toolResult",…}]`, a shape extractTextPreview does not
-        // summarize (it handles text / mediaRef / toolUse), so it returns
-        // null — and writing that null blanked the column, flipping the
-        // session list to "No messages yet" the instant a tool finished. The
-        // live preview pushed before the tool ran had just put the tool title
-        // there, so a multi-tool run visibly oscillated between the title and
-        // the empty state on every tool boundary.
-        //
-        // The row's own timestamp is still worth recording: it is what keeps
-        // the session sorted as recently-active while a long tool chain runs.
+        // summarize, so it returns null — and writing that null blanked the
+        // column, flipping the session list to "No messages yet" the instant a
+        // tool finished. The row's own timestamp is still worth recording: it
+        // keeps the session sorted as recently-active during a long tool chain.
         val preview = extractTextPreview(stored.inline)
         if (preview != null) {
             dao.updateLastMessage(sessionId, preview, now)

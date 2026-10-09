@@ -22,13 +22,21 @@
     "baselineFile": ".architecture-baseline.json"
   },
   "groups": {
-    "pureKotlin": ["core.model", "core.common", "harness", "provider.api", "hostcapability.api"]
+    "pureKotlin": [
+      "core.model",
+      "core.common",
+      "harness",
+      "provider.api",
+      "hostcapability.api"
+    ]
   },
   "importBans": [
     {
       "id": "pure-kotlin-layer",
       "pattern": "^import\\s+(android|androidx)\\.",
-      "groups": ["pureKotlin"],
+      "groups": [
+        "pureKotlin"
+      ],
       "message": "JVM 层模块必须保持 Pure Kotlin，严禁引入 android/androidx（需要平台能力请走构造参数注入，调用方传值）"
     }
   ],
@@ -36,33 +44,53 @@
     {
       "id": "app",
       "path": "app",
-      "requires": ["core.model", "core.common", "provider.api", "hostcapability.api"]
+      "requires": [
+        "core.model",
+        "core.common",
+        "provider.api",
+        "hostcapability.api",
+        "harness"
+      ]
     },
     {
       "id": "core.model",
       "path": "core/model",
       "requires": [],
-      "forbidBuildScript": ["android.library", "androidx."],
+      "forbidBuildScript": [
+        "android.library",
+        "androidx."
+      ],
       "_doc": "纯 Kotlin 数据模型：依赖白名单为空 + 构建脚本禁平台插件 + import 禁 android/androidx"
     },
     {
       "id": "core.common",
       "path": "core/common",
       "requires": [],
-      "forbidBuildScript": ["android.library", "androidx."],
+      "forbidBuildScript": [
+        "android.library",
+        "androidx."
+      ],
       "_doc": "通用工具层不依赖任何兄弟模块，防止核心层反向耦合"
     },
     {
       "id": "harness",
       "path": "harness",
-      "requires": ["core.model", "core.common"],
-      "forbidBuildScript": ["android.library", "androidx."],
+      "requires": [
+        "core.model",
+        "core.common"
+      ],
+      "forbidBuildScript": [
+        "android.library",
+        "androidx."
+      ],
       "_doc": "Agent 可靠性工具层：JVM 库（对齐 core/model 的纯 Kotlin 模式），仅允许依赖同为纯 Kotlin 的模块"
     },
     {
       "id": "provider.api",
       "path": "provider/api",
-      "requires": ["core.model"]
+      "requires": [
+        "core.model"
+      ]
     },
     {
       "id": "hostcapability.api",

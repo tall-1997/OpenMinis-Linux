@@ -351,6 +351,9 @@ dependencies {
     implementation(project(":core:common"))
     implementation(project(":provider:api"))
     implementation(project(":hostcapability:api"))
+    // [T-checkpoint-rewind] harness 检查点/回滚核心（纯 JVM，见 architecture-policy.json
+    // app.requires）。app 侧只经 com.openminis.app.checkpoint.CheckpointBridge 使用它。
+    implementation(project(":harness"))
     // Compose BOM
     val composeBom = platform("androidx.compose:compose-bom:2025.09.00")
     implementation(composeBom)

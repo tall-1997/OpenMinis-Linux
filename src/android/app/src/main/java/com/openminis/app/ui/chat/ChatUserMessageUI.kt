@@ -100,6 +100,9 @@ internal fun UserMessageBubble(
     // it. Null hides the action (streaming, or a host with no truncation
     // capability).
     onDeleteFromHere: (() -> Unit)? = null,
+    // [T-checkpoint-rewind] Rewind this turn; null while streaming (see
+    // ChatRewindDialog.kt for the body and the gating rationale).
+    onRewind: (() -> Unit)? = null,
     onWithdraw: (() -> Unit)? = null,
     onPreviewFile: (Uri, String) -> Unit = { _, _ -> },
 ) {
@@ -200,19 +203,17 @@ internal fun UserMessageBubble(
                                 )
                             }
                         } else Modifier
-                        // The whole LazyColumn is wrapped in a SelectionContainer,
-                        // which by default starts text-selection on long-press. We
-                        // want long-press on a user bubble to open the Copy/Retry
-                        // menu instead, with NO selection ever registered against
-                        // this Text. If we let selection register and the user
-                        // taps "Retry", retryFromMessage truncates the list and
-                        // the SelectionManager toolbar update then sorts stale
-                        // LayoutCoordinates → IllegalArgumentException
+                        // The whole LazyColumn sits in a SelectionContainer, which
+                        // by default starts text-selection on long-press. We want
+                        // long-press to open the Copy/Retry menu instead, with NO
+                        // selection registered against this Text: if selection
+                        // registers and the user taps "Retry", retryFromMessage
+                        // truncates the list and the SelectionManager toolbar then
+                        // sorts stale LayoutCoordinates → IllegalArgumentException
                         // ("layouts are not part of the same hierarchy").
-                        // DisableSelection scopes the bubble out of selection.
-                        // Long-press is captured on the outer Box (above) so
-                        // press coords share a LayoutCoordinates space with the
-                        // menu anchor.
+                        // DisableSelection scopes the bubble out; long-press is
+                        // captured on the outer Box so press coords share a
+                        // LayoutCoordinates space with the menu anchor.
                         androidx.compose.foundation.text.selection.DisableSelection {
                             // T167: when queued, leave room for the 44dp cancel
                             // IconButton sibling. Without weight(1f, fill=false)
@@ -270,22 +271,19 @@ internal fun UserMessageBubble(
             }
 
             // Long-press context menu — anchored to the bubble itself.
-            // Small positive y-offset so the menu doesn't sit flush against
-            // the bubble; the alignEnd path mirrors the offset when it
-            // auto-flips above (no room below), so the gap is symmetric in
-            // both directions. T238: alignEnd pins the menu's right edge to
-            // the bubble's right edge — user bubbles are right-aligned, the
-            // menu should follow. Mirrors iOS Messages.app context menu.
-            // T280: shrink width ~30% (default minWidth 240dp → 168dp,
-            // alignEnd-branch max 280dp → 196dp) so the popup feels less
-            // chunky on user bubbles, which only host 2-3 short items
-            // (Copy / Retry / Edit). Override is local to the user-message
-            // call site — other MinisMenu callers keep the default 240dp
-            // minimum.
-            // [T-android-tool-menu-minwidth] Match the tool-pill long-press
-            // menu: width = min(220dp, screen width). Wants 220dp but must never
-            // exceed the device width on a narrow screen; cap max to the same
-            // value so the widthIn(min,max) range is always valid.
+            // Small positive y-offset so the menu doesn't sit flush against the
+            // bubble; alignEnd mirrors it when the menu auto-flips above (no
+            // room below), keeping the gap symmetric. T238: alignEnd pins the
+            // menu's right edge to the bubble's — user bubbles are right-aligned
+            // and the menu follows, as in iOS Messages.app.
+            // T280: shrink width ~30% (default minWidth 240dp → 168dp, alignEnd
+            // max 280dp → 196dp) so the popup reads less chunky on user bubbles
+            // that only host 2-3 short items (Copy / Retry / Edit); local to
+            // this call site, other MinisMenu callers keep 240dp.
+            // [T-android-tool-menu-minwidth] Match the tool-pill long-press menu:
+            // width = min(220dp, screen width) — wants 220dp but must never
+            // exceed the device width; cap max to the same value so the
+            // widthIn(min,max) range stays valid.
             val userMenuWidthDp = minOf(220, LocalConfiguration.current.screenWidthDp).dp
             MinisMenu(
                 expanded = showMenu,
@@ -320,6 +318,8 @@ internal fun UserMessageBubble(
                         leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp)) },
                     )
                 }
+                // [T-checkpoint-rewind] Recoverable counterpart to Delete.
+                if (onRewind != null) RewindMenuEntry { showMenu = false; onRewind() }
                 // [T-android-delete-from-here] Removes this message and every
                 // message after it. Destructive and not undoable, so it sits
                 // last (furthest from the thumb's resting position on the

@@ -1,6 +1,7 @@
 package com.openminis.app.tools
 
 import android.content.Context
+import com.openminis.app.checkpoint.CheckpointBridge
 import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.model.AgentToolParam
 import com.openminis.app.sandbox.PRootKernel
@@ -91,20 +92,10 @@ object FileEditTool {
             val outcome = AtomicFileWrite.readModifyWrite(file) { current ->
                 when (val r = TextReplacers.replace(current, oldString, newString, replaceAll)) {
                     is TextReplacers.Result.Success -> {
-                        // [T-file-checkpoint] Snapshot inside the SAME per-path
-                        // lock as the write, and only on the success branch: a
-                        // capture outside the lock could read bytes another
-                        // writer already replaced, and capturing before we know
-                        // the replacement matched would litter the list with
-                        // checkpoints for edits that never happened.
-                        FileCheckpointStore.capture(
-                            context, sessionId, listOf(path),
-                            label = "before file_edit", source = "file_edit",
-                        ).checkpoint?.let { cp ->
-                            com.openminis.app.logging.AppLogger.info(
-                                "FileEdit", "checkpoint ${cp.id} captured for $path",
-                            )
-                        }
+                        // [T-checkpoint-rewind] 在同一个 per-path 锁内、且只在成功
+                        // 分支捕获：锁外读可能拿到别人已替换的字节；未匹配就捕获
+                        // 会给没发生的编辑留下垃圾检查点。
+                        CheckpointBridge.captureBeforeText(context, sessionId, path, current)
                         ReplaceOutcome(r.newContent, r.count)
                     }
                     is TextReplacers.Result.Failure ->
@@ -121,10 +112,19 @@ object FileEditTool {
                     "Error: ${outcome.message}",
                     false, toolTitle = toolTitle,
                 )
-                is ReplaceOutcome -> ToolExecutionResult(
-                    "Edited $path (${outcome.replacements} replacement(s), ${outcome.newContent.length} bytes)",
-                    true, toolTitle = toolTitle,
-                )
+                is ReplaceOutcome -> {
+                    // [T-checkpoint-rewind] 写后凭据：rewind 冲突检测的比对基线，
+                    // 与 readModifyWrite 锁内捕获的轮初快照成对。readModifyWrite
+                    // 返回 ReplaceOutcome 即写入已落盘并通过校验（写失败返回 null）。
+                    // 从盘上重读而非直接用 outcome.newContent：readModifyWrite 会
+                    // 先还原被剥离的 BOM 再写，盘上字节与 newContent 可能不同；
+                    // 读取方式与 AppRewindFileAccess.previewOrNull 一致，凭据才可比。
+                    CheckpointBridge.captureAfter(context, sessionId, path, file)
+                    ToolExecutionResult(
+                        "Edited $path (${outcome.replacements} replacement(s), ${outcome.newContent.length} bytes)",
+                        true, toolTitle = toolTitle,
+                    )
+                }
                 else -> ToolExecutionResult("Error: unexpected outcome", false, toolTitle = toolTitle)
             }
         } catch (e: Exception) {

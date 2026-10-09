@@ -117,11 +117,6 @@ class SecurityGateImpl : SecurityGate {
             "file_read" -> GateCommand(name, toolArgs, Capability.FS, Reversibility.REVERSIBLE, "只读文件操作，可逆")
             "file_write" -> GateCommand(name, toolArgs, Capability.FS, Reversibility.REVERSIBLE, "文件写入可回滚")
             "file_edit", "multi_edit" -> GateCommand(name, toolArgs, Capability.FS, Reversibility.REVERSIBLE, "文件局部编辑可回滚")
-            // Not in WRITE_TOOLS on purpose: capture only READS, and restore
-            // rewrites the same bytes a file_write/file_edit already put
-            // behind an approval prompt — gating the undo would mean asking
-            // the user to approve the rollback of a change they just approved.
-            "file_checkpoint" -> GateCommand(name, toolArgs, Capability.FS, Reversibility.REVERSIBLE, "文件检查点快照与回滚")
             "list_dir", "grep", "grep_source", "glob" ->
                 GateCommand(name, toolArgs, Capability.FS, Reversibility.REVERSIBLE, "只读文件/目录操作，可逆")
             "web_search", "web_fetch" -> GateCommand(name, toolArgs, Capability.NET, Reversibility.REVERSIBLE, "只读网络")
@@ -617,22 +612,6 @@ class SecurityGateImpl : SecurityGate {
                     }
                 }
             } catch (_: Exception) { cmd.toolArgs }
-        }
-        // args carry a `paths` ARRAY, not `path`. Left on the default branch
-        // it would fall through as the raw JSON blob and be read as a command
-        // string, so prefix/path rules would match against `{...}` instead of
-        // the files actually being snapshotted.
-        "file_checkpoint" -> {
-            try {
-                val a = JSONObject(cmd.toolArgs)
-                val arr = a.optJSONArray("paths")
-                val joined = if (arr != null && arr.length() > 0) {
-                    (0 until arr.length()).joinToString(" ") { arr.optString(it) }
-                } else {
-                    a.optString("path", "")
-                }
-                joined.ifBlank { "file_checkpoint ${a.optString("op", "")}" }
-            } catch (_: Exception) { "file_checkpoint" }
         }
         else -> cmd.toolArgs
     }

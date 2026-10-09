@@ -2610,4 +2610,20 @@
     <string name="db_quarantine_copy_at">Damaged copy kept at:\n%1$s</string>
     <string name="db_quarantine_keep">Keep the copy</string>
     <string name="db_quarantine_delete">Delete the damaged copy</string>
+    <string name="chat_rewind_menu">Rewind To Here</string>
+    <string name="chat_rewind_title">Rewind to this turn?</string>
+    <string name="chat_rewind_subtitle">Files written by later turns are rolled back. Choose how far the rollback reaches.</string>
+    <string name="chat_rewind_code">Code only</string>
+    <string name="chat_rewind_code_desc">Restore files to their state before this turn.</string>
+    <string name="chat_rewind_conversation">Conversation only</string>
+    <string name="chat_rewind_conversation_desc">Fork the chat back to this turn, keeping files as they are.</string>
+    <string name="chat_rewind_both">Code and conversation</string>
+    <string name="chat_rewind_both_desc">Restore files and fork the chat back to this turn.</string>
+    <string name="chat_rewind_undo">Undo</string>
+    <string name="chat_rewind_done">Rewind complete: %1$d restored, %2$d deleted</string>
+    <string name="chat_rewind_switched">switched to the forked branch</string>
+    <string name="chat_rewind_failed">Rewind failed: %1$s</string>
+    <string name="chat_rewind_no_checkpoint">No checkpoint for this turn — no file was written in it.</string>
+    <string name="chat_rewind_no_undo">Nothing to undo.</string>
+    <string name="chat_rewind_undone">Rollback undone: %1$d restored, %2$d deleted</string>
 </resources>

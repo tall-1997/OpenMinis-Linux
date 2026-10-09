@@ -843,30 +843,24 @@ fun ChatScreen(
     val coroutineScope = rememberCoroutineScope()
 
     var showModelPicker by remember { mutableStateOf(false) }
-    // [T-android-modelpicker-stuck-ripple] Interaction source for the navbar
-    // model-picker row, owned here so the press can be drained when the picker
-    // closes. See the clickable's comment for why the release never arrives on
-    // its own.
-    // [T-android-modelpicker-stuck-ripple] The row owns an InteractionSource
-    // that is REPLACED whenever the picker closes, rather than one whose
-    // presses we try to cancel individually.
+    // [T-android-modelpicker-stuck-ripple] The navbar model-picker row owns an
+    // InteractionSource that is REPLACED whenever the picker closes, rather
+    // than one whose presses we try to cancel individually.
     //
     // Why replacement: opening the picker puts a modal sheet over this row, so
     // the pointer's UP never reaches the clickable — Compose emits
     // PressInteraction.Press with no matching Release and the ripple stays
-    // lit, still visible after the sheet closes as a permanent grey highlight.
+    // lit, visible after the sheet closes as a permanent grey highlight.
     //
     // The obvious fix (collect the interactions, remember the open presses,
-    // emit Cancel for each on close) does NOT work reliably, and shipping it
-    // was the first attempt: MutableInteractionSource's flow has replay=0 and
-    // the collector is started by a LaunchedEffect coroutine, so a Press that
-    // lands before that coroutine is dispatched is never observed. The
-    // bookkeeping list is then empty, no Cancel is emitted, and the ripple
-    // stays exactly as stuck as before — while the ripple's own internal
-    // subscriber, registered during composition, did see it.
-    //
-    // Handing the clickable a brand-new source drops every interaction the old
-    // one was holding, with no dependence on collector timing.
+    // emit Cancel for each on close) does NOT work reliably: the flow has
+    // replay=0 and the collector is started by a LaunchedEffect coroutine, so
+    // a Press landing before that coroutine is dispatched is never observed —
+    // the bookkeeping list stays empty, no Cancel is emitted, and the ripple
+    // is exactly as stuck as before, while the ripple's own internal
+    // subscriber (registered during composition) did see it. Handing the
+    // clickable a brand-new source drops every interaction the old one held,
+    // with no collector timing dependence.
     var modelPickerInteractionGeneration by remember { mutableIntStateOf(0) }
     val modelPickerInteraction = remember(modelPickerInteractionGeneration) {
         MutableInteractionSource()
@@ -892,10 +886,11 @@ fun ChatScreen(
     var showClearChatDialog by remember { mutableStateOf(false) }
     var showCardShareDialog by remember { mutableStateOf(false) }
     // [T-android-delete-from-here] Id of the message a pending "Delete From
-    // Here" would cut at, or null when no confirmation is open. Holding the
-    // id (rather than a boolean plus a separate field) keeps the dialog and
-    // its target impossible to desynchronize.
+    // Here" would cut at; null = no confirmation open. Holding the id keeps
+    // the dialog and its target impossible to desynchronize.
     var deleteFromHereTargetId by remember { mutableStateOf<String?>(null) }
+    // [T-checkpoint-rewind] Same shape, for the rewind scope picker.
+    var rewindTargetId by remember { mutableStateOf<String?>(null) }
     // [T-new-chat-menu-entry] Confirmation gate for "New Chat" while the
     // current session is still streaming — stopping the running task needs
     // an explicit confirm; idle sessions skip the dialog entirely.
@@ -963,12 +958,12 @@ fun ChatScreen(
     // [T-android-camera-rotate-lost-photo] MainActivity has no
     // configChanges="orientation", so capturing in one orientation and
     // returning in another RECREATES the Activity. These pending handles must
-    // therefore survive the recreate — `remember` is reset on recomposition
-    // after recreation, so the ActivityResult callback would see a null uri
-    // and silently drop the just-taken photo (gallery picks are unaffected:
-    // their result Uri arrives directly in-callback). `rememberSaveable`
-    // persists through savedInstanceState: Uri is Parcelable; the staging
-    // File is saved as its absolute path string and rebuilt on read.
+    // therefore survive the recreate — `remember` is reset by it, so the
+    // ActivityResult callback would see a null uri and silently drop the
+    // just-taken photo (gallery picks are unaffected: their result Uri arrives
+    // directly in-callback). `rememberSaveable` persists through
+    // savedInstanceState: Uri is Parcelable, the staging File is saved as its
+    // absolute path string and rebuilt on read.
     var pendingCameraUri by rememberSaveable { mutableStateOf<Uri?>(null) }
     var pendingCameraFilePath by rememberSaveable { mutableStateOf<String?>(null) }
     val cameraLauncher = rememberLauncherForActivityResult(
@@ -1132,9 +1127,8 @@ fun ChatScreen(
     // skip the AppLogger.debug call (which builds a long format string and
     // writes a daily log file). Flip locally when debugging scroll behavior.
     // [T-android-scroll-telemetry-gate] Declared BEFORE the traced wrappers so
-    // their (previously unconditional) per-call logging can be gated too —
-    // the old TEMP ScrollSrc log built a long string on every programmatic
-    // scroll in production.
+    // their per-call logging is gated too — the old TEMP ScrollSrc log built a
+    // long string on every programmatic scroll in production.
     val verboseScrollLogs = false
     val tracedScrollToItem: suspend (source: String, idx: Int, off: Int) -> Unit = { source, idx, off ->
         if (verboseScrollLogs) {
@@ -1241,10 +1235,10 @@ fun ChatScreen(
             // case, but it ALSO stayed true as the user scrolled up by
             // thousands of px — settle-after-interaction then snapped them
             // right back. Use the LazyListState anchor instead: under
-            // reverseLayout, "at bottom" ⇔ index 0 is the first item AND
-            // its scroll offset is within `threshold` px. Any drag upward
-            // grows firstVisibleItemScrollOffset past threshold instantly,
-            // so the user's intent flips into userScrolledAway.
+            // reverseLayout, "at bottom" ⇔ index 0 is the first item AND its
+            // scroll offset is within `threshold` px. Any drag upward grows
+            // firstVisibleItemScrollOffset past threshold instantly, so the
+            // user's intent flips into userScrolledAway.
             val firstIdx = listState.firstVisibleItemIndex
             val firstOff = listState.firstVisibleItemScrollOffset
             // [T-android-scroll-isnearbottom-bug] Anchor authority lives on
@@ -1314,9 +1308,9 @@ fun ChatScreen(
     // equivalent to iOS's UIScrollView. Earlier estimations (off-screen item
     // count × avg/min visible-item size) misfired badly because one assistant
     // message expands into many FlatChatItems (header, several markdown
-    // blocks, tool blocks, typing indicator); the index count balloons out
-    // of proportion to actual pixel distance, so the up-button kept popping
-    // up right above the input bar when only a tool-block + header lay
+    // blocks, tool blocks, typing indicator); the index count balloons out of
+    // proportion to actual pixel distance, so the up-button kept popping up
+    // right above the input bar when only a tool-block + header lay
     // off-screen.
     //
     // Instead we OBSERVE: every time an item enters the viewport, cache its
@@ -1454,10 +1448,8 @@ fun ChatScreen(
     // has to reach up and tap the composer again after every single send.
     //
     // Read from Configuration rather than an input-device scan: `qwerty` +
-    // `keysexposed` is exactly the state Android already tracks for this, it
-    // updates live when a Bluetooth keyboard connects or a cover folds shut,
-    // and it recomposes the caller for free. Verified on a Mate Pad, which
-    // reports `keysexposed-qwerty` with its keyboard attached.
+    // `keysexposed` is exactly the state Android already tracks for this, and
+    // it recomposes the caller for free. Verified on a Mate Pad.
     val configuration = LocalConfiguration.current
     val hasHardwareKeyboard = configuration.keyboard ==
         android.content.res.Configuration.KEYBOARD_QWERTY &&
@@ -4168,6 +4160,8 @@ fun ChatScreen(
                                 onDeleteFromHere = if (isStreaming) null else ({
                                     deleteFromHereTargetId = item.message.id
                                 }),
+                                // [T-checkpoint-rewind] Gated like Retry: rewinds mutate live rows.
+                                onRewind = if (isStreaming) null else ({ rewindTargetId = item.message.id }),
                                 // T187: long-press → Edit pulls the user message
                                 // text into the composer; the next send truncates
                                 // from this turn (inclusive) before persisting
@@ -7201,6 +7195,12 @@ fun ChatScreen(
                     },
                 )
             }
+            // [T-checkpoint-rewind] Scope picker + result snackbar, rendered
+            // outside the message list so the dialog survives the truncation.
+            ChatRewindHost(
+                viewModel, rewindTargetId, { rewindTargetId = null },
+                snackbarHostState, onMoveToSession,
+            )
             // [T-android-delete-from-here] Confirm before truncating. The cut
             // removes the tapped message AND everything after it with no undo,
             // so the body states how many messages that actually is — "delete

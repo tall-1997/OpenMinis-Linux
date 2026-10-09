@@ -1,6 +1,7 @@
 package com.openminis.app.tools
 
 import android.content.Context
+import com.openminis.app.checkpoint.CheckpointBridge
 import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.model.AgentToolParam
 import com.openminis.app.sandbox.PRootKernel
@@ -66,21 +67,9 @@ object FileWriteTool {
             val file = PRootKernel.resolveSessionHostPath(sessionId, path, context)
                 ?: return ToolExecutionResult("Error: Cannot resolve path: $path", false, toolTitle = toolTitle)
 
-            // [T-file-checkpoint] Snapshot the CURRENT bytes before they are
-            // replaced, so a bad rewrite is recoverable via file_checkpoint
-            // restore. Best-effort — a capture failure must never block the
-            // write itself. Capture only fires when the file already exists;
-            // a create has nothing to lose and restore would just delete it.
-            if (!append && file.exists() && file.isFile) {
-                FileCheckpointStore.capture(
-                    context, sessionId, listOf(path),
-                    label = "before file_write", source = "file_write",
-                ).checkpoint?.let { cp ->
-                    com.openminis.app.logging.AppLogger.info(
-                        "FileWrite", "checkpoint ${cp.id} captured for $path",
-                    )
-                }
-            }
+            // [T-checkpoint-rewind] 落盘前捕获轮初内容（文件不存在则记 null，
+            // rewind 时删除本轮新建的文件）。best-effort：捕获失败绝不挡写入。
+            CheckpointBridge.captureBefore(context, sessionId, path, file)
 
             // Validate UTF-8
             try {
@@ -118,6 +107,14 @@ object FileWriteTool {
                         "and Settings → Mount External Folders.",
                     false, toolTitle = toolTitle,
                 )
+
+            // [T-checkpoint-rewind] 写后凭据：rewind 冲突检测（isExternallyModified）
+            // 的比对基线，与上面的轮初快照成对——store 侧只认已有 pre-image 的路径，
+            // 超大文件在此与捕获前同样整体跳过。
+            // 必须从盘上重读而不是直接用 content：append 模式下落盘结果是
+            // 「旧内容 + content」，入参不等于文件的最终状态。读取方式与
+            // AppRewindFileAccess.previewOrNull 一致，凭据才可比。
+            CheckpointBridge.captureAfter(context, sessionId, path, file)
 
             com.openminis.app.logging.AppLogger.info(
                 "FileWrite",
