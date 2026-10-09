@@ -20,9 +20,9 @@ class PortsContractTest {
     }
 
     private class FakeToolExecutor(private val outcomes: Map<String, ToolOutcome>) : ToolExecutorPort {
-        val calls = mutableListOf<Pair<String, String>>()
-        override suspend fun execute(toolName: String, argsJson: String): ToolOutcome {
-            calls += toolName to argsJson
+        val calls = mutableListOf<Triple<String, String, String>>()
+        override suspend fun execute(toolCallId: String, toolName: String, argsJson: String): ToolOutcome {
+            calls += Triple(toolCallId, toolName, argsJson)
             return outcomes[toolName] ?: ToolOutcome(false, "no such tool")
         }
     }
@@ -52,17 +52,18 @@ class PortsContractTest {
     @Test
     fun `tool executor maps outcomes and records calls`() = runBlocking {
         val executor = FakeToolExecutor(mapOf("file_read" to ToolOutcome(true, "ok")))
-        val outcome = executor.execute("file_read", """{"path":"a"}""")
+        val outcome = executor.execute("call-1", "file_read", """{"path":"a"}""")
         assertTrue(outcome.success)
         assertEquals("ok", outcome.output)
         assertEquals(1, executor.calls.size)
-        assertEquals("file_read", executor.calls[0].first)
+        assertEquals("call-1", executor.calls[0].first)
+        assertEquals("file_read", executor.calls[0].second)
     }
 
     @Test
     fun `unknown tools fail closed with a readable output`() = runBlocking {
         val executor = FakeToolExecutor(emptyMap())
-        val outcome = executor.execute("nope", "{}")
+        val outcome = executor.execute("call-2", "nope", "{}")
         assertTrue(!outcome.success)
         assertTrue(outcome.output.isNotEmpty())
     }

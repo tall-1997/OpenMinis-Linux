@@ -5,6 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.openminis.app.R
 import com.openminis.app.harness.agent.Level
 import com.openminis.app.harness.agent.ToolCallPreflight
+import com.openminis.app.harness.agent.ToolRoundOutcome
+import com.openminis.app.harness.runtime.ToolFinish
+import com.openminis.app.harness.runtime.ToolOutcome
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMError
 import com.openminis.app.data.model.LLMMessage
@@ -1965,98 +1968,60 @@ internal suspend fun ChatViewModel.runAgentLoop(
                 }
             }
             noteRunToolIntent(name, argsStr, id) // [T-operation-wiring] 主循环派发点：lane 调用不进主台账
-            val result = if (SubAgentKind.isSpawnTool(name)) {
-                parallelSubResults[id] ?: executeTool(name, argsStr, id, allToolBlocks, assistantId, accumulatedText)
-            } else {
-                executeTool(name, argsStr, id, allToolBlocks, assistantId, accumulatedText)
-            }
+            // [T-android-seam-extraction] 片段二：顺序执行走接缝二（spawn/并行是
+            // 宿主专有路径，结果经 toOutcome 归一到接缝口径）。
+            val outcome: ToolOutcome =
+                if (SubAgentKind.isSpawnTool(name)) {
+                    (parallelSubResults[id] ?: executeTool(name, argsStr, id, allToolBlocks, assistantId, accumulatedText)).toOutcome()
+                } else {
+                    toolExecutorPort(allToolBlocks, assistantId, accumulatedText).execute(id, name, argsStr)
+                }
             currentCoroutineContext().ensureActive()
-            android.util.Log.d("ToolChain[VM]", "[turn=$turn] executeTool END name=$name success=${result.success} title=${result.toolTitle} outputLen=${result.output.length} output=${result.output.take(200)}")
-            noteRunToolCall(failed = !result.success) // [T-run-metrics-wiring]
-            noteRunToolSettled(name, id, result) // [T-operation-wiring]
+            android.util.Log.d("ToolChain[VM]", "[turn=$turn] executeTool END name=$name success=${outcome.success} title=${outcome.toolTitle} outputLen=${outcome.output.length} output=${outcome.output.take(200)}")
+            noteRunToolCall(failed = !outcome.success) // [T-run-metrics-wiring]
+            noteRunToolSettled(name, id, outcome) // [T-operation-wiring]
 
             // Record post-execution. WARNING text is appended to the tool
             // result so the model sees it on its next turn. No block here —
             // CRITICAL only fires from check() and we already returned above.
-            val errMsgForDetector = if (!result.success) result.output else null
+            val errMsgForDetector = if (!outcome.success) outcome.output else null
             val postRecord = toolLoopDetector.record(
                 toolName = name,
                 params = paramsMap,
-                result = if (result.success) result.output else null,
+                result = if (outcome.success) outcome.output else null,
                 errorMessage = errMsgForDetector,
                 toolCallId = id,
             )
             val outputForLLM = if (postRecord.level == Level.WARNING && postRecord.message != null) {
                 AppLogger.debug("ChatViewModel",
                     "appending loop-warning to tool result name=$name key=${postRecord.warningKey}")
-                "${result.output}\n\n${postRecord.message}"
+                "${outcome.output}\n\n${postRecord.message}"
             } else {
-                result.output
+                outcome.output
             }
 
-            val blockIdx = allToolBlocks.indexOfFirst { it.id == id }
-            if (blockIdx >= 0) {
-                val elapsed = System.currentTimeMillis() - allToolBlocks[blockIdx].startTimeMs
-                // Keep live-streamed content if it has more data than the truncated result.
-                // T263: takeLast(80) was applied uniformly, but it was sized for
-                // shell_execute (long stdout streams where the tail is what
-                // matters). For tools whose first line carries metadata —
-                // file_read's `[path | N bytes | M lines | showing A-B of M]`
-                // banner, file_write/file_edit confirmations, memory_* /
-                // browser_use structured headers — clipping the head dropped
-                // the banner entirely. iOS routes file_read through a
-                // dedicated branch (AIChatViewModel.swift:5229) and avoids
-                // this; mirror that intent by gating the trim to shell_execute.
-                val existingContent = allToolBlocks[blockIdx].content
-                val resultContent = if (name == "shell_execute") {
-                    result.output.lines().takeLast(80).joinToString("\n")
-                } else {
-                    result.output
-                }
-                val mergedContent = if (existingContent.length > resultContent.length) existingContent else resultContent
-                val childPrefix = "$id#sub-"
-                val childCount = allToolBlocks.count { it.id.startsWith(childPrefix) }
-                val finalContent = if (childCount > 0) {
-                    "已分发 $childCount 个子代理，点开各自卡片查看当前运行。"
-                } else {
-                    mergedContent
-                }
-                // [T-truncated-args-visibility #119] A call built from
-                // truncated args must not render as a clean success — that
-                // silence is the reported bug. Show it with the same weight
-                // as the blocked path. Mirrors iOS ConcurrentTools.
-                val finalStatus = when {
-                    activeRun?.isStopped == true -> ToolBlockStatus.CANCELLED
-                    result.success && truncationRepairTag != null -> ToolBlockStatus.FAILED
-                    result.success -> ToolBlockStatus.SUCCESS
-                    result.timedOut -> ToolBlockStatus.TIMEOUT
-                    else -> ToolBlockStatus.FAILED
-                }
-                // T-bg-overlay phase 1: tool finished — drop the
-                // notification's indeterminate progress bar so the
-                // user can tell streaming has paused (LLM step) vs
-                // a tool is in flight.
-                // [T-overlay-glyph-typed-outcome] Pass the typed
-                // outcome so the bg overlay glyph reflects the real
-                // SUCCESS / TIMEOUT / FAILED result instead of
-                // text-sniffing the stale "Running: foo" status.
-                val toolOutcome = when (finalStatus) {
-                    ToolBlockStatus.SUCCESS -> com.openminis.app.service.ToolOutcome.Success
-                    ToolBlockStatus.TIMEOUT -> com.openminis.app.service.ToolOutcome.Timeout
-                    ToolBlockStatus.FAILED -> com.openminis.app.service.ToolOutcome.Error
-                    else -> com.openminis.app.service.ToolOutcome.Unknown
-                }
-                SessionActivityTracker.clearToolRunning(toolOutcome)
-                android.util.Log.d("ToolChain[VM]", "[turn=$turn] block[$blockIdx] status→$finalStatus title=${result.toolTitle} contentLen=${finalContent.length}")
-                allToolBlocks[blockIdx] = allToolBlocks[blockIdx].copy(
-                    toolStatus = finalStatus,
-                    content = finalContent,
-                    toolTitle = result.toolTitle.ifEmpty { allToolBlocks[blockIdx].toolTitle },
-                    durationMs = elapsed,
-                    browserURL = result.pageURL ?: allToolBlocks[blockIdx].browserURL,
-                    imageFilePath = result.imageFilePath ?: allToolBlocks[blockIdx].imageFilePath,
-                )
-            }
+            // [T-android-seam-extraction] 片段二：终局裁定与内容合并进 harness
+            // （ToolRoundOutcome——T263 尾裁 / #119 静默成功 / 子代理摘要语义逐条
+            // 保留），块投影与通知收尾走接缝四。
+            val childPrefix = "$id#sub-"
+            val childCount = allToolBlocks.count { it.id.startsWith(childPrefix) }
+            val blockIdxPeek = allToolBlocks.indexOfFirst { it.id == id }
+            val liveContent = if (blockIdxPeek >= 0) allToolBlocks[blockIdxPeek].content else ""
+            uiEventSink(allToolBlocks, assistantId, accumulatedText).onToolCallFinished(
+                ToolFinish(
+                    toolCallId = id,
+                    status = ToolRoundOutcome.decideStatus(
+                        success = outcome.success,
+                        timedOut = outcome.timedOut,
+                        truncationRepaired = truncationRepairTag != null,
+                        cancelled = activeRun?.isStopped == true,
+                    ),
+                    content = ToolRoundOutcome.blockContent(name, outcome.output, liveContent, childCount),
+                    toolTitle = outcome.toolTitle,
+                    browserURL = outcome.pageURL,
+                    imageFilePath = outcome.imageFilePath,
+                ),
+            )
 
             // [T-truncated-args-visibility #119] Tell the MODEL its own
             // arguments were altered. Writes never reach here (refused
@@ -2064,15 +2029,7 @@ internal suspend fun ChatViewModel.runAgentLoop(
             // model would otherwise assume the args it emitted were the args
             // that ran. Mirrors iOS ConcurrentTools.
             currentCoroutineContext().ensureActive()
-            val outputForLLMWithNote = if (truncationRepairTag != null) {
-                outputForLLM + "\n\n<system-reminder>The argument stream for this call was " +
-                    "truncated in transit and auto-closed by the client (repair strategy: " +
-                    "$truncationRepairTag) before execution. The arguments actually used may be " +
-                    "incomplete — verify the result and re-issue the call with complete " +
-                    "arguments if anything is missing.</system-reminder>"
-            } else {
-                outputForLLM
-            }
+            val outputForLLMWithNote = ToolRoundOutcome.withTruncationNote(outputForLLM, truncationRepairTag)
             val outputSpilled = com.openminis.app.tools.ToolOutputSpill.maybeSpill(
                 context = context,
                 sessionId = activeSessionId,
@@ -2081,14 +2038,14 @@ internal suspend fun ChatViewModel.runAgentLoop(
                 output = outputForLLMWithNote,
             )
 
-            resultParts.add(AgentContentPart.ToolResult(
-                id = id,
-                name = name,
-                content = outputSpilled,
-                isError = !result.success,
-                imageData = result.imageData,
-                imageMimeType = result.imageMimeType,
-                imageLinuxPath = result.imageLinuxPath,
+            resultParts.add(ToolRoundOutcome.toolResultPart(
+                callId = id,
+                toolName = name,
+                output = outputSpilled,
+                isError = !outcome.success,
+                imageData = outcome.imageData,
+                imageMimeType = outcome.imageMimeType,
+                imageLinuxPath = outcome.imageLinuxPath,
             ))
         }
 
@@ -2130,12 +2087,7 @@ internal suspend fun ChatViewModel.runAgentLoop(
         if (activeRun?.isStopped == true) { loopExitedNormally = true; break }
 
         // Add tool results to history
-        appendBoundedHistory(LLMMessage(
-            role = LLMMessage.Role.USER,
-            content = "",
-            contentParts = resultParts,
-            dbMessageId = toolResultDbId,
-        ))
+        conversationPort().append(ToolRoundOutcome.toolResultMessage(resultParts, toolResultDbId))
         val turnUsageTokens = (lastUsage?.inputTokens ?: 0).toLong() + (lastUsage?.outputTokens ?: 0).toLong()
         val goalUsageResult = runCatching {
             goalManager.recordUsage(

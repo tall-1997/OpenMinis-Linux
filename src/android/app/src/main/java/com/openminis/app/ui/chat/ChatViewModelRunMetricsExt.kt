@@ -6,7 +6,6 @@ import com.openminis.app.harness.effects.ToolReplayPolicy
 import com.openminis.app.harness.metrics.RunMetrics
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.operation.OperationBridge
-import com.openminis.app.tools.ToolExecutionResult
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
@@ -56,7 +55,7 @@ internal suspend fun ChatViewModel.noteRunToolIntent(name: String, argsJson: Str
 }
 
 /** 工具落定后：结果进台账（输出截 2k 入影子账，全文在 Room 与 spill 里）。 */
-internal suspend fun ChatViewModel.noteRunToolSettled(name: String, toolId: String, result: ToolExecutionResult) {
+internal suspend fun ChatViewModel.noteRunToolSettled(name: String, toolId: String, result: com.openminis.app.harness.runtime.ToolOutcome) {
     val op = currentOperationId ?: return
     OperationBridge.toolSettled(
         context.applicationContext,
