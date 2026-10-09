@@ -83,6 +83,17 @@ internal class MarkerFramer(marker: String) {
     private val preBeginSample = StringBuilder()
     private val preBeginAll = StringBuilder()
 
+    // [T-p1-3-shell-auth-frames] 首条命令的 bootstrap 在 pre-BEGIN 窗口回显一次
+    // 会话秘密（__MINIS_AUTH_<hex>__），framer 从丢弃流里捞出来交还宿主——秘密
+    // 因此只在「尚无任何 guest 子进程存在」的时刻走过 stdout，之后所有帧标签
+    // 都用它认证，竞争 stdin 的杂散进程伪造不出合法帧。
+    private val authRegex = Regex("__MINIS_AUTH_([0-9A-Za-z]{8,80})__")
+    private val authHoldPrefix = "__MINIS_AUTH_"
+
+    /** 会话秘密（bootstrap 回显），未捕获时为 null。宿主只读。 */
+    var authTag: String? = null
+        private set
+
     data class Step(val output: String, val completed: Boolean, val exitCode: Int)
 
     /** Bytes dropped before the BEGIN line, for post-mortem diagnostics. */
@@ -94,6 +105,7 @@ internal class MarkerFramer(marker: String) {
     fun push(text: String, endOfInput: Boolean = false): Step {
         if (text.isNotEmpty()) carry.append(text)
         if (!armed) {
+            captureAuth()
             val beginIdx = carry.indexOf(beginPrefix)
             if (beginIdx < 0) {
                 if (endOfInput) {
@@ -112,7 +124,13 @@ internal class MarkerFramer(marker: String) {
                     carry.setLength(0)
                     return Step(rest, completed = false, exitCode = -1)
                 }
-                val heldFrom = holdIndex(carry.toString(), beginPrefix)
+                // [T-p1-3-shell-auth-frames] begin 与 AUTH 两个前缀的部分尾巴都要
+                // 保住：AUTH 行跨读分割时，若把半个 AUTH 前缀当噪声丢掉，握手就
+                // 永远配不齐（降级 legacy）。取两者更靠前的 hold 点。
+                val heldFrom = minOf(
+                    holdIndex(carry.toString(), beginPrefix),
+                    holdIndex(carry.toString(), authHoldPrefix),
+                )
                 noteDropped(heldFrom)
                 carry.delete(0, heldFrom)
                 return Step("", completed = false, exitCode = -1)
@@ -139,6 +157,26 @@ internal class MarkerFramer(marker: String) {
             return Step(rest, completed = false, exitCode = -1)
         }
         return Step(output, completed = false, exitCode = -1)
+    }
+
+    /**
+     * [T-p1-3-shell-auth-frames] 从 pre-BEGIN 缓冲里捕获会话秘密并连同行尾删掉
+     * （不进丢弃样本、不进死亡缓冲）。每次 push 至多扫一次、命中一次后短路：
+     * pre-BEGIN 窗口的 carry 被持续裁剪，扫描成本有界。
+     */
+    private fun captureAuth() {
+        if (authTag != null) return
+        val text = carry.toString()
+        if (!text.contains("__MINIS_AUTH_")) return
+        val match = authRegex.find(text) ?: return
+        authTag = match.groupValues[1]
+        val delEnd = run {
+            var end = match.range.last + 1
+            if (carry.length >= end + 2 && carry.substring(end, end + 2) == "\r\n") end + 2
+            else if (carry.length >= end + 1 && carry[end] == '\n') end + 1
+            else end
+        }
+        carry.delete(match.range.first, delEnd)
     }
 
     private fun noteDropped(upto: Int) {

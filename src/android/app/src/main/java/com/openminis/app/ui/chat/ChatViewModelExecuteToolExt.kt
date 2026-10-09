@@ -1,6 +1,7 @@
 package com.openminis.app.ui.chat
 
 import com.openminis.app.data.db.AppDatabase
+import com.openminis.app.harness.validation.ToolSchemaValidator
 import com.openminis.app.tools.CodeGraphTool
 import com.openminis.app.tools.SubAgentKind
 import com.openminis.app.tools.FileEditTool
@@ -11,11 +12,13 @@ import com.openminis.app.tools.ReadImageTool
 import com.openminis.app.tools.ToolExecutionResult
 import com.openminis.app.tools.ToolOutputPolicy
 import com.openminis.app.security.SecurityGateHolder
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import org.json.JSONObject
 
 internal suspend fun ChatViewModel.executeTool(
     name: String,
-    argsJson: String,
+    rawArgsJson: String,
     toolId: String,
     toolBlocks: MutableList<AssistantBlock>,
     assistantId: String,
@@ -31,9 +34,18 @@ internal suspend fun ChatViewModel.executeTool(
     // bridge, which is now where checkPermission runs.
     val canonical = com.openminis.app.security.ToolAliases.canonical(name)
     val gated = com.openminis.app.security.SecurityGateHolder.intercept(
-        context, canonical, argsJson, activeSessionId,
+        context, canonical, rawArgsJson, activeSessionId,
     )
     if (gated != null) return gated
+
+    // [T-schema-exec-args-sync] P2：校验器与执行器的 args 口径统一。校验面在
+    // ToolSchemaValidator 里做别名补全（cmd→command）、params/arguments/input
+    // 包裹解包与 __/. 扁平键还原后校验的是归一化 args；执行器此前读原始
+    // argsJson——归一化补出来的键在执行器里缺失，「校验通过、执行缺参」。
+    // 这里让执行器读同一份归一化结果；非法 argsJson 或归一化抛错回退原始值
+    // （各执行器自有 JSON 错误路径，与接线前一致）。原始 argsJson 仍传给
+    // SecurityGate（审计模型原样输出）与 onToolFailure（记账）。
+    val argsJson = normalizedExecArgs(canonical, rawArgsJson)
     val toolTitle = try { JSONObject(argsJson).optString("tool_title", canonical) } catch (_: Exception) { canonical }
 
     // [T-schema-validation-wiring] 「模型参数 → 校验 → 审批 → 执行」链路的第二环：
@@ -270,7 +282,7 @@ internal suspend fun ChatViewModel.executeTool(
     }
     if (!result.success) {
         com.openminis.app.evolution.EvolutionHooks.onToolFailure(
-            activeSessionId, canonical, argsJson, result.output,
+            activeSessionId, canonical, rawArgsJson, result.output,
         )
     }
     // [T-tool-output-policy] 统一出口：环境变量脱敏 + 超长输出降级为可检索文件。
@@ -327,4 +339,22 @@ private suspend fun ChatViewModel.executeLocalTool(
                 toolTitle = tool.name,
             )
     }
+}
+
+/**
+ * [T-schema-exec-args-sync] 执行器与校验器同源归一化：执行器拿到
+ * [ToolSchemaValidator.normalizeArgs] 的输出（别名补全 / params 包裹解包 /
+ * __ 与 . 扁平键还原），与 harness 校验面是同一份形状——校验通过的工具调用
+ * 不因执行器读原始 argsJson 而缺参。MCP 工具（mcp__*）与校验面同样整体跳过
+ * 别名与解包（raw 即权威）。非法 argsJson 或归一化抛错回退原始值，行为与
+ * 接线前一致；无需归一化的调用（无包裹、无别名键）结果不变。
+ */
+internal fun normalizedExecArgs(canonical: String, rawArgsJson: String): String {
+    val parsed = runCatching {
+        Json.parseToJsonElement(rawArgsJson) as? JsonObject
+    }.getOrNull() ?: return rawArgsJson
+    val isMcp = canonical.startsWith("mcp__")
+    return runCatching {
+        ToolSchemaValidator.normalizeArgs(parsed, applyAliases = !isMcp, isMcpTool = isMcp).toString()
+    }.getOrDefault(rawArgsJson)
 }

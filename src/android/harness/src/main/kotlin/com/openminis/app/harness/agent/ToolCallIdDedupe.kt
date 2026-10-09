@@ -44,4 +44,15 @@ class ToolCallIdDedupe {
         completeCounts[raw] = n
         return if (n == 1) raw else "$raw-$n"
     }
+
+    /**
+     * [T-p1-2-lane-replay-guard] 重试回滚：整个 stream attempt 重新流入空派发列表，
+     * 与主循环的 toolCalls/toolReplayGuard 一起清零。旧实现只重置 replayGuard 不重置
+     * 本状态机——重试轮首个同 id 调用被改名 "-2"，内部虽自洽但属不对称瑕疵。
+     */
+    fun reset() {
+        startCounts.clear()
+        completeCounts.clear()
+        inFlightRenamedId.clear()
+    }
 }

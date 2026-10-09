@@ -3,6 +3,8 @@ package com.openminis.app.tools
 import com.openminis.app.harness.agent.LaneRoundPolicy
 import com.openminis.app.harness.agent.SubAgentHistoryCompactor
 import com.openminis.app.harness.agent.SubAgentTokenBudget
+import com.openminis.app.harness.agent.ToolCallIdDedupe
+import com.openminis.app.harness.agent.ToolReplayGuard
 
 import android.content.Context
 import com.openminis.app.data.model.AgentContentPart
@@ -73,6 +75,18 @@ object SubAgentRunner {
         // Defensive: duplicate tool names reach providers as duplicate schemas
         // and some of them reject the payload outright. Keep first-seen order.
         val dedupedTools = SubAgentKind.dedupeByName(tools)
+        // [T-p1-2-lane-replay-guard] 与主循环（ChatViewModelAgentLoopExt）同一套
+        // 防护，缺一不可：
+        //  - ToolReplayGuard：网关/SSE 重发的同一 ToolCallComplete（同 raw id +
+        //    name + args）在派发处拒绝执行——lane 的 shell_execute / file_write
+        //    都是有副作用的工具，重放即双跑；
+        //  - ToolCallIdDedupe：同 id 并行调用改名 "<id>-2"，否则同 id 直接进
+        //    history，下一轮撞上强校验唯一 id 的 provider 直接 400；
+        //  - replayRenamedIds：记录哪些改名 id 是重放，派发循环据此拒绝。
+        // lane 内一次 run() 一套状态（跨 turn 保留；lane 无流内重试回滚，无需 reset）。
+        val toolReplayGuard = ToolReplayGuard()
+        val replayRenamedIds = mutableSetOf<String>()
+        val toolIdDedupe = ToolCallIdDedupe()
         val history = mutableListOf(
             LLMMessage(role = LLMMessage.Role.USER, content = briefed),
         )
@@ -138,14 +152,30 @@ object SubAgentRunner {
                             textSeg++
                             thinkSeg++
                             announcedSpeak = false
+                            // [T-p1-2-lane-replay-guard] start 与 complete 共用同一
+                            // 改名映射，UI 事件跟随改名后的 id
+                            val renamedStart = toolIdDedupe.startId(chunk.id)
                             runCatching { onUi(UiEvent.Phase("调用工具", chunk.name)) }
-                            runCatching { onUi(UiEvent.ToolStart(chunk.id, chunk.name)) }
+                            runCatching { onUi(UiEvent.ToolStart(renamedStart, chunk.name)) }
                         }
                         is LLMStreamChunk.ToolInputDelta ->
-                            runCatching { onUi(UiEvent.ToolArgs(chunk.id, "", chunk.accumulated)) }
+                            runCatching { onUi(UiEvent.ToolArgs(toolIdDedupe.inputId(chunk.id), "", chunk.accumulated)) }
                         is LLMStreamChunk.ToolCallComplete -> {
-                            toolCalls.add(Triple(chunk.id, chunk.name, chunk.args))
-                            runCatching { onUi(UiEvent.ToolArgs(chunk.id, chunk.name, chunk.args.toString())) }
+                            // [T-p1-2-lane-replay-guard] 先记 raw id 出现（重放判定），
+                            // 再过改名器——顺序与主循环一致
+                            val isReplayedComplete = toolReplayGuard.registerAndCheckReplay(
+                                chunk.id, chunk.name, chunk.args.toString(),
+                            )
+                            val toolCompleteId = toolIdDedupe.completeId(chunk.id)
+                            if (isReplayedComplete) {
+                                replayRenamedIds += toolCompleteId
+                                com.openminis.app.logging.AppLogger.warning(
+                                    "SubAgentRunner",
+                                    "[ToolReplay] lane duplicate ToolCallComplete raw=${chunk.id} renamed=$toolCompleteId name=${chunk.name} — will refuse at dispatch",
+                                )
+                            }
+                            toolCalls.add(Triple(toolCompleteId, chunk.name, chunk.args))
+                            runCatching { onUi(UiEvent.ToolArgs(toolCompleteId, chunk.name, chunk.args.toString())) }
                         }
                         is LLMStreamChunk.Usage -> {
                             // Shared token budget (Codex rollout_budget semantics,
@@ -199,6 +229,16 @@ object SubAgentRunner {
 
                 val resultParts = mutableListOf<AgentContentPart>()
                 for ((id, name, args) in toolCalls) {
+                    // [T-p1-2-lane-replay-guard] 重放的 complete 拒绝执行：合成配对
+                    // 错误结果保持 tool_use/tool_result 平衡（与主循环同一文案源
+                    // ToolReplayGuard.duplicateRefusal），工具不再跑第二遍。
+                    if (id in replayRenamedIds) {
+                        runCatching { onStep(turn, "$name · replay refused") }
+                        runCatching { onUi(UiEvent.ToolDone(id, name, false, "duplicate tool call ignored")) }
+                        timeline.append("- turn $turn: $name (replay refused)\n")
+                        resultParts.add(toolReplayGuard.duplicateRefusal(id, name))
+                        continue
+                    }
                     if (SubAgentKind.isSpawnTool(name) || SubAgentKind.blocks(kind, name)) {
                         runCatching { onStep(turn, "$name · blocked") }
                         runCatching {

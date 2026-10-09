@@ -24,3 +24,30 @@ fun normalizeWritePath(path: String): String {
     }
     return "../".repeat(escaped) + segments.joinToString("/")
 }
+
+/**
+ * [T-p2-writelease-relative-scope] guest 工作区根。租约两侧（声明的 scopes 与
+ * 工具调用的 target）都以它解析相对路径——不解析的话，模型按拒绝文案改用相对
+ * 路径反而永远对不上绝对 scope（「照文案改反而永久写拒绝」的根因之一）。
+ * 纯字符串常量，不破坏 ：harness 的 JVM 纯度。
+ */
+const val WORKSPACE_ROOT = "/var/minis/workspace"
+
+/**
+ * 相对路径按工作区根解析；绝对路径原样归一。`../` 逃逸与整工作区哨兵（`*`）
+ * 保留原语义交调用方判。
+ *
+ * [T-p2-writelease-relative-scope] 「绝对」按**输入**是否以 `/` 开头判定，而不是
+ * 归一化结果——normalizeWritePath 对绝对路径本就不保留前导斜杠（"/var/x" →
+ * "var/x"），按结果判定会让绝对 scope 被二次加前缀（实测
+ * "var/minis/workspace/var/minis/workspace/docs"）。
+ */
+fun resolveAgainstWorkspaceRoot(path: String): String {
+    val trimmed = path.trim().replace('\\', '/')
+    val normalized = normalizeWritePath(trimmed)
+    return when {
+        trimmed.startsWith("/") || normalized.startsWith("../") -> normalized
+        normalized.isBlank() || normalized == "*" -> normalized
+        else -> normalizeWritePath("$WORKSPACE_ROOT/$normalized")
+    }
+}

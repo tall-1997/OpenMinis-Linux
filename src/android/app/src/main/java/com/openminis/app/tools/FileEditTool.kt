@@ -122,9 +122,18 @@ object FileEditTool {
                     // 先还原被剥离的 BOM 再写，盘上字节与 newContent 可能不同；
                     // 读取方式与 AppRewindFileAccess.previewOrNull 一致，凭据才可比。
                     CheckpointBridge.captureAfter(context, sessionId, path, file)
+                    // [T-file-edit-bom-diff] diff 的 after 同样从盘上重读：BOM 还原
+                    // 使盘上字节比 newContent 多一个 BOM，内存口径的 diff 与盘面差
+                    // 一个 BOM。重读失败回退内存内容（diff 仍可用）。before 侧按
+                    // 盘面 after 是否带 BOM 同步加回——否则首行会被 diff 误报成修改。
+                    val afterOnDisk = AtomicFileWrite.read(file) ?: outcome.newContent
+                    val bomRestored =
+                        afterOnDisk.startsWith("\uFEFF") && !outcome.newContent.startsWith("\uFEFF")
                     ToolExecutionResult(
                         "Edited $path (${outcome.replacements} replacement(s), ${outcome.newContent.length} bytes)" +
-                            (editedFrom?.let { EditDiffSection.render(path, it, outcome.newContent) }.orEmpty()),
+                            (editedFrom?.let {
+                                EditDiffSection.render(path, if (bomRestored) "\uFEFF$it" else it, afterOnDisk)
+                            }.orEmpty()),
                         true, toolTitle = toolTitle,
                     )
                 }

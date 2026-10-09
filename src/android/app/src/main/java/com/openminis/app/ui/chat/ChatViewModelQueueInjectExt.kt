@@ -14,7 +14,6 @@ internal suspend fun ChatViewModel.injectQueuedPromptsAsNewTurn(
 ): ChatViewModel.InjectedTurn? {
     if (_promptQueue.value.isEmpty()) return null
     val queued = _promptQueue.value
-    _promptQueue.value = emptyList()
 
     // [T-android-queued-message-duplicated-on-inject] REMOVE the queued
     // placeholder bubbles (the ones enqueuePrompt added with
@@ -55,6 +54,18 @@ internal suspend fun ChatViewModel.injectQueuedPromptsAsNewTurn(
     // image). An empty user msg is a 400 from every provider. Skip —
     // the caller falls through to a normal next-turn dispatch so the
     // loop doesn't spin.
+    //
+    // [T-queue-inject-ghost-bubble] Return WITHOUT having touched the
+    // queue. The old code cleared _promptQueue up front, so this early
+    // return (and any throw before the removal below) dropped the queued
+    // prompts from memory while their placeholder bubbles stayed in the
+    // UI and their disk mirrors stayed pending — a ghost bubble,
+    // resurrected again on next boot. The queue removal now happens only
+    // once consumption is certain (appendMessage below succeeded), so
+    // every path above this line leaves queue, bubbles and mirrors in
+    // step. The prompts stay queued: a transient prepare failure (file
+    // read hiccup) gets another chance at the next tool boundary, or at
+    // the post-loop drain.
     if (combinedParts.isEmpty()) {
         AppLogger.warning(
             ChatViewModel.TAG_STREAM,
@@ -99,6 +110,12 @@ internal suspend fun ChatViewModel.injectQueuedPromptsAsNewTurn(
         bodyPartsJson = queuedPaste?.partsJson,
     )
     val userEntity = chatRepository.appendMessage(sid, "user", userPartsJson)
+    // [T-queue-inject-ghost-bubble] Consumption is now certain: the queued
+    // prompts are real DB rows. Remove exactly the snapshot items — anything
+    // enqueued while we were preparing/persisting stays queued. (The old
+    // up-front clear-all could eat a concurrently enqueued prompt between
+    // the snapshot and the wipe; the targeted removal can't.)
+    _promptQueue.value = _promptQueue.value.filterNot { it.id in queuedIds }
     // [T-queue-disk-persistence] the queued prompts are now real DB rows —
     // confirm their disk mirrors consumed. Failure leaves a ghost record
     // restored on next boot; harmless (duplicate bubble), self-healing via

@@ -147,8 +147,15 @@ class FilePromptQueuePersistence(private val root: File) : PromptQueuePersistenc
             restored
         }
 
-    /** 会话删除时清理（宿主在 deleteSession 里调用）。幂等。 */
-    suspend fun dropSession(sessionId: String) {
+    /**
+     * 会话删除时清理：整份会话文件删除，幂等。
+     *
+     * [T-queue-disk-persistence] 早期这条链走 clear(FOLLOW_UP)：文件留下，
+     * 每个有排队历史的已删会话都在 root 里积累一个 {"records":[]} 空 JSON，
+     * claimed / 非 FOLLOW_UP 条目也跟着会话死不掉。现在 drop 面是活代码
+     * （PromptQueueManager.dropSession ← PromptQueueBridge.dropSession）。
+     */
+    override suspend fun dropSession(sessionId: String) {
         fileLock.withLock { fileFor(sessionId).delete() }
     }
 }

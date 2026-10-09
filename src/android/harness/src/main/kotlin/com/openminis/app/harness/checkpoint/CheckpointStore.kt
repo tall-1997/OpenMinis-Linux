@@ -37,6 +37,17 @@ class CheckpointStore() {
     /** 磁盘恢复标记：会话首次访问时懒恢复，避免启动期全量 IO。 */
     private val restoredSessions = ConcurrentHashMap.newKeySet<String>()
 
+    /**
+     * [T-p2-checkpointstore-drop-race] 已 drop 的会话：dropSession 之后、异步
+     * delete 执行之前，若同 id 的查询触发懒恢复，旧 checkpoint 会从盘上「复活」。
+     * drop 后本集合钉住该 id，懒恢复跳过；进程内同 id 重建属于异例（UUID），
+     * 钉住到进程结束无副作用（删除后盘上本就无数据可恢复）。
+     */
+    private val droppedSessions = ConcurrentHashMap.newKeySet<String>()
+
+    /** 每会话一把恢复锁：磁盘恢复（慢 IO）在会话间并行，不进实例锁。 */
+    private val restoreLocks = ConcurrentHashMap<String, Any>()
+
     private val sessions = ConcurrentHashMap<String, SessionState>()
 
     /** 每次 rewind 的撤销记录（单层级）；新写入/新 rewind/会话删除时失效。 */
@@ -66,15 +77,17 @@ class CheckpointStore() {
     }
 
     /** 开启一个新的用户轮次 checkpoint，并关闭上一轮（若有）。 */
-    @Synchronized
     fun beginTurn(sessionId: String, prompt: String, anchorMessageId: String? = null) {
-        val state = stateOf(sessionId)
-        closeTurn(sessionId, state)
-        state.activeTurn = state.lastTurn + 1
-        state.activePrompt = prompt.ifBlank { "（空白输入）" }
-        state.activeAnchorMessageId = anchorMessageId
-        state.active = LinkedHashMap()
-        state.open = true
+        ensureRestored(sessionId)
+        synchronized(this) {
+            val state = stateOf(sessionId)
+            closeTurn(sessionId, state)
+            state.activeTurn = state.lastTurn + 1
+            state.activePrompt = prompt.ifBlank { "（空白输入）" }
+            state.activeAnchorMessageId = anchorMessageId
+            state.active = LinkedHashMap()
+            state.open = true
+        }
     }
 
     /** 记录某路径在该轮"触碰前"的内容；无活动轮或路径已记录时忽略。 */
@@ -117,14 +130,16 @@ class CheckpointStore() {
      * 某路径在本 store 记录中的**最后改动后凭据**：活动轮优先，其余按关闭轮新→旧取第一个。
      * restore 的冲突检测用它判断"当前文件是否被外部改动过"；null = 无凭据（不检测）。
      */
-    @Synchronized
     fun latestAfterImage(sessionId: String, path: String): String? {
-        val state = stateOf(sessionId)
-        state.active?.get(path)?.afterContent?.let { return it }
-        for (checkpoint in state.checkpoints.asReversed()) {
-            checkpoint.files.firstOrNull { it.path == path }?.afterContent?.let { return it }
+        ensureRestored(sessionId)
+        synchronized(this) {
+            val state = stateOf(sessionId)
+            state.active?.get(path)?.afterContent?.let { return it }
+            for (checkpoint in state.checkpoints.asReversed()) {
+                checkpoint.files.firstOrNull { it.path == path }?.afterContent?.let { return it }
+            }
+            return null
         }
-        return null
     }
 
     /** 强制关闭当前活动轮（无触碰则丢弃空轮）。 */
@@ -136,6 +151,9 @@ class CheckpointStore() {
     /** 会话删除/重建时清理。 */
     @Synchronized
     fun dropSession(sessionId: String) {
+        // [T-p2-checkpointstore-drop-race] 先钉住再清：异步 delete 排队执行期间，
+        // 任何懒恢复都不得把旧 checkpoint 从盘上带回来。
+        droppedSessions.add(sessionId)
         sessions.remove(sessionId)
         restoredSessions.remove(sessionId)
         rewindUndoRecords.remove(sessionId)
@@ -144,16 +162,22 @@ class CheckpointStore() {
         persistence?.let { disk -> diskWriteExecutor.execute { runCatching { disk.delete(sessionId) } } }
     }
 
-    @Synchronized
-    fun checkpoints(sessionId: String): List<CheckpointMeta> =
-        stateOf(sessionId).checkpoints.map {
-            CheckpointMeta(it.turn, it.time, it.prompt, it.files.map { snap -> snap.path }, it.anchorMessageId)
+    fun checkpoints(sessionId: String): List<CheckpointMeta> {
+        ensureRestored(sessionId)
+        synchronized(this) {
+            return stateOf(sessionId).checkpoints.map {
+                CheckpointMeta(it.turn, it.time, it.prompt, it.files.map { snap -> snap.path }, it.anchorMessageId)
+            }
         }
+    }
 
     /** 查询某轮 checkpoint 的用户消息锚点（供对话 fork 定位）。 */
-    @Synchronized
-    fun anchorMessageIdOf(sessionId: String, turn: Int): String? =
-        stateOf(sessionId).checkpoints.firstOrNull { it.turn == turn }?.anchorMessageId
+    fun anchorMessageIdOf(sessionId: String, turn: Int): String? {
+        ensureRestored(sessionId)
+        synchronized(this) {
+            return stateOf(sessionId).checkpoints.firstOrNull { it.turn == turn }?.anchorMessageId
+        }
+    }
 
     /**
      * 规划"代码回滚"：撤回到 [turn]，即撤销该轮及之后的所有写改动。
@@ -162,52 +186,97 @@ class CheckpointStore() {
      */
     @Synchronized
     fun planCodeRewind(sessionId: String, turn: Int): List<FileSnap> {
-        val state = stateOf(sessionId)
-        val open = state.active
-        // 轮号全局单调（活动轮 = activeTurn = lastTurn+1），MAX_KEPT 裁剪或空轮缺号后
-        // 与 checkpoints.size/下标错位；必须按轮号比较，否则目标轮/活动轮会被错误纳入或漏掉。
-        val newestClosedTurn = state.checkpoints.lastOrNull()?.turn ?: -1
-        val newestTurn = if (open != null) maxOf(newestClosedTurn, state.activeTurn) else newestClosedTurn
-        if (turn < 0 || turn > newestTurn) return emptyList()
-        val merged = LinkedHashMap<String, FileSnap>()
-        for (checkpoint in state.checkpoints) {
-            if (checkpoint.turn >= turn) {
-                for (snap in checkpoint.files) {
-                    merged.putIfAbsent(snap.path, snap)
+        ensureRestored(sessionId)
+        synchronized(this) {
+            val state = stateOf(sessionId)
+            val open = state.active
+            // 轮号全局单调（活动轮 = activeTurn = lastTurn+1），MAX_KEPT 裁剪或空轮缺号后
+            // 与 checkpoints.size/下标错位；必须按轮号比较，否则目标轮/活动轮会被错误纳入或漏掉。
+            val newestClosedTurn = state.checkpoints.lastOrNull()?.turn ?: -1
+            val newestTurn = if (open != null) maxOf(newestClosedTurn, state.activeTurn) else newestClosedTurn
+            if (turn < 0 || turn > newestTurn) return emptyList()
+            val merged = LinkedHashMap<String, FileSnap>()
+            for (checkpoint in state.checkpoints) {
+                if (checkpoint.turn >= turn) {
+                    for (snap in checkpoint.files) {
+                        merged.putIfAbsent(snap.path, snap)
+                    }
                 }
             }
+            // 当前（尚未关闭）的轮次也纳入回滚范围：用 activeTurn 判断而非 checkpoints.size
+            //（活动轮轮号是 lastTurn+1，裁剪后远大于 checkpoints.size，原条件会漏掉当前进行轮的改动）
+            if (open != null && turn <= state.activeTurn) {
+                for (snap in open.values) merged.putIfAbsent(snap.path, snap)
+            }
+            return merged.values.toList()
         }
-        // 当前（尚未关闭）的轮次也纳入回滚范围：用 activeTurn 判断而非 checkpoints.size
-        //（活动轮轮号是 lastTurn+1，裁剪后远大于 checkpoints.size，原条件会漏掉当前进行轮的改动）
-        if (open != null && turn <= state.activeTurn) {
-            for (snap in open.values) merged.putIfAbsent(snap.path, snap)
-        }
-        return merged.values.toList()
     }
 
     /** 首次访问时从磁盘恢复该会话的已关闭轮；后续访问直接用内存态。 */
-    private fun stateOf(sessionId: String): SessionState {
-        val state = sessions.getOrPut(sessionId) { SessionState() }
-        val disk = persistence
-        if (disk != null && restoredSessions.add(sessionId)) {
+    private fun stateOf(sessionId: String): SessionState =
+        sessions.getOrPut(sessionId) { SessionState() }
+
+    /**
+     * [T-p2-checkpointstore-lockio] 磁盘恢复在**实例锁之外**执行：旧实现把
+     * readAll 埋在 @Synchronized 调用链里（stateOf），首次访问任一会话都会阻塞
+     * 所有会话的 capture/beginTurn/planCodeRewind——与本类"慢 IO 不进实例锁"的
+     * 自述（diskWriteExecutor 注释）直接矛盾。恢复锁按会话分片，恢复结果在
+     * 实例锁内短暂合并；恢复失败清标记允许重试（原语义保留）。
+     */
+    private fun ensureRestored(sessionId: String) {
+        val disk = persistence ?: return
+        if (droppedSessions.contains(sessionId)) return
+        if (!restoredSessions.add(sessionId)) return
+        val lock = restoreLocks.getOrPut(sessionId) { Any() }
+        synchronized(lock) {
+            if (droppedSessions.contains(sessionId)) return
             runCatching {
                 val restored = disk.readAll(sessionId)
-                // 内存态非空说明本进程已有新轮（恢复发生在运行中），只补齐磁盘里更早的轮
-                val existingTurns = state.checkpoints.mapTo(hashSetOf()) { it.turn }
-                val missing = restored.filter { it.turn !in existingTurns }
-                if (missing.isNotEmpty()) {
-                    state.checkpoints.addAll(0, missing.sortedBy { it.turn })
+                synchronized(this@CheckpointStore) {
+                    val state = sessions.getOrPut(sessionId) { SessionState() }
+                    // 内存态非空说明本进程已有新轮（恢复发生在运行中），只补齐磁盘里更早的轮
+                    val existingTurns = state.checkpoints.mapTo(hashSetOf()) { it.turn }
+                    val missing = restored.filter { it.turn !in existingTurns }
+                    if (missing.isNotEmpty()) {
+                        state.checkpoints.addAll(0, missing.sortedBy { it.turn })
+                    }
+                    // 恢复后裁剪到 MAX_KEPT（保留最新），与 write() 的 keptFloor 磁盘清理窗口对齐，
+                    // 避免恢复列表超过 100 项且与磁盘清理错位
+                    while (state.checkpoints.size > MAX_KEPT) state.checkpoints.removeAt(0)
+                    restored.maxOfOrNull { it.turn }?.let { if (it > state.lastTurn) state.lastTurn = it }
                 }
-                // 恢复后裁剪到 MAX_KEPT（保留最新），与 write() 的 keptFloor 磁盘清理窗口对齐，
-                // 避免恢复列表超过 100 项且与磁盘清理错位
-                while (state.checkpoints.size > MAX_KEPT) state.checkpoints.removeAt(0)
-                restored.maxOfOrNull { it.turn }?.let { if (it > state.lastTurn) state.lastTurn = it }
             }.onFailure {
                 restoredSessions.remove(sessionId)
                 System.err.println("Checkpoint restore failed for $sessionId; will retry: ${it.message}")
             }
         }
-        return state
+    }
+
+    /**
+     * [T-p2-rewind-baseline] rewind 落盘后把冲突检测基线挪到恢复后的状态：
+     * restore 的路径 after-image 更新为恢复内容；delete 的路径清空凭据
+     * （无凭据 = 不检测）。不挪基线的话，对同一轮的**第二次** rewind 拿旧
+     * after-image 与已被本 store 改写的盘面比较 → 全部误报「会话外被修改」并
+     * 跳过——fail-safe 但判定与文案语义都是错的。
+     */
+    @Synchronized
+    fun rebaseAfterImages(sessionId: String, images: Map<String, String?>) {
+        val state = sessions[sessionId] ?: return
+        for ((path, content) in images) {
+            val active = state.active
+            if (active != null && active.containsKey(path)) {
+                active[path] = active.getValue(path).copy(afterContent = content)
+                continue
+            }
+            for (i in state.checkpoints.indices.reversed()) {
+                val checkpoint = state.checkpoints[i]
+                if (checkpoint.files.none { it.path == path }) continue
+                state.checkpoints[i] = checkpoint.copy(
+                    files = checkpoint.files.map { if (it.path == path) it.copy(afterContent = content) else it },
+                )
+                break
+            }
+        }
     }
 
     private fun closeTurn(sessionId: String, state: SessionState) {

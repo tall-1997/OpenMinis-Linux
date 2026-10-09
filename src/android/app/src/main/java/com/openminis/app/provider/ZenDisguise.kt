@@ -1,8 +1,8 @@
 package com.openminis.app.provider
 
 import com.openminis.app.data.model.LLMMessage
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
-import org.json.JSONObject
 import java.math.BigInteger
 import java.security.MessageDigest
 
@@ -17,13 +17,26 @@ object ZenDisguise {
     /**
      * Whether [baseURL] addresses the OpenCode Zen endpoint.
      *
-     * Single source for "is this the Zen host", consumed by the request builder
-     * (bash/read gate tools), by the error mapper (the Zen error dialect is
-     * recognised here and nowhere else), and by the model-list filter. Keeping
-     * one predicate means a second host spelling can never be half-supported.
+     * [T-zen-host-anchor] Anchored on the URL HOST, not a substring: the old
+     * `contains("opencode.ai/zen")` also matched a bare path fragment, so a
+     * relay like `https://example.com/opencode.ai/zen` was dressed in the
+     * disguise and fed the Zen error dialect it knows nothing about. The host
+     * must be exactly `opencode.ai` (case-insensitive — okhttp lowercases it)
+     * and the path must live under `/zen`.
+     *
+     * Scope note: this predicate serves the WIRE layer only — the request
+     * builder (bash/read gate tools), the streaming header injection, and the
+     * error mapper (the Zen error dialect is recognised here and nowhere
+     * else). The model-list filter / reconciliation layer does NOT consume
+     * this predicate: ProviderRepository.isZenInstance matches the bundled
+     * endpoint exactly (config-level), so a user's own variant Zen spelling is
+     * never swept into the free-lane logic. See its KDoc for the split.
      */
-    fun isZenHost(baseURL: String?): Boolean =
-        baseURL != null && baseURL.contains("opencode.ai/zen", ignoreCase = true)
+    fun isZenHost(baseURL: String?): Boolean {
+        val url = baseURL?.trim()?.toHttpUrlOrNull() ?: return false
+        return url.host == "opencode.ai" &&
+            (url.encodedPath == "/zen" || url.encodedPath.startsWith("/zen/"))
+    }
 
     /**
      * The canonical session id the Zen free lane requires: `ses_` + exactly 12
@@ -63,6 +76,13 @@ object ZenDisguise {
         return chars.concatToString()
     }
 
+    /**
+     * Seed rule: the FIRST USER message of the typed [messages] list (content
+     * verbatim), or the constant fallback when the list has no user turn or
+     * the first user turn is blank. The system prompt is deliberately NOT the
+     * seed — it is passed to the body builders separately, and a dynamic
+     * system prompt would drift the session id every turn.
+     */
     fun sessionId(messages: List<LLMMessage>): String {
         val seed = messages.firstOrNull { it.role == LLMMessage.Role.USER }?.content?.toString().orEmpty()
             .ifBlank { "opencode2dsh-empty-conversation" }
@@ -93,27 +113,28 @@ object ZenDisguise {
 
     fun requestId(): String = "req_" + java.util.UUID.randomUUID().toString().replace("-", "")
 
-    fun applyToBody(builder: Request.Builder, body: String): Request.Builder {
-        val messages = runCatching {
-            val array = JSONObject(body).optJSONArray("messages") ?: return@runCatching emptyList<LLMMessage>()
-            buildList {
-                for (i in 0 until array.length()) {
-                    val item = array.optJSONObject(i) ?: continue
-                    val role = when (item.optString("role")) {
-                        "assistant" -> LLMMessage.Role.ASSISTANT
-                        else -> LLMMessage.Role.USER
-                    }
-                    add(LLMMessage(role, item.optString("content")))
-                }
-            }
-        }.getOrDefault(emptyList())
-        return apply(builder, messages)
-    }
-
-    fun apply(builder: Request.Builder, messages: List<LLMMessage>): Request.Builder {
+    /**
+     * Applies the disguise headers. The session id derives from the typed
+     * [messages] list — never from a re-parse of the serialized body (the old
+     * applyToBody path re-parsed tens of MB per request, violating T302
+     * single-serialization; folded the JSON `system` message into USER so the
+     * seed was actually the system prompt; and left Responses bodies — which
+     * have no `messages` array — sharing one constant seed).
+     *
+     * [T-zen-ua-preserve] [disguiseUserAgent] must be false when the caller
+     * has already applied a user-configured customUserAgent: `.header()`
+     * replaces, so the disguise UA would silently overwrite the user's choice
+     * on a paid Zen instance. The `x-opencode-*` headers have no
+     * user-configurable counterpart and are always applied.
+     */
+    fun apply(
+        builder: Request.Builder,
+        messages: List<LLMMessage>,
+        disguiseUserAgent: Boolean = true,
+    ): Request.Builder {
         val session = sessionId(messages)
+        if (disguiseUserAgent) builder.header("User-Agent", USER_AGENT)
         return builder
-            .header("User-Agent", USER_AGENT)
             .header("x-opencode-client", "cli")
             .header("x-opencode-session", session)
             .header("x-session-affinity", session)

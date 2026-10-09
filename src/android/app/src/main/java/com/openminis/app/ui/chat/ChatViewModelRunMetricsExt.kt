@@ -102,7 +102,15 @@ internal fun ChatViewModel.noteRunUsage(usage: com.openminis.app.data.model.LLMU
     viewModelScope.launch { OperationBridge.providerSettled(context.applicationContext, sid, op, usage, metrics.roundsSoFar) }
 }
 
-internal fun ChatViewModel.endRunMetrics(outcome: String) {
+/**
+ * [T-p1-6-finish-begin-race] 收尾从 fire-and-forget 改为挂起等待：endRunMetrics
+ * 之后的队列续跑/下一次 beginRun 可能抢在 finishRun 落盘前执行，beginRun 会把
+ * 即将被删除的旧 operationId 复用给新运行（新运行整轮台账丢失）。协调器侧已有
+ * lane 级收尾登记兜底（OperationCoordinator.pendingLaneFinishes），这里是把窗口
+ * 从源头关掉——收尾落盘后 runAgentLoop 才返回。台账失败仍不挡运行（OperationBridge
+ * 的 runCatching 语义不变）。
+ */
+internal suspend fun ChatViewModel.endRunMetrics(outcome: String) {
     val metrics = currentRunMetrics
     if (metrics != null) {
         metrics.finish(outcome)
@@ -111,6 +119,6 @@ internal fun ChatViewModel.endRunMetrics(outcome: String) {
     }
     val op = currentOperationId ?: return
     val sid = activeSessionId
-    viewModelScope.launch { OperationBridge.finishRun(context.applicationContext, sid, outcome) }
     currentOperationId = null
+    OperationBridge.finishRun(context.applicationContext, sid, outcome)
 }

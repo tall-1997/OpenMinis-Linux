@@ -107,18 +107,18 @@ taixu 有两层缺失：
 
 纯逻辑、无 Android 依赖、带配套测试，移植摩擦最小：
 
-| 复用件 | 行数 | 配套测试 |
+| 复用件 | taixu 参照行数 | 配套测试（本仓） |
 |---|---|---|
 | `harness/validation/ToolSchemaValidator.kt` | 355 | `ToolSchemaValidatorTest.kt` |
 | `harness/text/UnifiedDiffGenerator.kt` | 142 | `UnifiedDiffGeneratorTest.kt` |
-| `harness/effects/RetryPolicy.kt` | 26 | `HarnessRetryPolicyTest.kt` |
-| `harness/queue/PromptQueueManager.kt` | 135 | `HarnessCompactionAndQueueIntegrationTest.kt` |
+| `harness/effects/RetryPolicy.kt` | 26 | `RetryPolicyTest.kt` |
+| `harness/queue/PromptQueueManager.kt` | 135 | `PromptQueueManagerTest.kt` / `FilePromptQueuePersistenceTest.kt` |
 | `harness/metrics/RunMetrics.kt` | 119 | `RunMetricsTest.kt` |
 | `harness/operation/OperationCoordinator.kt` | 348 | `OperationCoordinatorTest.kt` |
 | `harness/checkpoint/RewindController.kt` | 179 | `RewindControllerTest.kt` / `CheckpointStoreTest.kt` / `CheckpointByteBudgetTest.kt` |
-| `harness/subagent/SubagentClaim.kt` | 252 | `SubagentClaimTest.kt` / `SubagentLaneContractsTest.kt` |
+| `harness/subagent/SubagentClaim.kt` | 252 | `SubagentClaimTest.kt` |
 
-整目录复用（行数为目录内 kt 合计）：
+整目录复用（行数为 taixu 原始目录内 kt 合计，非本仓实测）：
 
 | 目录 | 行数 |
 |---|---|

@@ -42,6 +42,10 @@ class RewindController(
         var deleted = 0
         val problems = mutableListOf<String>()
         val conflicts = mutableListOf<String>()
+        // [T-p2-rewind-unchecked-note] 无凭据路径（写入失败/超大文件跳过捕获/旧数据）
+        // 的外部改动**不检测**，恢复会静默覆盖其可能存在的外部修改——与冲突提示的
+        // 承诺不一致。至少把「哪些路径没检测」摆进 note，让用户知情。
+        val unchecked = mutableListOf<String>()
         // 撤销快照：仅记录实际会被本方案改动的路径在**改动前**的磁盘状态；
         // 超过快照上限的路径无法经 write 还原，不进撤销记录（该路径 rewind 后不可 undo）。
         val appliedSnaps = mutableListOf<FileSnap>()
@@ -49,8 +53,9 @@ class RewindController(
         for (snap in plan.fileSnaps) {
             // 外部改动冲突检测：当前文件内容与本 store 记录的最后改动后凭据不一致，
             // 说明会话之外有人改过该文件——恢复会静默覆盖外部修改，保守跳过并报告。
-            // 无凭据（写入失败/超大文件跳过捕获/旧数据）的路径不检测，维持原行为。
-            if (isExternallyModified(plan.sessionId, snap, activeFileAccess)) {
+            if (store.latestAfterImage(plan.sessionId, snap.path) == null) {
+                unchecked += snap.path
+            } else if (isExternallyModified(plan.sessionId, snap, activeFileAccess)) {
                 conflicts += snap.path
                 continue
             }
@@ -74,6 +79,9 @@ class RewindController(
         }
         if (appliedSnaps.isNotEmpty()) {
             store.recordRewindUndo(plan.sessionId, RewindUndoRecord(applied = appliedSnaps, undoSnaps = undoSnaps))
+            // [T-p2-rewind-baseline] 基线挪到恢复后状态：否则同一轮的第二次 rewind
+            // 拿旧 after-image 与已被本 store 改写的盘面比较，全部误报「会话外被修改」。
+            store.rebaseAfterImages(plan.sessionId, appliedSnaps.associate { it.path to it.content })
         }
 
         var partial = problems.isNotEmpty() || conflicts.isNotEmpty()
@@ -89,6 +97,13 @@ class RewindController(
         if (conflicts.isNotEmpty()) {
             note = (note?.let { "$it\n" } ?: "") +
                 "以下文件在会话外被修改过，已跳过恢复以免覆盖外部改动（如需回滚请先自行备份）：${conflicts.joinToString("；")}"
+        }
+        if (unchecked.isNotEmpty()) {
+            // [T-p2-rewind-unchecked-note] 只声明不改判 partial：无凭据不检测是
+            // 文档化行为（写入失败/超大文件本就跳过捕获），这些路径照常恢复；
+            // partial 语义 = 有路径没恢复成功，与「未检测」不同。
+            note = (note?.let { "$it\n" } ?: "") +
+                "以下文件缺少改动后凭据（写入失败或超大文件未捕获），本次恢复未做会话外改动检测：${unchecked.joinToString("；")}"
         }
         if (problems.isNotEmpty()) {
             note = (note?.let { "$it\n" } ?: "") + "以下文件恢复失败：${problems.joinToString("；")}"

@@ -107,7 +107,8 @@ object CheckpointBridge {
             store = store,
             fileAccess = AppRewindFileAccess(context, ""),
             conversationRewinder = SessionForkConversationRewinder(
-                AppSessionForkPort(chatRepository),
+                // [T-p1-9-fork-workspace] 端口需要 filesDir 做未归档会话的工作区复制
+                AppSessionForkPort(chatRepository, context.filesDir),
                 store,
             ),
         )

@@ -55,6 +55,10 @@ class PromptQueueManagerTest {
             }.forEach { records.remove(it.id) }
         }
 
+        override suspend fun dropSession(sessionId: String) {
+            records.values.filter { it.sessionId == sessionId }.forEach { records.remove(it.id) }
+        }
+
         override suspend fun claim(sessionId: String, laneName: String, queue: PromptQueue, limit: Int) =
             visible(sessionId, laneName, queue).take(limit).onEach {
                 records[it.id] = it.copy(claimedAt = System.currentTimeMillis())
@@ -148,6 +152,20 @@ class PromptQueueManagerTest {
         m.clear("s1", PromptQueue.STEER)
         assertNull(m.first("s1", PromptQueue.STEER))
         assertNotNull(m.first("s1", PromptQueue.FOLLOW_UP))
+    }
+
+    @Test
+    fun `dropSession removes every lane and queue type of one session`() = runTest {
+        val m = manager()
+        m.enqueue("s1", PromptQueue.FOLLOW_UP, Payload("follow"))
+        m.enqueue("s1", PromptQueue.STEER, Payload("steer"))
+        m.enqueue("s2", PromptQueue.FOLLOW_UP, Payload("other"))
+
+        m.dropSession("s1")
+
+        assertTrue(m.list("s1", PromptQueue.FOLLOW_UP).isEmpty())
+        assertNull(m.first("s1", PromptQueue.STEER))
+        assertEquals("other sessions must be untouched", listOf("other"), m.list("s2", PromptQueue.FOLLOW_UP).map { it.payload.text })
     }
 
     @Test

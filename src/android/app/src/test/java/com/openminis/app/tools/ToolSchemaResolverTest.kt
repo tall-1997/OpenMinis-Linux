@@ -1,5 +1,7 @@
 package com.openminis.app.tools
 
+import com.openminis.app.ui.chat.normalizedExecArgs
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -74,5 +76,37 @@ class ToolSchemaResolverTest {
     fun `malformed args json falls through to the executors own error path`() {
         assertTrue(ToolSchemaResolver.problemsFor("shell_execute", "{not json").isEmpty())
         assertTrue(ToolSchemaResolver.problemsFor("shell_execute", "[1,2]").isEmpty())
+    }
+
+    @Test
+    fun `executor side normalization completes aliases the validator approved`() {
+        // [T-schema-exec-args-sync] P2：校验面补出来的键（cmd→command）执行器也
+        // 要看得到，否则「校验通过、执行缺参」。ChatViewModelExecuteToolExt 的
+        // 执行器现在读 normalizedExecArgs 的输出。
+        val aliased = JSONObject(
+            normalizedExecArgs("shell_execute", """{"cmd":"ls"}"""),
+        )
+        assertEquals("ls", aliased.optString("command"))
+    }
+
+    @Test
+    fun `executor side normalization unwraps wrappers and unflattens keys`() {
+        val unwrapped = JSONObject(
+            normalizedExecArgs("shell_execute", """{"params":{"command":"ls"}}"""),
+        )
+        assertEquals("ls", unwrapped.optString("command"))
+
+        val unflattened = JSONObject(
+            normalizedExecArgs("shell_execute", """{"command":"ls","options__cwd":"/tmp"}"""),
+        )
+        assertEquals("/tmp", unflattened.optJSONObject("options")?.optString("cwd"))
+    }
+
+    @Test
+    fun `executor side normalization falls back to raw on invalid json and mcp`() {
+        // 非法 JSON 回退原始 argsJson（各执行器自有错误路径）；MCP 的别名与
+        // 解包整体关闭，raw 即权威。
+        assertEquals("{not json", normalizedExecArgs("shell_execute", "{not json"))
+        assertEquals("""{"params":{"a":1}}""", normalizedExecArgs("mcp__x", """{"params":{"a":1}}"""))
     }
 }

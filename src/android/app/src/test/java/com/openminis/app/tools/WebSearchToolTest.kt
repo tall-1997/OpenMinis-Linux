@@ -3,6 +3,8 @@ package com.openminis.app.tools
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.IOException
+import java.net.SocketTimeoutException
 
 class WebSearchToolTest {
 
@@ -36,5 +38,26 @@ class WebSearchToolTest {
     fun schemaIsRegistered() {
         assertEquals("web_search", WebSearchTool.definition().name)
         assertTrue(WebSearchTool.definition().required.contains("query"))
+    }
+
+    @Test
+    fun emptyQueryReportsInvalidArguments() {
+        // [T-retry-error-codes] P1-7：失败路径补机器可读错误码——参数错不是
+        // 瞬态，统一重试层不重试，弹回模型自我纠正。（无 context、无网络 I/O）
+        val result = WebSearchTool.execute("""{"tool_title":"x"}""", context = null)
+        assertTrue(!result.success)
+        assertEquals(ToolErrorCode.INVALID_ARGUMENTS, result.errorCode)
+    }
+
+    @Test
+    fun transientEngineCausesClassifyAsRetryable() {
+        // [T-retry-error-codes] P1-7：引擎级超时/IO 上报瞬态码，配置缺失不标——
+        // 「引擎没配 key」不该被退避重试一万次。
+        assertEquals(ToolErrorCode.TIMEOUT, WebSearchTool.transientErrorCode(SocketTimeoutException("t")))
+        assertEquals(ToolErrorCode.NETWORK_ERROR, WebSearchTool.transientErrorCode(IOException("io")))
+        assertEquals(null, WebSearchTool.transientErrorCode(IllegalStateException("no results")))
+        assertEquals(ToolErrorCode.TIMEOUT, WebSearchTool.errorCodeFor(SocketTimeoutException("t")))
+        assertEquals(ToolErrorCode.NETWORK_ERROR, WebSearchTool.errorCodeFor(IOException("io")))
+        assertEquals(ToolErrorCode.EXECUTION_FAILED, WebSearchTool.errorCodeFor(IllegalStateException("weird")))
     }
 }

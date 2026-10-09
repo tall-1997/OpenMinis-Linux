@@ -56,12 +56,57 @@ class WriteLeaseTest {
     }
 
     @Test
-    fun `non write tools and mcp tools are outside the lease`() {
+    fun `non write tools are outside the lease`() {
         assertTrue(WriteLeaseGate.check(WriteLease.NONE, HarnessTool.READ, "file_read", args("any.md")) is LeaseVerdict.Allowed)
         assertTrue(WriteLeaseGate.check(WriteLease.NONE, HarnessTool.BASE, "shell_execute", JsonObject(emptyMap())) is LeaseVerdict.Allowed)
-        assertTrue(
-            WriteLeaseGate.check(WriteLease.NONE, HarnessTool.WRITE, "mcp__fs__write", args("any.md")) is LeaseVerdict.Allowed,
+    }
+
+    // ——— [T-p2-writelease-mcp-gap] mcp__* 不再无条件放行 ———
+
+    @Test
+    fun `mcp tools are denied on a read only lane`() {
+        // 副作用面无法验证：只读 lane 一律拒（旧实现对 mcp__ 写工具完整放行）。
+        val verdict = WriteLeaseGate.check(WriteLease.NONE, HarnessTool.WRITE, "mcp__fs__write", args("any.md"))
+        assertTrue(verdict is LeaseVerdict.Denied)
+        assertTrue((verdict as LeaseVerdict.Denied).reason.contains("副作用面"))
+    }
+
+    @Test
+    fun `write shaped mcp tools are denied under a scoped lease`() {
+        val verdict = WriteLeaseGate.check(
+            WriteLease(listOf("docs")), HarnessTool.BASE, "mcp__fs__save_file", args("docs/x.md"),
         )
+        assertTrue("路径参数不受租约约束的写形 mcp 工具必须拒", verdict is LeaseVerdict.Denied)
+    }
+
+    @Test
+    fun `read shaped mcp tools stay allowed under a scoped lease`() {
+        assertTrue(
+            WriteLeaseGate.check(
+                WriteLease(listOf("docs")), HarnessTool.BASE, "mcp__search__query", JsonObject(emptyMap()),
+            ) is LeaseVerdict.Allowed,
+        )
+    }
+
+    // ——— [T-p2-writelease-relative-scope] 相对 target 与 scope 同根解析 ———
+
+    @Test
+    fun `relative target resolves against the workspace root`() {
+        // 模型照旧文案改用相对路径的场景：docs/reports 在租约 /var/minis/workspace/docs 内
+        val lease = WriteLease(listOf("docs"))
+        assertTrue(
+            "相对路径必须解析到工作区根后再比对 scope",
+            WriteLeaseGate.check(lease, HarnessTool.WRITE, "file_write", args("docs/reports/q3.md")) is LeaseVerdict.Allowed,
+        )
+    }
+
+    @Test
+    fun `workspace rooted target matches absolute scope`() {
+        val lease = WriteLease(listOf("/var/minis/workspace/docs"))
+        val v1 = WriteLeaseGate.check(lease, HarnessTool.WRITE, "file_write", args("docs/a.md"))
+        assertTrue("relative target verdict=$v1 normalized=${lease.normalized}", v1 is LeaseVerdict.Allowed)
+        val v2 = WriteLeaseGate.check(lease, HarnessTool.WRITE, "file_write", args("/var/minis/workspace/docs/a.md"))
+        assertTrue("absolute target verdict=$v2", v2 is LeaseVerdict.Allowed)
     }
 
     @Test

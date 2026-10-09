@@ -65,4 +65,36 @@ class ToolRetryTest {
         assertTrue(!ToolRetry.isTransient(ok()))
         assertTrue(!ToolRetry.isTransient(transient(ToolErrorCode.PERMISSION_DENIED)))
     }
+
+    @Test
+    fun `web fetch failure sites classify transient causes`() {
+        // [T-retry-error-codes] P1-7：web_fetch 失败路径此前全部 errorCode=null，
+        // ToolRetry.isTransient（只认 NETWORK_ERROR/TIMEOUT）从未触发。超时/IO
+        // 必须被归为瞬态，参数错与执行失败不重试。
+        assertEquals(
+            ToolErrorCode.TIMEOUT,
+            WebFetchTool.errorCodeFor(java.net.SocketTimeoutException("read timed out")),
+        )
+        assertEquals(
+            ToolErrorCode.NETWORK_ERROR,
+            WebFetchTool.errorCodeFor(java.io.IOException("connection reset")),
+        )
+        assertEquals(
+            ToolErrorCode.INVALID_ARGUMENTS,
+            WebFetchTool.errorCodeFor(IllegalArgumentException("bad url")),
+        )
+        assertEquals(
+            ToolErrorCode.EXECUTION_FAILED,
+            WebFetchTool.errorCodeFor(IllegalStateException("unexpected")),
+        )
+    }
+
+    @Test
+    fun `web fetch bad url result is not transient`() {
+        // [T-retry-error-codes] 畸形 URL 被 SSRF guard 拒绝（无网络 I/O）→
+        // PERMISSION_DENIED，弹回模型自查，统一重试层不重试。
+        val result = WebFetchTool.execute("""{"url":"not a url"}""")
+        assertEquals(ToolErrorCode.PERMISSION_DENIED, result.errorCode)
+        assertTrue(!ToolRetry.isTransient(result))
+    }
 }

@@ -47,7 +47,15 @@ class ToolReplayGuard {
      */
     fun registerAndCheckReplay(rawId: String, name: String, argsJson: String): Boolean {
         if (rawId.isEmpty()) return false
-        val fingerprint = "$name\u0000$argsJson"
+        // [T-p2-replay-fingerprint-keyorder] 指纹基于**键序归一**后的参数串：
+        // JSON 对象无序，网关重发时若重排键序，原始序列化串的指纹就不同——
+        // 漏判重放 → 工具双跑。ToolCallFingerprint.stableJson 在每层嵌套按
+        // 字典序排键（ToolLoopDetector 同源归一），解析失败回退原始串（保持
+        // 与旧实现的兼容面）。
+        val canonicalArgs = runCatching {
+            ToolCallFingerprint.stableJson(org.json.JSONObject(argsJson))
+        }.getOrDefault(argsJson)
+        val fingerprint = "$name\u0000$canonicalArgs"
         val previous = seen.put(rawId, fingerprint)
         return previous == fingerprint
     }

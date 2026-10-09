@@ -30,6 +30,7 @@ import com.openminis.app.data.repository.MCPRepository
 import com.openminis.app.data.repository.SkillRepository
 import com.openminis.app.evolution.EvolutionEngine
 import com.openminis.app.evolution.EvolutionHooks
+import com.openminis.app.harness.HarnessLog
 import com.openminis.app.notification.BackgroundTaskNotifier
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.network.NetworkMonitor
@@ -388,6 +389,19 @@ class MinisApp : Application(), ImageLoaderFactory {
         // the rest of onCreate land in today's log file. Mirrors iOS
         // `LoggingManager.startIfEnabled()` (called from MinisApp.swift:143).
         AppLogger.init(this)
+
+        // [T-harness-log-sink] :harness 是纯 JVM 库，默认 sink 只走 stderr；
+        // 注入 AppLogger 转发，harness 的 WARN/ERROR（ToolLoopDetector、
+        // SessionTreeStore 等）与 app 日志同落一份文件——对齐迁移前 AppLogger
+        // 的可观测性，运行链路仍不因日志失败。
+        HarnessLog.sink = { level, message, throwable ->
+            val text = if (throwable != null) "$message: ${throwable.message}" else message
+            when (level) {
+                "E" -> AppLogger.error("Harness", text)
+                "W" -> AppLogger.warning("Harness", text)
+                else -> AppLogger.debug("Harness", text)
+            }
+        }
 
         // [T-generation-run] 启动扫描：上一次进程死亡时半途而废的生成轮次
         // 标记为 ABANDONED 并留日志，让"崩溃时在跑哪条回复"可追溯。

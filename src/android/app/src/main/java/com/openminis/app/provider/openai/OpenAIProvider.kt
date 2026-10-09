@@ -86,8 +86,13 @@ class OpenAIProvider private constructor(
      * null/blank → default UA; non-blank → replaces User-Agent on every
      * outbound request (chat + responses). Only set for custom-base
      * OpenAI-compat instances.
+     *
+     * [T-zen-ua-preserve] internal (not private) so the streaming extension
+     * in OpenAIRawStream.kt can consult it: the Zen disguise UA is applied
+     * only when this is null/blank, so a paid Zen instance's user-configured
+     * UA is never silently replaced.
      */
-    private val customUserAgent: String? = null,
+    internal val customUserAgent: String? = null,
     /**
      * [T-android-azure-openai] Azure OpenAI mode. When true, requests auth with
      * the `api-key:` header (not `Authorization: Bearer`) and the URL is built
@@ -107,6 +112,16 @@ class OpenAIProvider private constructor(
     override val name = "OpenAI"
 
     /**
+     * [T-zen-host-anchor] Injection seam for tests, in the shape of
+     * [com.openminis.app.network.DohDns.nowProvider]. The host-anchored
+     * [ZenDisguise.isZenHost] can never accept a MockWebServer base path
+     * (localhost), so the free-lane harnesses force the host decision here
+     * instead of the old path-substring predicate. null → computed from
+     * [basePath]; production never sets it.
+     */
+    internal var zenHostOverride: Boolean? = null
+
+    /**
      * [T-zen-free-thinking-budget] Whether this instance drives the bundled
      * Zen FREE lane — the Zen host, authenticated with the literal anonymous
      * credential ("public") the free lane accepts. The bundled instance's key
@@ -115,7 +130,7 @@ class OpenAIProvider private constructor(
      * instance, and the free-lane budget path below stays off the paid wire.
      */
     internal val isZenFree: Boolean
-        get() = apiKey == "public" && ZenDisguise.isZenHost(basePath)
+        get() = apiKey == "public" && (zenHostOverride ?: ZenDisguise.isZenHost(basePath))
     override val callGateKey: String
         get() = ProviderKeyGate.key(
             basePath,

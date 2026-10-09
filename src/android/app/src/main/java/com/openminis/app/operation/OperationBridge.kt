@@ -4,6 +4,7 @@ import android.content.Context
 import com.openminis.app.harness.HarnessMessage
 import com.openminis.app.harness.ToolCall
 import com.openminis.app.harness.ToolResult
+import com.openminis.app.harness.events.HarnessEvent
 import com.openminis.app.harness.events.HarnessEventBus
 import com.openminis.app.harness.operation.OperationCoordinator
 import com.openminis.app.harness.operation.OperationPhase
@@ -13,8 +14,12 @@ import com.openminis.app.harness.operation.ReplayPolicy
 import com.openminis.app.harness.runtime.FileHarnessRuntimePersistence
 import com.openminis.app.harness.session.SessionTreeStore
 import com.openminis.app.data.model.LLMUsage
+import com.openminis.app.logging.AppLogger
 import java.io.File
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -44,18 +49,48 @@ object OperationBridge {
     private val persistences = java.util.concurrent.ConcurrentHashMap<String, FileHarnessRuntimePersistence>()
     private val coordinators = java.util.concurrent.ConcurrentHashMap<String, OperationCoordinator>()
     private val treeStores = java.util.concurrent.ConcurrentHashMap<String, SessionTreeStore>()
+    private val busScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     fun persistence(filesDir: File): FileHarnessRuntimePersistence =
         persistences.computeIfAbsent(filesDir.absolutePath) { FileHarnessRuntimePersistence(File(filesDir, DIR)) }
 
     fun coordinator(filesDir: File): OperationCoordinator =
         coordinators.computeIfAbsent(filesDir.absolutePath) {
-            OperationCoordinator(persistence(filesDir), json, HarnessEventBus())
+            val bus = HarnessEventBus()
+            // [T-harness-event-bus-consumer] 事件总线的兜底消费者：约 10 类事件
+            // 原先发进虚空（无任何订阅者，埋点白做）。先转发 AppLogger
+            // （tag=HarnessEvent.<Type>）保住埋点语义，未来 UI/统计消费者再
+            // 订阅同一条流——事件本身与投递语义不变。
+            busScope.launch { bus.events.collect { logBusEvent(it) } }
+            OperationCoordinator(persistence(filesDir), json, bus)
         }
 
     /** SessionTreeStore 的宿主出口：恢复链用它读盘上分支投影。 */
     fun treeStore(filesDir: File): SessionTreeStore =
         treeStores.computeIfAbsent(filesDir.absolutePath) { SessionTreeStore(persistence(filesDir), json) }
+
+    // ─── 事件总线兜底消费者（转发 AppLogger） ──────────────────────────
+
+    private fun logBusEvent(event: HarnessEvent) {
+        AppLogger.debug(
+            "HarnessEvent.${event::class.simpleName}",
+            "session=${event.sessionId.take(8)} ${eventLogDetail(event)}",
+        )
+    }
+
+    /** 只带路由键的兜底描述；细节（参数/输出/usage 明细）订阅方从持久化表读。 */
+    private fun eventLogDetail(event: HarnessEvent): String = when (event) {
+        is HarnessEvent.OperationStarted -> "op=${event.operationId} lane=${event.laneName}"
+        is HarnessEvent.OperationFinished -> "op=${event.operationId} outcome=${event.outcome}"
+        is HarnessEvent.ProviderRoundStarted -> "op=${event.operationId} round=${event.round} attempt=${event.attempt}"
+        is HarnessEvent.ProviderRoundSettled -> "op=${event.operationId} round=${event.round} in=${event.inputTokens} out=${event.outputTokens}"
+        is HarnessEvent.ToolCallStarted -> "tool=${event.toolName} call=${event.toolCallId}"
+        is HarnessEvent.ToolCallSettled -> "tool=${event.toolName} ok=${event.success}"
+        is HarnessEvent.ApprovalRequested -> "tool=${event.toolName} risk=${event.riskLevel}"
+        is HarnessEvent.RecoveryApplied -> "outcome=${event.outcome}"
+        is HarnessEvent.PermissionRequired -> "permission=${event.permission} reason=${event.reason}"
+        is HarnessEvent.PlanStepProgress -> "step=${event.stepId} status=${event.status}"
+    }
 
     // ─── 循环转移挂点（best-effort） ───────────────────────────────────
 

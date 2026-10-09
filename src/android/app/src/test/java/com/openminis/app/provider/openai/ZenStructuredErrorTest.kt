@@ -179,6 +179,33 @@ class ZenStructuredErrorTest {
         assertFalse(zenRetirementEvidence("gateway timeout"))
     }
 
+    /**
+     * [T-zen-free-lane-type-gate] The "is unavailable" message fallback must
+     * never fire for a free-lane / rate-limit error type: a body of one of
+     * those types describes a LIVE model (identity, quota, rate), and a
+     * message that merely happens to contain the phrase would otherwise be
+     * recorded as retirement evidence — dead-recording a working row and
+     * contradicting the mapper's own "Deliberately NOT evidence" contract.
+     */
+    @Test
+    fun `a free-lane error type is not evidence even when the message says is unavailable`() {
+        assertFalse(
+            zenRetirementEvidence(
+                """{"type":"error","error":{"type":"FreeTierError","message":"Endpoint is unavailable for the free tier"}}""",
+            ),
+        )
+        assertFalse(
+            zenRetirementEvidence(
+                """{"type":"error","error":{"type":"FreeUsageLimitError","message":"Model is unavailable: rate limit exceeded"}}""",
+            ),
+        )
+        assertFalse(
+            zenRetirementEvidence(
+                """{"error":{"type":"rate_limit_exceeded","message":"The model is unavailable right now: rate limited"}}""",
+            ),
+        )
+    }
+
     @Test
     fun `a retirement refusal records the model id in the dead record`() {
         val provider = zenProvider("mimo-v2.5-free")

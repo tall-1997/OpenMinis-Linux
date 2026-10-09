@@ -223,7 +223,28 @@ internal fun OpenAIProvider.rawStreamMessage(
         }
         var request = buildRequest(bodyStr)
         if (com.openminis.app.provider.ZenDisguise.isZenHost(basePath)) {
-            request = ZenDisguise.applyToBody(request.newBuilder(), bodyStr).build()
+            // [T-zen-session-seed] Seed from the typed message list, not the
+            // serialized body. The old applyToBody path re-parsed the full
+            // body (a second multi-MB materialisation per request on long
+            // loops — the exact cost the T302 single-serialization rule exists
+            // to prevent), its role mapping folded the JSON "system" message
+            // into USER so the seed was actually the system prompt (drifting
+            // every turn on a dynamic one, contrary to sessionId's contract),
+            // and Responses bodies (no "messages" array) collapsed onto one
+            // constant seed shared by every such request. The typed list's
+            // first USER message is the seed for both body shapes.
+            //
+            // [T-zen-ua-preserve] buildRequest already applied the
+            // per-provider customUserAgent, so the disguise UA is applied only
+            // when the user configured none — a paid Zen instance keeps its
+            // own UA. The x-opencode-* headers are always applied: they have
+            // no user-configurable counterpart, and Authorization is not among
+            // them.
+            request = ZenDisguise.apply(
+                request.newBuilder(),
+                messages,
+                disguiseUserAgent = customUserAgent.isNullOrBlank(),
+            ).build()
         }
         val headerMap = mutableMapOf<String, String>()
         for (name in request.headers.names()) {

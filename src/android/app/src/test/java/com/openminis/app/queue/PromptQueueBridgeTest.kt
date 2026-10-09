@@ -126,6 +126,21 @@ class PromptQueueBridgeTest {
         assertEquals(listOf("q1"), texts("sess-1"))
     }
 
+    @Test
+    fun `confirm waits for a still-pending mirror write before scanning`() = runBlocking {
+        // [T-queue-mirror-write-race] 工具边界的确认可能在入队后几 ms 就到；
+        // 确认的扫描若跑在记录落盘之前，晚到的写会把条目在盘上复活（重启后
+        // 还原出幽灵气泡）。confirm 必须先 join 同一 filesDir 的在途写。
+        PromptQueueBridge.launchMirrorWrite(filesDir, this) {
+            kotlinx.coroutines.delay(150)
+            PromptQueueBridge.enqueue(filesDir, "sess-1", prompt("q1", "late write"))
+        }
+
+        PromptQueueBridge.confirm(filesDir, "sess-1", listOf("q1"))
+
+        assertTrue("the late record must not outlive its own confirm", texts("sess-1").isEmpty())
+    }
+
     // ─── 会话隔离 ──────────────────────────────────────────────────────
 
     @Test
@@ -137,6 +152,20 @@ class PromptQueueBridgeTest {
 
         assertTrue("dropped session must come back empty", texts("sess-a").isEmpty())
         assertEquals("the other session must be untouched", listOf("beta"), texts("sess-b"))
+    }
+
+    @Test
+    fun `dropSession deletes the mirror file instead of leaving an emptied shell`() = runBlocking {
+        // [T-queue-disk-persistence] 空壳 {"records":[]} 不再累积：整份文件
+        // 必须消失。"sess-a" 全是安全字符 → 转义后就是 sess-a.json。
+        PromptQueueBridge.enqueue(filesDir, "sess-a", prompt("a1"))
+
+        PromptQueueBridge.dropSession(filesDir, "sess-a")
+
+        assertFalse(
+            "the session's mirror file must be deleted, not emptied",
+            File(queueRoot, "sess-a.json").exists(),
+        )
     }
 
     @Test

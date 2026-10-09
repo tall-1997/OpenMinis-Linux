@@ -74,4 +74,41 @@ class WritePathGuardTest {
         }
         assertNull(WritePathGuard.denyReason("/etc/passwd"))
     }
+
+    // ——— [T-p2-writepathguard-dotdot] 中段 .. 消解 ———
+
+    @Test
+    fun midPathDotDotEscapeIsDenied() {
+        val prev = WritePathGuard.swap(listOf("/ws/reports"))
+        try {
+            // 旧实现字符串前缀匹配会放行：/ws/reports/../../shared/x 以 /ws/reports 开头
+            val denied = WritePathGuard.denyReason("/ws/reports/../../shared/x")
+            assertTrue("中段 .. 消解后越界必须拒", denied!!.contains("write_paths"))
+            assertNull(WritePathGuard.denyReason("/ws/reports/q3/final.md"))
+        } finally {
+            WritePathGuard.restore(prev)
+        }
+    }
+
+    @Test
+    fun dotDotThatEscapesRootIsRejectedExplicitly() {
+        val prev = WritePathGuard.swap(listOf("/ws/reports"))
+        try {
+            val denied = WritePathGuard.denyReason("/../etc/passwd")
+            assertTrue(denied!!.contains("escapes the root"))
+        } finally {
+            WritePathGuard.restore(prev)
+        }
+    }
+
+    // ——— [T-p2-writelease-relative-scope] 相对声明按工作区根解析 ———
+
+    @Test
+    fun relativeScopesResolveAgainstWorkspaceRoot() {
+        val paths = WritePathGuard.parse("workspace/reports, .")
+        assertEquals(
+            listOf("/var/minis/workspace/workspace/reports", "/var/minis/workspace"),
+            paths,
+        )
+    }
 }

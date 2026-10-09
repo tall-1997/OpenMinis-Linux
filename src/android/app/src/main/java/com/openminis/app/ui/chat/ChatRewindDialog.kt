@@ -50,14 +50,17 @@ internal fun ChatRewindHost(
     // 成功 / 失败 / 无锚点的提示都走这里；成功时附带「撤销回滚」动作
     //（Snackbar 而不是 Toast —— Toast 承载不了动作）。
     LaunchedEffect(viewModel, snackbarHostState) {
-        RewindEvents.events.collect { text ->
+        RewindEvents.events.collect { event ->
             val outcome = snackbarHostState.showSnackbar(
-                message = text,
+                message = event.text,
                 actionLabel = context.getString(R.string.chat_rewind_undo),
                 withDismissAction = true,
                 duration = SnackbarDuration.Long,
             )
-            if (outcome == SnackbarResult.ActionPerformed) viewModel.undoLastRewind()
+            // 撤销必须查发起会话：CONVERSATION/BOTH 回溯后 UI 已切到 fork，
+            // activeSessionId 是 fork，undo 记录却记在原会话名下
+            //（[T-p1-8-undo-session-binding]）。
+            if (outcome == SnackbarResult.ActionPerformed) viewModel.undoLastRewind(event.initiatorSessionId)
         }
     }
 

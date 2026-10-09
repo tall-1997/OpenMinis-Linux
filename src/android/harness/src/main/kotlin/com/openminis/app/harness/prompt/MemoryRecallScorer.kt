@@ -79,7 +79,25 @@ object MemoryRecallScorer {
         val queryTerms = effectiveQueryTerms(query)
         if (queryTerms.isEmpty()) return emptyList()
 
-        val documents = candidates.map { tokenize(it.key + "\n" + it.value) }
+        // [T-cjk-unigram-recall] 单字 CJK 查询词的 unigram 回退：分词是
+        // bigram-only，单字查询词（如「问」）只作为 bigram 组成部分出现在文档侧，
+        // 永远命不中任何文档词——单字召回从「有」降为「无」。给文档补上被
+        // bigram 切词吞掉的该字出现次数（unigram tf），BM25/IDF 数学不变；
+        // 多字查询词仍走纯 bigram 路径（避免散字误命中）。
+        val singleCharTerms = queryTerms.filter { it.length == 1 && CJK_SEGMENT.matches(it) }
+        val documents = if (singleCharTerms.isEmpty()) {
+            candidates.map { tokenize(it.key + "\n" + it.value) }
+        } else {
+            candidates.map { candidate ->
+                val text = candidate.key + "\n" + candidate.value
+                val doc = tokenize(text).toMutableList()
+                singleCharTerms.forEach { term ->
+                    val ch = term[0]
+                    repeat(unigramTfInBigramSegments(text, ch)) { doc += term }
+                }
+                doc
+            }
+        }
         if (documents.all { it.isEmpty() }) return emptyList()
         val scores = bm25(queryTerms, documents)
 
@@ -151,4 +169,10 @@ object MemoryRecallScorer {
 
     private val LATIN_WORD = Regex("[A-Za-z0-9_]+")
     private val CJK_SEGMENT = Regex("[\\u3400-\\u9fff\\uf900-\\ufaff]+")
+
+    /** 被 bigram 切词吞掉的 `ch` 出现次数（多字 CJK 段内；单字段已在 tokenize 成为词）。 */
+    private fun unigramTfInBigramSegments(text: String, ch: Char): Int =
+        CJK_SEGMENT.findAll(text)
+            .filter { it.value.length > 1 }
+            .sumOf { segment -> segment.value.count { it == ch } }
 }

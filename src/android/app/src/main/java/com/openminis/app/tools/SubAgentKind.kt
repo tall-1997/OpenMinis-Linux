@@ -108,6 +108,12 @@ object SubAgentKind {
     // READ_ONLY_ALLOW (best web-recon surface) but these ACTIONS mutate remote
     // pages: click/type submit forms and keystrokes, execute_js runs arbitrary
     // page JS, set_cookies rewrites session state.
+    //
+    // [T-p2-browser-readonly-table] 审查建议把 set_user_agent / set_viewport /
+    // new_tab / close_tab 一并拒绝（会话状态类动作，close_tab 可能影响并行
+    // lane）。**不采纳**：SubAgentBrowserDenialTest.`research surface stays
+    // open` 把这四个动作钉在开放侧——研究 lane 需要 new_tab/close_tab 管理自己
+    // 的页面、set_viewport 保证截图可读，这是仓库已做的设计取舍；收紧属产品决策。
     private val READONLY_BROWSER_DENY = setOf(
         "click", "type", "hover", "execute_js", "set_cookies",
     )

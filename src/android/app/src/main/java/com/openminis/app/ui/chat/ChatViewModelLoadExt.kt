@@ -44,6 +44,10 @@ internal fun ChatViewModel.loadSession() {
         val tHangDiagStart = System.currentTimeMillis()
         println("[T-HANG-DIAG] loadSession ENTER session=$sessionId isDraft=$isDraft")
         com.openminis.app.diagnostics.PerfLongCtx.step(sessionId, "loadSession.enter", "isDraft=$isDraft")
+        // [T-queue-session-handoff] 会话切换的队列交接（第一语句）：把上一会话的
+        // 内存队列归还其磁盘镜像、载入本会话的镜像。必须在任何会话状态改写之前；
+        // 后文 restoreQueuedPromptsFromDisk(sid) 的非空守卫会让重复还原自动跳过。
+        runCatching { onActiveSessionChanged(sessionId) }
         try {
         val config = providerRepository.config.value
         _availableGroups.value = config.modelGroups

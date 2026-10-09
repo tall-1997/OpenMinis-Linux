@@ -72,7 +72,7 @@ class ZenFreeThinkingBudgetTest {
 
     /**
      * Drive the real provider on the Zen free path and return the serialized
-     * outbound body. `apiKey = "public"` + the Zen basePath substring triggers
+     * outbound body. `apiKey = "public"` + the forced Zen host trigger
      * `isZenFree` on the production OpenAIProvider, so `buildRequestBody`
      * takes the budget branch instead of `injectThinkingParams`.
      */
@@ -87,9 +87,12 @@ class ZenFreeThinkingBudgetTest {
                 MockResponse().setHeader("Content-Type", "application/json").setBody(ok),
             )
         }
-        // apiKey="public" + basePath containing "opencode.ai/zen" triggers isZenFree
-        val basePath = server.url("/opencode.ai/zen/v1").toString().trimEnd('/')
+        // [T-zen-host-anchor] isZenHost anchors on the URL HOST, and a
+        // MockWebServer base path can never carry it, so the Zen host decision
+        // is forced on the provider instead of the old path-substring trick.
+        val basePath = server.url("/v1").toString().trimEnd('/')
         val provider = OpenAIProvider(apiKey = "public", model = model, basePath = basePath)
+        provider.zenHostOverride = true
         runCatching {
             runBlocking {
                 provider.sendMessageClamped(
@@ -469,9 +472,12 @@ class ZenFreeThinkingBudgetTest {
     fun `paid provider keeps reasoning_effort path`() {
         val ok = """{"choices":[{"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}"""
         repeat(4) { server.enqueue(MockResponse().setHeader("Content-Type", "application/json").setBody(ok)) }
-        // apiKey is a real key, not "public" → isZenFree = false
-        val basePath = server.url("/opencode.ai/zen/v1").toString().trimEnd('/')
+        // [T-zen-host-anchor] Zen host forced + a real (non-"public") key:
+        // isZenFree stays false because the key alone disqualifies it — the
+        // exact paid-Zen-provider regression under test.
+        val basePath = server.url("/v1").toString().trimEnd('/')
         val provider = OpenAIProvider(apiKey = "sk-real-key", model = model("big-pickle"), basePath = basePath)
+        provider.zenHostOverride = true
         runCatching {
             runBlocking {
                 provider.sendMessageClamped(
@@ -525,8 +531,11 @@ class ZenFreeThinkingBudgetTest {
         for (level in listOf(ThinkingLevel.OFF, ThinkingLevel.LOW, ThinkingLevel.MEDIUM, ThinkingLevel.HIGH, ThinkingLevel.XHIGH, ThinkingLevel.MAX, ThinkingLevel.ULTRA)) {
             val ok = """{"choices":[{"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}"""
             repeat(4) { server.enqueue(MockResponse().setHeader("Content-Type", "application/json").setBody(ok)) }
-            val basePath = server.url("/opencode.ai/zen/v1").toString().trimEnd('/')
+            // [T-zen-host-anchor] Zen host forced (MockWebServer base path can
+            // never carry it) + apiKey="public" → isZenFree = true.
+            val basePath = server.url("/v1").toString().trimEnd('/')
             val provider = OpenAIProvider(apiKey = "public", model = model("big-pickle"), basePath = basePath)
+            provider.zenHostOverride = true
             runCatching {
                 runBlocking {
                     provider.sendMessageClamped(

@@ -66,6 +66,9 @@ interface PromptQueuePersistence {
 
     suspend fun clear(sessionId: String, laneName: String, queue: PromptQueue)
 
+    /** 会话消亡：删除该会话的全部队列状态（整份会话文件，跨 lane / 队列类型 / claimed 条目）。幂等。 */
+    suspend fun dropSession(sessionId: String)
+
     /** 领取：标记 claimedAt 并返回领走的条目（保持队列顺序）。 */
     suspend fun claim(sessionId: String, laneName: String, queue: PromptQueue, limit: Int): List<QueueRecord>
 
@@ -171,6 +174,16 @@ class PromptQueueManager<T>(
 
     suspend fun clear(sessionId: String, queue: PromptQueue, laneName: String = MAIN_LANE) {
         persistence.clear(sessionId, laneName, queue)
+    }
+
+    /**
+     * 会话消亡：整份会话文件删除。与 [clear] 的区别：clear 只清一个队列
+     * 类型、文件留下；drop 面向「会话本身没了 / 队列事实源归零」，文件
+     * 不留 {"records":[]} 空壳（全部 lane / 队列类型 / claimed 条目随文件
+     * 一起消失）。
+     */
+    suspend fun dropSession(sessionId: String) {
+        persistence.dropSession(sessionId)
     }
 
     /**

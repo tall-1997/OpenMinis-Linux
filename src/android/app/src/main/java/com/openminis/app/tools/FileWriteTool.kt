@@ -78,6 +78,13 @@ object FileWriteTool {
                 return ToolExecutionResult("Error: Content is not valid UTF-8", false, toolTitle = toolTitle)
             }
 
+            // [T-file-write-diff] P2：file_edit 的结果带 unified diff，file_write
+            // 整文件覆写却不带——模型改完无法自查整文件重写，下一轮还得 file_read
+            // 回读确认。落盘前读旧内容（仅文件已存在时；新文件保持纯字节计数，
+            // file_edit 对不存在的文件本就报错，没有「新增文件」diff 惯例）。
+            // AtomicFileWrite.read 取 per-path 锁，读取方式与 file_edit 一致。
+            val previousContent = if (file.exists()) AtomicFileWrite.read(file) else null
+
             // T123: mirror iOS AIChatViewModel L8339 — auto-create the
             // parent dir whenever it doesn't exist, regardless of the
             // create_dirs flag. Per-session subdirs (workspace, etc.) are
@@ -120,7 +127,17 @@ object FileWriteTool {
                 "FileWrite",
                 "wrote path=$path host=${file.absolutePath} bytes=$bytes append=$append",
             )
-            ToolExecutionResult("Wrote to $path ($bytes bytes)", true, toolTitle = toolTitle)
+            // [T-file-write-diff] 覆写模式 AtomicFileWrite.verify 已逐字节确认
+            // 盘面 == content，after 直接用 content 不再重读；append 模式落盘
+            // 结果是「旧内容 + content」，从盘上重读。diff 走 file_edit 同一套
+            // EditDiffSection（4KB 截断有标注）；盘读失败回退纯字节计数。
+            val finalContent = if (append) AtomicFileWrite.read(file) else content
+            val diff = if (previousContent != null && finalContent != null) {
+                EditDiffSection.render(path, previousContent, finalContent).orEmpty()
+            } else {
+                ""
+            }
+            ToolExecutionResult("Wrote to $path ($bytes bytes)$diff", true, toolTitle = toolTitle)
         } catch (e: Exception) {
             ToolExecutionResult("Error writing file: ${e.message}", false)
         }

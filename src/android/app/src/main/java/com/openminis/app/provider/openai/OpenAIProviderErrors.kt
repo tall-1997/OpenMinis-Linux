@@ -147,6 +147,12 @@ internal fun OpenAIProvider.mapError(error: Throwable): LLMError = mapThrowableT
  * model), FreeUsageLimitError (429 — the model works, the quota doesn't),
  * and bare 500s (upstream broken, may heal). Those keep their rows; the
  * user hides them if they don't want them.
+ *
+ * [T-zen-free-lane-type-gate] The message fallback is gated on the error
+ * type: free-lane types (FreeTierError / FreeUsageLimitError) and OpenAI
+ * rate-limit types never become evidence through it, so a body of one of
+ * those types whose message text merely happens to contain "is unavailable"
+ * cannot dead-record a working model.
  */
 internal fun zenRetirementEvidence(body: String): Boolean {
     val json = try {
@@ -157,6 +163,14 @@ internal fun zenRetirementEvidence(body: String): Boolean {
     val error = json.optJSONObject("error") ?: return false
     val type = error.optString("type", "")
     if (type == "ModelError" || type == "RegionError") return true
+    // [T-zen-free-lane-type-gate] The fallback below is for the non-free-lane
+    // dialects ("error", "server_error", bare OpenAI shapes). A body of one
+    // of the types excluded here describes a LIVE model — identity, quota or
+    // rate — so recording it as retirement evidence would nuke a working
+    // row, contradicting the "Deliberately NOT evidence" contract above.
+    if (type == "FreeTierError" || type == "FreeUsageLimitError" || type == "rate_limit_exceeded") {
+        return false
+    }
     val message = error.safeOptString("message", "").orEmpty()
     return message.contains("is unavailable", ignoreCase = true)
 }

@@ -96,6 +96,28 @@ class FilePromptQueuePersistenceTest {
     }
 
     @Test
+    fun `dropping a session deletes its file instead of leaving an emptied shell`() = runBlocking {
+        // [T-queue-disk-persistence] 旧链路（clear(FOLLOW_UP)）只把记录清空、
+        // 文件留下：每个有排队历史的已删会话都在 root 里积累一个
+        // {"records":[]} 空 JSON，非 FOLLOW_UP 条目也跟着死不掉。drop 必须
+        // 整份文件消失——这里特意在同会话文件里放一条 STEER 记录钉住
+        // 「跨队列类型一起走」。
+        persistence.enqueue(record("a1", "sess-a"))
+        persistence.enqueue(record("a2", "sess-a", PromptQueue.STEER))
+        persistence.enqueue(record("b1", "sess-b"))
+
+        persistence.dropSession("sess-a")
+
+        assertEquals(
+            "the dropped session's file must be GONE, not emptied",
+            1,
+            root.listFiles { f -> f.name.endsWith(".json") }?.size,
+        )
+        assertTrue("dropped session reads back empty", ids("sess-a").isEmpty())
+        assertEquals("the other session must be untouched", listOf("b1"), ids("sess-b"))
+    }
+
+    @Test
     fun `underscore in a raw id cannot masquerade as an escape sequence`() = runBlocking {
         // "_2f" 是合法原始 id；"/" 的转义结果也是 "_2f"。转义 '_' 自身正是为了
         // 让这两者不撞同一个文件。

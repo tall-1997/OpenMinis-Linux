@@ -59,6 +59,31 @@ class PersistentShell(
     @Volatile
     private var pendingCallback: CommandCallback? = null
 
+    /**
+     * [T-p1-3-shell-auth-frames] 会话帧认证秘密：guest 侧**未导出**的 shell 变量，
+     * 首条命令的 bootstrap 行生成（`$RANDOM`×4 ≈ 60bit），并以
+     * `__MINIS_AUTH_<hex>__` 回显一次。它从不过 stdin 之外的通道，也从不进入
+     * 子进程 environ（未 export）——竞争读取 stdin 的后台进程（`cat &` 继承
+     * fd 0）偷得到命令文本，偷不到秘密，因此**伪造不出合法的 GO/DONE 帧**。
+     * null = 尚未握手；握手失败一率降级 legacyFraming（保持旧行为，不破坏可用性）。
+     */
+    @Volatile
+    private var sessionAuth: String? = null
+
+    /** [T-p1-3-shell-auth-frames] 握手失败后的永久降级：帧退回无标签旧格式。 */
+    @Volatile
+    private var legacyFraming = false
+
+    /**
+     * [T-android-apply-env-race] stdin 写互斥。executeCommand 的写走
+     * ExecutionCoordinator 的 per-session mutex，applyEnvironment 原本不经过它——
+     * TZ/proxy 广播恰逢命令执行时，两个非线程安全的 BufferedWriter 写交错会损坏
+     * 命令流（wrappedCommand 可超 PIPE_BUF，写不是原子的）。shell 自身的写锁兜住
+     * 所有直接写 stdin 的路径。用对象监视器而非协程 Mutex：executeCommand 的写
+     * 发生在 suspendCancellableCoroutine 的非挂起 lambda 里，那里进不了挂起锁。
+     */
+    private val stdinLock = Any()
+
     val isAlive: Boolean
         get() = process?.isAlive == true
 
@@ -297,6 +322,11 @@ class PersistentShell(
         val activeRun = com.openminis.app.service.ActiveRunContext.current()
         activeRun?.registerProcess(p) { stop() }
         stdinWriter = BufferedWriter(OutputStreamWriter(p.outputStream, StandardCharsets.UTF_8))
+        // [T-p1-3-shell-auth-frames] 新进程 = 新 shell = 旧的未导出秘密已死。
+        // 不重置的话，respawn 后的帧标签仍按旧秘密计算，新 shell 永远配不上帧，
+        // 每条命令都超时自杀——这是本机制最危险的失效模式，必须在 spawn 点清零。
+        sessionAuth = null
+        legacyFraming = false
 
         // Start background reader thread
         Thread({
@@ -584,7 +614,37 @@ class PersistentShell(
         if (timeout != armed) {
             Log.w(TAG, "caller timeout ${timeout}ms ignored; armed ${armed}ms class=${budget.workClass}")
         }
-        val marker = UUID.randomUUID().toString().take(8)
+        // [T-p1-3-shell-auth-frames] 帧标签：认证建立后 marker = "<nonce>-<tag>"，
+        // tag = cksum(nonce + 会话秘密)。秘密只存在于 guest 的未导出变量里，wrapper
+        // 在 guest 侧现算标签——竞争读者（`cat &` 偷 stdin）偷不到秘密，伪造的
+        // GO/DONE 永远配不上 framer 的字面匹配。握手完成前 / 降级时保持旧格式。
+        val auth = if (legacyFraming) null else sessionAuth
+        val nonce = UUID.randomUUID().toString().take(8)
+        val tagCompute: String
+        val marker: String
+        if (auth != null) {
+            val tag = PosixCksum.cksum(nonce + auth).toString()
+            // 标签在 guest 侧重算一次（nonce 是本条命令的新值；秘密不出现在
+            // 命令文本里，出现在未导出变量的引用中）。
+            tagCompute = "__minis_tag=\$(printf '%s' '$nonce'\"\$__minis_auth\" | cksum | cut -d' ' -f1)\n"
+            marker = "$nonce-$tag"
+        } else {
+            tagCompute = ""
+            marker = nonce
+        }
+        // [T-p1-3-shell-auth-frames] 首条命令先握手：guest 生成未导出的
+        // __minis_auth 并回显一次（字节落在 GO 之前的 pre-BEGIN 窗口，由
+        // MarkerFramer 捕获）。秘密从不过 stdin 之外的通道；握手结果在命令
+        // 结束后回填 sessionAuth。
+        val bootstrap = if (sessionAuth == null && !legacyFraming) {
+            // printf %05d 定宽拼接：恰好 20 位数字，长度确定（framer 的 AUTH
+            // 正则与跨读 hold 都依赖可预期形状；$RANDOM 裸拼可能短于正则下限）。
+            "if [ -z \"\${__minis_auth:-}\" ]; then " +
+                "__minis_auth=\$(printf '%05d%05d%05d%05d' \$RANDOM \$RANDOM \$RANDOM \$RANDOM); " +
+                "echo \"__MINIS_AUTH_\${__minis_auth}__\"; fi\n"
+        } else {
+            ""
+        }
         // [T-android-ghost-cwd] Heal the shell's cwd before handing control back
         // to the next command. This shell is long-lived, so a `cd` into a
         // directory that a later command deletes leaves EVERY following command
@@ -594,6 +654,7 @@ class PersistentShell(
         // instead of `pwd` on purpose: it is a shell variable, so the probe
         // cannot itself fail with ENOENT in the very state it detects.
         val wrappedCommand = buildString {
+            append(bootstrap)
             append(offloadExitPrelude())
             // A previous command, or the user's own script, may have turned on
             // `set -e`. That would abort the rest of a compound command and
@@ -607,6 +668,10 @@ class PersistentShell(
             // bounded sample for ShellExecDiag. Field evidence (2026-10-04):
             // one command's full result re-delivered under four different
             // later tool-call ids because those bytes were never gated off.
+            //
+            // [T-p1-3-shell-auth-frames] 认证建立后 GO/DONE 的 marker 携带
+            // guest 侧现算的帧标签（__minis_tag），字面匹配天然拒绝伪造帧。
+            append(tagCompute)
             append("echo \"__MINIS_GO_${marker}__\"\n")
             // Supervisor re-arm. Not a subshell around the command, not a trap,
             // not a second ulimit. On expiry `kill -TERM -$$` kills the group.
@@ -619,39 +684,47 @@ class PersistentShell(
 
         return withContext(Dispatchers.IO) {
             SandboxWorkload.armDeadline(process, armed)
+            // [T-p1-3-shell-auth-frames] 握手对账：本条命令若带了 bootstrap，命令
+            // 结束（或超时——AUTH 字节先于 GO 到达，超时也可能已捕获）后把 framer
+            // 看到的秘密回填 sessionAuth；始终握不上则永久降级 legacy 帧。
+            val expectedAuth = bootstrap.isNotEmpty()
+            var authSeen: String? = null
+            var cb: CommandCallback? = null
             try {
             val result = withTimeoutOrNull(armed) {
                 coroutineScope {
-                val cb = CommandCallback(
+                val callback = CommandCallback(
                     marker = marker,
                     lineCallback = lineCallback,
                 )
-                pendingCallback = cb
+                cb = callback
+                pendingCallback = callback
                 val beat = if (lineCallback != null) {
                     launchSilentHeartbeat(
-                        cb.heartbeat,
-                        { pendingCallback === cb },
+                        callback.heartbeat,
+                        { pendingCallback === callback },
                     ) { line -> emitLine(lineCallback, line) }
                 } else {
                     null
                 }
                 try {
                 suspendCancellableCoroutine { cont ->
-                    cb.onComplete = { output, exitCode ->
+                    callback.onComplete = { output, exitCode ->
                         beat?.cancel()
-                        if (cb.output.truncated) {
-                            Log.w(TAG, "output truncated, dropped ${cb.output.dropped} chars")
+                        if (callback.output.truncated) {
+                            Log.w(TAG, "output truncated, dropped ${callback.output.dropped} chars")
                         }
                         // [T-android-stale-stream-gate] Make dropped pre-BEGIN
                         // bytes observable: the sample is the fingerprint of
                         // whatever emitted stale bytes into the stream.
-                        if (cb.framer.preBeginDroppedChars() > 0) {
+                        if (callback.framer.preBeginDroppedChars() > 0) {
                             Log.w(
                                 TAG,
-                                "pre-begin bytes dropped: ${cb.framer.preBeginDroppedChars()} " +
-                                    "sample=${cb.framer.preBeginDroppedSample().take(160).replace('\n', '|')}",
+                                "pre-begin bytes dropped: ${callback.framer.preBeginDroppedChars()} " +
+                                    "sample=${callback.framer.preBeginDroppedSample().take(160).replace('\n', '|')}",
                             )
                         }
+                        callback.framer.authTag?.let { authSeen = it }
                         if (cont.isActive) {
                             cont.resume(Pair(output, exitCode))
                         }
@@ -659,14 +732,16 @@ class PersistentShell(
 
                     cont.invokeOnCancellation {
                         beat?.cancel()
-                        if (pendingCallback === cb) pendingCallback = null
+                        if (pendingCallback === callback) pendingCallback = null
                         // Parent cancel has the same serialization bug as timeout.
                         stop()
                     }
 
                     try {
-                        writer.write(wrappedCommand)
-                        writer.flush()
+                        synchronized(stdinLock) {
+                            writer.write(wrappedCommand)
+                            writer.flush()
+                        }
                     } catch (e: Exception) {
                         beat?.cancel()
                         pendingCallback = null
@@ -680,6 +755,7 @@ class PersistentShell(
                 }
                 }
             }
+            authSeen = authSeen ?: cb?.framer?.authTag
 
             if (result == null) {
                 // The guest shell reads the next command only after the previous
@@ -692,6 +768,24 @@ class PersistentShell(
                 result
             }
             } finally {
+                // [T-p1-3-shell-auth-frames] 握手回填/降级判定在两条出路（完成/超时）
+                // 上都要走：AUTH 字节先于 GO 到达，超时命令也可能已完成握手。
+                if (expectedAuth) {
+                    val seen = authSeen
+                    if (seen != null && sessionAuth == null) {
+                        sessionAuth = seen
+                        com.openminis.app.logging.AppLogger.info(
+                            TAG,
+                            "shell frame auth established (session=$sessionId)",
+                        )
+                    } else if (seen == null && sessionAuth == null && !legacyFraming) {
+                        legacyFraming = true
+                        com.openminis.app.logging.AppLogger.warning(
+                            TAG,
+                            "shell frame auth handshake failed — falling back to legacy unauthenticated framing (session=$sessionId)",
+                        )
+                    }
+                }
                 SandboxWorkload.clearDeadline(process)
             }
         }
@@ -719,15 +813,20 @@ class PersistentShell(
         val writer = stdinWriter ?: return
         withContext(Dispatchers.IO) {
             try {
-                for (key in previousKeys - envVars.keys) {
-                    writer.write("unset $key\n")
+                // [T-android-apply-env-race] 与 executeCommand 的 stdin 写共用
+                // shell 自身写锁：广播恰逢命令执行时两个非线程安全的写交错会
+                // 损坏命令流（wrappedCommand 可超 PIPE_BUF）。
+                synchronized(stdinLock) {
+                    for (key in previousKeys - envVars.keys) {
+                        writer.write("unset $key\n")
+                    }
+                    for ((key, value) in envVars) {
+                        // Escape single quotes in values
+                        val escaped = value.replace("'", "'\\''")
+                        writer.write("export $key='$escaped'\n")
+                    }
+                    writer.flush()
                 }
-                for ((key, value) in envVars) {
-                    // Escape single quotes in values
-                    val escaped = value.replace("'", "'\\''")
-                    writer.write("export $key='$escaped'\n")
-                }
-                writer.flush()
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to apply env vars: ${e.message}")
             }

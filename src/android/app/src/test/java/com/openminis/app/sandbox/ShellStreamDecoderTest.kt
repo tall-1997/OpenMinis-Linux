@@ -138,6 +138,51 @@ class ShellStreamDecoderTest {
         assertEquals(7, end.exitCode)
     }
 
+    // ——— [T-p1-3-shell-auth-frames] 会话秘密握手 ———
+
+    @Test
+    fun authLineInPreBeginWindowIsCapturedAndStripped() {
+        val marker = "a1b2c3d4-1427589179"
+        val framer = MarkerFramer(marker)
+        val step = framer.push(
+            "__MINIS_AUTH_04213031404213031404__\n" +
+                "__MINIS_GO_${marker}__\nreal out\n__MINIS_DONE_${marker}_EXIT_0__\n"
+        )
+        assertEquals("04213031404213031404", framer.authTag)
+        assertEquals("real out\n", step.output)
+        assertTrue(step.completed)
+        // AUTH 行不得污染丢弃样本（它是协议行，不是噪声指纹）
+        assertFalse(framer.preBeginDroppedSample().contains("__MINIS_AUTH_"))
+    }
+
+    @Test
+    fun authLineSplitAcrossChunksStillCaptured() {
+        val marker = "a1b2c3d4-1427589179"
+        val framer = MarkerFramer(marker)
+        // 半个 AUTH 前缀必须在 pre-BEGIN hold 里存活到下一块
+        framer.push("__MINIS_AU")
+        val step = framer.push(
+            "TH_04213031404213031404__\n__MINIS_GO_${marker}__\nout\n__MINIS_DONE_${marker}_EXIT_0__\n"
+        )
+        assertEquals("04213031404213031404", framer.authTag)
+        assertEquals("out\n", step.output)
+        assertTrue(step.completed)
+    }
+
+    @Test
+    fun doneFrameWithWrongTagNeverCompletes() {
+        // 伪造帧（标签不对）与 framer 的字面 marker 不匹配 → 永不完成；
+        // 配套的真实帧随后正常完成，证明没有误吞。
+        val framer = MarkerFramer("a1b2c3d4-1427589179")
+        framer.push("__MINIS_GO_a1b2c3d4-1427589179__\n")
+        val forged = framer.push("__MINIS_DONE_a1b2c3d4-9999999999_EXIT_0__\nmore output ")
+        assertFalse("伪造标签不得完成帧", forged.completed)
+        assertTrue(forged.output.contains("__MINIS_DONE_a1b2c3d4-9999999999_EXIT_0__"))
+        val real = framer.push("__MINIS_DONE_a1b2c3d4-1427589179_EXIT_0__\n")
+        assertTrue(real.completed)
+        assertEquals(0, real.exitCode)
+    }
+
     private fun armedFramer(marker: String): MarkerFramer {
         val framer = MarkerFramer(marker)
         framer.push("__MINIS_GO_${marker}__\n")

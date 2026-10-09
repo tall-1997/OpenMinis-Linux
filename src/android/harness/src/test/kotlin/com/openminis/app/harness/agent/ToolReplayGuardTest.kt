@@ -64,11 +64,20 @@ class ToolReplayGuardTest {
     }
 
     @Test
-    fun `fingerprint distinguishes whitespace-different args`() {
-        // Serialized args differing in whitespace are different keys — the
-        // guard is byte-exact on purpose (a replay re-emits identical bytes).
+    fun `fingerprint is key-order and whitespace canonical`() {
+        // [T-p2-replay-fingerprint-keyorder] 指纹基于键序归一后的参数串（stableJson）：
+        // 同一 JSON 的键序/空白变体是**同一次调用**——网关重发时重排键序/空白不再
+        // 漏判重放导致双派发。键序不同 → 同一指纹（replay）。
         val guard = ToolReplayGuard()
         guard.registerAndCheckReplay("call_a", "shell_execute", """{"command":"ls"}""")
-        assertFalse(guard.registerAndCheckReplay("call_a", "shell_execute", """{ "command": "ls" }"""))
+        assertTrue(guard.registerAndCheckReplay("call_a", "shell_execute", """{ "command": "ls" }"""))
+        // 键序重排同样命中
+        val guard2 = ToolReplayGuard()
+        guard2.registerAndCheckReplay("call_a", "file_edit", """{"path":"a.md","text":"x"}""")
+        assertTrue(guard2.registerAndCheckReplay("call_a", "file_edit", """{"text":"x","path":"a.md"}"""))
+        // 真正不同的参数仍然放行
+        val guard3 = ToolReplayGuard()
+        guard3.registerAndCheckReplay("call_a", "shell_execute", """{"command":"ls"}""")
+        assertFalse(guard3.registerAndCheckReplay("call_a", "shell_execute", """{"command":"pwd"}"""))
     }
 }

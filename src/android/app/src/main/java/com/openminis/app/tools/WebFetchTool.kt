@@ -5,8 +5,12 @@ import com.openminis.app.data.model.AgentToolParam
 import com.openminis.app.network.guardedDohDns
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import org.json.JSONException
 import org.json.JSONObject
+import java.io.IOException
+import java.net.SocketTimeoutException
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 
 /**
  * Fetch a public URL to text. SSRF via [FetchUrlGuard].
@@ -47,7 +51,15 @@ object WebFetchTool {
             val url = JSONObject(argsJson).optString("url", "").trim()
             val blocked = FetchUrlGuard.blockedReason(url)
             if (blocked != null) {
-                return ToolExecutionResult("Error: $blocked", false, toolTitle = toolTitle)
+                // [T-retry-error-codes] P1-7: 失败路径补机器可读错误码——此前全部
+                // errorCode=null，ToolRetry.isTransient（只认 NETWORK_ERROR/TIMEOUT）
+                // 从未触发，统一重试层是死代码。SSRF 拒绝不是瞬态，标 PERMISSION_DENIED
+                // 弹回模型换 URL。
+                return ToolExecutionResult(
+                    "Error: $blocked", false,
+                    errorCode = ToolErrorCode.PERMISSION_DENIED,
+                    toolTitle = toolTitle,
+                )
             }
             val req = Request.Builder()
                 .url(url)
@@ -56,18 +68,44 @@ object WebFetchTool {
             client.newCall(req).execute().use { resp ->
                 val finalUrl = resp.request.url.toString()
                 FetchUrlGuard.blockedReason(finalUrl)?.let {
-                    return ToolExecutionResult("Error after redirect: $it", false, toolTitle = toolTitle)
+                    return ToolExecutionResult(
+                        "Error after redirect: $it", false,
+                        errorCode = ToolErrorCode.PERMISSION_DENIED,
+                        toolTitle = toolTitle,
+                    )
                 }
                 if (!resp.isSuccessful) {
-                    return ToolExecutionResult("HTTP ${resp.code} for $url", false, toolTitle = toolTitle)
+                    // [T-retry-error-codes] 5xx/408/429 是瞬态（过载/限流/请求超时），
+                    // 交给 ToolRetry 退避重试；其余 4xx 是确定性答复，重试也是同一个错。
+                    val transient = resp.code == 408 || resp.code == 429 || resp.code in 500..599
+                    return ToolExecutionResult(
+                        "HTTP ${resp.code} for $url", false,
+                        errorCode = if (transient) ToolErrorCode.NETWORK_ERROR else ToolErrorCode.EXECUTION_FAILED,
+                        toolTitle = toolTitle,
+                    )
                 }
                 val raw = resp.body?.string().orEmpty()
                 val text = htmlToText(raw).take(MAX_OUTPUT)
                 ToolExecutionResult("URL: $finalUrl\n\n$text", true, toolTitle = toolTitle)
             }
         } catch (e: Exception) {
-            ToolExecutionResult("Error fetching URL: ${e.message}", false, toolTitle = toolTitle)
+            ToolExecutionResult(
+                "Error fetching URL: ${e.message}", false,
+                errorCode = errorCodeFor(e),
+                toolTitle = toolTitle,
+            )
         }
+    }
+
+    /**
+     * [T-retry-error-codes] P1-7: 异常 → 错误码分类。超时/IO 是瞬态（退避重试
+     * 有意义）；畸形 URL / 烂 argsJson 是参数错；其余按执行失败弹回模型自查。
+     */
+    internal fun errorCodeFor(cause: Exception): ToolErrorCode = when (cause) {
+        is SocketTimeoutException, is TimeoutException -> ToolErrorCode.TIMEOUT
+        is IOException -> ToolErrorCode.NETWORK_ERROR
+        is JSONException, is IllegalArgumentException -> ToolErrorCode.INVALID_ARGUMENTS
+        else -> ToolErrorCode.EXECUTION_FAILED
     }
 
     internal fun htmlToText(raw: String): String {

@@ -51,8 +51,6 @@ object ChatLinkResolver {
         //    with multiple sessions the resolver otherwise points at
         //    whichever session booted its shell most recently.
         val hostFile = resolveSandboxFile(trimmed, scheme, sessionId, context)
-        android.util.Log.w("ChatLinkDiag",
-            "resolve url=${trimmed.take(200)} sid=$sessionId hostFile=${hostFile?.absolutePath} exists=${hostFile?.exists()}")
         if (hostFile != null && hostFile.exists() && !hostFile.isDirectory) {
             FileItem.from(hostFile)?.let { return ChatLinkAction.SandboxFile(it) }
         }
@@ -108,7 +106,7 @@ object ChatLinkResolver {
                     .firstOrNull { it != null && it.exists() }
                     // Nothing existed — hand back the primary candidate so the
                     // caller's own exists() check reports against the path the
-                    // user actually meant, and diagnostics stay readable.
+                    // user actually meant.
                     ?: lookup(
                         minisPathCandidates(stripped).first().let {
                             if (it.startsWith("/")) it else "/var/minis/$it"
@@ -117,7 +115,10 @@ object ChatLinkResolver {
             }
             "file" -> {
                 val path = raw.removePrefix("file://").substringBefore('?')
-                if (path.isEmpty()) null else File(java.net.URLDecoder.decode(path, "UTF-8"))
+                // [T-android-minis-plus-filename] file:// 与 minis:// 同口径：
+                // URLDecoder 的 '+'→空格语义会毁掉含 '+' 的文件名，统一走
+                // %XX-only 的 decodeMinisPath。
+                if (path.isEmpty()) null else File(decodeMinisPath(path))
             }
             null -> {
                 if (raw.startsWith("/")) lookup(raw) else null
@@ -153,49 +154,54 @@ object ChatLinkResolver {
      * legitimately contains a `%` still resolves via the first candidate and
      * never sees the second decode.
      *
-     * Percent-decoding is done by hand rather than with
-     * [java.net.URLDecoder], which implements
+     * Percent-decoding itself is [decodeMinisPath]: %XX only, never mapping
+     * '+' to space.
+     */
+    internal fun minisPathCandidates(strippedPath: String): List<String> {
+        val once = decodeMinisPath(strippedPath)
+        val candidates = mutableListOf(once)
+        val twice = decodeMinisPath(once)
+        if (twice != once) candidates.add(twice)
+        return candidates
+    }
+
+    /**
+     * Decode %XX escapes only, never mapping '+' to space. Shared by
+     * [minisPathCandidates] and the media resolvers below ([resolveMdMediaFile]).
+     *
+     * Done by hand rather than with [java.net.URLDecoder], which implements
      * `application/x-www-form-urlencoded` — where `+` means SPACE. A path
      * segment like `a+b/file.pdf` is a real directory name on disk, and
      * URLDecoder silently turns it into `a b/file.pdf`, resolving to nothing
      * and producing the same dead-link symptom. (`java.net.URI` is no help
      * either: its multi-arg constructor ENCODES its input, so `getPath()`
      * hands the string straight back undecoded.)
+     *
+     * Invalid escapes are emitted verbatim so a stray '%' degrades instead of
+     * throwing, and non-escape characters keep their own UTF-8 bytes so
+     * already-decoded CJK passes through intact.
      */
-    internal fun minisPathCandidates(strippedPath: String): List<String> {
-        // Decode %XX only, never mapping '+' to space (see KDoc). Done by hand
-        // rather than with URLDecoder (form semantics: '+' → space) or
-        // java.net.URI (its multi-arg constructor ENCODES its input, so
-        // getPath() hands the string straight back). Invalid escapes are
-        // emitted verbatim so a stray '%' degrades instead of throwing.
-        fun decodeOnce(s: String): String {
-            if (!s.contains('%')) return s
-            val out = java.io.ByteArrayOutputStream(s.length)
-            var i = 0
-            while (i < s.length) {
-                val c = s[i]
-                if (c == '%' && i + 2 < s.length) {
-                    val hex = s.substring(i + 1, i + 3)
-                    val byte = hex.toIntOrNull(16)
-                    if (byte != null) {
-                        out.write(byte)
-                        i += 3
-                        continue
-                    }
+    internal fun decodeMinisPath(s: String): String {
+        if (!s.contains('%')) return s
+        val out = java.io.ByteArrayOutputStream(s.length)
+        var i = 0
+        while (i < s.length) {
+            val c = s[i]
+            if (c == '%' && i + 2 < s.length) {
+                val hex = s.substring(i + 1, i + 3)
+                val byte = hex.toIntOrNull(16)
+                if (byte != null) {
+                    out.write(byte)
+                    i += 3
+                    continue
                 }
-                // Non-escape (or malformed escape): keep the character's own
-                // UTF-8 bytes so already-decoded CJK passes through intact.
-                out.write(c.toString().toByteArray(Charsets.UTF_8))
-                i++
             }
-            return String(out.toByteArray(), Charsets.UTF_8)
+            // Non-escape (or malformed escape): keep the character's own
+            // UTF-8 bytes so already-decoded CJK passes through intact.
+            out.write(c.toString().toByteArray(Charsets.UTF_8))
+            i++
         }
-
-        val once = decodeOnce(strippedPath)
-        val candidates = mutableListOf(once)
-        val twice = decodeOnce(once)
-        if (twice != once) candidates.add(twice)
-        return candidates
+        return String(out.toByteArray(), Charsets.UTF_8)
     }
 
     /** Fire a system intent so MainActivity's BROWSABLE filter picks the deep link up. */
@@ -231,7 +237,9 @@ internal fun resolveMdMediaFile(context: Context, url: String, sessionId: String
     val stripped = url.substringBefore('?')
     val primary: File? = when {
         stripped.startsWith("minis://") -> {
-            val decoded = java.net.URLDecoder.decode(stripped.removePrefix("minis://"), "UTF-8")
+            // [T-android-minis-plus-filename] decodeMinisPath decodes %XX only.
+            // URLDecoder's form-encoding ('+' → SPACE) silently broke '+' filenames.
+            val decoded = ChatLinkResolver.decodeMinisPath(stripped.removePrefix("minis://"))
             val linuxPath = "/var/minis/$decoded"
             // Prefer the session-scoped resolver when the caller supplied a
             // sessionId: the global `bindMounts` map is overwritten every time
@@ -254,7 +262,9 @@ internal fun resolveMdMediaFile(context: Context, url: String, sessionId: String
     if (!stripped.startsWith("minis://") || sessionId.isNullOrBlank()) {
         return null
     }
-    val decoded = java.net.URLDecoder.decode(stripped.removePrefix("minis://"), "UTF-8")
+    // [T-android-minis-plus-filename] decodeMinisPath, not URLDecoder — a '+'
+    // in a filename must survive the fallback path too.
+    val decoded = ChatLinkResolver.decodeMinisPath(stripped.removePrefix("minis://"))
     val basename = decoded.substringAfterLast('/')
     val subdir = decoded.substringBefore('/', missingDelimiterValue = "").takeIf { it.isNotEmpty() } ?: "attachments"
     val owner = com.openminis.app.sandbox.SessionWorkspace.ownerSessionId(sessionId)

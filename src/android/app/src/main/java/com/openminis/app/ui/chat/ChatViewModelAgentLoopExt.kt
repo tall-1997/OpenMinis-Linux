@@ -1155,6 +1155,9 @@ internal suspend fun ChatViewModel.runAgentLoop(
                     // from the dead attempt must not refuse the fresh ones.
                     toolReplayGuard.reset()
                     replayRenamedIds.clear()
+                    // [T-p1-2-lane-replay-guard] 改名状态机与 replay 记账同批重置：
+                    // 重试轮的第一个同 id 调用不该被死 attempt 的计数改名成 "-2"
+                    toolIdDedupe.reset()
                     // T94 fix 2 + T256: throttle bookkeeping is per-stream
                     // attempt; reset alongside the partial-block rollback so
                     // the next attempt's first delta fires through immediately
@@ -1290,6 +1293,8 @@ internal suspend fun ChatViewModel.runAgentLoop(
                     // from the dead attempt must not refuse the fresh ones.
                     toolReplayGuard.reset()
                     replayRenamedIds.clear()
+                    // [T-p1-2-lane-replay-guard] 与上一处回滚点同一批重置
+                    toolIdDedupe.reset()
                     // loop continues — will retry collect with currentProvider
                 } else {
                     // All fallbacks exhausted. Surface the trail of tried

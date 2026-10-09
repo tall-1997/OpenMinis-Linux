@@ -79,6 +79,11 @@ object ToolOutputSpill {
             if (tail.isNotEmpty()) {
                 append("\n\n…(${folded.length - head.length - tail.length} chars omitted)…\n\n")
                 append(tail)
+            } else if (folded.length > head.length) {
+                // [T-spill-head-omitted] P2：输出落在 (head, head+tail] 预算内时只
+                // 显示头段——中段被静默丢掉，模型看不出内容被截了。与上面的头+尾
+                // 分支同样标注省略字符数。
+                append("\n\n…(${folded.length - head.length} chars omitted)…\n\n")
             }
         }
     }

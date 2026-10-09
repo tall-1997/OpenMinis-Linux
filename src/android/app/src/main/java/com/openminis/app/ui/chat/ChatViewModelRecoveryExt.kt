@@ -85,11 +85,17 @@ internal fun replayableUses(history: List<LLMMessage>): List<ReplayableUse> {
     val answered = history.flatMap { m -> m.contentParts }
         .filterIsInstance<AgentContentPart.ToolResult>()
         .mapTo(mutableSetOf()) { it.id }
+    // [T-p1-5-recovery-user-turn] 同一条 assistant 消息可以有**多个**可重放调用
+    //（并行 tool_calls 崩在落盘前）——firstOrNull 只重放第一个，其余悬空。
     return history.mapIndexedNotNull { messageIndex, message ->
-        val use = message.contentParts.filterIsInstance<AgentContentPart.ToolUse>()
-            .firstOrNull { it.id in replayIds && it.id !in answered }
-        use?.let { ReplayableUse(it.id, it.name, it.input.toString(), messageIndex) }
-    }
+        val uses = message.contentParts.filterIsInstance<AgentContentPart.ToolUse>()
+            .filter { it.id in replayIds && it.id !in answered }
+        if (uses.isEmpty()) {
+            null
+        } else {
+            uses.map { ReplayableUse(it.id, it.name, it.input.toString(), messageIndex) }
+        }
+    }.flatten()
 }
 
 /**
@@ -142,7 +148,14 @@ internal suspend fun ChatViewModel.replaySafeDanglingToolCalls() {
     synthesizeUnsettledOperationIntents()
     val uses = replayableUses(agentHistory)
     if (uses.isEmpty()) return
-    var replayed = 0
+    // [T-p1-5-recovery-user-turn] tool_result 必须以 USER 角色进历史：Anthropic
+    // 协议要求 tool_result 块在 user 轮（且 stripOrphanToolResults 只清洗 USER 轮
+    // 的孤儿），旧实现把结果追加进持有 tool_use 的同一条 ASSISTANT 消息——恢复后
+    // 首个请求对 Anthropic 系端点直接 400，重试/回退救不了。主循环的形状是
+    // ToolRoundOutcome.toolResultMessage（user 角色），这里对齐它。
+    // 同一条 assistant 消息的多个可重放调用合并进**一条** user 结果消息（与主循环
+    // 并行工具落盘同形）；按 messageIndex 聚组后倒序插入，保持前面的索引有效。
+    val resultsByIndex = linkedMapOf<Int, MutableList<AgentContentPart.ToolResult>>()
     for (use in uses) {
         val result = withContext(Dispatchers.IO) {
             runCatching {
@@ -156,16 +169,20 @@ internal suspend fun ChatViewModel.replaySafeDanglingToolCalls() {
         } ?: continue
         val index = use.messageIndex
         if (index !in agentHistory.indices) continue
-        val message = agentHistory[index]
-        agentHistory[index] = message.copy(
-            contentParts = message.contentParts + AgentContentPart.ToolResult(
+        resultsByIndex.getOrPut(index) { mutableListOf() }.add(
+            AgentContentPart.ToolResult(
                 id = use.callId,
                 name = use.toolName,
                 content = result.output,
                 isError = !result.success,
             ),
         )
-        replayed++
+    }
+    val updated = insertRecoveryToolResults(agentHistory, resultsByIndex)
+    val replayed = updated.size - agentHistory.size
+    if (updated !== agentHistory) {
+        agentHistory.clear()
+        agentHistory.addAll(updated)
     }
     if (replayed > 0) {
         AppLogger.info(
@@ -173,4 +190,27 @@ internal suspend fun ChatViewModel.replaySafeDanglingToolCalls() {
             "[Recovery] replayed $replayed safe dangling tool call(s) of ${uses.size} planned",
         )
     }
+}
+
+/**
+ * [T-p1-5-recovery-user-turn] 纯函数：把按 messageIndex 聚组的重放结果以 USER
+ * 结果消息插入历史副本（倒序插入保持前面的索引有效；越界索引跳过——与执行侧
+ * 同一守卫）。恢复链端到端测试对准这里；[replaySafeDanglingToolCalls] 把
+ * agentHistory（MutableList）按其结果同步。
+ */
+internal fun insertRecoveryToolResults(
+    history: List<LLMMessage>,
+    resultsByIndex: Map<Int, List<AgentContentPart.ToolResult>>,
+): List<LLMMessage> {
+    val mutable = history.toMutableList()
+    var inserted = 0
+    for ((index, parts) in resultsByIndex.entries.toList().asReversed()) {
+        if (index !in mutable.indices) continue
+        mutable.add(
+            (index + 1).coerceAtMost(mutable.size),
+            com.openminis.app.harness.agent.ToolRoundOutcome.toolResultMessage(parts, dbMessageId = null),
+        )
+        inserted += parts.size
+    }
+    return mutable
 }

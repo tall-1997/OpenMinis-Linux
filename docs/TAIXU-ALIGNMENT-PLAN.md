@@ -23,9 +23,9 @@
 > P0 三项：P0-2 ✓（claim 裁定 + 租约判定半边）、P0-3 ✓、
 > P0-1 ◐（纯逻辑层与四道接缝已立，循环本体未迁）。
 >
-> **:harness 规模**：主源码 **47 文件 / 6010 行**（15 包），测试 **31 文件 /
-> 4043 行**。对照 taixu harness 240 文件 / 44,808 行（22 子包）——已迁的是
-> 我方缺口对应的纯逻辑子集，不是镜像搬运。
+> **:harness 规模**（2026-10-10 实测）：主源码 **61 文件 / 7778 行**（16 包），
+> 测试 **42 文件 / 5032 行**。对照 taixu harness 240 文件 / 44,808 行（22 子包）
+> ——已迁的是我方缺口对应的纯逻辑子集，不是镜像搬运。
 >
 > **批次三接缝**（P0-1 剩余 + 2.3 执行半边 + 2.4 本体的共同前置）：
 >
@@ -69,8 +69,10 @@ taixu `harness/` 是 **Android 库**（依赖 Room/OkHttp/Ktor/Koin，14 文件�
       与宿主工具分支，只重试 NETWORK_ERROR / TIMEOUT 瞬态失败）
 - [x] 1.4 `metrics/RunMetrics.kt`（`a50de17`，**已接线**：agent 循环埋点 + 收尾单行日志）
 - [x] 1.5 `validation/ToolSchemaValidator.kt`（`f796181`，**已接线**：executeTool 派发入口；MCP 暂跳过）
-- [x] 1.6 `text/TextReplacers.kt` + `validation/ToolCallLoopDetector.kt`（**已接线**：
-      TextReplacers 进 file_edit 文本替换；LoopDetector 进主循环工具记账与拒绝路径）
+- [x] 1.6 `text/TextReplacers.kt`（**已接线**：TextReplacers 进 file_edit 文本替换）。
+      本条原列 `validation/ToolCallLoopDetector.kt`「已接线」不实——该件从未被任何
+      主源码引用（循环检测一直由 `agent/ToolLoopDetector.kt` 承担：ChatViewModel
+      主循环 check/record），已按死代码删除（2026-10-10）
 - [x] 1.7 配套测试全部移植
 - [x] 1.8 `architecture-policy.json` 等价物 + preBuild 检查（`2e75a0a`）
 

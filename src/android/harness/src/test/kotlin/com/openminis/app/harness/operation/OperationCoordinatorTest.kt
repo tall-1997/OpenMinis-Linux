@@ -9,9 +9,12 @@ import com.openminis.app.harness.model.HarnessLaneResultEntity
 import com.openminis.app.harness.model.HarnessOperationEntity
 import com.openminis.app.harness.model.HarnessUsageEntity
 import com.openminis.app.harness.UserMessage
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.yield
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
@@ -99,6 +102,39 @@ class OperationCoordinatorTest {
         coordinator.finish("s7", "completed", laneName = "main")
         assertNull(coordinator.active("s7"))
         assertTrue(!coordinator.operationExists(operationId))
+    }
+
+    // ─── [T-p1-6-finish-begin-race] finish 与 beginRun 的背靠背竞态回归 ───
+
+    @Test
+    fun `beginRun does not reuse an operationId whose finish holds the lane lock`() = runBlocking {
+        val oldId = coordinator.acceptRun("s9", userMessage("old"))
+        // 让 finishOperation 停在半途：finish 全程持锁，beginRun 必须等它落盘
+        val gate = CompletableDeferred<Unit>()
+        repository.finishGate = gate
+        val finishJob = launch(Dispatchers.Unconfined) { coordinator.finish("s9", "completed") }
+
+        val begun = async { coordinator.beginRun("s9") }
+        yield()
+        assertTrue(
+            "beginRun 不应在收尾落盘前返回（旧实现会在这里复用即将被删除的旧 operationId）",
+            begun.isActive,
+        )
+
+        gate.complete(Unit)
+        val newId = begun.await()
+        finishJob.join()
+
+        assertNotEquals(oldId, newId)
+        assertNull("旧操作行应已删除", repository.operations[oldId])
+        assertEquals(newId, repository.lanes["s9" to "main"]!!.currentOperationId)
+    }
+
+    @Test
+    fun `beginRun still resumes a genuinely active run without pending finish`() = runBlocking {
+        val activeId = coordinator.acceptRun("s11", userMessage("running"))
+        // 无排队收尾时保持原语义：busy lane 返回活跃 operationId（恢复/续接路径）
+        assertEquals(activeId, coordinator.beginRun("s11"))
     }
 
     @Test
@@ -200,6 +236,10 @@ class OperationCoordinatorTest {
         val operations = LinkedHashMap<String, HarnessOperationEntity>()
         val results = LinkedHashMap<Pair<String, String>, HarnessLaneResultEntity>()
         val queueItems = mutableListOf<String>()
+
+        /** [T-p1-6-finish-begin-race] 非空时 finishOperation 在其上挂起，制造收尾半途窗口。 */
+        var finishGate: CompletableDeferred<Unit>? = null
+
         private val entryList = mutableListOf<HarnessEntryEntity>()
         private val usageList = mutableListOf<HarnessUsageEntity>()
 
@@ -274,6 +314,7 @@ class OperationCoordinatorTest {
         }
 
         override suspend fun finishOperation(result: HarnessLaneResultEntity, lane: HarnessLaneEntity) {
+            finishGate?.await()
             operations.remove(result.operationId)
             results[result.sessionId to result.laneName] = result
             upsertLaneForTest(lane)

@@ -65,21 +65,12 @@ internal suspend fun ChatViewModel.drainQueuedPrompts(
 internal suspend fun ChatViewModel.materializeQueuedPromptsAsUserTurn(): Boolean {
     if (_promptQueue.value.isEmpty()) return false
     val queued = _promptQueue.value
-    _promptQueue.value = emptyList()
     Log.i(ChatViewModel.TAG, "📨[DRAIN] Draining ${queued.size} queued prompt(s): " +
         queued.joinToString(", ") { "${it.id}=\"${it.text.take(20)}...\"" })
 
-    // Flip isQueued=false on corresponding chat messages so they render as sent.
-    // T189: also clear queuedPromptId so a later retry of this bubble
-    // doesn't try to drop a phantom queue entry (and so the field state
-    // matches what retryFromMessage's truncate path now produces).
-    val queuedIds = queued.map { it.id }.toSet()
-    _messages.value = _messages.value.map { m ->
-        if (m.queuedPromptId != null && queuedIds.contains(m.queuedPromptId)) {
-            m.copy(isQueued = false, queuedPromptId = null)
-        } else m
-    }
-
+    // [T-queue-inject-ghost-bubble] 与 mid-loop 注入同口径：清队与气泡翻转都推迟
+    // 到「确定要物化」之后——纯文档附件且 XML 为空等边缘组合会在这里早退，早退时
+    // 队列/气泡/磁盘镜像三方原样保留（不再产生幽灵气泡与丢词）。
     // Build a combined user message (text + images from all queued prompts).
     // Persist as a single row.
     val sid = ensureSession()
@@ -105,6 +96,20 @@ internal suspend fun ChatViewModel.materializeQueuedPromptsAsUserTurn(): Boolean
         combinedParts.add(AgentContentPart.ImageData(part.data, part.mimeType, linuxPath = path, noVisionPlaceholder = visionPlaceholderFor(path)))
     }
     prepared.attachedFilesXml?.let { combinedParts.add(AgentContentPart.Text(it)) }
+
+    if (combinedParts.isEmpty() && prepared.mediaRefPartsJson == null && prepared.attachedFilesXml == null) {
+        Log.w(ChatViewModel.TAG, "📨[DRAIN] queued prompts materialized to empty content — leaving queue untouched")
+        return false
+    }
+
+    // —— 消费确定：清队（按 id 精确移除，不吃并发新入队）+ 气泡翻转 + 落盘 ——
+    val queuedIds = queued.map { it.id }.toSet()
+    _promptQueue.value = _promptQueue.value.filterNot { it.id in queuedIds }
+    _messages.value = _messages.value.map { m ->
+        if (m.queuedPromptId != null && queuedIds.contains(m.queuedPromptId)) {
+            m.copy(isQueued = false, queuedPromptId = null)
+        } else m
+    }
 
     val userText = combinedText.toString()
     // [T-android-paste-mediaref] Same marker handling as the mid-loop

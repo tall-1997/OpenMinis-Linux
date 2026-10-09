@@ -23,7 +23,10 @@ import kotlinx.serialization.json.contentOrNull
  *  - 其余按归一化前缀匹配：`target == scope || target.startsWith("$scope/")`。
  */
 data class WriteLease(val scopes: List<String>) {
-    val normalized: List<String> = scopes.map { normalizeWritePath(it) }
+    // [T-p2-writelease-relative-scope] scope 与 target 同根解析（工作区根）：
+    // 两侧基准不一致时，相对声明与相对 target 永远对不上绝对 scope。
+    // 整工作区哨兵（`*` / 空串）经解析原样保留。
+    val normalized: List<String> = scopes.map { resolveAgainstWorkspaceRoot(it) }
 
     /** 整工作区租约：`*` 或归一化后空串（`.` 的消解结果）。 */
     val wholeWorkspace: Boolean get() = normalized.any { it == "*" || it.isBlank() }
@@ -49,8 +52,24 @@ object WriteLeaseGate {
     }
 
     fun check(lease: WriteLease, tool: HarnessTool, rawToolName: String?, args: JsonObject): LeaseVerdict {
+        // [T-p2-writelease-mcp-gap] mcp__* 检查必须在 pathKey 早退**之前**：MCP
+        // 工具映射到 BASE（harnessToolFor 兜底），pathKey(BASE) = null 会直接
+        // Allowed，mcp 分支永远不可达。
+        if (rawToolName?.startsWith("mcp__") == true) {
+            return when {
+                lease.wholeWorkspace -> LeaseVerdict.Allowed
+                lease.scopes.isEmpty() -> LeaseVerdict.Denied(
+                    "本子任务按只读任务执行，MCP 工具的副作用面无法验证，禁止使用。" +
+                        "请直接完成分析并把结果作为结论返回；如需 MCP 能力，让主智能体在本会话调用。",
+                )
+                looksLikeWrite(rawToolName) -> LeaseVerdict.Denied(
+                    "MCP 工具 $rawToolName 疑似写操作，且其路径参数不受写租约约束，已拦截。" +
+                        "请把需要写入的内容作为结论返回，由主智能体处理。",
+                )
+                else -> LeaseVerdict.Allowed
+            }
+        }
         val key = pathKey(tool) ?: return LeaseVerdict.Allowed
-        if (rawToolName?.startsWith("mcp__") == true) return LeaseVerdict.Allowed
         if (lease.scopes.isEmpty()) {
             return LeaseVerdict.Denied(
                 "本子任务未声明 write_paths，按只读任务执行，禁止写入工作区。" +
@@ -60,11 +79,17 @@ object WriteLeaseGate {
         }
         if (lease.wholeWorkspace) return LeaseVerdict.Allowed
         val rawTarget = (args[key] as? JsonPrimitive)?.contentOrNull.orEmpty()
-        val target = normalizeWritePath(rawTarget)
+        // [T-p2-writelease-relative-scope] 相对 target 与 scope 同根解析：模型按
+        // 拒绝文案改用相对路径时（workspace/reports/x.md），不再因两侧基准不同
+        // 永远对不上。
+        val target = resolveAgainstWorkspaceRoot(rawTarget)
         // 参数缺失或为空交由执行层按 schema 报错，这里不抢先拦截。
         if (target.isBlank()) return LeaseVerdict.Allowed
         if (target.startsWith("../")) {
-            return LeaseVerdict.Denied("路径 $rawTarget 经 ../ 消解后逃出工作区顶层，已拦截。请使用工作区内的相对路径。")
+            return LeaseVerdict.Denied(
+                "路径 $rawTarget 经 ../ 消解后逃出工作区顶层，已拦截。" +
+                    "请使用工作区内的路径（如 /var/minis/workspace/…，或相对工作区根的路径）。",
+            )
         }
         val allowed = lease.normalized.any { scope -> target == scope || target.startsWith("$scope/") }
         return if (allowed) {
@@ -76,6 +101,17 @@ object WriteLeaseGate {
             )
         }
     }
+
+    /** mcp__ 工具名的写形启发式：只用于受限租约下的保守拦截，不做放行依据。 */
+    private fun looksLikeWrite(rawToolName: String): Boolean {
+        val lower = rawToolName.lowercase()
+        return WRITEISH_HINTS.any { lower.contains(it) }
+    }
+
+    private val WRITEISH_HINTS = listOf(
+        "write", "save", "create", "insert", "update", "delete", "remove",
+        "put", "upload", "replace", "append", "写", "写入", "保存", "创建", "删除",
+    )
 
     /** 被拦截写入的可读描述，用于汇总与完成判定。 */
     fun targetLabel(rawToolName: String?, args: JsonObject): String {

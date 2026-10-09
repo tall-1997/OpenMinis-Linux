@@ -8,7 +8,10 @@ import com.openminis.app.session.InputAttachment
 import com.openminis.app.ui.chat.QueuedPrompt
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
@@ -30,12 +33,15 @@ import kotlinx.serialization.json.Json
  *    `chatRepository.appendMessage` 成功后）→ confirmConsumed 删除；
  *  - 撤回（`removeQueuedPrompt` / `withdrawQueuedMessage`）→ cancel 删除；
  *  - 重启恢复（`loadSession`）→ list 重建 `_promptQueue` + 占位气泡；
- *  - 会话消亡（`clearChat` / `deleteSession`）→ clear 清空。
+ *  - 会话消亡 / 清空（`clearChat` / `deleteSession`）→ dropSession 删整份
+ *    镜像文件（早期走 clear(FOLLOW_UP)，文件留成 {"records":[]} 空壳）。
  *
  * 全部 best-effort：磁盘队列失败绝不阻塞主流程（内存队列仍是运行时事实源，
  * 磁盘只是重启保险）。两段式 claim/confirm 故意不用——单进程单 ViewModel，
  * 内存队列本身就是"领走"，直接 list+confirm 即可；claim 中途崩溃会把提示词
- * 卡进"已领未确认"的恢复灰区，反而多一个状态要解释。
+ * 卡进"已领未确认"的恢复灰区，反而多一个状态要解释。镜像写本身仍是
+ * fire-and-forget，但写入 Job 由 [launchMirrorWrite] 记账、消费确认前 join
+ * （见 [awaitPendingWrites]），入队-确认的落盘窗口是闭合的。
  */
 object PromptQueueBridge {
 
@@ -62,6 +68,43 @@ object PromptQueueBridge {
                 json,
             )
         }
+
+    /**
+     * [T-queue-mirror-write-race] 每 filesDir 的在途镜像写 Job 台账。
+     *
+     * 宿主侧的镜像写是 fire-and-forget（enqueuePrompt 在主线程，不能为一次
+     * 小文件写阻塞它——这正是当初做成 async 的原因），但工具边界的消费确认
+     * 可能在入队后几 ms 就到：若 confirm 的扫描跑在记录落盘之前，晚到的写
+     * 会把已消费的条目在盘上复活（重启后还原出幽灵气泡）。confirm / cancel
+     * / dropSession 动文件前先 join 同一 filesDir 的全部在途写，窗口闭合。
+     */
+    private val pendingWrites = ConcurrentHashMap<String, MutableSet<Job>>()
+
+    /**
+     * Fire-and-forget 一次镜像写，并把它的 Job 记入 [pendingWrites]。
+     * 宿主侧所有镜像 IO（enqueue / cancel / dropSession）从这里走；Job 完成
+     * 后自行出账，台账不积攒。
+     */
+    fun launchMirrorWrite(filesDir: File, scope: CoroutineScope, block: suspend () -> Unit): Job {
+        val ledger = pendingWrites.computeIfAbsent(filesDir.absolutePath) { ConcurrentHashMap.newKeySet<Job>() }
+        val job = scope.launch { block() }
+        ledger.add(job)
+        job.invokeOnCompletion { ledger.remove(job) }
+        return job
+    }
+
+    /**
+     * join 同一 filesDir 的全部在途镜像写（快照后逐个 join；join 期间新到的
+     * 写属于确认之后才入队的提示词，必须留给磁盘，不能等）。
+     *
+     * confirm / cancel / dropSession 的内部版在动文件前先走这一步；公开出来
+     * 供会话切换交接（ChatViewModelQueueDiskExt.onActiveSessionChanged）在
+     * cancel+enqueue 对账前先排干在途写，防同 id 双写。
+     */
+    suspend fun awaitPendingWrites(filesDir: File) {
+        val ledger = pendingWrites[filesDir.absolutePath] ?: return
+        for (job in ledger.toList()) job.join()
+    }
 
     // ─── 落盘 DTO ───────────────────────────────────────────────────────
 
@@ -128,6 +171,7 @@ object PromptQueueBridge {
     /** 撤回单条（用户点掉占位气泡 / 长按撤回）。 */
     suspend fun cancel(context: Context, promptId: String) {
         withContext(Dispatchers.IO) {
+            awaitPendingWrites(context.filesDir) // [T-queue-mirror-write-race]
             runCatching { manager(context.filesDir).cancelById(promptId) }
         }
     }
@@ -136,6 +180,10 @@ object PromptQueueBridge {
     suspend fun confirm(context: Context, sessionId: String, promptIds: List<String>) {
         if (promptIds.isEmpty()) return
         withContext(Dispatchers.IO) {
+            // [T-queue-mirror-write-race] 先 join 在途镜像写，再扫描删除——
+            // 否则工具边界的确认（入队后几 ms 就到）会跑赢它要消费的那条
+            // 记录的落盘，晚到的写把条目在盘上复活。
+            awaitPendingWrites(context.filesDir)
             runCatching { manager(context.filesDir).confirmConsumed(promptIds) }
         }
     }
@@ -150,12 +198,16 @@ object PromptQueueBridge {
             }.getOrDefault(emptyList())
         }
 
-    /** 会话消亡（clearChat / deleteSession）时清空其磁盘队列。 */
+    /**
+     * 会话消亡（deleteSession）/ 会话清空（clearChat）时清空其磁盘队列。
+     * [T-queue-disk-persistence] 走整份文件删除而不是 clear(FOLLOW_UP)：
+     * clear 只清一个队列类型、文件留下（{"records":[]} 空壳 + 非 FOLLOW_UP
+     * 条目跟着会话死不掉）；drop 面向「队列事实源归零」，文件不留壳。
+     */
     suspend fun dropSession(context: Context, sessionId: String) {
         withContext(Dispatchers.IO) {
-            runCatching {
-                manager(context.filesDir).clear(sessionId, PromptQueue.FOLLOW_UP)
-            }
+            awaitPendingWrites(context.filesDir) // [T-queue-mirror-write-race]
+            runCatching { manager(context.filesDir).dropSession(sessionId) }
         }
     }
 
@@ -183,19 +235,22 @@ object PromptQueueBridge {
     suspend fun confirm(filesDir: File, sessionId: String, promptIds: List<String>) {
         if (promptIds.isEmpty()) return
         withContext(Dispatchers.IO) {
+            awaitPendingWrites(filesDir) // [T-queue-mirror-write-race]
             runCatching { manager(filesDir).confirmConsumed(promptIds) }
         }
     }
 
     suspend fun cancel(filesDir: File, promptId: String) {
         withContext(Dispatchers.IO) {
+            awaitPendingWrites(filesDir) // [T-queue-mirror-write-race]
             runCatching { manager(filesDir).cancelById(promptId) }
         }
     }
 
     suspend fun dropSession(filesDir: File, sessionId: String) {
         withContext(Dispatchers.IO) {
-            runCatching { manager(filesDir).clear(sessionId, PromptQueue.FOLLOW_UP) }
+            awaitPendingWrites(filesDir) // [T-queue-mirror-write-race]
+            runCatching { manager(filesDir).dropSession(sessionId) }
         }
     }
 }

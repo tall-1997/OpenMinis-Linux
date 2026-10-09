@@ -99,6 +99,16 @@ class ProviderRepository(private val context: Context) {
         /** [T-newchat-default-model-fallback-android] Global last-used model entry id. */
         internal const val KEY_LAST_USED_ENTRY = "lastUsedModelEntryId"
 
+        /** [T-zen-builtin-id-dedupe] Deterministic id of the bundled built-in Zen instance. */
+        private const val BUILTIN_ZEN_INSTANCE_ID = "builtin-opencode-zen"
+
+        /**
+         * [T-zen-builtin-tombstone] prefs flag set when the user deletes the
+         * built-in Zen instance, so [ensureBuiltInZenProvider] does not
+         * resurrect it on the next launch.
+         */
+        private const val ZEN_BUILTIN_REMOVED_KEY = "zen_builtin_removed"
+
         /** Single source of truth for provider type × credential support. */
         internal fun supportedCredentials(type: ProviderType): List<ProviderCredential> = when (type) {
             ProviderType.anthropic, ProviderType.openAI, ProviderType.openRouter,
@@ -503,12 +513,25 @@ class ProviderRepository(private val context: Context) {
     }
 
     /**
-     * Adds the bundled OpenCode Zen instance only on a fresh install.
+     * Seeds the bundled OpenCode Zen instance when the config has none.
      *
      * Upgrade safety: an existing user-created instance wins when its label or
      * endpoint already identifies Zen; otherwise the built-in gets a unique
      * deterministic label and ID, so no user-created provider is renamed or
      * merged accidentally.
+     *
+     * [T-zen-builtin-id-dedupe] An instance already carrying the deterministic
+     * builtin id wins outright, even when it no longer matches the free-lane
+     * predicate below (the user swapped in a real key or moved the endpoint):
+     * seeding again would add a SECOND instance with the same id.
+     *
+     * [T-zen-builtin-key-preserve] The anonymous "public" credential is only
+     * laid down when the id has no stored key — an existing stored key is
+     * never overwritten by the seed path.
+     *
+     * [T-zen-builtin-tombstone] Deleting the built-in instance is final: the
+     * removal persists a tombstone that this seed honours, and the seed
+     * clears it again once a new built-in actually exists.
      */
     private fun ensureBuiltInZenProvider() = synchronized(configLock) {
         if (!_configLoaded.value) return@synchronized
@@ -577,6 +600,21 @@ class ProviderRepository(private val context: Context) {
             return@synchronized
         }
 
+        // [T-zen-builtin-tombstone] The user deleted the built-in instance;
+        // that decision is final and must not resurrect on the next launch.
+        // Checked after the reconciliation pass so a hand-built free-lane
+        // instance still gets topped up — the tombstone only governs the
+        // bundled seed itself.
+        if (prefs.getBoolean(ZEN_BUILTIN_REMOVED_KEY, false)) return@synchronized
+
+        // [T-zen-builtin-id-dedupe] An instance with the deterministic id
+        // already exists but no longer matches the free-lane predicate above
+        // (the user swapped in a real key or moved the endpoint). Seeding
+        // again would add a SECOND instance with the same id — the id alone
+        // settles it. loadApiKey is reentrant here (same-thread intrinsic
+        // lock), so reading it inside the synchronized block is safe.
+        if (current.instances.any { it.id == BUILTIN_ZEN_INSTANCE_ID }) return@synchronized
+
         val config = workingCopy()
         val baseLabel = "OpenCode Zen (Free)"
         val label = if (config.instances.none { it.label == baseLabel }) {
@@ -585,7 +623,7 @@ class ProviderRepository(private val context: Context) {
             "$baseLabel · Built-in"
         }
         val instance = ProviderInstance(
-            id = "builtin-opencode-zen",
+            id = BUILTIN_ZEN_INSTANCE_ID,
             label = label,
             providerType = ProviderType.openAI,
             credentialType = ProviderCredential.apiKey,
@@ -594,19 +632,31 @@ class ProviderRepository(private val context: Context) {
             isEnabled = true,
         )
         config.instances.add(instance)
-        saveApiKey(instance.id, "public")
+        // [T-zen-builtin-key-preserve] Only lay down the anonymous credential
+        // when the id has none: a stored key (a paid instance re-pointed at
+        // this id) is never overwritten with "public".
+        if (loadApiKey(instance.id) == null) saveApiKey(instance.id, "public")
         val models = bundledZenModels()
         config.modelEntries.addAll(models.map { ModelEntry(providerInstanceId = instance.id, baseModel = it) })
         saveConfig(config)
+        // [T-zen-builtin-tombstone] The built-in exists again — clear the
+        // tombstone so a future removal / re-add cycle flows naturally.
+        prefs.edit().remove(ZEN_BUILTIN_REMOVED_KEY).apply()
         android.util.Log.i("ProviderRepo", "[BuiltIn] seeded Zen instance ${instance.id} as '${instance.label}'")
     }
 
     /**
-     * Whether [instance] points at a third-party OpenAI-compatible host
-     * (xAI Grok, vLLM, Ollama, LiteLLM, DeepSeek via OpenAI shim, etc.).
-     * For these instances we must never substitute `LLMModel.allOpenAI` as a
-     * fallback / seed — those are GPT-only IDs that don't exist upstream.
-     * Mirrors iOS `ProviderConfigStore.isThirdPartyOpenAICompat`.
+     * Whether [instance] points at the bundled Zen endpoint — the config-layer
+     * twin of [com.openminis.app.provider.ZenDisguise.isZenHost].
+     *
+     * [T-zen-host-anchor] Deliberately an EXACT match against the bundled
+     * endpoint rather than a delegated host check: this predicate decides the
+     * model-list filter and the seed/reconciliation sweep, which must identify
+     * THE bundled instance and must not sweep a user's own variant Zen
+     * spelling into free-lane logic. ZenDisguise.isZenHost serves the wire
+     * layer (request disguise + error dialect) with host-anchored parsing.
+     * The two agree on the bundled endpoint; the split keeps each layer's
+     * failure mode contained.
      */
     private fun isZenInstance(instance: ProviderInstance): Boolean =
         instance.customBaseURL?.trimEnd('/') == ZEN_BUNDLED_ENDPOINT
@@ -708,6 +758,13 @@ class ProviderRepository(private val context: Context) {
         // voiceShadowDisabled flag and a possibly dangling
         // lastUsedModelEntryId. Clean everything in one place.
         if (removedInstance != null) {
+            // [T-zen-builtin-tombstone] The user deleted the built-in Zen
+            // provider on purpose; persist that so the seed path does not
+            // resurrect it on the next launch. ensureBuiltInZenProvider
+            // clears the flag again after an actual seed.
+            if (removedInstance.id == BUILTIN_ZEN_INSTANCE_ID) {
+                prefs.edit().putBoolean(ZEN_BUILTIN_REMOVED_KEY, true).apply()
+            }
             runCatching {
                 com.openminis.app.auth.OAuthManager.forInstance(context, removedInstance)?.logout()
             }

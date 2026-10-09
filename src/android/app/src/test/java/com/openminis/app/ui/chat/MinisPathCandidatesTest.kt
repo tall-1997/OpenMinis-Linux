@@ -99,6 +99,20 @@ class MinisPathCandidatesTest {
     }
 
     @Test
+    fun `plus in a filename survives decoding on the media path too`() {
+        // [T-android-minis-plus-filename] resolveMdMediaFile's minis:// branch
+        // and its basename fallback now decode through the same shared
+        // decoder — a file literally named "a+b.pdf" must keep its plus on
+        // both paths.
+        val out = candidates("attachments/a+b.pdf")
+        assertEquals("attachments/a+b.pdf", out.first())
+        assertTrue(
+            "no candidate may contain 'a b'",
+            out.none { it.contains("a b") },
+        )
+    }
+
+    @Test
     fun `encoded space still decodes to a space`() {
         // %20 is a genuine space and must still decode.
         assertEquals("workspace/my dir/file.pdf", candidates("workspace/my%20dir/file.pdf").first())

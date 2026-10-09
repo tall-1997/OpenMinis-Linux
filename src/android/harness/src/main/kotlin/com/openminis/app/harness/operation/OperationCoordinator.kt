@@ -18,8 +18,6 @@ import com.openminis.app.harness.ToolCall
 import com.openminis.app.harness.ToolResult
 import com.openminis.app.harness.UserMessage
 import java.util.UUID
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
@@ -41,17 +39,17 @@ class OperationCoordinator(
     private val eventBus: HarnessEventBus,
 ) {
     /**
-     * 串行化 accept 类入口的 check-then-act：并发 accept 同一 lane 时，
-     * “检查 currentOperationId == null → 写入”之间无保护会产生孤儿 RUNNING 操作。
-     * 用 Mutex 而非 synchronized：临界区内含 suspend 的 repository 调用，不能阻塞线程。
+     * [T-p1-6-finish-begin-race] lane 运行闸（mutex/收尾登记/锁序，见 LaneRunGate
+     * 的 KDoc——为架构门 400 行帽整体搬出）。Mutex 不可重入，锁内路径（beginRun
+     * 接管、reclaim）的收尾必须走 [finishLocked] 而不是 [finish]。
      */
-    private val acceptMutex = Mutex()
+    private val gate = LaneRunGate()
 
     suspend fun acceptRun(
         sessionId: String,
         userMessage: HarnessMessage,
         laneName: String = HarnessLanes.MAIN_LANE,
-    ): String = acceptMutex.withLock {
+    ): String = gate.withLaneMutex(sessionId, laneName) {
         val lane = reclaimInterruptedLane(sessionId, laneName)
         check(lane.currentOperationId == null) { "Lane ${lane.name} is busy" }
         val now = System.currentTimeMillis()
@@ -64,11 +62,11 @@ class OperationCoordinator(
             operation = operation,
         )
         eventBus.emit(HarnessEvent.OperationStarted(sessionId, now, operationId, laneName))
-        return operationId
+        operationId
     }
 
     suspend fun acceptQueuedRun(sessionId: String, queueItemId: String, userMessage: HarnessMessage): String =
-        acceptMutex.withLock {
+        gate.withLaneMutex(sessionId, HarnessLanes.MAIN_LANE) {
             val lane = reclaimInterruptedLane(sessionId, HarnessLanes.MAIN_LANE)
             check(lane.currentOperationId == null) { "Lane ${lane.name} is busy" }
             val now = System.currentTimeMillis()
@@ -82,19 +80,19 @@ class OperationCoordinator(
                 operation = operation,
             )
             eventBus.emit(HarnessEvent.OperationStarted(sessionId, now, operationId, HarnessLanes.MAIN_LANE))
-            return operationId
+            operationId
         }
 
     suspend fun beginRun(sessionId: String, laneName: String = HarnessLanes.MAIN_LANE): String =
-        acceptMutex.withLock {
+        gate.withLaneMutex(sessionId, laneName) {
             var lane = repository.ensureLane(sessionId, laneName)
             lane.currentOperationId?.let { existingId ->
                 val existing = repository.findOperation(existingId)
-                if (existing != null && existing.status != OperationStatus.SUSPENDED.id) return existingId
+                if (existing != null && existing.status != OperationStatus.SUSPENDED.id) return@withLaneMutex existingId
                 if (existing == null) {
                     repository.clearLaneOperation(sessionId, laneName)
                 } else {
-                    finish(sessionId, "aborted", details = "挂起的旧运行已被新请求接管", laneName = laneName)
+                    finishLocked(sessionId, "aborted", details = "挂起的旧运行已被新请求接管", laneName = laneName)
                 }
                 lane = repository.ensureLane(sessionId, laneName)
             }
@@ -105,7 +103,7 @@ class OperationCoordinator(
                 newOperation(operationId, sessionId, lane, now),
             )
             eventBus.emit(HarnessEvent.OperationStarted(sessionId, now, operationId, laneName))
-            return operationId
+            operationId
         }
 
     suspend fun providerIntent(operationId: String, effectId: String, round: Int, attempt: Int, maxAttempts: Int) {
@@ -211,7 +209,33 @@ class OperationCoordinator(
         transition(operationId, OperationStatus.SUSPENDED, snapshot, current.replayPolicy?.let(::replayPolicy))
     }
 
+    /**
+     * 收尾入口：登记 lane 级收尾信号 → 拿锁 → [finishLocked]（锁序与登记时机见
+     * [LaneRunGate.withFinishMutex]）。锁内路径（beginRun 接管、reclaim）直接走
+     * [finishLocked]。
+     */
     suspend fun finish(
+        sessionId: String,
+        outcome: String,
+        finalEntryId: String? = null,
+        details: String? = null,
+        laneName: String = HarnessLanes.MAIN_LANE,
+    ) {
+        gate.withFinishMutex(sessionId, laneName) {
+            finishLocked(sessionId, outcome, finalEntryId, details, laneName)
+        }
+    }
+
+    /**
+     * 锁内收尾主体（[finish] 与锁内接管路径共用）。调用方必须已持有 acceptMutex。
+     * faulted 必须在这里落盘：lane 汇总用它给子智能体 lane 的圆点着色
+     * （红=中断 / 绿=正常）。此前全仓库没有写入点，字段恒为 false，于是
+     * “批次汇总判失败、每个子任务圆点却全是绿色”。每次收尾都按本轮结果整体
+     * 覆盖，成功即自动清除上一轮的标记。
+     * 只把 "failed" 视为中断："aborted" 同时被用户主动停止与进程中断复用，
+     * 计入会把“用户点了停止”的主线也标成故障。
+     */
+    private suspend fun finishLocked(
         sessionId: String,
         outcome: String,
         finalEntryId: String? = null,
@@ -221,12 +245,6 @@ class OperationCoordinator(
         val lane = repository.ensureLane(sessionId, laneName)
         val operationId = lane.currentOperationId ?: return
         val now = System.currentTimeMillis()
-        // faulted 必须在这里落盘：lane 汇总用它给子智能体 lane 的圆点着色
-        // （红=中断 / 绿=正常）。此前全仓库没有写入点，字段恒为 false，于是
-        // “批次汇总判失败、每个子任务圆点却全是绿色”。每次收尾都按本轮结果整体
-        // 覆盖，成功即自动清除上一轮的标记。
-        // 只把 "failed" 视为中断："aborted" 同时被用户主动停止与进程中断复用，
-        // 计入会把“用户点了停止”的主线也标成故障。
         repository.finishOperation(
             HarnessLaneResultEntity(sessionId, lane.name, operationId, outcome, finalEntryId, details, now),
             lane.copy(currentOperationId = null, updatedAt = now, faulted = outcome == "failed"),
@@ -262,7 +280,7 @@ class OperationCoordinator(
                 lane.copy(currentOperationId = null)
             }
             else -> {
-                finish(
+                finishLocked(
                     sessionId,
                     "aborted",
                     details = "上次运行未完成（进程中断或审批等待失效），已被新请求接管",

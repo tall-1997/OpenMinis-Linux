@@ -4,14 +4,18 @@ import android.content.Context
 import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.model.AgentToolParam
 import org.json.JSONArray
+import org.json.JSONException
 import org.json.JSONObject
 import java.io.BufferedReader
+import java.io.IOException
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
+import java.net.SocketTimeoutException
 import java.net.URL
 import java.net.URLDecoder
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
+import java.util.concurrent.TimeoutException
 
 /**
  * Key-free web search via DuckDuckGo HTML. Overlay already labeled this
@@ -78,7 +82,11 @@ object WebSearchTool {
             val toolTitle = args.optString("tool_title", NAME)
             val max = args.optInt("max_results", 5).coerceIn(1, MAX_RESULTS)
             if (query.isEmpty()) {
-                return ToolExecutionResult("query is required", success = false, toolTitle = toolTitle)
+                return ToolExecutionResult(
+                    "query is required", success = false,
+                    errorCode = ToolErrorCode.INVALID_ARGUMENTS,
+                    toolTitle = toolTitle,
+                )
             }
             val preferred = context?.let { WebSearchSettings.engine(it) } ?: WebSearchSettings.Engine.DDG
             val allowFallback = context?.let { WebSearchSettings.fallbackEnabled(it) } ?: true
@@ -99,6 +107,9 @@ object WebSearchTool {
             // exhausted" reads as if THAT is the only thing wrong, hiding
             // the expired Tavily key they actually need to rotate.
             val failures = mutableListOf<Pair<WebSearchSettings.Engine, String>>()
+            // [T-retry-error-codes] 链内任一引擎死于超时/IO 时把瞬态码带到
+            // 最终失败结果，ToolRetry 才有东西可认。
+            var transientCode: ToolErrorCode? = null
             var used = preferred
             var results: List<Result> = emptyList()
             for (engine in engines) {
@@ -109,6 +120,7 @@ object WebSearchTool {
                     break
                 }
                 failures += engine to (attempt.error ?: "no results")
+                if (transientCode == null) transientCode = attempt.errorCode
             }
             if (results.isEmpty()) {
                 // Key-free Chinese chain (Sogou → Bing RSS → Baidu) first —
@@ -143,16 +155,46 @@ object WebSearchTool {
                         "were also empty. " +
                         "Configure Settings → Web search, or open a known URL with browser_use.",
                     success = false,
+                    // [T-retry-error-codes] 任一引擎死于超时/IO → 瞬态码，统一重试层
+                    // 退避重试；全部引擎都「没结果/没配置」→ EXECUTION_FAILED，
+                    // 弹回模型自查，不重试一万次也是同一个错。
+                    errorCode = transientCode ?: ToolErrorCode.EXECUTION_FAILED,
                     toolTitle = toolTitle,
                 )
             }
             ToolExecutionResult(format(query, results, used.id), success = true, toolTitle = toolTitle)
         } catch (e: Exception) {
-            ToolExecutionResult("web_search failed: ${e.message}", success = false)
+            ToolExecutionResult(
+                "web_search failed: ${e.message}", success = false,
+                errorCode = errorCodeFor(e),
+            )
         }
     }
 
-    private data class Attempt(val results: List<Result>, val error: String?)
+    private data class Attempt(val results: List<Result>, val error: String?, val errorCode: ToolErrorCode? = null)
+
+    /**
+     * [T-retry-error-codes] P1-7: 异常 → 错误码分类。此前所有失败
+     * errorCode=null，ToolRetry.isTransient（只认 NETWORK_ERROR/TIMEOUT）
+     * 从未触发，统一重试层是死代码。超时/IO 是瞬态；烂 argsJson 是参数错；
+     * 其余按执行失败弹回模型自查。
+     */
+    internal fun errorCodeFor(cause: Exception): ToolErrorCode = when (cause) {
+        is SocketTimeoutException, is TimeoutException -> ToolErrorCode.TIMEOUT
+        is JSONException -> ToolErrorCode.INVALID_ARGUMENTS
+        is IOException -> ToolErrorCode.NETWORK_ERROR
+        else -> ToolErrorCode.EXECUTION_FAILED
+    }
+
+    /**
+     * 引擎级 attempt 只上报瞬态类（超时/IO）：配置缺失、no results 不是瞬态，
+     * 标了码会让「引擎没配 key」也被退避重试一万次。
+     */
+    internal fun transientErrorCode(cause: Exception): ToolErrorCode? = when (cause) {
+        is SocketTimeoutException, is TimeoutException -> ToolErrorCode.TIMEOUT
+        is IOException -> ToolErrorCode.NETWORK_ERROR
+        else -> null
+    }
 
     private fun search(
         engine: WebSearchSettings.Engine,
@@ -276,7 +318,10 @@ object WebSearchTool {
                 }
             }
         } catch (e: Exception) {
-            Attempt(emptyList(), e.message ?: engine.id)
+            // [T-retry-error-codes] 引擎级瞬态分类：只有超时/IO 上报错误码，
+            // execute() 聚合后交给 ToolRetry；配置缺失 / no results 不是瞬态，
+            // 标了码会让引擎级失败也被退避重试一万次。
+            Attempt(emptyList(), e.message ?: engine.id, transientErrorCode(e))
         }
     }
 
@@ -291,7 +336,9 @@ object WebSearchTool {
         extra: Map<String, String> = emptyMap(),
     ): Attempt {
         val key = context?.let { WebSearchSettings.apiKey(it, engine) }.orEmpty()
-        if (key.isEmpty()) return Attempt(emptyList(), "${engine.id} API key is not configured")
+        if (key.isEmpty()) {
+            return Attempt(emptyList(), "${engine.id} API key is not configured", ToolErrorCode.AUTH_REQUIRED)
+        }
         val headers = linkedMapOf("Accept" to "application/json")
         headers.putAll(extra)
         headers[headerName] = if (bearer && !key.startsWith("Bearer ", ignoreCase = true)) "Bearer $key" else key
@@ -312,7 +359,9 @@ object WebSearchTool {
         bearer: Boolean = false,
     ): Attempt {
         val key = context?.let { WebSearchSettings.apiKey(it, engine) }.orEmpty()
-        if (key.isEmpty()) return Attempt(emptyList(), "${engine.id} API key is not configured")
+        if (key.isEmpty()) {
+            return Attempt(emptyList(), "${engine.id} API key is not configured", ToolErrorCode.AUTH_REQUIRED)
+        }
         if (keyField != null) body.put(keyField, key)
         val headers = linkedMapOf(
             "Accept" to "application/json",

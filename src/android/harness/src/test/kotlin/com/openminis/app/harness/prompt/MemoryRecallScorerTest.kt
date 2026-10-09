@@ -33,6 +33,17 @@ class MemoryRecallScorerTest {
     }
 
     @Test
+    fun `single char cjk query falls back to unigram matching`() {
+        // [T-cjk-unigram-recall] bigram-only 切词下，单字查询词（「问」）只作为
+        // bigram 组成部分出现在文档侧，永远命不中——旧 contains 匹配能命中，
+        // unigram 回退恢复它；不含该字的候选仍不命中。
+        val doc = Candidate("k", "问题记录：重试后重复触发", "global", 0)
+        assertTrue(MemoryRecallScorer.selectRecall("问", listOf(doc)).isNotEmpty())
+        val other = Candidate("k2", "完全无关的另一段记录", "global", 0)
+        assertTrue(MemoryRecallScorer.selectRecall("问", listOf(other)).isEmpty())
+    }
+
+    @Test
     fun `idf makes rare query terms outrank common ones`() {
         // 两行候选：一行只有常见词，一行含判别词
         val common = Candidate("k1", "我们一个这个 我们一个这个 我们一个这个", "global", 0)
