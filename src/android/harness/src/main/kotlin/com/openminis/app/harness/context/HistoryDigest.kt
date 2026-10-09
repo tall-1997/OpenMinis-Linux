@@ -1,4 +1,4 @@
-package com.openminis.app.ui.chat
+package com.openminis.app.harness.context
 
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMMessage
@@ -11,7 +11,7 @@ import com.openminis.app.data.model.LLMMessage
  * window, so the model is not left with a silent hole. Compact summaries
  * remain a separate, explicit path.
  */
-internal object HistoryDigest {
+object HistoryDigest {
     const val MARKER = "[HISTORY_DIGEST]"
     const val MAX_CHARS = 6_000
     const val USER_CHARS = 400

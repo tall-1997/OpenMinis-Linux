@@ -92,19 +92,19 @@ internal suspend fun ChatViewModel.loadSplitTurnPrefix(beforeSortOrder: Int): Li
     return loadSortRange(SortRange(start, beforeSortOrder))
 }
 
-internal suspend fun ChatViewModel.collectDigestLines(beforeSortOrder: Int): List<HistoryDigest.Line> {
-    val newestFirst = ArrayList<HistoryDigest.Line>()
+internal suspend fun ChatViewModel.collectDigestLines(beforeSortOrder: Int): List<com.openminis.app.harness.context.HistoryDigest.Line> {
+    val newestFirst = ArrayList<com.openminis.app.harness.context.HistoryDigest.Line>()
     var used = 0
     var cursor = beforeSortOrder
-    while (used < HistoryDigest.MAX_CHARS) {
+    while (used < com.openminis.app.harness.context.HistoryDigest.MAX_CHARS) {
         val page = chatRepository.dao.loadPreviewPageBefore(sessionId, cursor, limit = 40)
         if (page.isEmpty()) break
         var stop = false
         for (row in page) {
             val line = row.toDigestLine()
-            val clipped = HistoryDigest.clip(line.role, line.text)
+            val clipped = com.openminis.app.harness.context.HistoryDigest.clip(line.role, line.text)
             if (clipped.isEmpty()) continue
-            if (newestFirst.isNotEmpty() && used + clipped.length > HistoryDigest.MAX_CHARS) {
+            if (newestFirst.isNotEmpty() && used + clipped.length > com.openminis.app.harness.context.HistoryDigest.MAX_CHARS) {
                 stop = true
                 break
             }
@@ -119,5 +119,5 @@ internal suspend fun ChatViewModel.collectDigestLines(beforeSortOrder: Int): Lis
     return newestFirst.asReversed()
 }
 
-private fun MessagePreviewRow.toDigestLine(): HistoryDigest.Line =
-    HistoryDigest.Line(role, HistoryDigest.readablePreview(preview.orEmpty()))
+private fun MessagePreviewRow.toDigestLine(): com.openminis.app.harness.context.HistoryDigest.Line =
+    com.openminis.app.harness.context.HistoryDigest.Line(role, com.openminis.app.harness.context.HistoryDigest.readablePreview(preview.orEmpty()))

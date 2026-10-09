@@ -423,22 +423,12 @@ class ChatViewModel(
             summaryWrappedText: String,
             history: List<LLMMessage>,
             tailSize: Int,
-        ): List<LLMMessage> {
-            val tail = if (history.size > tailSize) {
-                history.subList(history.size - tailSize, history.size).toList()
-            } else {
-                history.toList()
-            }
-            val start = tail.indexOfFirst { it.role == LLMMessage.Role.USER }
-            if (start < 0) {
-                return tail + LLMMessage(role = LLMMessage.Role.USER, content = summaryWrappedText)
-            }
-            val out = ArrayList<LLMMessage>(tail.size - start + 1)
-            val first = tail[start]
-            out.add(first.copy(content = summaryWrappedText + "\n\n" + first.content))
-            out.addAll(tail.subList(start + 1, tail.size))
-            return out
-        }
+        ): List<LLMMessage> =
+            com.openminis.app.harness.agent.CompactHistoryProjector.detachedCompactHistory(
+                history = history,
+                summaryWrappedText = summaryWrappedText,
+                tailSize = tailSize,
+            )
 
         /** Floor for the dynamic wall-clock timeout. */
         internal const val COMPACT_TIMEOUT_BASE_MS = 90_000L
@@ -882,7 +872,7 @@ class ChatViewModel(
     // and whether one more pass is owed after it.
     private var tailAttachJob: kotlinx.coroutines.Job? = null
     private var tailAttachQueued = false
-    internal val llmDigestLines = ArrayDeque<HistoryDigest.Line>()
+    internal val llmDigestLines = ArrayDeque<com.openminis.app.harness.context.HistoryDigest.Line>()
     internal var llmDigestOmitted = 0
 
     /**
@@ -958,10 +948,10 @@ class ChatViewModel(
         if (scheduleTail && after > 0) ensureSessionTailLoaded()
     }
 
-    internal fun rememberDigestLines(lines: List<HistoryDigest.Line>) {
+    internal fun rememberDigestLines(lines: List<com.openminis.app.harness.context.HistoryDigest.Line>) {
         if (lines.isEmpty()) return
         llmDigestLines.addAll(lines)
-        val retained = HistoryDigest.retainNewest(llmDigestLines)
+        val retained = com.openminis.app.harness.context.HistoryDigest.retainNewest(llmDigestLines)
         llmDigestOmitted += (llmDigestLines.size - retained.size).coerceAtLeast(0)
         llmDigestLines.clear()
         llmDigestLines.addAll(retained)
@@ -3308,9 +3298,9 @@ class ChatViewModel(
         // A compact summary, when present, still replaces the older prefix;
         // this digest covers what this process actually dropped.
         // [T-message-transformers] 发送前清洗 assistant 文本里的思考残留。
-        return HistoryDigest.inject(
+        return com.openminis.app.harness.context.HistoryDigest.inject(
             steered,
-            HistoryDigest.render(llmDigestLines, llmDigestOmitted),
+            com.openminis.app.harness.context.HistoryDigest.render(llmDigestLines, llmDigestOmitted),
         ).map { msg ->
             if (msg.role == com.openminis.app.data.model.LLMMessage.Role.ASSISTANT && msg.content.isNotBlank()) {
                 msg.copy(content = com.openminis.app.harness.agent.MessageTransformerChain.apply(msg.content))
@@ -3357,9 +3347,9 @@ class ChatViewModel(
      * slice, which is the only part that requires a resolvable anchor.
      */
     internal fun detachedCompactHistory(summaryWrappedText: String): List<LLMMessage> =
-        buildDetachedCompactHistory(
-            summaryWrappedText = summaryWrappedText,
+        com.openminis.app.harness.agent.CompactHistoryProjector.detachedCompactHistory(
             history = agentHistory,
+            summaryWrappedText = summaryWrappedText,
             tailSize = DETACHED_TAIL_MESSAGES,
         )
 
@@ -5828,7 +5818,7 @@ class ChatViewModel(
             llmHistoryStartOffset += byBytes
         }
         if (dropped.isNotEmpty()) {
-            rememberDigestLines(dropped.map { HistoryDigest.fromMessage(it) })
+            rememberDigestLines(dropped.map { com.openminis.app.harness.context.HistoryDigest.fromMessage(it) })
         }
     }
 
