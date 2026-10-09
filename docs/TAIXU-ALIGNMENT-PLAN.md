@@ -10,7 +10,7 @@
 > 的口径**不算能力补齐**，只是「可复用件已入库」。接线清单见各条备注。
 >
 > **验证基线修正**：原写「基线 5220 tests」从未被复现。实测口径为
-> `:app:testReleaseUnitTest` = **2893**（359 个结果 XML）+ `:harness:test` = **142**，
+> `:app:testReleaseUnitTest` = **2893**（359 个结果 XML）+ `:harness:test` = **143**，
 > 均 0 失败（2026-10-09，2b61fa7 之后）。后续每批以这两个数为新基线。
 
 ## 模块策略（已定）
@@ -32,7 +32,7 @@ taixu `harness/` 是 **Android 库**（依赖 Room/OkHttp/Ktor/Koin，14 文件�
 - [x] 1.2 `text/UnifiedDiffGenerator.kt` —— **未接线**
 - [x] 1.3 `effects/RetryPolicy.kt` —— **未接线**
 - [x] 1.4 `metrics/RunMetrics.kt` —— **未接线**
-- [x] 1.5 `validation/ToolSchemaValidator.kt` —— **未接线**（待接 MCP/工具派发入口）
+- [x] 1.5 `validation/ToolSchemaValidator.kt`（`f796181`，**已接线**：executeTool 派发入口；MCP 暂跳过）
 - [x] 1.6 `text/TextReplacers.kt` + `validation/ToolCallLoopDetector.kt`
 - [x] 1.7 配套测试全部移植
 - [x] 1.8 `architecture-policy.json` 等价物 + preBuild 检查（`2e75a0a`）
@@ -79,4 +79,4 @@ taixu `harness/` 是 **Android 库**（依赖 Room/OkHttp/Ktor/Koin，14 文件�
 
 每批结束跑 `./gradlew :app:testReleaseUnitTest` + `:harness:test` +
 `:architectureCheck`，确认零失败、棘轮不越线。每批独立 commit。
-当前基线：app **2893** / harness **142**（2b61fa7）。
+当前基线：app **2893** / harness **143**（f796181）。
