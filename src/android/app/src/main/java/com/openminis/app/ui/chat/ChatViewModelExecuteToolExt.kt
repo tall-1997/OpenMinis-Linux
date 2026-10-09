@@ -96,7 +96,11 @@ internal suspend fun ChatViewModel.executeTool(
         com.openminis.app.tools.GrepTool.NAME, com.openminis.app.tools.GrepSourceTool.NAME ->
             com.openminis.app.tools.GrepTool.execute(argsJson, activeSessionId, context)
         com.openminis.app.tools.GlobTool.NAME -> com.openminis.app.tools.GlobTool.execute(argsJson, activeSessionId, context)
-        com.openminis.app.tools.WebFetchTool.NAME -> com.openminis.app.tools.WebFetchTool.execute(argsJson)
+        // [T-recovery-layer] 网络类工具走统一重试层：瞬态失败（NETWORK_ERROR /
+        // TIMEOUT）按 RetryPolicy 指数退避重试，其余错误码直接弹回模型。
+        com.openminis.app.tools.WebFetchTool.NAME -> com.openminis.app.tools.ToolRetry.run {
+            com.openminis.app.tools.WebFetchTool.execute(argsJson)
+        }
         // [T-ui-read] GUI Agent 的眼睛：a11y 读屏快照，配合 shell_execute 里
         // 的 android-a11y-cli 点击/输入形成"看屏→决策→执行→再看"闭环。
         com.openminis.app.tools.UiReadTool.NAME ->
@@ -204,8 +208,13 @@ internal suspend fun ChatViewModel.executeTool(
         com.openminis.app.tools.WebSearchTool.NAME,
         com.openminis.app.tools.OcrTool.NAME,
         com.openminis.app.tools.ScreenTimeTool.NAME,
-        -> dispatchHostTool(canonical, argsJson, activeSessionId, context)
-            ?: ToolExecutionResult("unhandled host tool", false)
+        // [T-recovery-layer] 宿主工具（含 web_search）同样走统一重试层；
+        // isTransient 只认 NETWORK_ERROR / TIMEOUT，OCR/ScreenTime 的其它
+        // 错误码不会被无意义重试。
+        -> com.openminis.app.tools.ToolRetry.run {
+            dispatchHostTool(canonical, argsJson, activeSessionId, context)
+                ?: ToolExecutionResult("unhandled host tool", false)
+        }
         com.openminis.app.tools.SessionLookupTool.SEARCH -> com.openminis.app.tools.SessionLookupTool.executeSearch(
             argsJson, activeSessionId, context,
         )

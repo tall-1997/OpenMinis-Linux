@@ -65,6 +65,9 @@ internal fun dropOrphanedToolParts(history: List<LLMMessage>): List<LLMMessage> 
             "unansweredUses=${repairUses.size} historyCount=${history.size}",
     )
     val repairByMessage = repairUses.groupBy { it.messageIndex }
+    // [T-recovery-layer] 占位文案走 planner 单一策略源（进程中断 vs 用户停止 vs
+    // 不可重放说明），替换原先写死的一句英文；planner 无意见时保留旧文案兜底。
+    val stubNotes = stubNotesFor(history)
     val cleaned = ArrayList<LLMMessage>(history.size + repairUses.size)
     history.forEachIndexed { index, message ->
         val kept = message.contentParts.mapIndexedNotNull { partIndex, part ->
@@ -82,7 +85,7 @@ internal fun dropOrphanedToolParts(history: List<LLMMessage>): List<LLMMessage> 
                     AgentContentPart.ToolResult(
                         id = it.id,
                         name = it.name,
-                        content = "Tool execution was interrupted by an unexpected error.",
+                        content = stubNotes[it.id] ?: "Tool execution was interrupted by an unexpected error.",
                         isError = true,
                     )
                 },

@@ -26,14 +26,14 @@ object ToolOutputRetention {
  * 头部截断并对齐完整行：优先在字符预算内最后一个换行处切分，避免把一行切成两半；
  * 单行超过预算时退化为硬截断（无法按行对齐）。
  */
-internal fun keepHeadWholeLines(text: String, maxChars: Int): String {
+fun keepHeadWholeLines(text: String, maxChars: Int): String {
     if (text.length <= maxChars) return text
     val cut = text.lastIndexOf('\n', maxChars).let { if (it <= 0) maxChars else it }
     return text.substring(0, cut)
 }
 
 /** 尾部截断并对齐完整行：从末尾往前取整行，保证不切在行中。 */
-internal fun keepTailWholeLines(text: String, maxChars: Int): String {
+fun keepTailWholeLines(text: String, maxChars: Int): String {
     if (text.length <= maxChars) return text
     val from = (text.length - maxChars).coerceAtLeast(0)
     val newline = text.indexOf('\n', from)
@@ -48,7 +48,7 @@ internal fun keepTailWholeLines(text: String, maxChars: Int): String {
  * 折叠为「头部 + 提示 + 尾部」并保证结果行不超预算，提示模型用 grep -o 提取片段。
  * 返回值保证不包含超过 [maxLineChars] 的行，后续按行截断不再退化为硬切。
  */
-internal fun foldOverlongLines(text: String, maxLineChars: Int = 2000): String {
+fun foldOverlongLines(text: String, maxLineChars: Int = 2000): String {
     if (text.lines().none { it.length > maxLineChars }) return text
     val head = maxLineChars / 2
     val tail = maxLineChars / 4

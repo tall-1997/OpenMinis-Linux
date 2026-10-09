@@ -45,16 +45,39 @@ object ToolOutputSpill {
         }
     }
 
+    /**
+     * 宿主工具名 → taixu 保留策略名。shell_execute 的语义即上游 "base"
+     * （命令执行，报错在尾部）；execute_code 对应 "build_script"。其余走 HEAD。
+     */
+    private fun retentionName(toolName: String): String? = when (toolName) {
+        "shell_execute", "shell_exec", "env_exec" -> "base"
+        "execute_code" -> "build_script"
+        else -> null
+    }
+
     fun formatPreview(toolName: String, guestPath: String, output: String): String {
-        val head = output.take(HEAD)
-        val tail = if (output.length > HEAD + TAIL) output.takeLast(TAIL) else ""
+        // [T-recovery-layer] 截断方向随工具切换：命令/构建类的 panic、断言失败、
+        // 编译错误永远在末尾，保留尾部才能让模型直击报错核心；read/search 类
+        // 关键信息在头部。整行对齐避免把一行切两半；超长单行先折叠。
+        val folded = com.openminis.app.harness.effects.foldOverlongLines(output)
+        val tailFirst = com.openminis.app.harness.effects.ToolOutputRetention
+            .forTool(retentionName(toolName)) == com.openminis.app.harness.effects.OutputRetention.TAIL
+        val headBudget = if (tailFirst) TAIL else HEAD
+        val tailBudget = if (tailFirst) HEAD else TAIL
+        val head = com.openminis.app.harness.effects.keepHeadWholeLines(folded, headBudget)
+        val tail = if (folded.length > headBudget + tailBudget) {
+            com.openminis.app.harness.effects.keepTailWholeLines(folded, tailBudget)
+        } else {
+            ""
+        }
         return buildString {
             append("[tool-output-spill] $toolName produced ${output.length} chars. ")
             append("Full output saved to $guestPath — use file_read if you need more.\n")
-            append("Open in app: minis://workspace/tool-spill/${guestPath.substringAfterLast('/')}\n\n")
+            append("Open in app: minis://workspace/tool-spill/${guestPath.substringAfterLast('/')}\n")
+            append(if (tailFirst) "[retention: tail-biased — errors usually land at the end]\n\n" else "\n")
             append(head)
             if (tail.isNotEmpty()) {
-                append("\n\n…(${output.length - HEAD - TAIL} chars omitted)…\n\n")
+                append("\n\n…(${folded.length - head.length - tail.length} chars omitted)…\n\n")
                 append(tail)
             }
         }
