@@ -11,7 +11,8 @@
 >
 > **验证基线修正**：原写「基线 5220 tests」从未被复现。实测口径为
 > `:app:testReleaseUnitTest` = **2893**（359 个结果 XML）+ `:harness:test` = **143**，
-> 均 0 失败（2026-10-09，2b61fa7 之后）。后续每批以这两个数为新基线。
+> 均 0 失败（2026-10-09，62fc977 之后：app **2915** / harness **143**）。
+> 后续每批以这两个数为新基线。**P0-3（统一重试/恢复层）已于 `62fc977` 闭环。**
 
 ## 模块策略（已定）
 
@@ -30,7 +31,8 @@ taixu `harness/` 是 **Android 库**（依赖 Room/OkHttp/Ktor/Koin，14 文件�
 ### 第一批 — 纯逻辑移植（`5a9c721`，全完成）
 - [x] 1.1 建 `:harness` 模块骨架（settings + build.gradle.kts + 约定插件）
 - [x] 1.2 `text/UnifiedDiffGenerator.kt` —— **未接线**
-- [x] 1.3 `effects/RetryPolicy.kt` —— **未接线**
+- [x] 1.3 `effects/RetryPolicy.kt`（`62fc977`，**已接线**：ToolRetry 接 web_fetch
+      与宿主工具分支，只重试 NETWORK_ERROR / TIMEOUT 瞬态失败）
 - [x] 1.4 `metrics/RunMetrics.kt` —— **未接线**
 - [x] 1.5 `validation/ToolSchemaValidator.kt`（`f796181`，**已接线**：executeTool 派发入口；MCP 暂跳过）
 - [x] 1.6 `text/TextReplacers.kt` + `validation/ToolCallLoopDetector.kt`
@@ -61,7 +63,9 @@ taixu `harness/` 是 **Android 库**（依赖 Room/OkHttp/Ktor/Koin，14 文件�
       （忙时入队落盘 / 消费确认 / 冷开还原 / 撤回·重试·截断删盘），
       并修掉上游两个持久化缺陷（会话 id→文件名非单射、反查二次转义静默不删）。
 - [x] 2.7 `effects/DanglingToolCallPlanner.kt` + `ToolReplayPolicy.kt` + `ToolOutputRetention.kt`
-      （`123db12`）—— **未接线**
+      （`123db12` 落地，`62fc977` **已接线**）：planner 进冷启动恢复（SAFE 只读
+      悬空调用重放）与 dropOrphanedToolParts 占位文案；retention 进 ToolOutputSpill
+      截断方向（命令尾偏向 / 读取头偏向 + 整行对齐 + 超长行折叠）。
 
 ### 第三批 — 大件
 - [ ] 3.1 工作流 DAG（harness workflow 2854 + core/model/workflow 1514 + UI）
@@ -79,4 +83,4 @@ taixu `harness/` 是 **Android 库**（依赖 Room/OkHttp/Ktor/Koin，14 文件�
 
 每批结束跑 `./gradlew :app:testReleaseUnitTest` + `:harness:test` +
 `:architectureCheck`，确认零失败、棘轮不越线。每批独立 commit。
-当前基线：app **2893** / harness **143**（f796181）。
+当前基线：app **2915** / harness **143**（62fc977）。
