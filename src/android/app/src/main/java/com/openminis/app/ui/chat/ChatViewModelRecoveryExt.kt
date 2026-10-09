@@ -108,15 +108,18 @@ internal suspend fun ChatViewModel.synthesizeUnsettledOperationIntents() {
         .mapTo(mutableSetOf()) { it.id }
     val missing = intents.filter { it.id !in known }
     if (missing.isEmpty()) return
+    val port = conversationPort() // [T-android-seam-extraction] 接缝三的真实消费点
     for (call in missing) {
-        agentHistory += LLMMessage(
-            role = LLMMessage.Role.ASSISTANT,
-            content = "",
-            contentParts = listOf(
-                AgentContentPart.ToolUse(
-                    id = call.id,
-                    name = call.rawToolName ?: "tool",
-                    input = org.json.JSONObject(call.args.toString()),
+        port.append(
+            LLMMessage(
+                role = LLMMessage.Role.ASSISTANT,
+                content = "",
+                contentParts = listOf(
+                    AgentContentPart.ToolUse(
+                        id = call.id,
+                        name = call.rawToolName ?: "tool",
+                        input = org.json.JSONObject(call.args.toString()),
+                    ),
                 ),
             ),
         )
