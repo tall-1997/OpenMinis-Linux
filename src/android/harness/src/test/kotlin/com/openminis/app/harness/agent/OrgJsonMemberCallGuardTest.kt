@@ -13,9 +13,18 @@ import java.io.File
  * android.jar 的成员并生成 invokevirtual，真机直接 NoSuchMethodError 闪退；
  * JVM 测试跑在 org.json:json（testImplementation）上成员存在，永远测不出。
  *
+ * 同类第二陷阱（McpToolDispatcher 修复）：JDK 21 起本机编译时 `MutableList` 的
+ * `removeFirst()/removeLast()` 解析到 java.util.SequencedCollection 成员
+ * （invokeinterface java/util/List.removeFirst），Android 运行时无此方法 →
+ * 同样 NoSuchMethodError。CI 用 JDK 17 编译时成员不存在、Kotlin 扩展获胜，
+ * 所以 CI 恒绿——只有 JDK 21 本机构建会生成被禁引用，此时这里构建期就红。
+ * 仓库约定：可变列表首/尾删除一律用 removeAt(0) / removeAt(size-1)，双端
+ * 队列用 kotlin.collections.ArrayDeque 的自有 removeFirst/removeLast（成员
+ * 属于 kotlin-stdlib，设备随包携带，安全）。
+ *
  * 本测试解析编译产物 .class 常量池，钉死 Methodref/InterfaceMethodref 不指向
- * 这两个桌面版独有成员。以后任何人在 org.json 接收者上写出 toMap()/toList()
- * （或新增其他桌面版独有 API），这里构建期就红，不炸手机。
+ * 这些设备缺失成员。以后任何人在这些接收者上写出被禁调用（或新增其他设备
+ * 缺失 API），这里构建期就红，不炸手机。
  */
 class OrgJsonMemberCallGuardTest {
 
@@ -23,6 +32,10 @@ class OrgJsonMemberCallGuardTest {
     private val banned: Map<String, Set<String>> = mapOf(
         "org/json/JSONArray" to setOf("toList"),
         "org/json/JSONObject" to setOf("toMap"),
+        // JDK 21 SequencedCollection 成员：JDK 21 本机编译解析为成员方法，
+        // Android 运行时缺失。CI 的 JDK 17 不会生成该引用，故此规则只在
+        // JDK 21 本机构建上生效——正是它的暴露窗口。
+        "java/util/List" to setOf("removeFirst", "removeLast"),
     )
 
     @Test

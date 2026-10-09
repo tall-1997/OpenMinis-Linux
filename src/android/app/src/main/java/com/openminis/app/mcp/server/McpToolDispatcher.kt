@@ -125,7 +125,7 @@ class McpToolDispatcher(
                 when {
                     seg.isEmpty() || seg == "." -> Unit
                     seg == ".." -> {
-                        if (segments.isNotEmpty() && segments.last() != "..") segments.removeLast()
+                        if (segments.isNotEmpty() && segments.last() != "..") segments.removeAt(segments.size - 1)
                         else if (segments.isEmpty()) return "" // escaping above root
                     }
                     else -> segments.add(seg)
