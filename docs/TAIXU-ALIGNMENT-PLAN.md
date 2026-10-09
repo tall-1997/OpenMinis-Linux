@@ -10,8 +10,8 @@
 > 的口径**不算能力补齐**，只是「可复用件已入库」。接线清单见各条备注。
 >
 > **验证基线修正**：原写「基线 5220 tests」从未被复现。实测口径为
-> `:app:testReleaseUnitTest` = **2893**（359 个结果 XML）+ `:harness:test` = **121**，
-> 均 0 失败（2026-10-09，ebd0b59 之后）。后续每批以这两个数为新基线。
+> `:app:testReleaseUnitTest` = **2893**（359 个结果 XML）+ `:harness:test` = **130**，
+> 均 0 失败（2026-10-09，6b0d8bc 之后）。后续每批以这两个数为新基线。
 
 ## 模块策略（已定）
 
@@ -43,8 +43,11 @@ taixu `harness/` 是 **Android 库**（依赖 Room/OkHttp/Ktor/Koin，14 文件�
       `ChatRewindDialog`「撤回到此轮」+ 会话删除清盘。
       **偏离计划**：不是「接我方 FileCheckpointTool」，而是**移除**该模型侧工具——
       rewind 是用户动作不是模型工具（taixu 语义），捕获改为写工具自动挂钩。
-- [ ] 2.2 `operation/OperationCoordinator.kt`（348 行，纯 JVM）← **当前切片**
-      现状：`operation/OperationModels.kt` 已随 2.1 闭包落地，Coordinator 未移植。
+- [x] 2.2 `operation/OperationCoordinator.kt`（348 行，纯 JVM）（`6b0d8bc`，**未接线**）
+      落地面：Coordinator 本体 + 收窄的 `OperationRuntimeRepository` 接缝（11 方法）
+      + 运行时实体形状（model/HarnessRuntimeEntities）+ 事件总线（events/）+
+      `HarnessLanes.MAIN_LANE` 单源（queue 改引用它）。9 例移植测试全绿。
+      接线（把 ChatViewModel 的 send/工具/收尾挂到 Coordinator 转移上）留待后续批次。
 - [ ] 2.3 `subagent/SubagentClaim.kt`（252 行）→ 接我方 `WritePathGuard`
       阻塞：闭包分析显示它拖入 SubagentOrchestrator + ToolExecutor（41x），
       需先接口化或排到第三批之后。
@@ -74,4 +77,4 @@ taixu `harness/` 是 **Android 库**（依赖 Room/OkHttp/Ktor/Koin，14 文件�
 
 每批结束跑 `./gradlew :app:testReleaseUnitTest` + `:harness:test` +
 `:architectureCheck`，确认零失败、棘轮不越线。每批独立 commit。
-当前基线：app **2893** / harness **121**（ebd0b59）。
+当前基线：app **2893** / harness **130**（6b0d8bc）。
