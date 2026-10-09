@@ -2,6 +2,7 @@ package com.openminis.app.data.repository
 
 import android.content.Context
 import android.util.Log
+import com.openminis.app.harness.prompt.MemoryRecallScorer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -55,7 +56,6 @@ class MemoryRecallEngine(
         private const val RECALL_BOOST_COEFF = 0.10
         private const val RECALL_BOOST_MAX = 0.15
         private const val RECALL_COUNTS_FILE = ".recall-counts.json"
-        private val CHINESE_PUNCT = setOf('，', '。', '、', '；', '：', '“', '”', '‘', '’', '（', '）', '【', '】', '《', '》', '？', '！')
 
         /**
          * Build an engine bound to the app's /var/minis/memory directory.
@@ -105,92 +105,90 @@ class MemoryRecallEngine(
     )
 
     /**
-     * Extract query keywords from the latest user message(s).
-     * Chinese: split into 2-char window tokens + punctuation-free words.
-     * English: split on whitespace and strip punctuation.
-     * Returns lowercased, deduplicated tokens (>= 2 chars).
-     */
-    private fun extractKeywords(query: String): Set<String> {
-        if (query.isBlank()) return emptySet()
-        val cleaned = query.trim().lowercase().filter { !it.isWhitespace() }
-        val result = mutableSetOf<String>()
-        // English-style: split on whitespace/punctuation boundaries from the raw query
-        val words = query.lowercase()
-            .split("[\\s，。、；：！？“”‘’（）【】《》,.!?;:'\"()\\[\\]{}]+".toRegex())
-            .filter { it.length >= 2 && !it.all { c -> CHINESE_PUNCT.contains(c) } }
-        result.addAll(words)
-
-        // Chinese n-gram (2-char sliding window) for CJK memory search
-        val noPunct = cleaned.filterNot { CHINESE_PUNCT.contains(it) }
-        for (i in 0..noPunct.length - 2) {
-            result.add(noPunct.substring(i, i + 2))
-        }
-        return result.filter { it.isNotBlank() }.toSet()
-    }
-
-    /**
-     * Run a targeted recall: search all memory files for [query] keywords,
+     * Run a targeted recall: search all memory files for [query] terms,
      * score, and return the top [RECALL_LIMIT] hits.
+     *
+     * [T-taixu-2.5] 打分换 BM25（harness/prompt/MemoryRecallScorer，Adapted
+     * from taixu GPL-3.0）：线性关键词计数让常见 bigram 与判别词同权，一行
+     * 塞满常见词就能霸榜；IDF 加权让稀有查询词更值钱。泛化轮次（"继续"/
+     * "好的"）不再触发召回。我方的新近度窗口 / 召回计数加成 / 标题加权 /
+     * 条数上限语义全保留——只用打分器的低层件（effectiveQueryTerms + bm25）。
      */
     fun recall(query: String): List<RecallHit> {
-        val keywords = extractKeywords(query)
-        if (keywords.isEmpty()) return emptyList()
+        val queryTerms = MemoryRecallScorer.effectiveQueryTerms(query)
+        if (queryTerms.isEmpty()) return emptyList()
 
         val today = LocalDate.now()
         val files = scanMemoryFiles()
-        val candidates = mutableListOf<RecallHit>()
 
+        // Pass 1: collect all non-empty lines as raw candidates (BM25 scores
+        // everything; zero-score lines drop in pass 2 — same net effect as the
+        // old kwHits==0 prefilter, but IDF-weighted).
+        data class Raw(
+            val relName: String,
+            val line: String,
+            val dayStr: String,
+            val isHeadline: Boolean,
+            val rcKey: String,
+        )
+        val raws = mutableListOf<Raw>()
         for (file in files) {
             val relName = file.name
-            val isGlobal = relName == GLOBAL_FILE
             val lines = runCatching { file.readLines() }.getOrNull() ?: continue
             val dayStr = dayKeyOf(relName)
-
             for (line in lines) {
                 val trimmed = line.trim()
                 if (trimmed.isEmpty()) continue
                 // Headline / bullet / section lines are higher signal than body prose.
                 val isHeadline = trimmed.startsWith("#") || trimmed.startsWith("-") ||
                     trimmed.startsWith("*") || trimmed.startsWith(">")
-
-                val kwHits = keywords.count { kw ->
-                    trimmed.contains(kw, ignoreCase = true)
-                }
-                if (kwHits == 0) continue
-
-                // Recency: entries from today score full, decaying over the window.
-                val recencyBoost = if (isGlobal) 0.5 // GLOBAL.md always mildly relevant
-                else {
-                    val entryDay = runCatching {
-                        LocalDate.parse(dayStr, DateTimeFormatter.ISO_LOCAL_DATE)
-                    }.getOrNull() ?: continue
-                    // ChronoUnit gives a signed difference: negative for future
-                    // dates, positive for the past. The old `today.unaryMinus()
-                    // .until(entryDay)` was inverted (and negative for every
-                    // real, i.e. past, entry) so recencyBoost always clamped to
-                    // 0.0 and recency scoring was effectively dead.
-                    val daysAgo = ChronoUnit.DAYS.between(entryDay, today).coerceAtLeast(0L)
-                    if (daysAgo > RECENCY_WINDOW_DAYS) 0.0
-                    else 1.0 - (daysAgo.toDouble() / RECENCY_WINDOW_DAYS)
-                }
-
-                // Recall-count boost (M3-1): log2 growth, capped. The key must
-                // match [acceptRecall] exactly or the boost never accumulates.
-                val rcKey = "$dayStr:$trimmed"
-                val rc = recallCounts.getOrPut(rcKey) { AtomicInteger(0) }
-                val recallBonus = (RECALL_BOOST_COEFF * log2(rc.get().toDouble() + 1.0))
-                    .coerceAtMost(RECALL_BOOST_MAX)
-
-                val score = kwHits.toDouble() + recencyBoost + recallBonus
-                // Give headline lines a small priority tie-break.
-                val finalScore = score + (if (isHeadline) 0.3 else 0.0)
-
-                // [T-memory-recall-explain] Human-readable breakdown for callers
-                // that surface *why* an entry matched (Settings → Memory debug).
-                val detail = "kw=$kwHits recency=${"%.2f".format(recencyBoost)} recall=${"%.2f".format(recallBonus)}"
-
-                candidates.add(RecallHit(relName, trimmed, dayStr, finalScore, rc.get(), false, detail))
+                raws += Raw(relName, trimmed, dayStr, isHeadline, "$dayStr:$trimmed")
             }
+        }
+        if (raws.isEmpty()) return emptyList()
+
+        // Pass 2: BM25 over the line corpus, then our own boosts on top.
+        val documents = raws.map { MemoryRecallScorer.tokenize(it.line) }
+        val bm25Scores = MemoryRecallScorer.bm25(queryTerms, documents)
+
+        val candidates = mutableListOf<RecallHit>()
+        for (index in raws.indices) {
+            val raw = raws[index]
+            val kwScore = bm25Scores[index]
+            if (kwScore <= 0.0) continue
+
+            val isGlobal = raw.relName == GLOBAL_FILE
+            // Recency: entries from today score full, decaying over the window.
+            val recencyBoost = if (isGlobal) 0.5 // GLOBAL.md always mildly relevant
+            else {
+                val entryDay = runCatching {
+                    LocalDate.parse(raw.dayStr, DateTimeFormatter.ISO_LOCAL_DATE)
+                }.getOrNull() ?: continue
+                // ChronoUnit gives a signed difference: negative for future
+                // dates, positive for the past. The old `today.unaryMinus()
+                // .until(entryDay)` was inverted (and negative for every
+                // real, i.e. past, entry) so recencyBoost always clamped to
+                // 0.0 and recency scoring was effectively dead.
+                val daysAgo = ChronoUnit.DAYS.between(entryDay, today).coerceAtLeast(0L)
+                if (daysAgo > RECENCY_WINDOW_DAYS) 0.0
+                else 1.0 - (daysAgo.toDouble() / RECENCY_WINDOW_DAYS)
+            }
+
+            // Recall-count boost (M3-1): log2 growth, capped. The key must
+            // match [acceptRecall] exactly or the boost never accumulates.
+            val rc = recallCounts.getOrPut(raw.rcKey) { AtomicInteger(0) }
+            val recallBonus = (RECALL_BOOST_COEFF * log2(rc.get().toDouble() + 1.0))
+                .coerceAtMost(RECALL_BOOST_MAX)
+
+            val score = kwScore + recencyBoost + recallBonus
+            // Give headline lines a small priority tie-break.
+            val finalScore = score + (if (raw.isHeadline) 0.3 else 0.0)
+
+            // [T-memory-recall-explain] Human-readable breakdown for callers
+            // that surface *why* an entry matched (Settings → Memory debug).
+            val detail = "bm25=${"%.2f".format(kwScore)} recency=${"%.2f".format(recencyBoost)} recall=${"%.2f".format(recallBonus)}"
+
+            candidates.add(RecallHit(raw.relName, raw.line, raw.dayStr, finalScore, rc.get(), false, detail))
         }
 
         // Aging (M3-1 后半): entries older than ARCHIVE_AFTER_DAYS are still
