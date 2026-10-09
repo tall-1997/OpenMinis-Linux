@@ -34,8 +34,18 @@ class OrgJsonMemberCallGuardTest {
         "org/json/JSONObject" to setOf("toMap"),
         // JDK 21 SequencedCollection 成员：JDK 21 本机编译解析为成员方法，
         // Android 运行时缺失。CI 的 JDK 17 不会生成该引用，故此规则只在
-        // JDK 21 本机构建上生效——正是它的暴露窗口。
-        "java/util/List" to setOf("removeFirst", "removeLast"),
+        // JDK 21 本机构建上生效——正是它的暴露窗口。reversed/getFirst/
+        // getLast/addFirst/addLast 同属 SequencedCollection 家族（List 上的
+        // Kotlin 扩展 reversed() 编译成 invokestatic CollectionsKt，不会误伤；
+        // Comparator.reversed 是 Java 8 default 方法，API 24+ 设备有，不在此列）。
+        "java/util/List" to setOf(
+            "removeFirst", "removeLast", "reversed",
+            "getFirst", "getLast", "addFirst", "addLast",
+        ),
+        "java/util/SequencedCollection" to setOf(
+            "removeFirst", "removeLast", "reversed",
+            "getFirst", "getLast", "addFirst", "addLast",
+        ),
     )
 
     @Test
