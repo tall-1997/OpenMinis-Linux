@@ -8,6 +8,10 @@ import org.json.JSONObject
  * [T-p0-1-extraction] 工具调用指纹：参数与结果的稳定哈希。从 ToolLoopDetector
  * 拆出——检测器本体要守 400 行新文件上限，而指纹是自成一体的纯函数簇
  * （键序无关、忽略 tool_title 这类展示键、org.json 结构归一）。
+ * [CRASH-2026-10-10] stableMap/stableList 故意不叫 toMap/toList：org.json 桌面版
+ * （android.jar compileSdk 35 起）有同名成员方法，Kotlin 成员优先于扩展 →
+ * 编译成 invokevirtual JSONArray.toList()，而设备 ART core-libart 的 org.json
+ * 没有该方法 → NoSuchMethodError 闪退（JVM 测试跑在 org.json:json 上测不出）。
  */
 internal object ToolCallFingerprint {
 
@@ -59,13 +63,13 @@ private val HEX = "0123456789abcdef".toCharArray()
             is Array<*> -> appendStable(value.toList())
             is String -> append(JSONObject.quote(value))
             is Number, is Boolean -> append(value.toString())
-            is JSONObject -> appendStable(value.toMap())
-            is JSONArray -> appendStable(value.toList())
+            is JSONObject -> appendStable(value.stableMap())
+            is JSONArray -> appendStable(value.stableList())
             else -> append(JSONObject.quote(value.toString()))
         }
     }
 
-    internal fun JSONObject.toMap(): Map<String, Any?> {
+    internal fun JSONObject.stableMap(): Map<String, Any?> {
         val out = HashMap<String, Any?>(length())
         val keys = keys()
         while (keys.hasNext()) {
@@ -75,7 +79,7 @@ private val HEX = "0123456789abcdef".toCharArray()
         return out
     }
 
-    internal fun JSONArray.toList(): List<Any?> {
+    internal fun JSONArray.stableList(): List<Any?> {
         val out = ArrayList<Any?>(length())
         for (i in 0 until length()) out.add(unwrap(get(i)))
         return out
@@ -83,8 +87,8 @@ private val HEX = "0123456789abcdef".toCharArray()
 
     internal fun unwrap(v: Any?): Any? = when (v) {
         JSONObject.NULL -> null
-        is JSONObject -> v.toMap()
-        is JSONArray -> v.toList()
+        is JSONObject -> v.stableMap()
+        is JSONArray -> v.stableList()
         else -> v
     }
 
