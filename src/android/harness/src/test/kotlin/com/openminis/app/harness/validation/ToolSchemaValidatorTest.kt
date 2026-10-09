@@ -20,6 +20,27 @@ import org.junit.Test
 class ToolSchemaValidatorTest {
 
     @Test
+    fun `alias keys the target schema does not declare are dropped not reported`() {
+        // 宿主形状：参数叫 timeout / command（上游叫 timeout_seconds）。
+        // 加法式别名规整会补出 timeout_seconds、并保留 cmd 原键；两者都没被
+        // schema 声明，必须静默丢弃而不是「不接受的参数」误报。
+        val hostSchema = """{"type":"object","properties":{"command":{"type":"string"},"timeout":{"type":"integer"}},"required":["command"]}"""
+        val resolver = TestSchemaResolver(mapOf("host_tool" to hostSchema))
+
+        assertTrue(
+            ToolSchemaValidator.problemsFor("host_tool", args("command" to "ls", "timeout" to 30), resolver).isEmpty(),
+        )
+        assertTrue(
+            ToolSchemaValidator.problemsFor("host_tool", args("cmd" to "ls"), resolver).isEmpty(),
+        )
+        // 非别名的未知键仍然报错——那才是模型 hallucinate 参数
+        assertTrue(
+            ToolSchemaValidator.problemsFor("host_tool", args("command" to "ls", "hallucinated" to 1), resolver)
+                .any { it.contains("hallucinated") },
+        )
+    }
+
+    @Test
     fun `MCP hook target and script parameters do not gain builtin aliases`() {
         val hookSchema = """{"type":"object","properties":{"type":{"type":"string"},"target":{"type":"string"}},"required":["type","target"]}"""
         val resolver = mcpResolver("mcp__browser__browser.hook_create" to hookSchema)

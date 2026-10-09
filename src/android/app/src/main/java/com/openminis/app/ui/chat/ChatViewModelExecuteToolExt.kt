@@ -36,6 +36,25 @@ internal suspend fun ChatViewModel.executeTool(
     if (gated != null) return gated
     val toolTitle = try { JSONObject(argsJson).optString("tool_title", canonical) } catch (_: Exception) { canonical }
 
+    // [T-schema-validation-wiring] 「模型参数 → 校验 → 审批 → 执行」链路的第二环：
+    // 形状不合法的参数不进入执行器（执行器里的 optXxx 强转只会把错误变成静默
+    // 的默认值），问题列表写回 ToolResult 让模型自我纠正。无 schema 的工具
+    // （含 MCP）与非法 argsJson 都返回空列表，行为与接线前一致。
+    val schemaProblems = com.openminis.app.tools.ToolSchemaResolver.problemsFor(canonical, argsJson)
+    if (schemaProblems.isNotEmpty()) {
+        com.openminis.app.logging.AppLogger.warning(
+            ChatViewModel.TAG,
+            "schema validation rejected $canonical: ${schemaProblems.joinToString("; ")}",
+        )
+        return ToolExecutionResult(
+            "Arguments for `$canonical` failed schema validation:\n- " + schemaProblems.joinToString("\n- "),
+            false,
+            errorCode = com.openminis.app.tools.ToolErrorCode.INVALID_ARGUMENTS,
+            recoveryHint = "Fix the listed argument problems and call the tool again with corrected arguments.",
+            toolTitle = canonical,
+        )
+    }
+
     // [T-find-tools] On-demand tool discovery: resolve the query against the
     // full registry and enable matches for subsequent turns in this session.
     if (canonical == com.openminis.app.tools.FindTools.NAME) {

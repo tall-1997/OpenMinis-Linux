@@ -196,8 +196,37 @@ object ToolSchemaValidator {
         val isMcp = toolName.startsWith("mcp__")
         // MCP 工具：既不套用内置别名，也不做单键解包/扁平键还原（见 normalizeArgs 注释）
         val normalized = normalizeArgs(args, applyAliases = !isMcp, isMcpTool = isMcp)
-        return validateObject(schema, normalized, prefix = "")
+        // MCP 路径别名规整整体关闭，raw 即权威：未知键必须照常报错，不做丢弃。
+        val effective = if (isMcp) normalized else dropUndeclaredAliasTargets(normalized, schema)
+        return validateObject(schema, effective, prefix = "")
     }
+
+    /**
+     * 别名规整是**加法式**的：见到 `timeout` 补 `timeout_seconds`、见到 `cmd` 补
+     * `command`，原键都保留。上游自家 schema 与这套别名表同源所以不冲突；宿主
+     * 工具若用原名声明 schema（如我方 shell_execute 的 `timeout`），补出来的键
+     * 和没被「消费掉」的原别名键都会变成「不接受的参数」误报——模型明明按
+     * schema 传参却被弹回。
+     *
+     * 规则：别名表里出现过的键（源与目标），目标 schema 没声明就丢弃。schema
+     * 声明了的（上游形状、或我方确实叫这个名字的参数）原样保留。非别名的未知
+     * 键仍然报错——那才是真·模型 hallucinate 参数。
+     */
+    private fun dropUndeclaredAliasTargets(normalized: JsonObject, schema: JsonObject): JsonObject {
+        val declared = (schema["properties"] as? JsonObject)?.keys ?: return normalized
+        val dropped = normalized.keys.filter { key -> key in ALIAS_KEYS && key !in declared }
+        if (dropped.isEmpty()) return normalized
+        return JsonObject(normalized.filterKeys { it !in dropped })
+    }
+
+    /** normalizeArgs 会读写的全部键（别名源 + 别名目标）。 */
+    private val ALIAS_KEYS = setOf(
+        "path", "file_path", "filePath", "file", "target",
+        "command", "cmd", "script",
+        "oldText", "old_text", "original_text",
+        "newText", "new_text", "replacement",
+        "timeout_seconds", "timeout", "timeoutSeconds", "timeout_sec",
+    )
 
     /** 直接对给定 schema 校验（供自定义 schema 场景与测试使用）。 */
     fun validate(schema: JsonObject, args: JsonObject): List<String> =
