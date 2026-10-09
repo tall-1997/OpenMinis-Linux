@@ -10,7 +10,7 @@
 > 的口径**不算能力补齐**，只是「可复用件已入库」。接线清单见各条备注。
 >
 > **验证基线修正**：原写「基线 5220 tests」从未被复现。实测口径为
-> `:app:testReleaseUnitTest` + `:harness:test`，当前 **app 2892 / harness 245**
+> `:app:testReleaseUnitTest` + `:harness:test`，当前 **app 2870 / harness 267**
 > 均 0 失败。后续每批以这两个数为新基线。
 >
 > ## 进度总账（2026-10-09，`671f7d8`）
@@ -100,6 +100,11 @@ taixu `harness/` 是 **Android 库**（依赖 Room/OkHttp/Ktor/Koin，14 文件�
       语义，整换是退化；ProviderStreamClient 接缝已立（`6445c13`），本体评估
       窗口已开，排在循环骨架迁移之后
 - [ ] 2.5 `prompt/`（1233 行，Context 注入）
+      **形状已勘明（2026-10-09）**：PromptRouter(135)/PromptVariableResolver(70)/
+      PrivilegeSectionRenderer(37)/DistroCatalog(23) 纯逻辑可直迁；MemoryRecallSelector
+      (252) 对应我方记忆注入（有真实嫁接点）；SystemPromptBuilder(682) 深绑上游
+      资产结构（prompts/system/*.md + load_rule 工具），整搬需先决策是否引入
+      分层资产架构——嫁接面在 runAgentLoop 调用方的 systemPrompt 组装处。
 - [x] 2.6 `queue/PromptQueueManager.kt`（135 行）（`ebd0b59`，**已接线**）
       **超出计划**：不止 Room 接口化——做了文件持久化 + 完整宿主接线
       （忙时入队落盘 / 消费确认 / 冷开还原 / 撤回·重试·截断删盘），
