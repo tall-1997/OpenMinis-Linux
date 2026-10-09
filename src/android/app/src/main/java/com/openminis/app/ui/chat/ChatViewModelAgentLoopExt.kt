@@ -1088,6 +1088,16 @@ internal suspend fun ChatViewModel.runAgentLoop(
                         }
                         val jitter = com.openminis.app.harness.agent.HttpRetryAfter.jitterMs()
                         if (jitter > 0L) kotlinx.coroutines.delay(jitter)
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        // [T-retry-marker-stale] 倒计时被取消（用户停止/作业
+                        // 取消）：清掉本轮盖上的瞬时错误文案。否则「— retrying
+                        // (n/m)…」横幅带着重试钮留在旧气泡上，用户发新消息、
+                        // 新回合开跑后它还在（clearInlineError 只在倒计时走完
+                        // 的路径上跑，取消路径此前漏了）。
+                        withContext(Dispatchers.Main + kotlinx.coroutines.NonCancellable) {
+                            clearInlineError()
+                        }
+                        throw e
                     } finally {
                         _autoRetryCountdown.value = 0
                     }
@@ -1719,36 +1729,16 @@ internal suspend fun ChatViewModel.runAgentLoop(
                     "ToolPreflight",
                     "[ToolRepair] REFUSED truncated write tool=$name id=$id strategy=$truncationRepairTag path=$path"
                 )
-                val modelMessage = buildString {
-                    append("Error: This call was NOT executed. Its argument stream was truncated ")
-                    append("in transit (repair strategy: $truncationRepairTag), so the `content` ")
-                    append("your client sent was cut short and would have written an incomplete file")
-                    if (path.isNotBlank()) append(" to $path")
-                    append(". Nothing was written to disk — the target file is unchanged.\n\n")
-                    append("The most likely cause is the response hitting its output-token limit ")
-                    append("mid-argument. Re-issue this write in smaller pieces: write the first ")
-                    append("part, then append the rest with follow-up calls, rather than repeating ")
-                    append("the same oversized call.")
-                }
-                val refusedIdx = allToolBlocks.indexOfFirst { it.id == id }
-                if (refusedIdx >= 0) {
-                    val elapsed = System.currentTimeMillis() - allToolBlocks[refusedIdx].startTimeMs
-                    allToolBlocks[refusedIdx] = allToolBlocks[refusedIdx].copy(
-                        toolStatus = ToolBlockStatus.FAILED,
-                        content = "Blocked: arguments were truncated in transit",
-                        durationMs = elapsed,
-                    )
-                    withContext(Dispatchers.Main) {
-                        updateAssistantMessage(assistantId, accumulatedText, true, allToolBlocks)
-                    }
-                }
-                toolLoopDetector.record(name, parseToolParams(args.toString()),
-                    result = null, errorMessage = modelMessage, toolCallId = id)
-                resultParts.add(AgentContentPart.ToolResult(
-                    id = id, name = name,
-                    content = modelMessage,
-                    isError = true,
-                ))
+                // [T-android-seam-extraction] 拒绝半边进 harness（ToolCallPreflight）；
+                // 块置 FAILED + 消息刷新走接缝四。
+                val refusal = ToolCallPreflight.rejectTruncatedWrite(
+                    toolCallId = id, toolName = name,
+                    repairStrategy = truncationRepairTag, targetPath = path,
+                    params = parseToolParams(args.toString()), detector = toolLoopDetector,
+                )
+                uiEventSink(allToolBlocks, assistantId, accumulatedText)
+                    .onToolCallRejected(id, refusal.uiMessage)
+                resultParts.add(refusal.toolResultPart)
                 toolInputChunkRings.remove(id)
                 continue
             }
@@ -1762,29 +1752,14 @@ internal suspend fun ChatViewModel.runAgentLoop(
             // tool_use/tool_result pairing stays balanced. Not recorded in the
             // loop detector — a transport replay is not model behavior.
             if (id in replayRenamedIds) {
-                val duplicateMsg = "Error: duplicate tool call ignored. This exact call " +
-                    "(same id, name, and arguments) was already dispatched earlier in this " +
-                    "turn and its result is already available above. The duplicate was not " +
-                    "executed. Continue with the recorded result."
                 AppLogger.warning(ChatViewModel.TAG_STREAM, "[ToolReplay] refused duplicate dispatch id=$id name=$name args=${argsStr.take(200)}")
-                val dupIdx = allToolBlocks.indexOfFirst { it.id == id }
-                if (dupIdx >= 0) {
-                    val elapsedDup = System.currentTimeMillis() - allToolBlocks[dupIdx].startTimeMs
-                    allToolBlocks[dupIdx] = allToolBlocks[dupIdx].copy(
-                        toolStatus = ToolBlockStatus.FAILED,
-                        content = "Duplicate call ignored (already executed)",
-                        durationMs = elapsedDup,
-                    )
-                }
-                resultParts.add(AgentContentPart.ToolResult(
-                    id = id, name = name,
-                    content = duplicateMsg,
-                    isError = true,
-                ))
+                // [T-android-seam-extraction] 拒绝部件构造进 harness
+                // （ToolReplayGuard.duplicateRefusal）；块置 FAILED + 消息刷新
+                // 走接缝四。
+                resultParts.add(toolReplayGuard.duplicateRefusal(id, name))
                 toolInputChunkRings.remove(id)
-                withContext(Dispatchers.Main) {
-                    updateAssistantMessage(assistantId, accumulatedText, true, allToolBlocks)
-                }
+                uiEventSink(allToolBlocks, assistantId, accumulatedText)
+                    .onToolCallRejected(id, "Duplicate call ignored (already executed)")
                 continue
             }
             // Flip PENDING → RUNNING right before the execute dispatch so the UI
@@ -1879,28 +1854,36 @@ internal suspend fun ChatViewModel.runAgentLoop(
             android.util.Log.d("ToolChain[VM]", "[turn=$turn] executeTool START name=$name args=${argsStr.take(200)}")
             if (SubAgentKind.isSpawnTool(name) && !didFanOutSubAgents) {
                 didFanOutSubAgents = true
+                // [T-android-seam-extraction] 循环片段：扇出**规划**半边进
+                // harness（SubAgentFanOutPlanner）——peer 选择 / 波内序号 /
+                // 写者计数（WriteLease 预算）；执行（Semaphore 限并发 +
+                // executeRunSubAgent + 块投影）永久留宿主——接缝二边界。
+                val fanOutPlan = com.openminis.app.harness.agent.SubAgentFanOutPlanner.plan(
+                    toolCalls.map { Triple(it.first, it.second, it.third.toString()) },
+                    isSpawnTool = SubAgentKind::isSpawnTool,
+                    batchWriterCount = { argsJson ->
+                        parseSubAgentBatch(argsJson, com.openminis.app.data.ToolLimitPrefs.subagentMaxTurns())
+                            .count { spawn -> SubAgentKind.canWrite(spawn.kind) }
+                    },
+                )
                 val cap = MultiAgentSettings.clampConcurrent(multiAgentSettings.maxConcurrent.value)
                 val sem = Semaphore(cap)
-                val peers = toolCalls.filter { SubAgentKind.isSpawnTool(it.second) }
-                val writerCount = peers.sumOf { (_, _, peerArgs) ->
-                    parseSubAgentBatch(peerArgs.toString(), com.openminis.app.data.ToolLimitPrefs.subagentMaxTurns())
-                        .count { spawn -> SubAgentKind.canWrite(spawn.kind) }
-                }
+                val writerCount = fanOutPlan.writerCount
                 coroutineScope {
-                    peers.mapIndexed { peerIdx, (peerId, _, peerArgs) ->
+                    fanOutPlan.peers.map { peer ->
                         async {
                             val peerResult = executeRunSubAgent(
-                                peerArgs.toString(),
-                                peerId,
+                                peer.argsJson,
+                                peer.toolCallId,
                                 allToolBlocks,
                                 assistantId,
                                 accumulatedText,
                                 limiter = sem,
                                 parallelWriters = writerCount,
-                                waveIndex = peerIdx,
-                                waveSize = peers.size,
+                                waveIndex = peer.waveIndex,
+                                waveSize = peer.waveSize,
                             )
-                            synchronized(parallelSubResults) { parallelSubResults[peerId] = peerResult }
+                            synchronized(parallelSubResults) { parallelSubResults[peer.toolCallId] = peerResult }
                         }
                     }.awaitAll()
                 }

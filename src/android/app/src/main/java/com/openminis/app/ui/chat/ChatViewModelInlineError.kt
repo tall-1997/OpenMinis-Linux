@@ -55,3 +55,16 @@ internal fun ChatViewModel.setInlineError(errorText: String) {
         _error.value = safeError
     }
 }
+
+/**
+ * [T-retry-marker-stale] 新发送前的兜底：上一回合若死在自动重试倒计时里，
+ * 旧气泡上可能还盖着「— retrying (n/m)…」的瞬时错误横幅（倒计时取消路径
+ * 已清，这里防的是任何漏网路径）。新回合开跑 = 旧标记作废。只清瞬时重试
+ * 文案——真正的终局错误横幅是历史事实，保留。
+ */
+internal fun ChatViewModel.clearStaleTransientRetryMarker() {
+    val lastAssistant = _messages.value.lastOrNull { it.role == "assistant" } ?: return
+    if (lastAssistant.error?.contains("— retrying (") == true) {
+        clearInlineError()
+    }
+}

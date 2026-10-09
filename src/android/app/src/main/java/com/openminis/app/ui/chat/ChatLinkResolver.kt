@@ -1,5 +1,7 @@
 package com.openminis.app.ui.chat
 
+import android.net.Uri
+
 import android.content.Context
 import android.content.Intent
 import androidx.core.net.toUri
@@ -203,5 +205,114 @@ object ChatLinkResolver {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         runCatching { context.startActivity(intent) }
+    }
+}
+
+// ─── Media helpers ──────────────────────────────────────────────────────────
+
+/**
+ * Resolve a markdown media URL (`minis://attachments/foo.mp4`, file://, or
+ * plain absolute path) to a host File.
+ *
+ * First tries `PRootKernel.resolveHostPath` (same as MinisImageFetcher). If
+ * that fails — e.g. bind mounts are pointing at a different session, or the
+ * file was written under a `__new__...` draft id that predates
+ * `ensureSession()` rename — we fall back to scanning all per-session
+ * attachment directories for a file of the same basename. Mirrors the iOS
+ * attach-path resolution which walks the session cache when the primary
+ * lookup misses.
+ */
+internal fun resolveMdMediaFile(context: Context, url: String, sessionId: String? = null): File? {
+    if (url.isBlank()) return null
+    // Strip a real query (`?`), but NOT `#` — attachment filenames legitimately
+    // contain '#' (hashtags). `minis://` URLs don't carry fragments anyway,
+    // and truncating here would hide the '.mp4' extension and the file's real
+    // name from the resolver.
+    val stripped = url.substringBefore('?')
+    val primary: File? = when {
+        stripped.startsWith("minis://") -> {
+            val decoded = java.net.URLDecoder.decode(stripped.removePrefix("minis://"), "UTF-8")
+            val linuxPath = "/var/minis/$decoded"
+            // Prefer the session-scoped resolver when the caller supplied a
+            // sessionId: the global `bindMounts` map is overwritten every time
+            // another session boots its shell, so without sessionId we'd route
+            // this chat's attachment lookup to whichever session happened to
+            // boot last.
+            if (sessionId != null) PRootKernel.resolveSessionHostPath(sessionId, linuxPath, context)
+            else PRootKernel.resolveHostPath(linuxPath)
+        }
+        stripped.startsWith("file://") -> File(Uri.parse(stripped).path ?: return null)
+        stripped.startsWith("/") -> File(stripped)
+        else -> null
+    }
+    if (primary?.let { it.exists() && it.isFile } == true) {
+        return primary
+    }
+
+    // Fallback stays inside this chat. Scanning every session or every project
+    // by basename would show another chat's file when names collide.
+    if (!stripped.startsWith("minis://") || sessionId.isNullOrBlank()) {
+        return null
+    }
+    val decoded = java.net.URLDecoder.decode(stripped.removePrefix("minis://"), "UTF-8")
+    val basename = decoded.substringAfterLast('/')
+    val subdir = decoded.substringBefore('/', missingDelimiterValue = "").takeIf { it.isNotEmpty() } ?: "attachments"
+    val owner = com.openminis.app.sandbox.SessionWorkspace.ownerSessionId(sessionId)
+    // [T-md-media-fullpath-fallback] 先按**完整相对路径**探测：URL 里的
+    // uploads/ 等子目录不能丢。旧 fallback 只按 basename 探
+    // <subdir>/<name>，uploads/ 下的文件永远探不到——主路径（会话解析/
+    // bindMounts）一漂移（项目目录重建、__new__ 草稿改名、shell 未起），
+    // 旧消息的图就退化成破图占位，用户只能去「浏览对话文件」里找。
+    val relUnderSubdir = decoded.substringAfter('/', missingDelimiterValue = "")
+        .takeIf { it.isNotEmpty() && it != basename }
+    if (relUnderSubdir != null) {
+        val ownFull = File(com.openminis.app.sandbox.SessionWorkspace.hostDir(context.filesDir, sessionId, subdir), relUnderSubdir)
+        if (ownFull.isFile) return ownFull
+        val ownerFull = File(com.openminis.app.sandbox.SessionWorkspace.base(context.filesDir, owner), "$subdir/$relUnderSubdir")
+        if (ownerFull.isFile) return ownerFull
+    }
+    // basename 探测保留：__new__ 草稿 id 改名等「路径平移但文件名不变」的场景。
+    val own = File(com.openminis.app.sandbox.SessionWorkspace.hostDir(context.filesDir, sessionId, subdir), basename)
+    if (own.isFile) return own
+    val privateCopy = File(com.openminis.app.sandbox.SessionWorkspace.base(context.filesDir, owner), "$subdir/$basename")
+    if (privateCopy.isFile) return privateCopy
+    // Also probe `minis-global/<subdir>` for shared/memory/skills buckets.
+    val globalCandidate = File(context.filesDir, "minis-global/$subdir/$basename")
+    if (globalCandidate.exists() && globalCandidate.isFile) {
+        return globalCandidate
+    }
+    android.util.Log.w("MdStream", "resolveMdMediaFile url=$url -> NOT FOUND (primary=${primary?.absolutePath})")
+    return null
+}
+
+internal fun filenameFromMdUrl(url: String): String {
+    // Keep '#' — it's a legitimate character in attachment filenames.
+    val stripped = url.substringBefore('?')
+    val last = stripped.substringAfterLast('/')
+    return try { java.net.URLDecoder.decode(last, "UTF-8") } catch (_: Throwable) { last }
+}
+
+internal fun openMdMediaExternally(context: Context, file: File, mime: String) {
+    val authority = context.packageName + ".fileprovider"
+    val uri = try {
+        androidx.core.content.FileProvider.getUriForFile(context, authority, file)
+    } catch (t: Throwable) {
+        android.util.Log.w("MdStream", "FileProvider failed: ${t.message}")
+        Uri.fromFile(file)
+    }
+    val intent = Intent(Intent.ACTION_VIEW).apply {
+        setDataAndType(uri, mime)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        if (context !is android.app.Activity) {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+    }
+    val chooser = Intent.createChooser(intent, file.name).apply {
+        if (context !is android.app.Activity) {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+    }
+    try { context.startActivity(chooser) } catch (t: Throwable) {
+        android.util.Log.w("MdStream", "startActivity failed: ${t.message}")
     }
 }

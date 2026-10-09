@@ -59,4 +59,34 @@ class ToolCallPreflightTest {
         )
         assertTrue(verdict.level != Level.NONE)
     }
+
+    @Test
+    fun `truncated write refusal names the strategy path and the chunked re-issue guidance`() {
+        val detector = ToolLoopDetector()
+        val rejection = ToolCallPreflight.rejectTruncatedWrite(
+            toolCallId = "call-w", toolName = "file_write",
+            repairStrategy = "truncation+close-string", targetPath = "/var/minis/workspace/a.kt",
+            params = mapOf("path" to "/var/minis/workspace/a.kt"), detector = detector,
+        )
+        assertEquals("Blocked: arguments were truncated in transit", rejection.uiMessage)
+        assertTrue(rejection.modelMessage.startsWith("Error: This call was NOT executed."))
+        assertTrue(rejection.modelMessage.contains("repair strategy: truncation+close-string"))
+        assertTrue(rejection.modelMessage.contains("to /var/minis/workspace/a.kt"))
+        assertTrue(rejection.modelMessage.contains("Nothing was written to disk"))
+        assertTrue(rejection.modelMessage.contains("Re-issue this write in smaller pieces"))
+        assertTrue(rejection.toolResultPart.isError)
+        assertEquals("call-w", rejection.toolResultPart.id)
+    }
+
+    @Test
+    fun `truncated write refusal without a path omits the path clause`() {
+        val detector = ToolLoopDetector()
+        val rejection = ToolCallPreflight.rejectTruncatedWrite(
+            toolCallId = "call-w2", toolName = "file_edit",
+            repairStrategy = "truncation+close-obj", targetPath = "",
+            params = emptyMap(), detector = detector,
+        )
+        assertTrue(rejection.modelMessage.contains("incomplete file. Nothing was written"))
+        assertTrue(!rejection.modelMessage.contains(" to /"))
+    }
 }

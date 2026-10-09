@@ -129,6 +129,9 @@ internal fun ChatViewModel.sendMessage(
     }
     if (!internalGoalRun) clearAttachments()
 
+    // [T-retry-marker-stale] 清掉旧气泡上遗留的瞬时重试横幅（见 InlineError 扩展）。
+    clearStaleTransientRetryMarker()
+
     // T145: claim _isStreaming synchronously so a rapid second tap can't
     // slip past the entry guard during DB/OAuth setup. See retryFromMessage.
     AppLogger.info(ChatViewModel.TAG_STREAM, "send _isStreaming=true (sync, sid=$activeSessionId)")
@@ -270,32 +273,9 @@ internal fun ChatViewModel.sendMessage(
             refreshContextUsage()
         }
 
-        // Refresh OAuth token if needed before sending (mirrors iOS validAccessToken)
-        if ((provider as? com.openminis.app.provider.anthropic.AnthropicProvider)?.isOAuth == true) {
-            try {
-                val activeEntryId = _activeEntryId.value
-                val entry = activeEntryId?.let { id -> providerRepository.config.value.modelEntries.find { it.id == id } }
-                val instance = entry?.let { e -> providerRepository.config.value.instances.find { it.id == e.providerInstanceId } }
-                if (instance != null) {
-                    val manager = com.openminis.app.auth.OAuthManager.forInstance(context, instance)
-                    val freshToken = manager?.validAccessToken()
-                    if (freshToken != null) {
-                        val storedKey = providerRepository.loadApiKey(instance.id)
-                        if (freshToken != storedKey) {
-                            providerRepository.saveApiKey(instance.id, freshToken)
-                            // Recreate provider with fresh token
-                            provider = com.openminis.app.provider.ProviderFactory.create(
-                                instance, freshToken, currentModel ?: provider.model, context
-                            )
-                            currentProvider = provider
-                            android.util.Log.i(ChatViewModel.TAG, "OAuth token refreshed before send")
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                android.util.Log.w(ChatViewModel.TAG, "OAuth token refresh failed: ${e.message}")
-            }
-        }
+        // [T-oauth-refresh-dedupe] 刷新块收口进 ChatViewModelOAuthExt（与
+        // resumeQueueAfterCancel 共用一份）。
+        provider = refreshOAuthProviderIfNeeded(provider)
 
         // Build system prompt
         // Anthropic OAuth requires the Claude Code prefix in the system prompt
@@ -386,6 +366,12 @@ internal fun ChatViewModel.sendMessage(
                         setInlineError(e.message ?: "Unknown error")
                         // T298: completion notifier should show the ❌ variant.
                         SessionActivityTracker.markStreamError(activeSessionId)
+                        // [T-queued-prompt-ghost] 终局错误也要排空队列：
+                        // drainQueuedPrompts 只在正常返回路径跑，错误路径不排
+                        // → 用户在错误横幅期间发的消息永远卡在队列里（灰泡
+                        // 既不跑也撤不回）——「发送的消息被隐藏」。200ms 延迟
+                        // 让本协程的 finally 先把 _isStreaming 放下来。
+                        if (_promptQueue.value.isNotEmpty()) resumeQueueAfterCancel()
                     }
                 } finally {
                     AppLogger.info(ChatViewModel.TAG_STREAM, "send streamJob FINALLY enter")
@@ -402,7 +388,11 @@ internal fun ChatViewModel.sendMessage(
                     AppLogger.info(ChatViewModel.TAG_STREAM, "send streamJob FINALLY exit")
                 }
             } catch (e: com.openminis.app.service.SlotQueueTimeout) {
-                if (!run.isStopped) setInlineError(e.message ?: "会话排队超时，名额已释放")
+                if (!run.isStopped) {
+                    setInlineError(e.message ?: "会话排队超时，名额已释放")
+                    // [T-queued-prompt-ghost] 同上：错误出口不排空 = 幽灵队列。
+                    if (_promptQueue.value.isNotEmpty()) resumeQueueAfterCancel()
+                }
             } catch (e: CancellationException) {
                 AppLogger.info(ChatViewModel.TAG_STREAM, "send streamJob CANCELLED waiting for slot")
                 Log.d(ChatViewModel.TAG, "Cancelled while waiting for concurrency slot")

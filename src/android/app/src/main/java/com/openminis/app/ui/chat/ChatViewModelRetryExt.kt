@@ -72,32 +72,11 @@ fun ChatViewModel.retryLast() {
     // Case A too — the row is deleted moments later regardless.
     clearPersistedLastAssistantError()
 
-    // 2. Pop ONLY a trailing assistant entry from agentHistory (mirrors
-    //    iOS retry() :2107-2109). If the tail is already user(tool_result),
-    //    the next-turn LLM call errored — leave history alone.
-    val poppedAssistant = if (agentHistory.lastOrNull()?.role == LLMMessage.Role.ASSISTANT) {
-        val last = agentHistory.removeAt(agentHistory.size - 1)
-        last
-    } else null
-
-    // 3. GC orphaned tool_result parts whose tool_use is gone (mirrors
-    //    iOS retry() :2114-2128). Walks backward so removeAt is safe.
-    val liveToolUseIds = agentHistory.flatMap { m ->
-        m.contentParts.filterIsInstance<AgentContentPart.ToolUse>().map { it.id }
-    }.toSet()
-    for (i in agentHistory.indices.reversed()) {
-        val m = agentHistory[i]
-        if (m.role != LLMMessage.Role.USER) continue
-        val cleanedParts = m.contentParts.filter { p ->
-            p !is AgentContentPart.ToolResult || p.id in liveToolUseIds
-        }
-        when {
-            cleanedParts.isEmpty() && m.contentParts.isNotEmpty() ->
-                agentHistory.removeAt(i)
-            cleanedParts.size < m.contentParts.size ->
-                agentHistory[i] = m.copy(contentParts = cleanedParts)
-        }
-    }
+    // 2+3 (pop trailing assistant + GC orphaned tool_results) moved INTO the
+    // rerun coroutine below — they must run AFTER the queued-prompt flush
+    // ([T-retry-stale-context]) so the retry's cut point is the NEW tail,
+    // not the pre-flush one. Between here and the coroutine start nothing
+    // else can touch agentHistory: _isStreaming=true blocks sends/retries.
 
     val initialProvider = currentProvider ?: return
     var provider: LLMProvider = initialProvider
@@ -110,6 +89,37 @@ fun ChatViewModel.retryLast() {
     viewModelScope.launch {
         var streamLaunched = false
         try {
+        // [T-retry-stale-context] 重试前先把幽灵队列物化进 agentHistory：用户在
+        // 错误横幅期间发的消息若还卡在 _promptQueue（错误出口此前不排空），
+        // 它们不在 agentHistory 里——直接重试会拿到「上一次错误时」的上下文，
+        // 用户消息被跳过。物化成持久用户轮（不跑回合），再从新尾巴弹起。
+        if (_promptQueue.value.isNotEmpty()) {
+            materializeQueuedPromptsAsUserTurn()
+        }
+        // 2. Pop ONLY a trailing assistant entry from agentHistory (mirrors
+        //    iOS retry() :2107-2109). If the tail is already user(tool_result),
+        //    the next-turn LLM call errored — leave history alone.
+        val poppedAssistant = if (agentHistory.lastOrNull()?.role == LLMMessage.Role.ASSISTANT) {
+            agentHistory.removeAt(agentHistory.size - 1)
+        } else null
+        // 3. GC orphaned tool_result parts whose tool_use is gone (mirrors
+        //    iOS retry() :2114-2128). Walks backward so removeAt is safe.
+        val liveToolUseIds = agentHistory.flatMap { m ->
+            m.contentParts.filterIsInstance<AgentContentPart.ToolUse>().map { it.id }
+        }.toSet()
+        for (i in agentHistory.indices.reversed()) {
+            val m = agentHistory[i]
+            if (m.role != LLMMessage.Role.USER) continue
+            val cleanedParts = m.contentParts.filter { p ->
+                p !is AgentContentPart.ToolResult || p.id in liveToolUseIds
+            }
+            when {
+                cleanedParts.isEmpty() && m.contentParts.isNotEmpty() ->
+                    agentHistory.removeAt(i)
+                cleanedParts.size < m.contentParts.size ->
+                    agentHistory[i] = m.copy(contentParts = cleanedParts)
+            }
+        }
         val sid = realSessionId.takeIf { it.isNotEmpty() } ?: sessionId
 
         // T258: only sync the DB when step 2 popped a trailing assistant

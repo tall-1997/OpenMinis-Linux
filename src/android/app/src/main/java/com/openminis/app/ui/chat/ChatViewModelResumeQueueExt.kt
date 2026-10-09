@@ -41,42 +41,20 @@ internal fun ChatViewModel.resumeQueueAfterCancel() {
 
         val initialProvider = currentProvider
         if (initialProvider == null) {
-            AppLogger.warning(ChatViewModel.TAG, "resumeQueueAfterCancel: no provider, dropping queue")
-            _promptQueue.value = emptyList()
-            _messages.value = _messages.value.filterNot { it.isQueued }
-            // [T-queue-disk-persistence] 故意**不**清磁盘镜像（对比群聊收尾的
-            // clearQueuedPromptsEverywhere）。这里丢队列的原因是「当前没有可用
-            // provider」——一个配置状态，不是用户作废这些提示词的决定，也不是
-            // 它们的归属轮次消失了。清盘就等于让用户已经打出来的话因为一次
-            // 配置缺失而永久蒸发；留着则下次冷开本会话时按原样还原。
+            // [T-queued-prompt-ghost] 无 provider 时**队列与气泡都保留**：
+            // 旧实现把 _promptQueue 清空又把 isQueued 气泡从 _messages 里
+            // 滤掉——用户看到自己刚发的消息凭空消失（「发送的消息被隐藏」）。
+            // 磁盘镜像本来就保留（冷开还原）；内存队列留着，下次发送的
+            // drainQueuedPrompts 会把它作为正常轮次消费——配置缺失不该
+            // 吞掉用户已经打出来的话。
+            AppLogger.warning(ChatViewModel.TAG, "resumeQueueAfterCancel: no provider, leaving queue pending")
             return@launch
         }
         var provider: LLMProvider = initialProvider
 
-        // Refresh OAuth token if needed (mirrors sendMessage L2477-2501).
-        if ((provider as? com.openminis.app.provider.anthropic.AnthropicProvider)?.isOAuth == true) {
-            try {
-                val activeEntryId = _activeEntryId.value
-                val entry = activeEntryId?.let { id -> providerRepository.config.value.modelEntries.find { it.id == id } }
-                val instance = entry?.let { e -> providerRepository.config.value.instances.find { it.id == e.providerInstanceId } }
-                if (instance != null) {
-                    val manager = com.openminis.app.auth.OAuthManager.forInstance(context, instance)
-                    val freshToken = manager?.validAccessToken()
-                    if (freshToken != null) {
-                        val storedKey = providerRepository.loadApiKey(instance.id)
-                        if (freshToken != storedKey) {
-                            providerRepository.saveApiKey(instance.id, freshToken)
-                            provider = com.openminis.app.provider.ProviderFactory.create(
-                                instance, freshToken, currentModel ?: provider.model, context
-                            )
-                            currentProvider = provider
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                Log.w(ChatViewModel.TAG, "OAuth token refresh failed (resumeQueueAfterCancel): ${e.message}")
-            }
-        }
+        // [T-oauth-refresh-dedupe] 刷新块收口进 ChatViewModelOAuthExt（与
+        // sendMessage 共用一份）。
+        provider = refreshOAuthProviderIfNeeded(provider)
 
         val baseSystemPrompt = buildSystemPrompt()
         val systemPrompt = if ((provider as? com.openminis.app.provider.anthropic.AnthropicProvider)?.isOAuth == true) {

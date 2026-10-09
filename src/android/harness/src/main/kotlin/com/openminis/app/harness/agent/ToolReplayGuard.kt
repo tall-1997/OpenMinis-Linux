@@ -58,4 +58,23 @@ class ToolReplayGuard {
     /** Drop all recorded sightings. Called on the retry-rollback paths so a
      *  fresh stream attempt starts with a clean dispatch bookkeeping. */
     fun reset() = seen.clear()
+
+    /**
+     * [T-android-seam-extraction] 循环片段：重放拒绝的 tool_result 部件构造
+     * （纯半边）。宿主在派发循环里命中 [registerAndCheckReplay] 的 replay
+     * 判定后调用本函数拿配对部件——文案逐字保留（给模型的指令：用已记录
+     * 的结果继续，别重试同一调用）。
+     */
+    fun duplicateRefusal(toolCallId: String, toolName: String): com.openminis.app.data.model.AgentContentPart.ToolResult {
+        val message = "Error: duplicate tool call ignored. This exact call " +
+            "(same id, name, and arguments) was already dispatched earlier in this " +
+            "turn and its result is already available above. The duplicate was not " +
+            "executed. Continue with the recorded result."
+        return com.openminis.app.data.model.AgentContentPart.ToolResult(
+            id = toolCallId,
+            name = toolName,
+            content = message,
+            isError = true,
+        )
+    }
 }
