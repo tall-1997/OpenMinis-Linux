@@ -9,8 +9,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.compose.foundation.lazy.LazyListState
-import com.openminis.app.agent.Level
-import com.openminis.app.agent.ToolLoopDetector
+import com.openminis.app.harness.agent.Level
+import com.openminis.app.harness.agent.ToolLoopDetector
 import com.openminis.app.browser.BrowserActionInput
 import com.openminis.app.browser.BrowserTabPool
 import com.openminis.app.data.db.MessageEntity
@@ -3298,7 +3298,10 @@ class ChatViewModel(
      * cannot fix.
      */
     internal fun effectiveAgentHistory(): List<LLMMessage> {
-        val repaired = dropOrphanedToolParts(effectiveAgentHistoryUncounted())
+        val repaired = applyContextWindowPolicy(
+            dropOrphanedToolParts(effectiveAgentHistoryUncounted()),
+            contextWindowBudgetTokens(),
+        )
         val steered = if (personaHistorySteering) {
             com.openminis.app.agent.PersonaPromptLogic.applyHistorySteering(repaired)
         } else {
@@ -3313,7 +3316,7 @@ class ChatViewModel(
             HistoryDigest.render(llmDigestLines, llmDigestOmitted),
         ).map { msg ->
             if (msg.role == com.openminis.app.data.model.LLMMessage.Role.ASSISTANT && msg.content.isNotBlank()) {
-                msg.copy(content = com.openminis.app.agent.MessageTransformerChain.apply(msg.content))
+                msg.copy(content = com.openminis.app.harness.agent.MessageTransformerChain.apply(msg.content))
             } else msg
         }
     }
@@ -5609,7 +5612,7 @@ class ChatViewModel(
                                 // never render in the bubble. DB + agentHistory keep
                                 // the raw text; this only cleans the painted copy.
                                 if (entity.role == "assistant") {
-                                    com.openminis.app.agent.MessageTransformerChain.apply(it)
+                                    com.openminis.app.harness.agent.MessageTransformerChain.apply(it)
                                 } else it
                             }.let {
                                 if (it != raw) it.trim() else it

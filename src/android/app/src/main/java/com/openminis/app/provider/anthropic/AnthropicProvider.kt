@@ -148,7 +148,7 @@ class AnthropicProvider(
         // buildRequest. Pre-T302 body.toString() ran twice per call (once
         // here, once inside buildRequest); each emitted string was tens of
         // MB on long agent loops and stacked under GC pressure.
-        val bodyStr = body.toString()
+        val bodyStr = com.openminis.app.provider.RequestBodyByteGuard.enforce(body)
         val request = buildRequest(bodyStr, body)
 
         val startTime = System.currentTimeMillis()
