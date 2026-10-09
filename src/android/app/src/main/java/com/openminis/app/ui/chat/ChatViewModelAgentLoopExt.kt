@@ -245,7 +245,9 @@ internal suspend fun ChatViewModel.runAgentLoop(
     // that emits text across several turns doesn't re-fire it and cut off
     // its own speech mid-sentence.
     var didStopStaleReadAloud = false
+    beginRunMetrics() // [T-run-metrics-wiring]
     for (turn in 0 until ChatViewModel.MAX_AGENT_TURNS) {
+        noteRunRound() // [T-run-metrics-wiring]
         currentCoroutineContext().ensureActive()
         // Sanitize history before each API call (mirrors iOS pre-API validation)
         sanitizeAgentHistory()
@@ -1126,6 +1128,7 @@ internal suspend fun ChatViewModel.runAgentLoop(
                     Log.w(ChatViewModel.TAG, "🔁 Transient error on ${currentProvider.model.displayName}, retry $retryAttempt/$maxRetries in ${delaySec}s: $errDesc")
                     withContext(Dispatchers.Main) {
                         _autoRetryAttempt.value = retryAttempt
+                        noteRunRetry() // [T-run-metrics-wiring]
                         // Show the error inline on the streaming assistant message during countdown.
                         // Keeps isStreaming=true so the UI doesn't tear down the streaming state.
                         setTransientInlineError("$errDesc — retrying ($retryAttempt/$maxRetries)…")
@@ -1409,6 +1412,7 @@ internal suspend fun ChatViewModel.runAgentLoop(
         var goalAccountingSucceeded = true
         if (toolCalls.isEmpty()) {
             val turnUsageTokens = (lastUsage?.inputTokens ?: 0).toLong() + (lastUsage?.outputTokens ?: 0).toLong()
+            noteRunUsage(lastUsage) // [T-run-metrics-wiring]
             goalAccountingSucceeded = runCatching {
                 goalManager.recordUsage(
                     goalSessionId,
@@ -1999,6 +2003,7 @@ internal suspend fun ChatViewModel.runAgentLoop(
             }
             currentCoroutineContext().ensureActive()
             android.util.Log.d("ToolChain[VM]", "[turn=$turn] executeTool END name=$name success=${result.success} title=${result.toolTitle} outputLen=${result.output.length} output=${result.output.take(200)}")
+            noteRunToolCall(failed = !result.success) // [T-run-metrics-wiring]
 
             // Record post-execution. WARNING text is appended to the tool
             // result so the model sees it on its next turn. No block here —
@@ -2249,15 +2254,10 @@ internal suspend fun ChatViewModel.runAgentLoop(
             // pin the loop indefinitely.
         }
     }
-    // Two ways to leave the for-loop above:
-    //   (a) `break` from the "no tool calls" happy-path → loopExitedNormally=true,
-    //       updateAssistantMessage(...false...) already cleared streaming state.
-    //   (b) `for (turn in 0 until MAX_AGENT_TURNS)` exhausted → flag stays false,
-    //       which means the model kept asking for tool calls past the ceiling.
-    //
-    // (b) is the only case that needs the inline-error/Resume hand-holding;
-    // (a) must NOT be touched or every normal completion gets a fake "hit
-    // 200 turns" sticker (the bug user hit at v1.4.0-dev tip).
+    // 离开 for 循环只有两种：(a) 无工具调用的 happy-path break（loopExitedNormally=true，
+    // 流状态已清）；(b) 轮次上限耗尽（flag 仍 false，模型一直要工具）。
+    // 只有 (b) 需要 inline-error/Resume 安抚；碰 (a) 会给每次正常完成贴假的
+    // "hit 200 turns" 贴纸（v1.4.0-dev tip 用户踩过的 bug）。
     if (!loopExitedNormally) {
         AppLogger.warning(
             ChatViewModel.TAG_STREAM,
@@ -2269,6 +2269,7 @@ internal suspend fun ChatViewModel.runAgentLoop(
     } else {
         AppLogger.info(ChatViewModel.TAG_STREAM, "runAgentLoop EXIT (loop body ended naturally)")
     }
+    endRunMetrics(if (loopExitedNormally) "completed" else "turn_limit") // [T-run-metrics-wiring]
     // [T-context-ring] Refresh the live token ring after the turn settles.
     refreshContextUsage()
 

@@ -89,6 +89,7 @@ object FileEditTool {
             //     当成"新文件内容"写进磁盘——一次失败的替换会摧毁整个文件。
             //     现在 Failure 用 EditFailure 标记（persistableText=null），
             //     只报错、不动文件。
+            var editedFrom: String? = null // [T-unified-diff-wiring]
             val outcome = AtomicFileWrite.readModifyWrite(file) { current ->
                 when (val r = TextReplacers.replace(current, oldString, newString, replaceAll)) {
                     is TextReplacers.Result.Success -> {
@@ -96,6 +97,7 @@ object FileEditTool {
                         // 分支捕获：锁外读可能拿到别人已替换的字节；未匹配就捕获
                         // 会给没发生的编辑留下垃圾检查点。
                         CheckpointBridge.captureBeforeText(context, sessionId, path, current)
+                        editedFrom = current
                         ReplaceOutcome(r.newContent, r.count)
                     }
                     is TextReplacers.Result.Failure ->
@@ -121,7 +123,8 @@ object FileEditTool {
                     // 读取方式与 AppRewindFileAccess.previewOrNull 一致，凭据才可比。
                     CheckpointBridge.captureAfter(context, sessionId, path, file)
                     ToolExecutionResult(
-                        "Edited $path (${outcome.replacements} replacement(s), ${outcome.newContent.length} bytes)",
+                        "Edited $path (${outcome.replacements} replacement(s), ${outcome.newContent.length} bytes)" +
+                            (editedFrom?.let { EditDiffSection.render(path, it, outcome.newContent) }.orEmpty()),
                         true, toolTitle = toolTitle,
                     )
                 }

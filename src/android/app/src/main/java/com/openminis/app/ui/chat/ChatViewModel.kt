@@ -1925,6 +1925,10 @@ class ChatViewModel(
     /** Structured agent history for the agent loop (contentParts-based). */
     internal val agentHistory = mutableListOf<LLMMessage>()
 
+    // [T-run-metrics-wiring] 当前运行的过程指标实例；埋点壳见 ChatViewModelRunMetricsExt。
+    @Volatile
+    internal var currentRunMetrics: com.openminis.app.harness.metrics.RunMetrics? = null
+
     /**
      * All agent tool definitions, recomputed on each read so the memory
      * toggle gate (see [_memoryEnabled]) takes effect immediately when
