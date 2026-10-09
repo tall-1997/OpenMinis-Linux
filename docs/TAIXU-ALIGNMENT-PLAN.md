@@ -11,7 +11,7 @@
 >
 > **验证基线修正**：原写「基线 5220 tests」从未被复现。实测口径为
 > `:app:testReleaseUnitTest` = **2893**（359 个结果 XML）+ `:harness:test` = **143**，
-> 均 0 失败（2026-10-09，62fc977 之后：app **2915** / harness **143**）。
+> 均 0 失败（2026-10-09，a50de17 之后：app **2923** / harness **155**）。
 > 后续每批以这两个数为新基线。**P0-3（统一重试/恢复层）已于 `62fc977` 闭环。**
 
 ## 模块策略（已定）
@@ -30,10 +30,10 @@ taixu `harness/` 是 **Android 库**（依赖 Room/OkHttp/Ktor/Koin，14 文件�
 
 ### 第一批 — 纯逻辑移植（`5a9c721`，全完成）
 - [x] 1.1 建 `:harness` 模块骨架（settings + build.gradle.kts + 约定插件）
-- [x] 1.2 `text/UnifiedDiffGenerator.kt` —— **未接线**
+- [x] 1.2 `text/UnifiedDiffGenerator.kt`（`a50de17`，**已接线**：file_edit 结果附加有界 unified diff）
 - [x] 1.3 `effects/RetryPolicy.kt`（`62fc977`，**已接线**：ToolRetry 接 web_fetch
       与宿主工具分支，只重试 NETWORK_ERROR / TIMEOUT 瞬态失败）
-- [x] 1.4 `metrics/RunMetrics.kt` —— **未接线**
+- [x] 1.4 `metrics/RunMetrics.kt`（`a50de17`，**已接线**：agent 循环埋点 + 收尾单行日志）
 - [x] 1.5 `validation/ToolSchemaValidator.kt`（`f796181`，**已接线**：executeTool 派发入口；MCP 暂跳过）
 - [x] 1.6 `text/TextReplacers.kt` + `validation/ToolCallLoopDetector.kt`
 - [x] 1.7 配套测试全部移植
@@ -51,8 +51,10 @@ taixu `harness/` 是 **Android 库**（依赖 Room/OkHttp/Ktor/Koin，14 文件�
       `HarnessLanes.MAIN_LANE` 单源（queue 改引用它）。9 例移植测试全绿。
       接线（把 ChatViewModel 的 send/工具/收尾挂到 Coordinator 转移上）留待后续批次。
 - [ ] 2.3 `subagent/SubagentClaim.kt`（252 行）→ 接我方 `WritePathGuard`
-      阻塞：闭包分析显示它拖入 SubagentOrchestrator + ToolExecutor（41x），
-      需先接口化或排到第三批之后。
+      **前置已落地**（`ca70311`）：normalizeWritePath 从 orchestrator 抽出单放；
+      SubagentClaim 整体移植并公开化（12 例上游测试）；宿主接缝 SubagentClaimBridge
+      把编排器/执行器依赖收窄成一份 LaneToolReceipt 轨迹清单。**桥零调用点**，
+      2.3 本体 = 在 recordLaneOutcome 前递轨迹 + 裁定段进父汇总
 - [ ] 2.4 `compaction/`（1011 行，替换 `android.util.Log`）
       前置已落地：`SessionTreeStore` + `SessionTreeRepository` 接缝 + `HarnessLog`
       （`2b61fa7`，12 例自定验收测试）。仍缺 ProviderClient /
@@ -83,4 +85,4 @@ taixu `harness/` 是 **Android 库**（依赖 Room/OkHttp/Ktor/Koin，14 文件�
 
 每批结束跑 `./gradlew :app:testReleaseUnitTest` + `:harness:test` +
 `:architectureCheck`，确认零失败、棘轮不越线。每批独立 commit。
-当前基线：app **2915** / harness **143**（62fc977）。
+当前基线：app **2923** / harness **155**（a50de17）。
