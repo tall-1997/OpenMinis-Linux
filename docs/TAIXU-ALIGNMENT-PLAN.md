@@ -10,7 +10,7 @@
 > 的口径**不算能力补齐**，只是「可复用件已入库」。接线清单见各条备注。
 >
 > **验证基线修正**：原写「基线 5220 tests」从未被复现。实测口径为
-> `:app:testReleaseUnitTest` + `:harness:test`，当前 **app 2892 / harness 242**
+> `:app:testReleaseUnitTest` + `:harness:test`，当前 **app 2892 / harness 245**
 > 均 0 失败。后续每批以这两个数为新基线。
 >
 > ## 进度总账（2026-10-09，`671f7d8`）
@@ -28,13 +28,14 @@
 >
 > | 接缝 | commit | 消费状态 |
 > |---|---|---|
-> | 一 ProviderStreamClient | `6445c13` | 待消费（循环迁移下一片段开窗） |
+> | 一 ProviderStreamClient | `6445c13` 立体，片段三消费 | 流入口已走接缝 |
 > | 二 ToolExecutorPort | `6eb3f4b` 立体，本刀消费 | 工具轮顺序执行已走接缝 |
 > | 三 ConversationPort | `6eb3f4b` | 恢复链已消费 |
 > | 四 UiEventSink | `b96cde4` | 落地即消费（两条拒绝路径） |
 >
-> **循环迁移**：AgentLoopExt **2286 → 2207**（片段一拒绝路径 + 片段二工具轮
-> 本体，两刀累计 -79——循环变小、harness 变大是 P0-1 剩余的唯一正确方向）。台账基建：
+> **循环迁移**：AgentLoopExt **2286 → 2177**（片段一拒绝路径 + 片段二工具轮
+> 本体 + 片段三流入口与 id 去重，三刀累计 -109——循环变小、harness 变大是
+> P0-1 剩余的唯一正确方向）。四道接缝全部消费。台账基建：
 > FileHarnessRuntimePersistence（单文件五表）+ OperationBridge 循环转移挂点 +
 > 崩溃窗口恢复链（`cc81fc5` / `4e99a80` / `d75c920`）。
 
