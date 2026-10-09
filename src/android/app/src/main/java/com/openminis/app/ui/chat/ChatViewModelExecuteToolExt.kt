@@ -73,7 +73,6 @@ internal suspend fun ChatViewModel.executeTool(
         return findAndEnableTools(query, limit)
     }
 
-    noteRunToolIntent(canonical, argsJson, toolId) // [T-operation-wiring]
     val result = when (canonical) {
         FileReadTool.NAME -> {
             val result = FileReadTool.execute(argsJson, activeSessionId, context)
@@ -274,7 +273,6 @@ internal suspend fun ChatViewModel.executeTool(
             activeSessionId, canonical, argsJson, result.output,
         )
     }
-    noteRunToolSettled(canonical, toolId, result) // [T-operation-wiring]
     // [T-tool-output-policy] 统一出口：环境变量脱敏 + 超长输出降级为可检索文件。
     if (result.imageData == null) {
         return result.copy(output = ToolOutputPolicy.apply(result.output, toolId))

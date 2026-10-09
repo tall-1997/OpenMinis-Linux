@@ -1886,12 +1886,10 @@ internal suspend fun ChatViewModel.runAgentLoop(
                 continue
             }
 
-            // Preflight: reject empty / missing-required-field tool calls
-            // BEFORE the UI flips to RUNNING and BEFORE executeTool() does
-            // any actual work. Mirrors iOS preflightValidateToolCall in
-            // AIChatViewModel.swift. Synthesizes a tool_result error so the
-            // model can self-correct on the next turn without us spawning
-            // shells or touching the filesystem on `{}` args.
+            // Preflight: reject empty / missing-required-field tool calls before the
+            // UI flips to RUNNING and before executeTool() does actual work (mirrors
+            // iOS preflightValidateToolCall). Synthesizes a tool_result error so the
+            // model self-corrects next turn without spawning shells on `{}` args.
             val preflightError = preflightValidateToolCall(name, args, agentTools)
             if (preflightError != null) {
                 val chunkRing: List<String> = toolInputChunkRings.remove(id) ?: emptyList()
@@ -1996,6 +1994,7 @@ internal suspend fun ChatViewModel.runAgentLoop(
                     }.awaitAll()
                 }
             }
+            noteRunToolIntent(name, argsStr, id) // [T-operation-wiring] 主循环派发点：lane 调用不进主台账
             val result = if (SubAgentKind.isSpawnTool(name)) {
                 parallelSubResults[id] ?: executeTool(name, argsStr, id, allToolBlocks, assistantId, accumulatedText)
             } else {
@@ -2004,6 +2003,7 @@ internal suspend fun ChatViewModel.runAgentLoop(
             currentCoroutineContext().ensureActive()
             android.util.Log.d("ToolChain[VM]", "[turn=$turn] executeTool END name=$name success=${result.success} title=${result.toolTitle} outputLen=${result.output.length} output=${result.output.take(200)}")
             noteRunToolCall(failed = !result.success) // [T-run-metrics-wiring]
+            noteRunToolSettled(name, id, result) // [T-operation-wiring]
 
             // Record post-execution. WARNING text is appended to the tool
             // result so the model sees it on its next turn. No block here —
