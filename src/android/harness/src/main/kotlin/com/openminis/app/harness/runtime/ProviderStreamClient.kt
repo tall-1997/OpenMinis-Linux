@@ -26,7 +26,7 @@ interface ProviderStreamClient {
     suspend fun streamRound(request: HarnessRoundRequest): Flow<LLMStreamChunk>
 }
 
-/** 一轮请求的接缝形状：字段与 provider.api.ChatRequest 对齐，搬运即适配。 */
+/** 一轮请求的接缝形状：字段与 provider 的 streamMessage 入口对齐，搬运即适配。 */
 data class HarnessRoundRequest(
     val messages: List<LLMMessage>,
     val systemPrompt: String? = null,
@@ -35,4 +35,6 @@ data class HarnessRoundRequest(
     val imageParts: List<LLMMessage.ImagePart> = emptyList(),
     val tools: List<AgentToolDefinition> = emptyList(),
     val thinkingLevel: ThinkingLevel = ThinkingLevel.OFF,
+    /** 提示缓存稳定前缀长度（Anthropic prompt caching；非 Anthropic 忽略）。 */
+    val systemStablePrefixLen: Int = -1,
 )

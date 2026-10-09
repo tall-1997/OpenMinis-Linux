@@ -5,7 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.openminis.app.R
 import com.openminis.app.harness.agent.Level
 import com.openminis.app.harness.agent.ToolCallPreflight
+import com.openminis.app.harness.agent.ToolCallIdDedupe
 import com.openminis.app.harness.agent.ToolRoundOutcome
+import com.openminis.app.harness.runtime.HarnessRoundRequest
 import com.openminis.app.harness.runtime.ToolFinish
 import com.openminis.app.harness.runtime.ToolOutcome
 import com.openminis.app.data.model.AgentContentPart
@@ -523,46 +525,9 @@ internal suspend fun ChatViewModel.runAgentLoop(
         val toolReplayGuard = com.openminis.app.provider.ToolReplayGuard()
         val replayRenamedIds = mutableSetOf<String>()
 
-        // [T-dedupe-toolcallid 03fbcbfd] Per-turn dedupe of tool_call_id.
-        // Some upstream OpenAI-compatible gateways occasionally emit
-        // multiple parallel tool_calls with the SAME id but different
-        // name/args. Sending both back unchanged trips the receiver's
-        // uniqueness check (HTTP 400 "duplicate tool_call_id"). Mirror
-        // the iOS fix: the FIRST occurrence keeps the raw id, second
-        // becomes "<id>-2", third "<id>-3", etc.
-        //
-        // Three pieces of state because Android routes ToolInputDelta
-        // by chunk.id (iOS routes by name) and OpenAI emits ALL completes
-        // together after finish_reason — so we can't drop the
-        // "currently in-flight" map by the time completes arrive.
-        //
-        //   dedupeStartCounts    raw id → # ToolUseStart events seen
-        //   dedupeCompleteCounts raw id → # ToolCallComplete events seen
-        //   inFlightRenamedId    raw id → renamed id of the tool currently
-        //                        streaming deltas (overwritten on each start)
-        //
-        // Start/complete ordering match: OpenAI streams emit tools in
-        // `index` order at finish_reason, mirroring start order.
-        val dedupeStartCounts = mutableMapOf<String, Int>()
-        val dedupeCompleteCounts = mutableMapOf<String, Int>()
-        val inFlightRenamedId = mutableMapOf<String, String>()
-        fun dedupeToolStartId(raw: String): String {
-            val n = (dedupeStartCounts[raw] ?: 0) + 1
-            dedupeStartCounts[raw] = n
-            val renamed = if (n == 1) raw else "$raw-$n"
-            if (n > 1) {
-                AppLogger.warning(ChatViewModel.TAG_STREAM, "[ToolDedupe] duplicate tool_call id on stream start: '$raw' #$n -> renamed '$renamed'")
-            }
-            inFlightRenamedId[raw] = renamed
-            return renamed
-        }
-        fun dedupeToolInputId(raw: String): String =
-            inFlightRenamedId[raw] ?: raw
-        fun dedupeToolCompleteId(raw: String): String {
-            val n = (dedupeCompleteCounts[raw] ?: 0) + 1
-            dedupeCompleteCounts[raw] = n
-            return if (n == 1) raw else "$raw-$n"
-        }
+        // [T-dedupe-toolcallid 03fbcbfd] 同 id 并行调用的改名状态机已迁
+        // harness/agent/ToolCallIdDedupe（网关行为与三份状态的必要性见彼处注释）。
+        val toolIdDedupe = ToolCallIdDedupe()
 
         // Stream the response — with auto-retry on transient errors, then fallback.
         // callbackFlow wraps throws into CancellationException(cause=LLMError),
@@ -632,13 +597,18 @@ internal suspend fun ChatViewModel.runAgentLoop(
                 // per vendor, and it replaces a 600s transport read timeout as
                 // the only bound on a mid-stream stall.
                 val streamIdleTimeoutMs = firstEventTimeoutMs * 2
-                currentProvider.streamMessage(
-                    applyRequestImageBudget(requestHistory),
-                    systemPrompt, dynamicMaxTokens(currentProvider, lastContextTokens),
-                    temperature = samplingTemperature(_activeEntryId.value),
-                    tools = agentTools,
-                    thinkingLevel = if (currentModelSupportsReasoning) _thinkingLevel.value else ThinkingLevel.OFF,
-                    systemStablePrefixLen = systemPromptStablePrefixLen,
+                // [T-android-seam-extraction] 片段三：流入口走接缝一（ProviderStreamClient）
+                // ——循环体自此不直接攥 provider 对象；请求形状搬运即适配。
+                com.openminis.app.provider.LlmProviderStreamClient(currentProvider).streamRound(
+                    HarnessRoundRequest(
+                        messages = applyRequestImageBudget(requestHistory),
+                        systemPrompt = systemPrompt,
+                        maxTokens = dynamicMaxTokens(currentProvider, lastContextTokens),
+                        temperature = samplingTemperature(_activeEntryId.value),
+                        tools = agentTools,
+                        thinkingLevel = if (currentModelSupportsReasoning) _thinkingLevel.value else ThinkingLevel.OFF,
+                        systemStablePrefixLen = systemPromptStablePrefixLen,
+                    ),
                 ).streamStallWatchdog(firstEventTimeoutMs, streamIdleTimeoutMs).collect { chunk ->
             // [T-stream-trace-live] 运行时轨迹录制（日志页开关控制，默认关）。
             com.openminis.app.provider.StreamTraceRecorder.record(chunk)
@@ -791,7 +761,7 @@ internal suspend fun ChatViewModel.runAgentLoop(
                     // renamed value drives the AssistantBlock.id used by
                     // ToolCallComplete / ToolInputDelta lookups and ends
                     // up as the persisted tool_call_id on the next request.
-                    val toolUseId = dedupeToolStartId(chunk.id)
+                    val toolUseId = toolIdDedupe.startId(chunk.id)
                     android.util.Log.d("ToolChain[VM]", "[turn=$turn] ToolUseStart id=$toolUseId name=${chunk.name}")
                     // Mark thinking block as done when tool use starts
                     val thinkIdx = allToolBlocks.indexOfFirst { it.kind == "thinking" && it.id == "thinking_$turn" }
@@ -857,7 +827,7 @@ internal suspend fun ChatViewModel.runAgentLoop(
                     // [T-dedupe-toolcallid] Translate to the currently-in-flight
                     // renamed id so the per-tool ring + block lookup match
                     // the block that ToolUseStart created.
-                    val toolInputId = dedupeToolInputId(chunk.id)
+                    val toolInputId = toolIdDedupe.inputId(chunk.id)
                     val deltaLen = chunk.accumulated.length
                     if (com.openminis.app.text.BoundedText.shouldLogLengthStride(deltaLen)) {
                         android.util.Log.d("ToolChain[VM]", "[turn=$turn] ToolInputDelta id=$toolInputId len=$deltaLen")
@@ -930,7 +900,7 @@ internal suspend fun ChatViewModel.runAgentLoop(
                     // persisted tool_calls list, the block lookup, and
                     // the downstream tool-result join all key on the
                     // same value (matches the rename applied at start).
-                    val toolCompleteId = dedupeToolCompleteId(chunk.id)
+                    val toolCompleteId = toolIdDedupe.completeId(chunk.id)
                     if (isReplayedComplete) {
                         replayRenamedIds += toolCompleteId
                         AppLogger.warning(ChatViewModel.TAG_STREAM, "[ToolReplay] duplicate ToolCallComplete raw=${chunk.id} renamed=$toolCompleteId name=${chunk.name} — will refuse at dispatch, no re-execution")
