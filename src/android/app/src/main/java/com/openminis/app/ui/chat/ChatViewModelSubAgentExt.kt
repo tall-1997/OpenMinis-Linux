@@ -16,7 +16,7 @@ import com.openminis.app.tools.AgentTools
 import com.openminis.app.tools.PlanDiscussionOrchestrator
 import com.openminis.app.tools.SubAgentLane
 import com.openminis.app.tools.SubAgentRunner
-import com.openminis.app.tools.SubAgentTokenBudget
+import com.openminis.app.harness.agent.SubAgentTokenBudget
 import com.openminis.app.tools.ToolExecutionResult
 import com.openminis.app.tools.SubAgentKind
 import androidx.lifecycle.viewModelScope

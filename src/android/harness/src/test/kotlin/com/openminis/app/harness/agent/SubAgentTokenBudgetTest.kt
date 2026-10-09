@@ -1,4 +1,4 @@
-package com.openminis.app.tools
+package com.openminis.app.harness.agent
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

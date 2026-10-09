@@ -1,5 +1,9 @@
 package com.openminis.app.tools
 
+import com.openminis.app.harness.agent.LaneRoundPolicy
+import com.openminis.app.harness.agent.SubAgentHistoryCompactor
+import com.openminis.app.harness.agent.SubAgentTokenBudget
+
 import android.content.Context
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.AgentToolDefinition
@@ -17,7 +21,7 @@ import org.json.JSONObject
 object SubAgentRunner {
 
     /** Absolute safety ceiling so a runaway loop cannot burn tokens forever. */
-    const val ABSOLUTE_MAX_TURNS = 200
+    val ABSOLUTE_MAX_TURNS get() = LaneRoundPolicy.ABSOLUTE_MAX_TURNS
 
     /**
      * Live rows for the detail page. The parent card still uses [onStep];
@@ -39,15 +43,12 @@ object SubAgentRunner {
     }
 
     /** Fraction of budget consumed at which a <budget_warning> is injected. */
-    private const val WARN_FRACTION = 0.80
 
     /** Fraction at which the agent is ordered to stop calling tools and write up. */
-    private const val FORCE_FRACTION = 0.95
 
     /** Cap on a single tool-result / report chunk kept in history (tail kept).
      *  Generous: truncation here is a last-resort runaway guard, not a
      *  content policy — the coordinator asked for full reports. */
-    private const val MAX_REPORT_CHARS = 64_000
 
     suspend fun run(
         provider: LLMProvider,
@@ -78,7 +79,7 @@ object SubAgentRunner {
         // Turn budget is whatever the coordinator assigned (auto-sized or
         // explicit), bounded only by ABSOLUTE_MAX_TURNS as a runaway guard —
         // there is no longer a low global settings clamp here.
-        val turns = maxTurns.coerceIn(1, ABSOLUTE_MAX_TURNS)
+        val turns = LaneRoundPolicy.clampTurns(maxTurns)
         val system = workerSystemPrompt(modelDisplayName, role, skillsHint, kind, writePaths, turns, roleContext)
         val report = StringBuilder()
         val timeline = StringBuilder()
@@ -95,7 +96,7 @@ object SubAgentRunner {
                 if (tokenBudget != null && tokenBudget.exhausted) {
                     runCatching { onStep(turn, "token budget exhausted") }
                     val partial = report.toString().trim()
-                    val footer = "(stopped: shared token budget exhausted at $turn/$turns turns)"
+                    val footer = LaneRoundPolicy.tokenExhaustedFooter(turn, turns)
                     return ToolExecutionResult(composeOutput(partial, timeline.toString(), footer), true)
                 }
                 turn++
@@ -297,41 +298,29 @@ object SubAgentRunner {
                 // Turn-budget advisory so the agent wraps up instead of silently
                 // hitting the cap. 80%: warning; 95%: order to stop tool calls
                 // and hand in the partial result.
-                val frac = turn.toDouble() / turns
-                when {
-                    frac >= FORCE_FRACTION && !forced -> {
+                // [T-taixu-2.3] 预算警告文案与级别判定进 harness（LaneRoundPolicy）；
+                // 注入时机（一次语义 warned/forced 标记）留宿主。
+                when (LaneRoundPolicy.budgetLevel(turn, turns)) {
+                    LaneRoundPolicy.BudgetLevel.FORCE -> if (!forced) {
                         forced = true
-                        history.add(
-                            LLMMessage(
-                                role = LLMMessage.Role.USER,
-                                content = "<budget_warning used=\"$turn/$turns\" force=\"true\">\n" +
-                                    "You are at the final stretch of your turn budget. STOP calling tools NOW and return your findings so far as your final report in THIS turn — partial results are far more valuable than a perfect result you never submit. Lead with what you already confirmed, then list what is still unverified.\n" +
-                                    "</budget_warning>",
-                            ),
-                        )
+                        LaneRoundPolicy.budgetWarningMessage(turn, turns, LaneRoundPolicy.BudgetLevel.FORCE)?.let { msg ->
+                            history.add(LLMMessage(role = LLMMessage.Role.USER, content = msg))
+                        }
                     }
-                    frac >= WARN_FRACTION && !warned -> {
+                    LaneRoundPolicy.BudgetLevel.WARN -> if (!warned) {
                         warned = true
-                        history.add(
-                            LLMMessage(
-                                role = LLMMessage.Role.USER,
-                                content = "<budget_warning used=\"$turn/$turns\">\n" +
-                                    "You have used $turn of your $turns turns (~${(frac * 100).toInt()}%). Prioritize finishing: avoid further broad searches, consolidate what you have, and prepare to submit your report.\n" +
-                                    "</budget_warning>",
-                            ),
-                        )
+                        LaneRoundPolicy.budgetWarningMessage(turn, turns, LaneRoundPolicy.BudgetLevel.WARN)?.let { msg ->
+                            history.add(LLMMessage(role = LLMMessage.Role.USER, content = msg))
+                        }
                     }
+                    LaneRoundPolicy.BudgetLevel.NONE -> Unit
                 }
             }
             // Loop ended at the budget (95% force message, or a stubborn agent
             // kept calling tools to the last turn). Hand back the accumulated
             // partial report instead of a bare "hit the cap" string.
             val partial = report.toString().trim()
-            val footer = if (partial.isNotEmpty()) {
-                "(reached the $turns-turn budget — partial report above)"
-            } else {
-                "(sub-agent reached the $turns-turn budget with no findings to report)"
-            }
+            val footer = LaneRoundPolicy.turnBudgetFooter(turns, partial.isNotEmpty())
             return ToolExecutionResult(composeOutput(partial, timeline.toString(), footer), true)
         } catch (e: CancellationException) {
             throw e
@@ -340,50 +329,21 @@ object SubAgentRunner {
                 composeOutput(
                     report.toString(),
                     timeline.toString(),
-                    "Sub-agent failed: ${e.message ?: e.javaClass.simpleName}",
+                    LaneRoundPolicy.failureFooter(e.message ?: e.javaClass.simpleName),
                 ),
                 false,
             )
         }
     }
 
-    fun composeOutput(report: String, timeline: String, footer: String = ""): String {
-        val body = report.trim()
-        val trace = timeline.trim()
-        val note = footer.trim()
-        val composed = buildString {
-            if (trace.isNotEmpty()) {
-                append("## Trace\n")
-                append(trace)
-            }
-            if (body.isNotEmpty()) {
-                if (isNotEmpty()) append("\n\n")
-                append("## Report\n")
-                append(body)
-            }
-            if (note.isNotEmpty()) {
-                if (isNotEmpty()) append("\n\n")
-                append(note)
-            }
-            if (isEmpty()) append("(sub-agent finished with empty output)")
-        }
-        return truncate(composed)
-    }
+    fun composeOutput(report: String, timeline: String, footer: String = ""): String =
+        LaneRoundPolicy.composeOutput(report, timeline, footer)
 
     /**
      * Card and detail show the current result, not the step history.
      * The tool result returned to the parent still uses [composeOutput].
      */
-    fun cardStep(output: String): String {
-        val text = output.trim()
-        val marker = "## Report"
-        val at = text.indexOf(marker)
-        if (at >= 0) {
-            return text.substring(at + marker.length).trim().ifEmpty { text }
-        }
-        if (text.startsWith("## Trace")) return "已结束"
-        return text
-    }
+    fun cardStep(output: String): String = LaneRoundPolicy.cardStep(output)
 
     private fun appendTimeline(
         timeline: StringBuilder,
@@ -406,27 +366,9 @@ object SubAgentRunner {
         }
     }
 
-    fun previewToolArgs(argsJson: String): String {
-        return try {
-            val o = JSONObject(argsJson)
-            val raw = when {
-                o.has("command") -> o.optString("command")
-                o.has("path") -> o.optString("path")
-                o.has("query") -> o.optString("query")
-                o.has("url") -> o.optString("url")
-                o.has("pattern") -> o.optString("pattern")
-                else -> argsJson
-            }
-            raw.replace('\n', ' ').trim().take(80)
-        } catch (_: Exception) {
-            argsJson.replace('\n', ' ').trim().take(80)
-        }
-    }
+    fun previewToolArgs(argsJson: String): String = LaneRoundPolicy.previewToolArgs(argsJson)
 
-    private fun truncate(text: String): String {
-        if (text.length <= MAX_REPORT_CHARS) return text
-        return "…(truncated)\n" + text.takeLast(MAX_REPORT_CHARS)
-    }
+    private fun truncate(text: String): String = LaneRoundPolicy.truncate(text)
 
     private fun workerSystemPrompt(
         modelDisplayName: String,

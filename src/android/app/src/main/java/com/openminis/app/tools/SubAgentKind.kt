@@ -24,7 +24,7 @@ object SubAgentKind {
     const val COMPLEX_MAX_TURNS = 60
     // No longer a hard global ceiling — the coordinator assigns the budget and
     // SubAgentRunner only enforces its own ABSOLUTE_MAX_TURNS runaway guard.
-    const val MAX_TURNS = SubAgentRunner.ABSOLUTE_MAX_TURNS
+    val MAX_TURNS get() = com.openminis.app.harness.agent.LaneRoundPolicy.ABSOLUTE_MAX_TURNS
 
     private val READ_ONLY_ALLOW = setOf(
         "file_read",
