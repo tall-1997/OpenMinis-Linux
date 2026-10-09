@@ -11,8 +11,7 @@
 >
 > **验证基线修正**：原写「基线 5220 tests」从未被复现。实测口径为
 > `:app:testReleaseUnitTest` = **2893**（359 个结果 XML）+ `:harness:test` = **143**，
-> 均 0 失败（2026-10-09，63fbb89 之后：app **2883** / harness **212**；计数变化
-> 是 P0-1 搬家不是增删）。**P0-2 / P0-3 已闭环；P1-4 于 `69d2320` 闭环。**
+> 均 0 失败（2026-10-09，6445c13 之后：app **2888** / harness **223**）。
 > 后续每批以这两个数为新基线。**P0-3（统一重试/恢复层）已于 `62fc977` 闭环。**
 
 ## 模块策略（已定）
@@ -23,8 +22,11 @@ taixu `harness/` 是 **Android 库**（依赖 Room/OkHttp/Ktor/Koin，14 文件�
 > **P0-1 第一刀**（`63fbb89`）：已纯的四件 + 四套测试整体迁进 :harness
 > （InterruptedTailDetector / ToolLoopDetector + 拆出的 ToolCallFingerprint /
 > MessageTransformers / ReasoningTagVariants），AppLogger 换 HarnessLog。
-> 剩余 P0-1 = agent 循环 / 工具派发 / 上下文治理本体，与 Context/Uri/Room/Compose
-> 深耦合，需先抽 Android 接缝（批次三），不在本批假装做完。
+> **批次三接缝一**（`6445c13`）：ProviderStreamClient 立完（chunk 流复用
+> core:model 的 LLMStreamChunk，适配器零映射穿透），宿主实现 LlmProviderStreamClient；
+> 消费方未切换，循环迁移是下一刀。
+> 剩余 P0-1 = agent 循环 / 工具派发 / 上下文治理本体，需 ConversationPort /
+> ToolExecutorPort / UiEventSink 等后续接缝，仍在批次三。
 
 | 类 | 处理 |
 |---|---|
@@ -61,8 +63,9 @@ taixu `harness/` 是 **Android 库**（依赖 Room/OkHttp/Ktor/Koin，14 文件�
       轨迹从 lane 的工具执行 lambda 收口 plum 出（被拦调用也记），收尾经
       adjudicateLaneOutcome 折进报告：无 claim 块 fail-open 逐字节不变；有则
       干净报告 + 裁定段进父汇总（spawn_agent 返回值 / check_agent collect 同源）。
-      写路径租约（SubagentLaneRunner）未移植——我方 WritePathGuard 前缀校验仍在，
-      租约语义留待批次三编排器
+      写路径租约（SubagentLaneRunner）判定半边已于 `b28c566` 接线：lease 闸门在
+      lane 派发层拒越界写，被拒调用进轨迹清单供裁定段引用。执行半边（lane 运行器
+      本体）仍留批次三
 - [ ] 2.4 `compaction/`（1011 行，替换 `android.util.Log`）
       **策略半已接线**（`69d2320`）：ContextWindowPolicy 缺的三件（分桶估算 /
       巨型用户消息截断 / 4MB 请求体硬限 + 实测 schema 预留）移植并接进
@@ -95,4 +98,4 @@ taixu `harness/` 是 **Android 库**（依赖 Room/OkHttp/Ktor/Koin，14 文件�
 
 每批结束跑 `./gradlew :app:testReleaseUnitTest` + `:harness:test` +
 `:architectureCheck`，确认零失败、棘轮不越线。每批独立 commit。
-当前基线：app **2883** / harness **212**（63fbb89）。
+当前基线：app **2888** / harness **223**（6445c13）。
