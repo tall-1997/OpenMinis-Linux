@@ -93,6 +93,41 @@ internal fun replayableUses(history: List<LLMMessage>): List<ReplayableUse> {
 }
 
 /**
+ * 崩溃窗口合成：操作台账里有 tool_intent（模型已回工具调用）但内存历史/Room 里
+ * 没有对应 tool_use 行——进程死在「收到响应」与「落行」之间。把意图补成 assistant
+ * tool_use 部件进内存历史，后续的 replay/stub 判定（DanglingToolCallPlanner）就能
+ * 看见它：SAFE 只读重放，写操作占位说明。台账与 SessionTreeStore 的盘上投影由此
+ * 成为恢复链的凭据源，而不是两件落地的死代码。
+ */
+internal suspend fun ChatViewModel.synthesizeUnsettledOperationIntents() {
+    val intents = com.openminis.app.operation.OperationBridge.unsettledIntents(context.applicationContext, activeSessionId)
+        ?: return
+    if (intents.isEmpty()) return
+    val known = agentHistory.flatMap { m -> m.contentParts }
+        .filterIsInstance<AgentContentPart.ToolUse>()
+        .mapTo(mutableSetOf()) { it.id }
+    val missing = intents.filter { it.id !in known }
+    if (missing.isEmpty()) return
+    for (call in missing) {
+        agentHistory += LLMMessage(
+            role = LLMMessage.Role.ASSISTANT,
+            content = "",
+            contentParts = listOf(
+                AgentContentPart.ToolUse(
+                    id = call.id,
+                    name = call.rawToolName ?: "tool",
+                    input = org.json.JSONObject(call.args.toString()),
+                ),
+            ),
+        )
+    }
+    AppLogger.warning(
+        ChatViewModel.TAG,
+        "[Recovery] synthesized ${missing.size} unsettled tool intent(s) from the operation ledger",
+    )
+}
+
+/**
  * 冷启动恢复期执行 SAFE 悬空调用并把结果补进内存历史。
  *
  * 只补内存、不落盘：下一次冷启动会重新修复（读操作幂等且廉价），避免在恢复期
@@ -101,6 +136,7 @@ internal fun replayableUses(history: List<LLMMessage>): List<ReplayableUse> {
  */
 internal suspend fun ChatViewModel.replaySafeDanglingToolCalls() {
     if (_isStreaming.value) return
+    synthesizeUnsettledOperationIntents()
     val uses = replayableUses(agentHistory)
     if (uses.isEmpty()) return
     var replayed = 0

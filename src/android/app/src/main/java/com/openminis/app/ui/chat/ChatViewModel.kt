@@ -1925,9 +1925,9 @@ class ChatViewModel(
     /** Structured agent history for the agent loop (contentParts-based). */
     internal val agentHistory = mutableListOf<LLMMessage>()
 
-    // [T-run-metrics-wiring] 当前运行的过程指标实例；埋点壳见 ChatViewModelRunMetricsExt。
-    @Volatile
-    internal var currentRunMetrics: com.openminis.app.harness.metrics.RunMetrics? = null
+    // [T-run-metrics-wiring]/[T-operation-wiring] 当前运行的指标实例与持久化操作 id（壳见 RunMetricsExt）。
+    @Volatile internal var currentRunMetrics: com.openminis.app.harness.metrics.RunMetrics? = null
+    @Volatile internal var currentOperationId: String? = null
 
     /**
      * All agent tool definitions, recomputed on each read so the memory
@@ -5262,6 +5262,7 @@ class ChatViewModel(
     }
 
     override fun cancelStream() {
+        noteRunSuspended("user cancel") // [T-operation-wiring]
         val job = streamJob
         if (job == null || stoppedStreamJob === job) return
         // A coroutine may already be completing while its provider stream is

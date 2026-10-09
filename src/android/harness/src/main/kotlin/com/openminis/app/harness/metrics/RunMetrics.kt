@@ -50,6 +50,9 @@ class RunMetrics(
     private val estimatedInputTokens = AtomicLong()
 
     fun roundStarted() { rounds.incrementAndGet() }
+
+    /** 已开账的 provider 轮数（operation 程序计数器的 round 编号同源）。 */
+    val roundsSoFar: Int get() = rounds.get()
     fun toolCallRecorded(failed: Boolean) {
         toolCalls.incrementAndGet()
         if (failed) toolFailures.incrementAndGet()
