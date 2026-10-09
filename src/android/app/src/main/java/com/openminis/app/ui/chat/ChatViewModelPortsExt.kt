@@ -3,6 +3,9 @@ package com.openminis.app.ui.chat
 import com.openminis.app.harness.runtime.ConversationPort
 import com.openminis.app.harness.runtime.ToolExecutorPort
 import com.openminis.app.harness.runtime.ToolOutcome
+import com.openminis.app.harness.runtime.UiEventSink
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * [T-android-seam-extraction] 接缝二/三的宿主适配器。
@@ -30,5 +33,30 @@ fun ChatViewModel.toolExecutorPort(
     override suspend fun execute(toolName: String, argsJson: String): ToolOutcome {
         val result = executeTool(toolName, argsJson, "seam-${toolName}-${assistantId}", toolBlocks, assistantId, currentText)
         return ToolOutcome(success = result.success, output = result.output)
+    }
+}
+
+/**
+ * [T-android-seam-extraction] 接缝四宿主实现：块置 FAILED + 主线程刷新。
+ * 截断拒绝路径此前不刷新（FAILED 要等下次更新才可见）——静默外观与 #119 同款，
+ * 本刀统一为立即刷新。
+ */
+fun ChatViewModel.uiEventSink(
+    toolBlocks: MutableList<AssistantBlock>,
+    assistantId: String,
+    currentText: String,
+): UiEventSink = object : UiEventSink {
+    override suspend fun onToolCallRejected(toolCallId: String, uiMessage: String) {
+        val idx = toolBlocks.indexOfFirst { it.id == toolCallId }
+        if (idx < 0) return
+        val elapsed = System.currentTimeMillis() - toolBlocks[idx].startTimeMs
+        toolBlocks[idx] = toolBlocks[idx].copy(
+            toolStatus = ToolBlockStatus.FAILED,
+            content = uiMessage,
+            durationMs = elapsed,
+        )
+        withContext(Dispatchers.Main) {
+            updateAssistantMessage(assistantId, currentText, true, toolBlocks)
+        }
     }
 }

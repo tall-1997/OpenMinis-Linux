@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.lifecycle.viewModelScope
 import com.openminis.app.R
 import com.openminis.app.harness.agent.Level
+import com.openminis.app.harness.agent.ToolCallPreflight
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMError
 import com.openminis.app.data.model.LLMMessage
@@ -1906,33 +1907,15 @@ internal suspend fun ChatViewModel.runAgentLoop(
                         "  chunk[$i] bytes=${snap.toByteArray(Charsets.UTF_8).size} raw=<<<${snap.take(500)}>>>"
                     )
                 }
-                // English literal — string resource lookup intentionally
-                // avoided to keep this commit independent of any in-flight
-                // strings.xml refactor in other sessions. Promote to a
-                // localized R.string entry in a follow-up if needed.
-                val uiMessage = "Blocked invalid tool call"
-                val modelMessage = "Error: Tool call rejected before execution. $preflightError The arguments your client sent were empty or missing required fields — re-issue the call with all required parameters filled in. Do not retry with the same empty arguments."
-                val blockIdxPre = allToolBlocks.indexOfFirst { it.id == id }
-                if (blockIdxPre >= 0) {
-                    val elapsedPre = System.currentTimeMillis() - allToolBlocks[blockIdxPre].startTimeMs
-                    allToolBlocks[blockIdxPre] = allToolBlocks[blockIdxPre].copy(
-                        toolStatus = ToolBlockStatus.FAILED,
-                        content = uiMessage,
-                        durationMs = elapsedPre,
-                    )
-                }
-                toolLoopDetector.record(
-                    toolName = name, params = paramsMap,
-                    result = null, errorMessage = modelMessage, toolCallId = id
+                // [T-android-seam-extraction] 拒绝半边进 harness（ToolCallPreflight），
+                // UI 半边走接缝四；chunk 环诊断留宿主（读的是流式参数环）。
+                val rejection = ToolCallPreflight.rejectInvalid(
+                    toolCallId = id, toolName = name, validationError = preflightError,
+                    params = paramsMap, detector = toolLoopDetector,
                 )
-                resultParts.add(AgentContentPart.ToolResult(
-                    id = id, name = name,
-                    content = modelMessage,
-                    isError = true,
-                ))
-                withContext(Dispatchers.Main) {
-                    updateAssistantMessage(assistantId, accumulatedText, true, allToolBlocks)
-                }
+                uiEventSink(allToolBlocks, assistantId, accumulatedText)
+                    .onToolCallRejected(id, rejection.uiMessage)
+                resultParts.add(rejection.toolResultPart)
                 continue
             }
 
@@ -1941,26 +1924,13 @@ internal suspend fun ChatViewModel.runAgentLoop(
             // length/max_tokens），此工具调用的参数极可能是半截 JSON。拒执行，
             // 让模型看到失败结果后下一轮重新完整调用。镜像 Eta AGENT_RUNTIME.md。
             if (truncatedToolTurn) {
-                val truncatedMsg = "Error: This tool call was rejected because the " +
-                    "model output was truncated (finish_reason=$turnFinishReason). " +
-                    "The arguments are likely incomplete. Re-read any relevant " +
-                    "context and re-issue the call with complete arguments."
-                val blockIdxTr = allToolBlocks.indexOfFirst { it.id == id }
-                if (blockIdxTr >= 0) {
-                    val elapsedTr = System.currentTimeMillis() - allToolBlocks[blockIdxTr].startTimeMs
-                    allToolBlocks[blockIdxTr] = allToolBlocks[blockIdxTr].copy(
-                        toolStatus = ToolBlockStatus.FAILED,
-                        content = truncatedMsg,
-                        durationMs = elapsedTr,
-                    )
-                }
-                toolLoopDetector.record(name, paramsMap,
-                    result = null, errorMessage = truncatedMsg, toolCallId = id)
-                resultParts.add(AgentContentPart.ToolResult(
-                    id = id, name = name,
-                    content = truncatedMsg,
-                    isError = true,
-                ))
+                val rejection = ToolCallPreflight.rejectTruncated(
+                    toolCallId = id, toolName = name, finishReason = turnFinishReason,
+                    params = paramsMap, detector = toolLoopDetector,
+                )
+                uiEventSink(allToolBlocks, assistantId, accumulatedText)
+                    .onToolCallRejected(id, rejection.uiMessage)
+                resultParts.add(rejection.toolResultPart)
                 continue
             }
 
