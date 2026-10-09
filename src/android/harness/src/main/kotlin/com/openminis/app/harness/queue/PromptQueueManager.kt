@@ -198,6 +198,7 @@ class PromptQueueManager<T>(
     suspend fun restoreUnconfirmed(sessionId: String): Int = persistence.restoreUnconfirmed(sessionId)
 
     companion object {
-        const val MAIN_LANE = "main"
+        /** 别名自 [com.openminis.app.harness.HarnessLanes.MAIN_LANE]，字面量只在那一处。 */
+        const val MAIN_LANE = com.openminis.app.harness.HarnessLanes.MAIN_LANE
     }
 }
