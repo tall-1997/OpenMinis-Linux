@@ -179,6 +179,22 @@ fun monetIconTint(static: Color): Color =
         static
     }
 
+/**
+ * Chip (background, icon) colors for iOS-parity icon tiles: wallpaper
+ * primaryContainer + tuned glyph when [static] is an accent tile and dynamic
+ * color is on; else the static tile + White glyph. Shared by every icon-chip
+ * call site (SettingsRow, SettingsItem, CircleIconBadge) so the follow-wallpaper
+ * rule cannot drift between screens.
+ */
+@Composable
+fun monetChipColors(static: Color): Pair<Color, Color> =
+    if (LocalMonetDynamic.current && static in monetAccentTiles) {
+        MaterialTheme.colorScheme.primaryContainer to
+            MaterialTheme.colorScheme.onPrimaryContainer
+    } else {
+        static to Color.White
+    }
+
 // App-wide shape system — larger corners for a modern, friendly feel
 // DropdownMenu uses extraSmall, Dialog uses extraLarge, BottomSheet uses extraLarge
 private val MinisShapes = Shapes(

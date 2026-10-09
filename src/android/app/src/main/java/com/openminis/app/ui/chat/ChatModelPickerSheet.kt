@@ -61,6 +61,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.graphics.Color
+import com.openminis.app.ui.theme.monetIconTint
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -441,7 +442,7 @@ internal fun ModelPickerSheet(
                                     Icon(
                                         Icons.Default.Layers,
                                         contentDescription = null,
-                                        tint = Color(0xFF007AFF),
+                                        tint = monetIconTint(Color(0xFF007AFF)),
                                         modifier = Modifier.size(18.dp),
                                     )
                                     Spacer(Modifier.width(10.dp))
@@ -901,7 +902,7 @@ internal fun ModelPickerSheet(
                                                 Icons.Default.KeyboardArrowDown,
                                                 contentDescription = null,
                                                 modifier = Modifier.size(16.dp),
-                                                tint = Color(0xFF007AFF),
+                                                tint = monetIconTint(Color(0xFF007AFF)),
                                             )
                                             Spacer(Modifier.width(4.dp))
                                             Text(
@@ -1088,7 +1089,7 @@ private fun QuickTestButton(onClick: () -> Unit) {
         Icon(
             Icons.Default.Bolt,
             contentDescription = stringResource(R.string.model_picker_quick_test),
-            tint = Color(0xFF007AFF),
+            tint = monetIconTint(Color(0xFF007AFF)),
             modifier = Modifier.size(17.dp),
         )
     }
@@ -1102,9 +1103,7 @@ private fun providerDotColor(providerType: ProviderType?): Color = when (provide
     ProviderType.openRouter -> Color(0xFF00BCD4) // cyan
     ProviderType.xAI -> Color(0xFFFF7043)        // orange — Grok brand
     ProviderType.kimiCode -> Color(0xFF5C6BC0)   // indigo — Kimi accent
-    // [T-android-provider-type-parity] Responses API instances are
-    // OpenAI under the hood — same green dot. Undrivable types share
-    // the neutral gray used for "no provider".
+    // [T-android-provider-type-parity] Responses API = OpenAI green; undrivable = neutral gray.
     ProviderType.openAIResponses -> Color(0xFF4CAF50)
     ProviderType.antigravity,
     ProviderType.unsupported -> Color(0xFF8E8E93)

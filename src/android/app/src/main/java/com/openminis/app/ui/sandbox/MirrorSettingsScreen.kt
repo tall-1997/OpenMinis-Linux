@@ -58,6 +58,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import com.openminis.app.ui.theme.monetChipColors
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
@@ -614,19 +615,17 @@ private fun Modifier.widthIfShort(): Modifier = this
 
 @Composable
 private fun CircleIconBadge(icon: ImageVector, tint: Color) {
+    // [T-android-monet-dynamic-color] Accent badges follow the wallpaper
+    // (shared rule, see monetChipColors).
+    val (bg, fg) = monetChipColors(tint)
     Box(
         modifier = Modifier
             .size(26.dp)
             .clip(CircleShape)
-            .background(tint),
+            .background(bg),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(
-            icon,
-            contentDescription = null,
-            tint = Color.White,
-            modifier = Modifier.size(14.dp),
-        )
+        Icon(icon, contentDescription = null, tint = fg, modifier = Modifier.size(14.dp))
     }
 }
 

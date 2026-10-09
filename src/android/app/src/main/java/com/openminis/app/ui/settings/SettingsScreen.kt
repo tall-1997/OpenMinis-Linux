@@ -67,6 +67,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import com.openminis.app.ui.theme.monetChipColors
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -481,7 +482,6 @@ private fun buildBugReportUrl(): String {
 
         <!-- Briefly describe the issue you encountered -->
 
-
         ## 📱 Basic Information
 
         | Field | Value |
@@ -504,8 +504,6 @@ private fun buildBugReportUrl(): String {
         ```
 
         ## ✅ Expected Behavior
-
-
 
         ## 🗂️ Additional Information
 
@@ -531,7 +529,6 @@ private fun buildBugReportUrl(): String {
 private fun buildFeedbackMailto(): String {
     val body = """
         Please describe your feedback:
-
 
         ---
         App Version: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})
@@ -614,20 +611,21 @@ private fun SettingsItem(
                 .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Colored circle icon (matching iOS settings style)
+            // Colored circle icon (matching iOS settings style).
+            // [T-android-monet-dynamic-color] Accent tiles follow the wallpaper
+            // (shared rule, see monetChipColors) — the settings home no longer
+            // stays iOS-static while secondary screens follow the wallpaper.
+            val (chipBg, chipFg) = monetChipColors(iconColor)
             Box(
                 modifier = Modifier
                     .size(30.dp)
-                    .background(
-                        color = iconColor,
-                        shape = CircleShape,
-                    ),
+                    .background(color = chipBg, shape = CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = Color.White,
+                    tint = chipFg,
                     modifier = Modifier.size(16.dp),
                 )
             }
