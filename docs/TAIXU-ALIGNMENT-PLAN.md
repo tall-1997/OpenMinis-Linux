@@ -1,8 +1,17 @@
 # taixu 对齐执行计划
 
-基线：`17577a1` · 基线测试 **5220 tests / 0 failures**（`:app:testReleaseUnitTest --offline`，6m50s）
-移植源：`/var/minis/workspace/refs/taixu` @ `bf3565a`
+基线：`17577a1`
+移植源：`/var/minis/workspace/refs/taixu` @ `bf3565a`（对照分析见 `COMPARISON-TAIXU.md`）
 决策：① 抽 `:harness` 模块 ② **直接复用源码** ③ ADB/FTP/WebChat 同批
+
+> **状态同步（2026-10-09）**：勾选 = 已入库（含测试、architectureCheck 过）。
+> 勾选项分两档：**[x]** 已落地；**[x]（已接线）**  additionally 有 app 主源码调用点。
+> 只落地未接线的件在 :harness 里带测试但零 app 引用，按 `COMPARISON-TAIXU.md`
+> 的口径**不算能力补齐**，只是「可复用件已入库」。接线清单见各条备注。
+>
+> **验证基线修正**：原写「基线 5220 tests」从未被复现。实测口径为
+> `:app:testReleaseUnitTest` = **2893**（359 个结果 XML）+ `:harness:test` = **121**，
+> 均 0 失败（2026-10-09，ebd0b59 之后）。后续每批以这两个数为新基线。
 
 ## 模块策略（已定）
 
@@ -12,30 +21,42 @@ taixu `harness/` 是 **Android 库**（依赖 Room/OkHttp/Ktor/Koin，14 文件�
 | 类 | 处理 |
 |---|---|
 | 纯 JVM（零 `android.*`） | 直接进 `:harness` |
-| `android.util.Log` | 换成 `:harness` 内 `HarnessLog` |
+| `android.util.Log` | 换成 `:harness` 内日志接缝（`System.err` / 宿主注入） |
 | `android.content.Context` | 构造参数注入，调用方传值 |
 | Room 实体 | 留 `:app`，`:harness` 只放接口 |
 
 ## 批次
 
-### 第一批 — 纯逻辑移植
-- [ ] 1.1 建 `:harness` 模块骨架（settings + build.gradle.kts + 约定插件）
-- [ ] 1.2 `text/UnifiedDiffGenerator.kt`（142 行，零依赖）
-- [ ] 1.3 `effects/RetryPolicy.kt`（26 行，零依赖）
-- [ ] 1.4 `metrics/RunMetrics.kt`（119 行，依赖 `ChatUsage`）
-- [ ] 1.5 `validation/ToolSchemaValidator.kt`（355 行，需改写 `McpToolInfo`/`ProviderClient`/`McpToolApiName` 引用）
-- [ ] 1.6 `text/TextReplacers.kt` + `validation/ToolCallLoopDetector.kt`（同目录，一并）
-- [ ] 1.7 配套测试全部移植
-- [ ] 1.8 `architecture-policy.json` 等价物 + preBuild 检查
+### 第一批 — 纯逻辑移植（`5a9c721`，全完成）
+- [x] 1.1 建 `:harness` 模块骨架（settings + build.gradle.kts + 约定插件）
+- [x] 1.2 `text/UnifiedDiffGenerator.kt` —— **未接线**
+- [x] 1.3 `effects/RetryPolicy.kt` —— **未接线**
+- [x] 1.4 `metrics/RunMetrics.kt` —— **未接线**
+- [x] 1.5 `validation/ToolSchemaValidator.kt` —— **未接线**（待接 MCP/工具派发入口）
+- [x] 1.6 `text/TextReplacers.kt` + `validation/ToolCallLoopDetector.kt`
+- [x] 1.7 配套测试全部移植
+- [x] 1.8 `architecture-policy.json` 等价物 + preBuild 检查（`2e75a0a`）
 
 ### 第二批 — Agent 可靠性
-- [ ] 2.1 `checkpoint/`（720 行，纯 JVM）→ 接我方 `FileCheckpointTool`
-- [ ] 2.2 `operation/OperationCoordinator.kt`（348 行，纯 JVM）
+- [x] 2.1 `checkpoint/`（720 行，纯 JVM）（`123db12`，**已接线**）
+      接线面：`CheckpointBridge` + file_write/file_edit 自动捕获 +
+      `ChatRewindDialog`「撤回到此轮」+ 会话删除清盘。
+      **偏离计划**：不是「接我方 FileCheckpointTool」，而是**移除**该模型侧工具——
+      rewind 是用户动作不是模型工具（taixu 语义），捕获改为写工具自动挂钩。
+- [ ] 2.2 `operation/OperationCoordinator.kt`（348 行，纯 JVM）← **当前切片**
+      现状：`operation/OperationModels.kt` 已随 2.1 闭包落地，Coordinator 未移植。
 - [ ] 2.3 `subagent/SubagentClaim.kt`（252 行）→ 接我方 `WritePathGuard`
+      阻塞：闭包分析显示它拖入 SubagentOrchestrator + ToolExecutor（41x），
+      需先接口化或排到第三批之后。
 - [ ] 2.4 `compaction/`（1011 行，替换 `android.util.Log`）
+      阻塞：闭包拖入 ProviderClient / ContextWindowPolicy / SessionTreeStore。
 - [ ] 2.5 `prompt/`（1233 行，Context 注入）
-- [ ] 2.6 `queue/PromptQueueManager.kt`（135 行，Room 接口化）
-- [ ] 2.7 `effects/DanglingToolCallPlanner.kt` + `ToolReplayPolicy.kt` + `ToolOutputRetention.kt`
+- [x] 2.6 `queue/PromptQueueManager.kt`（135 行）（`ebd0b59`，**已接线**）
+      **超出计划**：不止 Room 接口化——做了文件持久化 + 完整宿主接线
+      （忙时入队落盘 / 消费确认 / 冷开还原 / 撤回·重试·截断删盘），
+      并修掉上游两个持久化缺陷（会话 id→文件名非单射、反查二次转义静默不删）。
+- [x] 2.7 `effects/DanglingToolCallPlanner.kt` + `ToolReplayPolicy.kt` + `ToolOutputRetention.kt`
+      （`123db12`）—— **未接线**
 
 ### 第三批 — 大件
 - [ ] 3.1 工作流 DAG（harness workflow 2854 + core/model/workflow 1514 + UI）
@@ -51,5 +72,6 @@ taixu `harness/` 是 **Android 库**（依赖 Room/OkHttp/Ktor/Koin，14 文件�
 
 ## 验证约定
 
-每批结束跑 `./gradlew :app:testReleaseUnitTest --offline`（基线 5220）+
-新增 `:harness:test`，确认零失败。每批独立 commit。
+每批结束跑 `./gradlew :app:testReleaseUnitTest` + `:harness:test` +
+`:architectureCheck`，确认零失败、棘轮不越线。每批独立 commit。
+当前基线：app **2893** / harness **121**（ebd0b59）。
