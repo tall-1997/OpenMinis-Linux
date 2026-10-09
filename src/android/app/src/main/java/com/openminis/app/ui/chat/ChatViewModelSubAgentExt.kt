@@ -743,15 +743,13 @@ private suspend fun ChatViewModel.runOneSubAgentInner(
             )
             return ToolExecutionResult(msg, false)
         }
-        // [T-subagent-config-race] `config.value` is whatever the StateFlow
-        // holds RIGHT NOW. A spawn that lands before the one-shot async config
-        // load publishes (cold app start, process recreate after memory
-        // pressure) sees empty modelEntries, resolves baseEntry to null and
-        // dies with "No model available for sub-agent" — on a device that has
-        // models configured. Intermittent by construction: it is a start-up
-        // window, not a state, and the retry loop further down never runs
-        // because the failure happens before it. Wait for the load, bounded,
-        // and only then fall through to the actionable error.
+        // [T-subagent-config-race] `config.value` is whatever the StateFlow holds RIGHT NOW.
+        // A spawn that lands before the one-shot async config load publishes (cold app start,
+        // process recreate after memory pressure) sees empty modelEntries and dies with
+        // "No model available for sub-agent" on a device that has models configured.
+        // Intermittent by construction: a start-up window, not a state — and the retry loop
+        // further down never runs because the failure happens before it.
+        // Wait for the load, bounded, and only then fall through to the actionable error.
         if (providerRepository.config.value.modelEntries.isEmpty()) {
             kotlinx.coroutines.withTimeoutOrNull(5_000L) {
                 providerRepository.configLoaded.first { it }
@@ -1001,7 +999,9 @@ private suspend fun ChatViewModel.runOneSubAgentInner(
                         } else if (name == com.openminis.app.tools.GrepSourceTool.NAME) {
                             com.openminis.app.tools.GrepSourceTool.execute(json, sessionId, context)
                         } else {
-                            executeTool(name, json, "", mutableListOf(), "", "")
+                            // [T-android-seam-extraction] 派发层写租约；被拒调用仍进轨迹清单。
+                            com.openminis.app.agent.LaneWriteLease.deniedResult(writePaths, name, json)
+                                ?: executeTool(name, json, "", mutableListOf(), "", "")
                         }
                     } },
                     onStep = { turn, toolName -> onStep(turn, toolName) },
