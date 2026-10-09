@@ -1,4 +1,4 @@
-package com.openminis.app.provider
+package com.openminis.app.harness.agent
 
 /**
  * [T-stall-resume] Resume-from-partial for mid-stream stalls.

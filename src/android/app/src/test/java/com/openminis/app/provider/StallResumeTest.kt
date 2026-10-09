@@ -1,5 +1,6 @@
 package com.openminis.app.provider
 
+import com.openminis.app.harness.agent.StallResume
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

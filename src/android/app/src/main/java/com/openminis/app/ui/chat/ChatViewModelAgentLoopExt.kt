@@ -1059,45 +1059,19 @@ internal suspend fun ChatViewModel.runAgentLoop(
             } catch (e: Exception) {
                 if (e is CancellationException && e.cause == null) throw e  // real job cancellation
                 val actual = unwrapFlowException(e)
-                val isRateLimit = actual is com.openminis.app.data.model.LLMError.RateLimited
-                val is5xx = actual is com.openminis.app.data.model.LLMError.ProviderError &&
-                    ChatViewModel.HTTP_5XX_STATUS_RE.containsMatchIn(actual.detail)
-                val isPermanentCapacity = actual is com.openminis.app.data.model.LLMError.ProviderError &&
-                    (actual.detail.contains("[429]") ||
-                        com.openminis.app.provider.HttpRetryAfter.isPermanentCapacityBody(actual.detail))
-                // Auto-retry on transient network/5xx/transient errors on the SAME provider
-                // Same-provider retry for network / 5xx / 429 (honour Retry-After),
-                // then fall back to the next group member.
-                // [T-llm-error-timeout-phase] Timeout now participates in
-                // same-provider retry ONLY for CONNECT-phase (the request
-                // never landed — pure local/connectivity issue; falling back
-                // to another model cannot help). READ/TTFB timeouts skip
-                // straight to fallback (isFallbackable already includes
-                // Timeout), so the main loop no longer diverges from the
-                // sub-agent loop (which keys off isRetryable). NOTE: with the
-                // breaker removed (5b9aa6f), a dead-but-not-429 key is now
-                // retried through the full backoff budget before fallback —
-                // the accepted cost of removing the breaker, not a
-                // classification defect.
-                val isTimeoutConnect = actual is com.openminis.app.data.model.LLMError.Timeout &&
-                    actual.phase == com.openminis.app.data.model.LLMError.Timeout.TimeoutPhase.CONNECT
-                val isTransient = (actual is com.openminis.app.data.model.LLMError.NetworkError ||
-                    actual is com.openminis.app.data.model.LLMError.TransientError ||
-                    actual is com.openminis.app.data.model.LLMError.RateLimited ||
-                    is5xx || isTimeoutConnect) && !isPermanentCapacity
+                // [T-loop-retry-cut] 分类与重试/回退判定走 harness 纯策略
+                // （StreamRetryPolicy）——catch 块只留 UI 编排。判定表逐条
+                // 对齐原内联实现：瞬态=Network/Transient/429/5xx/CONNECT 超时
+                // 且非永久容量；429 有组员跳过同 provider 重试；永久容量永不
+                // 重试；READ/TTFB 超时直落回退（isFallbackable 含 Timeout）。
+                val errorClass = com.openminis.app.harness.agent.StreamRetryPolicy.classify(actual)
                 val maxRetries = effectiveMaxRetries()
-                // 429 with another group member: switch endpoints instead of
-                // hammering the same key through 1/2/4/8/16s (inside a typical
-                // 60s relay window). Same-provider retries remain for network
-                // / 5xx, and for 429 when this is the last candidate — at most once.
-                val skipSameProviderRetry = (isRateLimit && remainingFallbacks.isNotEmpty()) || isPermanentCapacity
-                val sameProviderBudget = if (isRateLimit) minOf(maxRetries, 1) else maxRetries
-                if (isTransient && !skipSameProviderRetry && sameProviderBudget > 0 && retryAttempt < sameProviderBudget) {
-                    val retryAfter = (actual as? com.openminis.app.data.model.LLMError.RateLimited)?.retryAfterSeconds
-                    val delaySec = com.openminis.app.provider.HttpRetryAfter.delaySeconds(
-                        retryAttempt, retryAfter, ChatViewModel.AUTO_RETRY_DELAYS_SEC,
-                    )
-                    retryAttempt += 1
+                val decision = com.openminis.app.harness.agent.StreamRetryPolicy.decide(
+                    errorClass, retryAttempt, maxRetries, remainingFallbacks.size, fallbackStrategy,
+                )
+                if (decision is com.openminis.app.harness.agent.StreamRetryPolicy.Decision.RetrySameProvider) {
+                    val delaySec = decision.delaySec
+                    retryAttempt = decision.attempt
                     val errDesc = actual.message ?: actual.javaClass.simpleName
                     Log.w(ChatViewModel.TAG, "🔁 Transient error on ${currentProvider.model.displayName}, retry $retryAttempt/$maxRetries in ${delaySec}s: $errDesc")
                     withContext(Dispatchers.Main) {
@@ -1112,7 +1086,7 @@ internal suspend fun ChatViewModel.runAgentLoop(
                             _autoRetryCountdown.value = remaining
                             kotlinx.coroutines.delay(1000)
                         }
-                        val jitter = com.openminis.app.provider.HttpRetryAfter.jitterMs()
+                        val jitter = com.openminis.app.harness.agent.HttpRetryAfter.jitterMs()
                         if (jitter > 0L) kotlinx.coroutines.delay(jitter)
                     } finally {
                         _autoRetryCountdown.value = 0
@@ -1148,12 +1122,12 @@ internal suspend fun ChatViewModel.runAgentLoop(
                     // continues instead of regenerating from scratch.
                     if ((actual as? com.openminis.app.data.model.LLMError.TransientError)?.stalledAfterFirstEvent == true) {
                         val partial = turnTextSb.toString()
-                        stallResumeContext = com.openminis.app.provider.StallResume.note(partial)
+                        stallResumeContext = com.openminis.app.harness.agent.StallResume.note(partial)
                         // [T-stall-echo-strip] Arm the echo suppressor for the
                         // retried attempt. The seed must be the exact bytes the
                         // note embeds — StallResume.tail is the single source.
                         stallEchoStripper = com.openminis.app.harness.agent.StallEchoStripper(
-                            com.openminis.app.provider.StallResume.tail(partial),
+                            com.openminis.app.harness.agent.StallResume.tail(partial),
                         )
                     }
                     turnTextSb.setLength(0)
@@ -1197,25 +1171,19 @@ internal suspend fun ChatViewModel.runAgentLoop(
                 // makes the intent explicit and avoids a one-frame
                 // flash of the stale banner.
                 withContext(Dispatchers.Main) { clearInlineError() }
-                val llmErr = actual as? com.openminis.app.data.model.LLMError
-                val shouldFallback = fallbackStrategy == com.openminis.app.data.model.FallbackStrategy.always ||
-                    llmErr?.isFallbackable == true ||
-                    isRateLimit || is5xx || isPermanentCapacity
+                // [T-loop-retry-cut] 回退判定与同桶跳过走策略；宿主只补
+                // 组上下文（选中组才回退）与 provider 切换副作用。
+                // shouldFallback 不看剩余候选数——终局路径单成员组也要建轨迹。
+                val shouldFallback = com.openminis.app.harness.agent.StreamRetryPolicy.shouldFallback(errorClass, fallbackStrategy)
                 val curGate = currentProvider.callGateKey
                 val nextCandidate = if (shouldFallback && _selectedGroupId.value != null) {
-                    var c: ChatViewModel.FallbackCandidate? = remainingFallbacks.removeFirstOrNull()
-                    while (c != null && com.openminis.app.provider.ProviderKeyGate.sameBucket(c.provider.callGateKey, curGate)) {
-                        c = remainingFallbacks.removeFirstOrNull()
-                    }
-                    c
+                    com.openminis.app.harness.agent.StreamRetryPolicy.nextCandidate(
+                        remainingFallbacks, curGate,
+                    ) { it.provider.callGateKey }
                 } else null
                 val next = nextCandidate?.provider
                 if (next != null && nextCandidate != null) {
-                    val reason = when {
-                        isRateLimit -> actual.message ?: "Rate limited"
-                        actual is com.openminis.app.data.model.LLMError.ProviderError -> actual.detail
-                        else -> actual.message ?: "Error"
-                    }
+                    val reason = com.openminis.app.harness.agent.StreamRetryPolicy.fallbackReason(errorClass)
                     // [T-android-model-indicator-flash-on-endpoint-retry]
                     // Same-model recovery is a TRANSPARENT retry, not a real
                     // model switch. A model group can hold several entries

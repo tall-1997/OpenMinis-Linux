@@ -1,6 +1,7 @@
-package com.openminis.app.provider
+package com.openminis.app.harness.agent
 
 import com.openminis.app.data.model.LLMError
+import com.openminis.app.harness.HarnessLog
 import java.time.Duration
 import java.time.Instant
 import java.time.ZonedDateTime
@@ -134,10 +135,7 @@ object HttpRetryAfter {
         } else {
             LLMError.RateLimited(parseSeconds(retryAfterHeader, body), snippet(body, 160))
         }
-        android.util.Log.w(
-            "Minis.HTTP",
-            "HTTP 429 → ${err.javaClass.simpleName}: ${err.message}",
-        )
+        HarnessLog.w("HTTP", "HTTP 429 → ${err.javaClass.simpleName}: ${err.message}")
         return err
     }
 

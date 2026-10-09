@@ -5,7 +5,7 @@ import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.model.sanitizeToolId
 import com.openminis.app.data.model.LLMError
-import com.openminis.app.provider.HttpRetryAfter
+import com.openminis.app.harness.agent.HttpRetryAfter
 import com.openminis.app.provider.CredentialAcceptance
 import com.openminis.app.provider.ProviderKeyGate
 import com.openminis.app.data.model.LLMMessage

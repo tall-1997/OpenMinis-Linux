@@ -170,7 +170,6 @@ class ChatViewModel(
 
     companion object {
         internal const val TAG = "ChatViewModel"
-        internal val HTTP_5XX_STATUS_RE = Regex("""\[5\d{2}\]""")
 
         // ── [T-android-compact-runaway] Compaction budgets ──────────────
         //
@@ -501,7 +500,7 @@ class ChatViewModel(
                     is LLMError.TransientError -> isFirstByteTimeout(error)
                     is LLMError.ProviderError ->
                         !error.detail.contains("[429]") &&
-                            !com.openminis.app.provider.HttpRetryAfter.isPermanentCapacityBody(error.detail)
+                            !com.openminis.app.harness.agent.HttpRetryAfter.isPermanentCapacityBody(error.detail)
                     // DecodingError / Unknown stay retryable: an over-length
                     // refusal arrives untyped, and that is the case splitting exists for.
                     else -> true
@@ -798,8 +797,6 @@ class ChatViewModel(
         /// Max per-tool-call retained `accumulated` JSON snapshots from
         /// `ToolInputDelta`. Drained on preflight failure for diagnosis.
         internal const val TOOL_INPUT_CHUNK_RING_MAX = 2
-        /** Auto-retry backoff schedule (seconds). Mirrors iOS retryDelays, scaled to task spec: 1s → 2s → 4s. */
-        internal val AUTO_RETRY_DELAYS_SEC = com.openminis.app.provider.HttpRetryAfter.DELAYS_SEC
 
         /**
          * Factory for use with `viewModel(factory = ...)`. Binds the ChatViewModel
@@ -2375,7 +2372,7 @@ class ChatViewModel(
 
     internal fun effectiveMaxRetries(): Int =
         (activeOverrides()?.maxRetries
-            ?: com.openminis.app.provider.HttpRetryAfter.DEFAULT_MAX_RETRIES)
+            ?: com.openminis.app.harness.agent.HttpRetryAfter.DEFAULT_MAX_RETRIES)
             .coerceIn(0, 8)
 
     fun submitUserQuestionAnswers(selections: List<List<String>>) {

@@ -1,6 +1,7 @@
 package com.openminis.app.provider
 
 import com.openminis.app.data.model.LLMError
+import com.openminis.app.harness.agent.HttpRetryAfter
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
