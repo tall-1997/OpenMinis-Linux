@@ -10,7 +10,7 @@
 > 的口径**不算能力补齐**，只是「可复用件已入库」。接线清单见各条备注。
 >
 > **验证基线修正**：原写「基线 5220 tests」从未被复现。实测口径为
-> `:app:testReleaseUnitTest` + `:harness:test`，当前 **app 2870 / harness 290**
+> `:app:testReleaseUnitTest` + `:harness:test`，当前 **app 2866 / harness 302**
 > 均 0 失败。后续每批以这两个数为新基线。
 >
 > ## 进度总账（2026-10-09，`671f7d8`）
@@ -144,4 +144,4 @@ taixu `harness/` 是 **Android 库**（依赖 Room/OkHttp/Ktor/Koin，14 文件�
 
 每批结束跑 `./gradlew :app:testReleaseUnitTest` + `:harness:test` +
 `:architectureCheck`，确认零失败、棘轮不越线。每批独立 commit。
-当前基线：app **2870** / harness **290**。
+当前基线：app **2866** / harness **302**。
