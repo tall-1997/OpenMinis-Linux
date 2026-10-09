@@ -465,7 +465,7 @@ internal suspend fun ChatViewModel.runAgentLoop(
         // [T-stall-echo-strip] Armed only when the previous attempt stalled
         // mid-stream (see the retry-rollback path); the retried attempt's
         // text deltas route through it before reaching any consumer.
-        var stallEchoStripper: com.openminis.app.provider.StallEchoStripper? = null
+        var stallEchoStripper: com.openminis.app.harness.agent.StallEchoStripper? = null
         var currentTextBlockSb: StringBuilder? = null
         // [T-android-tool-splits-reply-fix] Index (into allToolBlocks) of
         // THIS turn's single text block, used only when the provider's
@@ -522,7 +522,7 @@ internal suspend fun ChatViewModel.runAgentLoop(
         // balanced without a second execution. Reset alongside toolCalls on
         // the retry-rollback path (a retried attempt re-streams into an
         // empty dispatch list; nothing executed in the dead attempt).
-        val toolReplayGuard = com.openminis.app.provider.ToolReplayGuard()
+        val toolReplayGuard = com.openminis.app.harness.agent.ToolReplayGuard()
         val replayRenamedIds = mutableSetOf<String>()
 
         // [T-dedupe-toolcallid 03fbcbfd] 同 id 并行调用的改名状态机已迁
@@ -1152,7 +1152,7 @@ internal suspend fun ChatViewModel.runAgentLoop(
                         // [T-stall-echo-strip] Arm the echo suppressor for the
                         // retried attempt. The seed must be the exact bytes the
                         // note embeds — StallResume.tail is the single source.
-                        stallEchoStripper = com.openminis.app.provider.StallEchoStripper(
+                        stallEchoStripper = com.openminis.app.harness.agent.StallEchoStripper(
                             com.openminis.app.provider.StallResume.tail(partial),
                         )
                     }

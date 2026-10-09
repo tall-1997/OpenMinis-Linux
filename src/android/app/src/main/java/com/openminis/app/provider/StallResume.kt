@@ -19,7 +19,7 @@ package com.openminis.app.provider
  * enough that restating it is cheap to suppress — and the quote fencing is
  * gone (a verbatim quoted block reads like text to reproduce). The
  * deterministic backstop for models that echo anyway is
- * [StallEchoStripper], which aligns the retried attempt against the exact
+ * [com.openminis.app.harness.agent.StallEchoStripper], which aligns the retried attempt against the exact
  * [tail] embedded here.
  *
  * `note()` and `tail()` are pure functions so the retry wiring stays
