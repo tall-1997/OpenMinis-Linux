@@ -107,7 +107,7 @@ fun ModelEntryDetailScreen(
     var maxRetriesText by remember {
         mutableStateOf(
             (overrides.maxRetries
-                ?: com.openminis.app.provider.HttpRetryAfter.DEFAULT_MAX_RETRIES).toString(),
+                ?: com.openminis.app.harness.agent.HttpRetryAfter.DEFAULT_MAX_RETRIES).toString(),
         )
     }
     var temperatureText by remember {
@@ -175,7 +175,7 @@ fun ModelEntryDetailScreen(
                         compactThresholdPercent = compactPercentText.trim().toIntOrNull()?.coerceIn(50, 95)
                             ?.takeUnless { compactPercentInherited },
                         maxRetries = maxRetriesText.trim().toIntOrNull()?.coerceIn(0, 8)
-                            ?: com.openminis.app.provider.HttpRetryAfter.DEFAULT_MAX_RETRIES,
+                            ?: com.openminis.app.harness.agent.HttpRetryAfter.DEFAULT_MAX_RETRIES,
                         temperature = parsedTemperature,
                     )
                     val updated = if (entry.isCustom) {
