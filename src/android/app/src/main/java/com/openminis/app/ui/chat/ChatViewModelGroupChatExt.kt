@@ -228,17 +228,15 @@ internal suspend fun ChatViewModel.runGroupChat(provider: LLMProvider, closing: 
                 groupChatClosedAfterId = stableGroupMessageId(closed)
                 groupChatPrefs().edit().putString(closedKey(), groupChatClosedAfterId).apply()
             }
-            withContext(Dispatchers.Main) {
-                _promptQueue.value = emptyList()
-                _messages.value = _messages.value.filterNot { it.isQueued }
-            }
+            // [T-queue-disk-persistence] 群聊收尾即队列归属轮次消亡：内存
+            // 队列 + 占位气泡 + 磁盘镜像一起清（helper 净减行，守棘轮）。
+            withContext(Dispatchers.Main) { clearQueuedPromptsEverywhere() }
             setGroupChatEnabled(false)
         } else {
             publishGroupNotice(context.getString(com.openminis.app.R.string.group_chat_summary_failed))
-            withContext(Dispatchers.Main) {
-                _promptQueue.value = emptyList()
-                _messages.value = _messages.value.filterNot { it.isQueued }
-            }
+            // [T-queue-disk-persistence] 群聊收尾即队列归属轮次消亡：内存
+            // 队列 + 占位气泡 + 磁盘镜像一起清（helper 净减行，守棘轮）。
+            withContext(Dispatchers.Main) { clearQueuedPromptsEverywhere() }
             setGroupChatEnabled(false)
         }
     }

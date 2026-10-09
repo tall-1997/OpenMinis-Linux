@@ -3,6 +3,7 @@ package com.openminis.app.ui.chat
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMMessage
+import com.openminis.app.queue.PromptQueueBridge
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -98,6 +99,17 @@ internal suspend fun ChatViewModel.injectQueuedPromptsAsNewTurn(
         bodyPartsJson = queuedPaste?.partsJson,
     )
     val userEntity = chatRepository.appendMessage(sid, "user", userPartsJson)
+    // [T-queue-disk-persistence] the queued prompts are now real DB rows —
+    // confirm their disk mirrors consumed. Failure leaves a ghost record
+    // restored on next boot; harmless (duplicate bubble), self-healing via
+    // removeQueuedPrompt. Best-effort, never blocks the loop.
+    runCatching {
+        PromptQueueBridge.confirm(
+            context.applicationContext,
+            sid,
+            queuedIds.toList(),
+        )
+    }
     appendBoundedHistory(
         LLMMessage(
             role = LLMMessage.Role.USER,

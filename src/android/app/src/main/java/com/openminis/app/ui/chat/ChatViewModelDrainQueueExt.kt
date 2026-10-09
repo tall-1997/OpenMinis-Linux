@@ -5,6 +5,7 @@ import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMMessage
 import com.openminis.app.data.model.isPureVideoGenerator
 import com.openminis.app.provider.LLMProvider
+import com.openminis.app.queue.PromptQueueBridge
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -79,6 +80,15 @@ internal suspend fun ChatViewModel.drainQueuedPrompts(
             bodyPartsJson = drainPaste?.partsJson,
         )
         val persistedUser = chatRepository.appendMessage(sid, "user", userPartsJson)
+        // [T-queue-disk-persistence] drained prompts became real DB rows —
+        // confirm their disk mirrors consumed (best-effort).
+        runCatching {
+            PromptQueueBridge.confirm(
+                context.applicationContext,
+                sid,
+                queued.map { it.id },
+            )
+        }
         val queuedUiId = withContext(Dispatchers.Main.immediate) {
             _messages.value.firstOrNull { it.isQueued && it.content == userText }?.id
         }

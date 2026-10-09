@@ -481,9 +481,8 @@ internal fun ChatViewModel.loadSession() {
             }
         }
 
-        // Restore the last provider-reported context size on cold open. Without
-        // this, the menu ring stays `?` until the next model call even though
-        // the session has persisted an exact latestContextTokens value.
+        // Restore the last provider-reported context size on cold open —
+        // without this the menu ring stays `?` until the next model call.
         if (!isDraft) {
             val sid = realSessionId.ifEmpty { sessionId }
             val restoredContext = withContext(Dispatchers.IO) {
@@ -498,6 +497,7 @@ internal fun ChatViewModel.loadSession() {
                     .coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
             }
             refreshContextUsage()
+            restoreQueuedPromptsFromDisk(sid) // [T-queue-disk-persistence]
         }
         } finally {
             // T201: open the gate even on early `return@launch` (draft path,

@@ -44,6 +44,11 @@ internal fun ChatViewModel.resumeQueueAfterCancel() {
             AppLogger.warning(ChatViewModel.TAG, "resumeQueueAfterCancel: no provider, dropping queue")
             _promptQueue.value = emptyList()
             _messages.value = _messages.value.filterNot { it.isQueued }
+            // [T-queue-disk-persistence] 故意**不**清磁盘镜像（对比群聊收尾的
+            // clearQueuedPromptsEverywhere）。这里丢队列的原因是「当前没有可用
+            // provider」——一个配置状态，不是用户作废这些提示词的决定，也不是
+            // 它们的归属轮次消失了。清盘就等于让用户已经打出来的话因为一次
+            // 配置缺失而永久蒸发；留着则下次冷开本会话时按原样还原。
             return@launch
         }
         var provider: LLMProvider = initialProvider

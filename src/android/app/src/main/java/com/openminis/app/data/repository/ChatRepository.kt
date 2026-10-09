@@ -442,6 +442,9 @@ class ChatRepository(
             // [T-checkpoint-rewind] 轮次检查点随会话一起消亡：内存态 + 磁盘
             // （异步写队列与删除在同一串行执行器上排队，见 CheckpointStore.dropSession）。
             runCatching { com.openminis.app.checkpoint.CheckpointBridge.dropSession(dir, id) }
+            // [T-queue-disk-persistence] 排队提示词的磁盘镜像随会话删除，
+            // 防止重启后给已删除的会话还原出幽灵排队气泡。
+            runCatching { com.openminis.app.queue.PromptQueueBridge.dropSession(dir, id) }
         }
     }
 

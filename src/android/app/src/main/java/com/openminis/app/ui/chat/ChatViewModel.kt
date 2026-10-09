@@ -4156,6 +4156,7 @@ class ChatViewModel(
         // Persist: drop messages + compact markers. Files (workspace,
         // attachments, offloads) intentionally retained.
         viewModelScope.launch {
+            dropQueuedPromptsOnDisk(sid) // [T-queue-disk-persistence]
             chatRepository.dao.deleteMessages(sid)
             chatRepository.dao.deleteCompactMarkers(sid)
             Log.i(TAG, "clearChat: session=$sid wiped (files preserved)")
@@ -4497,9 +4498,9 @@ class ChatViewModel(
         // doesn't double up against a later auto-drain.
         val retainedHead = messages.subList(0, index + 1).map { m ->
             if (m.id == messageId && m.isQueued) {
-                m.queuedPromptId?.let { pid ->
-                    _promptQueue.value = _promptQueue.value.filterNot { it.id == pid }
-                }
+                // [T-queue-disk-persistence] forgetQueuedPrompt 同时撤掉磁盘
+                // 镜像，否则重启会给这条已被重试的气泡还原出幽灵排队项。
+                m.queuedPromptId?.let { pid -> forgetQueuedPrompt(pid) }
                 m.copy(isQueued = false, queuedPromptId = null)
             } else m
         }
@@ -4624,6 +4625,7 @@ class ChatViewModel(
             attachments = pendingAttachments,
         )
         _promptQueue.value = _promptQueue.value + prompt
+        mirrorQueuedPromptToDisk(prompt) // [T-queue-disk-persistence]
 
         val attachmentNames = pendingAttachments.map { it.fileName }
         val imageUris = pendingAttachments.filter { it.isImage }.map { it.uri }
@@ -4644,20 +4646,10 @@ class ChatViewModel(
     }
 
     /** Remove a queued prompt and its chat message by prompt id. */
-    fun removeQueuedPrompt(promptId: String) {
-        _promptQueue.value = _promptQueue.value.filterNot { it.id == promptId }
-        _messages.value = _messages.value.filterNot { it.queuedPromptId == promptId }
-    }
+    fun removeQueuedPrompt(promptId: String) = removeQueuedPromptWithDiskMirror(promptId)
 
     /** Withdraw a queued message before it gets injected into the agent loop. */
-    fun withdrawQueuedMessage(messageId: String) {
-        val msg = _messages.value.firstOrNull { it.id == messageId } ?: return
-        if (!msg.isQueued) return
-        val pid = msg.queuedPromptId ?: return
-        _promptQueue.value = _promptQueue.value.filterNot { it.id == pid }
-        _messages.value = _messages.value.filterNot { it.id == messageId }
-        Log.i(TAG, "Withdrew queued message, queue=${_promptQueue.value.size}")
-    }
+    fun withdrawQueuedMessage(messageId: String) = withdrawQueuedMessageWithDiskMirror(messageId)
 
     /**
      * [T-android-queued-message-interrupt-on-toolclose] Mid-tool-loop

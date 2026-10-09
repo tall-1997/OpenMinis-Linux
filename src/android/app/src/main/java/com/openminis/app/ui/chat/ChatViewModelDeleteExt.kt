@@ -45,9 +45,9 @@ fun ChatViewModel.deleteFromMessage(messageId: String) {
     // auto-drain can't resurrect them.
     val retainedHead = messages.subList(0, index)
     for (m in deletedMessages) {
-        m.queuedPromptId?.let { pid ->
-            _promptQueue.value = _promptQueue.value.filterNot { it.id == pid }
-        }
+        // [T-queue-disk-persistence] forgetQueuedPrompt 连带撤掉磁盘镜像，
+        // 否则重启会给这批已删除的消息还原出幽灵排队气泡。
+        m.queuedPromptId?.let { pid -> forgetQueuedPrompt(pid) }
     }
     _messages.value = retainedHead
 
