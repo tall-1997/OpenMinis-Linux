@@ -9,11 +9,13 @@ import com.openminis.app.i18n.TranslationLanguages
 import com.openminis.app.i18n.TranslationOutcome
 import com.openminis.app.i18n.TranslationPrefs
 import com.openminis.app.i18n.TranslationRunner
+import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
@@ -187,5 +189,36 @@ internal suspend fun ChatViewModel.flushModelStreamTranslation(
     }
     withContext(Dispatchers.Main) {
         updateAssistantMessage(assistantId, accumulatedText + turnTextSb.toString(), true, blocks)
+    }
+}
+
+/**
+ * [T-reply-translated-only] 工具边界补尾（异步）：materialize 只能挂"已翻部分"，
+ * 模型批在飞的尾句 flush 后回填冻结块——否则中段文本块的译文缺尾，单段显示
+ * 会丢内容。不阻塞工具派发；块 id 在协程外捕获（工具块随后入列，索引会漂）。
+ * 失败静默：保持已翻部分，显示端由长度守卫回落原文。
+ */
+internal fun ChatViewModel.launchTextTailPatch(
+    holder: StreamTranslateHolder,
+    blocks: MutableList<AssistantBlock>,
+    monolithic: Boolean,
+    turnTextBlockIdx: Int,
+    assistantId: String,
+    accumulatedText: String,
+    turnTextSb: StringBuilder,
+) {
+    if (holder.model == null) return
+    val idx = if (monolithic) turnTextBlockIdx else blocks.lastIndex
+    val blockId = blocks.getOrNull(idx)?.takeIf { it.kind == "text" }?.id ?: return
+    viewModelScope.launch {
+        runCatching { holder.model?.flush() }
+        val translated = holder.model?.translatedSoFar?.takeIf { it.isNotEmpty() } ?: return@launch
+        val i = blocks.indexOfFirst { it.id == blockId && it.kind == "text" }
+        if (i >= 0) {
+            blocks[i] = blocks[i].copy(translatedContent = translated)
+            withContext(Dispatchers.Main) {
+                updateAssistantMessage(assistantId, accumulatedText + turnTextSb.toString(), true, blocks)
+            }
+        }
     }
 }

@@ -642,7 +642,10 @@ internal fun buildFlatChatItems(
                         // paragraph re-parses per token (Pattern A jank
                         // optimization preserved). Code fences stay standalone
                         // either way.
-                        val rawFragments = splitMarkdownIntoBlockTexts(block.content)
+                        // [T-reply-translated-only] 输出单段显示翻译：流结束且译文足够
+                        // 覆盖（≥原文 40%）才切译文；流中（延迟）/缺失/失败/残缺一律回落原文。
+                        val replySource = if (!message.isStreaming) block.translatedContent?.takeIf { it.length >= block.content.length * 0.4 } ?: block.content else block.content
+                        val rawFragments = splitMarkdownIntoBlockTexts(replySource)
                         // [T-android-stream-end-reflow-flicker-v18] Preserve
                         // per-fragment FlatChatItem keys across the
                         // streaming→idle boundary. Previously the trailing
@@ -651,12 +654,9 @@ internal fun buildFlatChatItems(
                         // false the fragments coalesced into fewer rows, all
                         // mdblock:msgId:parentBlockId:N keys for N >= K
                         // suddenly vanished from the flatItems list. That
-                        // wipe-and-rebuild was the "整个页面像被重刷" the
-                        // user reported — LazyColumn lost every key it was
-                        // using to anchor the viewport, fell back to numeric
-                        // firstVisibleItemIndex, and parked the viewport on
-                        // whatever row happened to take that numeric slot
-                        // (often the previous assistant message).
+                        // wipe-and-rebuild was the "整个页面像被重刷" the user
+                        // reported — LazyColumn lost its anchor keys and parked
+                        // the viewport on whatever took the numeric slot.
                         //
                         // Fix: keep the live (== last in the list) text block
                         // on rawFragments regardless of isStreaming. The
@@ -685,7 +685,7 @@ internal fun buildFlatChatItems(
                             out.add(dedupe(FlatChatItem.AssistantMarkdownBlock(
                                 messageId = message.id,
                                 parentBlockId = block.id,
-                                rawText = block.content,
+                                rawText = replySource,
                                 blockIndex = 0,
                                 isLastBlockOfMessage = isLastText && message.isStreaming,
                                 messageIsStreaming = message.isStreaming && isLastText,

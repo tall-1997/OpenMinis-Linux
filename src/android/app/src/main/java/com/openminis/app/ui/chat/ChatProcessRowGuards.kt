@@ -3,9 +3,12 @@ package com.openminis.app.ui.chat
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.Text
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -173,4 +176,24 @@ internal fun formatThinkingCharCount(chars: Int): String = when {
     chars < 10_000 -> String.format(java.util.Locale.US, "%.1fk", chars / 1_000.0)
     chars < 1_000_000 -> "${chars / 1_000}k"
     else -> String.format(java.util.Locale.US, "%.1fM", chars / 1_000_000.0)
+}
+
+/**
+ * [T-translate-isolated] 思考框内两段隔离显示的译文段：细分隔线 + 蓝灰小字，
+ * 挂在原文下方。null/blank 由调用方挡掉（未翻译零渲染，失败兜底=只显原文）。
+ * 独立思考块与过程卡片思考行共用同一视觉语言。
+ */
+@Composable
+internal fun ThinkingTranslatedSegment(translated: String) {
+    HorizontalDivider(
+        modifier = Modifier.padding(vertical = 6.dp),
+        thickness = 0.75.dp,
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+    )
+    Text(
+        text = translated.takeLast(4000),
+        fontSize = 11.sp,
+        lineHeight = 15.sp,
+        color = Color(0xFF32ADE6).copy(alpha = 0.9f),
+    )
 }

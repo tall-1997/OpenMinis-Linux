@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -312,6 +313,12 @@ private fun ProcessRunThinkingRow(block: AssistantBlock, listState: LazyListStat
             // [T-mlkit-stream-translate] 实时离线翻译覆盖层：原文下方灰蓝小字，
             // 句级缓冲随思考更新；null = 未开启/引擎不可用（零渲染）。
             block.translatedContent?.takeIf { it.isNotBlank() }?.let { translated ->
+                // [T-translate-isolated] 原文/译文隔离：细分隔线，两段各自成块。
+                HorizontalDivider(
+                    modifier = Modifier.padding(start = 30.dp, end = 12.dp, top = 4.dp),
+                    thickness = 0.75.dp,
+                    color = Color(0xFF8E8E93).copy(alpha = 0.25f),
+                )
                 val trScroll = rememberTailFollowingScroll("${block.id}-t-tr", translated.length)
                 Text(
                     text = translated.takeLast(4000),

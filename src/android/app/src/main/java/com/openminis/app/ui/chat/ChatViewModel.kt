@@ -3080,7 +3080,7 @@ class ChatViewModel(
         val msg = cur[idx]
         val old = msg.toolBlocks.find { it.id == blockId }?.content
         val newBlocks = msg.toolBlocks.map { block ->
-            if (block.id == blockId && block.kind == "text") block.copy(content = text) else block
+            if (block.id == blockId && block.kind == "text") block.copy(content = text, translatedContent = null) else block // [T-reply-translated-only] drop stale auto overlay so the swap shows THIS translation
         }
         val joined = newBlocks.filter { it.kind == "text" }.joinToString("\n\n") { it.content }.ifBlank { text }
         val updated = msg.copy(content = joined, toolBlocks = newBlocks)

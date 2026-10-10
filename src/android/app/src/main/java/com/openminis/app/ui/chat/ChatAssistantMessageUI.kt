@@ -857,11 +857,8 @@ internal fun ThinkingBlock(block: AssistantBlock, isStreaming: Boolean, isLast: 
                 snapshotFlow { block.content.length }
                     .collect {
                         if (innerAutoFollowPaused) return@collect
-                        // scrollTo (not animateScrollTo) — animating fights
-                        // back-to-back token ticks; iOS uses a 0.15s linear
-                        // animation, but Compose's animateScrollTo cancels
-                        // any in-flight scroll, so streaming bursts get
-                        // jankier than a direct snap.
+                        // scrollTo (not animateScrollTo) — Compose's animate cancels
+                        // in-flight scrolls, jankier than a direct snap on token ticks.
                         scrollState.scrollTo(scrollState.maxValue)
                     }
             }
@@ -889,6 +886,7 @@ internal fun ThinkingBlock(block: AssistantBlock, isStreaming: Boolean, isLast: 
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
                     lineHeight = 19.sp,
                 )
+                block.translatedContent?.takeIf { it.isNotBlank() }?.let { ThinkingTranslatedSegment(it) } // [T-translate-isolated] 原文在上、译文在下
             }
         }
 

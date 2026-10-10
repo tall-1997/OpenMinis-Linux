@@ -717,8 +717,11 @@ internal suspend fun ChatViewModel.runAgentLoop(
                     } else {
                         // New text run — either first text after a tool_use/thinking
                         // break, or first text in this turn. Open a fresh block AND
-                        // a fresh accumulator. The new block's content carries the
-                        // first delta verbatim; subsequent deltas append to the SB.
+                        // a fresh accumulator. [T-reply-translated-only] reset the
+                        // translator too: per-block coverage, no duplication.
+                        textTranslate.reset()
+                        // The new block's content carries the first delta
+                        // verbatim; subsequent deltas append to the SB.
                         val freshSb = StringBuilder(strippedDelta)
                         currentTextBlockSb = freshSb
                         val block = AssistantBlock(
@@ -788,24 +791,20 @@ internal suspend fun ChatViewModel.runAgentLoop(
                     if (thinkIdx >= 0 && allToolBlocks[thinkIdx].toolStatus != ToolBlockStatus.SUCCESS) {
                         allToolBlocks[thinkIdx] = allToolBlocks[thinkIdx].let { it.copy(toolStatus = ToolBlockStatus.SUCCESS, durationMs = if (it.startTimeMs > 0L) System.currentTimeMillis() - it.startTimeMs else it.durationMs) }
                     }
-                    // T154: when the last few text deltas landed inside the 50ms throttle
-                    // window, the UI hadn't yet been pushed with the trailing text — and
-                    // adding the tool_use block before that push freezes the preceding
-                    // text fragment in StreamingMarkdownText (its `messageIsStreaming`
-                    // flag flips off the next layout pass) with chars chopped off the
-                    // end. Mirror iOS AnthropicAgentProvider.swift Step 1 / Step 2:
-                    // first push the latest accumulated text *unthrottled* so the text
-                    // block freezes at its complete value, yield to let Compose render
-                    // it, then add the tool_use block in a separate transaction. The
-                    // pendingChunkText/lastUiUpdateMs reset mirrors the throttle path
-                    // so the next text delta doesn't try to flush stale state.
+                    // T154: text deltas inside the 50ms throttle window hadn't been
+                    // pushed when the tool_use block lands — freezing then truncates the
+                    // trailing text. Mirror iOS Step 1 / Step 2: push the accumulated
+                    // text *unthrottled*, yield to render, then add the tool_use block
+                    // in a separate transaction; reset pendingChunkText/lastUiUpdateMs
+                    // like the throttle path so no stale state flushes.
                     if (turnTextSb.isNotEmpty() && pendingChunkSb.isNotEmpty()) {
                         pendingChunkSb.setLength(0)
                         lastUiUpdateMs = System.currentTimeMillis()
                         lastFlushedLen = turnTextSb.length
-                        // T307: pre-tool-use flush also materialises the
-                        // active text block + a turn-text snapshot.
+                        // T307: pre-tool-use flush also materialises the active text block + a turn-text snapshot.
                         materializeActiveTextBlock()
+                        // [T-reply-translated-only] async tail patch: flush in-flight batches back into the frozen block.
+                        launchTextTailPatch(textTranslate, allToolBlocks, currentProvider.streamTextIsMonolithic, turnTextBlockIdx, assistantId, accumulatedText, turnTextSb)
                         // [T-android-tool-splits-reply-fix] Ordered mode:
                         // the tool block breaks the text run, so the next
                         // text delta opens a new block. Monolithic mode
