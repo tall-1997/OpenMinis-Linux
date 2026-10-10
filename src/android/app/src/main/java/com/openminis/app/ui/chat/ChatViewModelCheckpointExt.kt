@@ -5,11 +5,13 @@ import com.openminis.app.R
 import com.openminis.app.checkpoint.CheckpointBridge
 import com.openminis.app.data.model.LLMMessage
 import com.openminis.app.harness.checkpoint.RewindScope
+import com.openminis.app.logging.AppLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * [T-p1-8-undo-session-binding] 「撤回到此轮」的用户入口逻辑。
@@ -81,6 +83,37 @@ internal fun ChatViewModel.rewindToMessage(
             val plan = controller.prepare(sid, turn.turn, scope)
             // workspace 参数在宿主侧承载 sessionId —— 见 AppRewindFileAccess.withBase。
             val result = controller.commit(plan, workspace = sid)
+            // [T-code-rewind-context-trim] CODE 模式顺带截断模型上下文（用户指示的
+            // 产品行为）：文件回到过去 + 模型忘记之后的轮次。与 deleteFromMessage
+            // 同一套截断：锚点 = checkpoint 的 anchorMessageId 自身 DB 行（1:1，
+            // 永不错位）——UI 截到锚、DB 删行、agentHistory 重建、压缩标记对账、
+            // 会话预览刷新。CONVERSATION/BOTH 不在此列：它们派生 fork 会话，
+            // 上下文天然就是分支点的消息。
+            if (scope == RewindScope.CODE && result.forkedSessionId == null) {
+                val anchorSort = runCatching { chatRepository.dao.sortOrderOf(messageId) }.getOrNull()
+                if (anchorSort != null) {
+                    chatRepository.deleteMessagesAfter(sid, anchorSort + 1)
+                }
+                withContext(Dispatchers.Main) {
+                    val idx = _messages.value.indexOfFirst { it.id == messageId }
+                    if (idx >= 0) {
+                        for (m in _messages.value.subList(idx + 1, _messages.value.size)) {
+                            m.queuedPromptId?.let { pid -> forgetQueuedPrompt(pid) }
+                        }
+                        _messages.value = _messages.value.subList(0, idx + 1)
+                    }
+                }
+                val tail = awaitBoundedHistoryRebuild(sid)
+                reconcileCompactMarkerAfterTruncation()
+                runCatching {
+                    chatRepository.updateSessionPreview(sid, tail.lastOrNull()?.partsJson ?: "[]")
+                }
+                AppLogger.info(
+                    ChatViewModel.TAG,
+                    "[T-code-rewind-context-trim] CODE rewind also trimmed context: " +
+                        "cut at sortOrder=${anchorSort ?: -1}, ${tail.size} message(s) remain",
+                )
+            }
             RewindEvents.emit(
                 sid,
                 buildString {
