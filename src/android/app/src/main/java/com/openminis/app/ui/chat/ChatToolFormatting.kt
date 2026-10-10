@@ -12,7 +12,17 @@ import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Icon
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.dp
 import com.openminis.app.util.IsoTime
 
 // [T-android-split-chat] Pure tool-label / duration / timestamp formatting
@@ -130,5 +140,44 @@ internal fun formatToolDuration(ms: Long): String {
             val s = (seconds % 60).toInt()
             "${m}m ${s}s"
         }
+    }
+}
+
+/**
+ * [T-agent-ui-design-system] Status icon with a same-color halo ring.
+ *
+ * Adapted from the agent-ui design system spec 6.2 (tool row five states):
+ * a 9px status dot wrapped in a 3px halo of the same color at ~12% alpha
+ * (`box-shadow: 0 0 0 3px <color>1f`). Here the per-tool icon plays the
+ * dot, and the halo is an 18dp circle under the 12dp icon — same intent
+ * (state reads at a glance) at mobile density.
+ *
+ * `halo = false` renders the bare icon: neutral rows (pending, or muted
+ * rows with no viewable output) carry no state ring, per spec.
+ */
+@Composable
+internal fun ToolStatusHaloIcon(
+    icon: ImageVector,
+    tint: Color,
+    halo: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier.size(18.dp),
+    ) {
+        if (halo) {
+            Box(
+                modifier = Modifier
+                    .size(18.dp)
+                    .background(color = tint.copy(alpha = 0.12f), shape = CircleShape),
+            )
+        }
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = tint,
+            modifier = Modifier.size(12.dp),
+        )
     }
 }

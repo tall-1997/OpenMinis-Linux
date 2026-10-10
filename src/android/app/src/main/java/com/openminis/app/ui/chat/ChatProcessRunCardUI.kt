@@ -78,13 +78,22 @@ internal fun ProcessRunCard(
         Color(0xFF007AFF)
     }
     val cardBackground = Color(0xFF007AFF)
+    // [T-agent-ui-design-system] Collapsed = pill (spec 6.3: r-pill 999px,
+    // 20px horizontal padding, 56px height → mobile: percent-50 corners,
+    // 16dp horizontal / 12dp vertical padding ≈ 46dp tap target).
+    // Expanded = the 12dp card (spec 6.1 trace card).
+    val cardShape = if (item.expanded) {
+        RoundedCornerShape(12.dp)
+    } else {
+        RoundedCornerShape(percent = 50)
+    }
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp)
-            .background(cardBackground.copy(alpha = 0.06f), RoundedCornerShape(12.dp))
-            .border(0.5.dp, cardBackground.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
-            .clip(RoundedCornerShape(12.dp)),
+            .background(cardBackground.copy(alpha = 0.06f), cardShape)
+            .border(0.5.dp, cardBackground.copy(alpha = 0.15f), cardShape)
+            .clip(cardShape),
     ) {
         ProcessRunCardHeader(
             item = item,
@@ -119,7 +128,7 @@ private fun ProcessRunCardHeader(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onToggle)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
         val headerIcon = when (item.phaseKind) {
             ProcessPhaseKind.THINKING -> Icons.Default.Psychology
@@ -273,31 +282,42 @@ private fun ProcessRunToolRow(
         block.toolStatus == ToolBlockStatus.TIMEOUT
     val isCancelled = block.toolStatus == ToolBlockStatus.CANCELLED
     val isDone = block.toolStatus == ToolBlockStatus.SUCCESS
+    // [T-agent-ui-design-system] Muted row (spec 6.2 .row.muted): a tool
+    // that finished with no viewable output is a pure status row — no
+    // "查看" affordance, not clickable, name in the process gray.
+    // Failed/cancelled rows stay tappable (error detail is the point).
+    val isMuted = isDone && block.content.isBlank()
     val iconTint = when {
         isFailed -> ToolErrorColor
         isCancelled -> ToolCancelColor
         isDone -> ToolCheckColor
         else -> toolAccentColor(block.toolName)
     }
+    // Halo marks rows carrying a live/terminal state (spec 6.2 dot+halo);
+    // muted rows render the bare icon.
+    val showHalo = isRunning || isFailed || isCancelled || (isDone && !isMuted)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onOpenTool(block.id) }
+            .clickable(enabled = !isMuted) { onOpenTool(block.id) }
             .padding(horizontal = 12.dp, vertical = 3.dp),
     ) {
-        Icon(
-            imageVector = toolIconFor(block.toolName),
-            contentDescription = null,
+        ToolStatusHaloIcon(
+            icon = toolIconFor(block.toolName),
             tint = iconTint,
-            modifier = Modifier.size(12.dp),
+            halo = showHalo,
         )
         Spacer(modifier = Modifier.width(6.dp))
         val title = block.toolTitle.ifEmpty { block.toolName }.ifEmpty { "tool" }
         Text(
             text = title,
             fontSize = 12.sp,
-            color = if (isFailed) ToolErrorColor else Color(0xFF3C3C43),
+            color = when {
+                isFailed -> ToolErrorColor
+                isMuted -> Color(0xFF8E8E93)
+                else -> Color(0xFF3C3C43)
+            },
             maxLines = 1,
             modifier = Modifier.weight(1f),
         )
@@ -318,13 +338,15 @@ private fun ProcessRunToolRow(
             )
             Spacer(modifier = Modifier.width(6.dp))
         }
-        Text(
-            text = stringResource(R.string.chat_process_card_view),
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Medium,
-            color = Color(0xFF007AFF).copy(alpha = 0.7f),
-            maxLines = 1,
-        )
+        if (!isMuted) {
+            Text(
+                text = stringResource(R.string.chat_process_card_view),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color(0xFF007AFF).copy(alpha = 0.7f),
+                maxLines = 1,
+            )
+        }
     }
 }
 
