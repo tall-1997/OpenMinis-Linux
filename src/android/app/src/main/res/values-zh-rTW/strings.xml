@@ -1854,7 +1854,6 @@
     <string name="db_quarantine_body">本機資料庫在 %1$s 的啟動完整性檢查中未通過，無法安全開啟。你的聊天與設定並未刪除：損毀的檔案已被移出，應用以全新的空資料庫啟動。</string>
     <string name="db_quarantine_copy_at">損毀副本保留於：\n%1$s</string>
     <string name="db_quarantine_keep">保留副本</string>
-    <string name="chat_process_card_title">工作過程</string>
     <string name="chat_process_card_phase_thinking">正在思考中…</string>
     <string name="chat_process_card_phase_tool">正在調用 %1$s…</string>
     <string name="chat_process_card_phase_replying">正在回覆…</string>
@@ -1863,7 +1862,6 @@
     <string name="chat_process_card_view">查看</string>
     <string name="chat_process_card_thinking_row">思考</string>
     <string name="chat_process_card_error_row">出錯了</string>
-    <string name="chat_process_card_task_label">任務</string>
     <string name="db_quarantine_delete">刪除損毀副本</string>
     <string name="appearance_show_mic_button_title">顯示麥克風按鈕</string>
     <string name="appearance_show_mic_button_subtitle">輸入框的語音輸入按鈕。語音模式本身始終可從應用圖示進入。</string>

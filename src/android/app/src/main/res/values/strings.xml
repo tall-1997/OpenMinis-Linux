@@ -963,7 +963,6 @@
          palette, so wallpaper tinting must not be the default. -->
     <string name="appearance_monet_title">Dynamic color</string>
     <string name="appearance_monet_subtitle">Restyle the whole app from your wallpaper (Material You): surfaces, cards, chat bubbles and icons all follow; semantic colors like red stay put. Requires Android 12+.</string>
-    <string name="chat_process_card_title">Work process</string>
     <string name="chat_process_card_phase_thinking">Thinking…</string>
     <string name="chat_process_card_phase_tool">Running %1$s…</string>
     <string name="chat_process_card_phase_replying">Writing…</string>
@@ -972,7 +971,6 @@
     <string name="chat_process_card_view">View</string>
     <string name="chat_process_card_thinking_row">Thinking</string>
     <string name="chat_process_card_error_row">Failed</string>
-    <string name="chat_process_card_task_label">Task</string>
     <string name="appearance_section_font_size">Font Size</string>
     <string name="appearance_font_size_footer">Scale fonts for chat input, message content, and general app text. Changes apply immediately.</string>
     <string name="appearance_font_scale_title">Font Scale</string>

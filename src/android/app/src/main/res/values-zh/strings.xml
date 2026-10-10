@@ -883,7 +883,6 @@
     <string name="appearance_fold_ai_process_subtitle">思考和工具一完成就收进摘要，不必等整段回复结束。只有当前进行中的那一块保持展开。点摘要可展开。进行中的工具仍会显示在底部工具条。</string>
     <string name="appearance_monet_title">动态取色</string>
     <string name="appearance_monet_subtitle">整体配色跟随系统壁纸（Material You）：表面、卡片、聊天气泡与图标一起着色，红色等语义色保留。需要 Android 12 及以上。</string>
-    <string name="chat_process_card_title">工作过程</string>
     <string name="chat_process_card_phase_thinking">正在思考中…</string>
     <string name="chat_process_card_phase_tool">正在调用 %1$s…</string>
     <string name="chat_process_card_phase_replying">正在回复…</string>
@@ -892,7 +891,6 @@
     <string name="chat_process_card_view">查看</string>
     <string name="chat_process_card_thinking_row">思考</string>
     <string name="chat_process_card_error_row">出错了</string>
-    <string name="chat_process_card_task_label">任务</string>
     <string name="appearance_section_font_size">字体大小</string>
     <string name="appearance_font_size_footer">调整聊天输入、消息内容和应用文本的字体大小。更改立即生效。</string>
     <string name="appearance_font_scale_title">字体缩放</string>

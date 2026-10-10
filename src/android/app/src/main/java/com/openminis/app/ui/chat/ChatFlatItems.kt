@@ -217,31 +217,18 @@ internal sealed class FlatChatItem {
     }
 
     /**
-     * [T-process-run-card] Unified "work process" card — ONE collapsible
-     * surface that owns the whole process of an assistant turn while
-     * folding is ON: a live phase header (spinner + "正在思考中…"),
-     * entries appended chronologically as the agent works (tool rows with
-     * a 查看 button, thinking rows, the turn error), and a collapsed bar
-     * ("工作过程 · 已调用 N 个工具 · 47s").
+     * [T-process-run-card] Unified process card — phase header, chronological
+     * entries (tool rows, thinking rows), turn error as a red row.
+     * [T-process-card-segments] A turn is sliced at every non-empty text
+     * block, so one turn can own SEVERAL cards — see ChatProcessFoldLogic
+     * ([processSegmentToggleId], [nextProcessToggleState]). [segmentAnchor]
+     * keys that split: "" for the tail (legacy messageId toggle key), the
+     * anchor block id otherwise.
      *
-     * Replaces the old AssistantProcessSummary fold bar + the in-list live
-     * thinking row + the in-flight tool pills: those three surfaces fought
-     * for attention and the user saw "everything piled together, no sense
-     * of what is running". The card is emitted directly after the
-     * AssistantHeader row, so under reverseLayout + asReversed it renders
-     * at the visual TOP of the turn — the running state reads as the
-     * turn's header and the reply text streams in below it.
-     *
-     * Auto-expand: while the turn is live AND no reply text has arrived
-     * the card is expanded (live process view). The moment reply text
-     * starts streaming the card auto-collapses — "一段运行完成后输出内容
-     * 时折叠中间的过程" — and finished turns stay collapsed. Manual taps
-     * override via expandedProcessIds / collapsedProcessIds.
-     *
-     * [blocks] is compared by REFERENCE in equals: AssistantBlock is a
-     * data class whose equals walks full content strings, and the flat
-     * rebuild fires per streaming tick — a content-based equals would
-     * re-compare kilobytes of tool output on every token.
+     * [blocks] is compared by REFERENCE in equals: AssistantBlock's equals
+     * walks full content strings and the flat rebuild fires per streaming
+     * tick — a content-based equals would re-walk kilobytes of tool output
+     * on every token.
      */
     class ProcessRunCard(
         val messageId: String,
@@ -254,18 +241,21 @@ internal sealed class FlatChatItem {
         /** Summed block durations for the collapsed "· 47s" suffix. 0 when
          *  no block recorded a duration — the bar then omits the suffix. */
         val totalMs: Long,
-        /** One-line task description from the preceding user message. */
-        val taskDescription: String = "",
         /** Turn-level error (message.error) rendered as a red row inside
          *  the card while the card is showing. */
         val errorText: String = "",
+        /** "" for the tail segment; the anchor block id otherwise. */
+        val segmentAnchor: String = "",
         private val keySuffix: String = "",
     ) : FlatChatItem() {
-        override val key = FlatKeys.of(FlatKeys.KIND_PROCESS, messageId) + keySuffix
+        /** Manual-toggle id — [processSegmentToggleId] for this card. */
+        val toggleId: String =
+            if (segmentAnchor.isEmpty()) messageId else "$messageId:$segmentAnchor"
+        override val key = FlatKeys.of(FlatKeys.KIND_PROCESS, messageId, segmentAnchor) + keySuffix
         override val contentType = "process"
         override fun withKeySuffix(suffix: String): FlatChatItem = ProcessRunCard(
             messageId, blocks, isRunning, phaseKind, phaseToolName, expanded,
-            hasFailure, totalMs, taskDescription, errorText, suffix,
+            hasFailure, totalMs, errorText, segmentAnchor, suffix,
         )
         override fun equals(other: Any?): Boolean = this === other
         override fun hashCode(): Int = messageId.hashCode()
@@ -535,14 +525,6 @@ internal fun buildFlatChatItems(
         // appended chronologically as the agent works, and a collapsed
         // bar ("工作过程 · 已调用 N 个工具 · 47s") once reply text streams.
         val isTurnRunning = message.isStreaming || message.isAwaitingModelResponse
-        val turnHasReplyText = hasReplyText(message)
-        val processExpanded = effectiveProcessExpanded(
-            messageId = message.id,
-            isRunning = isTurnRunning,
-            hasReplyText = turnHasReplyText,
-            expandedIds = expandedProcessIds,
-            collapsedIds = collapsedProcessIds,
-        )
         val processCardBlocks = if (foldAiProcess && !isSystem) {
             blocks.filter { block ->
                 block.kind == "thinking" ||
@@ -558,16 +540,6 @@ internal fun buildFlatChatItems(
         // hasFoldableProcess, and live turns never translate.
         val showProcessSummary = showProcessCard
         val replyText = AssistantReplyText.joined(blocks)
-        // [T-process-run-card] One-line task description from the preceding
-        // user message — the expanded card shows it so a scrolled-back
-        // process card still says WHAT this run was about.
-        val taskDescription = if (idx > 0) {
-            val prev = messages[idx - 1]
-            if (prev.role == "user") {
-                prev.content.lineSequence()
-                    .firstOrNull { it.isNotBlank() }?.trim()?.take(64).orEmpty()
-            } else ""
-        } else ""
         if (!isSystem && !isResumeContinuation) {
             // [T-android-fold-toolonly-blank] A turn whose entire visible
             // payload is the process card (no text/info/error/interactive
@@ -592,34 +564,67 @@ internal fun buildFlatChatItems(
                 )))
             }
         }
-        // [T-process-run-card] Emitted directly after the header so under
-        // reverseLayout + asReversed it renders at the visual TOP of the
-        // turn — the running state reads as the turn's header and the
-        // reply text streams in below it (the old summary bar sat below
-        // the reply, where a running turn showed nothing at the top).
-        if (showProcessCard) {
+        // [T-process-card-segments] The turn is sliced at every non-empty
+        // text block: each slice's card is emitted right BEFORE the text
+        // that closes it (flat order == visual order: card above its
+        // reply text), and the live tail card is emitted after the block
+        // loop. forceTail keeps a turn-level error rideable even when the
+        // last block is text (error row lives in the tail card).
+        val processSegments = if (showProcessCard) {
+            buildProcessSegments(blocks, forceTail = message.error != null)
+        } else {
+            emptyList()
+        }
+        val segmentByBoundaryText: Map<String, ProcessSegment> = processSegments
+            .filterNotNull()
+            .filter { it.boundaryTextBlockId != null }
+            .associate { it.boundaryTextBlockId!! to it }
+        val tailSegment = processSegments.lastOrNull { it.isTail }
+
+        fun emitSegmentCard(segment: ProcessSegment) {
+            val toggleId = processSegmentToggleId(message.id, segment)
+            // A slice that still owns an in-flight tool reads as running
+            // even when a later text block closed it — its rows keep their
+            // spinners and the header names the live tool.
+            val liveToolName = segment.blocks
+                .lastOrNull { isInFlightProcessTool(it) }?.toolName.orEmpty()
+            val segRunning = (segment.isTail && isTurnRunning) || liveToolName.isNotEmpty()
             out.add(dedupe(FlatChatItem.ProcessRunCard(
                 messageId = message.id,
-                blocks = processCardBlocks,
-                isRunning = isTurnRunning,
-                phaseKind = processPhaseKind(message),
-                phaseToolName = processPhaseToolName(message),
-                expanded = processExpanded,
-                hasFailure = processCardBlocks.any { block ->
+                blocks = segment.blocks,
+                isRunning = segRunning,
+                phaseKind = when {
+                    segment.isTail -> processPhaseKind(message)
+                    segRunning -> ProcessPhaseKind.TOOL
+                    else -> ProcessPhaseKind.DONE
+                },
+                phaseToolName = if (segment.isTail) processPhaseToolName(message) else liveToolName,
+                expanded = effectiveProcessExpanded(
+                    messageId = toggleId,
+                    isRunning = segRunning,
+                    hasReplyText = !segment.isTail,
+                    expandedIds = expandedProcessIds,
+                    collapsedIds = collapsedProcessIds,
+                ),
+                hasFailure = segment.blocks.any { block ->
                     block.kind == "tool_use" && (
                         block.toolStatus == ToolBlockStatus.FAILED ||
                             block.toolStatus == ToolBlockStatus.TIMEOUT
                         )
                 },
-                totalMs = blocks.sumOf { it.durationMs },
-                taskDescription = taskDescription,
-                errorText = message.error.orEmpty(),
+                totalMs = segment.blocks.sumOf { it.durationMs },
+                errorText = if (segment.isTail) message.error.orEmpty() else "",
+                segmentAnchor = if (segment.isTail) "" else segment.anchorBlockId,
             )))
         }
         blocks.forEachIndexed { index, block ->
             when (block.kind) {
                 "text" -> {
                     if (block.content.isNotEmpty()) {
+                        // [T-process-card-segments] The card for the process
+                        // slice that PRECEDES this text renders above it —
+                        // emit it before the text rows.
+                        segmentByBoundaryText[block.id]?.let { emitSegmentCard(it) }
                         val isLastText = index == lastTextIdx
                         // Pattern A: split this text block's content into
                         // independent markdown fragments so each becomes its
@@ -754,6 +759,11 @@ internal fun buildFlatChatItems(
                 }
             }
         }
+
+        // [T-process-card-segments] The live tail card renders after the
+        // last text — visually the bottom-most process surface, showing
+        // the in-flight phase while the reply above it stays put.
+        tailSegment?.let { emitSegmentCard(it) }
 
         // [T-process-run-card] The old fold bar was emitted here (after the
         // content blocks, visually below the reply). The unified card now

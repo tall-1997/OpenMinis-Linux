@@ -128,13 +128,112 @@ internal fun processExpandedFor(
     collapsedIds = collapsedIds,
 )
 
-/** Next (expandedIds, collapsedIds) after tapping the card of [item]. */
+/** Next (expandedIds, collapsedIds) after tapping the card of [item].
+ *  [T-process-card-segments] toggles by the SEGMENT id — the tail keeps
+ *  the legacy messageId key (existing manual state survives), completed
+ *  segments key by their anchor block. */
 internal fun nextProcessToggleState(
     item: FlatChatItem.ProcessRunCard,
     expandedIds: Set<String>,
     collapsedIds: Set<String>,
 ): Pair<Set<String>, Set<String>> {
-    val id = item.messageId
-    return if (item.expanded) (collapsedIds + id) to (expandedIds - id)
+    val id = item.toggleId
+    // (expandedIds, collapsedIds) order — tapping an expanded card moves
+    // its id OUT of the expanded set into the collapsed set. Regression:
+    // the collapse branch used to return its pair in (collapsed, expanded)
+    // order, so a tapped-open card could never close.
+    return if (item.expanded) (expandedIds - id) to (collapsedIds + id)
     else (expandedIds + id) to (collapsedIds - id)
 }
+
+// ── [T-process-card-segments] segment split ──────────────────────────
+//
+// A turn is sliced at every NON-EMPTY text block: the process blocks
+// (thinking + tool_use, minus always-visible ones) that accumulated
+// before each text become their own foldable segment card, the text
+// renders below it, and whatever follows the LAST text is the live tail
+// segment. This restores the interleaved reading order (text → tool →
+// text) that the single-card-per-turn design flattened away.
+
+/** One foldable slice of a turn's process blocks. */
+internal class ProcessSegment(
+    /** Chronological process blocks owned by this segment. */
+    val blocks: List<AssistantBlock>,
+    /** First block's id — a stable key anchor (block ids never rewrite). */
+    val anchorBlockId: String,
+    /** True for the slice after the LAST non-empty text block. */
+    val isTail: Boolean,
+    /** Non-tail only: the id of the text block that closes this segment. */
+    val boundaryTextBlockId: String? = null,
+)
+
+/**
+ * Splits [blocks] into foldable segments at non-empty text boundaries.
+ * Empty text blocks, info rows and always-visible tools neither join a
+ * segment nor close one. [forceTail] appends an empty tail segment when
+ * no natural tail exists — used when a turn-level error needs a card to
+ * ride in (the error row lives in the tail card).
+ */
+internal fun buildProcessSegments(
+    blocks: List<AssistantBlock>,
+    forceTail: Boolean = false,
+): List<ProcessSegment> {
+    val segments = mutableListOf<ProcessSegment>()
+    var current = mutableListOf<AssistantBlock>()
+    fun flush(boundaryTextId: String?, isTail: Boolean) {
+        if (current.isEmpty() && !(isTail && forceTail)) return
+        segments.add(ProcessSegment(
+            blocks = current.toList(),
+            anchorBlockId = current.firstOrNull()?.id.orEmpty(),
+            isTail = isTail,
+            boundaryTextBlockId = boundaryTextId,
+        ))
+        current = mutableListOf()
+    }
+    for (block in blocks) {
+        val isProcess = block.kind == "thinking" ||
+            (block.kind == "tool_use" && !isAlwaysVisibleProcessTool(block))
+        if (isProcess) {
+            current.add(block)
+        } else if (block.kind == "text" && block.content.isNotEmpty()) {
+            flush(boundaryTextId = block.id, isTail = false)
+        }
+    }
+    flush(boundaryTextId = null, isTail = true)
+    return segments
+}
+
+/**
+ * Manual-toggle id for a segment card: the tail keeps the plain
+ * messageId (legacy single-card manual state survives the migration);
+ * completed segments append their anchor block id.
+ */
+internal fun processSegmentToggleId(messageId: String, segment: ProcessSegment): String =
+    if (segment.isTail) messageId else "$messageId:${segment.anchorBlockId}"
+
+/**
+ * [processExpandedFor] re-anchored to the TAIL segment for the floating
+ * overlay: in-flight tools always live in the tail, so the overlay only
+ * needs to know whether the tail card is hiding them. A turn with no
+ * tail segment (reply text is the last block) has nothing in flight to
+ * float.
+ */
+internal fun tailProcessExpandedFor(
+    message: ChatMessage,
+    expandedIds: Set<String>,
+    collapsedIds: Set<String>,
+): Boolean {
+    val tail = buildProcessSegments(message.toolBlocks).lastOrNull { it.isTail }
+        ?: return false
+    return effectiveProcessExpanded(
+        messageId = processSegmentToggleId(message.id, tail),
+        isRunning = message.isStreaming || message.isAwaitingModelResponse,
+        // The tail by definition has no reply text after it; the auto rule
+        // collapses the OLD single card once text arrived, which here is
+        // expressed by the tail becoming empty (no card) instead.
+        hasReplyText = false,
+        expandedIds = expandedIds,
+        collapsedIds = collapsedIds,
+    )
+}
+

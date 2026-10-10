@@ -24,16 +24,22 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openminis.app.R
+import com.openminis.app.ui.settings.autoExpandThinkingEnabled
 
 /**
  * [T-process-run-card] The unified process card for one assistant turn.
@@ -62,17 +68,22 @@ internal fun ProcessRunCard(
     onToggle: () -> Unit,
     onOpenTool: (String) -> Unit,
 ) {
+    // [T-process-card-visual] Failure tints ICONS/TEXT only — the card
+    // background stays the constant blue family so a failed run does not
+    // repaint the whole surface red (failure is already carried by the
+    // red rows inside the card).
     val accent = if (item.hasFailure || item.errorText.isNotEmpty()) {
         Color(0xFFFF3B30)
     } else {
         Color(0xFF007AFF)
     }
+    val cardBackground = Color(0xFF007AFF)
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp)
-            .background(accent.copy(alpha = 0.06f), RoundedCornerShape(12.dp))
-            .border(0.5.dp, accent.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
+            .background(cardBackground.copy(alpha = 0.06f), RoundedCornerShape(12.dp))
+            .border(0.5.dp, cardBackground.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
             .clip(RoundedCornerShape(12.dp)),
     ) {
         ProcessRunCardHeader(
@@ -81,16 +92,6 @@ internal fun ProcessRunCard(
             onToggle = onToggle,
         )
         if (item.expanded) {
-            if (item.taskDescription.isNotEmpty()) {
-                Text(
-                    text = stringResource(R.string.chat_process_card_task_label) +
-                        " · " + item.taskDescription,
-                    fontSize = 11.sp,
-                    color = accent.copy(alpha = 0.55f),
-                    maxLines = 1,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp),
-                )
-            }
             item.blocks.forEach { block ->
                 when (block.kind) {
                     "thinking" -> ProcessRunThinkingRow(block)
@@ -133,13 +134,9 @@ private fun ProcessRunCardHeader(
             modifier = Modifier.size(14.dp),
         )
         Spacer(modifier = Modifier.width(6.dp))
-        Text(
-            text = stringResource(R.string.chat_process_card_title),
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = accent,
-        )
-        Spacer(modifier = Modifier.width(8.dp))
+        // [T-process-card-visual] No static "工作过程" title — the bar leads
+        // with the live phase verb while running and folds straight into
+        // the right-side tool-count meta when done. One line, no filler.
         // Live phase text (spinner + verb) while running; the done state
         // folds into the right-side meta so the bar stays one line.
         if (item.isRunning) {
@@ -194,39 +191,73 @@ private fun ProcessRunCardHeader(
 private fun ProcessRunThinkingRow(block: AssistantBlock) {
     val live = block.toolStatus == ToolBlockStatus.STREAMING ||
         block.toolStatus == ToolBlockStatus.PENDING
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 3.dp),
-    ) {
-        Icon(
-            imageVector = Icons.Default.Psychology,
-            contentDescription = null,
-            tint = Color(0xFF8E8E93),
-            modifier = Modifier.size(12.dp),
-        )
-        Spacer(modifier = Modifier.width(6.dp))
-        Text(
-            text = stringResource(R.string.chat_process_card_thinking_row),
-            fontSize = 12.sp,
-            color = Color(0xFF8E8E93),
-            maxLines = 1,
-            modifier = Modifier.weight(1f),
-        )
-        if (live) {
-            CircularProgressIndicator(
-                strokeWidth = 1.2.dp,
-                color = Color(0xFF8E8E93),
-                modifier = Modifier.size(11.dp),
+    // [T-process-card-thinking-view] The thinking CONTENT is viewable:
+    // tapping the row expands/collapses it, and the initial state follows
+    // the Appearance "auto expand thinking" setting (default ON = the row
+    // shows its content expanded). Only the tail window of the content is
+    // laid out — same layout-cost guard as the standalone thinking block,
+    // which matters because the flat list rebuilds per streaming tick.
+    val context = LocalContext.current
+    val autoExpand = remember { autoExpandThinkingEnabled(context) }
+    val hasContent = block.content.isNotBlank()
+    var expanded by remember(block.id) { mutableStateOf(autoExpand && hasContent) }
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(enabled = hasContent) { expanded = !expanded }
+                .padding(horizontal = 12.dp, vertical = 3.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Default.Psychology,
+                contentDescription = null,
+                tint = Color(0xFF8E8E93),
+                modifier = Modifier.size(12.dp),
             )
-        } else if (block.durationMs > 0) {
+            Spacer(modifier = Modifier.width(6.dp))
             Text(
-                text = formatProcessDuration(block.durationMs).orEmpty(),
-                fontSize = 10.sp,
-                fontFamily = FontFamily.Monospace,
-                color = Color(0xFF8E8E93).copy(alpha = 0.7f),
+                text = stringResource(R.string.chat_process_card_thinking_row),
+                fontSize = 12.sp,
+                color = Color(0xFF8E8E93),
                 maxLines = 1,
+                modifier = Modifier.weight(1f),
+            )
+            if (live) {
+                CircularProgressIndicator(
+                    strokeWidth = 1.2.dp,
+                    color = Color(0xFF8E8E93),
+                    modifier = Modifier.size(11.dp),
+                )
+            } else if (block.durationMs > 0) {
+                Text(
+                    text = formatProcessDuration(block.durationMs).orEmpty(),
+                    fontSize = 10.sp,
+                    fontFamily = FontFamily.Monospace,
+                    color = Color(0xFF8E8E93).copy(alpha = 0.7f),
+                    maxLines = 1,
+                )
+            }
+            if (hasContent) {
+                Spacer(modifier = Modifier.width(4.dp))
+                Icon(
+                    imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                    contentDescription = null,
+                    tint = Color(0xFF8E8E93).copy(alpha = 0.6f),
+                    modifier = Modifier.size(12.dp),
+                )
+            }
+        }
+        if (expanded && hasContent) {
+            // Tail window only (8000 chars) — a huge thinking block must
+            // not re-measure its full text on every streaming tick.
+            Text(
+                text = block.content.takeLast(8000),
+                fontSize = 11.sp,
+                color = Color(0xFF8E8E93).copy(alpha = 0.85f),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 30.dp, end = 12.dp, top = 2.dp, bottom = 4.dp),
             )
         }
     }

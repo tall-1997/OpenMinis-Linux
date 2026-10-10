@@ -3011,7 +3011,7 @@ fun ChatScreen(
                             isFloatingProcessTool(
                                 tb,
                                 foldAiProcess,
-                                processExpandedFor(msg, expandedProcessIds, collapsedProcessIds),
+                                tailProcessExpandedFor(msg, expandedProcessIds, collapsedProcessIds),
                             )
                         }
                     }
@@ -4579,7 +4579,7 @@ fun ChatScreen(
                         // [T-android-fold-expanded-duplicate] Expanded card
                         // already shows the tool in place — no pinned copy.
                         val latestExpanded = latestReply
-                            ?.let { processExpandedFor(it, expandedProcessIds, collapsedProcessIds) } == true
+                            ?.let { tailProcessExpandedFor(it, expandedProcessIds, collapsedProcessIds) } == true
                         val overlay = latestReply?.toolBlocks.orEmpty()
                             .filter {
                                 isFloatingProcessTool(it, foldAiProcess, processExpanded = latestExpanded)

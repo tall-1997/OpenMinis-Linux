@@ -2,6 +2,7 @@ package com.openminis.app.ui.chat
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -195,7 +196,9 @@ class ChatFlatItemsProcessFoldTest {
             listOf(assistant(blocks = listOf(thinking(), tool(), text()))),
             showCompletedToolCards = false,
             foldAiProcess = true,
-            expandedProcessIds = setOf("m1"),
+            // The card is the slice closed by tx1 — its toggle id carries
+            // the anchor block id (only the tail card keeps plain "m1").
+            expandedProcessIds = setOf("m1:th1"),
         )
         val c = card(items)
         assertTrue(c.expanded)
@@ -204,6 +207,68 @@ class ChatFlatItemsProcessFoldTest {
         val k = kinds(items)
         assertEquals(listOf("header", "card", "md"), k)
         assertEquals(listOf("th1", "tool1"), c.blocks.map { it.id })
+    }
+
+    @Test
+    fun `tapping an expanded card collapses it and tapping again reopens it`() {
+        // Regression: the collapse branch of nextProcessToggleState used to
+        // return its pair in (collapsed, expanded) order while the expand
+        // branch returned (expanded, collapsed) — tapping an expanded card
+        // wrote its id into the EXPANDED set, so the card could never close.
+        val live = buildFlatChatItems(
+            listOf(assistant(streaming = true, blocks = listOf(thinking()))),
+            showCompletedToolCards = false,
+            foldAiProcess = true,
+        )
+        val auto = card(live)
+        assertTrue(auto.expanded)
+        // Tap 1 on the auto-expanded card: id moves to the collapsed set.
+        val (expanded1, collapsed1) = nextProcessToggleState(auto, emptySet(), emptySet())
+        assertEquals(emptySet<String>(), expanded1)
+        assertEquals(setOf("m1"), collapsed1)
+        // Tap 2 from the manually-collapsed state: id moves back.
+        val closed = buildFlatChatItems(
+            listOf(assistant(streaming = true, blocks = listOf(thinking()))),
+            showCompletedToolCards = false,
+            foldAiProcess = true,
+            collapsedProcessIds = setOf("m1"),
+        )
+        assertFalse(card(closed).expanded)
+        val (expanded2, collapsed2) = nextProcessToggleState(card(closed), expanded1, collapsed1)
+        assertEquals(setOf("m1"), expanded2)
+        assertEquals(emptySet<String>(), collapsed2)
+    }
+
+    @Test
+    fun `process slices collapse at their text while the live tail stays open`() {
+        val items = buildFlatChatItems(
+            listOf(
+                assistant(
+                    streaming = true,
+                    blocks = listOf(
+                        tool(id = "a"),
+                        text(id = "tx1", content = "one"),
+                        tool(id = "b", status = ToolBlockStatus.RUNNING),
+                    ),
+                ),
+            ),
+            showCompletedToolCards = false,
+            foldAiProcess = true,
+        )
+        // card above its reply text, live tail card last
+        assertEquals(listOf("header", "card", "md", "card"), kinds(items))
+        val cards = items.filterIsInstance<FlatChatItem.ProcessRunCard>()
+        // The slice closed by its text ("text 到达时收拢") stays collapsed…
+        assertEquals("m1:a", cards[0].toggleId)
+        assertFalse(cards[0].expanded)
+        assertEquals(listOf("a"), cards[0].blocks.map { it.id })
+        // …and the running tail card auto-expands while the turn runs.
+        assertEquals("m1", cards[1].toggleId)
+        assertTrue(cards[1].expanded)
+        assertTrue(cards[1].isRunning)
+        assertEquals(listOf("b"), cards[1].blocks.map { it.id })
+        // Segments are independently toggleable — distinct LazyColumn keys.
+        assertNotEquals(cards[0].key, cards[1].key)
     }
 
     @Test
@@ -297,18 +362,6 @@ class ChatFlatItemsProcessFoldTest {
         val k = kinds(items)
         assertFalse(k.contains("error"))
         assertEquals("boom", card(items).errorText)
-    }
-
-    @Test
-    fun `task description comes from the preceding user message`() {
-        val items = buildFlatChatItems(
-            listOf(
-                ChatMessage(id = "u1", role = "user", content = "\n  帮我分析这个样本\n第二行忽略"),
-                assistant(blocks = listOf(tool(), text())),
-            ),
-            foldAiProcess = true,
-        )
-        assertEquals("帮我分析这个样本", card(items).taskDescription)
     }
 
     @Test
