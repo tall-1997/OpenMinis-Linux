@@ -4312,13 +4312,13 @@ fun ChatScreen(
                             }
                             is FlatChatItem.ProcessRunCard -> ProcessRunCard(
                                 item = item,
+                                listState = listState,
                                 onToggle = {
                                     val (e, c) = nextProcessToggleState(item, expandedProcessIds, collapsedProcessIds)
                                     expandedProcessIds = e
                                     collapsedProcessIds = c
                                 },
-                                // T261: detail sheet must survive LazyColumn
-                                // item disposal — open goes via the ViewModel.
+                                // T261: detail sheet survives item disposal via the ViewModel.
                                 onOpenTool = { viewModel.openToolDetail(it) },
                             )
                             is FlatChatItem.AssistantThinking -> {

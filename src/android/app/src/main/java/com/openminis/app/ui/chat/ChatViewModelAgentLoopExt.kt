@@ -621,7 +621,7 @@ internal suspend fun ChatViewModel.runAgentLoop(
                             id = "thinking_$turn",
                             kind = "thinking",
                             content = turnThinking.toString(),
-                            toolTitle = "Thinking",
+                            toolTitle = "Thinking", startTimeMs = System.currentTimeMillis(),
                             toolStatus = ToolBlockStatus.STREAMING, // [T-thinking-auto-fold] born live: row auto-expands, Text/ToolUseStart flip to SUCCESS → auto-fold
                         ))
                     } else {
@@ -646,7 +646,7 @@ internal suspend fun ChatViewModel.runAgentLoop(
                     // Mark thinking block as done when text starts flowing
                     val thinkIdx = allToolBlocks.indexOfFirst { it.kind == "thinking" && it.id == "thinking_$turn" }
                     if (thinkIdx >= 0 && allToolBlocks[thinkIdx].toolStatus != ToolBlockStatus.SUCCESS) {
-                        allToolBlocks[thinkIdx] = allToolBlocks[thinkIdx].copy(toolStatus = ToolBlockStatus.SUCCESS)
+                        allToolBlocks[thinkIdx] = allToolBlocks[thinkIdx].let { it.copy(toolStatus = ToolBlockStatus.SUCCESS, durationMs = if (it.startTimeMs > 0L) System.currentTimeMillis() - it.startTimeMs else it.durationMs) }
                     }
                     // [T-stall-echo-strip] Route the delta through the echo
                     // suppressor when the previous attempt stalled mid-stream:
@@ -766,7 +766,7 @@ internal suspend fun ChatViewModel.runAgentLoop(
                     // Mark thinking block as done when tool use starts
                     val thinkIdx = allToolBlocks.indexOfFirst { it.kind == "thinking" && it.id == "thinking_$turn" }
                     if (thinkIdx >= 0 && allToolBlocks[thinkIdx].toolStatus != ToolBlockStatus.SUCCESS) {
-                        allToolBlocks[thinkIdx] = allToolBlocks[thinkIdx].copy(toolStatus = ToolBlockStatus.SUCCESS)
+                        allToolBlocks[thinkIdx] = allToolBlocks[thinkIdx].let { it.copy(toolStatus = ToolBlockStatus.SUCCESS, durationMs = if (it.startTimeMs > 0L) System.currentTimeMillis() - it.startTimeMs else it.durationMs) }
                     }
                     // T154: when the last few text deltas landed inside the 50ms throttle
                     // window, the UI hadn't yet been pushed with the trailing text — and

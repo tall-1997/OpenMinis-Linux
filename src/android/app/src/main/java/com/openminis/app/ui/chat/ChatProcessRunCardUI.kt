@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.EditNote
@@ -29,11 +30,15 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -67,6 +72,7 @@ import kotlinx.coroutines.delay
 @Composable
 internal fun ProcessRunCard(
     item: FlatChatItem.ProcessRunCard,
+    listState: LazyListState,
     onToggle: () -> Unit,
     onOpenTool: (String) -> Unit,
 ) {
@@ -76,6 +82,9 @@ internal fun ProcessRunCard(
     // successful run does not repaint the whole pill red.
     val accent = Color(0xFF007AFF)
     val cardBackground = Color(0xFF007AFF)
+    // [T-process-card-dark] 深色下 6%/15% 蓝叠近黑底不可见——抬到 12%/32%。
+    val cardBgAlpha = if (ChatColors.isDark) 0.12f else 0.06f
+    val cardBorderAlpha = if (ChatColors.isDark) 0.32f else 0.15f
     // [T-process-card-visual] One shape for both states — the collapsed
     // state is just the folded card, not a separate pill form.
     val cardShape = RoundedCornerShape(12.dp)
@@ -86,8 +95,8 @@ internal fun ProcessRunCard(
     Column(
         modifier = cardWidth
             .padding(vertical = 4.dp)
-            .background(cardBackground.copy(alpha = 0.06f), cardShape)
-            .border(0.5.dp, cardBackground.copy(alpha = 0.15f), cardShape)
+            .background(cardBackground.copy(alpha = cardBgAlpha), cardShape)
+            .border(0.5.dp, cardBackground.copy(alpha = cardBorderAlpha), cardShape)
             .clip(cardShape),
     ) {
         ProcessRunCardHeader(
@@ -98,7 +107,7 @@ internal fun ProcessRunCard(
         if (item.expanded) {
             item.blocks.forEach { block ->
                 when (block.kind) {
-                    "thinking" -> ProcessRunThinkingRow(block)
+                    "thinking" -> ProcessRunThinkingRow(block, listState)
                     "tool_use" -> ProcessRunToolRow(
                         block = block,
                         onOpenTool = onOpenTool,
@@ -182,7 +191,8 @@ private fun ProcessRunCardHeader(
             Spacer(modifier = Modifier.width(6.dp))
         }
         val toolCount = item.blocks.count { it.kind == "tool_use" }
-        val durationSuffix = formatProcessDuration(item.totalMs)?.let { " · $it" } ?: ""
+        // [T-process-card-live-duration] 运行中也显示耗时（在飞块墙钟）。
+        val durationSuffix = formatProcessDuration(rememberLiveProcessDurationMs(item))?.let { " · $it" } ?: ""
         Text(
             text = stringResource(
                 R.string.chat_process_card_tool_count,
@@ -205,7 +215,7 @@ private fun ProcessRunCardHeader(
 }
 
 @Composable
-private fun ProcessRunThinkingRow(block: AssistantBlock) {
+private fun ProcessRunThinkingRow(block: AssistantBlock, listState: LazyListState) {
     val live = block.toolStatus == ToolBlockStatus.STREAMING ||
         block.toolStatus == ToolBlockStatus.PENDING
     // [T-thinking-auto-fold] Live thinking auto-expands so the stream is
@@ -218,14 +228,18 @@ private fun ProcessRunThinkingRow(block: AssistantBlock) {
     // laid out — same layout-cost guard as the standalone thinking block,
     // which matters because the flat list rebuilds per streaming tick.
     val hasContent = block.content.isNotBlank()
-    var expanded by remember(block.id) { mutableStateOf(false) }
-    var userPinned by remember(block.id) { mutableStateOf(false) }
+    // [T-thinking-scroll-state] rememberSaveable：条目滚出视口随 item key 存档，滚回不重置；卡片折叠时行离开组合仍失档——「再展开不默认展开」保留。
+    var expanded by rememberSaveable(block.id) { mutableStateOf(false) }
+    var userPinned by rememberSaveable(block.id) { mutableStateOf(false) }
+    // [T-thinking-collapse-jump] 折叠防跳转守卫（见 ChatProcessRowGuards）。
+    val collapseGuard = rememberThinkingCollapseGuard(listState)
     LaunchedEffect(live, hasContent) {
         if (live && hasContent && !userPinned) expanded = true
     }
     LaunchedEffect(live, userPinned) {
         if (!live && !userPinned && expanded) {
             delay(500)
+            collapseGuard.armCollapse()
             expanded = false
         }
     }
@@ -234,8 +248,10 @@ private fun ProcessRunThinkingRow(block: AssistantBlock) {
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .fillMaxWidth()
+                .onGloballyPositioned { collapseGuard.onHeaderPositioned(it.positionInRoot().y) }
                 .clickable(enabled = hasContent) {
                     userPinned = true
+                    if (expanded) collapseGuard.armCollapse()
                     expanded = !expanded
                 }
                 .padding(horizontal = 12.dp, vertical = 3.dp),
@@ -254,6 +270,7 @@ private fun ProcessRunThinkingRow(block: AssistantBlock) {
                 maxLines = 1,
                 modifier = Modifier.weight(1f),
             )
+            if (hasContent) ThinkingCharCountBadge(block.content.length)
             if (live) {
                 CircularProgressIndicator(
                     strokeWidth = 1.2.dp,

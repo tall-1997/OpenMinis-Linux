@@ -11,7 +11,7 @@ package com.openminis.app.ui.chat
 internal fun isAlwaysVisibleProcessTool(block: AssistantBlock): Boolean =
     block.kind == "tool_use" && block.toolName == "ask_user_question"
 
-private val IN_FLIGHT_PROCESS_TOOL_STATUSES = setOf(
+internal val IN_FLIGHT_PROCESS_TOOL_STATUSES = setOf(
     ToolBlockStatus.STREAMING,
     ToolBlockStatus.PENDING,
     ToolBlockStatus.RUNNING,
