@@ -41,8 +41,10 @@ private data class McpToolRow(val name: String, val description: String)
 @Composable
 fun MCPToolsSheet(
     server: MCPRepository.MCPServerConfig,
+    mcpRepository: MCPRepository,
     onDismiss: () -> Unit,
     onManage: () -> Unit,
+    onRequestDelete: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -54,19 +56,28 @@ fun MCPToolsSheet(
     LaunchedEffect(server.id) {
         busy = true
         error = null
-        val quoted = "'" + server.id.replace("'", "'\\''") + "'"
-        val result = withContext(Dispatchers.IO) {
-            ExecutionCoordinator.execute(
-                sessionId = "mcp-tools-ui",
-                command = "minis-mcp-cli tools $quoted",
-                timeout = 25_000L,
-            )
+        // [T-p2-mcp-tools-inprocess] 工具列表改走 in-process 桥接（McpNativeBridge
+        // 的 initialize + tools/list，HTTP 直连 / stdio 经 proot 派生），替换
+        // `minis-mcp-cli tools` 的沙箱 shell 往返——那条路依赖 guest 里的 CLI 存在、
+        // shell 存活与 25s 超时，任何一环断了工具列表就是空（「获取不到工具列表」）。
+        val result = runCatching {
+            withContext(Dispatchers.IO) {
+                com.openminis.app.mcp.client.McpNativeBridge.listTools(
+                    context, mcpRepository, "mcp-tools-ui", server.id,
+                )
+            }
         }
-        tools = parseMcpTools(result.output)
-        disabled = MCPToolPolicy.disabled(context, server.id)
-        if (tools.isEmpty()) {
-            error = result.output.ifBlank { "exit ${result.exitCode}" }
-        }
+        result.fold(
+            onSuccess = { text ->
+                tools = parseMcpTools(text)
+                disabled = MCPToolPolicy.disabled(context, server.id)
+                if (tools.isEmpty()) error = text.ifBlank { "no tools reported" }
+            },
+            onFailure = { e ->
+                error = e.message ?: e.javaClass.simpleName
+                tools = emptyList()
+            },
+        )
         busy = false
     }
 
@@ -142,6 +153,7 @@ fun MCPToolsScreen(
     serverId: String,
     onBack: () -> Unit,
     onManage: () -> Unit,
+    onRequestDelete: () -> Unit = {},
 ) {
     val servers by mcpRepository.servers.collectAsState()
     val server = servers.find { it.id == serverId }
@@ -150,6 +162,9 @@ fun MCPToolsScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var tools by remember { mutableStateOf<List<McpToolRow>>(emptyList()) }
     var disabled by remember(serverId) { mutableStateOf(MCPToolPolicy.disabled(context, serverId)) }
+    // [T-p2-mcp-tools-delete] 删除入口就放在工具页：用户点服务器行进来的就是
+    // 这里——旧路径要先点「管理」进编辑表单、再滚到底部找删除，找不到。
+    var confirmDelete by remember { mutableStateOf(false) }
 
     LaunchedEffect(serverId, servers) {
         if (servers.isNotEmpty() && server == null) onBack()
@@ -159,19 +174,26 @@ fun MCPToolsScreen(
         val current = server ?: return@LaunchedEffect
         busy = true
         error = null
-        val quoted = "'" + current.id.replace("'", "'\\''") + "'"
-        val result = withContext(Dispatchers.IO) {
-            ExecutionCoordinator.execute(
-                sessionId = "mcp-tools-ui",
-                command = "minis-mcp-cli tools $quoted",
-                timeout = 25_000L,
-            )
+        // [T-p2-mcp-tools-inprocess] in-process 桥接（同 Sheet）——不再依赖 guest
+        // 里的 minis-mcp-cli / shell 存活 / 25s 超时。
+        val result = runCatching {
+            withContext(Dispatchers.IO) {
+                com.openminis.app.mcp.client.McpNativeBridge.listTools(
+                    context, mcpRepository, "mcp-tools-ui", current.id,
+                )
+            }
         }
-        tools = parseMcpTools(result.output)
-        disabled = MCPToolPolicy.disabled(context, current.id)
-        if (tools.isEmpty()) {
-            error = result.output.ifBlank { "exit ${result.exitCode}" }
-        }
+        result.fold(
+            onSuccess = { text ->
+                tools = parseMcpTools(text)
+                disabled = MCPToolPolicy.disabled(context, current.id)
+                if (tools.isEmpty()) error = text.ifBlank { "no tools reported" }
+            },
+            onFailure = { e ->
+                error = e.message ?: e.javaClass.simpleName
+                tools = emptyList()
+            },
+        )
         busy = false
     }
 
@@ -225,10 +247,34 @@ fun MCPToolsScreen(
                 HorizontalDivider()
             }
         }
-        TextButton(
-            onClick = onManage,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-        ) { Text(stringResource(R.string.mcp_manage)) }
+        Row(modifier = Modifier.fillMaxWidth()) {
+            TextButton(
+                onClick = { confirmDelete = true },
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            ) { Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error) }
+            TextButton(
+                onClick = onManage,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            ) { Text(stringResource(R.string.mcp_manage)) }
+        }
+    }
+    // [T-p2-mcp-tools-delete] 删除确认：与 MCPIntegrationsScreen 的对话框同一文案。
+    if (confirmDelete) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text(stringResource(R.string.mcp_delete_title, serverId)) },
+            text = { Text(stringResource(R.string.mcp_delete_message)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmDelete = false
+                    mcpRepository.delete(serverId)
+                    onBack()
+                }) { Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.cancel)) }
+            },
+        )
     }
 }
 

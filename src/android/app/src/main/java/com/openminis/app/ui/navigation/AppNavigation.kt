@@ -1382,6 +1382,7 @@ fun AppNavigation(
                     serverId = serverId,
                     onBack = { navController.safePopBackStack() },
                     onManage = { navController.safePopBackStack() },
+                    onRequestDelete = { navController.safePopBackStack() },
                 )
             }
         }
