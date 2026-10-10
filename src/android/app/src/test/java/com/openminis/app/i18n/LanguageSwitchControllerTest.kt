@@ -32,7 +32,7 @@ class LanguageSwitchControllerTest {
             readEffective = { effective },
             writeEffective = { effective = it },
             isPairReady = { it in ready },
-            downloadPack = { pair, _ ->
+            downloadPack = { pair ->
                 downloads.add(pair)
                 if (downloadDelayMs > 0) delay(downloadDelayMs)
                 if (downloadFails) throw RuntimeException("net down")
@@ -43,7 +43,7 @@ class LanguageSwitchControllerTest {
         )
 
         suspend fun switch(src: String, tgt: String) =
-            controller.requestSwitch(LangPair(src, tgt), requireWifi = false)
+            controller.requestSwitch(LangPair(src, tgt))
     }
 
     @Test
@@ -137,11 +137,11 @@ class LanguageSwitchControllerTest {
         h.downloadDelayMs = 40L
         val order = mutableListOf<Int>()
         val j1 = launch {
-            h.controller.requestSwitch(LangPair("en", "ja"), false)
+            h.controller.requestSwitch(LangPair("en", "ja"))
             order.add(1)
         }
         val j2 = launch {
-            h.controller.requestSwitch(LangPair("en", "ko"), false)
+            h.controller.requestSwitch(LangPair("en", "ko"))
             order.add(2)
         }
         j1.join(); j2.join()

@@ -11,25 +11,26 @@ import org.junit.Test
 class MlKitTranslationEngineTest {
 
     @Test
-    fun `detailText byte mode renders MB pair and percent`() {
+    fun `detailText byte fields are ignored - honest indeterminate stage only`() {
         val s = MlKitTranslationEngine.PackState.Downloading(
             progress = 0.5f, step = 1, totalSteps = 2,
             downloadedBytes = 12_582_912L, totalBytes = 29_882_912L,
         )
-        // 12582912/1048576 = 12.0 MB; 29882912/1048576 = 28.5 MB; 42%
-        assertEquals("12.0 MB / 28.5 MB (42%)", s.detailText)
+        // [T-pack-download-rework] ML Kit exposes no byte progress; stale byte
+        // fields must NOT be rendered - only the stage remains.
+        assertEquals("第 1/2 阶段", s.detailText)
     }
 
     @Test
-    fun `detailText progress mode renders stage percent`() {
+    fun `detailText progress field is ignored - stage only`() {
         val s = MlKitTranslationEngine.PackState.Downloading(progress = 0.5f, step = 1, totalSteps = 2)
-        assertEquals("50% (第 1/2 阶段)", s.detailText)
+        assertEquals("第 1/2 阶段", s.detailText)
     }
 
     @Test
     fun `detailText connecting mode renders stage only`() {
         val s = MlKitTranslationEngine.PackState.Downloading(progress = null, step = 2, totalSteps = 2)
-        assertEquals("第 2/2 阶段 (连接中...)", s.detailText)
+        assertEquals("第 2/2 阶段", s.detailText)
     }
 
     @Test
