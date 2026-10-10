@@ -354,7 +354,19 @@ internal fun normalizedExecArgs(canonical: String, rawArgsJson: String): String 
         Json.parseToJsonElement(rawArgsJson) as? JsonObject
     }.getOrNull() ?: return rawArgsJson
     val isMcp = canonical.startsWith("mcp__")
-    return runCatching {
-        ToolSchemaValidator.normalizeArgs(parsed, applyAliases = !isMcp, isMcpTool = isMcp).toString()
-    }.getOrDefault(rawArgsJson)
+    val normalized = runCatching {
+        ToolSchemaValidator.normalizeArgs(parsed, applyAliases = !isMcp, isMcpTool = isMcp)
+    }.getOrNull() ?: return rawArgsJson
+    // [T-p2-multiedit-args-coerce] multi_edit 的宽容形状（字符串化数组 / old/new
+    // 缩写 / 单对象 / 顶层对）在工具的 coerceEdits 里处理，但 schema 校验先于
+    // 工具执行——严格类型检查把工具本可接受的形状弹回。归一化后、schema 校验前
+    // 做同一 coercion，两侧看到同一份 coerced args；解析失败回退归一化结果。
+    val coerced = if (canonical == com.openminis.app.tools.MultiEditTool.NAME) {
+        runCatching {
+            com.openminis.app.tools.MultiEditTool.coerceArgsJson(normalized.toString())
+        }.getOrNull() ?: normalized.toString()
+    } else {
+        normalized.toString()
+    }
+    return coerced
 }

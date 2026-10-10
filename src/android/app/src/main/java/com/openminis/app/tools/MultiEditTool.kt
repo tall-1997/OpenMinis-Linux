@@ -88,6 +88,93 @@ object MultiEditTool {
     }
 
     /**
+     * [T-p2-multiedit-args-coerce] 执行器与 schema 校验同源的**预矫正**：本工具的
+     * 宽容传参形状（replacements/changes/operations 别名键、字符串化数组、单对象、
+     * 条目内 old/new 缩写、顶层 old_string/new_string 对）在 [coerceEdits] 里处理，
+     * 但 schema 校验先于工具执行——严格类型检查把工具本可接受的形状弹回
+     * （「参数 edits 类型错误：应为 array，实际是字符串」「不接受参数 old、new」），
+     * 工具的宽容路径变成死代码。执行器在归一化后、schema 校验前调用本函数，
+     * 校验与执行两侧看到同一份 coerced args。
+     *
+     * @return 矫正后的 argsJson；解析失败原样返回（工具自有的错误路径接住）。
+     */
+    fun coerceArgsJson(argsJson: String): String {
+        val parsed = runCatching {
+            kotlinx.serialization.json.Json.parseToJsonElement(argsJson) as? kotlinx.serialization.json.JsonObject
+        }.getOrNull() ?: return argsJson
+        return runCatching { coerceMultiEditArgs(parsed).toString() }.getOrDefault(argsJson)
+    }
+
+    private fun coerceMultiEditArgs(args: kotlinx.serialization.json.JsonObject): kotlinx.serialization.json.JsonObject {
+        if (!args.containsKey("edits")) {
+            val alias = args["replacements"] ?: args["changes"] ?: args["operations"]
+                ?: (args["input"] as? kotlinx.serialization.json.JsonObject)?.get("edits")
+                ?: (args["arguments"] as? kotlinx.serialization.json.JsonObject)?.get("edits")
+            if (alias == null) {
+                // 顶层 old_string/new_string 对 → 单条 edit（coerceEdits 的同款宽容）
+                val old = args["old_string"] ?: args["old"] ?: return args
+                val new = args["new_string"] ?: args["new"] ?: return args
+                val kept = kotlinx.serialization.json.buildJsonObject {
+                    args.forEach { (k, v) -> if (k != "old" && k != "new") put(k, v) }
+                    put("edits", kotlinx.serialization.json.JsonArray(listOf(
+                        kotlinx.serialization.json.buildJsonObject {
+                            put("old_string", old)
+                            put("new_string", new)
+                        },
+                    )))
+                }
+                return kept
+            }
+            return kotlinx.serialization.json.buildJsonObject {
+                args.forEach { (k, v) ->
+                    if (k != "replacements" && k != "changes" && k != "operations" && k != "input" && k != "arguments") put(k, v)
+                }
+                put("edits", coerceEditsShape(alias))
+            }
+        }
+        return kotlinx.serialization.json.buildJsonObject {
+            args.forEach { (k, v) -> put(k, if (k == "edits") coerceEditsShape(v) else v) }
+        }
+    }
+
+    /**
+     * edits 形状宽容（coerceEdits 的 kotlinx 对应半边）：字符串化数组/对象 → 数组；
+     * 单对象 → 包一层数组；条目内 old/new → old_string/new_string **改名**
+     * （原键移除——item schema 拒绝未知键，保留会继续误报「不接受参数」）。
+     */
+    private fun coerceEditsShape(raw: kotlinx.serialization.json.JsonElement): kotlinx.serialization.json.JsonElement {
+        val arr: kotlinx.serialization.json.JsonArray = when (raw) {
+            is kotlinx.serialization.json.JsonArray -> raw
+            is kotlinx.serialization.json.JsonObject -> kotlinx.serialization.json.JsonArray(listOf(raw))
+            is kotlinx.serialization.json.JsonPrimitive -> runCatching {
+                when (val parsed = kotlinx.serialization.json.Json.parseToJsonElement(raw.content)) {
+                    is kotlinx.serialization.json.JsonArray -> parsed
+                    is kotlinx.serialization.json.JsonObject -> kotlinx.serialization.json.JsonArray(listOf(parsed))
+                    else -> kotlinx.serialization.json.JsonArray(emptyList())
+                }
+            }.getOrDefault(kotlinx.serialization.json.JsonArray(emptyList()))
+            else -> return raw
+        }
+        val items = arr.map { element ->
+            val item = element as? kotlinx.serialization.json.JsonObject ?: return@map element
+            val oldString = item["old_string"] ?: item["old"]
+            val newString = item["new_string"] ?: item["new"]
+            if (oldString == null && newString == null) return@map item
+            kotlinx.serialization.json.buildJsonObject {
+                item.forEach { (k, v) ->
+                    when (k) {
+                        "old", "new" -> Unit // 改名后原键移除
+                        else -> put(k, v)
+                    }
+                }
+                if (oldString != null && !item.containsKey("old_string")) put("old_string", oldString)
+                if (newString != null && !item.containsKey("new_string")) put("new_string", newString)
+            }
+        }
+        return kotlinx.serialization.json.JsonArray(items)
+    }
+
+    /**
      * Models sometimes stringify the array, nest it under replacements/changes,
      * or send one old_string/new_string pair. Those used to become "edits required"
      * even though the edit was in the arguments.

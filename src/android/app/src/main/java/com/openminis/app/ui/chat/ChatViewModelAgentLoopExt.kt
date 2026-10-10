@@ -1728,7 +1728,14 @@ internal suspend fun ChatViewModel.runAgentLoop(
             // partial artifact is silent corruption of user data and is worse
             // than no write at all; read-only and shell tools keep the
             // repair-and-run behaviour. Mirrors iOS ConcurrentTools.
-            if (truncationRepairTag != null && (name == "file_write" || name == "file_edit")) {
+            //
+            // [T-p2-multiedit-args-coerce] multi_edit 也是写工具（T_WRITER）且参数
+            // 体积最大、最易被截断——截断修复把半截 edits 自动闭合后照跑：old_string
+            // 匹配 + new_string 缺失 = 一条 old→"" 的删除编辑，模型从未发起。与
+            // file_write/file_edit 同批拒绝。
+            if (truncationRepairTag != null &&
+                (name == "file_write" || name == "file_edit" || name == "multi_edit")
+            ) {
                 val path = args.optString("path", "").ifBlank { args.optString("file_path", "") }
                 AppLogger.warning(
                     "ToolPreflight",
