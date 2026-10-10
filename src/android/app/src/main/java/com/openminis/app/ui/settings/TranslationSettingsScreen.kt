@@ -31,12 +31,11 @@ import com.openminis.app.R
 import com.openminis.app.data.repository.ProviderRepository
 import com.openminis.app.i18n.MlKitTranslationEngine
 import com.openminis.app.i18n.TranslationPrefs
-import com.openminis.app.ui.components.DialogTextField
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.material3.Button
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.unit.sp
@@ -55,8 +54,6 @@ fun TranslationSettingsScreen(
     var entryId by remember { mutableStateOf(TranslationPrefs.entryId(context)) }
     // [T-mlkit-stream-translate] 思考流/输出流的实时离线翻译设置。
     var streamEnabled by remember { mutableStateOf(TranslationPrefs.isStreamEnabled(context)) }
-    var streamSource by remember { mutableStateOf(TranslationPrefs.streamSource(context)) }
-    var streamTarget by remember { mutableStateOf(TranslationPrefs.streamTarget(context)) }
     BackHandler(onBack = onBack)
     val entries = config.modelEntries.filter { entry ->
         if (entry.isHidden) return@filter false
@@ -101,7 +98,7 @@ fun TranslationSettingsScreen(
                 modifier = Modifier.padding(start = 16.dp, top = 12.dp, end = 16.dp),
                 style = MaterialTheme.typography.labelLarge,
             )
-            DialogTextField(
+            TranslationTargetField(
                 value = lang,
                 onValueChange = {
                     lang = it
@@ -141,43 +138,9 @@ fun TranslationSettingsScreen(
                 )
             }
             HorizontalDivider()
-            Text(
-                stringResource(R.string.translate_stream_source),
-                modifier = Modifier.padding(start = 16.dp, top = 12.dp, end = 16.dp),
-                style = MaterialTheme.typography.labelLarge,
-            )
-            DialogTextField(
-                value = streamSource,
-                onValueChange = {
-                    streamSource = it
-                    TranslationPrefs.setStreamSource(context, it)
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-            )
-            Text(
-                stringResource(R.string.translate_stream_target),
-                modifier = Modifier.padding(start = 16.dp, top = 4.dp, end = 16.dp),
-                style = MaterialTheme.typography.labelLarge,
-            )
-            DialogTextField(
-                value = streamTarget,
-                onValueChange = {
-                    streamTarget = it
-                    TranslationPrefs.setStreamTarget(context, it)
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-            )
-            // [T-mlkit-model-mgmt] 离线语言包管理（复用 taixu TranslationModelCard：
-            // 状态机 + 字节级下载进度 + 删除释放空间 + Wi-Fi 条件）。
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-            TranslationModelManager(
-                src = streamSource,
-                tgt = streamTarget,
-            )
+            // [T-lang-picker][T-lang-switch-txn] 语言对下拉 + 切换事务状态条 +
+            // 回滚失败错误条 + 语言包管理卡。prefs 只在下载成功后由控制器写入。
+            TranslationSwitchPanel()
         }
         SettingsSection(header = stringResource(R.string.translate_pick_model)) {
             if (entries.isEmpty()) {
@@ -234,13 +197,21 @@ fun TranslationSettingsScreen(
     }
 }
 
-/** [T-mlkit-model-mgmt] 语言包状态/下载/删除卡（引擎状态机驱动）。 */
+/**
+ * [T-mlkit-model-mgmt] 语言包状态/下载/删除卡（引擎状态机驱动）。
+ * Wi-Fi 开关由 [TranslationSwitchPanel] 持有并下传：切换事务与手动下载共用
+ * 一个条件，两张卡各一个开关是噪音。
+ */
 @Composable
-private fun TranslationModelManager(src: String, tgt: String) {
+internal fun TranslationModelManager(
+    src: String,
+    tgt: String,
+    wifiOnly: Boolean,
+    onWifiOnlyChange: (Boolean) -> Unit,
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val state by remember(src, tgt) { MlKitTranslationEngine.packState(src, tgt) }.collectAsState()
-    var wifiOnly by remember { mutableStateOf(true) }
     var busy by remember { mutableStateOf(false) }
     LaunchedEffect(src, tgt) { busy = false }
     Column(
@@ -304,7 +275,7 @@ private fun TranslationModelManager(src: String, tgt: String) {
             Text(stringResource(R.string.translate_model_wifi), style = MaterialTheme.typography.bodySmall)
             Switch(
                 checked = wifiOnly,
-                onCheckedChange = { wifiOnly = it },
+                onCheckedChange = onWifiOnlyChange,
             )
         }
     }

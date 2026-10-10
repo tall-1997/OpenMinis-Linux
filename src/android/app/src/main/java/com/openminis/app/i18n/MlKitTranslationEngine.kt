@@ -18,6 +18,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.tasks.await
+import com.google.android.gms.tasks.Task
 import kotlinx.coroutines.withContext
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
@@ -74,6 +75,21 @@ object MlKitTranslationEngine {
     private val packStates = ConcurrentHashMap<String, MutableStateFlow<PackState>>()
     private val downloadMutexes = ConcurrentHashMap<String, Mutex>()
 
+    /** [T-lang-switch-txn] 在飞下载 Task（per-pair），供 [cancelActiveDownload] 挂清理监听。 */
+    private val activeDownloadTasks = ConcurrentHashMap<String, MutableList<Task<Void>>>()
+
+    /**
+     * [T-lang-switch-txn] 取消标记 + 下载代际。
+     *
+     * mlkit common 18.11.0 的 `RemoteModelManager.download` **只有两参重载**
+     * （无 CancellationToken 版本，javap 核实），底层下载无法真中断。故取消是
+     * **协作式**：置标记 → 分阶段循环下一步前退出 + 宿主吊销等待协程；若 GMS
+     * 侧仍把模型下完，完成监听按**同代**判定删掉游离包（代际不同 = 用户已重新
+     * 发起同语言对下载，不能误删新包）。
+     */
+    private val cancelRequested = ConcurrentHashMap.newKeySet<String>()
+    private val downloadGen = ConcurrentHashMap<String, Long>()
+
     /** LRU 翻译缓存（复用 taixu：最多 100 条，访问序淘汰）。 */
     internal val translationCache = Collections.synchronizedMap(
         object : LinkedHashMap<Int, String>(64, 0.75f, true) {
@@ -113,11 +129,27 @@ object MlKitTranslationEngine {
     private suspend fun isPairDownloaded(src: String, tgt: String): Boolean {
         val srcCode = mlLang(src) ?: return false
         val tgtCode = mlLang(tgt) ?: return false
-        val manager = RemoteModelManager.getInstance()
-        val downloaded = runCatching {
+        val downloaded = downloadedLanguages()
+        return downloaded.contains(srcCode) && downloaded.contains(tgtCode)
+    }
+
+    /**
+     * [T-lang-switch-txn] 语言对是否已就绪（两侧模型都在本地）。切换事务的
+     * 就绪快路径判定——就绪则不下载直接提交。
+     */
+    suspend fun isPairReady(src: String, tgt: String): Boolean = isPairDownloaded(src, tgt)
+
+    /**
+     * [T-lang-source-provider] 已下载模型的语言码集合（live 查询
+     * RemoteModelManager）。语言清单数据源用它收窄 downloaded 标记；查询失败
+     * 返回空集（调用方保持 stale 态）。
+     */
+    suspend fun downloadedLanguages(): Set<String> {
+        val manager = runCatching { RemoteModelManager.getInstance() }.getOrNull() ?: return emptySet()
+        val models = runCatching {
             manager.getDownloadedModels(TranslateRemoteModel::class.java).await()
-        }.getOrDefault(emptySet())
-        return downloaded.any { it.language == srcCode } && downloaded.any { it.language == tgtCode }
+        }.getOrNull() ?: return emptySet()
+        return models.map { it.language }.toSet()
     }
 
     /**
@@ -148,6 +180,9 @@ object MlKitTranslationEngine {
         val mutex = downloadMutexes.getOrPut(k) { Mutex() }
         if (!mutex.tryLock()) return
         try {
+            cancelRequested.remove(k)
+            val gen = (downloadGen[k] ?: 0L) + 1L
+            downloadGen[k] = gen
             if (flow.value is PackState.Ready && isPairDownloaded(src, tgt)) return
             val conditions = DownloadConditions.Builder().apply {
                 if (requireWifi) requireWifi()
@@ -166,7 +201,11 @@ object MlKitTranslationEngine {
             withContext(Dispatchers.IO) {
                 coroutineScope {
                     val totalSteps = queue.size
+                    val pairTasks = activeDownloadTasks.getOrPut(k) { mutableListOf() }
                     for (i in queue.indices) {
+                        // [T-lang-switch-txn] 取消检查点：两阶段之间退出（阶段内
+                        // 的 await 由宿主吊销协程打断）。
+                        if (cancelRequested.contains(k)) throw IllegalStateException("download cancelled")
                         val base = i.toFloat() / totalSteps
                         val weight = 1f / totalSteps
                         val monitor: Job = launch {
@@ -187,7 +226,13 @@ object MlKitTranslationEngine {
                             }
                         }
                         try {
-                            manager.download(queue[i], conditions).await()
+                            val task = manager.download(queue[i], conditions)
+                            synchronized(pairTasks) { pairTasks.add(task) }
+                            try {
+                                task.await()
+                            } finally {
+                                synchronized(pairTasks) { pairTasks.remove(task) }
+                            }
                         } finally {
                             monitor.cancel()
                         }
@@ -200,7 +245,38 @@ object MlKitTranslationEngine {
             flow.value = PackState.Failed(t.message ?: "download failed")
             throw t
         } finally {
+            activeDownloadTasks.remove(k)
+            cancelRequested.remove(k)
             mutex.unlock()
+        }
+    }
+
+    /**
+     * [T-lang-switch-txn] 取消在飞下载（语言切换回滚路径）。
+     *
+     * 三：① 置取消标记（分阶段循环下个检查点退出，flow 置 Failed）；
+     * ② 给在飞 Task 挂完成监听——GMS 侧若仍下完，按同代删除游离模型包；
+     * ③ 等待中的协程由宿主吊销（`await()` 抛 CancellationException）。
+     * 半成品清理由调用方（切换事务）跟进 [deletePack]。无在飞任务时只置标记。
+     */
+    fun cancelActiveDownload(src: String, tgt: String) {
+        val k = key(src, tgt)
+        cancelRequested.add(k)
+        val gen = downloadGen[k] ?: 0L
+        flowFor(k).value = PackState.Failed("cancelled")
+        val srcCode = mlLang(src)
+        val tgtCode = mlLang(tgt)
+        val tasks = activeDownloadTasks[k] ?: return
+        synchronized(tasks) { tasks.toList() }.forEach { task ->
+            runCatching {
+                task.addOnCompleteListener {
+                    // 同代才删：用户可能已重新发起同语言对下载（新代），误删会毁掉新包。
+                    if (!cancelRequested.contains(k) || (downloadGen[k] ?: 0L) != gen) return@addOnCompleteListener
+                    val mgr = runCatching { RemoteModelManager.getInstance() }.getOrNull() ?: return@addOnCompleteListener
+                    srcCode?.let { c -> runCatching { mgr.deleteDownloadedModel(TranslateRemoteModel.Builder(c).build()) } }
+                    tgtCode?.let { c -> runCatching { mgr.deleteDownloadedModel(TranslateRemoteModel.Builder(c).build()) } }
+                }
+            }
         }
     }
 

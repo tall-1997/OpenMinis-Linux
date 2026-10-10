@@ -2414,6 +2414,10 @@
     <string name="translate_model_delete">Delete packs to free space</string>
     <string name="translate_model_wifi">Wi-Fi only</string>
     <string name="translate_model_failed">Failed: %1$s</string>
+    <string name="translate_switch_confirm_title">Switch translation languages</string>
+    <string name="translate_switch_confirm_msg">%1$s → %2$s needs the offline language packs downloaded first (about 30 MB per language). The switch takes effect only after the download succeeds.</string>
+    <string name="translate_switch_pending">Switching to %1$s…</string>
+    <string name="translate_switch_rollback_failed">Rollback failed: %1$s — still using the previous language pair; you can retry.</string>
     <string name="persona_worldbook_header">World book</string>
     <string name="persona_worldbook_footer">When the user says the words on the left, this extra text is added to the reply. Tap an entry to remove it.</string>
     <string name="persona_worldbook_when">When the user says…</string>

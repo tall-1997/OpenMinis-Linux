@@ -2226,6 +2226,10 @@
     <string name="translate_model_delete">删除语言包释放空间</string>
     <string name="translate_model_wifi">仅 Wi-Fi 下载</string>
     <string name="translate_model_failed">失败：%1$s</string>
+    <string name="translate_switch_confirm_title">切换翻译语言</string>
+    <string name="translate_switch_confirm_msg">%1$s → %2$s 需要先下载离线语言包（每种语言约 30 MB）。下载成功后才会生效。</string>
+    <string name="translate_switch_pending">正在切换到 %1$s…</string>
+    <string name="translate_switch_rollback_failed">回滚失败：%1$s——仍在用原语言对，可重试。</string>
     <string name="persona_worldbook_header">世界书</string>
     <string name="persona_worldbook_footer">用户说到左边的词时，回复会带上这段补充。点已有条目可删除。</string>
     <string name="persona_worldbook_when">当用户说到…</string>
