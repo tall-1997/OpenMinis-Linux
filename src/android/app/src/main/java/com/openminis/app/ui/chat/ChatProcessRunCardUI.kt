@@ -11,8 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.EditNote
@@ -78,18 +76,10 @@ internal fun ProcessRunCard(
     // [T-process-card-visual] One shape for both states — the collapsed
     // state is just the folded card, not a separate pill form.
     val cardShape = RoundedCornerShape(12.dp)
-    // [T-process-card-pill-width] Collapsed = hugs its content — a
-    // full-width "pill" reads as a bar with dead space on the right.
-    // Capped at 340dp so a long live phase verb still ellipsizes instead
-    // of running off-screen. Expanded = the full-width trace card so tool
-    // rows stay aligned with the reply text above/below.
-    val cardWidth = if (item.expanded) {
-        Modifier.fillMaxWidth()
-    } else {
-        Modifier
-            .wrapContentWidth()
-            .widthIn(max = 340.dp)
-    }
+    // [T-process-card-pill-width] One width for both states — the folded
+    // card is the same card with its height collapsed, not a shrinking
+    // pill. A width jump on toggle reads as a different element.
+    val cardWidth = Modifier.fillMaxWidth()
     Column(
         modifier = cardWidth
             .padding(vertical = 4.dp)
@@ -128,7 +118,7 @@ private fun ProcessRunCardHeader(
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
-            .then(if (item.expanded) Modifier.fillMaxWidth() else Modifier)
+            .fillMaxWidth()
             .clickable(onClick = onToggle)
             // Collapsed: compact but not squashed — vertical 8dp keeps the
             // folded strip readable (~32dp tall with the 11sp line), while
