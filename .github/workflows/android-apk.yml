@@ -139,7 +139,7 @@ jobs:
             echo "No upload keystore — APK will be debug-signed (cannot replace a differently signed install)"
           fi
 
-      - name: Assemble release APK
+      - name: Assemble release APKs
         working-directory: src/android
         env:
           ANDROID_NDK_HOME: /usr/local/lib/android/sdk/ndk/${{ env.ANDROID_NDK }}
@@ -157,15 +157,24 @@ jobs:
           # [T-ci-build-speed] The debug variant is disabled via androidComponents
           # (app/build.gradle.kts), removing the kspDebug / kspRelease Room
           # schema race. --parallel is safe and cuts build time.
-          ./gradlew :app:assembleRelease --parallel --stacktrace
+          # [T-apk-flavors] Two variants: full (ML Kit offline translation — the
+          # bundled 15.6 MB libtranslate_jni.so rides along) and slim (no ML Kit,
+          # ~16 MB smaller; translation falls back to the LLM path).
+          ./gradlew :app:assembleFullRelease :app:assembleSlimRelease --parallel --stacktrace
 
-      - name: Stage APK
+      - name: Stage APKs
         run: |
-          SRC=src/android/app/build/outputs/apk/release/app-release.apk
-          test -s "$SRC"
+          FULL=src/android/app/build/outputs/apk/full/release/app-full-release.apk
+          SLIM=src/android/app/build/outputs/apk/slim/release/app-slim-release.apk
+          test -s "$FULL"
+          test -s "$SLIM"
           mkdir -p dist
-          cp "$SRC" dist/minis-ultra-com.openminis.linux.apk
-          unzip -l "$SRC" | grep -E "libproot|proot-aarch64|ubuntu-base|android-sdk-tools|android-cmdline-tools" || true
+          cp "$FULL" dist/minis-ultra-com.openminis.linux.apk
+          cp "$SLIM" dist/minis-ultra-slim-com.openminis.linux.apk
+          unzip -l "$FULL" | grep -E "libproot|proot-aarch64|ubuntu-base|android-sdk-tools|android-cmdline-tools" || true
+          echo "--- slim variant must NOT bundle the ML Kit translate runtime ---"
+          if unzip -l "$SLIM" | grep -q "libtranslate_jni"; then echo "ERROR: slim APK still carries libtranslate_jni"; exit 1; fi
+          if unzip -l "$FULL" | grep -q "libtranslate_jni"; then echo "full APK carries libtranslate_jni (expected)"; fi
           NDK="/usr/local/lib/android/sdk/ndk/${ANDROID_NDK}"
           UNWIND_SO=$(find "$NDK" -path '*aarch64-linux-android*' -name libunwind.so 2>/dev/null | head -n 1 || true)
           UNWIND_A=$(find "$NDK" -path '*aarch64-linux-android*' -name libunwind.a 2>/dev/null | head -n 1 || true)
@@ -185,21 +194,25 @@ jobs:
       - name: Stage mapping.txt and native symbols
         run: |
           mkdir -p dist/symbols
-          MAP=src/android/app/build/outputs/mapping/release/mapping.txt
-          if [ -f "$MAP" ]; then cp "$MAP" dist/symbols/mapping.txt; fi
+          for V in fullRelease slimRelease; do
+            MAP=src/android/app/build/outputs/mapping/${V}/mapping.txt
+            if [ -f "$MAP" ]; then cp "$MAP" dist/symbols/mapping-${V}.txt; fi
+          done
           find src/android/app/build -name 'native-debug-symbols.zip' -print -exec cp {} dist/symbols/ \; || true
-          MERGED=$(find src/android/app/build/intermediates -path '*merged_native_libs*release*' -name '*.so' | head -n 20)
+          MERGED=$(find src/android/app/build/intermediates -path '*merged_native_libs*fullRelease*' -name '*.so' | head -n 20)
           if [ -n "$MERGED" ]; then
             mkdir -p dist/symbols/so
             for f in $MERGED; do cp "$f" dist/symbols/so/; done
           fi
           ls -lhR dist/symbols || true
 
-      - name: Upload APK artifact
+      - name: Upload APK artifacts
         uses: actions/upload-artifact@v4
         with:
           name: minis-ultra-apk
-          path: dist/minis-ultra-com.openminis.linux.apk
+          path: |
+            dist/minis-ultra-com.openminis.linux.apk
+            dist/minis-ultra-slim-com.openminis.linux.apk
           if-no-files-found: error
 
       - name: Upload mapping and native symbols
@@ -236,6 +249,7 @@ jobs:
             - NDK：r29 `29.0.14206865`（与应用内安装同一修订号，不回退 r28）
             - versionName：`${{ steps.appver.outputs.name }}`
             - versionCode：${{ steps.appver.outputs.code }}
+            - **两个变体**：`minis-ultra-com.openminis.linux.apk`（full，含 ML Kit 离线翻译）与 `minis-ultra-slim-com.openminis.linux.apk`（slim，约小 16 MB，实时翻译需要 full 版；气泡翻译不受影响）
             - 签名说明见 docs/SIGNING.md
 
       - name: Select versioned release notes

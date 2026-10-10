@@ -110,37 +110,49 @@ fun TranslationSettingsScreen(
             )
         }
         // [T-mlkit-stream-translate] 思考流/输出流的实时离线翻译（ML Kit）。
-        SettingsSection(header = stringResource(R.string.translate_stream_section)) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable {
-                        streamEnabled = !streamEnabled
-                        TranslationPrefs.setStreamEnabled(context, streamEnabled)
+        // [T-apk-flavors] slim 变体无 bundled 推理运行时：区块换成需要 full 版
+        // 的提示，而不是渲染一个永远下载失败的语言包卡。
+        if (MlKitTranslationEngine.bundledEngine) {
+            SettingsSection(header = stringResource(R.string.translate_stream_section)) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            streamEnabled = !streamEnabled
+                            TranslationPrefs.setStreamEnabled(context, streamEnabled)
+                        }
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(stringResource(R.string.translate_stream_enabled), style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            stringResource(R.string.translate_stream_enabled_sub),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text(stringResource(R.string.translate_stream_enabled), style = MaterialTheme.typography.bodyLarge)
-                    Text(
-                        stringResource(R.string.translate_stream_enabled_sub),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    Switch(
+                        checked = streamEnabled,
+                        onCheckedChange = {
+                            streamEnabled = it
+                            TranslationPrefs.setStreamEnabled(context, it)
+                        },
                     )
                 }
-                Switch(
-                    checked = streamEnabled,
-                    onCheckedChange = {
-                        streamEnabled = it
-                        TranslationPrefs.setStreamEnabled(context, it)
-                    },
+                HorizontalDivider()
+                // [T-lang-picker][T-lang-switch-txn] 语言对下拉 + 切换事务状态条 +
+                // 回滚失败错误条 + 语言包管理卡。prefs 只在下载成功后由控制器写入。
+                TranslationSwitchPanel()
+            }
+        } else {
+            SettingsSection(header = stringResource(R.string.translate_stream_section)) {
+                Text(
+                    stringResource(R.string.translate_stream_slim_notice),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            HorizontalDivider()
-            // [T-lang-picker][T-lang-switch-txn] 语言对下拉 + 切换事务状态条 +
-            // 回滚失败错误条 + 语言包管理卡。prefs 只在下载成功后由控制器写入。
-            TranslationSwitchPanel()
         }
         SettingsSection(header = stringResource(R.string.translate_pick_model)) {
             if (entries.isEmpty()) {

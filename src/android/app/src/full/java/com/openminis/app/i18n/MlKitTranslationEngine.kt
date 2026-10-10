@@ -71,6 +71,13 @@ object MlKitTranslationEngine {
     var available: Boolean = true
         private set
 
+    /**
+     * [T-apk-flavors] bundled 引擎标记：full 变体 true、slim 存根 false。
+     * 设置页用它决定 ML Kit 实时翻译区块是否渲染（slim 下显示需要 full 版提示，
+     * 而不是渲染一个永远下载失败的语言包卡）。
+     */
+    const val bundledEngine: Boolean = true
+
     private val translators = ConcurrentHashMap<String, com.google.mlkit.nl.translate.Translator>()
     private val packStates = ConcurrentHashMap<String, MutableStateFlow<PackState>>()
     private val downloadMutexes = ConcurrentHashMap<String, Mutex>()

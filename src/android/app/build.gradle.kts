@@ -204,6 +204,22 @@ android {
         }
     }
 
+    // [T-apk-flavors] 双 APK（用户报告「安装包又变大了」）：ML Kit 翻译推理
+    // 运行时（libtranslate_jni.so arm64 15.6 MB）是 bundled 交付、无法按需化。
+    // full = 现行为（实时离线翻译可用）；slim = 无 ML Kit 依赖（APK -16 MB，
+    // 翻译走 LLM 路径）。引擎是唯一引用 ML Kit 类的文件——src/main 保持不变，
+    // src/full 载入真实引擎、src/slim 载入同 API 存根（available 恒 false）。
+    flavorDimensions += "engine"
+    productFlavors {
+        create("full") {
+            dimension = "engine"
+        }
+        create("slim") {
+            dimension = "engine"
+            versionNameSuffix = "-slim"
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -359,9 +375,13 @@ dependencies {
     // 推理在本机完成（不出设备、不经过任何服务器）。
     // 无 Play Services 的设备上整个引擎不可用——MlKitTranslationEngine 用一次
     // 试探调用探测并永久降级（翻译行静默不出现，气泡翻译仍走 LLM 路径）。
-    implementation("com.google.mlkit:translate:17.0.3")
+    // [T-apk-flavors] full 专属：slim 变体不带这 16 MB（推理运行时 bundled，
+    // 无法按需化），src/slim 的同 API 存根让 src/main 零改动编译。
+    // 字符串调用形式："fullImplementation" 访问器在本模块的 Kotlin DSL 里
+    // 不生成（AGP 8.7.3），对配置名字符串调用则永远有效。
+    "fullImplementation"("com.google.mlkit:translate:17.0.3")
     // ML Kit 的 Task.await()（kotlinx 协程桥）。
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0")
+    "fullImplementation"("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0")
     // Compose BOM
     val composeBom = platform("androidx.compose:compose-bom:2025.09.00")
     implementation(composeBom)

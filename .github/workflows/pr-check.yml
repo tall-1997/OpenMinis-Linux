@@ -70,13 +70,17 @@ jobs:
           sed -i 's|kotlin.daemon.jvmargs=.*|kotlin.daemon.jvmargs=-Xmx4g|' gradle.properties
           sed -i 's|org.gradle.workers.max=.*|org.gradle.workers.max=4|' gradle.properties
           chmod +x gradlew
-          ./gradlew :app:compileReleaseKotlin --parallel --stacktrace
+          # [T-apk-flavors] With the engine flavor dimension the variant names
+          # carry the flavor: full (ML Kit) / slim (no-ML-Kit stub).
+          ./gradlew :app:compileFullReleaseKotlin :app:compileSlimReleaseKotlin --parallel --stacktrace
 
-      - name: Unit tests (release variant)
+      - name: Unit tests (release variants)
         working-directory: src/android
         env:
           ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
-        run: ./gradlew :app:testReleaseUnitTest --parallel --stacktrace
+        # [T-apk-flavors] Both flavors: the full suite against the real engine,
+        # the slim suite against the same-API stub (pack state + cache behavior).
+        run: ./gradlew :app:testFullReleaseUnitTest :app:testSlimReleaseUnitTest --parallel --stacktrace
 
       - name: No new untranslated strings
         if: github.event_name == 'pull_request'
