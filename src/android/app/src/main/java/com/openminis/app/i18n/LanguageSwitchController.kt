@@ -32,7 +32,7 @@ class LanguageSwitchController(
     private val readEffective: () -> LangPair,
     private val writeEffective: (LangPair) -> Unit,
     private val isPairReady: suspend (LangPair) -> Boolean,
-    private val downloadPack: suspend (LangPair, Boolean) -> Unit,
+    private val downloadPack: suspend (LangPair) -> Unit,
     private val abortDownload: (LangPair) -> Unit,
     private val clearPartial: suspend (LangPair) -> Unit,
 ) {
@@ -72,7 +72,7 @@ class LanguageSwitchController(
      * 连切：新请求先回滚在飞事务（abort + 清半成品），再开新事务——回滚
      * 基准仍是已生效槽。
      */
-    suspend fun requestSwitch(to: LangPair, requireWifi: Boolean = false): SwitchResult {
+    suspend fun requestSwitch(to: LangPair): SwitchResult {
         val from = readEffective()
         if (from == to) return SwitchResult.COMMITTED
         val gen = stateMutex.withLock {
@@ -91,7 +91,7 @@ class LanguageSwitchController(
         val ok = try {
             QUEUE.withLock {
                 if (activeGen != gen) throw Superseded
-                downloadPack(to, requireWifi)
+                downloadPack(to)
             }
             true
         } catch (ce: kotlinx.coroutines.CancellationException) {

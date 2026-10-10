@@ -192,6 +192,10 @@ internal fun TranslateCorner(
 /**
  * One tap translates with the language and model already saved in Settings.
  * Does not ask for the language again.
+ *
+ * [T-translation-page-slim] 「显示翻译按钮」开关挪到外观设置页（原翻译页
+ * Bubble 区块整体精简）；显隐由 [TranslationPrefs.isEnabled] 驱动，设置存储
+ * 不变——用户已有偏好无缝保留。
  */
 @Composable
 fun AssistantTranslateButton(

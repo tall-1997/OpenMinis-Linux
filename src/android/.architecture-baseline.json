@@ -58,7 +58,7 @@
         "app/src/main/java/com/openminis/app/provider/gemini/GeminiProvider.kt": 563,
         "app/src/main/java/com/openminis/app/provider/openai/OpenAIProvider.kt": 1768,
         "app/src/main/java/com/openminis/app/provider/openai/OpenAIRawStream.kt": 1244,
-        "app/src/main/java/com/openminis/app/provider/openai/OpenAIRequestBodies.kt": 1410,
+        "app/src/main/java/com/openminis/app/provider/openai/OpenAIRequestBodies.kt": 1416,
         "app/src/main/java/com/openminis/app/provider/thinking/ThinkingRuleResolver.kt": 787,
         "app/src/main/java/com/openminis/app/provider/voice/VoiceProviderVendors.kt": 991,
         "app/src/main/java/com/openminis/app/sandbox/ExecutionCoordinator.kt": 492,

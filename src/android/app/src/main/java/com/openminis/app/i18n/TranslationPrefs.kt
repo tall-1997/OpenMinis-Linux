@@ -21,7 +21,17 @@ object TranslationPrefs {
 
     fun isEnabled(context: Context): Boolean = prefs(context).getBoolean(KEY_ENABLED, true)
 
-    fun lang(context: Context): String = prefs(context).getString(KEY_LANG, "中文")?.ifBlank { "中文" } ?: "中文"
+    /**
+     * [T-translation-page-slim] 气泡翻译目标语言：优先旧 KEY_LANG；未设置时
+     * 回退实时翻译的目标语言（设置页的「翻译成」下拉已合并为一份）——两个
+     * 入口不再各留一份会漂移的目标语言配置。默认「中文」保留。
+     */
+    fun lang(context: Context): String {
+        prefs(context).getString(KEY_LANG, null)?.takeIf { it.isNotBlank() }?.let { return it }
+        return streamTarget(context).let { code ->
+            TranslationLanguages.displayName(code).takeIf { it.isNotBlank() } ?: "中文"
+        }
+    }
 
     fun entryId(context: Context): String? = prefs(context).getString(KEY_ENTRY, null)?.ifBlank { null }
 

@@ -1,7 +1,6 @@
 package com.openminis.app.i18n
 
 import android.content.Context
-import android.app.DownloadManager
 import com.google.mlkit.common.model.DownloadConditions
 import com.google.mlkit.common.model.RemoteModelManager
 import com.google.mlkit.nl.translate.TranslateLanguage
@@ -9,14 +8,11 @@ import com.google.mlkit.nl.translate.TranslateRemoteModel
 import com.google.mlkit.nl.translate.Translation
 import com.google.mlkit.nl.translate.TranslatorOptions
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.tasks.await
 import com.google.android.gms.tasks.Task
 import kotlinx.coroutines.withContext
@@ -50,18 +46,13 @@ object MlKitTranslationEngine {
             val downloadedBytes: Long = 0L,
             val totalBytes: Long = 0L,
         ) : PackState() {
-            /** "12.3 MB / 29.8 MB (41%)" or "41% (第 1/2 阶段)" */
+            /**
+             * [T-mlkit-download-stall] ML Kit 的 download Task 不暴露字节进度，
+             * 旧实现模拟/借用系统 DownloadManager 的百分比会卡在 91%——改为
+             * 确定的「下载中」文案，进度条走不确定式（progress=null）。
+             */
             val detailText: String
-                get() = if (downloadedBytes > 0L && totalBytes > 0L) {
-                    val dl = String.format(java.util.Locale.US, "%.1f", downloadedBytes / 1048576.0)
-                    val tot = String.format(java.util.Locale.US, "%.1f", totalBytes / 1048576.0)
-                    val pct = ((downloadedBytes.toDouble() / totalBytes) * 100).toInt().coerceIn(0, 100)
-                    "$dl MB / $tot MB ($pct%)"
-                } else if (progress != null) {
-                    "${(progress * 100).toInt().coerceIn(0, 100)}% (第 $step/$totalSteps 阶段)"
-                } else {
-                    "第 $step/$totalSteps 阶段 (连接中...)"
-                }
+                get() = if (totalSteps > 1) "第 $step/$totalSteps 阶段" else ""
         }
         data object Ready : PackState()
         data class Failed(val message: String) : PackState()
@@ -80,7 +71,13 @@ object MlKitTranslationEngine {
 
     private val translators = ConcurrentHashMap<String, com.google.mlkit.nl.translate.Translator>()
     private val packStates = ConcurrentHashMap<String, MutableStateFlow<PackState>>()
-    private val downloadMutexes = ConcurrentHashMap<String, Mutex>()
+
+    // [T-mlkit-download-detached] 引擎级下载 scope：下载脱离调用方生命周期，
+    // 退出设置页不再杀掉在飞下载（重进页面 packState 仍显示 Downloading）。
+    private val downloadScope = kotlinx.coroutines.CoroutineScope(
+        kotlinx.coroutines.SupervisorJob() + Dispatchers.IO,
+    )
+    private val downloadJobs = ConcurrentHashMap<String, kotlinx.coroutines.Job>()
 
     /** [T-lang-switch-txn] 在飞下载 Task（per-pair），供 [cancelActiveDownload] 挂清理监听。 */
     private val activeDownloadTasks = ConcurrentHashMap<String, MutableList<Task<Void>>>()
@@ -175,25 +172,50 @@ object MlKitTranslationEngine {
     }
 
     /**
-     * 下载语言对模型（复用 taixu downloadModel：分阶段 + DownloadManager
-     * 字节级进度轮询 + 无进度时平滑估算）。已就绪立即返回；并发调用同语言对
-     * 只跑一个。失败置 [PackState.Failed] 并抛。
+     * 下载语言对模型。
+     *
+     * [T-mlkit-download-detached] 下载任务跑在**引擎级 scope**（脱离调用方）：
+     * 退出设置页取消的是调用方协程，下载继续；重进页面 packState（引擎级
+     * flow）仍显示 Downloading，同语言对再调 [downloadPack] 只是 join 在飞
+     * 任务——修复「退出页面再进入又要重新下载」。
+     *
+     * [T-mlkit-download-stall] 进度改**不确定式**：ML Kit 的 download Task
+     * 不暴露字节进度，旧实现轮询系统 DownloadManager——常常查不到（模拟
+     * 进度封顶 90%）或查到别家应用的下载任务，百分比永远卡在 91%。现在
+     * Downloading 只表达「进行中」（progress=null → UI 不确定式进度条），
+     * 完成即 Ready，不再有假数字。
+     *
+     * 失败置 [PackState.Failed] 并抛。
      */
-    suspend fun downloadPack(context: Context, src: String, tgt: String, requireWifi: Boolean = false) {
-        val srcCode = mlLang(src) ?: throw IllegalArgumentException("unsupported source language: $src")
-        val tgtCode = mlLang(tgt) ?: throw IllegalArgumentException("unsupported target language: $tgt")
+    suspend fun downloadPack(context: Context, src: String, tgt: String) {
         val k = key(src, tgt)
-        val flow = flowFor(k)
-        val mutex = downloadMutexes.getOrPut(k) { Mutex() }
-        if (!mutex.tryLock()) return
+        val existing = downloadJobs[k]
+        if (existing?.isActive == true) {
+            // [T-mlkit-download-detached] 同语言对已在飞：等待而不是静默返回
+            // （旧 tryLock 直接 return，调用方误以为下载完成）。
+            existing.join()
+            return
+        }
+        val job = downloadScope.launch { runDownload(context, src, tgt, k) }
+        downloadJobs[k] = job
         try {
+            job.join()
+        } catch (e: CancellationException) {
+            // 调用方（页面）退出：下载任务继续跑，这里只是不再等。
+            throw e
+        }
+    }
+
+    private suspend fun runDownload(context: Context, src: String, tgt: String, k: String) {
+        val flow = flowFor(k)
+        try {
+            val srcCode = mlLang(src) ?: throw IllegalArgumentException("unsupported source language: $src")
+            val tgtCode = mlLang(tgt) ?: throw IllegalArgumentException("unsupported target language: $tgt")
             cancelRequested.remove(k)
             val gen = (downloadGen[k] ?: 0L) + 1L
             downloadGen[k] = gen
             if (flow.value is PackState.Ready && isPairDownloaded(src, tgt)) return
-            val conditions = DownloadConditions.Builder().apply {
-                if (requireWifi) requireWifi()
-            }.build()
+            val conditions = DownloadConditions.Builder().build()
             val manager = RemoteModelManager.getInstance()
             val queue = mutableListOf<TranslateRemoteModel>()
             val downloaded = runCatching {
@@ -205,45 +227,19 @@ object MlKitTranslationEngine {
                 flow.value = PackState.Ready
                 return
             }
+            flow.value = PackState.Downloading()
             withContext(Dispatchers.IO) {
-                coroutineScope {
-                    val totalSteps = queue.size
-                    val pairTasks = activeDownloadTasks.getOrPut(k) { mutableListOf() }
-                    for (i in queue.indices) {
-                        // [T-lang-switch-txn] 取消检查点：两阶段之间退出（阶段内
-                        // 的 await 由宿主吊销协程打断）。
-                        if (cancelRequested.contains(k)) throw IllegalStateException("download cancelled")
-                        val base = i.toFloat() / totalSteps
-                        val weight = 1f / totalSteps
-                        val monitor: Job = launch {
-                            var simulated = 0.05f
-                            while (isActive) {
-                                delay(250)
-                                val dm = queryDownloadProgress(context)
-                                flow.value = if (dm != null && dm.second > 0L) {
-                                    PackState.Downloading(
-                                        progress = base + (dm.first.toFloat() / dm.second).coerceIn(0f, 0.99f) * weight,
-                                        step = i + 1, totalSteps = totalSteps,
-                                        downloadedBytes = dm.first, totalBytes = dm.second,
-                                    )
-                                } else {
-                                    if (simulated < 0.90f) simulated += 0.03f
-                                    PackState.Downloading(progress = base + simulated * weight, step = i + 1, totalSteps = totalSteps)
-                                }
-                            }
-                        }
-                        try {
-                            val task = manager.download(queue[i], conditions)
-                            synchronized(pairTasks) { pairTasks.add(task) }
-                            try {
-                                task.await()
-                            } finally {
-                                synchronized(pairTasks) { pairTasks.remove(task) }
-                            }
-                        } finally {
-                            monitor.cancel()
-                        }
-                        flow.value = PackState.Downloading(progress = (i + 1).toFloat() / totalSteps, step = i + 1, totalSteps = totalSteps)
+                val pairTasks = activeDownloadTasks.getOrPut(k) { mutableListOf() }
+                for (model in queue) {
+                    // [T-lang-switch-txn] 取消检查点：两阶段之间退出（阶段内
+                    // 的 await 由宿主吊销协程打断）。
+                    if (cancelRequested.contains(k)) throw IllegalStateException("download cancelled")
+                    val task = manager.download(model, conditions)
+                    synchronized(pairTasks) { pairTasks.add(task) }
+                    try {
+                        task.await()
+                    } finally {
+                        synchronized(pairTasks) { pairTasks.remove(task) }
                     }
                 }
             }
@@ -252,9 +248,9 @@ object MlKitTranslationEngine {
             flow.value = PackState.Failed(t.message ?: "download failed")
             throw t
         } finally {
+            downloadJobs.remove(k)
             activeDownloadTasks.remove(k)
             cancelRequested.remove(k)
-            mutex.unlock()
         }
     }
 
@@ -302,35 +298,6 @@ object MlKitTranslationEngine {
         } catch (t: Throwable) {
             flowFor(k).value = PackState.Failed(t.message ?: "delete failed")
             throw t
-        }
-    }
-
-    /** 查询系统 DownloadManager 活跃任务的字节进度（照搬 taixu）。 */
-    private fun queryDownloadProgress(context: Context): Pair<Long, Long>? {
-        val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as? DownloadManager ?: return null
-        return try {
-            val query = DownloadManager.Query()
-            dm.query(query)?.use { cursor ->
-                val bytesCol = cursor.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)
-                val totalCol = cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES)
-                val statusCol = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
-                var latestBytes = 0L
-                var latestTotal = 0L
-                while (cursor.moveToNext()) {
-                    val status = if (statusCol != -1) cursor.getInt(statusCol) else -1
-                    if (status == DownloadManager.STATUS_RUNNING || status == DownloadManager.STATUS_PENDING || status == DownloadManager.STATUS_PAUSED) {
-                        val bytes = if (bytesCol != -1) cursor.getLong(bytesCol) else 0L
-                        val total = if (totalCol != -1) cursor.getLong(totalCol) else 0L
-                        if (total > 0L) {
-                            latestBytes = bytes
-                            latestTotal = total
-                        }
-                    }
-                }
-                if (latestTotal > 0L) Pair(latestBytes, latestTotal) else null
-            }
-        } catch (_: Throwable) {
-            null
         }
     }
 

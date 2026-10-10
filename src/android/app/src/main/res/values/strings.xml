@@ -2412,6 +2412,7 @@
     <string name="translate_model_status_ready">Ready — fully offline</string>
     <string name="translate_model_download">Download packs (~60MB)</string>
     <string name="translate_model_delete">Delete packs to free space</string>
+    <string name="translate_model_downloading">Downloading</string>
     <string name="translate_model_wifi">Wi-Fi only</string>
     <string name="translate_model_failed">Failed: %1$s</string>
     <string name="translate_switch_confirm_title">Switch translation languages</string>

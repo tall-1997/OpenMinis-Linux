@@ -49,8 +49,6 @@ fun TranslationSettingsScreen(
 ) {
     val context = LocalContext.current
     val config by providerRepository.config.collectAsState()
-    var enabled by remember { mutableStateOf(TranslationPrefs.isEnabled(context)) }
-    var lang by remember { mutableStateOf(TranslationPrefs.lang(context)) }
     var entryId by remember { mutableStateOf(TranslationPrefs.entryId(context)) }
     // [T-mlkit-stream-translate] 思考流/输出流的实时离线翻译设置。
     var streamEnabled by remember { mutableStateOf(TranslationPrefs.isStreamEnabled(context)) }
@@ -66,48 +64,10 @@ fun TranslationSettingsScreen(
         onBack = null,
     ) {
         SettingsSection(header = stringResource(R.string.translate_settings_section)) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable {
-                        enabled = !enabled
-                        TranslationPrefs.setEnabled(context, enabled)
-                    }
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text(stringResource(R.string.translate_settings_enabled), style = MaterialTheme.typography.bodyLarge)
-                    Text(
-                        stringResource(R.string.translate_settings_enabled_sub),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(
-                    checked = enabled,
-                    onCheckedChange = {
-                        enabled = it
-                        TranslationPrefs.setEnabled(context, it)
-                    },
-                )
-            }
-            HorizontalDivider()
-            Text(
-                stringResource(R.string.translate_target),
-                modifier = Modifier.padding(start = 16.dp, top = 12.dp, end = 16.dp),
-                style = MaterialTheme.typography.labelLarge,
-            )
-            TranslationTargetField(
-                value = lang,
-                onValueChange = {
-                    lang = it
-                    TranslationPrefs.setLang(context, it)
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-            )
+            // [T-translation-page-slim] 「显示翻译按钮」开关挪到外观设置页；
+            // 「翻译成」下拉删除——与下方实时翻译的目标语言重复，气泡翻译
+            // 改读同一个目标语言（TranslationPrefs.lang 回退 streamTarget）。
+            // 本区块只剩气泡翻译的模型列表。
         }
         // [T-mlkit-stream-translate] 思考流/输出流的实时离线翻译（ML Kit）。
         // [T-apk-flavors] slim 变体无 bundled 推理运行时：区块换成需要 full 版
@@ -211,15 +171,12 @@ fun TranslationSettingsScreen(
 
 /**
  * [T-mlkit-model-mgmt] 语言包状态/下载/删除卡（引擎状态机驱动）。
- * Wi-Fi 开关由 [TranslationSwitchPanel] 持有并下传：切换事务与手动下载共用
- * 一个条件，两张卡各一个开关是噪音。
+ * 下载跑在引擎级 scope：退出页面不中断，重进显示在飞的 Downloading 状态。
  */
 @Composable
 internal fun TranslationModelManager(
     src: String,
     tgt: String,
-    wifiOnly: Boolean,
-    onWifiOnlyChange: (Boolean) -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -236,59 +193,50 @@ internal fun TranslationModelManager(
             MlKitTranslationEngine.PackState.Checking -> stringResource(R.string.translate_model_status_checking)
             MlKitTranslationEngine.PackState.NeedsDownload -> stringResource(R.string.translate_model_status_not_downloaded)
             MlKitTranslationEngine.PackState.Ready -> stringResource(R.string.translate_model_status_ready)
-            is MlKitTranslationEngine.PackState.Downloading -> s.detailText
+            is MlKitTranslationEngine.PackState.Downloading ->
+                stringResource(R.string.translate_model_downloading) +
+                    (s.detailText.takeIf { it.isNotBlank() }?.let { " · $it" } ?: "")
             is MlKitTranslationEngine.PackState.Failed -> stringResource(R.string.translate_model_failed, s.message)
         }
         Text(
             stringResource(R.string.translate_model_section) + " · " + statusText,
             style = MaterialTheme.typography.labelLarge,
         )
-        (state as? MlKitTranslationEngine.PackState.Downloading)?.let { dl ->
-            LinearProgressIndicator(
-                progress = { dl.progress ?: 0f },
-                modifier = Modifier.fillMaxWidth(),
-            )
+        // [T-mlkit-download-stall] ML Kit 不暴露字节进度：不确定式进度条，
+        // 不再渲染会卡死的假百分比。
+        if (state is MlKitTranslationEngine.PackState.Downloading) {
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
         }
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            when (state) {
-                is MlKitTranslationEngine.PackState.Downloading -> Unit
-                is MlKitTranslationEngine.PackState.Failed, MlKitTranslationEngine.PackState.NeedsDownload, MlKitTranslationEngine.PackState.Checking -> {
-                    Button(
-                        enabled = !busy,
-                        onClick = {
-                            busy = true
-                            scope.launch {
-                                runCatching { MlKitTranslationEngine.downloadPack(context, src, tgt, wifiOnly) }
-                                busy = false
-                            }
-                        },
-                    ) {
-                        Text(stringResource(R.string.translate_model_download), style = MaterialTheme.typography.labelMedium)
-                    }
-                }
-                MlKitTranslationEngine.PackState.Ready -> {
-                    OutlinedButton(
-                        enabled = !busy,
-                        onClick = {
-                            busy = true
-                            scope.launch {
-                                runCatching { MlKitTranslationEngine.deletePack(src, tgt) }
-                                busy = false
-                            }
-                        },
-                    ) {
-                        Text(stringResource(R.string.translate_model_delete), style = MaterialTheme.typography.labelMedium)
-                    }
+        when (state) {
+            is MlKitTranslationEngine.PackState.Downloading -> Unit
+            is MlKitTranslationEngine.PackState.Failed, MlKitTranslationEngine.PackState.NeedsDownload, MlKitTranslationEngine.PackState.Checking -> {
+                Button(
+                    enabled = !busy,
+                    onClick = {
+                        busy = true
+                        scope.launch {
+                            runCatching { MlKitTranslationEngine.downloadPack(context, src, tgt) }
+                            busy = false
+                        }
+                    },
+                ) {
+                    Text(stringResource(R.string.translate_model_download), style = MaterialTheme.typography.labelMedium)
                 }
             }
-            Text(stringResource(R.string.translate_model_wifi), style = MaterialTheme.typography.bodySmall)
-            Switch(
-                checked = wifiOnly,
-                onCheckedChange = onWifiOnlyChange,
-            )
+            MlKitTranslationEngine.PackState.Ready -> {
+                OutlinedButton(
+                    enabled = !busy,
+                    onClick = {
+                        busy = true
+                        scope.launch {
+                            runCatching { MlKitTranslationEngine.deletePack(src, tgt) }
+                            busy = false
+                        }
+                    },
+                ) {
+                    Text(stringResource(R.string.translate_model_delete), style = MaterialTheme.typography.labelMedium)
+                }
+            }
         }
     }
 }

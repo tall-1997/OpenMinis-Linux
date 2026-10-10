@@ -2224,6 +2224,7 @@
     <string name="translate_model_status_ready">已就绪，完全离线</string>
     <string name="translate_model_download">下载离线语言包（约 60MB）</string>
     <string name="translate_model_delete">删除语言包释放空间</string>
+    <string name="translate_model_downloading">下载中</string>
     <string name="translate_model_wifi">仅 Wi-Fi 下载</string>
     <string name="translate_model_failed">失败：%1$s</string>
     <string name="translate_switch_confirm_title">切换翻译语言</string>

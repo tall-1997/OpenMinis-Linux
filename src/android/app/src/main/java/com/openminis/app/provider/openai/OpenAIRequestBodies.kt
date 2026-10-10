@@ -1350,20 +1350,26 @@ internal class OpenAIRequestBodies(
      * turn with attachments-only input, etc.).
      */
     private fun derivePromptCacheKey(messages: List<LLMMessage>): String {
-        for (msg in messages) {
-            if (msg.role != LLMMessage.Role.USER) continue
-            val text = msg.contentParts
-                .filterIsInstance<AgentContentPart.Text>()
-                .joinToString("") { it.text }
-                .ifEmpty { msg.content }
-            if (text.isNotEmpty()) {
-                val digest = java.security.MessageDigest.getInstance("SHA-256")
-                    .digest(text.toByteArray(Charsets.UTF_8))
-                val hex = digest.joinToString("") { "%02x".format(it) }
-                return "minis-${hex.take(32)}"
-            }
-        }
-        return "minis-${java.util.UUID.randomUUID().toString().lowercase()}"
+        // [T-prompt-cache-key-truncation] SHAPE fingerprint: first user
+        // message + current message count + last user text. A mid-chat
+        // truncation (delete-from-here / rewind / model switching) changes
+        // count or last-user text -> the key rotates and relays that treat
+        // prompt_cache_key as a thread id can no longer serve the
+        // pre-truncation context. Within an untruncated chat every field is
+        // byte-stable per turn, so prompt-cache hit rates are unchanged.
+        val firstUser = messages.firstOrNull { it.role == LLMMessage.Role.USER }?.let { msg ->
+            (msg.contentParts.filterIsInstance<AgentContentPart.Text>().joinToString("") { it.text }
+                .ifEmpty { msg.content })
+        }.orEmpty()
+        val lastUser = messages.lastOrNull { it.role == LLMMessage.Role.USER }?.let { msg ->
+            (msg.contentParts.filterIsInstance<AgentContentPart.Text>().joinToString("") { it.text }
+                .ifEmpty { msg.content })
+        }.orEmpty()
+        val fingerprint = firstUser.length.toString() + ":" + messages.size.toString() + ":" + firstUser + "|" + lastUser
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(fingerprint.toByteArray(Charsets.UTF_8))
+        val hex = digest.joinToString("") { "%02x".format(it) }
+        return "minis-" + hex.take(32)
     }
 
     /**

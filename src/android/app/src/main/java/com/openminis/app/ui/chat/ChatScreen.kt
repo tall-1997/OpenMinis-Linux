@@ -1918,8 +1918,11 @@ fun ChatScreen(
     var messageFontLevel by remember { mutableStateOf(appearancePrefs.getInt(com.openminis.app.ui.settings.KEY_FONT_MESSAGE, 0)) }
     var chatInputLevel by remember { mutableStateOf(appearancePrefs.getInt(com.openminis.app.ui.settings.KEY_FONT_CHAT_INPUT, 0)) }
     var chatGutterDp by rememberChatGutterDp(context)
-    var toolPreviewEnabled by remember { mutableStateOf(appearancePrefs.getBoolean(com.openminis.app.ui.settings.KEY_TOOL_PREVIEW, true)) }
-    var showFloatingToolBar by remember { mutableStateOf(appearancePrefs.getBoolean(com.openminis.app.ui.settings.KEY_SHOW_FLOATING_TOOL_BAR, true)) }
+    // [T-remove-floating-bar-display] 浮动工具条 + 工具预览**不再在会话页显示**
+    // （外观设置项一并移除）；实现保留——FloatingToolStatusBar /
+    // ToolPreviewThumbnail / LocalToolPreviewEnabled 组合函数留在
+    // ChatComposerWidgets 供会话内查看（ToolDetailSheet）复用。显示面的
+    // 状态读取与 provides 相应删除。
     var showCompletedToolCards by remember { mutableStateOf(appearancePrefs.getBoolean(com.openminis.app.ui.settings.KEY_SHOW_COMPLETED_TOOL_CARDS, false)) }
     var foldAiProcess by remember { mutableStateOf(appearancePrefs.getBoolean(com.openminis.app.ui.settings.KEY_FOLD_AI_PROCESS, com.openminis.app.ui.settings.DEFAULT_FOLD_AI_PROCESS)) }
     // [T-composer-mic-toggle] Composer mic visibility (default OFF).
@@ -1946,8 +1949,6 @@ fun ChatScreen(
         fun applyAppearancePrefs(sp: android.content.SharedPreferences) {
             messageFontLevel = sp.getInt(com.openminis.app.ui.settings.KEY_FONT_MESSAGE, 0)
             chatInputLevel = sp.getInt(com.openminis.app.ui.settings.KEY_FONT_CHAT_INPUT, 0)
-            toolPreviewEnabled = sp.getBoolean(com.openminis.app.ui.settings.KEY_TOOL_PREVIEW, true)
-            showFloatingToolBar = sp.getBoolean(com.openminis.app.ui.settings.KEY_SHOW_FLOATING_TOOL_BAR, true)
             showCompletedToolCards = sp.getBoolean(com.openminis.app.ui.settings.KEY_SHOW_COMPLETED_TOOL_CARDS, false)
             foldAiProcess = sp.getBoolean(com.openminis.app.ui.settings.KEY_FOLD_AI_PROCESS, com.openminis.app.ui.settings.DEFAULT_FOLD_AI_PROCESS)
             showSubAgentBar = sp.getBoolean(com.openminis.app.ui.settings.KEY_SHOW_SUBAGENT_BAR, true)
@@ -1964,8 +1965,6 @@ fun ChatScreen(
                     com.openminis.app.ui.settings.KEY_FONT_MESSAGE -> messageFontLevel = sp.getInt(key, 0)
                     com.openminis.app.ui.settings.KEY_FONT_CHAT_INPUT -> chatInputLevel = sp.getInt(key, 0)
                     com.openminis.app.ui.settings.KEY_CHAT_GUTTER_DP -> chatGutterDp = sp.getInt(key, com.openminis.app.ui.settings.DEFAULT_CHAT_GUTTER_DP).coerceIn(8, 32)
-                    com.openminis.app.ui.settings.KEY_TOOL_PREVIEW -> toolPreviewEnabled = sp.getBoolean(key, true)
-                    com.openminis.app.ui.settings.KEY_SHOW_FLOATING_TOOL_BAR -> showFloatingToolBar = sp.getBoolean(key, true)
                     com.openminis.app.ui.settings.KEY_SHOW_COMPLETED_TOOL_CARDS -> showCompletedToolCards = sp.getBoolean(key, false)
                     com.openminis.app.ui.settings.KEY_FOLD_AI_PROCESS -> foldAiProcess = sp.getBoolean(key, com.openminis.app.ui.settings.DEFAULT_FOLD_AI_PROCESS)
                     com.openminis.app.ui.settings.KEY_SHOW_MIC_BUTTON -> showMicButton = sp.getBoolean(key, com.openminis.app.ui.settings.DEFAULT_SHOW_MIC_BUTTON)
@@ -2176,7 +2175,6 @@ fun ChatScreen(
     CompositionLocalProvider(
         LocalBrowserTabPool provides viewModel.browserTabPool,
         LocalMarkdownFontScale provides markdownFontScale,
-        LocalToolPreviewEnabled provides toolPreviewEnabled,
         LocalMarkdownUrlClickHandler provides urlClickHandler,
         LocalMarkdownImageTapHandler provides markdownImageTapHandler,
         // Route markdown media resolution through this chat's session so
@@ -2940,108 +2938,22 @@ fun ChatScreen(
 
             // Messages + scroll-to-bottom button
             Box(modifier = Modifier.weight(1f)) {
+                // [T-remove-floating-bar-display] 浮动工具条的显示已移除：
+                // toolBarHeightPx 原来测量 FloatingToolStatusBar overlay 的高度
+                // 供 bottomReserve / TTS 胶囊避让；无 overlay 后恒 0（变量保留，
+                // SpeechPlayerCapsule 的传参契约不变）。T166/T170/T173/T174/
+                // TG36286 的浮条避让史随显示一并失效。
                 var toolBarHeightPx by remember { mutableStateOf(0) }
-                val density = LocalDensity.current
-                val toolBarHeightDp = with(density) { toolBarHeightPx.toDp() }
-                // T166 / T170 / T173: bottomReserve must clear the visible
-                // top of the floating tool-status overlay. Layout primitives
-                // come from FloatingToolStatusBar:
-                //   - status bar height = 38 dp
-                //   - thumbnail floats over the bar with overhang = 27 dp
-                //   - thumbnail TOP = bar top - overhang = 65 dp above the
-                //     input bar's upper edge (which is also the LazyColumn
-                //     bottom edge under reverseLayout).
-                //
-                // `onGloballyPositioned` on the wrapper Box reports ~98 dp
-                // because it includes wrapper padding(bottom=6) + horizontal
-                // padding insets + shadow allowance — none of which are
-                // *visually occluding* the LazyColumn. Using the measured
-                // value + 8 dp left a ~25 dp gap above the thumbnail (red
-                // box in the user's report).
-                //
-                // Pin to the visual constant: thumbnail height (65 dp) + a
-                // visual buffer (18 dp) so the latest row's bottom has clear
-                // breathing room above the thumbnail top.
-                //
-                // T174: an earlier version gated reserve on `toolBarHeightPx
-                // > 0`, but `onGloballyPositioned` fires asynchronously after
-                // the first floating-bar layout pass; for one frame after
-                // toolBlocks appeared the reserve evaluated the small
-                // default (28 dp) and the just-arrived user bubble landed
-                // beneath the bar. Logcat showed the inverse glitch too:
-                // `toolBarHeightPx=258 toolBarHeightDp=0 reserve=28` — the
-                // px state and the dp/reserve values come from different
-                // recomposition snapshots. Drive the reserve directly off
-                // the same predicate used for *whether* the floating bar is
-                // emitted (`hasFloatingTools` below) so reserve and bar
-                // visibility flip on the same frame.
-                // [T-android-chat-cannot-scroll-bottom-many-tools]
-                // Bug 𝙓𝙄𝙉 TG36286: with 7+ tools the user couldn't scroll the
-                // last messages above the floating tool status bar.
-                //
-                // Asymmetry between the bar's render condition and its
-                // bottomReserve gate: [lastToolBlocks] (drives whether to
-                // mount FloatingToolStatusBar) merges `messages` with the
-                // streaming-side-channel `streamingById`, so during a live
-                // turn the in-flight tool's toolStatus shows up there →
-                // bar renders. [hasFloatingTools] (drives bottomReserve)
-                // only read `messages`, which the streaming architecture
-                // intentionally leaves stable during a turn — so the
-                // in-flight tool is invisible to this predicate → reserve
-                // collapsed to 20dp while a 65dp+6dp floating bar covered
-                // the bottom of the LazyColumn. The new arrivals (status
-                // pill, "Minis is thinking" indicator, inline retry banner) landed
-                // behind the bar with no way to scroll them into view.
-                //
-                // Fix: also subscribe to streamingById so the predicate
-                // matches the bar's actual mount condition. The bar's
-                // mount uses `lastToolBlocks.isNotEmpty()` over the merged
-                // view; we mirror that semantically by checking the same
-                // filter on both sources.
+                // [T-remove-floating-bar-display] 浮动工具条不再显示：
+                // hasFloatingTools / visualOverlayHeight / 65dp+14dp 预留分支
+                // 一并失效——bottomReserve 恒 20dp（最后一条气泡与输入框顶缘
+                // 的呼吸间距，[T-bottom-occluded 0a6d3c92]）。streamingById /
+                // expanded/collapsedProcessIds 保留：streamingById 驱动流式
+                // overlay 合并，expanded/collapsed 是过程卡的手动展开状态。
                 val streamingById by viewModel.streamingById.collectAsState()
-                // [T-process-run-card] Manual expand/collapse overrides of
-                // the card's auto rule (see effectiveProcessExpanded in
-                // ChatProcessFoldLogic.kt). Padding reservation and overlay
-                // must agree on expansion, else 65dp of empty space stays.
                 var expandedProcessIds by remember(sessionId) { mutableStateOf(emptySet<String>()) }
                 var collapsedProcessIds by remember(sessionId) { mutableStateOf(emptySet<String>()) }
-                val hasFloatingTools = remember(messages, streamingById, foldAiProcess, expandedProcessIds, collapsedProcessIds) {
-                    val merged = if (streamingById.isEmpty()) messages
-                                 else mergeStreamingOverlay(messages, streamingById)
-                    merged.any { msg ->
-                        msg.role == "assistant" && msg.toolBlocks.any { tb ->
-                            isFloatingProcessTool(
-                                tb,
-                                foldAiProcess,
-                                tailProcessExpandedFor(msg, expandedProcessIds, collapsedProcessIds),
-                            )
-                        }
-                    }
-                }
-                val visualOverlayHeight = 65.dp  // thumbnailHeight in FloatingToolStatusBar
-                // Halve the breathing room above the input bar in both
-                // states — felt too sparse before. The thumbnail's 65dp
-                // physical height is preserved (it has to clear the
-                // floating overlay).
-                //
-                // T245: buffer raised 9dp → 14dp so the gap between the
-                // last LazyColumn tool row and the floating thumbnail's
-                // top reads at least as loose as the inter-tool spacing
-                // (each ToolCallPill carries padding(vertical = 3.dp) +
-                // LazyColumn spacedBy(2.dp) = ~8dp inter-tool gap; the
-                // 9dp buffer combined with the floating bar's internal
-                // overhang was visually tighter than 8dp). 14dp also
-                // matches the no-tool branch — single visual constant
-                // for "row-bottom → bottom chrome" breathing room.
-                // [T-bottom-occluded 0a6d3c92] No-tools branch bumped from
-                // 14dp → 20dp to give the last message bubble a comfortable
-                // gap above the composer's top edge. With 14dp the trailing
-                // line sat too close to the composer shadow / rounded edge
-                // (user reported "the bottom of the text is slightly clipped"). The floating-tools branch
-                // already reserves visualOverlayHeight (65dp) + buffer and
-                // was not part of the report; keep its +14 buffer.
-                val bottomReserve =
-                    if (hasFloatingTools) visualOverlayHeight + 14.dp else 20.dp
+                val bottomReserve = 20.dp
                 // T174: when bottomReserve changes (toolbar appearing /
                 // disappearing or thumbnail height shift), re-pin to bottom
                 // if we are currently following. Without this, the new
@@ -4565,103 +4477,44 @@ fun ChatScreen(
                 } // Box (selection scope)
                 } // CompositionLocalProvider
 
-                // Floating tool status bar — shows only actual tool calls (not text/thinking/info).
-                // Matches iOS: filter on toolStatus != nil (text blocks have toolStatus = null).
-                //
-                // T-streaming-side-channel-tool-blocks: derive lastToolBlocks
-                // from a state that combines messages + streamingById INSIDE
-                // a LaunchedEffect (not via a top-level collectAsState read),
-                // so streaming-tick churn stays off the ChatScreen invalidation
-                // list. Without including streamingById, a tool pill clicked
-                // mid-turn is missing from lastToolBlocks → ToolDetailSheet
-                // never opens (and its sentinel LaunchedEffect immediately
-                // closes the detail state because the id "doesn't exist").
-                var lastToolBlocks by remember { mutableStateOf<List<AssistantBlock>>(emptyList()) }
+                // [T-remove-floating-bar-display] 浮动工具条的**显示**移除：
+                // lastToolBlocks（overlay 子集）不再计算，FloatingToolStatusBar
+                // 不再挂载——工具活动全部由过程卡（ProcessRunCard）承载。
+                // detailToolBlocks 保留：ToolDetailSheet 仍从聊天内工具 pill /
+                // 过程卡行打开。实现（FloatingToolStatusBar / ToolPreviewThumbnail
+                // / LocalToolPreviewEnabled）保留在 ChatComposerWidgets 供复用。
                 var detailToolBlocks by remember { mutableStateOf<List<AssistantBlock>>(emptyList()) }
-                LaunchedEffect(messages, foldAiProcess, showSubAgentBar, expandedProcessIds, collapsedProcessIds) {
+                LaunchedEffect(messages, showSubAgentBar) {
                     kotlinx.coroutines.flow.combine(
                         kotlinx.coroutines.flow.flowOf(messages),
                         viewModel.streamingById,
                     ) { msgs, stream ->
                         val merged = if (stream.isEmpty()) msgs else mergeStreamingOverlay(msgs, stream)
                         val all = assistantToolUseBlocks(merged)
-                        // The floating strip belongs to the latest assistant
-                        // reply, not to every tool in the session. Keep the
-                        // complete list separately for historical details.
-                        val latestReply = merged.lastOrNull { it.role == "assistant" }
-                        // [T-android-fold-expanded-duplicate] Expanded card
-                        // already shows the tool in place — no pinned copy.
-                        val latestExpanded = latestReply
-                            ?.let { tailProcessExpandedFor(it, expandedProcessIds, collapsedProcessIds) } == true
-                        val overlay = latestReply?.toolBlocks.orEmpty()
-                            .filter {
-                                isFloatingProcessTool(it, foldAiProcess, processExpanded = latestExpanded)
-                            }
-                            .filterNot {
-                                showSubAgentBar && isSubAgentTranscriptCard(it) &&
-                                    (it.id in activeSubAgentToolIds ||
-                                        it.id.substringBefore("#sub-") in activeSubAgentToolIds)
-                            }
-                        all to overlay
-                    }.collect { (all, overlay) ->
+                        // Sub-agent transcript cards still hide from the detail
+                        // sheet while their run is live (same rule the overlay
+                        // used — read on for the id aliasing).
+                        val filtered = all.filterNot {
+                            showSubAgentBar && isSubAgentTranscriptCard(it) &&
+                                (it.id in activeSubAgentToolIds ||
+                                    it.id.substringBefore("#sub-") in activeSubAgentToolIds)
+                        }
+                        filtered to Unit
+                    }.collect { (all, _) ->
                         detailToolBlocks = all
-                        lastToolBlocks = overlay
                     }
-                }
-                if (showFloatingToolBar && isStreaming && lastToolBlocks.isNotEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            // [T-android-chat-max-content-width] The tool status
-                            // bar is part of the conversation column, so it
-                            // takes the same cap as the message list and the
-                            // composer. Without it the bar alone spanned the
-                            // full pane while everything above and below it was
-                            // capped, so on a tablet it visibly overhung both.
-                            //
-                            // ORDER MATTERS: widthIn must come BEFORE
-                            // fillMaxWidth. fillMaxWidth pins the incoming
-                            // MIN width to the full pane as well as the max, so
-                            // a widthIn placed after it is raised back up by
-                            // that min and does nothing — which is exactly how
-                            // the first attempt at this failed. Declared first,
-                            // widthIn narrows the constraint and fillMaxWidth
-                            // then fills the already-narrowed one.
-                            //
-                            // BottomCenter on the parent centres the result, so
-                            // no extra alignment is needed.
-                            .widthIn(max = CHAT_MAX_CONTENT_WIDTH)
-                            .fillMaxWidth()
-                            .onGloballyPositioned { toolBarHeightPx = it.size.height }
-                            // [T-android-chat-gutter] same rail as the list and composer.
-                            .padding(horizontal = chatGutterDp.dp)
-                            .padding(bottom = 6.dp),
-                    ) {
-                        FloatingToolStatusBar(
-                            toolBlocks = lastToolBlocks,
-                            // T14: per-card stop on the floating bar — same
-                            // global cancel as the message-list pill button.
-                            onStop = { viewModel.cancelStream() },
-                            onOpenTerminalWithCommand = onOpenTerminalWithCommand,
-                            // T261: route detail open through the same VM
-                            // state as in-list pills so both surfaces share
-                            // one always-mounted sheet instance.
-                            onOpenDetail = { viewModel.openToolDetail(it) },
-                        )
-                    }
-                } else {
-                    SideEffect { toolBarHeightPx = 0 }
                 }
 
                 // [T-android-tts-capsule] Floating speech-player control for
                 // "Read replies" TTS — expand/compact capsule with mute, model
                 // switch and speed cycling. Mounted LAST in this Box so it
-                // draws above the list, the FABs and the floating tool bar
-                // (iOS mounts its SpeechPlayerControl at app root; chat-screen
-                // scope is the Android first pass).
+                // draws above the list and the FABs (iOS mounts its
+                // SpeechPlayerControl at app root; chat-screen scope is the
+                // Android first pass).
                 // [T-android-tts-capsule-avoid] toolBarHeightPx is the same
-                // measurement bottomReserve uses — the capsule lifts above the
-                // floating tool bar instead of covering its trailing edge.
+                // measurement bottomReserve uses — with the floating bar's
+                // DISPLAY removed it stays 0 (the capsule keeps clearing the
+                // FAB stack via additionalObstructionDp below).
                 // [T-android-tts-capsule-avoid-fabs] The scroll FABs share the
                 // capsule's bottom-end corner and OVERLAPPED it (user report:
                 // capsule stacked on the jump-to-user-message / scroll-to-
@@ -4676,7 +4529,10 @@ fun ChatScreen(
                 val downFabVisible = messages.isNotEmpty() && (
                     hasNewerMessages || (scrollMode is ScrollMode.Reading && contentOverflows.value)
                     )
-                val fabBaseDp = if (lastToolBlocks.isNotEmpty()) 80.dp else 8.dp
+                // [T-remove-floating-bar-display] 浮动工具条不再显示：FAB 底距
+                // 回归常规 8dp（原 80dp 分支是为清开 65dp 的浮动 overlay）；
+                // toolBarHeightPx 保持声明但恒 0（无 overlay 测量源）。
+                val fabBaseDp = 8.dp
                 val fabStackTopDp = when {
                     upFabVisible -> fabBaseDp + 46.dp + 36.dp
                     downFabVisible -> fabBaseDp + 36.dp
@@ -4775,7 +4631,8 @@ fun ChatScreen(
                 // spacing). Tapping walks BACK one user turn at a time rather
                 // than jumping to the oldest message.
                 if (messages.isNotEmpty() && !isNearBottom.value) {
-                    val upBaseBottom = if (lastToolBlocks.isNotEmpty()) 80.dp else 8.dp
+                    // [T-remove-floating-bar-display] 原 80dp 避让偏移随浮动条显示移除。
+                    val upBaseBottom = 8.dp
                     androidx.compose.material3.FilledIconButton(
                         onClick = {
                             // [T-android-scroll-policy] Land in Reading
@@ -4823,7 +4680,8 @@ fun ChatScreen(
                 }
 
                 if (downFabVisible) {
-                    val fabBottomPadding = if (lastToolBlocks.isNotEmpty()) 80.dp else 8.dp
+                    // [T-remove-floating-bar-display] 同上。
+                    val fabBottomPadding = 8.dp
                     androidx.compose.material3.FilledIconButton(
                         onClick = {
                             // [T-android-scroll-fab-down-stuck] Pin the mode

@@ -9,7 +9,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -75,20 +74,18 @@ internal fun TranslationSwitchPanel() {
                 TranslationPrefs.setStreamTarget(context, p.tgt)
             },
             isPairReady = { p -> MlKitTranslationEngine.isPairReady(p.src, p.tgt) },
-            downloadPack = { p, wifi -> MlKitTranslationEngine.downloadPack(context, p.src, p.tgt, wifi) },
+            downloadPack = { p -> MlKitTranslationEngine.downloadPack(context, p.src, p.tgt) },
             abortDownload = { p -> MlKitTranslationEngine.cancelActiveDownload(p.src, p.tgt) },
             clearPartial = { p -> MlKitTranslationEngine.deletePack(p.src, p.tgt) },
         )
     }
     val switchState by controller.state.collectAsState()
-    // 单一 Wi-Fi 开关同时服务切换事务与手动下载（两张卡各一个开关是噪音）。
-    var wifiOnly by remember { mutableStateOf(true) }
     var confirm by remember { mutableStateOf<LangPair?>(null) }
 
     fun commit(pair: LangPair) {
         scope.launch {
             try {
-                controller.requestSwitch(pair, wifiOnly)
+                controller.requestSwitch(pair)
             } finally {
                 rev++
             }
@@ -168,26 +165,10 @@ internal fun TranslationSwitchPanel() {
             }
         }
 
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Text(
-                stringResource(R.string.translate_model_wifi),
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Switch(checked = wifiOnly, onCheckedChange = { wifiOnly = it })
-        }
-
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         TranslationModelManager(
             src = effective.src,
             tgt = effective.tgt,
-            wifiOnly = wifiOnly,
-            onWifiOnlyChange = { wifiOnly = it },
         )
     }
 
@@ -218,17 +199,21 @@ internal fun TranslationSwitchPanel() {
     }
 }
 
-/** 切换事务下载阶段的字节级进度（复用引擎 packState，与手动下载同一状态机）。 */
+/** 切换事务下载阶段的不确定式进度（复用引擎 packState，与手动下载同一状态机）。 */
 @Composable
 private fun SwitchDownloadProgress(src: String, tgt: String) {
     val state by remember(src, tgt) { MlKitTranslationEngine.packState(src, tgt) }.collectAsState()
     val dl = state as? MlKitTranslationEngine.PackState.Downloading ?: return
-    LinearProgressIndicator(progress = { dl.progress ?: 0f }, modifier = Modifier.fillMaxWidth())
-    Text(
-        dl.detailText,
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
+    // [T-mlkit-download-stall] ML Kit 不暴露字节进度：不确定式进度条，
+    // 不再渲染会卡死的假百分比。
+    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+    if (dl.detailText.isNotBlank()) {
+        Text(
+            dl.detailText,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
 }
 
 /** 某语言码的离线包是否已在本地（UI 侧预判，控制器内部另有权威判定）。 */

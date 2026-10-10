@@ -81,7 +81,7 @@ object MlKitTranslationEngine {
     suspend fun probe(context: Context): Boolean = false
 
     /** slim 下无推理运行时：显式失败而不是假装下载。 */
-    suspend fun downloadPack(context: Context, src: String, tgt: String, requireWifi: Boolean = false) {
+    suspend fun downloadPack(context: Context, src: String, tgt: String) {
         flowFor(key(src, tgt)).value = PackState.Failed("translation engine requires the full build")
         throw IllegalStateException("translation engine requires the full build")
     }

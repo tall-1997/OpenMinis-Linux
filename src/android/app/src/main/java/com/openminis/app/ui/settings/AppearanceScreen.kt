@@ -38,6 +38,7 @@ import androidx.compose.material.icons.outlined.BrightnessAuto
 import androidx.compose.material.icons.outlined.ChatBubble
 import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material.icons.outlined.CompareArrows
 import androidx.compose.material.icons.outlined.Wallpaper
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
@@ -51,7 +52,6 @@ import androidx.compose.material.icons.outlined.Launch
 import androidx.compose.material.icons.outlined.Psychology
 import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.ScreenLockPortrait
-import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.ViewAgenda
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.Palette
@@ -93,7 +93,7 @@ const val KEY_LAUNCH_SESSION = "launch_session"    // 0=Auto, 1=LastSession, 2=N
 const val KEY_RETURN_KEY_BEHAVIOR = "returnKeyBehavior"  // Int 0=Newline (default), 1=Send
 const val KEY_KEEP_SCREEN_AWAKE = "keepScreenAwakeDuringTasks"  // Boolean, default false
 const val KEY_TOOL_PREVIEW = "tool_preview"        // Boolean, default true
-const val KEY_SHOW_FLOATING_TOOL_BAR = "chat.showFloatingToolBar"  // Boolean, default true
+const val KEY_SHOW_FLOATING_TOOL_BAR = "chat.showFloatingToolBar"  // Boolean, default true — [T-remove-floating-bar-display] 显示已移除，常量保留（minis-config 面兼容）
 // [T-plan-board-pref] 任务列表看板显示开关（只改显示，功能不受影响）。
 const val KEY_SHOW_PLAN_BOARD = "chat.showPlanBoard"  // Boolean, default true
 const val KEY_SHOW_COMPLETED_TOOL_CARDS = "chat.showCompletedToolCards"  // Boolean, default false
@@ -331,8 +331,6 @@ fun AppearanceScreen(
     var returnKeyBehavior by remember { mutableIntStateOf(prefs.getInt(KEY_RETURN_KEY_BEHAVIOR, 0)) }
     var keepScreenAwake by remember { mutableStateOf(prefs.getBoolean(KEY_KEEP_SCREEN_AWAKE, false)) }
     var highRefresh by remember { mutableStateOf(com.openminis.app.ui.HighRefreshRate.enabled(context)) }
-    var toolPreview by remember { mutableStateOf(prefs.getBoolean(KEY_TOOL_PREVIEW, true)) }
-    var showFloatingToolBar by remember { mutableStateOf(prefs.getBoolean(KEY_SHOW_FLOATING_TOOL_BAR, true)) }
     var showCompletedToolCards by remember { mutableStateOf(prefs.getBoolean(KEY_SHOW_COMPLETED_TOOL_CARDS, false)) }
     var showSubAgentBar by remember { mutableStateOf(prefs.getBoolean(KEY_SHOW_SUBAGENT_BAR, DEFAULT_SHOW_SUB_AGENT_BAR)) }
     var showMicButton by remember { mutableStateOf(prefs.getBoolean(KEY_SHOW_MIC_BUTTON, DEFAULT_SHOW_MIC_BUTTON)) }
@@ -536,28 +534,10 @@ fun AppearanceScreen(
             header = stringResource(R.string.appearance_section_chat_chrome),
             footer = stringResource(R.string.appearance_chat_chrome_footer),
         ) {
-            SettingsSwitchRow(
-                icon = Icons.Outlined.Visibility,
-                iconColor = tileTeal,
-                title = stringResource(R.string.appearance_show_floating_tool_bar),
-                checked = showFloatingToolBar,
-                onCheckedChange = {
-                    showFloatingToolBar = it
-                    prefs.edit().putBoolean(KEY_SHOW_FLOATING_TOOL_BAR, it).apply()
-                },
-            )
-            SettingsSwitchRow(
-                icon = Icons.Outlined.Visibility,
-                iconColor = tileTeal,
-                title = stringResource(R.string.appearance_tool_preview_title),
-                subtitle = stringResource(R.string.appearance_tool_preview_footer),
-                checked = toolPreview,
-                onCheckedChange = {
-                    toolPreview = it
-                    prefs.edit().putBoolean(KEY_TOOL_PREVIEW, it).apply()
-                },
-                enabled = showFloatingToolBar,
-            )
+            // [T-remove-floating-bar-display] 浮动工具条与工具预览的**设置项**
+            // 移除（会话页也不再显示浮条）。实现保留：FloatingToolStatusBar /
+            // ToolPreviewThumbnail 组合函数仍供会话内查看（ToolDetailSheet 等）
+            // 复用；KEY_* 常量与 minis-config 条目一并保留（配置面不变）。
             // [T-plan-board-pref] 任务列表看板显示开关（只改显示，功能不受影响）。
             SettingsSwitchRow(
                 icon = Icons.Outlined.Checklist,
@@ -567,6 +547,19 @@ fun AppearanceScreen(
                 checked = prefs.getBoolean(KEY_SHOW_PLAN_BOARD, true),
                 onCheckedChange = {
                     prefs.edit().putBoolean(KEY_SHOW_PLAN_BOARD, it).apply()
+                },
+            )
+            // [T-translation-page-slim] 「显示翻译按钮」从翻译页挪来（原 Bubble
+            // 区块整体精简）。存储仍是 TranslationPrefs（translate_settings 文件），
+            // 用户已有偏好无缝保留——这里只挪 UI 位置。
+            SettingsSwitchRow(
+                icon = Icons.Outlined.Translate,
+                iconColor = tileTeal,
+                title = stringResource(R.string.translate_settings_enabled),
+                subtitle = stringResource(R.string.translate_settings_enabled_sub),
+                checked = com.openminis.app.i18n.TranslationPrefs.isEnabled(context),
+                onCheckedChange = {
+                    com.openminis.app.i18n.TranslationPrefs.setEnabled(context, it)
                 },
                 showDivider = false,
             )
