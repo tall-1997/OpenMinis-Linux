@@ -2448,7 +2448,7 @@
     <string name="chat_rewind_title">撤回到这一轮？</string>
     <string name="chat_rewind_subtitle">后续轮次写入的文件会被回滚。请选择回滚的范围。</string>
     <string name="chat_rewind_code">仅代码</string>
-    <string name="chat_rewind_code_desc">把文件恢复到此轮开始前的状态。</string>
+    <string name="chat_rewind_code_desc">把文件恢复到此轮开始前的状态，并截断之后的对话上下文。</string>
     <string name="chat_rewind_conversation">仅对话</string>
     <string name="chat_rewind_conversation_desc">派生一条回到此轮的分支，文件保持现状。</string>
     <string name="chat_rewind_both">代码与对话</string>

@@ -2633,7 +2633,7 @@
     <string name="chat_rewind_title">Rewind to this turn?</string>
     <string name="chat_rewind_subtitle">Files written by later turns are rolled back. Choose how far the rollback reaches.</string>
     <string name="chat_rewind_code">Code only</string>
-    <string name="chat_rewind_code_desc">Restore files to their state before this turn.</string>
+    <string name="chat_rewind_code_desc">Restore files to how they were before this turn, and trim the context after it.</string>
     <string name="chat_rewind_conversation">Conversation only</string>
     <string name="chat_rewind_conversation_desc">Fork the chat back to this turn, keeping files as they are.</string>
     <string name="chat_rewind_both">Code and conversation</string>
