@@ -1917,6 +1917,7 @@ fun ChatScreen(
     val appearancePrefs = remember { com.openminis.app.ui.settings.getAppearancePrefs(context) }
     var messageFontLevel by remember { mutableStateOf(appearancePrefs.getInt(com.openminis.app.ui.settings.KEY_FONT_MESSAGE, 0)) }
     var chatInputLevel by remember { mutableStateOf(appearancePrefs.getInt(com.openminis.app.ui.settings.KEY_FONT_CHAT_INPUT, 0)) }
+    var chatGutterDp by rememberChatGutterDp(context)
     var toolPreviewEnabled by remember { mutableStateOf(appearancePrefs.getBoolean(com.openminis.app.ui.settings.KEY_TOOL_PREVIEW, true)) }
     var showFloatingToolBar by remember { mutableStateOf(appearancePrefs.getBoolean(com.openminis.app.ui.settings.KEY_SHOW_FLOATING_TOOL_BAR, true)) }
     var showCompletedToolCards by remember { mutableStateOf(appearancePrefs.getBoolean(com.openminis.app.ui.settings.KEY_SHOW_COMPLETED_TOOL_CARDS, false)) }
@@ -1962,6 +1963,7 @@ fun ChatScreen(
                 when (key) {
                     com.openminis.app.ui.settings.KEY_FONT_MESSAGE -> messageFontLevel = sp.getInt(key, 0)
                     com.openminis.app.ui.settings.KEY_FONT_CHAT_INPUT -> chatInputLevel = sp.getInt(key, 0)
+                    com.openminis.app.ui.settings.KEY_CHAT_GUTTER_DP -> chatGutterDp = sp.getInt(key, com.openminis.app.ui.settings.DEFAULT_CHAT_GUTTER_DP).coerceIn(8, 32)
                     com.openminis.app.ui.settings.KEY_TOOL_PREVIEW -> toolPreviewEnabled = sp.getBoolean(key, true)
                     com.openminis.app.ui.settings.KEY_SHOW_FLOATING_TOOL_BAR -> showFloatingToolBar = sp.getBoolean(key, true)
                     com.openminis.app.ui.settings.KEY_SHOW_COMPLETED_TOOL_CARDS -> showCompletedToolCards = sp.getBoolean(key, false)
@@ -3879,7 +3881,8 @@ fun ChatScreen(
                         // a BoxScope.
                         .wrapContentWidth(Alignment.CenterHorizontally)
                         .widthIn(max = CHAT_MAX_CONTENT_WIDTH)
-                        .padding(horizontal = 16.dp)
+                        // [T-android-chat-gutter] shared conversation-column gutter (Appearance).
+                        .padding(horizontal = chatGutterDp.dp)
                         .onGloballyPositioned {
                             listRootCoords = it
                             if (perfFirstLayoutFired.compareAndSet(false, true)) {
@@ -4620,7 +4623,8 @@ fun ChatScreen(
                             .widthIn(max = CHAT_MAX_CONTENT_WIDTH)
                             .fillMaxWidth()
                             .onGloballyPositioned { toolBarHeightPx = it.size.height }
-                            .padding(horizontal = 12.dp)
+                            // [T-android-chat-gutter] same rail as the list and composer.
+                            .padding(horizontal = chatGutterDp.dp)
                             .padding(bottom = 6.dp),
                     ) {
                         FloatingToolStatusBar(
@@ -4916,7 +4920,8 @@ fun ChatScreen(
                     // looked broken.
                     .onGloballyPositioned { composerWidthPx = it.size.width }
                     .navigationBarsPadding()
-                    .padding(horizontal = 12.dp)
+                    // [T-android-chat-gutter] same rail as the list and tool bar.
+                    .padding(horizontal = chatGutterDp.dp)
                     .padding(top = 2.dp, bottom = 8.dp),
             ) {
                 val pendingUserQuestions by viewModel.pendingUserQuestions.collectAsState()
@@ -7521,19 +7526,7 @@ private data class HistoryEdgeVisible(
     val oldestEdge: Boolean,
 )
 
-@Composable
-private fun HistoryPageEdge(text: String, onClick: () -> Unit) {
-    Text(
-        text = text,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 16.dp),
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        textAlign = TextAlign.Center,
-    )
-}
+// [T-android-chat-customization] HistoryPageEdge moved to ChatScreenHelpers.kt.
 
 // [T-android-split-chat] UserMessageBubble / UserAttachmentList /
 // FileAttachmentTile / fileIconFor / ImageGalleryDialog moved verbatim to

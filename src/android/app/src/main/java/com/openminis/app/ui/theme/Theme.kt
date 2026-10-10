@@ -14,6 +14,16 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import com.openminis.app.ui.settings.getAppearancePrefs
+import com.openminis.app.ui.settings.userBubbleColorOverride
+import com.openminis.app.ui.settings.chatBgColorOverride
+import com.openminis.app.ui.settings.KEY_CHAT_USER_BUBBLE_COLOR
+import com.openminis.app.ui.settings.KEY_CHAT_BG_COLOR
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
@@ -233,13 +243,36 @@ fun MinisTheme(
             fallbackChatPalette
         }
 
+    // [T-android-chat-customization] User color overrides ride on top of the
+    // resolved palette (static or dynamic). The prefs listener bumps a
+    // revision so a change made in Appearance re-composes every ChatColors
+    // consumer without touching any call site; remember(chatPalette, rev)
+    // re-reads the prefs on either a theme flip or a revision bump.
+    val appearancePrefs = remember { getAppearancePrefs(context) }
+    var chatColorRevision by remember { mutableIntStateOf(0) }
+    DisposableEffect(appearancePrefs) {
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { sp, key ->
+            if (key == KEY_CHAT_USER_BUBBLE_COLOR || key == KEY_CHAT_BG_COLOR) {
+                chatColorRevision++
+            }
+        }
+        appearancePrefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose { appearancePrefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+    val effectiveChatPalette = remember(chatPalette, chatColorRevision) {
+        chatPalette.copy(
+            userBubble = userBubbleColorOverride(context) ?: chatPalette.userBubble,
+            background = chatBgColorOverride(context) ?: chatPalette.background,
+        )
+    }
+
     MaterialTheme(
         colorScheme = colorScheme,
         shapes = MinisShapes,
         typography = typography,
     ) {
         CompositionLocalProvider(
-            LocalChatPalette provides chatPalette,
+            LocalChatPalette provides effectiveChatPalette,
             LocalMonetDynamic provides dynamicActive,
             content = content,
         )

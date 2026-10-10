@@ -35,7 +35,10 @@ import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.BrightnessAuto
+import androidx.compose.material.icons.outlined.ChatBubble
 import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material.icons.outlined.CompareArrows
+import androidx.compose.material.icons.outlined.Wallpaper
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.DarkMode
@@ -151,11 +154,42 @@ const val KEY_FONT_APP_BASE = "font_app_base"      // Int scale level -2..3
 // or Android will not offer the language in system per-app settings.
 const val KEY_LANGUAGE = "app_language"
 
+// [T-android-chat-customization] User-tunable chat geometry & colors.
+// Gutter = the shared horizontal rail of the conversation column (message
+// list / floating tool bar / composer all sit on it; see [T-android-chat-gutter-20]
+// in ChatScreen). Range 8..32dp, default 20.
+// Colors are stored as ARGB packed in a Long; NO_COLOR_OVERRIDE (-1) means
+// "follow theme" (the resolved ChatPalette value, dynamic or static).
+const val KEY_CHAT_GUTTER_DP = "chat.gutterDp"
+const val DEFAULT_CHAT_GUTTER_DP = 20
+const val KEY_CHAT_USER_BUBBLE_COLOR = "chat.userBubbleColor"
+const val KEY_CHAT_BG_COLOR = "chat.bgColor"
+const val NO_COLOR_OVERRIDE = -1L
+
 /** True when Enter (without Shift) should send the message. iOS calls this
  *  `returnKeyBehavior == 1`. Default 0 = Enter inserts a newline (matches
  *  iOS shipping default + most desktop chat clients). */
 fun returnKeySendsMessage(context: Context): Boolean =
     getAppearancePrefs(context).getInt(KEY_RETURN_KEY_BEHAVIOR, 0) == 1
+
+/** Conversation-column gutter in dp, clamped to 8..32. Read at composition
+ *  time by ChatScreen (message list / tool bar / composer share one rail). */
+fun chatGutterDp(context: Context): Int =
+    getAppearancePrefs(context).getInt(KEY_CHAT_GUTTER_DP, DEFAULT_CHAT_GUTTER_DP)
+        .coerceIn(8, 32)
+
+/** User-bubble color override, or null to follow the theme palette. */
+fun userBubbleColorOverride(context: Context): Color? {
+    val v = getAppearancePrefs(context).getLong(KEY_CHAT_USER_BUBBLE_COLOR, NO_COLOR_OVERRIDE)
+    return if (v == NO_COLOR_OVERRIDE) null else Color(v.toLong() and 0xFFFFFFFFL)
+}
+
+/** Chat background color override, or null to follow the theme palette. */
+fun chatBgColorOverride(context: Context): Color? {
+    val v = getAppearancePrefs(context).getLong(KEY_CHAT_BG_COLOR, NO_COLOR_OVERRIDE)
+    return if (v == NO_COLOR_OVERRIDE) null else Color(v.toLong() and 0xFFFFFFFFL)
+}
+
 
 fun keepScreenAwakeEnabled(context: Context): Boolean =
     getAppearancePrefs(context).getBoolean(KEY_KEEP_SCREEN_AWAKE, false)
@@ -185,8 +219,8 @@ fun autoExpandThinkingEnabled(context: Context): Boolean =
  */
 private val APP_ICON_TILE_MAX_WIDTH = 192.dp
 
-private val fontScaleLabels = listOf("XS", "Small", "Default", "Medium", "Large", "XL")
-private val fontScaleValues = listOf(-2, -1, 0, 1, 2, 3)
+internal val fontScaleLabels = listOf("XS", "Small", "Default", "Medium", "Large", "XL")
+internal val fontScaleValues = listOf(-2, -1, 0, 1, 2, 3)
 private val fontScaleMultipliers = listOf(0.88f, 0.94f, 1.0f, 1.06f, 1.12f, 1.21f)
 
 private data class LanguageOption(val code: String, val flag: String, val label: String)
@@ -308,7 +342,6 @@ fun AppearanceScreen(
     var appBaseLevel by remember { mutableIntStateOf(prefs.getInt(KEY_FONT_APP_BASE, 0)) }
     var selectedLanguage by remember { mutableStateOf(prefs.getString(KEY_LANGUAGE, "") ?: "") }
     var selectedAppIcon by remember { mutableStateOf(AppIconRepository.current(context)) }
-
     val fontsModified = chatInputLevel != 0 || messageLevel != 0 || appBaseLevel != 0
 
     val tilePurple = Color(0xFF5856D6)
@@ -711,6 +744,8 @@ fun AppearanceScreen(
             }
         }
 
+        ChatAreaSection(prefs)
+
         // -- App Icon (T-android-dynamic-app-icon) --
         // Grid picker mirrors the iOS Settings → Appearance → App Icon
         // section but uses a 3-column grid layout per spec. Each tile is
@@ -910,57 +945,7 @@ fun AppearanceScreen(
     }
 }
 
-@Composable
-private fun FontScaleSliderRow(
-    label: String,
-    level: Int,
-    onLevelChange: (Int) -> Unit,
-    showDivider: Boolean,
-) {
-    val idx = fontScaleValues.indexOf(level).coerceIn(0, fontScaleValues.lastIndex)
-    var sliderPos by remember(level) { mutableFloatStateOf(idx.toFloat()) }
-    val currentLabel = fontScaleLabels.getOrElse(sliderPos.roundToInt()) { "Default" }
-
-    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(label, style = MaterialTheme.typography.bodyMedium)
-            Text(
-                currentLabel,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.primary,
-            )
-        }
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            Text("A", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Slider(
-                value = sliderPos,
-                onValueChange = { sliderPos = it },
-                onValueChangeFinished = {
-                    val newIdx = sliderPos.roundToInt().coerceIn(0, fontScaleValues.lastIndex)
-                    sliderPos = newIdx.toFloat()
-                    onLevelChange(fontScaleValues[newIdx])
-                },
-                valueRange = 0f..5f,
-                steps = 4,
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 8.dp),
-            )
-            Text("A", fontSize = 20.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-    if (showDivider) {
-        val dividerColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-        androidx.compose.foundation.layout.Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 16.dp, end = 14.dp)
-                .height(0.5.dp)
-                .background(dividerColor),
-        )
-    }
-}
+// [T-android-chat-customization] ChatAreaSection / GutterSliderRow /
+// ColorSwatch / ChatColorPickerDialog / color presets moved to
+// AppearanceChatArea.kt. FontScaleSliderRow moved there too (ratchet
+// extraction; behavior unchanged).

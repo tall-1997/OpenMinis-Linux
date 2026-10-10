@@ -9,6 +9,10 @@ import android.provider.OpenableColumns
 import java.io.File
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
 
 /**
  * Create an empty JPEG file under filesDir/camera-photos/ and return a
@@ -122,5 +126,37 @@ internal fun captureSelectionReplacement(
         context = context,
         before = replaced,
         after = inserted,
+    )
+}
+
+/**
+ * [T-android-chat-customization] Conversation-column gutter (dp). Live updates
+ * flow through ChatScreen's shared appearance-prefs listener, which writes
+ * back into this state on KEY_CHAT_GUTTER_DP changes. Default 20, 8..32.
+ */
+@androidx.compose.runtime.Composable
+internal fun rememberChatGutterDp(
+    context: android.content.Context,
+): androidx.compose.runtime.MutableState<Int> =
+    androidx.compose.runtime.remember(context) {
+        androidx.compose.runtime.mutableStateOf(com.openminis.app.ui.settings.chatGutterDp(context))
+    }
+
+/** [T-android-chat-customization] "Load earlier / jump to latest" edge row
+ *  (moved verbatim from ChatScreen.kt during the gutter ratchet extraction). */
+@androidx.compose.runtime.Composable
+internal fun HistoryPageEdge(
+    text: String,
+    onClick: () -> Unit,
+) {
+    androidx.compose.material3.Text(
+        text = text,
+        modifier = androidx.compose.ui.Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 16.dp),
+        style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+        color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
     )
 }

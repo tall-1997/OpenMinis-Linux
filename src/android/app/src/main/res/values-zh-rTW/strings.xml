@@ -691,6 +691,14 @@
     <string name="appearance_font_message">訊息文字</string>
     <string name="appearance_font_app_base">應用程式基準</string>
     <string name="appearance_font_reset">還原為預設值</string>
+    <!-- T-android-chat-customization: chat geometry & colors. -->
+    <string name="appearance_section_chat_area">對話區</string>
+    <string name="appearance_chat_area_footer">調整對話列的左右邊距，自訂氣泡與背景顏色。「跟隨主題」還原應用配色。</string>
+    <string name="appearance_chat_gutter_title">對話區邊距</string>
+    <string name="appearance_chat_gutter_subtitle">聊天列的左右留白</string>
+    <string name="appearance_chat_user_bubble_color">使用者氣泡顏色</string>
+    <string name="appearance_chat_bg_color">聊天背景顏色</string>
+    <string name="appearance_color_follow_theme">跟隨主題</string>
     <string name="appearance_section_language">語言</string>
     <string name="appearance_language_footer">覆寫本應用程式的顯示語言。「系統」會跟隨您的裝置語言。</string>
     <string name="appearance_section_app_icon">應用程式圖示</string>

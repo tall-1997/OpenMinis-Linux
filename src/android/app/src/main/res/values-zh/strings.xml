@@ -899,6 +899,14 @@
     <string name="appearance_font_message">消息文本</string>
     <string name="appearance_font_app_base">应用基础</string>
     <string name="appearance_font_reset">恢复默认</string>
+    <!-- T-android-chat-customization: chat geometry & colors. -->
+    <string name="appearance_section_chat_area">对话区</string>
+    <string name="appearance_chat_area_footer">调整对话列的左右边距，自定义气泡与背景颜色。「跟随主题」恢复应用配色。</string>
+    <string name="appearance_chat_gutter_title">对话区边距</string>
+    <string name="appearance_chat_gutter_subtitle">聊天列的左右留白</string>
+    <string name="appearance_chat_user_bubble_color">用户气泡颜色</string>
+    <string name="appearance_chat_bg_color">聊天背景颜色</string>
+    <string name="appearance_color_follow_theme">跟随主题</string>
     <string name="appearance_section_language">语言</string>
     <string name="appearance_language_footer">自定义此 App 的显示语言。选择「系统」将跟随设备语言设置。</string>
     <string name="appearance_section_app_icon">应用图标</string>

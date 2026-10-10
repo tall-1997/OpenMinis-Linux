@@ -979,6 +979,14 @@
     <string name="appearance_font_message">Message Text</string>
     <string name="appearance_font_app_base">App Base</string>
     <string name="appearance_font_reset">Reset to Defaults</string>
+    <!-- T-android-chat-customization: chat geometry & colors. -->
+    <string name="appearance_section_chat_area">Chat Area</string>
+    <string name="appearance_chat_area_footer">Adjust the conversation column width and pick custom bubble or background colors. "Follow theme" restores the app palette.</string>
+    <string name="appearance_chat_gutter_title">Conversation Margins</string>
+    <string name="appearance_chat_gutter_subtitle">Left and right inset of the chat column</string>
+    <string name="appearance_chat_user_bubble_color">User Bubble Color</string>
+    <string name="appearance_chat_bg_color">Chat Background Color</string>
+    <string name="appearance_color_follow_theme">Follow Theme</string>
     <string name="appearance_section_language">Language</string>
     <string name="appearance_language_footer">Override the display language for this app. \"System\" follows your device language.</string>
     <!-- T-android-dynamic-app-icon: launcher-icon picker section. -->
