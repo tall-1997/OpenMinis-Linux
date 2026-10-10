@@ -2651,6 +2651,8 @@
     <string name="chat_queue_hint_wait">Queued - injects after the current tool finishes (long-press to abort the tool and insert now)</string>
     <string name="chat_queue_hint_abort">Queued - a tool is running (long-press to abort it and insert now)</string>
 <string name="translate_stream_slim_notice">This is the slim build (no offline translation runtime, smaller APK). Live offline translation requires the full build; bubble translation is unaffected and still handled by the model.</string>
+    <string name="plan_board_expand">Expand</string>
+    <string name="plan_board_collapse">Collapse</string>
     <string name="chat_rewind_title">Rewind to this turn?</string>
     <string name="chat_rewind_subtitle">Files written by later turns are rolled back. Choose how far the rollback reaches.</string>
     <string name="chat_rewind_code">Code only</string>

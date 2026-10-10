@@ -20,7 +20,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material3.Icon
@@ -37,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -45,6 +45,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.openminis.app.R
 import com.openminis.app.tools.AgentPlanStore
+import com.openminis.app.ui.theme.ChatColors
 
 /**
  * [T-plan-board-sticky] 会话级任务列表看板（taixu StickyPlanBar 形态）：数据来自
@@ -52,6 +53,13 @@ import com.openminis.app.tools.AgentPlanStore
  * 消息列表 weight(1f) 之后）——收起时单行显示当前步骤 + 进度，点击向上展开
  * 完整列表；展开吃的是列表空间（列表收缩），不遮挡聊天记录；浮动工具条与
  * 工具预览缩略图 overlay 在上方消息区 Box 内，与看板互不重叠。
+ *
+ * [T-plan-board-style] 视觉语言与过程卡片（ChatProcessRunCardUI）同源：四角统一
+ * 12dp 圆角的独立卡片（旧版只圆上两角、下缘切平贴输入框，像被裁掉一截）；底色/
+ * 边框走 ChatColors.isDark 双值（深色实底 1C1C1E/38383A，浅色蓝 tint 6%/15%），
+ * 状态色全用 iOS 系统色（深浅同值）——不再走 M3 colorScheme，那套不跟随 app 内
+ * 调色板，是旧版与整体风格脱节的根因。展开/收起操作点从表头右侧 12dp 小箭头
+ * 移到卡片底部整宽 40dp 触控条（[T-plan-board-toggle]），拇指区可及。
  *
  * 数据刷新：isStreaming 翻转驱动 + 每 2s 轮询（流式期间工具频繁更新）。
  * 传入真实 context：list() 命中内存缓存无 IO，冷启动从会话文件恢复——
@@ -80,120 +88,144 @@ fun SessionPlanBoardCard(
     val allDone = completed == plans.size
     // 收起态标题：首个未完成项（taixu 同款）——一眼看到"现在在干嘛"。
     val activeStep = plans.firstOrNull { it.status == "pending" || it.status == "active" }
+    // iOS 系统色深浅同值；卡底/边框按 isDark 双值，与过程卡片逐字同源。
+    val accent = Color(0xFF007AFF)
+    val doneGreen = Color(0xFF34C759)
+    val failRed = Color(0xFFFF3B30)
+    val idleGray = Color(0xFF8E8E93)
+    val cardFill = if (ChatColors.isDark) Color(0xFF1C1C1E) else Color(0xFF007AFF).copy(alpha = 0.06f)
+    val cardStroke = if (ChatColors.isDark) Color(0xFF38383A) else Color(0xFF007AFF).copy(alpha = 0.15f)
     Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
-            .clickable { expanded = !expanded },
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp),
-        border = BorderStroke(
-            1.dp,
-            if (allDone) MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
-            else MaterialTheme.colorScheme.primary.copy(alpha = 0.30f),
-        ),
+        modifier = modifier.fillMaxWidth(),
+        color = cardFill,
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, cardStroke),
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp)
-                .animateContentSize(),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Icon(
-                    if (allDone) Icons.Default.CheckCircle else Icons.Outlined.Checklist,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(14.dp),
-                )
-                Text(
-                    when {
-                        allDone -> stringResource(R.string.plan_board_all_done)
-                        activeStep != null -> activeStep.title
-                        else -> stringResource(R.string.plan_board_header)
-                    },
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
-                Text(
-                    if (failed > 0) "$completed/${plans.size} · ${stringResource(R.string.plan_board_failed_n, failed)}"
-                    else "$completed/${plans.size}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Icon(
-                    if (expanded) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowRight,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
-                    modifier = Modifier.size(12.dp),
-                )
-            }
-            // 细进度条（收起/展开都显示）。
-            LinearProgressIndicator(
-                progress = { if (plans.isEmpty()) 0f else completed.toFloat() / plans.size },
+        Column(modifier = Modifier.fillMaxWidth().animateContentSize()) {
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(2.dp)
-                    .clip(CircleShape),
-                color = MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-            )
-            if (expanded) {
-                Column(
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Icon(
+                        if (allDone) Icons.Default.CheckCircle else Icons.Outlined.Checklist,
+                        contentDescription = null,
+                        tint = if (allDone) doneGreen else accent,
+                        modifier = Modifier.size(14.dp),
+                    )
+                    Text(
+                        when {
+                            allDone -> stringResource(R.string.plan_board_all_done)
+                            activeStep != null -> activeStep.title
+                            else -> stringResource(R.string.plan_board_header)
+                        },
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = ChatColors.primaryText,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        if (failed > 0) "$completed/${plans.size} · ${stringResource(R.string.plan_board_failed_n, failed)}"
+                        else "$completed/${plans.size}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (failed > 0) failRed else accent,
+                    )
+                }
+                // 细进度条（收起/展开都显示）。
+                LinearProgressIndicator(
+                    progress = { if (plans.isEmpty()) 0f else completed.toFloat() / plans.size },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 260.dp)
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    plans.forEach { p ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            when (p.status) {
-                                "done" -> Icon(
-                                    Icons.Default.CheckCircle,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(15.dp),
-                                )
-                                "failed" -> Box(
-                                    modifier = Modifier
-                                        .size(10.dp)
-                                        .background(MaterialTheme.colorScheme.error, CircleShape),
-                                )
-                                "active" -> Box(
-                                    modifier = Modifier
-                                        .size(10.dp)
-                                        .background(MaterialTheme.colorScheme.tertiary, CircleShape),
-                                )
-                                else -> Box(
-                                    modifier = Modifier
-                                        .size(10.dp)
-                                        .background(
-                                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
-                                            CircleShape,
-                                        ),
+                        .height(2.dp)
+                        .clip(CircleShape),
+                    color = if (allDone) doneGreen else accent,
+                    trackColor = cardStroke,
+                )
+                if (expanded) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 260.dp)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        plans.forEach { p ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                when (p.status) {
+                                    "done" -> Icon(
+                                        Icons.Default.CheckCircle,
+                                        contentDescription = null,
+                                        tint = doneGreen,
+                                        modifier = Modifier.size(15.dp),
+                                    )
+                                    "failed" -> Box(
+                                        modifier = Modifier
+                                            .size(10.dp)
+                                            .background(failRed, CircleShape),
+                                    )
+                                    "active" -> Box(
+                                        modifier = Modifier
+                                            .size(10.dp)
+                                            .background(accent, CircleShape),
+                                    )
+                                    else -> Box(
+                                        modifier = Modifier
+                                            .size(10.dp)
+                                            .background(idleGray.copy(alpha = 0.35f), CircleShape),
+                                    )
+                                }
+                                Text(
+                                    p.title,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = if (p.status == "done") ChatColors.secondaryText else ChatColors.primaryText,
+                                    textDecoration = if (p.status == "done") TextDecoration.LineThrough else null,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f),
                                 )
                             }
-                            Text(
-                                p.title,
-                                style = MaterialTheme.typography.bodyMedium,
-                                textDecoration = if (p.status == "done") TextDecoration.LineThrough else null,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f),
-                            )
                         }
                     }
                 }
+            }
+            // [T-plan-board-toggle] 展开/收起操作点：整宽触控条沉到卡片底部。
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(cardStroke),
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(40.dp)
+                    .clickable { expanded = !expanded },
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                Icon(
+                    // 列表向上展开：收起态箭头朝上（展开方向），展开态朝下（收回）。
+                    if (expanded) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowUp,
+                    contentDescription = null,
+                    tint = idleGray,
+                    modifier = Modifier.size(16.dp),
+                )
+                Text(
+                    if (expanded) stringResource(R.string.plan_board_collapse)
+                    else stringResource(R.string.plan_board_expand),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = idleGray,
+                    modifier = Modifier.padding(start = 4.dp),
+                )
             }
         }
     }
