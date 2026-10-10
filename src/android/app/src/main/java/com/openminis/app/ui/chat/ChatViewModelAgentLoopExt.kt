@@ -615,7 +615,6 @@ internal suspend fun ChatViewModel.runAgentLoop(
             when (chunk) {
                 is LLMStreamChunk.ThinkingDelta -> {
                     turnThinking.append(chunk.text)
-                    // Update thinking block in UI
                     val thinkIdx = allToolBlocks.indexOfFirst { it.kind == "thinking" && it.id == "thinking_$turn" }
                     if (thinkIdx < 0) {
                         allToolBlocks.add(AssistantBlock(
@@ -623,6 +622,7 @@ internal suspend fun ChatViewModel.runAgentLoop(
                             kind = "thinking",
                             content = turnThinking.toString(),
                             toolTitle = "Thinking",
+                            toolStatus = ToolBlockStatus.STREAMING, // [T-thinking-auto-fold] born live: row auto-expands, Text/ToolUseStart flip to SUCCESS → auto-fold
                         ))
                     } else {
                         allToolBlocks[thinkIdx] = allToolBlocks[thinkIdx].copy(content = turnThinking.toString())
