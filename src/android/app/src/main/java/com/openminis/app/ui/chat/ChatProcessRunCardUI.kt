@@ -24,6 +24,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -32,15 +33,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openminis.app.R
-import com.openminis.app.ui.settings.autoExpandThinkingEnabled
 import com.openminis.app.ui.theme.ChatColors
+import kotlinx.coroutines.delay
 
 /**
  * [T-process-run-card] The unified process card for one assistant turn.
@@ -201,22 +201,36 @@ private fun ProcessRunCardHeader(
 private fun ProcessRunThinkingRow(block: AssistantBlock) {
     val live = block.toolStatus == ToolBlockStatus.STREAMING ||
         block.toolStatus == ToolBlockStatus.PENDING
-    // [T-process-card-thinking-view] The thinking CONTENT is viewable:
-    // tapping the row expands/collapses it, and the initial state follows
-    // the Appearance "auto expand thinking" setting (default ON = the row
-    // shows its content expanded). Only the tail window of the content is
+    // [T-thinking-auto-fold] Live thinking auto-expands so the stream is
+    // readable while it runs; 500ms after the stream ends the row folds
+    // itself back. One manual tap pins the row to user control — both
+    // auto behaviors stand down from then on. Re-expanding the collapsed
+    // CARD starts this row folded: the remember state dies with the
+    // composition when the card folds, so the initial state below is the
+    // only thing that comes back. Only the tail window of the content is
     // laid out — same layout-cost guard as the standalone thinking block,
     // which matters because the flat list rebuilds per streaming tick.
-    val context = LocalContext.current
-    val autoExpand = remember { autoExpandThinkingEnabled(context) }
     val hasContent = block.content.isNotBlank()
-    var expanded by remember(block.id) { mutableStateOf(autoExpand && hasContent) }
+    var expanded by remember(block.id) { mutableStateOf(false) }
+    var userPinned by remember(block.id) { mutableStateOf(false) }
+    LaunchedEffect(live, hasContent) {
+        if (live && hasContent && !userPinned) expanded = true
+    }
+    LaunchedEffect(live, userPinned) {
+        if (!live && !userPinned && expanded) {
+            delay(500)
+            expanded = false
+        }
+    }
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable(enabled = hasContent) { expanded = !expanded }
+                .clickable(enabled = hasContent) {
+                    userPinned = true
+                    expanded = !expanded
+                }
                 .padding(horizontal = 12.dp, vertical = 3.dp),
         ) {
             Icon(
