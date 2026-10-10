@@ -63,7 +63,7 @@ object MultiEditTool {
                     toolTitle = toolTitle,
                 )
             }
-            var last: ToolExecutionResult? = null
+            val outputs = ArrayList<String>(edits.length())
             for (i in 0 until edits.length()) {
                 val e = edits.getJSONObject(i)
                 val one = JSONObject()
@@ -72,18 +72,62 @@ object MultiEditTool {
                     .put("old_string", e.optString("old_string", e.optString("old", "")))
                     .put("new_string", e.optString("new_string", e.optString("new", "")))
                     .put("replace_all", e.optBoolean("replace_all", false))
-                last = FileEditTool.execute(one.toString(), sessionId, context)
-                if (last?.success != true) {
+                val res = FileEditTool.execute(one.toString(), sessionId, context)
+                if (!res.success) {
                     return ToolExecutionResult(
-                        "multi_edit stopped at #${i + 1}: ${last?.output}",
+                        "multi_edit stopped at #${i + 1}: ${res.output}",
                         false,
                         toolTitle = toolTitle,
                     )
                 }
+                outputs.add(res.output)
             }
-            ToolExecutionResult("Applied ${edits.length()} edits to $path. ${last?.output.orEmpty()}", true, toolTitle = toolTitle)
+            ToolExecutionResult(composeReceipt(path, edits.length(), outputs), true, toolTitle = toolTitle)
         } catch (e: Exception) {
             ToolExecutionResult("Error multi_edit: ${e.message}", false, toolTitle = toolTitle)
+        }
+    }
+
+    /**
+     * [T-multi-edit-receipt] 回执聚合。旧实现把**最后一条** edit 的 file_edit 输出
+     * 原样透传，而那句自带 `(1 replacement(s), M bytes)`——于是出现「Applied 2
+     * edits … 1 replacement(s)」的自相矛盾；ChatToolDetailUI 又按第一个括号组取用，
+     * UI 上跟着一起错。现在跨 edits 累加 replacement 数、bytes 取最后一条（=最终
+     * 文件大小）、每条 edit 的 diff 段全部保留（合计按 MAX_DIFF_CHARS 收口）。
+     *
+     * `(N replacement(s), M bytes)` 的形状是仓内既有契约（FileEditTool 产出、
+     * ChatToolDetailUI 消费），这里只累加数字，不新造格式；解析不到就不报数字，
+     * 宁缺不假。抽成纯函数是为了能脱离 Context 单测。
+     */
+    internal fun composeReceipt(path: String, editCount: Int, outputs: List<String>): String {
+        val parsed = outputs.map { SUMMARY_RE.find(it) }
+        val replacements = parsed.sumOf { it?.groupValues?.get(1)?.toIntOrNull() ?: 0 }
+        val bytes = parsed.lastOrNull()?.groupValues?.get(2)?.toIntOrNull()
+        val counts = when {
+            bytes != null -> " ($replacements replacement(s), $bytes bytes)"
+            replacements > 0 -> " ($replacements replacement(s))"
+            else -> ""
+        }
+        return "Applied $editCount edits to $path$counts" + boundedDiffs(outputs)
+    }
+
+    private val SUMMARY_RE = Regex("""\((\d+) replacement\(s\), (\d+) bytes\)""")
+
+    private const val DIFF_MARKER = "\n[unified-diff"
+
+    /** 逐条 edit 的 diff 段原样拼接（各自带 unified-diff 头），合计超界才截断。 */
+    private fun boundedDiffs(outputs: List<String>): String {
+        val joined = outputs.joinToString("") { o ->
+            val at = o.indexOf(DIFF_MARKER)
+            if (at < 0) "" else o.substring(at)
+        }
+        if (joined.isEmpty()) return ""
+        val cap = EditDiffSection.MAX_DIFF_CHARS
+        return if (joined.length <= cap) {
+            joined
+        } else {
+            "\n[unified-diff truncated at $cap chars across ${outputs.size} edits — " +
+                "read the file for the full change]\n" + joined.take(cap)
         }
     }
 
