@@ -2639,6 +2639,8 @@
     <string name="db_quarantine_delete">Delete the damaged copy</string>
     <string name="chat_rewind_menu">Rewind To Here</string>
     <string name="plan_board_header">Task list</string>
+    <string name="appearance_plan_board_title">Show task list board</string>
+    <string name="appearance_plan_board_footer">Show the model task progress board at the top of the chat list. Turning it off hides the card only; the task list feature is unaffected.</string>
     <string name="plan_board_failed_n">%1$d failed</string>
     <string name="chat_rewind_title">Rewind to this turn?</string>
     <string name="chat_rewind_subtitle">Files written by later turns are rolled back. Choose how far the rollback reaches.</string>

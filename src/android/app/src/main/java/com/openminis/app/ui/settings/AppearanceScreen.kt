@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.BrightnessAuto
 import androidx.compose.material.icons.outlined.ChatBubble
+import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.CompareArrows
 import androidx.compose.material.icons.outlined.Wallpaper
@@ -93,6 +94,8 @@ const val KEY_RETURN_KEY_BEHAVIOR = "returnKeyBehavior"  // Int 0=Newline (defau
 const val KEY_KEEP_SCREEN_AWAKE = "keepScreenAwakeDuringTasks"  // Boolean, default false
 const val KEY_TOOL_PREVIEW = "tool_preview"        // Boolean, default true
 const val KEY_SHOW_FLOATING_TOOL_BAR = "chat.showFloatingToolBar"  // Boolean, default true
+// [T-plan-board-pref] 任务列表看板显示开关（只改显示，功能不受影响）。
+const val KEY_SHOW_PLAN_BOARD = "chat.showPlanBoard"  // Boolean, default true
 const val KEY_SHOW_COMPLETED_TOOL_CARDS = "chat.showCompletedToolCards"  // Boolean, default false
 const val KEY_SHOW_SUBAGENT_BAR = "chat.showSubAgentBar"
 // [T-composer-mic-toggle] Single source for the sub-agent bar default
@@ -207,6 +210,11 @@ fun showChatTitleEnabled(context: Context): Boolean =
  *  user taps it. */
 fun autoExpandThinkingEnabled(context: Context): Boolean =
     getAppearancePrefs(context).getBoolean(KEY_AUTO_EXPAND_THINKING, true)
+
+/** [T-plan-board-pref] Default ON — the plan board renders when the model has
+ *  written task list items; off hides the card only (the tool still works). */
+fun showPlanBoardEnabled(context: Context): Boolean =
+    getAppearancePrefs(context).getBoolean(KEY_SHOW_PLAN_BOARD, true)
 
 /** Font scale levels matching iOS: XS(-2) Small(-1) Default(0) Medium(1) Large(2) XL(3) */
 /**
@@ -549,6 +557,18 @@ fun AppearanceScreen(
                     prefs.edit().putBoolean(KEY_TOOL_PREVIEW, it).apply()
                 },
                 enabled = showFloatingToolBar,
+            )
+            // [T-plan-board-pref] 任务列表看板显示开关（只改显示，功能不受影响）。
+            SettingsSwitchRow(
+                icon = Icons.Outlined.Checklist,
+                iconColor = tileTeal,
+                title = stringResource(R.string.appearance_plan_board_title),
+                subtitle = stringResource(R.string.appearance_plan_board_footer),
+                checked = prefs.getBoolean(KEY_SHOW_PLAN_BOARD, true),
+                onCheckedChange = {
+                    prefs.edit().putBoolean(KEY_SHOW_PLAN_BOARD, it).apply()
+                },
+                showDivider = false,
             )
             SettingsSwitchRow(
                 icon = Icons.Outlined.ViewAgenda,
