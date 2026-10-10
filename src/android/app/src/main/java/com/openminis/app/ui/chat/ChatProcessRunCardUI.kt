@@ -8,10 +8,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.EditNote
@@ -19,7 +20,6 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Psychology
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -69,28 +69,29 @@ internal fun ProcessRunCard(
     onToggle: () -> Unit,
     onOpenTool: (String) -> Unit,
 ) {
-    // [T-process-card-visual] Failure tints ICONS/TEXT only — the card
-    // background stays the constant blue family so a failed run does not
-    // repaint the whole surface red (failure is already carried by the
-    // red rows inside the card).
-    val accent = if (item.hasFailure || item.errorText.isNotEmpty()) {
-        Color(0xFFFF3B30)
-    } else {
-        Color(0xFF007AFF)
-    }
+    // [T-process-card-visual] Failure tints the ROWS only — the red error
+    // row at the card bottom and the failed tool rows carry the failure.
+    // The card accent stays blue even after a failed step, so a later
+    // successful run does not repaint the whole pill red.
+    val accent = Color(0xFF007AFF)
     val cardBackground = Color(0xFF007AFF)
-    // [T-agent-ui-design-system] Collapsed = pill (spec 6.3: r-pill 999px,
-    // 20px horizontal padding, 56px height → mobile: percent-50 corners,
-    // 16dp horizontal / 12dp vertical padding ≈ 46dp tap target).
-    // Expanded = the 12dp card (spec 6.1 trace card).
-    val cardShape = if (item.expanded) {
-        RoundedCornerShape(12.dp)
+    // [T-process-card-visual] One shape for both states — the collapsed
+    // state is just the folded card, not a separate pill form.
+    val cardShape = RoundedCornerShape(12.dp)
+    // [T-process-card-pill-width] Collapsed = hugs its content — a
+    // full-width "pill" reads as a bar with dead space on the right.
+    // Capped at 340dp so a long live phase verb still ellipsizes instead
+    // of running off-screen. Expanded = the full-width trace card so tool
+    // rows stay aligned with the reply text above/below.
+    val cardWidth = if (item.expanded) {
+        Modifier.fillMaxWidth()
     } else {
-        RoundedCornerShape(percent = 50)
+        Modifier
+            .wrapContentWidth()
+            .widthIn(max = 340.dp)
     }
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
+        modifier = cardWidth
             .padding(vertical = 4.dp)
             .background(cardBackground.copy(alpha = 0.06f), cardShape)
             .border(0.5.dp, cardBackground.copy(alpha = 0.15f), cardShape)
@@ -127,9 +128,15 @@ private fun ProcessRunCardHeader(
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
-            .fillMaxWidth()
+            .then(if (item.expanded) Modifier.fillMaxWidth() else Modifier)
             .clickable(onClick = onToggle)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            // Collapsed: compact padding — the folded card is a small meta
+            // strip, not a full-height pill. Expanded: the spec-6.1 header
+            // padding (~46dp tap target).
+            .padding(
+                horizontal = if (item.expanded) 16.dp else 10.dp,
+                vertical = if (item.expanded) 12.dp else 6.dp,
+            ),
     ) {
         val headerIcon = when (item.phaseKind) {
             ProcessPhaseKind.THINKING -> Icons.Default.Psychology
@@ -173,7 +180,14 @@ private fun ProcessRunCardHeader(
                 maxLines = 1,
             )
         }
-        Spacer(modifier = Modifier.weight(1f))
+        if (item.expanded) {
+            // Expanded: push the count meta to the trailing edge of the
+            // full-width card. Collapsed: fixed gap — the pill hugs its
+            // content, and weight() needs a bounded row anyway.
+            Spacer(modifier = Modifier.weight(1f))
+        } else {
+            Spacer(modifier = Modifier.width(6.dp))
+        }
         val toolCount = item.blocks.count { it.kind == "tool_use" }
         val durationSuffix = formatProcessDuration(item.totalMs)?.let { " · $it" } ?: ""
         Text(
@@ -365,30 +379,4 @@ private fun ProcessRunToolRow(
             )
         }
     }
-}
-
-@Composable
-private fun ProcessRunErrorRow(errorText: String) {
-    Row(
-        verticalAlignment = Alignment.Top,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-    ) {
-        Icon(
-            imageVector = Icons.Default.Warning,
-            contentDescription = null,
-            tint = ToolErrorColor,
-            modifier = Modifier.size(13.dp),
-        )
-        Spacer(modifier = Modifier.width(6.dp))
-        Text(
-            text = stringResource(R.string.chat_process_card_error_row) + "\n" + errorText,
-            fontSize = 12.sp,
-            color = ToolErrorColor,
-            maxLines = 3,
-            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-        )
-    }
-    Spacer(modifier = Modifier.height(2.dp))
 }
