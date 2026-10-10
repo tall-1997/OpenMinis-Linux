@@ -2213,6 +2213,11 @@
     <string name="translate_run">翻译</string>
     <string name="translate_bubble">翻译这条回复</string>
     <string name="translate_pick_model">翻译模型</string>
+    <string name="translate_stream_section">实时离线翻译（ML Kit）</string>
+    <string name="translate_stream_enabled">实时翻译思考与回复</string>
+    <string name="translate_stream_enabled_sub">本机离线翻译（ML Kit）。语言包首次使用时按需下载，内容不出设备。无 Google 服务的设备不可用。</string>
+    <string name="translate_stream_source">源语言代码（en / zh / ja …）</string>
+    <string name="translate_stream_target">翻译成（en / zh / ja …）</string>
     <string name="persona_worldbook_header">世界书</string>
     <string name="persona_worldbook_footer">用户说到左边的词时，回复会带上这段补充。点已有条目可删除。</string>
     <string name="persona_worldbook_when">当用户说到…</string>

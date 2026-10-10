@@ -206,6 +206,12 @@ data class AssistantBlock(
      * Null for non-Gemini providers and thinking-off Gemini calls.
      */
     val thoughtSignature: String? = null,
+    /**
+     * [T-mlkit-stream-translate] 思考/文本流的**实时离线翻译**覆盖层（ML Kit，
+     * 句子级缓冲）。流式期间随句翻译、原地更新；null = 未开启翻译或引擎不可用
+     * （无 GMS 设备零行为变化）。原文永远是 [content]，翻译行渲染在其下。
+     */
+    val translatedContent: String? = null,
 ) {
     val isText: Boolean get() = kind == "text"
 }

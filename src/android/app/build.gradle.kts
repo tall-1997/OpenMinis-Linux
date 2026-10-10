@@ -354,6 +354,14 @@ dependencies {
     // [T-checkpoint-rewind] harness 检查点/回滚核心（纯 JVM，见 architecture-policy.json
     // app.requires）。app 侧只经 com.openminis.app.checkpoint.CheckpointBridge 使用它。
     implementation(project(":harness"))
+    // [T-mlkit-offline-translate] ML Kit 离线翻译（思考流/输出流实时翻译）。
+    // 语言包**不内置**：由 RemoteModelManager 在用户首次使用该语言对时按需下载，
+    // 推理在本机完成（不出设备、不经过任何服务器）。
+    // 无 Play Services 的设备上整个引擎不可用——MlKitTranslationEngine 用一次
+    // 试探调用探测并永久降级（翻译行静默不出现，气泡翻译仍走 LLM 路径）。
+    implementation("com.google.mlkit:translate:17.0.3")
+    // ML Kit 的 Task.await()（kotlinx 协程桥）。
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0")
     // Compose BOM
     val composeBom = platform("androidx.compose:compose-bom:2025.09.00")
     implementation(composeBom)

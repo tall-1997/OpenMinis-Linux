@@ -43,6 +43,10 @@ fun TranslationSettingsScreen(
     var enabled by remember { mutableStateOf(TranslationPrefs.isEnabled(context)) }
     var lang by remember { mutableStateOf(TranslationPrefs.lang(context)) }
     var entryId by remember { mutableStateOf(TranslationPrefs.entryId(context)) }
+    // [T-mlkit-stream-translate] 思考流/输出流的实时离线翻译设置。
+    var streamEnabled by remember { mutableStateOf(TranslationPrefs.isStreamEnabled(context)) }
+    var streamSource by remember { mutableStateOf(TranslationPrefs.streamSource(context)) }
+    var streamTarget by remember { mutableStateOf(TranslationPrefs.streamTarget(context)) }
     BackHandler(onBack = onBack)
     val entries = config.modelEntries.filter { entry ->
         if (entry.isHidden) return@filter false
@@ -92,6 +96,66 @@ fun TranslationSettingsScreen(
                 onValueChange = {
                     lang = it
                     TranslationPrefs.setLang(context, it)
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            )
+        }
+        // [T-mlkit-stream-translate] 思考流/输出流的实时离线翻译（ML Kit）。
+        SettingsSection(header = stringResource(R.string.translate_stream_section)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        streamEnabled = !streamEnabled
+                        TranslationPrefs.setStreamEnabled(context, streamEnabled)
+                    }
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(stringResource(R.string.translate_stream_enabled), style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        stringResource(R.string.translate_stream_enabled_sub),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(
+                    checked = streamEnabled,
+                    onCheckedChange = {
+                        streamEnabled = it
+                        TranslationPrefs.setStreamEnabled(context, it)
+                    },
+                )
+            }
+            HorizontalDivider()
+            Text(
+                stringResource(R.string.translate_stream_source),
+                modifier = Modifier.padding(start = 16.dp, top = 12.dp, end = 16.dp),
+                style = MaterialTheme.typography.labelLarge,
+            )
+            DialogTextField(
+                value = streamSource,
+                onValueChange = {
+                    streamSource = it
+                    TranslationPrefs.setStreamSource(context, it)
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            )
+            Text(
+                stringResource(R.string.translate_stream_target),
+                modifier = Modifier.padding(start = 16.dp, top = 4.dp, end = 16.dp),
+                style = MaterialTheme.typography.labelLarge,
+            )
+            DialogTextField(
+                value = streamTarget,
+                onValueChange = {
+                    streamTarget = it
+                    TranslationPrefs.setStreamTarget(context, it)
                 },
                 modifier = Modifier
                     .fillMaxWidth()

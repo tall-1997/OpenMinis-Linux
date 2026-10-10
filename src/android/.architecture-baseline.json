@@ -109,7 +109,7 @@
         "app/src/main/java/com/openminis/app/ui/chat/ChatToolDetailUI.kt": 1507,
         "app/src/main/java/com/openminis/app/ui/chat/ChatUserMessageUI.kt": 556,
         "app/src/main/java/com/openminis/app/ui/chat/ChatViewModel.kt": 6093,
-        "app/src/main/java/com/openminis/app/ui/chat/ChatViewModelAgentLoopExt.kt": 2140,
+        "app/src/main/java/com/openminis/app/ui/chat/ChatViewModelAgentLoopExt.kt": 2175,
         "app/src/main/java/com/openminis/app/ui/chat/ChatViewModelAttachmentExt.kt": 474,
         "app/src/main/java/com/openminis/app/ui/chat/ChatViewModelCompactExt.kt": 429,
         "app/src/main/java/com/openminis/app/ui/chat/ChatViewModelGroupChatExt.kt": 822,

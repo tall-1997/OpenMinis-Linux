@@ -312,6 +312,20 @@ private fun ProcessRunThinkingRow(block: AssistantBlock, listState: LazyListStat
                     .verticalScroll(rememberScrollState())
                     .padding(start = 30.dp, end = 12.dp, top = 2.dp, bottom = 4.dp),
             )
+            // [T-mlkit-stream-translate] 实时离线翻译覆盖层：原文下方灰蓝小字，
+            // 句级缓冲随思考更新；null = 未开启/引擎不可用（零渲染）。
+            block.translatedContent?.takeIf { it.isNotBlank() }?.let { translated ->
+                Text(
+                    text = translated.takeLast(4000),
+                    fontSize = 11.sp,
+                    color = Color(0xFF32ADE6).copy(alpha = 0.9f),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 240.dp)
+                        .verticalScroll(rememberScrollState())
+                        .padding(start = 30.dp, end = 12.dp, top = 2.dp, bottom = 4.dp),
+                )
+            }
         }
     }
 }

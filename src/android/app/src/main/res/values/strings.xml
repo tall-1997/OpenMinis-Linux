@@ -2401,6 +2401,11 @@
     <string name="translate_run">Translate</string>
     <string name="translate_bubble">Translate this reply</string>
     <string name="translate_pick_model">Translation model</string>
+    <string name="translate_stream_section">Live offline translation (ML Kit)</string>
+    <string name="translate_stream_enabled">Translate thinking &amp; reply live</string>
+    <string name="translate_stream_enabled_sub">Offline on-device translation (ML Kit). Language packs download on first use; nothing leaves the device. Unavailable on devices without Google Play services.</string>
+    <string name="translate_stream_source">Source language code (en / zh / ja …)</string>
+    <string name="translate_stream_target">Translate into (en / zh / ja …)</string>
     <string name="persona_worldbook_header">World book</string>
     <string name="persona_worldbook_footer">When the user says the words on the left, this extra text is added to the reply. Tap an entry to remove it.</string>
     <string name="persona_worldbook_when">When the user says…</string>
