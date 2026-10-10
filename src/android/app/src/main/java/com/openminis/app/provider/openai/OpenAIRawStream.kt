@@ -95,6 +95,28 @@ private const val STREAM_TTFB_TIMEOUT_MS = 120_000L
 private const val STREAM_UPLOAD_CAP_MS = 120_000L
 
 /**
+ * [T-android-body-idle-watchdog] Post-header body watches. The TTFB watchdog
+ * STOPS once headers arrive, and a flowing SSE stream has no total-duration
+ * limit — so a body that stalls AFTER headers hangs on OkHttp's readTimeout
+ * (600s = 10 stuck minutes) or, when the gateway keeps the tunnel warm with
+ * keepalive pings, on nothing at all (70-minute hang observed in the
+ * opencode2dsh reference; same failure shape: headers fine, quick test fine,
+ * context fine, model "thinking" forever). Two watches cover the body:
+ *  - RAW-BYTE idle (4 min): no bytes at all — dead tunnel. readTimeout already
+ *    catches this at 600s; this tightens it and never false-trips a trickling
+ *    line (ANY byte resets it).
+ *  - CONTENT idle (10 min): bytes (keepalive pings) but no content/thinking/
+ *    tool chunk — alive-but-silent. A legit thinking silence tops out ~3:10
+ *    (documented; OpenAIProvider.kt T-android-openai-codex-timeout), so 10 min
+ *    is headroom-safe.
+ * Both cancel the call + evict the connection and surface as TransientError
+ * with stalledAfterFirstEvent=true, so the retry ladder's stall-resume carries
+ * the partial text/thinking forward instead of regenerating from scratch.
+ */
+private const val STREAM_BODY_IDLE_MS = 240_000L
+private const val STREAM_CONTENT_IDLE_MS = 600_000L
+
+/**
  * [T-stream-content-type-sniff] How many leading bytes are peeked (and pushed
  * back) to decide whether a body is SSE or a single JSON object.
  */
@@ -159,6 +181,33 @@ internal fun OpenAIProvider.rawStreamMessage(
         thinkingLevel: ThinkingLevel,
         stream: Boolean,
     ): Flow<LLMStreamChunk> = callbackFlow {
+        // [T-android-body-idle-watchdog] Arrival timestamps, declared up front
+        // so the send chokepoint below can update the content one. The raw one
+        // is updated by a counting stream wrapper at the reader site (EVERY
+        // read resets the idle window — a slow-trickling line never false-
+        // trips); during a stalled body nobody updates it, which is exactly
+        // the signal the watchdog polls.
+        val lastByteNanos = java.util.concurrent.atomic.AtomicLong(System.nanoTime())
+        val lastContentNanos = java.util.concurrent.atomic.AtomicLong(System.nanoTime())
+        // Content-bearing send chokepoint: the CONTENT-idle watch polls
+        // lastContentNanos, which updates ONLY on chunks that carry model
+        // output (text/thinking/tool events) — SSE keepalive comments and
+        // empty pings never touch it, so a tunnel kept warm-but-silent still
+        // trips the watch. Started/Usage/Finished are lifecycle, not content.
+        suspend fun sendTracked(chunk: LLMStreamChunk) {
+            when (chunk) {
+                is LLMStreamChunk.Text,
+                is LLMStreamChunk.ThinkingDelta,
+                is LLMStreamChunk.ReasoningContent,
+                is LLMStreamChunk.ToolUseStart,
+                is LLMStreamChunk.ToolInputDelta,
+                is LLMStreamChunk.ToolCallComplete,
+                is LLMStreamChunk.MediaAttachment,
+                -> lastContentNanos.set(System.nanoTime())
+                else -> Unit
+            }
+            send(chunk)
+        }
         val body = if (isCodexImageModel) {
             // [T-gpt-image2-codex-backend-route-android] gpt-image-2 on an
             // OpenAI OAuth (Codex) instance is driven through the Codex backend
@@ -304,6 +353,11 @@ internal fun OpenAIProvider.rawStreamMessage(
         // flowing SSE stream has NO total-duration limit, as before.
         val ttfbTimedOut = java.util.concurrent.atomic.AtomicBoolean(false)
         val headersArrived = java.util.concurrent.atomic.AtomicBoolean(false)
+        // [T-android-body-idle-watchdog] The watchdog's post-header trip phase
+        // ("body-idle" = raw-byte watch, "content-idle" = content watch), read
+        // by the read loop's catch to map the socket failure to a
+        // stall-resume-carrying TransientError.
+        val bodyIdlePhase = java.util.concurrent.atomic.AtomicReference<String?>(null)
         val callStartNanos = System.nanoTime()
         val ttfbWatchdog = launch {
             val pollMs = 250L
@@ -338,6 +392,35 @@ internal fun OpenAIProvider.rawStreamMessage(
                 } catch (_: Throwable) {
                     // Best-effort; call.cancel() already unblocks execute().
                 }
+                return@launch
+            }
+            // [T-android-body-idle-watchdog] Headers arrived — keep watching the
+            // BODY (the old watchdog stopped here and a stalled body hung on
+            // readTimeout 600s — or forever when the gateway's keepalive pings
+            // kept resetting it). RAW-idle catches the dead tunnel; CONTENT-idle
+            // catches the warm-but-silent one. Either trip → cancel + evict →
+            // the read loop's socket failure maps to a stall-resume
+            // TransientError and the retry ladder carries the partial output.
+            while (true) {
+                val now = System.nanoTime()
+                val sinceByteMs = (now - lastByteNanos.get()) / 1_000_000L
+                val sinceContentMs = (now - lastContentNanos.get()) / 1_000_000L
+                if (sinceByteMs >= STREAM_BODY_IDLE_MS) { timedOutPhase = "body-idle"; break }
+                if (sinceContentMs >= STREAM_CONTENT_IDLE_MS) { timedOutPhase = "content-idle"; break }
+                delay(pollMs)
+            }
+            bodyIdlePhase.set(timedOutPhase)
+            com.openminis.app.logging.AppLogger.warning(
+                "OpenAIProvider",
+                "[T-android-body-idle-watchdog] $timedOutPhase (" +
+                    "${STREAM_BODY_IDLE_MS / 1000}s raw / ${STREAM_CONTENT_IDLE_MS / 1000}s content) — " +
+                    "cancelling call + evicting connection; retry ladder takes over with stall-resume",
+            )
+            call.cancel()
+            try {
+                watchState.connection.get()?.socket()?.close()
+            } catch (_: Throwable) {
+                // Best-effort; call.cancel() already unblocks execute().
             }
         }
         val response = try {
@@ -351,7 +434,10 @@ internal fun OpenAIProvider.rawStreamMessage(
             throw e
         } finally {
             headersArrived.set(true)
-            ttfbWatchdog.cancel()
+            // [T-android-body-idle-watchdog] The watchdog is NOT cancelled here:
+            // it transitions to the body phase (raw-byte idle + content idle)
+            // and keeps watching until the stream ends — the read loop's
+            // finally / awaitClose cancel it.
         }
         // T321: response-side diagnostic log (status + select header values).
         run {
@@ -445,15 +531,15 @@ internal fun OpenAIProvider.rawStreamMessage(
                         ),
                     )
                 }
-                send(LLMStreamChunk.Started)
+                sendTracked(LLMStreamChunk.Started)
                 val choice = json.optJSONArray("choices")?.optJSONObject(0)
                 val message = choice?.optJSONObject("message")
                 val text = message?.optString("content", "").orEmpty()
-                if (text.isNotEmpty()) send(LLMStreamChunk.Text(text))
+                if (text.isNotEmpty()) sendTracked(LLMStreamChunk.Text(text))
                 json.optJSONObject("usage")?.let {
-                    send(LLMStreamChunk.Usage(parseChatCompletionsUsage(it)))
+                    sendTracked(LLMStreamChunk.Usage(parseChatCompletionsUsage(it)))
                 }
-                send(LLMStreamChunk.Finished(choice?.optString("finish_reason", null)))
+                sendTracked(LLMStreamChunk.Finished(choice?.optString("finish_reason", null)))
             } finally {
                 response.close()
             }
@@ -470,7 +556,16 @@ internal fun OpenAIProvider.rawStreamMessage(
                 IllegalStateException("streaming response had no body"),
             )
         }
-        val reader = BufferedReader(InputStreamReader(pushback))
+        // [T-android-body-idle-watchdog] Counting stream wrapper: EVERY read
+        // (any byte, however small) resets the raw-idle window; during a
+        // stalled body nobody reads, which is exactly the signal the watchdog
+        // polls.
+        val trackedPushback = object : java.io.FilterInputStream(pushback) {
+            override fun read(): Int = super.read().also { if (it >= 0) lastByteNanos.set(System.nanoTime()) }
+            override fun read(b: ByteArray, off: Int, len: Int): Int =
+                super.read(b, off, len).also { if (it > 0) lastByteNanos.set(System.nanoTime()) }
+        }
+        val reader = BufferedReader(InputStreamReader(trackedPushback))
 
         // [T-codex-gpt-image2-oauth-android] gpt-image-2: the Codex backend
         // streams the image as a base64 blob (PNG / JPEG / WebP) inside the SSE
@@ -544,7 +639,7 @@ internal fun OpenAIProvider.rawStreamMessage(
         var sentFinished = false
 
         try {
-            send(LLMStreamChunk.Started)
+            sendTracked(LLMStreamChunk.Started)
             var line: String?
 
             // Branch streaming parser based on API format
@@ -570,9 +665,9 @@ internal fun OpenAIProvider.rawStreamMessage(
                     thinkParser.finishTurn().let { fin ->
                         if (fin.thinking.isNotEmpty()) {
                             reasoningAccum.append(fin.thinking)
-                            send(LLMStreamChunk.ThinkingDelta(fin.thinking))
+                            sendTracked(LLMStreamChunk.ThinkingDelta(fin.thinking))
                         }
-                        if (fin.visible.isNotEmpty()) send(LLMStreamChunk.Text(fin.visible))
+                        if (fin.visible.isNotEmpty()) sendTracked(LLMStreamChunk.Text(fin.visible))
                     }
                     // [T-android-think-prefix-stream] Persist reasoning captured
                     // EITHER from the `reasoning_content` field or from a
@@ -580,9 +675,9 @@ internal fun OpenAIProvider.rawStreamMessage(
                     // stream think-tag reasoning live and then drop it — the
                     // thinking bubble would vanish on session reload.
                     if (sawReasoningField || reasoningAccum.isNotEmpty()) {
-                        send(LLMStreamChunk.ReasoningContent(reasoningAccum.toString()))
+                        sendTracked(LLMStreamChunk.ReasoningContent(reasoningAccum.toString()))
                     }
-                    send(LLMStreamChunk.Finished(finishReason))
+                    sendTracked(LLMStreamChunk.Finished(finishReason))
                     sentFinished = true
                     break
                 }
@@ -671,12 +766,12 @@ internal fun OpenAIProvider.rawStreamMessage(
                                     )
                                     sawReasoningDelta = true
                                 }
-                                send(LLMStreamChunk.ThinkingDelta(delta))
+                                sendTracked(LLMStreamChunk.ThinkingDelta(delta))
                             }
                         }
                         type == "response.output_text.delta" -> {
                             val delta = event.optString("delta", "")
-                            if (delta.isNotEmpty()) send(LLMStreamChunk.Text(delta))
+                            if (delta.isNotEmpty()) sendTracked(LLMStreamChunk.Text(delta))
                         }
                         // function_call item announced — capture call_id + name, start accumulator.
                         type == "response.output_item.added" -> {
@@ -690,7 +785,7 @@ internal fun OpenAIProvider.rawStreamMessage(
                                     responsesToolCalls[itemId] = ResponsesToolCallAccumulator(callId = callId, name = name)
                                     val combined = combineResponsesAPIIds(callId, itemId)
                                     android.util.Log.d("ToolChain[Provider]", "→ ToolUseStart (Responses) id=$combined name=$name")
-                                    send(LLMStreamChunk.ToolUseStart(combined, name))
+                                    sendTracked(LLMStreamChunk.ToolUseStart(combined, name))
                                     responsesToolCalls[itemId]?.started = true
                                 }
                             }
@@ -705,7 +800,7 @@ internal fun OpenAIProvider.rawStreamMessage(
                                 if (com.openminis.app.text.BoundedText.shouldCommitLengthStride(n, acc.lastSentArgsLen)) {
                                     acc.lastSentArgsLen = n
                                     val combined = combineResponsesAPIIds(acc.callId, itemId)
-                                    send(LLMStreamChunk.ToolInputDelta(combined, acc.args.toString()))
+                                    sendTracked(LLMStreamChunk.ToolInputDelta(combined, acc.args.toString()))
                                 }
                             } else if (acc == null) {
                                 // Pre-T107 this branch silently dropped the entire tool call
@@ -733,7 +828,7 @@ internal fun OpenAIProvider.rawStreamMessage(
                                 val args = try { JSONObject(argsStr) } catch (_: Exception) { JSONObject() }
                                 val combined = combineResponsesAPIIds(acc.callId, itemId)
                                 android.util.Log.d("ToolChain[Provider]", "→ ToolCallComplete (Responses) id=$combined name=${acc.name} args=${args.toString().take(300)}")
-                                send(LLMStreamChunk.ToolCallComplete(combined, acc.name, args))
+                                sendTracked(LLMStreamChunk.ToolCallComplete(combined, acc.name, args))
                             }
                         }
                         type == "response.failed" -> {
@@ -878,7 +973,7 @@ internal fun OpenAIProvider.rawStreamMessage(
                                     "OpenAIProvider",
                                     "[T321] Responses usage block: $usage"
                                 )
-                                send(LLMStreamChunk.Usage(parseResponsesAPIUsage(usage)))
+                                sendTracked(LLMStreamChunk.Usage(parseResponsesAPIUsage(usage)))
                             }
                         }
                         type == "response.output_text.done" -> {
@@ -920,7 +1015,7 @@ internal fun OpenAIProvider.rawStreamMessage(
                                         "Chat Completions: first reasoning_content delta arrived on ${model.id} — streaming Thinking content"
                                     )
                                 }
-                                send(LLMStreamChunk.ThinkingDelta(rc))
+                                sendTracked(LLMStreamChunk.ThinkingDelta(rc))
                             }
                         }
 
@@ -938,9 +1033,9 @@ internal fun OpenAIProvider.rawStreamMessage(
                                 val out = thinkParser.feed(text)
                                 if (out.thinking.isNotEmpty()) {
                                     reasoningAccum.append(out.thinking)
-                                    send(LLMStreamChunk.ThinkingDelta(out.thinking))
+                                    sendTracked(LLMStreamChunk.ThinkingDelta(out.thinking))
                                 }
-                                if (out.visible.isNotEmpty()) send(LLMStreamChunk.Text(out.visible))
+                                if (out.visible.isNotEmpty()) sendTracked(LLMStreamChunk.Text(out.visible))
                             }
                         }
 
@@ -962,7 +1057,7 @@ internal fun OpenAIProvider.rawStreamMessage(
                                 if (!acc.started && acc.id.isNotEmpty() && acc.name.isNotEmpty()) {
                                     acc.started = true
                                     android.util.Log.d("ToolChain[Provider]", "→ ToolUseStart id=${acc.id} name=${acc.name}")
-                                    send(LLMStreamChunk.ToolUseStart(acc.id, acc.name))
+                                    sendTracked(LLMStreamChunk.ToolUseStart(acc.id, acc.name))
                                 }
                                 // Emit input delta
                                 if (acc.id.isNotEmpty() && acc.args.isNotEmpty()) {
@@ -972,7 +1067,7 @@ internal fun OpenAIProvider.rawStreamMessage(
                                         if (com.openminis.app.text.BoundedText.shouldLogLengthStride(n)) {
                                             android.util.Log.d("ToolChain[Provider]", "→ ToolInputDelta id=${acc.id} accumulated=${n}chars")
                                         }
-                                        send(LLMStreamChunk.ToolInputDelta(acc.id, acc.args.toString()))
+                                        sendTracked(LLMStreamChunk.ToolInputDelta(acc.id, acc.args.toString()))
                                     }
                                 }
                             }
@@ -999,7 +1094,7 @@ internal fun OpenAIProvider.rawStreamMessage(
                             "OpenAIProvider",
                             "[T321] usage block: $usage"
                         )
-                        send(LLMStreamChunk.Usage(parseChatCompletionsUsage(usage)))
+                        sendTracked(LLMStreamChunk.Usage(parseChatCompletionsUsage(usage)))
                     }
                 }
             }
@@ -1010,9 +1105,9 @@ internal fun OpenAIProvider.rawStreamMessage(
             thinkParser.finishTurn().let { fin ->
                 if (fin.thinking.isNotEmpty()) {
                     reasoningAccum.append(fin.thinking)
-                    send(LLMStreamChunk.ThinkingDelta(fin.thinking))
+                    sendTracked(LLMStreamChunk.ThinkingDelta(fin.thinking))
                 }
-                if (fin.visible.isNotEmpty()) send(LLMStreamChunk.Text(fin.visible))
+                if (fin.visible.isNotEmpty()) sendTracked(LLMStreamChunk.Text(fin.visible))
             }
 
             // Emit ToolCallComplete for all accumulated tool calls
@@ -1020,7 +1115,7 @@ internal fun OpenAIProvider.rawStreamMessage(
                 if (acc.id.isNotEmpty() && acc.name.isNotEmpty()) {
                     val args = try { JSONObject(acc.args.toString()) } catch (_: Exception) { JSONObject() }
                     android.util.Log.d("ToolChain[Provider]", "→ ToolCallComplete id=${acc.id} name=${acc.name} args=${args.toString().take(300)}")
-                    send(LLMStreamChunk.ToolCallComplete(acc.id, acc.name, args))
+                    sendTracked(LLMStreamChunk.ToolCallComplete(acc.id, acc.name, args))
                 }
             }
             // Drain Responses-API tool accumulators that didn't get an output_item.done
@@ -1037,7 +1132,7 @@ internal fun OpenAIProvider.rawStreamMessage(
                         "OpenAIProvider",
                         "Stream ended mid-tool-call id=$combined name=${acc.name} argsLen=${acc.args.length} — flushing as ToolCallComplete (T248)",
                     )
-                    send(LLMStreamChunk.ToolCallComplete(combined, acc.name, args))
+                    sendTracked(LLMStreamChunk.ToolCallComplete(combined, acc.name, args))
                 }
             }
             responsesToolCalls.clear()
@@ -1074,14 +1169,14 @@ internal fun OpenAIProvider.rawStreamMessage(
                 thinkParser.finishTurn().let { fin ->
                     if (fin.thinking.isNotEmpty()) {
                         reasoningAccum.append(fin.thinking)
-                        send(LLMStreamChunk.ThinkingDelta(fin.thinking))
+                        sendTracked(LLMStreamChunk.ThinkingDelta(fin.thinking))
                     }
-                    if (fin.visible.isNotEmpty()) send(LLMStreamChunk.Text(fin.visible))
+                    if (fin.visible.isNotEmpty()) sendTracked(LLMStreamChunk.Text(fin.visible))
                 }
                 if (sawReasoningField || reasoningAccum.isNotEmpty()) {
-                    send(LLMStreamChunk.ReasoningContent(reasoningAccum.toString()))
+                    sendTracked(LLMStreamChunk.ReasoningContent(reasoningAccum.toString()))
                 }
-                send(LLMStreamChunk.Finished(finishReason))
+                sendTracked(LLMStreamChunk.Finished(finishReason))
                 sentFinished = true
                 com.openminis.app.logging.AppLogger.info(
                     "OpenAIProvider",
@@ -1104,6 +1199,25 @@ internal fun OpenAIProvider.rawStreamMessage(
                 )
             }
         } catch (e: Exception) {
+            // [T-android-body-idle-watchdog] The watchdog's trip (body-idle /
+            // content-idle) closed the socket: surface as a stall-resume
+            // TransientError so the retry ladder carries the partial
+            // text/thinking forward instead of surfacing a plain NetworkError
+            // (which regenerates from scratch).
+            val idlePhase = bodyIdlePhase.get()
+            if (idlePhase != null && e is IOException) {
+                com.openminis.app.logging.AppLogger.warning(
+                    "OpenAIProvider",
+                    "[T-android-body-idle-watchdog] mapping socket failure to stall-resume retry (phase=$idlePhase, contentLen=$contentLen reasoningLen=$reasoningLen)"
+                )
+                cancel(
+                    "Stream error",
+                    LLMError.TransientError(
+                        "stream body idle ($idlePhase) after $contentLen chars — resuming from partial output",
+                        stalledAfterFirstEvent = true,
+                    ),
+                )
+            }
             // T321: never silently swallow — log message + top-3 stack frames.
             val frames = e.stackTrace.take(3).joinToString(" | ") { "${it.className}.${it.methodName}:${it.lineNumber}" }
             com.openminis.app.logging.AppLogger.error(
@@ -1113,6 +1227,7 @@ internal fun OpenAIProvider.rawStreamMessage(
             )
             cancel("Stream error", mapError(e))
         } finally {
+            ttfbWatchdog.cancel()
             reader.close()
             response.close()
         }
