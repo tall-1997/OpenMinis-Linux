@@ -2459,8 +2459,9 @@
     <string name="chat_rewind_menu">撤回到此轮</string>
     <string name="plan_board_header">任务列表</string>
     <string name="appearance_plan_board_title">显示任务列表看板</string>
-    <string name="appearance_plan_board_footer">在聊天列表顶部显示模型的任务进度看板。关闭只隐藏卡片，任务列表功能不受影响。</string>
-    <string name="plan_board_failed_n">%1\ 项失败</string>
+    <string name="appearance_plan_board_footer">在输入框上方显示模型的任务进度看板，向上展开。关闭只隐藏看板，任务列表功能不受影响。</string>
+    <string name="plan_board_failed_n">%1$d 项失败</string>
+    <string name="plan_board_all_done">所有步骤已完成</string>
     <string name="chat_rewind_title">撤回到这一轮？</string>
     <string name="chat_rewind_subtitle">后续轮次写入的文件会被回滚。请选择回滚的范围。</string>
     <string name="chat_rewind_code">仅代码</string>

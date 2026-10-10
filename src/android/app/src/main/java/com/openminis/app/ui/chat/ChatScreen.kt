@@ -3956,18 +3956,6 @@ fun ChatScreen(
                         .lastOrNull { it.role == "assistant" }
                         ?.error
                         ?.isNotBlank() == true
-                    // [T-plan-board] 会话级任务列表看板：模型经 agent_plan 写入的
-                    // 条目（放在列表首项——reverseLayout 下 item 顺序即视觉底部）。
-                    // [T-plan-board-pref] 显示开关只改显示，功能不受影响。
-                    if (com.openminis.app.ui.settings.showPlanBoardEnabled(context)) {
-                        item(key = "__plan_board__", contentType = "plan_board") {
-                            SessionPlanBoardCard(
-                                sessionId = viewModel.activeSessionId,
-                                isStreaming = isStreaming,
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-                            )
-                        }
-                    }
                     // [T-android-compact-progress] Live compaction status, so a
                     // long-running compact reads as "working" rather than
                     // "hung". Sits above the resume banner because the two are
@@ -4899,6 +4887,24 @@ fun ChatScreen(
                         viewModel.updateTitleAndCategory(newTitle, newCategory)
                         editingSession = null
                     },
+                )
+            }
+
+            // [T-plan-board-sticky] 会话级任务列表看板：贴输入框上缘（taixu
+            // StickyPlanBar 形态），向上展开——下方 Column 里列表 weight(1f)，
+            // 展开吃列表空间而非遮挡聊天记录；浮动工具条/预览缩略图 overlay
+            // 在上方消息区 Box 内，与看板互不重叠。
+            // [T-plan-board-pref] 显示开关只改显示，功能不受影响。
+            if (com.openminis.app.ui.settings.showPlanBoardEnabled(context)) {
+                SessionPlanBoardCard(
+                    sessionId = viewModel.activeSessionId,
+                    isStreaming = isStreaming,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .wrapContentWidth(Alignment.CenterHorizontally)
+                        .widthIn(max = CHAT_MAX_CONTENT_WIDTH)
+                        .padding(horizontal = chatGutterDp.dp)
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
                 )
             }
 

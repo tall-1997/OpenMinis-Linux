@@ -45,7 +45,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openminis.app.R
 import com.openminis.app.ui.theme.ChatColors
-import kotlinx.coroutines.delay
 
 /**
  * [T-process-run-card] The unified process card for one assistant turn.
@@ -225,20 +224,18 @@ private fun ProcessRunThinkingRow(block: AssistantBlock, listState: LazyListStat
     // laid out — same layout-cost guard as the standalone thinking block,
     // which matters because the flat list rebuilds per streaming tick.
     val hasContent = block.content.isNotBlank()
-    // [T-thinking-scroll-state] rememberSaveable：条目滚出视口随 item key 存档，滚回不重置；卡片折叠时行离开组合仍失档——「再展开不默认展开」保留。
-    var expanded by rememberSaveable(block.id) { mutableStateOf(false) }
+    // [T-thinking-scroll-state] rememberSaveable：条目滚出视口随 item key 存档，滚回不重置。
+    // [T-thinking-row-default-open] 初始即展开（有内容时）：旧行为在流结束 500ms
+    // 后自动折回首行思考，且卡片折叠时行离开组合失档、再展开恒为折叠态——
+    // 结果卡片展开后第一行永远是工具调用，思考内容看不见（用户报告）。
+    // 现在思考完成后行保持展开（行只在卡片展开时组合，行高已封顶），
+    // 卡片再展开时已完成思考也直接展开；手动点按仍可收起（userPinned 接管）。
+    var expanded by rememberSaveable(block.id) { mutableStateOf(block.content.isNotBlank()) }
     var userPinned by rememberSaveable(block.id) { mutableStateOf(false) }
     // [T-thinking-collapse-jump] 折叠防跳转守卫（见 ChatProcessRowGuards）。
     val collapseGuard = rememberThinkingCollapseGuard(listState)
     LaunchedEffect(live, hasContent) {
         if (live && hasContent && !userPinned) expanded = true
-    }
-    LaunchedEffect(live, userPinned) {
-        if (!live && !userPinned && expanded) {
-            delay(500)
-            collapseGuard.armCollapse()
-            expanded = false
-        }
     }
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(

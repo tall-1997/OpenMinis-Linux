@@ -107,11 +107,16 @@ internal fun assistantToolUseBlocks(messages: List<ChatMessage>): List<Assistant
 internal fun isFloatingProcessTool(
     block: AssistantBlock,
     foldAiProcess: Boolean,
-    processExpanded: Boolean = false,
+    // [T-floating-bar-toggle] 参数保留（两个 call site 已传），但在飞工具不再按它抑制。
+    @Suppress("UNUSED_PARAMETER") processExpanded: Boolean = false,
 ): Boolean {
     if (!isDetailProcessTool(block)) return false
-    if (foldAiProcess && processExpanded) return false
+    // 折叠开启时已完成工具折入过程卡——第二条 "computer" 条会与卡片行重复。
     if (foldAiProcess && block.toolStatus !in IN_FLIGHT_PROCESS_TOOL_STATUSES) return false
+    // [T-floating-bar-toggle] 在飞工具恒浮。旧行为按"过程卡是否展开"抑制在飞
+    // 工具，而过程卡在大多数运行期间自动展开（回复文本到达前）→ 浮动条整个
+    // 运行期都不出现，外观开关形同虚设（用户报告「开启无效果」）。外观开关是
+    // 主开关：显式开启即在流式期间显示在飞工具条；卡片在原位照常显示完整行。
     return true
 }
 

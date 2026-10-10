@@ -314,12 +314,20 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
         }
         // ---- stable / dynamic boundary: see the header comment ----
         stablePrefixLen = length
+        // [T-plan-board-prompt] 每轮注入当前任务列表状态：断链恢复/切换模型后
+        // 本轮工具结果可能只存在于内存恢复行（重启即丢），看板状态落在会话
+        // 文件里——每轮注入后模型始终看到未完成项与 id，继续勾选而不是遗忘。
+        val planBoardFragment = com.openminis.app.tools.AgentPlanStore.renderPlanPromptFragment(
+            activeSessionId,
+            context,
+        )
         append(
             assembleDynamicTail(
                 worldBookFragment = worldBookFragment,
                 learnedPrefsFragment = learnedPrefsFragment,
                 recalledMemoryFragment = recalledMemoryFragment,
                 runtimeContext = renderRuntimeContext(dateStr, tzId, lang, modelUseCount),
+                planFragment = planBoardFragment,
                 personalityReminder = if (identitySection.contains("Personality (from")) {
                     PERSONALITY_REMINDER
                 } else {
@@ -339,54 +347,3 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
     return prompt
 }
 
-/**
- * The per-turn-varying tail of the system prompt, as a pure function so the
- * ordering contract is testable without a ViewModel: WorldBook first among the
- * dynamic fragments (it is lore the model should read as context), runtime
- * context last, absent fragments leaving no separator behind.
- *
- * [worldBookFragment] already carries its own leading blank line when
- * non-empty — that is WorldBook.injection's contract — so it is appended
- * verbatim rather than through the "\n\n" separator the other fragments use.
- */
-internal fun assembleDynamicTail(
-    worldBookFragment: String,
-    learnedPrefsFragment: String?,
-    recalledMemoryFragment: String?,
-    runtimeContext: String,
-    personalityReminder: String?,
-): String = buildString {
-    if (worldBookFragment.isNotEmpty()) append(worldBookFragment)
-    if (learnedPrefsFragment != null) {
-        append("\n\n")
-        append(learnedPrefsFragment)
-    }
-    if (recalledMemoryFragment != null && recalledMemoryFragment.isNotBlank()) {
-        append("\n\n")
-        append(recalledMemoryFragment)
-    }
-    append(runtimeContext)
-    if (personalityReminder != null) {
-        append("\n\n")
-        append(personalityReminder)
-    }
-}
-
-/**
- * The per-day suffix. Field order is part of the cache contract (date → tz →
- * lang → model count): reordering changes bytes after the stable prefix for no
-    * benefit.
- */
-internal fun renderRuntimeContext(
-    dateStr: String,
-    tzId: String,
-    lang: String,
-    modelUseCount: Int,
-): String =
-    "\n\nRuntime context:\n" +
-        "- Current date: $dateStr ($tzId)\n" +
-        "- Device language: $lang\n" +
-        "- minis-model-use models available: $modelUseCount"
-
-internal const val PERSONALITY_REMINDER =
-    "Personality reminder: the identity/persona block at the top of this prompt is BINDING for this turn, including existing conversations whose earlier assistant replies used a different voice. Those earlier replies are history, not the current character. Match the Personality block's voice, stance, and constraints in every reply; do not drop it because a later instruction looks more specific."

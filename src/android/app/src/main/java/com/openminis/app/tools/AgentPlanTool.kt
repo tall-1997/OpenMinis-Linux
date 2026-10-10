@@ -131,7 +131,7 @@ object AgentPlanStore {
 
     fun update(sessionId: String, context: Context?, id: String, title: String? = null, description: String? = null, status: String? = null, position: Int? = null): Plan? = lock(sessionId).withLock {
         val plans = loadLocked(sessionId, context)
-        val index = plans.indexOfFirst { it.id == id }
+        val index = resolvePlanIndex(plans, id)
         if (index < 0) return@withLock null
         if (status != null) require(status in STATUSES) { "status must be pending, active, done, or failed" }
         val old = plans[index]
@@ -143,10 +143,24 @@ object AgentPlanStore {
 
     fun remove(sessionId: String, context: Context?, id: String): Boolean = lock(sessionId).withLock {
         val plans = loadLocked(sessionId, context)
-        val out = plans.filterNot { it.id == id }.mapIndexed { i, p -> p.copy(position = i) }
-        if (out.size == plans.size) return@withLock false
+        val index = resolvePlanIndex(plans, id)
+        if (index < 0) return@withLock false
+        val out = plans.filterIndexed { i, _ -> i != index }.mapIndexed { i, p -> p.copy(position = i) }
         saveLocked(sessionId, context, out)
         true
+    }
+
+    /**
+     * [T-plan-id-prefix] id 解析：先精确匹配，再 8+ 字符前缀匹配。render 与
+     * 系统提示注入都只展示 8 字符截断 id——恢复行（断链/重连）仅存内存、
+     * 重启后丢失，模型手里常常只有截断 id，精确匹配会让 update/remove
+     * 永远 "plan item not found"（用户报告「忘记勾选已完成任务」的帮凶）。
+     */
+    private fun resolvePlanIndex(plans: List<Plan>, id: String): Int {
+        if (id.isBlank()) return -1
+        plans.indexOfFirst { it.id == id }.takeIf { it >= 0 }?.let { return it }
+        if (id.length >= 8) plans.indexOfFirst { it.id.startsWith(id) }.takeIf { it >= 0 }?.let { return it }
+        return -1
     }
 
     fun clear(sessionId: String, context: Context?) = lock(sessionId).withLock {
@@ -164,6 +178,26 @@ object AgentPlanStore {
                 if (p.description.isNotBlank()) append(" — ${p.description}")
                 append("\n")
             }
+        }
+    }
+
+    /**
+     * [T-plan-board-prompt] 系统提示动态尾注入：当前看板状态 + 截断 id。
+     * 断链恢复/切换模型后，本轮的工具结果（含 agent_plan 输出）可能只存在
+     * 于内存恢复行、重启即丢——看板状态落在会话文件里，每轮注入后模型
+     * 始终能看到未完成项与 id，继续勾选而不是遗忘/重做。
+     * 空看板返回 null（零注入）。
+     */
+    fun renderPlanPromptFragment(sessionId: String, context: Context?): String? {
+        val plans = list(sessionId, context)
+        if (plans.isEmpty()) return null
+        return buildString {
+            append("Active task list (agent_plan board — keep it live):\n")
+            plans.forEachIndexed { i, p ->
+                val mark = when (p.status) { "done" -> "x"; "active" -> ">"; "failed" -> "!"; else -> " " }
+                append("[$mark] ${i + 1}. ${p.title} (id=${p.id.take(8)}, status=${p.status})\n")
+            }
+            append("Work through pending items in order; call agent_plan(op=update, id=<id from above>, status=done) the moment a step finishes (status=failed when abandoned); do not re-create existing items.")
         }
     }
 

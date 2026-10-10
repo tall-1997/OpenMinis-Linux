@@ -105,7 +105,7 @@
         "app/src/main/java/com/openminis/app/ui/chat/ChatFlatItems.kt": 843,
         "app/src/main/java/com/openminis/app/ui/chat/ChatMiscViews.kt": 888,
         "app/src/main/java/com/openminis/app/ui/chat/ChatModelPickerSheet.kt": 1111,
-        "app/src/main/java/com/openminis/app/ui/chat/ChatScreen.kt": 7575,
+        "app/src/main/java/com/openminis/app/ui/chat/ChatScreen.kt": 7581,
         "app/src/main/java/com/openminis/app/ui/chat/ChatToolDetailUI.kt": 1507,
         "app/src/main/java/com/openminis/app/ui/chat/ChatUserMessageUI.kt": 556,
         "app/src/main/java/com/openminis/app/ui/chat/ChatViewModel.kt": 6102,
