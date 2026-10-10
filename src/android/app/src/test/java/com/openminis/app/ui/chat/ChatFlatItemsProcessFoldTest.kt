@@ -397,22 +397,23 @@ class ChatFlatItemsProcessFoldTest {
         assertTrue(isFloatingProcessTool(running, foldAiProcess = true))
     }
 
-    // ── [T-android-fold-expanded-duplicate] ──────────────────────────────
+    // ── [T-floating-bar-toggle] ──────────────────────────────
     //
-    // The overlay exists to surface process activity the card is currently
-    // HIDING. Once the card is expanded its entries show the running tool
-    // at its chronological position, so the same tool must not ALSO be
-    // pinned to the viewport bottom.
+    // 旧契约（T-android-fold-expanded-duplicate）：卡片展开时会按时间序原位显示
+    // 在飞工具，浮动条再钉一份就是重复，故展开即抑制。实测这让「浮动工具条」
+    // 开关形同虚设——一个回合里绝大多数时间卡片都是自动展开的（还没有回复正文），
+    // 条子永远不出现。开关是用户的显式意图，不该被折叠态悄悄推翻：在飞工具恒浮，
+    // 已完成工具仍折进过程卡（见上一例）。f879974 起 processExpanded 不再参与判定。
 
     @Test
-    fun `an expanded card does not also float its running tool`() {
+    fun `the floating bar toggle is not overridden by card expansion`() {
         val running = tool(id = "t2", status = ToolBlockStatus.RUNNING)
         assertTrue(
             "collapsed: the card hides it, so the overlay must carry it",
             isFloatingProcessTool(running, foldAiProcess = true, processExpanded = false),
         )
-        assertFalse(
-            "expanded: the card already shows it in place",
+        assertTrue(
+            "expanded: the user turned the bar on — expansion must not silence it",
             isFloatingProcessTool(running, foldAiProcess = true, processExpanded = true),
         )
     }
