@@ -4528,10 +4528,19 @@ class ChatViewModel(
             val sid = realSessionId.takeIf { it.isNotEmpty() } ?: sessionId
 
             // Find the DB sort_order cutoff for this user message.
-            // UI visible user messages are the N-th user msg with actual text content.
-            // Count which visible user message this is (0-based).
+            // [T-retry-cutoff-row-anchor] 锚点 = 目标消息**自身的 DB 行**（用户
+            // 消息与 DB 行 1:1，id 全局唯一）。旧锚点用「UI 第 N 个用户消息」序号
+            // 去 DB 数「有可见文本的用户行」——纯图片/无文本头的用户消息让两侧
+            // 序号错位，visibleUserCutoff 返回 null → cutoffSortOrder=-1 → 不删
+            // 任何行 → runAgentLoop 开头从 DB 重建出完整旧历史（含出错轮），模型
+            // 接到的就是「上一次出错的上下文」。sortOrderOf 直接命中点的那一行，
+            // 永不错位；消息不在 DB（纯内存行）时回退旧计数路径。
             val visibleUserIndex = messages.subList(0, index + 1).count { it.role == "user" } - 1
-            val cutoffSortOrder = visibleUserCutoff(sid, visibleUserIndex)?.let { it.sortOrder + 1 } ?: -1
+            val targetRowSort = runCatching { chatRepository.dao.sortOrderOf(messageId) }.getOrNull()
+            val cutoffSortOrder = when {
+                targetRowSort != null -> targetRowSort + 1
+                else -> visibleUserCutoff(sid, visibleUserIndex)?.let { it.sortOrder + 1 } ?: -1
+            }
             if (cutoffSortOrder >= 0) {
                 chatRepository.deleteMessagesAfter(sid, cutoffSortOrder)
             }

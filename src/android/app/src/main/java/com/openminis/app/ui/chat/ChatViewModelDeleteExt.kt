@@ -64,7 +64,16 @@ fun ChatViewModel.deleteFromMessage(messageId: String) {
     val sid = activeSessionId ?: return
     viewModelScope.launch {
         val target = messages[index]
-        val cutoffSortOrder = resolveDeleteCutoffSortOrder(sid, messages, index, target)
+        // [T-retry-cutoff-row-anchor] 截断锚点 = 目标消息**自身的 DB 行**（用户
+        // 消息与 DB 行 1:1，id 全局唯一）。旧锚点用「UI 第 N 个用户消息」序号去
+        // DB 数「有可见文本的用户行」——纯图片/无文本头的用户消息让两侧序号
+        // 错位，visibleUserCutoff 返回 null/-1 → 不删任何行 → 下一轮从 DB 重建
+        // 出完整旧历史，模型接到的就是旧上下文。sortOrderOf 直接命中，永不错位。
+        val targetRowSort = runCatching { chatRepository.dao.sortOrderOf(messageId) }.getOrNull()
+        val cutoffSortOrder = when {
+            targetRowSort != null -> targetRowSort // delete removes the target too
+            else -> resolveDeleteCutoffSortOrder(sid, messages, index, target)
+        }
         if (cutoffSortOrder >= 0) {
             chatRepository.deleteMessagesAfter(sid, cutoffSortOrder)
         }
