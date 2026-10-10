@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import kotlinx.coroutines.launch
@@ -60,6 +61,8 @@ import com.openminis.app.mcp.server.McpServerConfigStore
 import com.openminis.app.mcp.server.McpServerManager
 import com.openminis.app.ui.components.DialogTextField
 import com.openminis.app.ui.components.MinisTextButton
+import com.openminis.app.ui.components.SwipeRowAction
+import com.openminis.app.ui.components.SwipeRowActions
 
 /**
  * MCP Integrations management screen. Mirrors [SkillsManagementScreen]:
@@ -174,30 +177,46 @@ fun MCPIntegrationsScreen(
             } else {
                 servers.forEachIndexed { index, server ->
                     val transportIcon = if (server.isStdio) Icons.Outlined.Terminal else Icons.Outlined.Language
-                    SettingsRow(
-                        title = server.id,
-                        subtitle = server.transportSummary.takeIf { it.isNotBlank() },
-                        showChevron = true,
-                        showDivider = index < servers.size - 1,
-                        // FIX 1: plain tap opens the edit form (was delete-confirm).
-                        // Delete stays reachable from inside the edit sheet.
-                        onClick = { onOpenTools(server) },
-                        trailing = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    transportIcon,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(14.dp),
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                SettingsSwitch(
-                                    checked = server.enabled,
-                                    onCheckedChange = { mcpRepository.setEnabled(server.id, it) },
-                                )
-                            }
-                        },
-                    )
+                    // [T-mcp-swipe-delete] 右滑露出删除按钮（app 自有的
+                    // SwipeRowActions 模式，与模型分组/挂载目录列表同款交互），
+                    // 确认对话框仍拦截误触。旧路径（工具页 → 管理 → 编辑表单
+                    // 底部）实测找不到删除入口。
+                    SwipeRowActions(
+                        actions = listOf(
+                            SwipeRowAction(
+                                label = stringResource(R.string.delete),
+                                icon = Icons.Filled.Delete,
+                                containerColor = MaterialTheme.colorScheme.errorContainer,
+                                contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                                onClick = { deleteId = server.id },
+                            ),
+                        ),
+                    ) {
+                        SettingsRow(
+                            title = server.id,
+                            subtitle = server.transportSummary.takeIf { it.isNotBlank() },
+                            showChevron = true,
+                            showDivider = index < servers.size - 1,
+                            // FIX 1: plain tap opens the edit form (was delete-confirm).
+                            // Delete stays reachable from inside the edit sheet.
+                            onClick = { onOpenTools(server) },
+                            trailing = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        transportIcon,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(14.dp),
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    SettingsSwitch(
+                                        checked = server.enabled,
+                                        onCheckedChange = { mcpRepository.setEnabled(server.id, it) },
+                                    )
+                                }
+                            },
+                        )
+                    }
                 }
             }
         }

@@ -153,7 +153,7 @@
         "app/src/main/java/com/openminis/app/ui/settings/CheckUpdateSection.kt": 813,
         "app/src/main/java/com/openminis/app/ui/settings/EnvironmentVariablesScreen.kt": 529,
         "app/src/main/java/com/openminis/app/ui/settings/LogManagementScreen.kt": 794,
-        "app/src/main/java/com/openminis/app/ui/settings/MCPIntegrationsScreen.kt": 1214,
+        "app/src/main/java/com/openminis/app/ui/settings/MCPIntegrationsScreen.kt": 1233,
         "app/src/main/java/com/openminis/app/ui/settings/ModelEntryDetailScreen.kt": 452,
         "app/src/main/java/com/openminis/app/ui/settings/ModelGroupDetailScreen.kt": 797,
         "app/src/main/java/com/openminis/app/ui/settings/ModelGroupsScreen.kt": 1039,
