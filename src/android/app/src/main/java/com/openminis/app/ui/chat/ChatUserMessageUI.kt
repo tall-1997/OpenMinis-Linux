@@ -41,6 +41,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Refresh
@@ -104,6 +105,10 @@ internal fun UserMessageBubble(
     // ChatRewindDialog.kt for the body and the gating rationale).
     onRewind: (() -> Unit)? = null,
     onWithdraw: (() -> Unit)? = null,
+    // [T-queue-abort-tool] 中止当前工具并立即把这条排队消息注入为独立新轮。
+    // 仅排队气泡 + 流式运行中非 null；由调用方用 currentToolSnapshot 判定，
+    // 无在飞工具时传 null（pre-dispatch 注入点已保证下一个工具边界生效）。
+    onAbortToolAndInject: (() -> Unit)? = null,
     onPreviewFile: (Uri, String) -> Unit = { _, _ -> },
 ) {
     var showMenu by remember { mutableStateOf(false) }
@@ -178,8 +183,22 @@ internal fun UserMessageBubble(
                     // Queued: transparent bg + dashed border + dimmed text +
                     // a red withdraw button alongside. Mirrors iOS
                     // AIChatView.swift queued-bubble overlay.
+                    // [T-queue-status-hint] 提示注入时机：有在飞工具 → 「将中止
+                    // 当前工具后注入」的长按暗示；否则「当前工具完成后注入」。
+                    // 长工具（构建/安装动辄数分钟）排队时用户对延迟有预期。
                     val secondaryTextColor = ChatColors.secondaryText
                     val userBubbleColor = ChatColors.userBubble
+                    if (isQueued) {
+                        Text(
+                            text = stringResource(
+                                if (onAbortToolAndInject != null) R.string.chat_queue_hint_abort
+                                else R.string.chat_queue_hint_wait,
+                            ),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = secondaryTextColor.copy(alpha = 0.8f),
+                            modifier = Modifier.padding(end = 4.dp),
+                        )
+                    }
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -320,6 +339,17 @@ internal fun UserMessageBubble(
                 }
                 // [T-checkpoint-rewind] Recoverable counterpart to Delete.
                 if (onRewind != null) RewindMenuEntry { showMenu = false; onRewind() }
+                // [T-queue-abort-tool] 排队消息的长按菜单：正在执行工具时
+                // 提供「中止当前工具并立即插入」——杀在飞进程，工具以失败
+                // 返回，工具边界随即将本消息注入。前置 Copy 项之后、其余
+                // 变异项（全部 gated）之前，用醒目主色区分于普通操作。
+                if (onAbortToolAndInject != null) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.chat_longpress_abort_tool_inject)) },
+                        onClick = { showMenu = false; onAbortToolAndInject() },
+                        leadingIcon = { Icon(Icons.Default.Bolt, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                    )
+                }
                 // [T-android-delete-from-here] Removes this message and every
                 // message after it. Destructive and not undoable, so it sits
                 // last (furthest from the thumb's resting position on the

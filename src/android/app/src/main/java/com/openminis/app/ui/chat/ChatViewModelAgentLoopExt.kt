@@ -1710,6 +1710,36 @@ internal suspend fun ChatViewModel.runAgentLoop(
         var didFanOutSubAgents = false
         for ((id, name, args) in toolCalls) {
             currentCoroutineContext().ensureActive()
+            // [T-queue-pre-dispatch-inject] 注入点前移：队列非空时本回合的工具
+            // 一律不执行——合成 interrupted 结果保持 tool_use/tool_result 配对，
+            // 随后的 post-result 边界把排队消息注入为独立新轮。旧注入点在工具
+            // 结果之后，10 分钟的构建/安装命令会把排队延迟吞掉同样的时长。
+            // 不计入循环检测器：用户中断不是模型行为（与 replay 拒绝同口径）。
+            if (_promptQueue.value.isNotEmpty()) {
+                val interruptedMsg = "[interrupted] Not executed — the user sent a new message while this call was pending. Handle the user's message first; re-issue this call afterwards if it is still needed."
+                AppLogger.info(
+                    ChatViewModel.TAG_STREAM,
+                    "📨[QueueInterrupt] turn=$turn pre-dispatch skip tool=$name id=$id (queue non-empty)",
+                )
+                val blockIdx = allToolBlocks.indexOfFirst { it.id == id }
+                if (blockIdx >= 0) {
+                    val elapsed = System.currentTimeMillis() - allToolBlocks[blockIdx].startTimeMs
+                    allToolBlocks[blockIdx] = allToolBlocks[blockIdx].copy(
+                        toolStatus = ToolBlockStatus.FAILED,
+                        content = interruptedMsg,
+                        durationMs = elapsed,
+                    )
+                }
+                uiEventSink(allToolBlocks, assistantId, accumulatedText)
+                    .onToolCallRejected(id, "Interrupted by a new user message")
+                resultParts.add(AgentContentPart.ToolResult(
+                    id = id, name = name,
+                    content = interruptedMsg,
+                    isError = true,
+                ))
+                toolInputChunkRings.remove(id)
+                continue
+            }
             // [T-android-overlay-tool-title] Pull tool_title uniformly
             // from args for ALL tools — without this browser_use's
             // tool_title never reached the overlay (only shell_execute

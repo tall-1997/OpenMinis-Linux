@@ -2462,7 +2462,10 @@
     <string name="appearance_plan_board_footer">在输入框上方显示模型的任务进度看板，向上展开。关闭只隐藏看板，任务列表功能不受影响。</string>
     <string name="plan_board_failed_n">%1$d 项失败</string>
     <string name="plan_board_all_done">所有步骤已完成</string>
-    <string name="translate_stream_slim_notice">当前安装的是 slim 版（不含离线翻译推理运行时，安装包更小）。实时离线翻译需要 full 版；气泡翻译不受影响，仍由模型完成。</string>
+        <string name="chat_longpress_abort_tool_inject">中止当前工具并立即插入</string>
+    <string name="chat_queue_hint_wait">已排队 · 当前工具完成后注入（长按可中止工具立即插入）</string>
+    <string name="chat_queue_hint_abort">已排队 · 正在执行工具（长按可中止立即插入）</string>
+<string name="translate_stream_slim_notice">当前安装的是 slim 版（不含离线翻译推理运行时，安装包更小）。实时离线翻译需要 full 版；气泡翻译不受影响，仍由模型完成。</string>
     <string name="chat_rewind_title">撤回到这一轮？</string>
     <string name="chat_rewind_subtitle">后续轮次写入的文件会被回滚。请选择回滚的范围。</string>
     <string name="chat_rewind_code">仅代码</string>

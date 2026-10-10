@@ -4660,6 +4660,34 @@ class ChatViewModel(
     fun withdrawQueuedMessage(messageId: String) = withdrawQueuedMessageWithDiskMirror(messageId)
 
     /**
+     * [T-queue-abort-tool] 长按排队消息 → 「中止当前工具并立即插入」：
+     * 杀掉运行中 run 登记的宿主子进程（当前工具以失败结果返回，协程存活），
+     * 工具边界检查点随即将本排队消息注入为独立新轮。无运行中 run / 无在飞
+     * 工具时是 no-op——注入点前移已保证排队消息在下一个工具边界进入，
+     * 重复中止不会误杀刚启动的新工具之后的进程。
+     */
+    fun abortRunningToolAndInject() {
+        if (_promptQueue.value.isEmpty()) return
+        val run = streamJob?.let { com.openminis.app.service.ActiveRunRegistry.current(it) }
+            ?: com.openminis.app.service.ActiveRunRegistry.current(activeSessionId)
+        if (run == null || run.isStopped) return
+        if (run.currentToolSnapshot() == null) return
+        AppLogger.info(
+            TAG_STREAM,
+            "📨[QueueAbortTool] aborting current tool ${run.currentToolName} to inject ${_promptQueue.value.size} queued prompt(s)",
+        )
+        run.abortCurrentTool()
+    }
+
+    /** [T-queue-abort-tool] 当前在飞工具快照（菜单项可用性判定）；无 run/无工具返回 null。 */
+    fun currentRunningToolSnapshot(): com.openminis.app.service.ActiveRun.CurrentTool? {
+        if (!_isStreaming.value) return null
+        val run = streamJob?.let { com.openminis.app.service.ActiveRunRegistry.current(it) }
+            ?: com.openminis.app.service.ActiveRunRegistry.current(activeSessionId)
+        return run?.takeIf { !it.isStopped }?.currentToolSnapshot()
+    }
+
+    /**
      * [T-android-queued-message-interrupt-on-toolclose] Mid-tool-loop
      * interrupt: take everything in [_promptQueue] right now, finalize the
      * just-finished assistant bubble in the UI, persist a fresh user

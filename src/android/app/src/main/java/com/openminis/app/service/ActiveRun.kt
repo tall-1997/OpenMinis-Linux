@@ -161,6 +161,20 @@ class ActiveRun internal constructor(
         resources.second.forEach { cleanup -> runCatching(cleanup) }
     }
 
+    /**
+     * [T-queue-abort-tool] 中止**当前正在执行的工具**但不结束整个 run：
+     * 杀掉本 run 登记的宿主子进程（shell/子智能体 await 通道随进程退出），
+     * 协程保持存活——工具调用以失败结果返回，agent loop 在工具边界走
+     * 既有排队注入路径。与 [stop] 的区别：stopped 不置位、协程不取消、
+     * 停止钩子不触发（它们属于整个 run 的清理，不属于单个工具）。
+     * 进程清空是安全的：registerProcess 对已停止 run 走立即 cleanup，
+     * 后续同 run 的新进程照常登记。
+     */
+    fun abortCurrentTool() {
+        val ownedProcesses = synchronized(resourcesLock) { processes.values.toList() }
+        ownedProcesses.forEach { cleanup -> runCatching(cleanup) }
+    }
+
     val isStopped: Boolean get() = stopped.get()
 }
 

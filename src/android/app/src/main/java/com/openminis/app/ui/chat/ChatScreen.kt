@@ -4188,6 +4188,16 @@ fun ChatScreen(
                                 onWithdraw = if (item.message.isQueued) {
                                     { safeMutate { viewModel.withdrawQueuedMessage(item.message.id) } }
                                 } else null,
+                                // [T-queue-abort-tool] 排队气泡 + 流式运行中有在飞
+                                // 工具才提供「中止当前工具并立即插入」。currentTool
+                                // 来自 run 的原子引用；null = 工具间隙（模型在思考/
+                                // 流式输出），pre-dispatch 注入点会在下一个工具边界
+                                // 生效，无需中止。
+                                onAbortToolAndInject = if (item.message.isQueued && isStreaming &&
+                                    viewModel.currentRunningToolSnapshot() != null
+                                ) {
+                                    { viewModel.abortRunningToolAndInject() }
+                                } else null,
                                 onPreviewFile = { uri, name ->
                                     // T150: turn the persisted file:// URI back
                                     // into a FileItem and hand off to the host

@@ -7,6 +7,13 @@ import com.openminis.app.queue.PromptQueueBridge
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+internal const val BRIDGE_TEXT =
+    "(Interrupted mid-task by a new user message. Decide based on the new message and overall context " +
+        "whether the prior task should continue — do not forget or abandon it unless the user explicitly " +
+        "says to stop, or the new message makes clear it is no longer needed. Unfinished items live on the " +
+        "agent_plan task list — after addressing the user's message, resume the pending items from the board " +
+        "instead of restarting the plan.)"
+
 internal suspend fun ChatViewModel.injectQueuedPromptsAsNewTurn(
     finishedAssistantId: String,
     finishedAccumulatedText: String,
@@ -80,13 +87,16 @@ internal suspend fun ChatViewModel.injectQueuedPromptsAsNewTurn(
     // provider merges them — exactly the regression iOS hit at #579.
     // Empty/whitespace-only bridge text would itself be merged out by
     // some sanitizers; keep a small visible string for parity with iOS.
+    //
+    // [T-plan-board-prompt] 被打断的计划有持久恢复点：任务列表看板
+    // （agent_plan）每轮注入系统提示——bridge 指向它，模型处理完新消息后
+    // 按看板续跑未完成项，而不是把剩余计划丢在脑内（旧 bridge 只靠模型
+    // 记住被打断前的进度）。
     appendBoundedHistory(
         LLMMessage(
             role = LLMMessage.Role.ASSISTANT,
-            content = "(Interrupted mid-task by a new user message. Decide based on the new message and overall context whether the prior task should continue — do not forget or abandon it unless the user explicitly says to stop, or the new message makes clear it is no longer needed.)",
-            contentParts = listOf(
-                AgentContentPart.Text("(Interrupted mid-task by a new user message. Decide based on the new message and overall context whether the prior task should continue — do not forget or abandon it unless the user explicitly says to stop, or the new message makes clear it is no longer needed.)"),
-            ),
+            content = BRIDGE_TEXT,
+            contentParts = listOf(AgentContentPart.Text(BRIDGE_TEXT)),
         ),
     )
 
