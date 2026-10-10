@@ -17,8 +17,6 @@ import com.openminis.app.data.model.LLMStreamChunk
 import com.openminis.app.data.model.LLMUsage
 import com.openminis.app.data.model.ThinkingLevel
 import com.openminis.app.data.repository.MultiAgentSettings
-import com.openminis.app.i18n.MlKitTranslationEngine
-import com.openminis.app.i18n.StreamTranslator
 import com.openminis.app.i18n.TranslationPrefs
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.provider.LLMProvider
@@ -487,11 +485,13 @@ internal suspend fun ChatViewModel.runAgentLoop(
         // text block — which may NOT be the last block once trailing
         // content arrived after tool_calls; ordered mode keeps the
         // original trailing-block behaviour.
-        // [T-mlkit-stream-translate] 本轮思考/文本流的实时翻译器（句级缓冲）。
-        // 未开启实时翻译或引擎不可用时保持 null（零行为变化）；本轮结束重置。
+        // [T-stream-translate] 本轮流翻译器（判定/喂入/flush 在 StreamTranslateExt）；
         // 声明先于 materializeActiveTextBlock（local fun 不能引用后声明的局部量）。
-        var textStreamTranslator: StreamTranslator? = null
-        var thinkingStreamTranslator: StreamTranslator? = null
+        val textTranslate = StreamTranslateHolder()
+        val thinkingTranslate = StreamTranslateHolder()
+        val offlineStreamOn = streamOfflineOn(context)
+        val modelStreamOn = streamModelOn(context)
+        val modelTranslateBatch = modelStreamBatch(context)
         fun materializeActiveTextBlock() {
             val sb = currentTextBlockSb ?: return
             val idx = if (currentProvider.streamTextIsMonolithic) turnTextBlockIdx else allToolBlocks.lastIndex
@@ -499,7 +499,7 @@ internal suspend fun ChatViewModel.runAgentLoop(
                 // [T-mlkit-stream-translate] 实时离线翻译覆盖层随 materialize 挂上
                 allToolBlocks[idx] = allToolBlocks[idx].copy(
                     content = sb.toString(),
-                    translatedContent = textStreamTranslator?.translatedSoFar?.takeIf { it.isNotEmpty() },
+                    translatedContent = textTranslate.translatedSoFar,
                 )
             }
         }
@@ -627,17 +627,10 @@ internal suspend fun ChatViewModel.runAgentLoop(
             when (chunk) {
                 is LLMStreamChunk.ThinkingDelta -> {
                     turnThinking.append(chunk.text)
-                    // [T-mlkit-stream-translate] 实时离线翻译：句级缓冲，随句更新。
-                    // 未开启/引擎不可用时静默跳过（零行为变化）。
-                    val translatedThinking = if (TranslationPrefs.isStreamEnabled(context) && MlKitTranslationEngine.available) {
-                        runCatching {
-                            (thinkingStreamTranslator ?: StreamTranslator(
-                                MlKitTranslationEngine,
-                                TranslationPrefs.streamSource(context),
-                                TranslationPrefs.streamTarget(context),
-                            ).also { thinkingStreamTranslator = it }).feed(chunk.text)
-                        }.getOrNull()?.takeIf { it.isNotEmpty() }
-                    } else null
+                    // [T-stream-translate] 离线随句更新；模型 feed 入队异步翻，onUpdate 刷覆盖层。
+                    val translatedThinking = feedThinkingTranslate(thinkingTranslate, this@runAgentLoop, context,
+                        viewModelScope, modelTranslateBatch, allToolBlocks, turn, assistantId, accumulatedText,
+                        turnTextSb, offlineStreamOn, modelStreamOn, chunk.text)
                     val thinkIdx = allToolBlocks.indexOfFirst { it.kind == "thinking" && it.id == "thinking_$turn" }
                     if (thinkIdx < 0) {
                         allToolBlocks.add(AssistantBlock(
@@ -686,17 +679,9 @@ internal suspend fun ChatViewModel.runAgentLoop(
                     // T307: append-only on the StringBuilder; .toString()
                     // is taken once below at flush time, not per delta.
                     turnTextSb.append(strippedDelta)
-                    // [T-mlkit-stream-translate] 输出流的实时离线翻译：句级缓冲，
-                    // materialize 时把覆盖层挂上活动文本块。未开启/不可用静默跳过。
-                    if (TranslationPrefs.isStreamEnabled(context) && MlKitTranslationEngine.available) {
-                        runCatching {
-                            (textStreamTranslator ?: StreamTranslator(
-                                MlKitTranslationEngine,
-                                TranslationPrefs.streamSource(context),
-                                TranslationPrefs.streamTarget(context),
-                            ).also { textStreamTranslator = it }).feed(strippedDelta)
-                        }
-                    }
+                    // [T-stream-translate] 离线句级缓冲 materialize 挂块；模型入队，流结束 flush 挂回。
+                    feedTextTranslate(textTranslate, context, viewModelScope, modelTranslateBatch,
+                        offlineStreamOn, modelStreamOn, strippedDelta)
                     activeRun?.updateAssistantText(accumulatedText + turnTextSb.toString())
                     // Append to the trailing text block — or open a new one if the last
                     // block isn't a text block (i.e. a tool call or thinking was in between).
@@ -1071,6 +1056,9 @@ internal suspend fun ChatViewModel.runAgentLoop(
                         updateAssistantMessage(assistantId, accumulatedText + turnSnap, true, allToolBlocks)
                     }
                 }
+                // [T-model-stream-translate] 流结束 flush 尾句翻译，覆盖层挂回文本块（支持件内处理）。
+                flushModelStreamTranslation(textTranslate, allToolBlocks, currentProvider.streamTextIsMonolithic,
+                    turnTextBlockIdx, assistantId, accumulatedText, turnTextSb)
                 // T256: reset throttle bookkeeping for the next turn so the
                 // first delta of the next assistant message fires immediately
                 // rather than coalescing against this turn's stale baseline.
@@ -1177,6 +1165,9 @@ internal suspend fun ChatViewModel.runAgentLoop(
                     }
                     turnTextSb.setLength(0)
                     currentTextBlockSb = null
+                    // [T-model-stream-translate] 回滚：丢弃本轮翻译状态。
+                    textTranslate.reset()
+                    thinkingTranslate.reset()
                     // [T-android-tool-splits-reply-fix] The tracked turn
                     // text block was just rolled back with the rest of
                     // this turn's partial blocks.
@@ -1315,6 +1306,9 @@ internal suspend fun ChatViewModel.runAgentLoop(
                     // Reset turn state for retry with new provider
                     turnTextSb.setLength(0)
                     currentTextBlockSb = null
+                    // [T-model-stream-translate] 回滚：丢弃本轮翻译状态。
+                    textTranslate.reset()
+                    thinkingTranslate.reset()
                     // [T-android-tool-splits-reply-fix] Fresh stream from a
                     // different provider — and the add(0, info) above
                     // shifted every block index anyway.

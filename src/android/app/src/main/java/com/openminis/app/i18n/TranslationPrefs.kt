@@ -13,6 +13,8 @@ object TranslationPrefs {
     private const val KEY_STREAM_ENABLED = "stream_enabled"
     private const val KEY_STREAM_SOURCE = "stream_source"
     private const val KEY_STREAM_TARGET = "stream_target"
+    // [T-model-stream-translate] 实时翻译引擎选择（auto/offline/model）。
+    private const val KEY_STREAM_ENGINE = "stream_engine"
 
     fun prefs(context: Context): SharedPreferences =
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -29,6 +31,26 @@ object TranslationPrefs {
     fun streamSource(context: Context): String = prefs(context).getString(KEY_STREAM_SOURCE, "en")?.ifBlank { "en" } ?: "en"
 
     fun streamTarget(context: Context): String = prefs(context).getString(KEY_STREAM_TARGET, "zh")?.ifBlank { "zh" } ?: "zh"
+
+    /**
+     * [T-model-stream-translate] 实时翻译引擎。AUTO = 离线优先，ML Kit
+     * 不可用（无 GMS/包未下/翻译失败）时回落用户模型；OFFLINE = 仅 ML Kit
+     * （不可用静默，现状语义）；MODEL = 仅模型（无 GMS 设备的主力路径）。
+     */
+    enum class StreamEngine { AUTO, OFFLINE, MODEL }
+
+    fun streamEngine(context: Context): StreamEngine = when (prefs(context).getString(KEY_STREAM_ENGINE, "auto")) {
+        "offline" -> StreamEngine.OFFLINE
+        "model" -> StreamEngine.MODEL
+        else -> StreamEngine.AUTO
+    }
+
+    fun setStreamEngine(context: Context, engine: StreamEngine) {
+        prefs(context).edit().putString(
+            KEY_STREAM_ENGINE,
+            when (engine) { StreamEngine.AUTO -> "auto"; StreamEngine.OFFLINE -> "offline"; StreamEngine.MODEL -> "model" },
+        ).apply()
+    }
 
     fun setEnabled(context: Context, enabled: Boolean) {
         prefs(context).edit().putBoolean(KEY_ENABLED, enabled).apply()

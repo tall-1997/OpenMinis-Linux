@@ -56,20 +56,7 @@ class StreamTranslator(
     }
 
     companion object {
-        private val SENTENCE_END = charArrayOf('。', '！', '？', '!', '?', '\n')
-
-        /** 第一个句子边界（句尾标点 + 可选的引号/右括号跟随）之后的下标。 */
-        private fun sentenceEnd(text: StringBuilder): Int? {
-            var i = 0
-            while (i < text.length) {
-                if (text[i] in SENTENCE_END) {
-                    var end = i + 1
-                    while (end < text.length && text[end] in "\"》）】”』」)】]") end++
-                    return end
-                }
-                i++
-            }
-            return null
-        }
+        /** 句子边界检测与模型兜底路径共享（见 [ModelStreamTranslator.sentenceBoundary]）。 */
+        private fun sentenceEnd(text: StringBuilder): Int? = ModelStreamTranslator.sentenceBoundary(text)
     }
 }
