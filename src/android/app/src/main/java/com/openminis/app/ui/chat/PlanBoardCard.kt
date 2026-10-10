@@ -21,7 +21,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -86,8 +85,22 @@ fun SessionPlanBoardCard(
     val completed = plans.count { it.status == "done" }
     val failed = plans.count { it.status == "failed" }
     val allDone = completed == plans.size
-    // 收起态标题：首个未完成项（taixu 同款）——一眼看到"现在在干嘛"。
-    val activeStep = plans.firstOrNull { it.status == "pending" || it.status == "active" }
+    // 收起态标题 = 当前任务：并行 active 取最先开始的，完成后自动换下一条（pickCurrentStep）。
+    val current = pickCurrentStep(plans)
+    // [T-plan-board-autoclear] 轮次任务彻底做完（全 done、无 failed/在飞）后自动
+    // 清场隐藏：绿态停留 4s 供确认，复查仍是全 done 才 clear 会话看板——卡片随
+    // 空板消失，下一轮 agent_plan 从零开始。failed 不算"彻底做完"，看板保留；
+    // 等待窗口内写入的新任务会被复查挡下，不误清新轮次。isStreaming 进 key：
+    // 轮次进行中不清，流结束（key 翻转）才起算。
+    LaunchedEffect(allDone, isStreaming, sessionId) {
+        if (!allDone || plans.isEmpty()) return@LaunchedEffect
+        kotlinx.coroutines.delay(4_000)
+        val latest = AgentPlanStore.list(sessionId, context)
+        if (latest.isNotEmpty() && latest.all { it.status == "done" }) {
+            AgentPlanStore.clear(sessionId, context)
+            plans = emptyList()
+        }
+    }
     // iOS 系统色深浅同值；卡底/边框按 isDark 双值，与过程卡片逐字同源。
     val accent = Color(0xFF007AFF)
     val doneGreen = Color(0xFF34C759)
@@ -112,16 +125,25 @@ fun SessionPlanBoardCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Icon(
-                        if (allDone) Icons.Default.CheckCircle else Icons.Outlined.Checklist,
-                        contentDescription = null,
-                        tint = if (allDone) doneGreen else accent,
-                        modifier = Modifier.size(14.dp),
-                    )
+                    if (allDone) {
+                        Icon(
+                            Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            tint = doneGreen,
+                            modifier = Modifier.size(14.dp),
+                        )
+                    } else {
+                        // 状态点：蓝=进行中，灰=下一条待做——收起态一眼看到当前任务。
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .background(if (current?.status == "active") accent else idleGray, CircleShape),
+                        )
+                    }
                     Text(
                         when {
                             allDone -> stringResource(R.string.plan_board_all_done)
-                            activeStep != null -> activeStep.title
+                            current != null -> current.title
                             else -> stringResource(R.string.plan_board_header)
                         },
                         style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
@@ -229,4 +251,16 @@ fun SessionPlanBoardCard(
             }
         }
     }
+}
+
+/**
+ * [T-plan-board-current] 收起态当前任务选择：并行 `active` 里取
+ * [AgentPlanStore.Plan.startedAt] 最早者（旧数据 startedAt 全 0 时回退 position 序）；
+ * 无 active 取首个 `pending`（= 下一条要做的——前一条完成时收起态自动换到它）；
+ * 两者皆无返回 null（调用方落通用标题）。纯函数，JVM 可测。
+ */
+internal fun pickCurrentStep(plans: List<AgentPlanStore.Plan>): AgentPlanStore.Plan? {
+    val active = plans.filter { it.status == "active" }
+    if (active.isNotEmpty()) return active.minWithOrNull(compareBy({ it.startedAt }, { it.position }))
+    return plans.firstOrNull { it.status == "pending" }
 }

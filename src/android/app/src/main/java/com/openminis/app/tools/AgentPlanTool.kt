@@ -43,6 +43,10 @@ object AgentPlanStore {
         val position: Int = 0,
         val createdAt: Long = System.currentTimeMillis(),
         val updatedAt: Long = System.currentTimeMillis(),
+        // [T-plan-board-current] pending→active 转变的时间戳：折叠态卡片据此在并行
+        // active 里选"最先开始的"。不拿 updatedAt 是因为改标题/描述也会推后它。
+        // 旧文件无此键，kotlinx 按默认值 0 解码（选择时回退 position 序）。
+        val startedAt: Long = 0,
     )
 
     private fun key(sessionId: String): String = sessionId.ifBlank { "__default__" }
@@ -123,7 +127,7 @@ object AgentPlanStore {
         return lock(sessionId).withLock {
             val plans = loadLocked(sessionId, context)
             require(plans.size < MAX_PLANS) { "plan list is full" }
-            val p = Plan(id = id?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString(), title = title.trim(), description = description.trim(), status = status, position = plans.size)
+            val p = Plan(id = id?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString(), title = title.trim(), description = description.trim(), status = status, position = plans.size, startedAt = if (status == "active") System.currentTimeMillis() else 0)
             saveLocked(sessionId, context, plans + p)
             p
         }
@@ -135,7 +139,10 @@ object AgentPlanStore {
         if (index < 0) return@withLock null
         if (status != null) require(status in STATUSES) { "status must be pending, active, done, or failed" }
         val old = plans[index]
-        val next = old.copy(title = title?.trim()?.takeIf { it.isNotEmpty() } ?: old.title, description = description ?: old.description, status = status ?: old.status, position = position ?: old.position, updatedAt = System.currentTimeMillis())
+        val nextStatus = status ?: old.status
+        // 只在转入 active 时打戳；done/failed 后再回 active 算重新开始。
+        val startedAt = if (nextStatus == "active" && old.status != "active") System.currentTimeMillis() else old.startedAt
+        val next = old.copy(title = title?.trim()?.takeIf { it.isNotEmpty() } ?: old.title, description = description ?: old.description, status = nextStatus, position = position ?: old.position, updatedAt = System.currentTimeMillis(), startedAt = startedAt)
         val out = plans.toMutableList().also { it[index] = next }
         saveLocked(sessionId, context, out)
         next
