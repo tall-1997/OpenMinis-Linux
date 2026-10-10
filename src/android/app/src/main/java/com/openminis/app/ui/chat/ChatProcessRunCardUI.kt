@@ -81,10 +81,11 @@ internal fun ProcessRunCard(
     // The card accent stays blue even after a failed step, so a later
     // successful run does not repaint the whole pill red.
     val accent = Color(0xFF007AFF)
-    val cardBackground = Color(0xFF007AFF)
-    // [T-process-card-dark] 深色下 6%/15% 蓝叠近黑底不可见——抬到 12%/32%。
-    val cardBgAlpha = if (ChatColors.isDark) 0.12f else 0.06f
-    val cardBorderAlpha = if (ChatColors.isDark) 0.32f else 0.15f
+    // [T-process-card-dark] 深色不再用蓝叠黑：低 alpha 蓝叠纯黑底永远读不出
+    // （12% 蓝 = RGB(0,13,30)，和背景一个样）。改实色抬升面 + iOS 分隔线色，
+    // 蓝只留在图标/文字/进度上。浅色保持蓝 tint 家族不变。
+    val cardFill = if (ChatColors.isDark) Color(0xFF1C1C1E) else Color(0xFF007AFF).copy(alpha = 0.06f)
+    val cardStroke = if (ChatColors.isDark) Color(0xFF38383A) else Color(0xFF007AFF).copy(alpha = 0.15f)
     // [T-process-card-visual] One shape for both states — the collapsed
     // state is just the folded card, not a separate pill form.
     val cardShape = RoundedCornerShape(12.dp)
@@ -95,8 +96,8 @@ internal fun ProcessRunCard(
     Column(
         modifier = cardWidth
             .padding(vertical = 4.dp)
-            .background(cardBackground.copy(alpha = cardBgAlpha), cardShape)
-            .border(0.5.dp, cardBackground.copy(alpha = cardBorderAlpha), cardShape)
+            .background(cardFill, cardShape)
+            .border(0.5.dp, cardStroke, cardShape)
             .clip(cardShape),
     ) {
         ProcessRunCardHeader(
@@ -182,14 +183,11 @@ private fun ProcessRunCardHeader(
                 maxLines = 1,
             )
         }
-        if (item.expanded) {
-            // Expanded: push the count meta to the trailing edge of the
-            // full-width card. Collapsed: fixed gap — the pill hugs its
-            // content, and weight() needs a bounded row anyway.
-            Spacer(modifier = Modifier.weight(1f))
-        } else {
-            Spacer(modifier = Modifier.width(6.dp))
-        }
+        // [T-process-card-meta-position] Meta always rides the trailing
+        // edge — collapsed and expanded must agree on where the count
+        // lives, or the toggle reads as the meta jumping sides. The card
+        // is full-width in both states, so weight() is always bounded.
+        Spacer(modifier = Modifier.weight(1f))
         val toolCount = item.blocks.count { it.kind == "tool_use" }
         // [T-process-card-live-duration] 运行中也显示耗时（在飞块墙钟）。
         val durationSuffix = formatProcessDuration(rememberLiveProcessDurationMs(item))?.let { " · $it" } ?: ""
@@ -326,86 +324,6 @@ private fun ProcessRunThinkingRow(block: AssistantBlock, listState: LazyListStat
                         .padding(start = 30.dp, end = 12.dp, top = 2.dp, bottom = 4.dp),
                 )
             }
-        }
-    }
-}
-
-@Composable
-private fun ProcessRunToolRow(
-    block: AssistantBlock,
-    onOpenTool: (String) -> Unit,
-) {
-    val isRunning = isInFlightProcessTool(block)
-    val isFailed = block.toolStatus == ToolBlockStatus.FAILED ||
-        block.toolStatus == ToolBlockStatus.TIMEOUT
-    val isCancelled = block.toolStatus == ToolBlockStatus.CANCELLED
-    val isDone = block.toolStatus == ToolBlockStatus.SUCCESS
-    // [T-agent-ui-design-system] Muted row (spec 6.2 .row.muted): a tool
-    // that finished with no viewable output is a pure status row — no
-    // "查看" affordance, not clickable, name in the process gray.
-    // Failed/cancelled rows stay tappable (error detail is the point).
-    val isMuted = isDone && block.content.isBlank()
-    val iconTint = when {
-        isFailed -> ToolErrorColor
-        isCancelled -> ToolCancelColor
-        isDone -> ToolCheckColor
-        else -> toolAccentColor(block.toolName)
-    }
-    // Halo marks rows carrying a live/terminal state (spec 6.2 dot+halo);
-    // muted rows render the bare icon.
-    val showHalo = isRunning || isFailed || isCancelled || (isDone && !isMuted)
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(enabled = !isMuted) { onOpenTool(block.id) }
-            .padding(horizontal = 12.dp, vertical = 3.dp),
-    ) {
-        ToolStatusHaloIcon(
-            icon = toolIconFor(block.toolName),
-            tint = iconTint,
-            halo = showHalo,
-        )
-        Spacer(modifier = Modifier.width(6.dp))
-        val title = block.toolTitle.ifEmpty { block.toolName }.ifEmpty { "tool" }
-        Text(
-            text = title,
-            fontSize = 12.sp,
-            color = when {
-                isFailed -> ToolErrorColor
-                isMuted -> Color(0xFF8E8E93)
-                // iOS .label: light 3C3C43 / dark EBEBF5 — follows the in-app
-                // theme override (ChatColors.isDark), not the system setting.
-                else -> if (ChatColors.isDark) Color(0xFFEBEBF5) else Color(0xFF3C3C43)
-            },
-            maxLines = 1,
-            modifier = Modifier.weight(1f),
-        )
-        if (isRunning) {
-            CircularProgressIndicator(
-                strokeWidth = 1.2.dp,
-                color = iconTint,
-                modifier = Modifier.size(11.dp),
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-        } else if (block.durationMs > 0) {
-            Text(
-                text = formatProcessDuration(block.durationMs).orEmpty(),
-                fontSize = 10.sp,
-                fontFamily = FontFamily.Monospace,
-                color = Color(0xFF8E8E93).copy(alpha = 0.7f),
-                maxLines = 1,
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-        }
-        if (!isMuted) {
-            Text(
-                text = stringResource(R.string.chat_process_card_view),
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium,
-                color = Color(0xFF007AFF).copy(alpha = 0.7f),
-                maxLines = 1,
-            )
         }
     }
 }

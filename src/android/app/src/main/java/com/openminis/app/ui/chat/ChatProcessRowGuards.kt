@@ -83,14 +83,20 @@ internal fun rememberThinkingCollapseGuard(listState: LazyListState): ThinkingCo
     var headerY by remember { mutableStateOf(0f) }
     var anchorY by remember { mutableStateOf<Float?>(null) }
     LaunchedEffect(anchorY) {
-        val anchor = anchorY
-        if (anchor != null) {
+        val anchor = anchorY ?: return@LaunchedEffect
+        // Wait for the post-collapse remeasure to LAND: a 2000px row
+        // collapse can take more than two frames to settle (item
+        // remeasure -> viewport refill -> relayout). Poll until the
+        // header actually moves off the anchor, or give up after 6
+        // frames — a collapse that moves nothing needs no compensation.
+        var frames = 0
+        while (headerY == anchor && frames < 6) {
             withFrameNanos { }
-            withFrameNanos { }
-            val dy = anchor - headerY
-            anchorY = null
-            if (dy != 0f) listState.scrollBy(dy)
+            frames++
         }
+        val dy = anchor - headerY
+        anchorY = null
+        if (dy != 0f) listState.scrollBy(dy)
     }
     return remember {
         ThinkingCollapseGuard(
