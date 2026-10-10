@@ -2218,6 +2218,14 @@
     <string name="translate_stream_enabled_sub">本机离线翻译（ML Kit）。语言包首次使用时按需下载，内容不出设备。无 Google 服务的设备不可用。</string>
     <string name="translate_stream_source">源语言代码（en / zh / ja …）</string>
     <string name="translate_stream_target">翻译成（en / zh / ja …）</string>
+    <string name="translate_model_section">离线语言包</string>
+    <string name="translate_model_status_checking">检测本地语言包…</string>
+    <string name="translate_model_status_not_downloaded">未下载</string>
+    <string name="translate_model_status_ready">已就绪，完全离线</string>
+    <string name="translate_model_download">下载离线语言包（约 60MB）</string>
+    <string name="translate_model_delete">删除语言包释放空间</string>
+    <string name="translate_model_wifi">仅 Wi-Fi 下载</string>
+    <string name="translate_model_failed">失败：%1$s</string>
     <string name="persona_worldbook_header">世界书</string>
     <string name="persona_worldbook_footer">用户说到左边的词时，回复会带上这段补充。点已有条目可删除。</string>
     <string name="persona_worldbook_when">当用户说到…</string>

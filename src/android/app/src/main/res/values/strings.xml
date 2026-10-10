@@ -2406,6 +2406,14 @@
     <string name="translate_stream_enabled_sub">Offline on-device translation (ML Kit). Language packs download on first use; nothing leaves the device. Unavailable on devices without Google Play services.</string>
     <string name="translate_stream_source">Source language code (en / zh / ja …)</string>
     <string name="translate_stream_target">Translate into (en / zh / ja …)</string>
+    <string name="translate_model_section">Offline language packs</string>
+    <string name="translate_model_status_checking">Checking local packs…</string>
+    <string name="translate_model_status_not_downloaded">Not downloaded</string>
+    <string name="translate_model_status_ready">Ready — fully offline</string>
+    <string name="translate_model_download">Download packs (~60MB)</string>
+    <string name="translate_model_delete">Delete packs to free space</string>
+    <string name="translate_model_wifi">Wi-Fi only</string>
+    <string name="translate_model_failed">Failed: %1$s</string>
     <string name="persona_worldbook_header">World book</string>
     <string name="persona_worldbook_footer">When the user says the words on the left, this extra text is added to the reply. Tap an entry to remove it.</string>
     <string name="persona_worldbook_when">When the user says…</string>

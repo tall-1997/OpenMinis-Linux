@@ -29,8 +29,18 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.openminis.app.R
 import com.openminis.app.data.repository.ProviderRepository
+import com.openminis.app.i18n.MlKitTranslationEngine
 import com.openminis.app.i18n.TranslationPrefs
 import com.openminis.app.ui.components.DialogTextField
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.material3.Button
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
 
 @Composable
 fun TranslationSettingsScreen(
@@ -161,6 +171,13 @@ fun TranslationSettingsScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp),
             )
+            // [T-mlkit-model-mgmt] 离线语言包管理（复用 taixu TranslationModelCard：
+            // 状态机 + 字节级下载进度 + 删除释放空间 + Wi-Fi 条件）。
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+            TranslationModelManager(
+                src = streamSource,
+                tgt = streamTarget,
+            )
         }
         SettingsSection(header = stringResource(R.string.translate_pick_model)) {
             if (entries.isEmpty()) {
@@ -212,6 +229,82 @@ fun TranslationSettingsScreen(
                 subtitle = stringResource(R.string.translate_pad_open_sub),
                 onClick = onOpenPad,
                 showDivider = false,
+            )
+        }
+    }
+}
+
+/** [T-mlkit-model-mgmt] 语言包状态/下载/删除卡（引擎状态机驱动）。 */
+@Composable
+private fun TranslationModelManager(src: String, tgt: String) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val state by remember(src, tgt) { MlKitTranslationEngine.packState(src, tgt) }.collectAsState()
+    var wifiOnly by remember { mutableStateOf(true) }
+    var busy by remember { mutableStateOf(false) }
+    LaunchedEffect(src, tgt) { busy = false }
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        val statusText = when (val s = state) {
+            MlKitTranslationEngine.PackState.Checking -> stringResource(R.string.translate_model_status_checking)
+            MlKitTranslationEngine.PackState.NeedsDownload -> stringResource(R.string.translate_model_status_not_downloaded)
+            MlKitTranslationEngine.PackState.Ready -> stringResource(R.string.translate_model_status_ready)
+            is MlKitTranslationEngine.PackState.Downloading -> s.detailText
+            is MlKitTranslationEngine.PackState.Failed -> stringResource(R.string.translate_model_failed, s.message)
+        }
+        Text(
+            stringResource(R.string.translate_model_section) + " · " + statusText,
+            style = MaterialTheme.typography.labelLarge,
+        )
+        (state as? MlKitTranslationEngine.PackState.Downloading)?.let { dl ->
+            LinearProgressIndicator(
+                progress = { dl.progress ?: 0f },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            when (state) {
+                is MlKitTranslationEngine.PackState.Downloading -> Unit
+                is MlKitTranslationEngine.PackState.Failed, MlKitTranslationEngine.PackState.NeedsDownload, MlKitTranslationEngine.PackState.Checking -> {
+                    Button(
+                        enabled = !busy,
+                        onClick = {
+                            busy = true
+                            scope.launch {
+                                runCatching { MlKitTranslationEngine.downloadPack(context, src, tgt, wifiOnly) }
+                                busy = false
+                            }
+                        },
+                    ) {
+                        Text(stringResource(R.string.translate_model_download), style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+                MlKitTranslationEngine.PackState.Ready -> {
+                    OutlinedButton(
+                        enabled = !busy,
+                        onClick = {
+                            busy = true
+                            scope.launch {
+                                runCatching { MlKitTranslationEngine.deletePack(src, tgt) }
+                                busy = false
+                            }
+                        },
+                    ) {
+                        Text(stringResource(R.string.translate_model_delete), style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+            }
+            Text(stringResource(R.string.translate_model_wifi), style = MaterialTheme.typography.bodySmall)
+            Switch(
+                checked = wifiOnly,
+                onCheckedChange = { wifiOnly = it },
             )
         }
     }
