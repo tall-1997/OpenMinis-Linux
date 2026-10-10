@@ -1,5 +1,6 @@
 package com.openminis.app.ui.chat
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
@@ -11,6 +12,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
@@ -104,6 +107,60 @@ internal fun rememberThinkingCollapseGuard(listState: LazyListState): ThinkingCo
             armCollapse = { anchorY = headerY },
         )
     }
+}
+
+/**
+ * [T-thinking-tail-follow] Pure decision core for the tail-following
+ * scroll of the expanded thinking row: an upward move past
+ * [leaveThresholdPx] hands control to the user (stop following the
+ * stream); landing within [snapThresholdPx] of the bottom re-arms the
+ * follow. Content growth alone never flips the mode — it only raises
+ * maxValue while value stands still, and only value changes are fed
+ * in — so the follow survives arbitrarily long streams.
+ */
+internal class TailFollowPolicy(
+    private val leaveThresholdPx: Int = 8,
+    private val snapThresholdPx: Int = 24,
+) {
+    private var lastValue = -1
+
+    /** null = keep the current mode; true = follow the tail; false = user holds. */
+    internal fun onScroll(value: Int, maxValue: Int): Boolean? {
+        val prev = lastValue
+        lastValue = value
+        if (prev < 0) return null
+        if (value <= prev - leaveThresholdPx) return false
+        if (maxValue > 0 && value >= maxValue - snapThresholdPx) return true
+        return null
+    }
+}
+
+/**
+ * [T-thinking-tail-follow] Tail-following [ScrollState] for the expanded
+ * thinking row: while the user has not scrolled away, the viewport rides
+ * the streaming tail (re-snaps to the bottom on every content tick); one
+ * upward fling hands control over; scrolling back to the bottom re-arms
+ * the follow. [contentTick] must be the FULL content length — the rendered
+ * tail window saturates at 8000 chars and stops changing while the stream
+ * keeps appending.
+ */
+@Composable
+internal fun rememberTailFollowingScroll(key: String, contentTick: Int): ScrollState {
+    val scroll = rememberSaveable(key, saver = ScrollState.Saver) { ScrollState(0) }
+    var followTail by rememberSaveable(key) { mutableStateOf(true) }
+    val policy = remember { TailFollowPolicy() }
+    LaunchedEffect(scroll) {
+        snapshotFlow { scroll.value }.collect { v ->
+            policy.onScroll(v, scroll.maxValue)?.let { followTail = it }
+        }
+    }
+    LaunchedEffect(contentTick, followTail) {
+        if (followTail) {
+            withFrameNanos { } // let the new content measure before snapping
+            if (followTail && scroll.maxValue > 0) scroll.scrollTo(scroll.maxValue)
+        }
+    }
+    return scroll
 }
 
 /**

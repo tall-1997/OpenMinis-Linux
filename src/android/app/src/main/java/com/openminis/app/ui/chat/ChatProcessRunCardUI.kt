@@ -3,7 +3,6 @@ package com.openminis.app.ui.chat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -300,6 +299,9 @@ private fun ProcessRunThinkingRow(block: AssistantBlock, listState: LazyListStat
             // [T-process-card-thinking-height] 行高封顶 + 可滚动：8000 字符
             // 尾窗排版出来仍有约 200 行高，随思考输出把卡片无限拉长；封顶后
             // 卡片高度恒定，内容在框内滚动。
+            // [T-thinking-tail-follow] 没动过就随流式输出滚到最新；上滑接管；
+            // 滚回底部恢复跟随（见 ChatProcessRowGuards）。
+            val thinkScroll = rememberTailFollowingScroll("${block.id}-t", block.content.length)
             Text(
                 text = block.content.takeLast(8000),
                 fontSize = 11.sp,
@@ -307,12 +309,13 @@ private fun ProcessRunThinkingRow(block: AssistantBlock, listState: LazyListStat
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(max = 320.dp)
-                    .verticalScroll(rememberScrollState())
+                    .verticalScroll(thinkScroll)
                     .padding(start = 30.dp, end = 12.dp, top = 2.dp, bottom = 4.dp),
             )
             // [T-mlkit-stream-translate] 实时离线翻译覆盖层：原文下方灰蓝小字，
             // 句级缓冲随思考更新；null = 未开启/引擎不可用（零渲染）。
             block.translatedContent?.takeIf { it.isNotBlank() }?.let { translated ->
+                val trScroll = rememberTailFollowingScroll("${block.id}-t-tr", translated.length)
                 Text(
                     text = translated.takeLast(4000),
                     fontSize = 11.sp,
@@ -320,7 +323,7 @@ private fun ProcessRunThinkingRow(block: AssistantBlock, listState: LazyListStat
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(max = 240.dp)
-                        .verticalScroll(rememberScrollState())
+                        .verticalScroll(trScroll)
                         .padding(start = 30.dp, end = 12.dp, top = 2.dp, bottom = 4.dp),
                 )
             }
