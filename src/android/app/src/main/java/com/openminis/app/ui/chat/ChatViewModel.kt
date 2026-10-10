@@ -4538,6 +4538,11 @@ class ChatViewModel(
 
             awaitBoundedHistoryRebuild(sid)
 
+            // [T-p1-context-marker-reconcile] 截断后对账压缩标记：摘要描述的
+            // 轮次刚被重试删掉时，丢弃标记让全量历史流动（否则模型以为做了
+            // 已不存在的工-作）。
+            reconcileCompactMarkerAfterTruncation()
+
             streamLaunched = runRerunStreamTail(provider, "retryFromMessage")
             } finally {
                 if (!streamLaunched) {

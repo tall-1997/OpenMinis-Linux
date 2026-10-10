@@ -3,11 +3,14 @@ package com.openminis.app.ui.chat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -279,12 +282,17 @@ private fun ProcessRunThinkingRow(block: AssistantBlock) {
         if (expanded && hasContent) {
             // Tail window only (8000 chars) — a huge thinking block must
             // not re-measure its full text on every streaming tick.
+            // [T-process-card-thinking-height] 行高封顶 + 可滚动：8000 字符
+            // 尾窗排版出来仍有约 200 行高，随思考输出把卡片无限拉长；封顶后
+            // 卡片高度恒定，内容在框内滚动。
             Text(
                 text = block.content.takeLast(8000),
                 fontSize = 11.sp,
                 color = Color(0xFF8E8E93).copy(alpha = 0.85f),
                 modifier = Modifier
                     .fillMaxWidth()
+                    .heightIn(max = 320.dp)
+                    .verticalScroll(rememberScrollState())
                     .padding(start = 30.dp, end = 12.dp, top = 2.dp, bottom = 4.dp),
             )
         }

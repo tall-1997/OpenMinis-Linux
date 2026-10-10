@@ -72,6 +72,7 @@ fun ChatViewModel.deleteFromMessage(messageId: String) {
         // Rebuild agentHistory from what survived, so the next turn is
         // built on the truncated conversation rather than a stale list.
         val tail = awaitBoundedHistoryRebuild(sid)
+        reconcileCompactMarkerAfterTruncation()
         // Refresh the session's last-message preview; otherwise the
         // session list keeps quoting a message that no longer exists.
         // An empty remainder clears it rather than leaving the stale text.
@@ -83,5 +84,46 @@ fun ChatViewModel.deleteFromMessage(messageId: String) {
             "deleteFromMessage: cut at sortOrder=$cutoffSortOrder, " +
                 "${deletedMessages.size} message(s) removed, ${tail.size} remain",
         )
+    }
+}
+
+/**
+ * [T-p1-context-marker-reconcile] 长按截断类操作（重试 / 从此处删除 / 撤回到
+ * 此轮）之后的压缩标记对账。
+ *
+ * 三种操作都把历史截断到某个点，但**压缩标记不随之对账**：标记的摘要描述的是
+ * 被截断掉的轮次（「已完成了 X/Y/Z」），而那些轮次刚刚被用户删除/回滚——
+ * effectiveAgentHistory 的投影仍然把摘要注入模型上下文，模型以为做了已经不
+ * 存在的工作 → 「接入模型的上下文与实际上下文不对」。
+ *
+ * 规则：标记的三个锚（boundary / firstKept / lastCompacted）在**活历史**里
+ * 一个都解析不到 → 摘要描述的会话已不存在 → 整体丢弃压缩状态（删 DB 标记行 +
+ * 清内存缓存 + 清 UI 分隔行），全量历史重新流动。任一锚仍在 → 标记有效保留
+ * （detached-anchor 的 _compactMarkerDetached 是窗口外不是不存在，不在此列）。
+ */
+internal suspend fun ChatViewModel.reconcileCompactMarkerAfterTruncation() {
+    val marker = _cachedLatestMarker ?: return
+    val history = agentHistory.toList()
+    val anchors = listOfNotNull(
+        marker.boundaryMessageId,
+        marker.firstKeptMessageId,
+        marker.lastCompactedMessageId,
+    )
+    if (anchors.isEmpty()) return
+    val anchorIds = anchors.toSet()
+    val anyAnchorAlive = history.any { it.dbMessageId != null && it.dbMessageId in anchorIds }
+    if (anyAnchorAlive) return
+    val sid = realSessionId.ifEmpty { sessionId }
+    AppLogger.warning(
+        ChatViewModel.TAG,
+        "[Compact] truncation removed every marker anchor (${anchors.size}) — " +
+            "dropping compact state; summary described turns that no longer exist",
+    )
+    runCatching { chatRepository.dao.deleteCompactMarker(marker.id) }
+    _cachedLatestMarker = null
+    _compactSummary.value = null
+    // UI 分隔行（compact 系统行）随标记消失；真实消息不动。
+    _messages.value = _messages.value.filterNot { msg ->
+        msg.role == "system" && msg.toolBlocks.firstOrNull()?.toolName == "compact"
     }
 }
