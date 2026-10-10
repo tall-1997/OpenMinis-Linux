@@ -123,6 +123,11 @@ object AgentTools {
                     "shell_execute", "file_read", "file_write", "file_edit", "multi_edit",
                     "list_dir", "grep", "glob", "browser_use", "web_search", "web_fetch",
                     "ui_read", "ui_action", "read_image", "ask_user_question", "update_goal",
+                    // [T-plan-board-always-on] 任务列表工具必须常驻：多步任务的
+                    // 进度看板（PlanBoard）只渲染模型经此工具写入的条目——被
+                    // long-tail 门控挡住时模型看不到工具、不会建任务列表，
+                    // 看板永远为空（实测「没有任务列表」的根因）。
+                    AgentPlanTool.NAME,
                 ),
             )
             if (memoryEnabled) {

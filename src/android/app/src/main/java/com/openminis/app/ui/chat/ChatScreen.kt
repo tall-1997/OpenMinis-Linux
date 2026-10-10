@@ -3956,6 +3956,15 @@ fun ChatScreen(
                         .lastOrNull { it.role == "assistant" }
                         ?.error
                         ?.isNotBlank() == true
+                    // [T-plan-board] 会话级任务列表看板：模型经 agent_plan 写入的
+                    // 条目（放在列表首项——reverseLayout 下 item 顺序即视觉底部）。
+                    item(key = "__plan_board__", contentType = "plan_board") {
+                        SessionPlanBoardCard(
+                            sessionId = viewModel.activeSessionId,
+                            isStreaming = isStreaming,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                        )
+                    }
                     // [T-android-compact-progress] Live compaction status, so a
                     // long-running compact reads as "working" rather than
                     // "hung". Sits above the resume banner because the two are

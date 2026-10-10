@@ -2638,6 +2638,8 @@
     <string name="db_quarantine_keep">Keep the copy</string>
     <string name="db_quarantine_delete">Delete the damaged copy</string>
     <string name="chat_rewind_menu">Rewind To Here</string>
+    <string name="plan_board_header">Task list</string>
+    <string name="plan_board_failed_n">%1$d failed</string>
     <string name="chat_rewind_title">Rewind to this turn?</string>
     <string name="chat_rewind_subtitle">Files written by later turns are rolled back. Choose how far the rollback reaches.</string>
     <string name="chat_rewind_code">Code only</string>

@@ -2453,6 +2453,8 @@
     <string name="db_quarantine_keep">保留副本</string>
     <string name="db_quarantine_delete">删除损坏副本</string>
     <string name="chat_rewind_menu">撤回到此轮</string>
+    <string name="plan_board_header">任务列表</string>
+    <string name="plan_board_failed_n">%1\ 项失败</string>
     <string name="chat_rewind_title">撤回到这一轮？</string>
     <string name="chat_rewind_subtitle">后续轮次写入的文件会被回滚。请选择回滚的范围。</string>
     <string name="chat_rewind_code">仅代码</string>
