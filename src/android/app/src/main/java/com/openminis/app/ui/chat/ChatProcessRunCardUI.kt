@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openminis.app.R
 import com.openminis.app.ui.settings.autoExpandThinkingEnabled
+import com.openminis.app.ui.theme.ChatColors
 
 /**
  * [T-process-run-card] The unified process card for one assistant turn.
@@ -316,7 +317,9 @@ private fun ProcessRunToolRow(
             color = when {
                 isFailed -> ToolErrorColor
                 isMuted -> Color(0xFF8E8E93)
-                else -> Color(0xFF3C3C43)
+                // iOS .label: light 3C3C43 / dark EBEBF5 — follows the in-app
+                // theme override (ChatColors.isDark), not the system setting.
+                else -> if (ChatColors.isDark) Color(0xFFEBEBF5) else Color(0xFF3C3C43)
             },
             maxLines = 1,
             modifier = Modifier.weight(1f),
