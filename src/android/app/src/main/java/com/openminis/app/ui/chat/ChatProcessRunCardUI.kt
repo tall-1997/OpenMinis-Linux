@@ -130,12 +130,12 @@ private fun ProcessRunCardHeader(
         modifier = Modifier
             .then(if (item.expanded) Modifier.fillMaxWidth() else Modifier)
             .clickable(onClick = onToggle)
-            // Collapsed: compact padding — the folded card is a small meta
-            // strip, not a full-height pill. Expanded: the spec-6.1 header
-            // padding (~46dp tap target).
+            // Collapsed: compact but not squashed — vertical 8dp keeps the
+            // folded strip readable (~32dp tall with the 11sp line), while
+            // expanded keeps the spec-6.1 header padding (~46dp tap target).
             .padding(
-                horizontal = if (item.expanded) 16.dp else 10.dp,
-                vertical = if (item.expanded) 12.dp else 6.dp,
+                horizontal = if (item.expanded) 16.dp else 12.dp,
+                vertical = if (item.expanded) 12.dp else 8.dp,
             ),
     ) {
         val headerIcon = when (item.phaseKind) {
