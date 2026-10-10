@@ -732,12 +732,11 @@ object ModelsDevApi {
     private fun loadBundledRegistry(): Map<String, ProviderEntry>? {
         val ctx = appContext ?: return null
         return try {
-            val jsonStr = runCatching {
-                ctx.assets.open("models-dev-api.json.gzip").use { raw ->
-                    java.util.zip.GZIPInputStream(raw).bufferedReader().readText()
-                }
-            }.getOrElse {
-                ctx.assets.open("models-dev-api.json").bufferedReader().use { it.readText() }
+            // [T-apk-shrink] 只内置 gzip 目录（0.4 MB）：明文 JSON（4.1 MB）是
+            // 死 fallback——gzip 成功时永不读取，删掉后磁盘还能省 deflate 后
+            // 的 ~0.5 MB。gzip 损坏会走到 null（走网络刷新目录的既有路径）。
+            val jsonStr = ctx.assets.open("models-dev-api.json.gzip").use { raw ->
+                java.util.zip.GZIPInputStream(raw).bufferedReader().readText()
             }
             val parsed = parseRegistry(jsonStr)
             Log.d(TAG, "Loaded bundled models.dev registry: ${parsed?.size ?: 0} providers")

@@ -1,6 +1,5 @@
 package com.openminis.app.provider
 
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -8,7 +7,7 @@ import java.util.zip.GZIPInputStream
 
 class BundledModelsCatalogTest {
     @Test
-    fun plaintextFallbackMatchesGzipAsset() {
+    fun gzipCatalogPresentAndPlaintextCopyStaysDeleted() {
         val assets = find("src/android/app/src/main/assets")
             ?: find("app/src/main/assets")
             ?: find("src/main/assets")
@@ -16,9 +15,12 @@ class BundledModelsCatalogTest {
         val gz = File(assets, "models-dev-api.json.gzip")
         val plain = File(assets, "models-dev-api.json")
         assertTrue(gz.isFile)
-        assertTrue(plain.isFile)
-        val fromGz = GZIPInputStream(gz.inputStream()).bufferedReader().use { it.readText() }
-        assertEquals(fromGz, plain.readText())
+        // [T-apk-shrink] 明文副本（4.1 MB，gzip 成功时永不读取的死 fallback）
+        // 已删。重新出现即体积回归——加这道断言防手滑把它再加回来。
+        assertTrue("plaintext models-dev-api.json must stay deleted", !plain.isFile)
+        val text = GZIPInputStream(gz.inputStream()).bufferedReader().use { it.readText() }
+        assertTrue(text.isNotBlank())
+        assertTrue(text.trimStart().startsWith("{"))
     }
 
     private fun find(relative: String): File? {

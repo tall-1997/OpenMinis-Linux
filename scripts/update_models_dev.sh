@@ -6,10 +6,11 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 IOS_DEST="$SCRIPT_DIR/../src/ios/Resources/models-dev-api.json"
-ANDROID_DEST="$SCRIPT_DIR/../src/android/app/src/main/assets/models-dev-api.json"
-# Android's asset merger strips the .gz suffix and would collide with the
-# plaintext fallback. Use .gzip so both assets can coexist in the APK.
-ANDROID_GZ="${ANDROID_DEST}.gzip"
+# Android ships ONLY the gzipped catalog: the 4.1 MB plaintext copy was a dead
+# fallback (the loader prefers gzip) that still cost ~0.5 MB on disk after
+# deflate. The .gzip suffix also keeps the asset from colliding with any
+# future plaintext sibling in the APK merger (.gz would be stripped).
+ANDROID_GZ="$SCRIPT_DIR/../src/android/app/src/main/assets/models-dev-api.json.gzip"
 URL="https://models.dev/api.json"
 
 echo "Downloading $URL ..."

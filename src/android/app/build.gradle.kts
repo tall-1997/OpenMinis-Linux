@@ -411,7 +411,12 @@ dependencies {
 
     // Core
     implementation("androidx.core:core-ktx:1.15.0")
-    implementation("com.google.mlkit:text-recognition-chinese:16.0.1")
+    // [T-ocr-unbundled] OCR 按需化：play-services 版 API 与 bundled 版完全同名
+    // （com.google.mlkit.vision.text.*），纯依赖换血。bundled 版自带
+    // libmlkit_google_ocr_pipeline.so（arm64 10.6 MB）+ 模型资产（~2.5 MB）；
+    // 换后模型经 Play Services 首次使用时下载，无 GMS 设备 OcrTool 返回
+    // 工具错误（既有 try/catch 降级，与翻译引擎同一模式）。-12.6 MB/变体。
+    implementation("com.google.android.gms:play-services-mlkit-text-recognition-chinese:16.0.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     // ProcessLifecycleOwner — used by XAIOAuthManager to detect Custom
