@@ -1787,6 +1787,7 @@
     <string name="selection_copy_as_plain_text">Copiază ca text simplu</string>
     <string name="chat_input_placeholder_hint_5">Enter poate trimite sau adăuga un rând</string>
     <string name="chat_process_step_view">View</string>
+    <string name="plugin_market_subtitle">Sușite dev, instrumente locale și OpenAPI online</string>
     <string name="dev_suite_section_header">Sușite de medii de dezvoltare</string>
     <string name="dev_suite_section_footer">Rețetele instalează toolchain-uri la cerere în sandbox — payload-urile nu mai sunt incluse în aplicație, prima asamblare necesită rețea. Rețea restricționată? Rulați minis-devsuite-offline-list pentru lista de import offline.</string>
     <string name="dev_suite_online_header">Instrumente online</string>
