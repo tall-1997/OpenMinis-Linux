@@ -41,7 +41,7 @@ private fun shellExec(
     val timeoutSec = arguments.optInt("timeout_sec", 60).coerceIn(1, 900)
 
     return McpToolShared.gateAndRun(deps, "shell_exec", command) {
-        val result = McpToolShared.executeInGuest(command, timeoutSec)
+        val result = McpToolShared.runInGuest(command, timeoutSec)
         val output = JSONObject().apply {
             put("exit_code", result.exitCode)
             put("output", result.output)

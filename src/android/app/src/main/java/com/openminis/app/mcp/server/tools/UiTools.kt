@@ -143,8 +143,10 @@ private fun coordArgs(
 ): Pair<List<String>, String?> {
     val values = mutableListOf<String>()
     for (n in names) {
-        val (v, err) = McpToolShared.validateCoord(arguments.opt(n), n)
-        if (err != null) return emptyList() to err
+        val pair = McpToolShared.validateCoord(arguments.opt(n), n)
+        val err: String? = pair.second
+        val v: Int? = pair.first
+        if (err != null) return emptyList<String>() to err
         values.add(v!!.toString())
     }
     return values to null

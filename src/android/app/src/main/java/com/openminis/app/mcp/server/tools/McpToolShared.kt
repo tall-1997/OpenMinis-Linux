@@ -165,8 +165,13 @@ internal object McpToolShared {
      * at server start. runBlocking suffices: the dispatcher has no coroutine
      * context of its own.
      */
-    fun executeInGuest(script: String, timeoutSec: Int = 30): McpServerCore.CallResult {
-        val result = runCatching {
+    /**
+     * Raw guest execution — returns the coordinator result (output/exitCode/
+     * durationMs). Callers that need the raw fields (shell_exec) use this;
+     * [executeInGuest] wraps it into a CallResult.
+     */
+    fun runInGuest(script: String, timeoutSec: Int = 30): ExecutionCoordinator.CommandResult =
+        runCatching {
             runBlocking {
                 ExecutionCoordinator.execute(
                     sessionId = SESSION_ID,
@@ -175,8 +180,15 @@ internal object McpToolShared {
                 )
             }
         }.getOrElse {
-            return error("Execution failed: ${it.message}")
+            ExecutionCoordinator.CommandResult(
+                output = "Execution failed: ${it.message}",
+                exitCode = 124,
+                durationMs = 0L,
+            )
         }
+
+    fun executeInGuest(script: String, timeoutSec: Int = 30): McpServerCore.CallResult {
+        val result = runInGuest(script, timeoutSec)
         val output = if (result.output.isNotBlank()) result.output.trim() else "(no output)"
         return McpServerCore.CallResult(
             JSONArray().put(text(output)),
