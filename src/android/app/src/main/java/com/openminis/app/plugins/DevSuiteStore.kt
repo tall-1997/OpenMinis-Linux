@@ -18,20 +18,17 @@ import kotlinx.coroutines.flow.asStateFlow
  *
  * [T-devsuite-progress-write] Write amplification was the reason this file
  * looks the way it does now: a multi-GB install streams thousands of guest
- * lines and every one of them used to do `putString().apply()` PLUS a full
- * `snapshot()` re-read of every key. Progress writes are now time-throttled
- * (>= [PROGRESS_WRITE_INTERVAL_MS] between writes of the SAME component) and
- * a status transition is always persisted immediately. The in-memory
- * [states] mirror is updated on every call, so the UI stays live while the
- * disk stays quiet — and [ComponentState.progressLine] is the single store
- * of the live progress line (the installer used to keep a second, parallel
- * copy that nothing read).
+ * lines, and every one of them used to do `putString().apply()` PLUS a full
+ * `snapshot()` re-read of every key. Persistence is now limited to status
+ * transitions ([shouldPersistComponentState]) — progress lines live only in
+ * the in-memory [states] flow, so the UI stays live while the disk stays
+ * quiet — and [snapshot] merges rather than replaces, so a re-read cannot
+ * rewind a newer in-memory line. [ComponentState.progressLine] is the single
+ * store of the live progress line (the installer used to keep a second,
+ * parallel copy that nothing read).
  */
 object DevSuiteStore {
     private const val PREFS = "dev_suite_state"
-
-    /** Minimum gap between two progress writes of the same component. */
-    private const val PROGRESS_WRITE_INTERVAL_MS = 300L
 
     /** Per-component last outcome. */
     enum class Status { NOT_INSTALLED, INSTALLING, INSTALLED, FAILED }
@@ -48,10 +45,6 @@ object DevSuiteStore {
     val states: StateFlow<Map<String, ComponentState>> = _states.asStateFlow()
 
     private val lock = Any()
-    private var loaded = false
-
-    /** Per-component timestamp of the last write that actually hit disk. */
-    private val lastPersistedMs = mutableMapOf<String, Long>()
 
     private fun prefs(context: Context) =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -60,19 +53,7 @@ object DevSuiteStore {
         val p = prefs(context)
         val out = mutableMapOf<String, ComponentState>()
         for (id in p.all.keys) {
-            val raw = p.getString(id, null) ?: continue
-            val parts = raw.split('\u0001', limit = 3)
-            out[id] = ComponentState(
-                componentId = id,
-                status = when (parts.getOrNull(0)) {
-                    "INSTALLING" -> Status.INSTALLING
-                    "INSTALLED" -> Status.INSTALLED
-                    "FAILED" -> Status.FAILED
-                    else -> Status.NOT_INSTALLED
-                },
-                progressLine = parts.getOrNull(1).orEmpty(),
-                updatedAtMs = parts.getOrNull(2)?.toLongOrNull() ?: 0L,
-            )
+            out[id] = decodeComponentState(id, p.getString(id, null)) ?: continue
         }
         return out
     }
@@ -87,40 +68,39 @@ object DevSuiteStore {
             val stored = merged[id]
             if (stored == null || stored.updatedAtMs <= live.updatedAtMs) merged[id] = live
         }
-        loaded = true
         _states.value = merged
         merged
     }
 
     /**
-     * Record a progress transition. [status] changes always go to disk; a
-     * progress line for a status that is already current is throttled to at
-     * most one write per [PROGRESS_WRITE_INTERVAL_MS].
+     * Record a status/progress transition. Only a status change persists to
+     * disk — see [T-dev-suite-prefs-storm] in [update].
      */
     fun update(context: Context, componentId: String, status: Status, progressLine: String = "") {
-        val now = System.currentTimeMillis()
-        val write: Boolean
-        synchronized(lock) {
-            if (!loaded) {
-                var merged = _states.value
-                for ((id, st) in readFromDisk(context)) {
-                    val live = merged[id]
-                    if (live == null || live.updatedAtMs <= st.updatedAtMs) merged = merged + (id to st)
-                }
-                _states.value = merged
-                loaded = true
-            }
-            val previous = _states.value[componentId]
-            write = previous?.status != status ||
-                now - (lastPersistedMs[componentId] ?: 0L) >= PROGRESS_WRITE_INTERVAL_MS
-            _states.value = _states.value +
-                (componentId to ComponentState(componentId, status, progressLine, now))
-            if (write) lastPersistedMs[componentId] = now
+        val previous = _states.value[componentId]
+        val next = ComponentState(
+            componentId = componentId,
+            status = status,
+            progressLine = progressLine,
+            updatedAtMs = System.currentTimeMillis(),
+        )
+        // [T-dev-suite-prefs-storm] Persist ONLY status transitions. The
+        // installer feeds every apt/pip output line through here — hundreds
+        // of full-XML SharedPreferences rewrites per install, and each
+        // apply() queues a disk write that QueuedWork.waitToFinish() can
+        // later force the MAIN thread to drain (observed as a multi-second
+        // main-thread stall during installs that deferred the foreground
+        // service's createService dispatch past its deadline — the
+        // install-crash amplifier). Progress lines are UI-only state: they
+        // flow through the in-memory StateFlow and never touch disk. Crash
+        // recovery (recoverInterrupted) only needs the status marker, and
+        // it overwrites the line anyway.
+        if (shouldPersistComponentState(previous?.status, status)) {
+            prefs(context).edit()
+                .putString(componentId, encodeComponentState(status, progressLine, next.updatedAtMs))
+                .apply()
         }
-        if (!write) return
-        prefs(context).edit()
-            .putString(componentId, "$status\u0001$progressLine\u0001$now")
-            .apply()
+        _states.value = _states.value + (componentId to next)
     }
 
     /**
@@ -137,5 +117,36 @@ object DevSuiteStore {
         val reason = context.getString(R.string.dev_suite_interrupted)
         interrupted.forEach { update(context, it, Status.FAILED, reason) }
         return interrupted
+    }
+
+    /**
+     * [T-dev-suite-prefs-storm] True when this update must hit disk: ONLY
+     * status transitions. Progress-line refreshes (the installer feeds every
+     * apt/pip output line through [update]) stay in memory — see the block
+     * comment in [update]. Pure so the throttle contract is unit-testable.
+     */
+    internal fun shouldPersistComponentState(previous: Status?, next: Status): Boolean =
+        previous != next
+
+    /** Encodes one component marker for SharedPreferences. Pure (testable). */
+    internal fun encodeComponentState(status: Status, progressLine: String, updatedAtMs: Long): String =
+        "$status\u0001$progressLine\u0001$updatedAtMs"
+
+    /** Decodes one component marker; null for absent/corrupt rows. Pure (testable). */
+    internal fun decodeComponentState(componentId: String, raw: String?): ComponentState? {
+        if (raw == null) return null
+        val parts = raw.split('\u0001', limit = 3)
+        val status = when (parts.getOrNull(0)) {
+            "INSTALLING" -> Status.INSTALLING
+            "INSTALLED" -> Status.INSTALLED
+            "FAILED" -> Status.FAILED
+            else -> Status.NOT_INSTALLED
+        }
+        return ComponentState(
+            componentId = componentId,
+            status = status,
+            progressLine = parts.getOrNull(1).orEmpty(),
+            updatedAtMs = parts.getOrNull(2)?.toLongOrNull() ?: 0L,
+        )
     }
 }
