@@ -595,7 +595,10 @@ internal fun ToolCallPill(
                     text = block.toolTitle.ifEmpty { block.toolName },
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    // [P-process-card] A failed call tints its OWN row's title
+                    // (matching the icon) — the reference card colours the
+                    // error line and leaves every other row untouched.
+                    color = if (isFailed) ToolErrorColor else MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
@@ -782,6 +785,20 @@ internal fun ThinkingBlock(block: AssistantBlock, isStreaming: Boolean, isLast: 
                 color = thinkingBlue,
             )
             Spacer(modifier = Modifier.weight(1f))
+            // [P-process-card] Thinking duration, settled by the agent loop
+            // when the first text/tool call ends the reasoning phase. Same
+            // slot family as the char count so the header reads
+            // "思考 · 4m 59s · 11k" like the reference card.
+            formatProcessDuration(block.durationMs)?.let { dur ->
+                Text(
+                    text = dur,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    fontFamily = FontFamily.Monospace,
+                    color = thinkingBlue.copy(alpha = 0.6f),
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+            }
             if (charCount > 0) {
                 Text(
                     text = charLabel,
