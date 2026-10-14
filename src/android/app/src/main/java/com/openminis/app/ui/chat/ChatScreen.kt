@@ -3535,6 +3535,17 @@ fun ChatScreen(
                     var frozenKeys: Set<String> = emptySet()
                     var frozenSplitIdx = -1
                     var frozenExpanded: Set<String> = emptySet()
+                    // [T-android-subagent-ids-frozen-input]
+                    // `effectiveBlocks` hides a sub-agent transcript card while
+                    // its run is still live, so the roster is a build input of
+                    // the frozen prefix like expandedProcessIds is. It must be
+                    // part of the reuse check: a run that settles AFTER the
+                    // turn drained changes neither splitIdx nor the expansion
+                    // set, and the finished card would stay hidden. Read from
+                    // the tracker flow rather than the composition-captured
+                    // `activeSubAgentToolIds`, which is frozen for the whole
+                    // effect run (a plain `remember(subAgentMembers)` value).
+                    var frozenActiveSubAgent: Set<String> = emptySet()
                     var streamWasActive = false
                     // [T-android-stream-pipeline-incremental] Flush the perf
                     // turn when this effect is CANCELLED mid-turn: the
@@ -3549,10 +3560,15 @@ fun ChatScreen(
                         kotlinx.coroutines.flow.flowOf(messages),
                         viewModel.streamingById,
                         snapshotFlow { expandedProcessIds },
-                    ) { msgs, stream, expanded -> Triple(msgs, stream, expanded) }
+                        com.openminis.app.service.SubAgentActivityTracker.members,
+                    ) { msgs, stream, expanded, members ->
+                        Triple(msgs, stream, expanded to members.mapTo(HashSet()) { it.parentToolId })
+                    }
                         .conflate()
                         .sample(80L)
-                        .collect { (msgs, stream, expandedIds) ->
+                        .collect { (msgs, stream, expandedAndActive) ->
+                            val expandedIds = expandedAndActive.first
+                            val activeIds = if (showSubAgentBar) expandedAndActive.second else emptySet()
                             val tickStartNs = System.nanoTime()
                             if (stream.isNotEmpty() && !streamWasActive) {
                                 streamWasActive = true
@@ -3575,7 +3591,9 @@ fun ChatScreen(
                             // no other owner and must be emitted normally
                             // (-1 = no boundary).
                             val cardBoundary = if (splitIdx < msgs.size) splitIdx else -1
-                            val frozenReused = splitIdx == frozenSplitIdx && expandedIds == frozenExpanded
+                            val frozenReused = splitIdx == frozenSplitIdx &&
+                                expandedIds == frozenExpanded &&
+                                activeIds == frozenActiveSubAgent
                             if (!frozenReused) {
                                 val tBuildStart = System.nanoTime()
                                 val wasEmptyPre = flatItems.isEmpty()
@@ -3608,7 +3626,7 @@ fun ChatScreen(
                                         showCompletedToolCards = showCompletedToolCards,
                                         foldAiProcess = foldAiProcess,
                                         expandedProcessIds = expandedIds,
-                                        activeSubAgentToolIds = if (showSubAgentBar) activeSubAgentToolIds else emptySet(),
+                                        activeSubAgentToolIds = activeIds,
                                         processCardBoundary = cardBoundary,
                                     )
                                 }
@@ -3617,6 +3635,7 @@ fun ChatScreen(
                                 frozenKeys = rows.mapTo(HashSet()) { it.key }
                                 frozenSplitIdx = splitIdx
                                 frozenExpanded = expandedIds
+                                frozenActiveSubAgent = activeIds
                                 // [T-android-coldload-offmain-parse] Parallel
                                 // viewport prewarm: block-parse + inline-warm
                                 // the newest (viewport-candidate) markdown
@@ -3697,7 +3716,7 @@ fun ChatScreen(
                                         showCompletedToolCards = showCompletedToolCards,
                                         foldAiProcess = foldAiProcess,
                                         expandedProcessIds = expandedIds,
-                                        activeSubAgentToolIds = if (showSubAgentBar) activeSubAgentToolIds else emptySet(),
+                                        activeSubAgentToolIds = activeIds,
                                         // [P-process-card-dup] The frozen prefix
                                         // suppressed this round's boundary card;
                                         // this build owns it, as its first row.

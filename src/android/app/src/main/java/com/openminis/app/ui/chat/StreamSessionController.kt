@@ -30,6 +30,13 @@ internal class StreamSessionController(
     private class StreamFlushState {
         var lastFlushMs: Long = 0L
         var lastFlushedLen: Int = 0
+        // The `st.trailingJob === coroutineContext[Job]` ownership guards in
+        // updateAssistantMessage are only sound because every read/write of
+        // this field happens on one thread: `scope` is viewModelScope
+        // (Dispatchers.Main.immediate), so ticks and trailing jobs are
+        // serialized and never interleave mid-statement. Move this state
+        // off-main and the guard becomes a plain data race needing a CAS or a
+        // mutex instead.
         var trailingJob: Job? = null
         // [T-android-stream-flush-review] Freshest suppressed delta. Updated on
         // EVERY throttled tick so the trailing job publishes the latest content
