@@ -191,10 +191,13 @@ interface ChatDao {
      * users' model choice. The binding column holds compact JSON written as
      * `{"type":"entry","entryId":"<id>"}` (ConfigBuiltins:210,
      * HeadlessChatRunner:107), so matching the quoted `entryId` value is exact.
+     * `instr` rather than `LIKE` because the id itself is data: `_` and `%` are
+     * legal in model ids and LIKE would read them as wildcards, which would
+     * re-open the same over-match with a different spelling.
      */
     @Query(
         "UPDATE sessions SET model_binding = NULL, updated_at = :updatedAt " +
-            "WHERE model_binding LIKE '%\"entryId\":\"' || :entryId || '\"%'",
+            "WHERE instr(model_binding, '\"entryId\":\"' || :entryId || '\"') > 0",
     )
     suspend fun clearBindingReferencing(entryId: String, updatedAt: Long = System.currentTimeMillis())
 

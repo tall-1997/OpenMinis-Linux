@@ -1245,11 +1245,12 @@ class ProviderRepository(private val context: Context) {
      * persistence worker as a single task, ordered behind the save that removed
      * the entries (which is what publishes the removal in memory anyway).
      *
-     * COORDINATION (ChatDao.kt is owned elsewhere): the query is
-     * `WHERE model_binding LIKE '%' || :entryId || '%'`, and entry ids are
-     * instance + "/" + model, so clearing inst/gpt-4 also un-pins sessions
-     * bound to inst/gpt-4o. It needs an exact-match variant — compare the
-     * binding JSON, or the entry: slot value against an id list — not a LIKE.
+     * COORDINATION: the DAO updates the row whose binding literally contains
+     * `"entryId":"<id>"` (ChatDao.clearBindingReferencing, `instr` not `LIKE`),
+     * and [com.openminis.app.scheduled.ScheduledTaskStore.dropEntryRefs] parses
+     * the same JSON before comparing. Both used to substring-match, which
+     * un-pinned `inst/gpt-4o` whenever `inst/gpt-4` was removed; keep the two
+     * call sites exact if either is touched again.
      */
     private fun scrubExternalEntryRefs(removedIds: Set<String>) {
         if (removedIds.isEmpty()) return
