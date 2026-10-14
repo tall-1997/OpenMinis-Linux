@@ -1,5 +1,6 @@
 package com.openminis.app.plugins
 
+import com.openminis.app.plugins.DevSuiteStore.Status
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
