@@ -11,25 +11,25 @@ internal fun fileTools(deps: McpToolDeps): List<McpToolSpec> = listOf(
     McpToolSpec(
         name = "file_read",
         description = McpToolSchemas.fileRead,
-        schema = McpToolSchemas.fileReadSchema(),
+        schema = McpToolSchemas.fileReadSchema,
         handler = { fileRead(deps, it) },
     ),
     McpToolSpec(
         name = "file_write",
         description = McpToolSchemas.fileWrite,
-        schema = McpToolSchemas.fileWriteSchema(),
+        schema = McpToolSchemas.fileWriteSchema,
         handler = { fileWrite(deps, it) },
     ),
     McpToolSpec(
         name = "file_transfer_pull",
         description = McpToolSchemas.fileTransferPull,
-        schema = McpToolSchemas.fileTransferPullSchema(),
+        schema = McpToolSchemas.fileTransferPullSchema,
         handler = { fileTransferPull(deps, it) },
     ),
     McpToolSpec(
         name = "file_transfer_push",
         description = McpToolSchemas.fileTransferPush,
-        schema = McpToolSchemas.fileTransferPushSchema(),
+        schema = McpToolSchemas.fileTransferPushSchema,
         handler = { fileTransferPush(deps, it) },
     ),
 )

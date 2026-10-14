@@ -1,10 +1,10 @@
 package com.openminis.app.mcp.server.tools
 
 import com.openminis.app.mcp.server.McpServerCore
-import com.openminis.app.schedule.CronScheduler
-import com.openminis.app.schedule.ScheduledTask
-import com.openminis.app.schedule.ScheduledTaskManager
-import com.openminis.app.schedule.ScheduledRepeatMode
+import com.openminis.app.scheduled.CronScheduler
+import com.openminis.app.scheduled.ScheduledTask
+import com.openminis.app.scheduled.ScheduledTaskManager
+import com.openminis.app.scheduled.ScheduledRepeatMode
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Calendar
@@ -15,31 +15,31 @@ internal fun scheduleTools(deps: McpToolDeps): List<McpToolSpec> = listOf(
     McpToolSpec(
         name = "schedule_task_create",
         description = McpToolSchemas.scheduleTaskCreate,
-        schema = McpToolSchemas.scheduleTaskCreateSchema(),
+        schema = McpToolSchemas.scheduleTaskCreateSchema,
         handler = { scheduleTaskCreate(deps, it) },
     ),
     McpToolSpec(
         name = "schedule_task_list",
         description = McpToolSchemas.scheduleTaskList,
-        schema = McpToolSchemas.scheduleTaskListSchema(),
+        schema = McpToolSchemas.scheduleTaskListSchema,
         handler = { scheduleTaskList(deps) },
     ),
     McpToolSpec(
         name = "schedule_task_update",
         description = McpToolSchemas.scheduleTaskUpdate,
-        schema = McpToolSchemas.scheduleTaskUpdateSchema(),
+        schema = McpToolSchemas.scheduleTaskUpdateSchema,
         handler = { scheduleTaskUpdate(deps, it) },
     ),
     McpToolSpec(
         name = "schedule_task_delete",
         description = McpToolSchemas.scheduleTaskDelete,
-        schema = McpToolSchemas.scheduleTaskDeleteSchema(),
+        schema = McpToolSchemas.scheduleTaskDeleteSchema,
         handler = { scheduleTaskDelete(deps, it) },
     ),
     McpToolSpec(
         name = "alarm_reminder_create",
         description = McpToolSchemas.alarmReminderCreate,
-        schema = McpToolSchemas.alarmReminderCreateSchema(),
+        schema = McpToolSchemas.alarmReminderCreateSchema,
         handler = { alarmReminderCreate(deps, it) },
     ),
 )

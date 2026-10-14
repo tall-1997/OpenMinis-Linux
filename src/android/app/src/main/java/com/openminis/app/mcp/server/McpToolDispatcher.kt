@@ -64,7 +64,7 @@ class McpToolDispatcher(
         // ── Pre-refactor public surface (tests depend on these) ──────────────
 
         @JvmStatic
-        fun text(s: String): String = McpToolShared.text(s)
+        fun text(s: String): JSONObject = McpToolShared.text(s)
 
         @JvmStatic
         fun shellEscape(s: String): String = McpToolShared.shellEscape(s)

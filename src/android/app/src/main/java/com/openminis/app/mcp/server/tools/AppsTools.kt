@@ -9,7 +9,7 @@ internal fun appsTools(deps: McpToolDeps): List<McpToolSpec> = listOf(
     McpToolSpec(
         name = "context_apps_query",
         description = McpToolSchemas.contextAppsQuery,
-        schema = McpToolSchemas.contextAppsQuerySchema(),
+        schema = McpToolSchemas.contextAppsQuerySchema,
         handler = { contextAppsQuery(deps, it) },
     ),
 )
