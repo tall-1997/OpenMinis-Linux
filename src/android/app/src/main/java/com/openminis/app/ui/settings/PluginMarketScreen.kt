@@ -25,6 +25,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.openminis.app.R
 import com.openminis.app.data.repository.MCPRepository
+import com.openminis.app.plugins.DevSuiteCatalog
 import com.openminis.app.plugins.LocalToolPluginStore
 import com.openminis.app.plugins.OnlinePluginStore
 import com.openminis.app.plugins.PluginCatalog
