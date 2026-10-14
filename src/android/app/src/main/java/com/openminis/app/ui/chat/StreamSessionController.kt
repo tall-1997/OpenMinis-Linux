@@ -146,22 +146,46 @@ internal class StreamSessionController(
                 newChunk.contains('\n') &&
                 unflushed >= newlineFlushMinChars
 
-            fun publish(text: String, blocks: List<AssistantBlock>, awaiting: Boolean) {
+            /**
+             * @return true when the delta reached the side channel now, false
+             * when the UI bus was full and it was parked for the trailing job.
+             * A caller running INSIDE a trailing job must not clear state on the
+             * false path — see [T-android-stream-flush-reentry].
+             */
+            fun publish(text: String, blocks: List<AssistantBlock>, awaiting: Boolean): Boolean {
                 val at = System.currentTimeMillis()
                 if (!UIBus.admit(at, criticalEvent = false)) {
                     st.pendingContent = text
                     st.pendingBlocks = blocks
                     st.pendingAwaiting = awaiting
                     val wait = UIBus.waitMs(at, criticalEvent = false).coerceAtLeast(16L)
+                    // [T-android-stream-flush-reentry] Reaching this branch from
+                    // inside a trailing job means st.trailingJob IS the job now
+                    // executing. Cancelling it is harmless (nothing suspends
+                    // after this point), but the enclosing body then used to run
+                    // its own cleanup: nulling the freshly scheduled job handle
+                    // and its pendingContent. The replacement job fired, read
+                    // null, and returned — so the last throttled delta vanished
+                    // from the side channel until the next delta or the stream
+                    // end, with nothing in the logs.
                     st.trailingJob?.cancel()
                     st.trailingJob = scope.launch {
                         delay(wait)
-                        val pc = st.pendingContent ?: return@launch
-                        publish(pc, st.pendingBlocks, st.pendingAwaiting)
-                        st.pendingContent = null
-                        st.trailingJob = null
+                        val pc = st.pendingContent ?: run {
+                            // Nothing left to flush. Release the handle only if
+                            // a re-entrant park has not already replaced it —
+                            // the `trailingJob == null` guard otherwise refuses
+                            // to schedule the next delta and parked text would
+                            // sit unpublished until the stream ends.
+                            if (st.trailingJob === coroutineContext[Job]) st.trailingJob = null
+                            return@launch
+                        }
+                        if (publish(pc, st.pendingBlocks, st.pendingAwaiting)) {
+                            st.pendingContent = null
+                            if (st.trailingJob === coroutineContext[Job]) st.trailingJob = null
+                        }
                     }
-                    return
+                    return false
                 }
                 streamingById.value = streamingById.value + (
                     id to StreamingDelta(
@@ -172,6 +196,7 @@ internal class StreamSessionController(
                 )
                 st.lastFlushMs = System.currentTimeMillis()
                 st.lastFlushedLen = text.length
+                return true
             }
 
             if (structuralChange || elapsed >= throttle || newlineFlush) {
@@ -191,12 +216,20 @@ internal class StreamSessionController(
                     val wait = (throttle - elapsed).coerceAtLeast(16L)
                     st.trailingJob = scope.launch {
                         delay(wait)
-                        val pc = st.pendingContent
-                        if (pc != null) {
-                            publish(pc, st.pendingBlocks, st.pendingAwaiting)
-                            st.pendingContent = null
+                        val pc = st.pendingContent ?: run {
+                            // Nothing left to flush. Release the handle only if
+                            // a re-entrant park has not already replaced it —
+                            // the `trailingJob == null` guard otherwise refuses
+                            // to schedule the next delta and parked text would
+                            // sit unpublished until the stream ends.
+                            if (st.trailingJob === coroutineContext[Job]) st.trailingJob = null
+                            return@launch
                         }
-                        st.trailingJob = null
+                        // Only clear state this coroutine still owns.
+                        if (publish(pc, st.pendingBlocks, st.pendingAwaiting)) {
+                            st.pendingContent = null
+                            if (st.trailingJob === coroutineContext[Job]) st.trailingJob = null
+                        }
                     }
                 }
             }
