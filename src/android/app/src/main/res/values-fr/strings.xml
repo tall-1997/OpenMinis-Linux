@@ -1181,8 +1181,8 @@
     <string name="chat_menu_restore_deleted">Restaurer les messages supprimés</string>
     <string name="chat_restore_deleted_confirm">Restaurer</string>
     <plurals name="chat_restore_deleted_dialog_body">
-        <item quantity="one">Replace %d message supprimé de l'archive locale de cette conversation à sa position d'origine, pas à la fin.</item>
-        <item quantity="other">Replace %d messages supprimés de l'archive locale de cette conversation à leur position d'origine, pas à la fin.</item>
+        <item quantity="one">Replace %d message supprimé de l\'archive locale de cette conversation à sa position d\'origine, pas à la fin.</item>
+        <item quantity="other">Replace %d messages supprimés de l\'archive locale de cette conversation à leur position d\'origine, pas à la fin.</item>
     </plurals>
     <string name="chat_menu_section_quick">Quick</string>
     <string name="chat_menu_section_session">Session</string>

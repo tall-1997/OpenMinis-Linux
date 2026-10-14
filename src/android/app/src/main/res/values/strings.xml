@@ -1667,8 +1667,8 @@
     <string name="chat_menu_restore_deleted">Restore deleted messages</string>
     <string name="chat_restore_deleted_confirm">Restore</string>
     <plurals name="chat_restore_deleted_dialog_body">
-        <item quantity="one">Put back %d deleted message from this chat's local archive. It returns where it was in time, not at the end.</item>
-        <item quantity="other">Put back %d deleted messages from this chat's local archive. They return where they were in time, not at the end.</item>
+        <item quantity="one">Put back %d deleted message from this chat\'s local archive. It returns where it was in time, not at the end.</item>
+        <item quantity="other">Put back %d deleted messages from this chat\'s local archive. They return where they were in time, not at the end.</item>
     </plurals>
     <string name="chat_menu_section_quick">Quick</string>
     <string name="chat_menu_section_session">Session</string>
