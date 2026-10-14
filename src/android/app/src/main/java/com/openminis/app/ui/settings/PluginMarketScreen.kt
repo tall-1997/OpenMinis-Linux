@@ -81,6 +81,27 @@ fun PluginMarketScreen(
             )
         }
 
+        // [T-dev-suite] Declarative dev-environment bundles (taixu-style
+        // recipes): apt + setup scripts, downloaded on demand — the payloads
+        // no longer ship in the APK. Also consumes the pending
+        // minis://devsuite/install/<bundleId> deep link the agent can emit.
+        var pendingSuite by remember { mutableStateOf<String?>(null) }
+        LaunchedEffect(Unit) {
+            pendingSuite = com.openminis.app.deeplink.DeepLinkCoordinator.consumePendingDevSuiteInstall()
+        }
+        DevSuiteSection()
+        pendingSuite?.let { id ->
+            LaunchedEffect(id) {
+                DevSuiteCatalog.bundleById(id)?.let { bundle ->
+                    val selected = bundle.components.map { it.id }.toSet()
+                    com.openminis.app.plugins.DevSuiteInstaller.assembleBundleAsync(
+                        context, bundle, selected,
+                    )
+                }
+                pendingSuite = null
+            }
+        }
+
         SettingsSection(
             header = stringResource(R.string.plugin_market_section_online),
             footer = stringResource(R.string.plugin_market_footer_online) + "\n" +
