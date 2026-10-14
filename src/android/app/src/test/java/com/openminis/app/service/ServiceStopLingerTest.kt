@@ -1,6 +1,7 @@
 package com.openminis.app.service
 
 import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -34,7 +35,10 @@ class ServiceStopLingerTest {
         advanceTimeBy(lingerMs - 1)
         assertEquals(0, fired.get())
 
+        // advanceTimeBy runs tasks due strictly BEFORE the target; a task
+        // landing exactly on the boundary needs runCurrent() to execute.
         advanceTimeBy(1)
+        runCurrent()
         assertEquals(1, fired.get())
         assertFalse(linger.isPending)
     }
@@ -71,6 +75,7 @@ class ServiceStopLingerTest {
         assertEquals(0, fired.get())
 
         advanceTimeBy(1_000)
+        runCurrent()
         assertEquals(1, fired.get())
     }
 
