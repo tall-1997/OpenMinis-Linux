@@ -888,6 +888,12 @@ fun ChatScreen(
     var showThinkingLevelSheet by remember { mutableStateOf(false) }
     var showAttachMenu by remember { mutableStateOf(false) }
     var showChatMenu by remember { mutableStateOf(false) }
+    // Archived rows whose live message is gone. 0 hides the restore action;
+    // recounts whenever the menu opens so a truncation made this session
+    // shows up without a reload. Declared before the LaunchedEffect below
+    // that reads it.
+    var restorableCount by remember { mutableIntStateOf(0) }
+    var showRestoreDialog by remember { mutableStateOf(false) }
     LaunchedEffect(showChatMenu) {
         if (showChatMenu) {
             restorableCount = viewModel.restorableArchivedMessageCount()
@@ -903,11 +909,6 @@ fun ChatScreen(
     // backing state without needing fragile scope wiring.
     var showMoveSheet by remember { mutableStateOf(false) }
     var showClearChatDialog by remember { mutableStateOf(false) }
-    // Archived rows whose live message is gone. 0 hides the restore action;
-    // recounts whenever the menu opens so a truncation made this session
-    // shows up without a reload.
-    var restorableCount by remember { mutableIntStateOf(0) }
-    var showRestoreDialog by remember { mutableStateOf(false) }
     var showCardShareDialog by remember { mutableStateOf(false) }
     // [T-android-delete-from-here] Id of the message a pending "Delete From
     // Here" would cut at, or null when no confirmation is open. Holding the
