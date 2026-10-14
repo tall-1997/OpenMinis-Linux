@@ -140,6 +140,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.RadioButtonChecked
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material3.ripple
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -887,6 +888,11 @@ fun ChatScreen(
     var showThinkingLevelSheet by remember { mutableStateOf(false) }
     var showAttachMenu by remember { mutableStateOf(false) }
     var showChatMenu by remember { mutableStateOf(false) }
+    LaunchedEffect(showChatMenu) {
+        if (showChatMenu) {
+            restorableCount = viewModel.restorableArchivedMessageCount()
+        }
+    }
     var showSkillsSheet by remember { mutableStateOf(false) }
     // [T-mcp-integration-android] MCPs-in-Session sheet visibility.
     var showMcpsSheet by remember { mutableStateOf(false) }
@@ -897,6 +903,11 @@ fun ChatScreen(
     // backing state without needing fragile scope wiring.
     var showMoveSheet by remember { mutableStateOf(false) }
     var showClearChatDialog by remember { mutableStateOf(false) }
+    // Archived rows whose live message is gone. 0 hides the restore action;
+    // recounts whenever the menu opens so a truncation made this session
+    // shows up without a reload.
+    var restorableCount by remember { mutableIntStateOf(0) }
+    var showRestoreDialog by remember { mutableStateOf(false) }
     var showCardShareDialog by remember { mutableStateOf(false) }
     // [T-android-delete-from-here] Id of the message a pending "Delete From
     // Here" would cut at, or null when no confirmation is open. Holding the
@@ -2685,6 +2696,16 @@ fun ChatScreen(
                                 },
                                 leadingIcon = { Icon(Icons.Default.Stop, contentDescription = null) },
                             )
+                            if (restorableCount > 0) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.chat_menu_restore_deleted)) },
+                                    onClick = {
+                                        showChatMenu = false
+                                        showRestoreDialog = true
+                                    },
+                                    leadingIcon = { Icon(Icons.Default.Restore, contentDescription = null) },
+                                )
+                            }
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.chat_menu_share_card)) },
                                 onClick = {
@@ -7279,6 +7300,23 @@ fun ChatScreen(
                     onShare = { options ->
                         showCardShareDialog = false
                         viewModel.shareConversationCard(options)
+                    },
+                )
+            }
+            if (showRestoreDialog) {
+                MinisAlertDialog(
+                    onDismissRequest = { showRestoreDialog = false },
+                    title = stringResource(R.string.chat_menu_restore_deleted),
+                    text = pluralStringResource(
+                        R.plurals.chat_restore_deleted_dialog_body,
+                        restorableCount,
+                        restorableCount,
+                    ),
+                    confirmText = stringResource(R.string.chat_restore_deleted_confirm),
+                    onConfirm = {
+                        viewModel.restoreArchivedMessages()
+                        showRestoreDialog = false
+                        restorableCount = 0
                     },
                 )
             }
