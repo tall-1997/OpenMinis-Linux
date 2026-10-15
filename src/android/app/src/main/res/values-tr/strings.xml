@@ -1842,7 +1842,7 @@
     <string name="mcp_builtin_shell_policy">Shell politikası</string>
     <string name="mcp_builtin_shell_strict">strict: yalnızca salt okunur ve güvenli komutlara izin verilir; geri kalanı onay isteyen bir hata döndürür</string>
     <string name="mcp_builtin_shell_auto">auto: yüksek riskli olanlar dışında tüm komutlara izin ver</string>
-    <string name="mcp_builtin_pc_connect">Bir PC\\'den bağlan</string>
+    <string name="mcp_builtin_pc_connect">Bir PC\'den bağlan</string>
     <string name="mcp_builtin_pc_connect_sub">adb reverse tcp:%1$d tcp:%1$d çalıştırın, ardından MCP istemcinize http://127.0.0.1:%1$d/mcp (Streamable HTTP, Bearer belirteci gerekli) ekleyin</string>
     <string name="mcp_builtin_port_edit"> Portu değiştir</string>
     <string name="mcp_builtin_port_edit_sub">1024–65535. Değişikliğin etkili olması için sunucuyu yeniden başlatın.</string>

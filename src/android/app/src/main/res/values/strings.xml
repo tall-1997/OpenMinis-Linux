@@ -2644,7 +2644,7 @@
     <string name="vm_compact_already_compacted">This point has already been compacted.</string>
     <string name="vm_compact_nothing_to_compact">There is no content to compact.</string>
     <string name="log_stream_trace_section">Stream traces (playback &amp; debugging)</string>
-    <string name="log_stream_trace_footer">After recording, browse each session\\'s chunk frames below to compare stream-parser output before and after changes.</string>
+    <string name="log_stream_trace_footer">After recording, browse each session\'s chunk frames below to compare stream-parser output before and after changes.</string>
     <string name="log_stream_trace_record">Record stream traces</string>
     <string name="log_stream_trace_browse">Browse trace playback</string>
     <string name="log_stream_trace_browse_sub">Recordings under offloads/stream-traces/ (one chunk per line)</string>
