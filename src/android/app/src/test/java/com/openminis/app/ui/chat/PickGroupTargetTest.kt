@@ -3,6 +3,7 @@ package com.openminis.app.ui.chat
 import com.openminis.app.data.ModelCapability
 import com.openminis.app.data.model.LLMModel
 import com.openminis.app.data.model.ModelEntry
+import com.openminis.app.data.model.ModelGroup
 import com.openminis.app.data.model.RoutingStrategy
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
