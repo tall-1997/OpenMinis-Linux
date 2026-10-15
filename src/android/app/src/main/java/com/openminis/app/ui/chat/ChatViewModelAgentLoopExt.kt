@@ -2344,8 +2344,11 @@ internal fun ChatViewModel.persistFallbackModelSelection(
     // Update top bar model info + active entry. (For a same-model
     // endpoint recovery these are no-ops on the visible model name, but
     // still keep activeEntryId / provider name in sync with the instance
-    // we actually used.)
-    _modelName.value = currentProvider.model.displayName
+    // we actually used.) [T-android-model-switch-next-request] Reads the
+    // non-null parameter, not the VM's nullable property — the original
+    // loop read its local `var currentProvider`, and the bare name inside
+    // this extension resolves to `this.currentProvider` (LLMProvider?).
+    _modelName.value = next.model.displayName
     // Update activeEntryId so model picker reflects the switch.
     // [T-android-fallback-entry-identity] Look the entry up by its OWN id,
     // carried on the candidate. The previous
