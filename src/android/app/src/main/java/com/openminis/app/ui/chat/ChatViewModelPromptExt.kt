@@ -3,6 +3,10 @@ package com.openminis.app.ui.chat
 import com.openminis.app.data.repository.MultiAgentSettings
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.tools.MemoryTools
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 internal fun ChatViewModel.buildSystemPrompt(): String? {
     // Cache-friendly layout: keep `base` byte-stable by stripping out anything
@@ -369,6 +373,28 @@ internal object TaskAnchor {
         "Session task anchor (the session's original task, from its first user " +
             "message; re-read this if long tool loops made you lose track — it still " +
             "applies until the user completes it or replaces it):"
+
+    /**
+     * Extract the first `"type":"text"` element's `value` from a raw
+     * `parts_json` array. The message body has no dedicated column — it
+     * lives inside this JSON — so the DAO hands over the raw array and
+     * this does the extraction. Non-text parts (toolResult/toolUse) are
+     * skipped; a malformed array or no text element returns null.
+     * kotlinx.serialization, not org.json: this must stay testable on the
+     * pure JVM (the unit-test classpath only has the android.jar stub).
+     */
+    fun firstUserTextFromParts(partsJson: String?): String? {
+        if (partsJson.isNullOrBlank()) return null
+        val el = runCatching { Json.parseToJsonElement(partsJson) }.getOrNull() ?: return null
+        val arr = el as? JsonArray ?: return null
+        for (item in arr) {
+            val o = item as? JsonObject ?: continue
+            if (o["type"]?.jsonPrimitive?.contentOrNull != "text") continue
+            val v = o["value"]?.jsonPrimitive?.contentOrNull
+            if (!v.isNullOrBlank()) return v
+        }
+        return null
+    }
 
     /** Pure decision core: DB copy wins, in-memory window is the fallback, blank is nothing. */
     fun fragment(anchorFromDb: String?, firstUserInWindow: String?): String? {

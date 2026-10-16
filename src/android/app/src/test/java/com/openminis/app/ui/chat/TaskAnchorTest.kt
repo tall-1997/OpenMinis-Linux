@@ -20,6 +20,39 @@ class TaskAnchorTest {
     }
 
     @Test
+    fun `firstUserTextFromParts extracts the first text element`() {
+        val raw = """[{"type":"text","value":"build the login flow"},{"type":"toolResult","value":{"name":"x","output":"y"}}]"""
+        assertEquals("build the login flow", TaskAnchor.firstUserTextFromParts(raw))
+    }
+
+    @Test
+    fun `firstUserTextFromParts skips toolResult elements`() {
+        val raw = """[{"type":"toolResult","value":{"name":"x","output":"y"}},{"type":"text","value":"real user text"}]"""
+        assertEquals("real user text", TaskAnchor.firstUserTextFromParts(raw))
+    }
+
+    @Test
+    fun `firstUserTextFromParts skips blank text elements`() {
+        val raw = """[{"type":"text","value":""},{"type":"text","value":"  "},{"type":"text","value":"task"}]"""
+        assertEquals("task", TaskAnchor.firstUserTextFromParts(raw))
+    }
+
+    @Test
+    fun `firstUserTextFromParts null for malformed json`() {
+        assertNull(TaskAnchor.firstUserTextFromParts("{not json"))
+        assertNull(TaskAnchor.firstUserTextFromParts("""{"type":"text"}"""))
+        assertNull(TaskAnchor.firstUserTextFromParts(null))
+        assertNull(TaskAnchor.firstUserTextFromParts(""))
+        assertNull(TaskAnchor.firstUserTextFromParts("   "))
+    }
+
+    @Test
+    fun `firstUserTextFromParts keeps json escapes intact`() {
+        val raw = """[{"type":"text","value":"fix the \"login\" bug\nline two"}]"""
+        assertEquals("fix the \"login\" bug\nline two", TaskAnchor.firstUserTextFromParts(raw))
+    }
+
+    @Test
     fun `null when both sources are blank`() {
         assertNull(TaskAnchor.fragment(anchorFromDb = "   \n  ", firstUserInWindow = " \t "))
     }
