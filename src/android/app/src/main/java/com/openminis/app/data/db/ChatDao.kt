@@ -300,6 +300,18 @@ interface ChatDao {
     @Query("SELECT sort_order FROM messages WHERE id = :id")
     suspend fun sortOrderOf(id: String): Int?
 
+    /**
+     * [T-task-anchor] The earliest user message body, regardless of the
+     * UI window. Long sessions window their history (only the tail is
+     * resident), so the task description — which lives at the very
+     * head of the conversation — falls out of both the UI list and
+     * `_messages`; a windowed read returns the wrong message or none.
+     * Read straight from the store so the task anchor reflects the
+     * session's actual opening turn.
+     */
+    @Query("SELECT content FROM messages WHERE session_id = :sessionId AND role = 'user' ORDER BY sort_order ASC, created_at ASC, id ASC LIMIT 1")
+    suspend fun firstUserMessageBody(sessionId: String): String?
+
     @Query("SELECT COUNT(*) FROM messages WHERE session_id = :sessionId AND sort_order < :sortOrder")
     suspend fun countMessagesBeforeSort(sessionId: String, sortOrder: Int): Int
 

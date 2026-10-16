@@ -931,6 +931,11 @@ class ChatViewModel(
     val hasOlderMessages: StateFlow<Boolean> = _hasOlderMessages.asStateFlow()
     private val _hasNewerMessages = MutableStateFlow(false)
     val hasNewerMessages: StateFlow<Boolean> = _hasNewerMessages.asStateFlow()
+    // [T-task-anchor] Session-scoped copy of the first user message. Loaded
+    // once per session (DB read, immune to the UI window), consumed by the
+    // system prompt's dynamic tail every turn. Cleared with the session.
+    internal val _taskAnchorText = MutableStateFlow<String?>(null)
+    internal val taskAnchorText: StateFlow<String?> = _taskAnchorText.asStateFlow()
     internal val _isLoadingHistory = MutableStateFlow(false)
     val isLoadingHistory: StateFlow<Boolean> = _isLoadingHistory.asStateFlow()
 
@@ -4294,6 +4299,9 @@ class ChatViewModel(
         _hasOlderMessages.value = false
         _hasNewerMessages.value = false
         _isLoadingHistory.value = false
+        // [T-task-anchor] Session-scoped — the next session re-reads its own
+        // opening turn; a cleared chat must not anchor on the old one.
+        _taskAnchorText.value = null
         pendingSendText = null
         _pendingCaret.value = null
         _showCompactBeforeSendPrompt.value = false

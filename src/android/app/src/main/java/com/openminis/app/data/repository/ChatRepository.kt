@@ -98,6 +98,16 @@ class ChatRepository(
         return loadMessagesBefore(sessionId, total, limit, pageSize, totalMessages = total)
     }
 
+    /**
+     * [T-task-anchor] The session's first user message body, straight from
+     * the store — see [ChatDao.firstUserMessageBody] for why a windowed
+     * read cannot supply this.
+     */
+    suspend fun firstUserMessageBody(sessionId: String): String? {
+        if (sessionId.isEmpty()) return null
+        return dao.firstUserMessageBody(sessionId)
+    }
+
     suspend fun loadMessagesBefore(
         sessionId: String,
         endExclusive: Int,
