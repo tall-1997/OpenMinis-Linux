@@ -47,7 +47,7 @@ class CancellationDiagnosticTest {
             reason = "compact cancelled by user",
             streaming = false,
         )
-        assertEquals("compact-cancel", line.substringBefore(" model="))
+        assertEquals("source=compact-cancel", line.substringBefore(" model="))
     }
 
     @Test
