@@ -106,10 +106,10 @@ class TaskAnchorTest {
 
     @Test
     fun `clip never splits a surrogate pair`() {
-        // 599 emoji (2 code units each = 1198) + 1 emoji (2 units) → the
-        // 1200-unit cut lands exactly between the last pair's halves.
-        val emoji = "😀".repeat(600)
-        assertEquals(1200, emoji.length)
+        // Leading ASCII shifts the pairs by one: the 1200-unit cut lands
+        // between the last pair's halves, so the dangling high is trimmed.
+        val emoji = "x" + "😀".repeat(600)
+        assertEquals(1201, emoji.length)
         val out = TaskAnchor.fragment(anchorFromDb = emoji, firstUserInWindow = null)!!
         val body = out.removePrefix(TaskAnchor.HEADER + "\n")
         // The dangling high surrogate was trimmed: no lone surrogate remains.
