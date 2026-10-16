@@ -226,7 +226,9 @@ class ProviderRepository(private val context: Context) {
             // refusal exists for. Swallowing it leaves _configLoaded false, so
             // ensureConfigLoaded retries on the next access.
             try {
-                val loaded = loadConfig()
+                // [T-nonstream-json-default] loadConfigSuspending directly (no runBlocking hop);
+                // JSON/DAO decode moves to Dispatchers.Default, not the IO pool next to blocking I/O.
+                val loaded = withContext(Dispatchers.Default) { loadConfigSuspending() }
                 synchronized(configLock) {
                     // Only adopt the disk config if nothing has written in the
                     // meantime. A write during the load window (rare — writes come
@@ -368,7 +370,6 @@ class ProviderRepository(private val context: Context) {
             }
         }
     }
-
 
     /**
      * [T-android-startup-config-stall] Guard for read-modify-write mutators.
@@ -1198,7 +1199,6 @@ class ProviderRepository(private val context: Context) {
         markInstanceFetched(instanceId)
         if (droppedRefs) prunedEntryIds else emptySet()
     }
-
 
     /**
      * Drop fetched (non-custom, non voice-seed) entries so a manual refresh
