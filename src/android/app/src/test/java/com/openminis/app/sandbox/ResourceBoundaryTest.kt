@@ -94,8 +94,8 @@ class ResourceBoundaryTest {
             .filter { it.contains("SELECT parts_json FROM messages WHERE session_id") }
             .forEach { line ->
                 assertTrue(
-                    line.contains("LIMIT 1"),
                     "raw parts_json by-session read must be single-row LIMIT 1: $line",
+                    line.contains("LIMIT 1"),
                 )
             }
         val screen = File("src/main/java/com/openminis/app/accessibility/MinisAccessibilityService.kt").readText()
