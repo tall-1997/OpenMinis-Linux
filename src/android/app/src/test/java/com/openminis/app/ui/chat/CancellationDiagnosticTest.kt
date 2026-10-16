@@ -1,6 +1,7 @@
 package com.openminis.app.ui.chat
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
