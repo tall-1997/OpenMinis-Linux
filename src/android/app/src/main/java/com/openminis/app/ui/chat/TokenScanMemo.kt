@@ -26,7 +26,7 @@ internal object TokenScanMemo {
     private val toolUseJson =
         java.util.Collections.synchronizedMap(java.util.WeakHashMap<Any, String>())
 
-    private val mixedTokens =
+    private val textScans =
         java.util.Collections.synchronizedMap(java.util.WeakHashMap<String, Long>())
 
     /** Memoizes `input.toString()` per object — multi-KB JSON args copied once. */
