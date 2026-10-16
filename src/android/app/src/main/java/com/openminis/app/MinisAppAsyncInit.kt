@@ -1,8 +1,10 @@
 package com.openminis.app
 
 import android.util.Log
+import com.openminis.app.data.AppDatabase
 import com.openminis.app.di.AppContainer
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.launch
 
 /**
  * [T-perf-async-db-init-v2] Pull the FIRST DAO open (SQLiteDatabase.open +
