@@ -39,7 +39,7 @@ internal object FullBodyJson {
             } catch (e: Exception) {
                 throw LLMError.DecodingError(
                     IllegalStateException(
-                        "expected a JSON body ($debugLabel) but got: " +
+                        "expected a JSON object body ($debugLabel) but got: " +
                             raw.take(120).replace('\n', ' '),
                         e,
                     ),
