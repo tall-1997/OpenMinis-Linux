@@ -3289,8 +3289,7 @@ fun ChatScreen(
                     // present — one page per iteration, bounded, the same
                     // contract as the up-button's window-edge walk. Paging
                     // works mid-stream (the old edge never touches the live
-                    // turn's new edge); the loop breaks on the page budget,
-                    // history exhaustion, or a failed page, and the fallback
+                    // turn's new edge); the loop breaks and the fallback
                     // below logs instead of scrolling blind.
                     var pages = 0
                     while (pages < 60) {
