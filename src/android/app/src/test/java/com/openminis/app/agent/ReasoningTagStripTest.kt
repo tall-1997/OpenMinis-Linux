@@ -75,8 +75,9 @@ class ReasoningTagStripTest {
 
     @Test
     fun nestedAndInterleavedFormsCollapseLikeTheLazyRegexDid() {
-        // lazy .*? from the first open to the first same-name close eats everything inside
-        assertEquals("", strip("<thinking>a<thinking>b</thinking>c</thinking>"))
+        // lazy .*? from the first open to the first same-name close eats everything inside;
+        // the trailing close is then stray and stays (old regex: single replace pass)
+        assertEquals("c</thinking>", strip("<thinking>a<thinking>b</thinking>c</thinking>"))
         assertEquals("", strip("<thinking><scratchpad></scratchpad></thinking>"))
         assertEquals("</scratchpad>", strip("<thinking><scratchpad></thinking></scratchpad>"))
         assertEquals("tail", strip("<thinking>a</thinking><thinking>b</thinking>tail"))
