@@ -172,11 +172,6 @@ internal fun AssistantMessageView(message: ChatMessage, onRetry: (() -> Unit)? =
         // text ↔ tool_use transitions, which must be preserved for coherent reading).
         val toolPillBlocks = message.toolBlocks.filter { it.kind == "tool_use" }
         val lastThinkingId = message.toolBlocks.lastOrNull { it.kind == "thinking" }?.id
-        // [T-android-thinking-auto-collapse] Mirror the FlatChatItem path's
-        // `isLastBlockOverall` so the legacy renderer's ThinkingBlock also
-        // flips !isStreaming when a sibling block arrives (id of the last
-        // block of ANY kind in the message). See ChatFlatItems builder.
-        val lastBlockIdOverall = message.toolBlocks.lastOrNull()?.id
         // Backward compat: if there are no text blocks but message.content is non-empty
         // (e.g. legacy sessions saved before the text-block migration), fall back to
         // rendering message.content after all tool blocks.
@@ -192,14 +187,13 @@ internal fun AssistantMessageView(message: ChatMessage, onRetry: (() -> Unit)? =
                     // hiding by level swallows that thinking and the user
                     // sees "model isn't thinking".
                     if (block.content.isNotBlank() || message.isStreaming) {
-                        // [T-android-thinking-auto-collapse] Stream signal
-                        // requires THIS block to be the trailing block of
-                        // any kind, not just the last thinking — see
-                        // FlatChatItem path + iOS ThinkingBlockView parity.
-                        val isTrailingThinking = block.id == lastBlockIdOverall
+                        // [T-android-thinking-stable-expand] Same complete
+                        // signal as the FlatChatItem path (message streaming
+                        // AND no reply text after this block) — flips once
+                        // per reasoning phase, not once per tool round.
                         ThinkingBlock(
                             block,
-                            isStreaming = isTrailingThinking && message.isStreaming,
+                            isStreaming = message.isStreaming && !hasReplyTextAfter(message.toolBlocks, index),
                             isLast = block.id == lastThinkingId,
                         )
                     }
@@ -831,6 +825,15 @@ internal fun ThinkingBlock(block: AssistantBlock, isStreaming: Boolean, isLast: 
         // the next token.
         AnimatedVisibility(visible = expanded && !overHardCap) {
             val scrollState = rememberScrollState()
+            // [T-thinking-render-perf-android] Render only the tail window so
+            // Compose lays out at most `thinkingWindowSize` chars. Snap the cut
+            // to the next newline (within 200 chars) so we don't start
+            // mid-line.
+            // [T-android-thinking-poll-removal] Read block.content directly —
+            // the VM-side UiUpdateBatcher already paces recomposition, so a
+            // 100ms poll only added lag between the state write and the frame
+            // that showed it. ThinkingAutoFollow publishes its SideEffect on
+            // recomposition, not on the poll.
             val isTruncated = block.content.length > thinkingWindowSize
             val displayContent = visibleThinkingTail(block.content, thinkingWindowSize)
             ThinkingAutoFollow(
