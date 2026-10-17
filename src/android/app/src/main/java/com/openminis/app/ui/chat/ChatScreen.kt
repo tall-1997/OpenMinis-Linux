@@ -472,12 +472,6 @@ fun ChatScreen(
     onToggleSidebar: (() -> Unit)? = null,
     /** Whether the list is currently hidden — decides which way the icon points. */
     sidebarCollapsed: Boolean = false,
-    /** [P1-6] Compact-width only: opens the modal session drawer owned by
-     *  ChatSplitScaffold (the pane navigator swaps list/detail there, so
-     *  switching chats no longer requires popping back to the full list
-     *  screen). Null in two-pane — the sidebar toggle already owns this
-     *  slot. */
-    onOpenSessionDrawer: (() -> Unit)? = null,
     /** [T-new-chat-menu-entry] "New Chat" from the chat "..." menu: caller
      *  navigates to a fresh draft chat (same funnel as the session list's
      *  new-chat button), replacing this chat on the back stack. */
@@ -1771,9 +1765,31 @@ fun ChatScreen(
     // Entering or switching a conversation is navigation, not an input action.
     // Do not request composer focus here: doing so opens the IME on every new
     // draft/session visit. The user explicitly focuses the composer when ready.
+    //
+    // [T-android-entry-ime-guard] The hide runs in three passes rather than
+    // once. Clearing focus on the first frame is not enough on its own: the
+    // screen it replaces (the session list, usually with its search field
+    // focused) is still composed for the pane transition, and the platform can
+    // re-show the IME for that view's still-live input connection a frame or
+    // two after our hide. Repeating the clear+hide through the transition
+    // window is what actually keeps the keyboard down — the previous single
+    // call was a no-op whenever it raced the animation.
+    var composerFocusGuardUntil by remember(sessionId) {
+        mutableStateOf(android.os.SystemClock.uptimeMillis() + 600L)
+    }
+    // A tap on the composer during the entry window is a real request to type;
+    // the swipe/tap gesture below marks it, and the guard stands down.
+    var composerTouched by remember(sessionId) { mutableStateOf(false) }
     LaunchedEffect(sessionId) {
-        focusManager.clearFocus(force = true)
-        keyboardController?.hide()
+        repeat(3) {
+            focusManager.clearFocus(force = true)
+            keyboardController?.hide()
+            kotlinx.coroutines.delay(90)
+        }
+        // Keep refusing focus for the rest of the entry window: if something
+        // still hands focus to the composer (OEM IME restoring state), the
+        // onFocusChanged hook below drops it instead of opening the keyboard.
+        composerFocusGuardUntil = android.os.SystemClock.uptimeMillis() + 400L
     }
     var sawStreamingThisVisit by remember(sessionId) { mutableStateOf(false) }
     // Reply-end focus is opt-in (Appearance → Auto-Focus After Reply). The
@@ -1791,6 +1807,9 @@ fun ChatScreen(
         // Let the final markdown reflow settle before taking focus so the IME
         // doesn't fight the stream-end layout pass.
         kotlinx.coroutines.delay(250)
+        // This focus is intentional (reply-end setting); it must not be
+        // mistaken for the entry ghost focus the guard exists to drop.
+        composerFocusGuardUntil = 0L
         runCatching { inputFocusRequester.requestFocus() }
         keyboardController?.show()
     }
@@ -2385,19 +2404,11 @@ fun ChatScreen(
                 },
                 navigationIcon = {
                     // [T-android-tablet-split] See `isTwoPane`.
-                    // [P1-6] Compact width: the slot becomes the session-drawer
-                    // button — switching chats no longer requires popping back
-                    // to the full list screen. The back arrow survives only for
-                    // callers without a drawer; the system back gesture still
-                    // pops to the list either way.
-                    if (!isTwoPane && onOpenSessionDrawer != null) {
-                        IconButton(onClick = onOpenSessionDrawer) {
-                            Icon(
-                                Icons.Filled.Menu,
-                                contentDescription = stringResource(R.string.chat_show_sidebar),
-                            )
-                        }
-                    } else if (!isTwoPane) {
+                    // Single-pane: the back arrow returns to the session list.
+                    // There is no swipe-in drawer any more — the list is the
+                    // home screen, and a second copy of it over the chat was
+                    // redundant (and could steal focus / reopen the IME).
+                    if (!isTwoPane) {
                         IconButton(onClick = onBack) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back))
                         }
@@ -5534,6 +5545,9 @@ fun ChatScreen(
                         val slop = viewConfiguration.touchSlop
                         awaitEachGesture {
                             val down = awaitFirstDown(requireUnconsumed = false)
+                            // Any pointer landing on the composer is a user
+                            // gesture — the entry guard must not eat its focus.
+                            composerTouched = true
                             var totalDx = 0f
                             var totalDy = 0f
                             var claimed = false
@@ -5599,6 +5613,8 @@ fun ChatScreen(
                                 // up the keyboard. If the keyboard is
                                 // already open, do nothing so a stray drag
                                 // doesn't re-trigger anything.
+                                // Deliberate gesture: lift the entry guard.
+                                composerFocusGuardUntil = 0L
                                 inputFocusRequester.requestFocus()
                                 keyboardController?.show()
                                 sendSwipeProgress = 0f
@@ -6223,6 +6239,19 @@ fun ChatScreen(
                                             randomIndex = { bound -> kotlin.random.Random.nextInt(bound) },
                                         )
                                         composerHasFocusedBefore = true
+                                    }
+                                    // [T-android-entry-ime-guard] Refuse a focus
+                                    // that lands during the entry window without
+                                    // the user having asked for it. Entering a
+                                    // session must never open the IME; if the
+                                    // platform or an OEM IME restores focus here,
+                                    // drop it again instead of showing the
+                                    // keyboard.
+                                    if (it.isFocused && !composerTouched &&
+                                        android.os.SystemClock.uptimeMillis() < composerFocusGuardUntil
+                                    ) {
+                                        focusManager.clearFocus(force = true)
+                                        keyboardController?.hide()
                                     }
                                     inputFocused = it.isFocused
                                 }

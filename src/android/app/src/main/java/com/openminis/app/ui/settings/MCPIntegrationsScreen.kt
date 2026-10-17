@@ -119,83 +119,80 @@ fun MCPIntegrationsScreen(
             }
         },
     ) {
-        SettingsSection(
-            header = stringResource(R.string.mcp_section_presets),
-            footer = stringResource(R.string.mcp_section_presets_footer),
-        ) {
-            com.openminis.app.plugins.PluginCatalog.MCP_PRESETS.forEachIndexed { index, preset ->
-                val on = servers.any { preset.matches(it) }
-                SettingsSwitchRow(
-                    title = preset.name,
-                    subtitle = preset.description,
-                    checked = on,
-                    onCheckedChange = { checked ->
-                        if (checked) {
-                            preset.url?.let { url ->
-                                com.openminis.app.tools.FetchUrlGuard.blockedReason(url)?.let { return@SettingsSwitchRow }
-                            }
-                            mcpRepository.add(preset.toServer())
-                        } else {
-                            mcpRepository.delete(preset.id)
-                        }
-                    },
-                    showDivider = index < com.openminis.app.plugins.PluginCatalog.MCP_PRESETS.lastIndex,
-                )
+        // [T-android-mcp-merged-server-list] ONE list for presets and saved
+        // servers. They used to be two sections, so an enabled preset showed up
+        // twice — a switch under "Presets" and, for the same config, a row
+        // under "Servers". Merged, each preset is a single switch that adds the
+        // server it represents (or flips an existing entry), and hand-added
+        // servers follow below.
+        //
+        // Presets start OFF: nothing is written to servers.json until the user
+        // flips a switch, so a fresh install never ships enabled integrations.
+        // Turning a switch off disables the existing entry instead of deleting
+        // it, so headers/args the user customised survive a toggle.
+        val presetServers = remember(servers) {
+            com.openminis.app.plugins.PluginCatalog.MCP_PRESETS.map { preset ->
+                preset to servers.firstOrNull { preset.matches(it) }
             }
         }
+        val presetServerIds = remember(presetServers) {
+            presetServers.mapNotNull { it.second?.id }.toSet()
+        }
+        val customServers = servers.filterNot { it.id in presetServerIds }
+
         SettingsSection(
             header = stringResource(R.string.mcp_section_servers),
             footer = stringResource(R.string.mcp_section_footer),
         ) {
-            if (servers.isEmpty()) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    Icon(
-                        Icons.Outlined.Extension,
-                        contentDescription = null,
-                        modifier = Modifier.size(36.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
-                    )
-                    Text(
-                        stringResource(R.string.mcp_empty_title),
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Text(
-                        stringResource(R.string.mcp_empty_action),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+            presetServers.forEachIndexed { index, (preset, existing) ->
+                val showDivider = index < presetServers.lastIndex || customServers.isNotEmpty()
+                val toggle: (Boolean) -> Unit = { checked ->
+                    if (checked) {
+                        if (existing == null) {
+                            // Same URL guard the standalone preset list
+                            // used: a blocked host never reaches the repo.
+                            val blocked = preset.url?.let { url ->
+                                com.openminis.app.tools.FetchUrlGuard.blockedReason(url) != null
+                            } == true
+                            if (!blocked) mcpRepository.add(preset.toServer())
+                        } else {
+                            mcpRepository.setEnabled(existing.id, true)
+                        }
+                    } else if (existing != null) {
+                        mcpRepository.setEnabled(existing.id, false)
+                    }
                 }
-            } else {
-                servers.forEachIndexed { index, server ->
-                    val transportIcon = if (server.isStdio) Icons.Outlined.Terminal else Icons.Outlined.Language
+                if (existing == null) {
+                    SettingsSwitchRow(
+                        // Localized preset name (Chinese in zh) rather than the
+                        // technical id written to servers.json — the id stays
+                        // visible in the edit sheet.
+                        title = preset.name,
+                        subtitle = preset.description,
+                        checked = false,
+                        onCheckedChange = toggle,
+                        showDivider = showDivider,
+                    )
+                } else {
+                    // Once the preset exists, keep the same entry points the
+                    // old Servers list gave it: tap to edit/delete, and the
+                    // wrench for per-tool toggles. Merging the lists must not
+                    // strand those actions behind a switch.
+                    val transportIcon = if (existing.isStdio) Icons.Outlined.Terminal else Icons.Outlined.Language
                     SettingsRow(
-                        title = server.id,
-                        subtitle = server.transportSummary.takeIf { it.isNotBlank() },
-                        showDivider = index < servers.size - 1,
-                        // [T-mcp-fix-delete-entry] Plain tap opens the EDIT
-                        // form (delete lives there). A previous change rewired
-                        // this to the tools screen, which left the edit sheet
-                        // — and with it the delete button — with zero entry
-                        // points: editServer was never set anywhere.
-                        onClick = { editServer = server },
+                        title = preset.name,
+                        subtitle = preset.description,
+                        showDivider = showDivider,
+                        onClick = { editServer = existing },
                         trailing = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                // Tools list (per-tool enable/disable) stays
-                                // one tap away without stealing the edit entry.
                                 IconButton(
-                                    onClick = { onOpenTools(server) },
+                                    onClick = { onOpenTools(existing) },
                                     modifier = Modifier.size(32.dp),
                                 ) {
                                     Icon(
                                         Icons.Outlined.Construction,
-                                        contentDescription = stringResource(R.string.mcp_tools_title, server.id),
+                                        contentDescription = stringResource(R.string.mcp_tools_title, existing.id),
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.size(16.dp),
                                     )
@@ -209,13 +206,56 @@ fun MCPIntegrationsScreen(
                                 )
                                 Spacer(Modifier.width(8.dp))
                                 SettingsSwitch(
-                                    checked = server.enabled,
-                                    onCheckedChange = { mcpRepository.setEnabled(server.id, it) },
+                                    checked = existing.enabled,
+                                    onCheckedChange = toggle,
                                 )
                             }
                         },
                     )
                 }
+            }
+            customServers.forEachIndexed { index, server ->
+                val transportIcon = if (server.isStdio) Icons.Outlined.Terminal else Icons.Outlined.Language
+                SettingsRow(
+                    title = server.id,
+                    subtitle = server.transportSummary.takeIf { it.isNotBlank() },
+                    showDivider = index < customServers.size - 1,
+                    // [T-mcp-fix-delete-entry] Plain tap opens the EDIT
+                    // form (delete lives there). A previous change rewired
+                    // this to the tools screen, which left the edit sheet
+                    // — and with it the delete button — with zero entry
+                    // points: editServer was never set anywhere.
+                    onClick = { editServer = server },
+                    trailing = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            // Tools list (per-tool enable/disable) stays
+                            // one tap away without stealing the edit entry.
+                            IconButton(
+                                onClick = { onOpenTools(server) },
+                                modifier = Modifier.size(32.dp),
+                            ) {
+                                Icon(
+                                    Icons.Outlined.Construction,
+                                    contentDescription = stringResource(R.string.mcp_tools_title, server.id),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                            }
+                            Spacer(Modifier.width(4.dp))
+                            Icon(
+                                transportIcon,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(14.dp),
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            SettingsSwitch(
+                                checked = server.enabled,
+                                onCheckedChange = { mcpRepository.setEnabled(server.id, it) },
+                            )
+                        }
+                    },
+                )
             }
         }
         // ─── 内置 MCP Server（实验）──────────────────────────────────────────

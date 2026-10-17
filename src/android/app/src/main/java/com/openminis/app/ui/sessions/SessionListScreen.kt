@@ -501,13 +501,6 @@ fun SessionListScreen(
      * prepends the same placeholder in split mode.
      */
     draftPlaceholderId: String? = null,
-    /**
-     * [P1-6] Render the list WITHOUT its own top bar, for embedding inside
-     * the compact-width session drawer (ChatSplitScaffold owns the drawer
-     * chrome and the close affordance). Default false keeps the full-screen
-     * and two-pane-sidebar renderings byte-identical.
-     */
-    embedded: Boolean = false,
 ) {
     val context = LocalContext.current
     // T46: hoist VM ownership to the NavBackStackEntry's ViewModelStore so
@@ -577,6 +570,17 @@ fun SessionListScreen(
     // doesn't flash the "add a provider" onboarding before the real config emits.
     val configLoaded by providerRepository.configLoaded.collectAsState()
     val scope = rememberCoroutineScope()
+    // [T-android-entry-ime-guard] Focus is released HERE, while the list is
+    // still on screen, before the pane navigator swaps in the chat. The search
+    // field outlives the tap that picks a session (its ViewModel state is kept
+    // on purpose), so hiding the IME only from ChatScreen raced a text field
+    // that still held focus and the platform re-opened the keyboard.
+    val listFocusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    val listKeyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    val releaseListFocus: () -> Unit = {
+        listFocusManager.clearFocus(force = true)
+        listKeyboard?.hide()
+    }
     val isDark = ChatColors.isDark
 
     // [T-android-search-focus-sticky] When the user opens search but types
@@ -628,9 +632,14 @@ fun SessionListScreen(
             com.openminis.app.deeplink.DeepLinkCoordinator
                 .setPendingSearchFocus(id, messageId)
         }
+        releaseListFocus()
         onSessionClick(id)
     }
-    val onNewChatGuarded: (String) -> Unit = { id -> exitSearchIfQueryBlank(); onNewChat(id) }
+    val onNewChatGuarded: (String) -> Unit = { id ->
+        exitSearchIfQueryBlank()
+        releaseListFocus()
+        onNewChat(id)
+    }
 
     var showDeleteDialog by remember { mutableStateOf(false) }
     var deleteTargetId by remember { mutableStateOf<String?>(null) }
@@ -797,7 +806,7 @@ fun SessionListScreen(
 
     Scaffold(
         topBar = {
-            if (!embedded) MinisCenterTopBar(
+            MinisCenterTopBar(
                 title = {
                     Text(
                             stringResource(R.string.app_name),
