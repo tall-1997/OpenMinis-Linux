@@ -144,6 +144,7 @@ internal object ModelBrandResolver {
         "llamaindex" to "llamaindex",
         "modelscope" to "modelscope",
         "nanobanana" to "nanobanana",
+        "nano-banana" to "nanobanana",
         "notebooklm" to "notebooklm",
         "perceptron" to "perceptron",
         "pydanticai" to "pydanticai",
