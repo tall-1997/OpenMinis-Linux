@@ -56,6 +56,30 @@ class ModelBrandResolverTest {
     }
 
     @Test
+    fun catalogExpansionBrandsResolve() {
+        // v6.0.0-catalog expansion (358 slugs): domestic newcomers + tools.
+        assertEquals("hailuo", resolve(modelId = "hailuo-02"))
+        assertEquals("jimeng", resolve(modelId = "jimeng-2.1"))
+        assertEquals("kolors", resolve(modelId = "kolors-v2"))
+        assertEquals("vidu", resolve(modelId = "vidu-q1"))
+        assertEquals("stepfun", resolve(modelId = "stepfun-step3"))
+        assertEquals("internlm", resolve(modelId = "internlm2.5-20b"))
+        assertEquals("codegeex", resolve(modelId = "codegeex-4"))
+        assertEquals("coze", resolve(modelId = "coze-loop"))
+        assertEquals("nanobanana", resolve(modelId = "nano-banana-pro"))
+        assertEquals("xuanyuan", resolve(modelId = "xuanyuan-70b"))
+    }
+
+    @Test
+    fun shortSlugsAreExcludedFromScoring() {
+        // "pi"/"v0"/"lg" (<=2 chars) are packed as icons but must NOT score:
+        // a 2-char contains() hits unrelated ids. Unrecognized ids fall
+        // back to the OpenAI mark, never to a 2-char slug's icon.
+        assertEquals("openai", resolve(modelId = "pi-3.5-turbo"))
+        assertEquals("openai", resolve(modelId = "lg-express"))
+    }
+
+    @Test
     fun overseasBrandsResolve() {
         assertEquals("claude", resolve(modelId = "claude-sonnet-4-5"))
         assertEquals("claude", resolve(modelId = "claude-opus-4-1"))
@@ -83,12 +107,17 @@ class ModelBrandResolverTest {
     @Test
     fun displayNameIsASignal() {
         assertEquals("claude", resolve(modelId = "relay-x7", displayName = "Claude Sonnet 4.5"))
-        assertNull(resolve(modelId = "relay-x7", displayName = null))
+        // Unrecognized id with no display name → OpenAI fallback.
+        assertEquals("openai", resolve(modelId = "relay-x7", displayName = null))
     }
 
     @Test
-    fun noMatchReturnsNull() {
-        assertNull(resolve(modelId = "custom-finetune-a"))
+    fun noMatchFallsBackToOpenAI() {
+        // Product decision: unrecognized non-empty references show the
+        // OpenAI mark so the icon slot keeps a stable rhythm.
+        assertEquals("openai", resolve(modelId = "custom-finetune-a"))
+        assertEquals("openai", resolve(modelId = "relay-x7"))
+        // No reference at all → no icon (empty row).
         assertNull(resolve(modelId = ""))
         assertNull(resolve(null, null))
     }
