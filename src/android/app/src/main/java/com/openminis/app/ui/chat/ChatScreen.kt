@@ -1763,56 +1763,16 @@ fun ChatScreen(
     }
 
     // Entering or switching a conversation is navigation, not an input action.
-    // Do not request composer focus here: doing so opens the IME on every new
-    // draft/session visit. The user explicitly focuses the composer when ready.
-    //
-    // [T-android-entry-ime-guard] The hide runs in three passes rather than
-    // once. Clearing focus on the first frame is not enough on its own: the
-    // screen it replaces (the session list, usually with its search field
-    // focused) is still composed for the pane transition, and the platform can
-    // re-show the IME for that view's still-live input connection a frame or
-    // two after our hide. Repeating the clear+hide through the transition
-    // window is what actually keeps the keyboard down — the previous single
-    // call was a no-op whenever it raced the animation.
-    var composerFocusGuardUntil by remember(sessionId) {
-        mutableStateOf(android.os.SystemClock.uptimeMillis() + 600L)
-    }
-    // A tap on the composer during the entry window is a real request to type;
-    // the swipe/tap gesture below marks it, and the guard stands down.
-    var composerTouched by remember(sessionId) { mutableStateOf(false) }
-    LaunchedEffect(sessionId) {
-        repeat(3) {
-            focusManager.clearFocus(force = true)
-            keyboardController?.hide()
-            kotlinx.coroutines.delay(90)
-        }
-        // Keep refusing focus for the rest of the entry window: if something
-        // still hands focus to the composer (OEM IME restoring state), the
-        // onFocusChanged hook below drops it instead of opening the keyboard.
-        composerFocusGuardUntil = android.os.SystemClock.uptimeMillis() + 400L
-    }
-    var sawStreamingThisVisit by remember(sessionId) { mutableStateOf(false) }
-    // Reply-end focus is opt-in (Appearance → Auto-Focus After Reply). The
-    // setting must be real: when enabled, refocus only on a streaming→idle
-    // edge observed by this screen; entering an already-running session never
-    // opens the IME by itself.
-    LaunchedEffect(isStreaming, sessionId) {
-        if (isStreaming) {
-            sawStreamingThisVisit = true
-            return@LaunchedEffect
-        }
-        if (!sawStreamingThisVisit) return@LaunchedEffect
-        sawStreamingThisVisit = false
-        if (!autoFocusAfterReply) return@LaunchedEffect
-        // Let the final markdown reflow settle before taking focus so the IME
-        // doesn't fight the stream-end layout pass.
-        kotlinx.coroutines.delay(250)
-        // This focus is intentional (reply-end setting); it must not be
-        // mistaken for the entry ghost focus the guard exists to drop.
-        composerFocusGuardUntil = 0L
-        runCatching { inputFocusRequester.requestFocus() }
-        keyboardController?.show()
-    }
+    // Keyboard-focus policy (clear on entry, drop ghost focus, reply-end
+    // autofocus) lives in ChatComposerFocus.kt.
+    val composerGuard = rememberComposerEntryFocusGuard(sessionId)
+    ReplyEndAutofocusEffect(
+        isStreaming = isStreaming,
+        sessionId = sessionId,
+        enabled = autoFocusAfterReply,
+        onIntentionalFocus = composerGuard::release,
+        requestFocus = { runCatching { inputFocusRequester.requestFocus() } },
+    )
 
     // Show top-level error in snackbar (only for errors without an assistant message)
     LaunchedEffect(error) {
@@ -5547,7 +5507,7 @@ fun ChatScreen(
                             val down = awaitFirstDown(requireUnconsumed = false)
                             // Any pointer landing on the composer is a user
                             // gesture — the entry guard must not eat its focus.
-                            composerTouched = true
+                            composerGuard.markTouched()
                             var totalDx = 0f
                             var totalDy = 0f
                             var claimed = false
@@ -5614,7 +5574,7 @@ fun ChatScreen(
                                 // already open, do nothing so a stray drag
                                 // doesn't re-trigger anything.
                                 // Deliberate gesture: lift the entry guard.
-                                composerFocusGuardUntil = 0L
+                                composerGuard.release()
                                 inputFocusRequester.requestFocus()
                                 keyboardController?.show()
                                 sendSwipeProgress = 0f
@@ -6247,9 +6207,7 @@ fun ChatScreen(
                                     // platform or an OEM IME restores focus here,
                                     // drop it again instead of showing the
                                     // keyboard.
-                                    if (it.isFocused && !composerTouched &&
-                                        android.os.SystemClock.uptimeMillis() < composerFocusGuardUntil
-                                    ) {
+                                    if (it.isFocused && composerGuard.shouldDropFocus()) {
                                         focusManager.clearFocus(force = true)
                                         keyboardController?.hide()
                                     }
