@@ -1631,22 +1631,23 @@ fun ChatScreen(
             var growth: Long = m.content.length.toLong()
             var blockSig: Long = 1469598103934665603L // FNV-1a 64-bit offset basis
             for (b in m.toolBlocks) {
+                // [T-android-thinking-follow-scope] Thinking grows inside
+                // its own 300dp box (ThinkingAutoFollow); counting its
+                // length here scrolled the whole PAGE per token during
+                // reasoning. Keep id/kind/status so block appearance and
+                // RUNNING→SUCCESS transitions still wake the collector.
+                val isThinking = b.kind == "thinking"
+                if (!isThinking) growth += b.content.length.toLong()
                 blockSig = blockSig xor b.id.hashCode().toLong()
                 blockSig *= 1099511628211L
                 blockSig = blockSig xor b.kind.hashCode().toLong()
                 blockSig *= 1099511628211L
                 blockSig = blockSig xor (b.toolStatus?.ordinal?.toLong() ?: -1L)
                 blockSig *= 1099511628211L
-                // [T-android-thinking-follow-scope] Thinking grows inside
-                // its own 300dp box (ThinkingAutoFollow); counting its
-                // length here scrolled the whole PAGE per token during
-                // reasoning. Keep id/kind/status so block appearance and
-                // RUNNING→SUCCESS transitions still wake the collector.
-                if (b.kind != "thinking") {
-                    growth += b.content.length.toLong()
+                if (!isThinking) {
                     blockSig = blockSig xor b.content.length.toLong()
+                    blockSig *= 1099511628211L
                 }
-                blockSig *= 1099511628211L
             }
             ScrollFollowKey(
                 lastIndex = effective.lastIndex,
