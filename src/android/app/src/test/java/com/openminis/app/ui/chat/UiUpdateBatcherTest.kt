@@ -6,6 +6,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -62,15 +63,19 @@ class UiUpdateBatcherTest {
             consumerDispatcher = StandardTestDispatcher(testScheduler),
         )
 
-        batcher.start()
-        batcher.enqueue("assistant", "thinking-final", true, emptyList())
-        runCurrent()
-        batcher.enqueue("assistant", "answer-final", false, emptyList())
-        val flushJob = launch { batcher.flush() }
-        runCurrent()
-        flushJob.join()
+        try {
+            batcher.start()
+            batcher.enqueue("assistant", "thinking-final", true, emptyList())
+            runCurrent()
+            batcher.enqueue("assistant", "answer-final", false, emptyList())
+            val flushJob = launch { batcher.flush() }
+            advanceUntilIdle()
+            flushJob.join()
 
-        assertEquals(listOf("answer-final" to false), applied)
+            assertEquals(listOf("answer-final" to false), applied)
+        } finally {
+            batcher.stop()
+        }
     }
 
     @Test

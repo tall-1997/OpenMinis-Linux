@@ -33,7 +33,6 @@ class ChatScrollControllerTest {
         testScheduler.runCurrent()
         assertFalse(waiter.isCompleted)
         items.value = listOf(FlatChatItem.AssistantHeader("target"))
-        version.value = 6L
         testScheduler.runCurrent()
         assertTrue(waiter.isCompleted)
     }
