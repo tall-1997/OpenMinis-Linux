@@ -34,7 +34,9 @@ class UsageTimeSeriesGuardTest {
     @Test
     fun chartSeriesIsNotRebuiltOnRangeChange() {
         val source = ProductionSources.read("ui/settings/UsageStatsScreen.kt")
-        val rangeEffectStart = source.indexOf("LaunchedEffect(timeRange)")
+        // No closing paren: the effect keys on (timeRange, records) so a
+        // records load also re-derives; the guard must match that prefix.
+        val rangeEffectStart = source.indexOf("LaunchedEffect(timeRange")
         assertTrue("range LaunchedEffect must exist", rangeEffectStart >= 0)
         val rangeEffectEnd = source.indexOf("SettingsScaffold", rangeEffectStart)
         val rangeEffect = source.substring(rangeEffectStart, rangeEffectEnd)

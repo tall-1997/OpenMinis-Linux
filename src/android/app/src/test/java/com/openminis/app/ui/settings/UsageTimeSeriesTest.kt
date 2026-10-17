@@ -120,7 +120,7 @@ class UsageTimeSeriesTest {
             """{"inputTokens":100,"outputTokens":30,"cacheReadTokens":50,"cacheCreationTokens":25}""",
         )
         val series = buildDailySeries(listOf(r), 14, now)
-        assertEquals(150L, series.last().inputTokens)
+        assertEquals(175L, series.last().inputTokens)
         assertEquals(30L, series.last().outputTokens)
     }
 

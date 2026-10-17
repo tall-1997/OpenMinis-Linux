@@ -1,7 +1,6 @@
 package com.openminis.app.ui.settings
 
 import com.openminis.app.data.db.UsageRecord
-import com.openminis.app.util.IsoTime
 import java.util.Calendar
 
 /**
@@ -57,6 +56,24 @@ internal fun filterUsageByRange(
 }
 
 /**
+ * Local `yyyy-MM-dd` key derived from the SAME Calendar source as
+ * [localMidnightBefore] — deliberately NOT IsoTime.formatLocalDate, whose
+ * DateTimeFormatter captures ZoneId.systemDefault() at class-load time;
+ * under a mid-process timezone change (or a test JVM that pins the default
+ * after IsoTime was first loaded) the two sources disagree and a record can
+ * land one day off its bucket.
+ */
+internal fun localDateKey(ms: Long): String {
+    val cal = Calendar.getInstance()
+    cal.timeInMillis = ms
+    return "%04d-%02d-%02d".format(
+        cal.get(Calendar.YEAR),
+        cal.get(Calendar.MONTH) + 1,
+        cal.get(Calendar.DAY_OF_MONTH),
+    )
+}
+
+/**
  * Build a fixed-length daily series ending today (inclusive), zero-filled
  * for days without usage. The chart needs a stable slot count so bars don't
  * jump around as days pass; missing days render as empty slots.
@@ -73,7 +90,7 @@ internal fun buildDailySeries(
     val start = localMidnightBefore(nowMillis, days - 1)
     val keys = ArrayList<String>(days)
     for (offset in days - 1 downTo 0) {
-        keys.add(IsoTime.formatLocalDate(localMidnightBefore(nowMillis, offset)))
+        keys.add(localDateKey(localMidnightBefore(nowMillis, offset)))
     }
     val byKey = HashMap<String, LongArray>(days)
     for (record in records) {
@@ -87,7 +104,7 @@ internal fun buildDailySeries(
             usage.optLong("cacheReadTokens", 0) +
             usage.optLong("cacheCreationTokens", 0)
         val output = usage.optLong("outputTokens", 0)
-        val key = IsoTime.formatLocalDate(record.createdAt)
+        val key = localDateKey(record.createdAt)
         val acc = byKey.getOrPut(key) { longArrayOf(0, 0) }
         acc[0] += input
         acc[1] += output
