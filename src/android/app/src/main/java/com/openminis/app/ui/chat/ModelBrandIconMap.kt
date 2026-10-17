@@ -21,7 +21,7 @@ internal object ModelBrandIconMap {
         "agui" -> R.raw.ic_brand_agui
         "ai2" -> R.raw.ic_brand_ai2
         "ai21" -> R.raw.ic_brand_ai21
-        "ai21-brand" -> R.raw.ic_brand_ai21-brand
+        "ai21-brand" -> R.raw.ic_brand_ai21_brand
         "ai302" -> R.raw.ic_brand_ai302
         "ai360" -> R.raw.ic_brand_ai360
         "aihubmix" -> R.raw.ic_brand_aihubmix
@@ -32,13 +32,13 @@ internal object ModelBrandIconMap {
         "akashchat" -> R.raw.ic_brand_akashchat
         "alephalpha" -> R.raw.ic_brand_alephalpha
         "alibaba" -> R.raw.ic_brand_alibaba
-        "alibaba-brand" -> R.raw.ic_brand_alibaba-brand
+        "alibaba-brand" -> R.raw.ic_brand_alibaba_brand
         "alibabacloud" -> R.raw.ic_brand_alibabacloud
         "amdradeoncloud" -> R.raw.ic_brand_amdradeoncloud
         "amp" -> R.raw.ic_brand_amp
         "anspire" -> R.raw.ic_brand_anspire
         "antgroup" -> R.raw.ic_brand_antgroup
-        "antgroup-brand" -> R.raw.ic_brand_antgroup-brand
+        "antgroup-brand" -> R.raw.ic_brand_antgroup_brand
         "anthropic" -> R.raw.ic_brand_anthropic
         "antigravity" -> R.raw.ic_brand_antigravity
         "anyscale" -> R.raw.ic_brand_anyscale
@@ -50,14 +50,14 @@ internal object ModelBrandIconMap {
         "atlascloud" -> R.raw.ic_brand_atlascloud
         "automatic" -> R.raw.ic_brand_automatic
         "aws" -> R.raw.ic_brand_aws
-        "aws-brand" -> R.raw.ic_brand_aws-brand
+        "aws-brand" -> R.raw.ic_brand_aws_brand
         "aya" -> R.raw.ic_brand_aya
         "azure" -> R.raw.ic_brand_azure
         "azureai" -> R.raw.ic_brand_azureai
         "baai" -> R.raw.ic_brand_baai
         "baichuan" -> R.raw.ic_brand_baichuan
         "baidu" -> R.raw.ic_brand_baidu
-        "baidu-brand" -> R.raw.ic_brand_baidu-brand
+        "baidu-brand" -> R.raw.ic_brand_baidu_brand
         "baiducloud" -> R.raw.ic_brand_baiducloud
         "bailian" -> R.raw.ic_brand_bailian
         "baseten" -> R.raw.ic_brand_baseten
@@ -72,13 +72,13 @@ internal object ModelBrandIconMap {
         "browserless" -> R.raw.ic_brand_browserless
         "burncloud" -> R.raw.ic_brand_burncloud
         "bytedance" -> R.raw.ic_brand_bytedance
-        "bytedance-brand" -> R.raw.ic_brand_bytedance-brand
+        "bytedance-brand" -> R.raw.ic_brand_bytedance_brand
         "capcut" -> R.raw.ic_brand_capcut
         "celestoai" -> R.raw.ic_brand_celestoai
         "centml" -> R.raw.ic_brand_centml
-        "centml-brand" -> R.raw.ic_brand_centml-brand
+        "centml-brand" -> R.raw.ic_brand_centml_brand
         "cerebras" -> R.raw.ic_brand_cerebras
-        "cerebras-brand" -> R.raw.ic_brand_cerebras-brand
+        "cerebras-brand" -> R.raw.ic_brand_cerebras_brand
         "chatglm" -> R.raw.ic_brand_chatglm
         "cherrystudio" -> R.raw.ic_brand_cherrystudio
         "chutes" -> R.raw.ic_brand_chutes
@@ -105,13 +105,13 @@ internal object ModelBrandIconMap {
         "coqui" -> R.raw.ic_brand_coqui
         "coze" -> R.raw.ic_brand_coze
         "crewai" -> R.raw.ic_brand_crewai
-        "crewai-brand" -> R.raw.ic_brand_crewai-brand
+        "crewai-brand" -> R.raw.ic_brand_crewai_brand
         "crusoe" -> R.raw.ic_brand_crusoe
         "cursor" -> R.raw.ic_brand_cursor
         "cybercut" -> R.raw.ic_brand_cybercut
         "dalle" -> R.raw.ic_brand_dalle
         "dbrx" -> R.raw.ic_brand_dbrx
-        "dbrx-brand" -> R.raw.ic_brand_dbrx-brand
+        "dbrx-brand" -> R.raw.ic_brand_dbrx_brand
         "decart" -> R.raw.ic_brand_decart
         "deepai" -> R.raw.ic_brand_deepai
         "deepcogito" -> R.raw.ic_brand_deepcogito
@@ -154,9 +154,9 @@ internal object ModelBrandIconMap {
         "glmv" -> R.raw.ic_brand_glmv
         "gmicloud" -> R.raw.ic_brand_gmicloud
         "google" -> R.raw.ic_brand_google
-        "google-brand" -> R.raw.ic_brand_google-brand
+        "google-brand" -> R.raw.ic_brand_google_brand
         "googlecloud" -> R.raw.ic_brand_googlecloud
-        "googlecloud-brand" -> R.raw.ic_brand_googlecloud-brand
+        "googlecloud-brand" -> R.raw.ic_brand_googlecloud_brand
         "goose" -> R.raw.ic_brand_goose
         "gradio" -> R.raw.ic_brand_gradio
         "greptile" -> R.raw.ic_brand_greptile
@@ -225,7 +225,7 @@ internal object ModelBrandIconMap {
         "menlo" -> R.raw.ic_brand_menlo
         "meshy" -> R.raw.ic_brand_meshy
         "meta" -> R.raw.ic_brand_meta
-        "meta-brand" -> R.raw.ic_brand_meta-brand
+        "meta-brand" -> R.raw.ic_brand_meta_brand
         "metaai" -> R.raw.ic_brand_metaai
         "metagpt" -> R.raw.ic_brand_metagpt
         "microsoft" -> R.raw.ic_brand_microsoft
@@ -287,7 +287,7 @@ internal object ModelBrandIconMap {
         "reka" -> R.raw.ic_brand_reka
         "relace" -> R.raw.ic_brand_relace
         "replicate" -> R.raw.ic_brand_replicate
-        "replicate-brand" -> R.raw.ic_brand_replicate-brand
+        "replicate-brand" -> R.raw.ic_brand_replicate_brand
         "replit" -> R.raw.ic_brand_replit
         "reve" -> R.raw.ic_brand_reve
         "roocode" -> R.raw.ic_brand_roocode
@@ -300,7 +300,7 @@ internal object ModelBrandIconMap {
         "searchapi" -> R.raw.ic_brand_searchapi
         "searxng" -> R.raw.ic_brand_searxng
         "sensenova" -> R.raw.ic_brand_sensenova
-        "sensenova-brand" -> R.raw.ic_brand_sensenova-brand
+        "sensenova-brand" -> R.raw.ic_brand_sensenova_brand
         "siliconcloud" -> R.raw.ic_brand_siliconcloud
         "sillytavern" -> R.raw.ic_brand_sillytavern
         "skywork" -> R.raw.ic_brand_skywork
@@ -312,7 +312,7 @@ internal object ModelBrandIconMap {
         "spark" -> R.raw.ic_brand_spark
         "speedai" -> R.raw.ic_brand_speedai
         "stability" -> R.raw.ic_brand_stability
-        "stability-brand" -> R.raw.ic_brand_stability-brand
+        "stability-brand" -> R.raw.ic_brand_stability_brand
         "statecloud" -> R.raw.ic_brand_statecloud
         "stepfun" -> R.raw.ic_brand_stepfun
         "straico" -> R.raw.ic_brand_straico
@@ -323,12 +323,12 @@ internal object ModelBrandIconMap {
         "targon" -> R.raw.ic_brand_targon
         "tavily" -> R.raw.ic_brand_tavily
         "tencent" -> R.raw.ic_brand_tencent
-        "tencent-brand" -> R.raw.ic_brand_tencent-brand
+        "tencent-brand" -> R.raw.ic_brand_tencent_brand
         "tencentcloud" -> R.raw.ic_brand_tencentcloud
         "tiangong" -> R.raw.ic_brand_tiangong
         "tii" -> R.raw.ic_brand_tii
         "together" -> R.raw.ic_brand_together
-        "together-brand" -> R.raw.ic_brand_together-brand
+        "together-brand" -> R.raw.ic_brand_together_brand
         "topazlabs" -> R.raw.ic_brand_topazlabs
         "trae" -> R.raw.ic_brand_trae
         "tripo" -> R.raw.ic_brand_tripo
