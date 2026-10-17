@@ -132,7 +132,7 @@ internal class ChatScrollController(
         ): Boolean {
             return combine(flatItems, flatItemsVersion) { items, version ->
                 if (version > requestedVersion) items.any(matches) else null
-            }.filterNotNull().first()
+            }.filterNotNull().first { it }
         }
 
         suspend fun awaitVersion(
