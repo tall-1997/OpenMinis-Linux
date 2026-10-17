@@ -4,6 +4,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
@@ -16,7 +17,7 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class UiUpdateBatcherTest {
-    private lateinit var dispatcher: StandardTestDispatcher
+    private lateinit var dispatcher: TestDispatcher
 
     @Before
     fun setUp() {
