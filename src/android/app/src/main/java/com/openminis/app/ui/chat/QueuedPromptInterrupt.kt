@@ -19,4 +19,9 @@ package com.openminis.app.ui.chat
  * Carries no stack trace — it is thrown per-occurrence at token cadence and
  * unwinds only a few frames inside the collector.
  */
-internal class QueuedPromptInterrupt : Exception(null, writableStackTrace = false)
+internal class QueuedPromptInterrupt : Exception() {
+    // No stack: thrown at token cadence, unwinds only a few frames inside
+    // the collector. (Exception(null, writableStackTrace = false) doesn't
+    // compile — the Java constructor has no defaults to skip to.)
+    override fun fillInStackTrace(): Throwable = this
+}
