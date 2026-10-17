@@ -216,7 +216,7 @@ class ThinkingStableExpandTest {
         val src = ProductionSources.read("ui/chat/QueuedPromptInterrupt.kt")
         assertTrue(
             "thrown at token cadence - must not capture stack frames",
-            "writableStackTrace = false" in src,
+            "override fun fillInStackTrace(): Throwable = this" in src,
         )
     }
 }
