@@ -484,7 +484,7 @@ private fun DetailRow(label: String, value: String) {
     }
 }
 
-private fun formatCount(n: Long): String = when {
+internal fun formatCount(n: Long): String = when {
     n >= 1_000_000 -> String.format("%.1fM", n / 1_000_000.0)
     n >= 1_000 -> {
         val k = n / 1000.0
