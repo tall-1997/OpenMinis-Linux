@@ -1,5 +1,7 @@
 package com.openminis.app.ui.chat
 
+import com.openminis.app.tools.BrandKeywordSources
+
 /**
  * Resolves the lobe-icons brand slug for a MODEL reference (top bar, model
  * picker, provider detail).
@@ -31,7 +33,10 @@ internal object ModelBrandResolver {
      * Brand keywords → lobe-icons slug. Order matters for ties; longer
      * keywords outrank shorter ones by length, not position.
      */
-    private val KEYWORDS: List<Pair<String, String>> = listOf(
+    private val KEYWORDS: List<Pair<String, String>> =
+        // Chinese brand aliases live in tools/BrandKeywordSources — match data,
+        // not UI copy, so the CJK ratchet on ui/ stays meaningful.
+        BrandKeywordSources.CJK_ALIASES + listOf(
         // Long, unambiguous brand names first so they win length ties.
         "deepseek" to "deepseek",
         "moonshot" to "moonshot",
@@ -403,21 +408,6 @@ internal object ModelBrandResolver {
         "poe" to "poe",
         "xai" to "xai",
         "zai" to "zai",
-        // [T-brand-cjk-aliases] Chinese brand aliases. Group-chat speakers are
-        // frequently named in Chinese ("智谱清言", "通义千问"); without these the
-        // scan misses and the avatar degrades to an initial letter. Merged from
-        // the retired GroupChat.vendorKey alias table — one keyword table, one
-        // truth (PR70 lesson).
-        "深度求索" to "deepseek",
-        "通义" to "qwen",
-        "千问" to "qwen",
-        "月之暗面" to "kimi",
-        "豆包" to "doubao",
-        "混元" to "hunyuan",
-        "文心" to "wenxin",
-        "百川" to "baichuan",
-        "海螺" to "hailuo",
-        "智谱" to "zhipu",
     )
 
     /**
