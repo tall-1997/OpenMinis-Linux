@@ -231,9 +231,9 @@ baseline 已同步收紧（只降不升）。新增/改动单测 5 个类 48 例
 | 已接线（3） | `FallbackPulseGate`、`SheetScrollGuard`、`SendReturnModeMenu` | 分别修掉「重进会话重放红脉冲」「选择器甩到底误关面板」「回车偏好不可观察」 |
 | 我们有等价或更严格实现（2） | `EvictionGuard`、`SettleAfterInteractionGate` | 前者被 `ChatViewModel.canEvictFromMemory()` 覆盖且检查项更多；后者对应的 settle 重钉已被我们的滚动策略明确移除 |
 | 依赖其它批次的基础设施（4） | `ImageInputPreflight`、`QueuedPromptBatching`、`TitleCandidates`、`VoiceSendGate` | 分别需要 `LLMError.httpStatus`+`effectiveInputModalities`、`QueuedPrompt.origin/isScheduledFire`、我们标题管线签名、语音 `RetryPromptQueue/FailedAudio` |
-| 需结构性改造（5，未完成） | `OrphanedRunningToolGate`、`BubbleRowLocator`、`SelectionDocumentOrder`、`ContextUsageHint(+Ui)`、`EmptyTurnRecovery` | 上游的集成断言要求 `ChatViewModel` 具备 `mergeDelegateOverrides`/`delegateJobIsAlive` 这类我们结构里没有的私有函数；`SelectionDocumentOrder` 要引入 `DocOrder`(行, 子序号) 替换按屏幕 y 排序；`ContextUsageHint` 需要 ChatScreen 里的展示位 |
+| 需结构性改造（5，转入批次 4b） | `OrphanedRunningToolGate`、`BubbleRowLocator`、`SelectionDocumentOrder`、`ContextUsageHint(+Ui)`、`EmptyTurnRecovery` | 上游的集成断言要求 `ChatViewModel` 具备 `mergeDelegateOverrides`/`delegateJobIsAlive` 这类我们结构里没有的私有函数；`SelectionDocumentOrder` 要引入 `DocOrder`(行, 子序号) 替换按屏幕 y 排序；`ContextUsageHint` 需要 ChatScreen 里的展示位 |
 
-这 5 件不是「加一行调用」能接的：`ChatScreen`(7526)、`ChatViewModel`(6291)、`MinisTextKitSelection`(1245) 都在架构基线上，且改动本身要新增状态与排序键。已移植的 5 个文件保留在分支上（编译通过），接线按每轮一件推进。
+这 5 件不是「加一行调用」能接的：`ChatScreen`(7526)、`ChatViewModel`(6291)、`MinisTextKitSelection`(1245) 都在架构基线上，且改动本身要新增状态与排序键。因此批次 4 只交付已接线的 3 件；这 5 件的移植文件已从批次 4 分支移除（未接线的实现留在仓库里就是死码），转为批次 4b 逐件实现：每件都要先落地它依赖的状态/排序键，再接 UI。
 
 **全量上游对比审查（2026-10-19）**：本台账只覆盖逐条点名过的条目。把 origin 与 upstream（`b4c0661d`）做
 文件级 / 顶层符号级 / 字符串键级四层比对后，另有 **112 个上游源码文件、28 个部分实现文件（缺 55 个顶层符号）、
