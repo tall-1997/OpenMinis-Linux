@@ -87,3 +87,37 @@ internal object OrphanedRunningToolGate {
         return isLiveRun || jobIsAlive
     }
 }
+
+/**
+ * [T-android-orphaned-running-tool-spin] Display-side repair for a message list
+ * that came back from the database.
+ *
+ * A tool block persisted as STREAMING/PENDING/RUNNING means the app died (or the
+ * process was reclaimed) before its outcome was written. Nothing will ever
+ * resolve it, so it shimmers forever 鈥?the measured 85-130% idle CPU in the
+ * KDoc above. [resolve] turns those into TIMEOUT unless the run is live or a job
+ * with that id is still alive; terminal states pass through untouched.
+ *
+ * @param isLiveRun the session currently has a turn in flight
+ * @param jobIsAlive asks the job registry whether a block id still has work
+ */
+internal fun List<ChatMessage>.demoteOrphanedToolSpinners(
+    isLiveRun: Boolean,
+    jobIsAlive: (String) -> Boolean = { false },
+): List<ChatMessage> = map { message ->
+    if (message.toolBlocks.isEmpty()) {
+        message
+    } else {
+        message.copy(
+            toolBlocks = message.toolBlocks.map { block ->
+                block.copy(
+                    toolStatus = OrphanedRunningToolGate.resolve(
+                        status = block.toolStatus,
+                        isLiveRun = isLiveRun,
+                        jobIsAlive = jobIsAlive(block.id),
+                    ),
+                )
+            },
+        )
+    }
+}
