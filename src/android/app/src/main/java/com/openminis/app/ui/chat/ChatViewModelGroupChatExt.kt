@@ -311,7 +311,7 @@ private fun ChatViewModel.groupMembers(
         GroupMember(
             name = entry.model.displayName,
             modelId = entry.model.id,
-            vendor = GroupChat.vendorKey(entry.model.id, entry.model.displayName),,
+            vendor = GroupChat.vendorKey(entry.model.id, entry.model.displayName),
             provider = provider,
             snapshot = snapshotFor(entry),
             maxTokens = (entry.model.maxOutputTokens ?: 4096).coerceIn(1024, 16384),
