@@ -88,10 +88,17 @@ class ModelBrandResolverTest {
     }
 
     @Test
-    fun shortAliasesDoNotSwallowUnrelatedWords() {
-        // "hy" alone is NOT a keyword on purpose: it would hit myth/hyphen.
+    fun genericWordsNeverScoreAsBrands() {
+        // [T-brand-generic-word-guard] Bare generic English words (magic,
+        // sync, nova, flux, spark...) were in the keyword table straight
+        // from the icon catalog and swallowed unrelated model ids. Every one
+        // of them is now excluded; a brand that NEEDS such a word must use a
+        // longer, unambiguous keyword (flux-1/flux-pro → bfl, nova-pro → nova).
         assertEquals(FALLBACK, resolve(modelId = "myth-7b"))
         assertEquals(FALLBACK, resolve(modelId = "hyphen-magic"))
+        assertEquals(FALLBACK, resolve(modelId = "flux-dev"))
+        assertEquals("bfl", resolve(modelId = "flux-pro"))
+        assertEquals("nova", resolve(modelId = "nova-micro"))
     }
 
     @Test
