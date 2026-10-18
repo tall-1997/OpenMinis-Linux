@@ -82,6 +82,7 @@ internal object ModelBrandResolver {
         "kimi" to "kimi",
         "copilot" to "copilot",
         "command" to "cohere",
+        "cohere" to "cohere",
         "together" to "together",
         "ollama" to "ollama",
         "davinci" to "openai",
@@ -402,6 +403,21 @@ internal object ModelBrandResolver {
         "poe" to "poe",
         "xai" to "xai",
         "zai" to "zai",
+        // [T-brand-cjk-aliases] Chinese brand aliases. Group-chat speakers are
+        // frequently named in Chinese ("智谱清言", "通义千问"); without these the
+        // scan misses and the avatar degrades to an initial letter. Merged from
+        // the retired GroupChat.vendorKey alias table — one keyword table, one
+        // truth (PR70 lesson).
+        "深度求索" to "deepseek",
+        "通义" to "qwen",
+        "千问" to "qwen",
+        "月之暗面" to "kimi",
+        "豆包" to "doubao",
+        "混元" to "hunyuan",
+        "文心" to "wenxin",
+        "百川" to "baichuan",
+        "海螺" to "hailuo",
+        "智谱" to "zhipu",
     )
 
     /**
@@ -421,22 +437,40 @@ internal object ModelBrandResolver {
      * already say far more precisely.
      */
     fun resolve(modelId: String?, displayName: String? = null): String? {
-        val haystack = "${modelId ?: ""} ${displayName ?: ""}".trim().lowercase()
-        if (haystack.isBlank()) return null
+        // Product decision: an unrecognized non-empty reference shows the OpenAI
+        // mark so the icon slot keeps a stable rhythm. null means "no reference
+        // at all" (empty row) — never a fallback.
+        return resolveExact(modelId, displayName) ?: FALLBACK_BRAND
+    }
+
+    /**
+     * Same keyword scan as [resolve] but WITHOUT the OpenAI fallback: returns
+     * null when the reference matches no brand. Group-chat avatars use this —
+     // an unrecognized speaker must degrade to its initial-letter avatar, not
+     // silently wear another vendor's mark.
+     */
+    fun resolveExact(modelId: String?, displayName: String? = null): String? {
+        val raw = "${modelId ?: ""} ${displayName ?: ""}".trim().lowercase()
+        if (raw.isBlank()) return null
+        // Second channel with punctuation stripped: dirty relay ids like
+        // "deep-seek_chat" or "x.ai/grok-3" glue the brand name across
+        // separators, so a plain contains() on the raw text misses it.
+        // Keywords that themselves contain separators ("hy-") simply never
+        // hit this channel — the raw channel covers them.
+        val compact = raw.replace(Regex("[^a-z0-9\\u4e00-\\u9fff]+"), "")
 
         var best: String? = null
         var bestScore = 0
         for ((keyword, slug) in KEYWORDS) {
             if (keyword.length <= bestScore) continue
-            if (haystack.contains(keyword)) {
+            if (raw.contains(keyword) ||
+                (compact.length > keyword.length && compact.contains(keyword))
+            ) {
                 best = slug
                 bestScore = keyword.length
             }
         }
-        // Product decision: an unrecognized non-empty reference shows the OpenAI
-        // mark so the icon slot keeps a stable rhythm. null means "no reference
-        // at all" (empty row) — never a fallback.
-        return best ?: FALLBACK_BRAND
+        return best
     }
 
     /** Compiled resource id for a slug, or null when not packed. */
