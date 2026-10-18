@@ -177,4 +177,24 @@ class ModelBrandResolverTest {
     fun unknownSlugHasNoIcon() {
         assertNull(ModelBrandResolver.iconResId("not-a-brand"))
     }
+
+    /**
+     * [T-brand-icon-in-picker] The model picker used to draw a flat
+     * provider-color dot, which encoded the relay's ProviderType only — every
+     * OpenAI-typed relay showed the same green dot and told the user nothing
+     * about the model. Guard both picker surfaces against regressing to a dot.
+     */
+    @Test
+    fun modelPickerUsesBrandIconsNotColorDots() {
+        val source = com.openminis.app.ProductionSources.read("ui/chat/ChatModelPickerSheet.kt")
+        assertEquals(
+            "ChatModelPickerSheet must render a brand icon per model row",
+            3,
+            Regex("ModelBrandIcon\\(").findAll(source).count(),
+        )
+        assertTrue(
+            "ChatModelPickerSheet must NOT reintroduce the provider color dot",
+            !source.contains("providerDotColor"),
+        )
+    }
 }
