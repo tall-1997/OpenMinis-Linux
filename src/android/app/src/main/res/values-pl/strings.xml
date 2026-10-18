@@ -1898,4 +1898,7 @@
     <string name="ma_role_tools_label">Lista dozwolonych narzędzi (rozdzielona przecinkami, pusta = bez limitu)</string>
     <string name="ma_role_delete">Usuń tę rolę</string>
     <string name="tool_limits_main_session">Maks. turów sesji głównej</string>
+    <string name="picker_unavailable_toast">Żadna aplikacja na tym urządzeniu nie może otworzyć tego selektora.</string>
+    <string name="settings_scheduled_badge_title">Plakietka zaplanowanych zadań</string>
+    <string name="settings_scheduled_badge_footer">Pokazuje na ikonie zegara na ekranie głównym liczbę aktywnych zaplanowanych zadań.</string>
 </resources>

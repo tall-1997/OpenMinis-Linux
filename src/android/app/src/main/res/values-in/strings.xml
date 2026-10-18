@@ -1895,4 +1895,7 @@
     <string name="ma_role_tools_label">Daftar alat yang diizinkan (dipisah koma, kosong = tanpa batas)</string>
     <string name="ma_role_delete">Hapus peran ini</string>
     <string name="tool_limits_main_session">Maks. giliran sesi utama</string>
+    <string name="picker_unavailable_toast">Tidak ada aplikasi di perangkat ini yang dapat membuka pemilih tersebut.</string>
+    <string name="settings_scheduled_badge_title">Lencana tugas terjadwal</string>
+    <string name="settings_scheduled_badge_footer">Tampilkan di ikon jam beranda berapa banyak tugas terjadwal yang aktif.</string>
 </resources>

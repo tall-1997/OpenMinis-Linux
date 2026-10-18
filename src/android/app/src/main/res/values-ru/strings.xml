@@ -1900,4 +1900,7 @@
     <string name="ma_role_tools_label">Список разрешённых инструментов (через запятую, пусто = без ограничений)</string>
     <string name="ma_role_delete">Удалить эту роль</string>
     <string name="tool_limits_main_session">Макс. ходов основного сеанса</string>
+    <string name="picker_unavailable_toast">На этом устройстве нет приложения, которое может открыть этот выбор.</string>
+    <string name="settings_scheduled_badge_title">Значок запланированных задач</string>
+    <string name="settings_scheduled_badge_footer">Показывает на значке часов на главном экране число активных запланированных задач.</string>
 </resources>

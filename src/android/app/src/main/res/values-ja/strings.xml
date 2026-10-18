@@ -1889,4 +1889,7 @@
     <string name="ma_role_tools_label">ツール許可リスト（カンマ区切り、空=無制限）</string>
     <string name="ma_role_delete">このロールを削除</string>
     <string name="tool_limits_main_session">メインセッションの最大ターン数</string>
+    <string name="picker_unavailable_toast">この端末には、この選択画面を開けるアプリがありません。</string>
+    <string name="settings_scheduled_badge_title">スケジュールタスクのバッジ</string>
+    <string name="settings_scheduled_badge_footer">ホームの時計アイコンに、有効なスケジュールタスクの数を表示します。</string>
 </resources>
