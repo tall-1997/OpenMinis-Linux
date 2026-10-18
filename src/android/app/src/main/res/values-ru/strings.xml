@@ -1900,6 +1900,12 @@
     <string name="ma_role_tools_label">Список разрешённых инструментов (через запятую, пусто = без ограничений)</string>
     <string name="ma_role_delete">Удалить эту роль</string>
     <string name="tool_limits_main_session">Макс. ходов основного сеанса</string>
+    <string name="usage_section_models">Использование по моделям</string>
+    <string name="usage_summary_window">Период: %1$s</string>
+    <string name="usage_summary_cache_hit">Попадания в кэш</string>
+    <string name="usage_detail_window_share">Доля за период</string>
+    <string name="usage_label_input_short">Ввод</string>
+    <string name="usage_label_output_short">Вывод</string>
     <string name="picker_unavailable_toast">На этом устройстве нет приложения, которое может открыть этот выбор.</string>
     <string name="settings_scheduled_badge_title">Значок запланированных задач</string>
     <string name="settings_scheduled_badge_footer">Показывает на значке часов на главном экране число активных запланированных задач.</string>
