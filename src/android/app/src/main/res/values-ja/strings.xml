@@ -1892,4 +1892,6 @@
     <string name="picker_unavailable_toast">この端末には、この選択画面を開けるアプリがありません。</string>
     <string name="settings_scheduled_badge_title">スケジュールタスクのバッジ</string>
     <string name="settings_scheduled_badge_footer">ホームの時計アイコンに、有効なスケジュールタスクの数を表示します。</string>
+    <string name="backup_dest_edit_title">保存先を編集</string>
+    <string name="backup_dest_folder">フォルダ</string>
 </resources>

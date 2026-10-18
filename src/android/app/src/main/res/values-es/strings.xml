@@ -1895,4 +1895,6 @@
     <string name="picker_unavailable_toast">Ninguna aplicación de este dispositivo puede abrir ese selector.</string>
     <string name="settings_scheduled_badge_title">Distintivo de tareas programadas</string>
     <string name="settings_scheduled_badge_footer">Muestra en el icono de reloj de la pantalla de inicio cuántas tareas programadas están activas.</string>
+    <string name="backup_dest_edit_title">Editar destino</string>
+    <string name="backup_dest_folder">Carpeta</string>
 </resources>
