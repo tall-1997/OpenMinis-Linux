@@ -13,6 +13,9 @@ import org.junit.Test
  */
 class ModelBrandResolverTest {
 
+    /** Unrecognized non-empty references fall back to the OpenAI mark. */
+    private val FALLBACK = ModelBrandResolver.FALLBACK_BRAND
+
     private fun resolve(modelId: String? = null, displayName: String? = null, type: ProviderType? = null) =
         ModelBrandResolver.resolve(type, modelId, displayName)
 
@@ -68,6 +71,26 @@ class ModelBrandResolverTest {
         assertEquals("coze", resolve(modelId = "coze-loop"))
         assertEquals("nanobanana", resolve(modelId = "nano-banana-pro"))
         assertEquals("xuanyuan", resolve(modelId = "xuanyuan-70b"))
+    }
+
+    @Test
+    fun shortEnablementNamesHitTheirLongSlug() {
+        // [T-brand-short-name] Products ship enablement names shorter than the
+        // icon slug: a model called "agnes-2.0-flash" must still find
+        // agnesai's logo, and hy3/hy4 are Hunyuan's compact naming.
+        assertEquals("agnesai", resolve(modelId = "agnes-2.0-flash"))
+        assertEquals("hunyuan", resolve(modelId = "hy3"))
+        assertEquals("hunyuan", resolve(modelId = "hy4"))
+        assertEquals("hunyuan", resolve(modelId = "hy3-preview"))
+        assertEquals("vertexai", resolve(modelId = "vertex-gemini-2.5"))
+        assertEquals("leptonai", resolve(modelId = "lepton-llama-3"))
+    }
+
+    @Test
+    fun shortAliasesDoNotSwallowUnrelatedWords() {
+        // "hy" alone is NOT a keyword on purpose: it would hit myth/hyphen.
+        assertEquals(FALLBACK, resolve(modelId = "myth-7b"))
+        assertEquals(FALLBACK, resolve(modelId = "hyphen-magic"))
     }
 
     @Test
