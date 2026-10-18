@@ -5956,13 +5956,11 @@ fun ChatScreen(
                             fontSize = 16.5.sp * chatInputFontScale,
                             color = MaterialTheme.colorScheme.onSurface,
                         )
-                        // [T-android-enter-to-send-broken] Live read of the
-                        // "Return key sends" preference. Bound here (not
-                        // captured at BasicTextField construction) so a
-                        // toggle in Settings reflects on the next IME
-                        // commit without recomposing the chat tree.
-                        val sendOnEnter = com.openminis.app.ui.settings
-                            .returnKeySendsMessage(context)
+                        // [T-android-enter-to-send-broken] Observable read of the
+                        // "Return key sends" preference (SendReturnModeMenu). A plain
+                        // function call would miss a toggle made while this screen is
+                        // alive; the State wrapper recomposes the IME action with it.
+                        val sendOnEnter by rememberReturnKeySendsMessage(context)
                         // Shared "Enter pressed → send" body used by BOTH
                         // the hardware-keyboard onKeyEvent path AND the
                         // soft-keyboard KeyboardActions.onSend below.
