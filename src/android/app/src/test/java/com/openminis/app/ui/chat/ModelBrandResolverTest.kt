@@ -83,7 +83,7 @@ class ModelBrandResolverTest {
         assertEquals("hunyuan", resolve(modelId = "hy3"))
         assertEquals("hunyuan", resolve(modelId = "hy4"))
         assertEquals("hunyuan", resolve(modelId = "hy3-preview"))
-        assertEquals("vertexai", resolve(modelId = "vertex-gemini-2.5"))
+        assertEquals("vertexai", resolve(modelId = "vertex-llama-3.3-70b"))
         assertEquals("leptonai", resolve(modelId = "lepton-llama-3"))
     }
 
