@@ -437,9 +437,12 @@ internal object ModelBrandResolver {
      * already say far more precisely.
      */
     fun resolve(modelId: String?, displayName: String? = null): String? {
+        // No reference at all → no icon (the row itself is empty). This guard
+        // must live HERE, not in resolveExact: an empty reference is not
+        // "unrecognized", it is absent, and must not wear the fallback mark.
+        if ("${modelId ?: ""} ${displayName ?: ""}".isBlank()) return null
         // Product decision: an unrecognized non-empty reference shows the OpenAI
-        // mark so the icon slot keeps a stable rhythm. null means "no reference
-        // at all" (empty row) — never a fallback.
+        // mark so the icon slot keeps a stable rhythm.
         return resolveExact(modelId, displayName) ?: FALLBACK_BRAND
     }
 
