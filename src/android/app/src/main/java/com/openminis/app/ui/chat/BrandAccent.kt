@@ -1,10 +1,9 @@
 package com.openminis.app.ui.chat
 
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
+import com.openminis.app.ui.theme.ChatColors
 
 /**
  * [T-brand-accent-color] Brand accent used for the usage-page share bars.
@@ -128,16 +127,15 @@ internal object BrandAccent {
 /**
  * Theme-aware brand accent for a model row.
  *
- * NOT [androidx.compose.foundation.isSystemInDarkTheme]: the app carries an
- * in-app theme override (theme_mode 1=light / 2=dark / system) and the system
- * check only tracks the system half — a user who forces dark in-app while the
- * system stays light would get light brand accents on a dark surface. The
- * active scheme's surface luminance follows whatever theme is ACTUALLY
- * applied, static or wallpaper-derived alike.
+ * [ChatColors.isDark] follows the app's RESOLVED theme — the in-app override
+ * (Settings → Appearance) included — and is the single source of truth the
+ * rest of the UI already reads. A system-level dark check would miss a user
+ * who forces dark in-app while the system stays light, painting light brand
+ * accents on a dark surface.
  */
 @Composable
 internal fun brandAccentFor(modelId: String?, displayName: String?): Color {
-    val dark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val dark = ChatColors.isDark
     return remember(modelId, displayName, dark) {
         BrandAccent.forModel(modelId, displayName, dark)
     }
