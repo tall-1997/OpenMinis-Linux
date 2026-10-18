@@ -34,7 +34,10 @@ internal object PreviewTextGuard {
         var lines = 0
         while (index <= text.length) {
             if (lines == MAX_LINES) {
-                out.append("\n… (preview truncated)")
+                // No leading newline: the loop already terminated the previous
+                // line, so adding one here would insert a blank line before the
+                // marker (and push the count one past the cap).
+                out.append("… (preview truncated)")
                 break
             }
             var end = text.indexOf('\n', index)
