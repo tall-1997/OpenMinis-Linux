@@ -137,7 +137,8 @@ class ScheduledTriggerMigrationTest {
     @Test
     fun `an interval counts, re-anchors, and stops at its count`() {
         val iv = task(ScheduledTriggerKind.INTERVAL, intervalSec = 600, maxFires = 2, triggered = 0)
-        assertFalse("not before its slot", ScheduledTaskManager.relativeAlarmDue(iv, t0 + 599_000))
+        // Outside the 5s clock-granularity slack the claim allows.
+        assertFalse("not before its slot", ScheduledTaskManager.relativeAlarmDue(iv, t0 + 590_000))
         assertTrue(ScheduledTaskManager.relativeAlarmDue(iv, t0 + 600_000))
 
         val (first, armFirst) = ScheduledTaskManager.afterAlarmFire(iv, t0 + 600_000)!!
