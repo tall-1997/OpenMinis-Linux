@@ -1392,6 +1392,8 @@
     <string name="backup_report_not_downloaded">%1$s : %2$d fichier(s) ne figuraient pas dans la sauvegarde (non téléchargés sur l\'appareil source)</string>
     <string name="backup_report_missing_from_package">%1$s : %2$d fichier(s) étaient répertoriés dans la sauvegarde mais en sont absents — la sauvegarde est incomplète</string>
     <string name="backup_report_unreadable">%1$s : %2$d élément(s) n\'ont pas pu être lus</string>
+    <string name="backup_report_notices">Non inclus dans cette sauvegarde</string>
+    <string name="backup_report_notices_footer">Ces éléments ont été exclus lors de la création de la sauvegarde : limite de taille dépassée, ou fichiers non téléchargés sur cet appareil. La restauration ne s\'est pas mal passée.</string>
     <string name="backup_creds_restored">Les clés API ont été restaurées pour %1$d fournisseur(s), avec leurs réglages. Les clés déjà présentes sur cet appareil ont été conservées. Les connexions OAuth peuvent nécessiter un renouvellement si leurs jetons ont expiré.</string>
     <string name="backup_creds_kept">Vos clés API existantes ont été conservées — les clés de la sauvegarde correspondaient aux identifiants déjà présents sur cet appareil, rien n\'a donc eu besoin d\'être remplacé.</string>
     <string name="backup_creds_none">Cette sauvegarde a été créée sans clés API : les fournisseurs restaurés n\'ont donc aucun identifiant — saisissez chaque clé API ou reconnectez-vous avant utilisation.</string>

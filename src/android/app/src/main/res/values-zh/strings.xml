@@ -1789,6 +1789,8 @@
     <string name="backup_report_not_downloaded">%1$s：%2$d 个文件不在备份中（源设备上未下载）</string>
     <string name="backup_report_missing_from_package">%1$s：备份中列出了 %2$d 个文件但包里没有——该备份不完整</string>
     <string name="backup_report_unreadable">%1$s：%2$d 个条目无法读取</string>
+    <string name="backup_report_notices">未包含在此备份中</string>
+    <string name="backup_report_notices_footer">这些内容在创建备份时被排除：要么超出备份的大小限制，要么在当时的设备上并未下载。恢复过程中没有出错。</string>
     <string name="backup_creds_restored">已为 %1$d 个服务商恢复 API 密钥及其设置。本设备上已有的密钥予以保留。若 OAuth 登录的令牌已过期，可能仍需重新登录。</string>
     <string name="backup_creds_kept">已保留你现有的 API 密钥——备份中的密钥与本设备上已有的凭据一致，因此无需覆盖。</string>
     <string name="backup_creds_none">此备份未包含 API 密钥，因此恢复的服务商没有凭据——请在使用前逐个输入 API 密钥或重新登录。</string>

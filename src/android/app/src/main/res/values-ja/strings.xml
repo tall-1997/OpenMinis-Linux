@@ -1391,6 +1391,8 @@
     <string name="backup_report_not_downloaded">%1$s：%2$d 件のファイルがバックアップに含まれていませんでした（作成元の端末にダウンロードされていません）</string>
     <string name="backup_report_missing_from_package">%1$s：%2$d 件のファイルがバックアップに記載されているのに実体がありません。このバックアップは不完全です</string>
     <string name="backup_report_unreadable">%1$s：%2$d 件の項目を読み取れませんでした</string>
+    <string name="backup_report_notices">このバックアップには含まれていません</string>
+    <string name="backup_report_notices_footer">これらはバックアップ作成時に除外されました。サイズ上限を超えたか、その端末でダウンロードされていなかったためです。復元時に問題は起きていません。</string>
     <string name="backup_creds_restored">%1$d 件のプロバイダーについて、設定とあわせて API キーを復元しました。この端末に既存のキーがある場合はそのまま残しています。OAuth のトークンが期限切れの場合は、ログインし直す必要があることがあります。</string>
     <string name="backup_creds_kept">既存の API キーをそのまま残しました。バックアップ内のキーはこの端末の認証情報と一致していたため、上書きの必要はありませんでした。</string>
     <string name="backup_creds_none">このバックアップは API キーを含めずに作成されているため、復元したプロバイダーには認証情報がありません。使用する前に、各 API キーを入力するかログインし直してください。</string>

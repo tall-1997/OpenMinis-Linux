@@ -31,14 +31,11 @@ import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.CloudDownload
 import androidx.compose.material.icons.outlined.CloudUpload
 import androidx.compose.material.icons.outlined.Stop
-import androidx.compose.material.icons.outlined.SwapVert
 import androidx.compose.material.icons.outlined.Storage
-import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.FolderZip
 import androidx.compose.material.icons.outlined.Folder
-import androidx.compose.material.icons.outlined.CreateNewFolder
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Forum
 import androidx.compose.material.icons.outlined.Layers
@@ -58,7 +55,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -87,10 +83,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.openminis.app.ui.settings.SettingsSwitch
 import com.openminis.app.R
 import com.openminis.app.backup.BackupCategory
-import com.openminis.app.backup.BackupFormat
 import com.openminis.app.backup.BackupHistory
 import com.openminis.app.ui.components.MinisMenu
 import com.openminis.app.ui.components.MinisButton
+import com.openminis.app.ui.theme.ChatColors
 import com.openminis.app.ui.components.MinisOutlinedButton
 import com.openminis.app.ui.components.MinisTextButton
 import com.openminis.app.ui.settings.SettingsScaffold
@@ -1158,52 +1154,58 @@ private fun RestoreReport(
         }
     }
 
-    // Per-category problems. The totals above say a restore had issues; these
+    // Per-category outcomes. The totals above say a restore had issues; these
     // say WHICH data was affected and why, which is the difference between
     // "something went wrong" and knowing whether it matters. Each line names
     // the category, as on iOS.
-    val problems = buildList {
-        for (c in report.categories) {
-            val name = BackupCategory.fromKey(c.category)
-                ?.let { stringResource(categoryNameRes(it)) } ?: c.category
-            // The category threw outright — the most serious line here, and
-            // the one iOS lists first.
-            c.failed?.let { add(stringResource(R.string.backup_report_failed, name, it)) }
-            if (c.sizeSkippedInPackage > 0) {
-                add(stringResource(R.string.backup_report_size_skipped, name, c.sizeSkippedInPackage))
-            }
-            if (c.notDownloadedInPackage > 0) {
-                add(stringResource(R.string.backup_report_not_downloaded, name, c.notDownloadedInPackage))
-            }
-            if (c.missingBlobs > 0) {
-                // The package itself is incomplete — worth distinguishing from
-                // a file the user deliberately capped out of it.
-                add(stringResource(R.string.backup_report_missing_from_package, name, c.missingBlobs))
-            }
-            if (c.unreadable > 0) {
-                add(stringResource(R.string.backup_report_unreadable, name, c.unreadable))
+    //
+    // [T-android-restore-report-severity] Split by severity. Everything used to
+    // render in the error colour, so a file the SOURCE device deliberately left
+    // out — over the size cap, or never downloaded there — read as if the
+    // restore had broken. Those are the backup's own policy, recorded as
+    // tombstones in the index, and they get their own amber section.
+    //
+    // Which counter is which severity is decided in restoreIssues(), not here,
+    // so the rule is tested as data rather than inferred from colours.
+    val issues = restoreIssues(report)
+    val lines = issues.map { issue ->
+        val name = BackupCategory.fromKey(issue.categoryKey)
+            ?.let { stringResource(categoryNameRes(it)) } ?: issue.categoryKey
+        issue.severity to when (issue.kind) {
+            RestoreIssueKind.FAILED ->
+                stringResource(R.string.backup_report_failed, name, issue.detail.orEmpty())
+            RestoreIssueKind.MISSING_FROM_PACKAGE ->
+                stringResource(R.string.backup_report_missing_from_package, name, issue.count)
+            RestoreIssueKind.UNREADABLE ->
+                stringResource(R.string.backup_report_unreadable, name, issue.count)
+            RestoreIssueKind.SIZE_SKIPPED ->
+                stringResource(R.string.backup_report_size_skipped, name, issue.count)
+            RestoreIssueKind.NOT_DOWNLOADED ->
+                stringResource(R.string.backup_report_not_downloaded, name, issue.count)
+        }
+    }
+    val errors = lines.filter { it.first == RestoreIssueSeverity.ERROR }.map { it.second }
+    // report.warnings are advisories (count mismatches and the like), already
+    // sentences rather than counts; they read as notices, not failures.
+    val notices = lines.filter { it.first == RestoreIssueSeverity.NOTICE }.map { it.second } +
+        report.warnings
+    if (errors.isNotEmpty()) {
+        SettingsSection(header = stringResource(R.string.backup_report_issues)) {
+            Column(Modifier.padding(16.dp)) {
+                errors.forEach {
+                    ReportLine(it, Icons.Outlined.ErrorOutline, MaterialTheme.colorScheme.error)
+                }
             }
         }
     }
-    if (problems.isNotEmpty() || report.warnings.isNotEmpty()) {
-        SettingsSection(header = stringResource(R.string.backup_report_issues)) {
+    if (notices.isNotEmpty()) {
+        SettingsSection(
+            header = stringResource(R.string.backup_report_notices),
+            footer = stringResource(R.string.backup_report_notices_footer),
+        ) {
             Column(Modifier.padding(16.dp)) {
-                problems.forEach {
-                    Text(
-                        it,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(vertical = 2.dp),
-                    )
-                }
-                report.warnings.forEach {
-                    Text(
-                        it,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(vertical = 2.dp),
-                    )
-                }
+                val amber = reportNoticeColor()
+                notices.forEach { ReportLine(it, Icons.Outlined.Warning, amber) }
             }
         }
     }
@@ -1231,171 +1233,47 @@ private fun RestoreReport(
     }
 }
 
+@Composable
+private fun ReportLine(text: String, icon: ImageVector, tint: Color) {
+    Row(
+        modifier = Modifier.padding(vertical = 3.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = tint,
+            // Nudged down to sit on the first text line rather than centring on
+            // a paragraph that may wrap.
+            modifier = Modifier.padding(top = 1.dp).size(16.dp),
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(text, style = MaterialTheme.typography.bodySmall, color = tint)
+    }
+}
+
+/**
+ * [T-android-restore-report-severity] Amber for "left out on purpose".
+ *
+ * Two values because no single amber works on both grounds at body-text size.
+ * The commonly used #E6A23C measures 2.19:1 against a light surface — well
+ * under the 4.5:1 small text needs — so it would be close to unreadable in
+ * light mode. #B45309 gives 5.02:1 on light; #FFB74D gives 9.83:1 on dark.
+ *
+ * Keyed on ChatColors.isDark, the theme the app actually resolved, so it
+ * follows the in-app Appearance setting rather than the OS one (GH#187).
+ */
+@Composable
+private fun reportNoticeColor(): Color =
+    if (ChatColors.isDark) {
+        Color(0xFFFFB74D)
+    } else {
+        Color(0xFFB45309)
+    }
+
 // ─── Restore sources ─────────────────────────────────────────────────────
 
-/**
- * [T-android-backup-destination-gate] The destinations a backup will be
- * delivered to, listed inline on the Backup tab. Mirrors iOS
- * `BackupSettingsView.destinationSection`.
- *
- * Android previously surfaced destinations only behind a "Manage Destinations…"
- * button, so the screen never showed whether any existed — a user with none
- * configured saw a normal-looking Start button, got "Backup ready", and ended
- * up with a package that never left the app sandbox.
- */
-@Composable
-private fun DestinationsSection(
-    destinations: List<com.openminis.app.backup.remote.RcloneRemoteStore.Remote>,
-    phoneFolders: List<com.openminis.app.backup.PhoneBackupFolderStore.Folder>,
-    enabled: Boolean,
-    onManage: () -> Unit,
-    onToggle: (String, Boolean) -> Unit,
-    onTogglePhone: (String, Boolean) -> Unit,
-    onAddPhoneFolder: () -> Unit,
-) {
-    SettingsSection(
-        header = stringResource(R.string.backup_section_destinations),
-        footer = stringResource(
-            if (destinations.isEmpty() && phoneFolders.isEmpty()) R.string.backup_destinations_empty_footer
-            else R.string.backup_destinations_footer,
-        ),
-    ) {
-        phoneFolders.forEach { folder ->
-            Column {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 56.dp)
-                        .padding(horizontal = 14.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Box(
-                        modifier = Modifier.size(30.dp).background(Color(0xFF007AFF), CircleShape),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(Icons.Outlined.Folder, contentDescription = null, tint = Color.White, modifier = Modifier.size(17.dp))
-                    }
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(folder.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(
-                            stringResource(R.string.backup_dest_phone_subtitle),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Spacer(Modifier.width(8.dp))
-                    SettingsSwitch(
-                        checked = folder.enabled,
-                        onCheckedChange = { onTogglePhone(folder.id, it) },
-                        enabled = enabled,
-                    )
-                }
-                Box(
-                    Modifier.fillMaxWidth().padding(start = 56.dp)
-                        .height(0.5.dp).background(MaterialTheme.colorScheme.outlineVariant),
-                )
-            }
-        }
-        destinations.forEach { remote ->
-            DestinationRow(
-                remote = remote,
-                enabled = enabled,
-                onToggle = { on -> onToggle(remote.name, on) },
-                onClick = onManage,
-            )
-        }
-        RestoreSourceRow(
-            icon = Icons.Outlined.CreateNewFolder,
-            iconColor = Color(0xFF34C759),
-            label = stringResource(R.string.backup_dest_add_folder),
-            enabled = enabled,
-            onClick = onAddPhoneFolder,
-            showDivider = true,
-        )
-        RestoreSourceRow(
-            icon = Icons.Outlined.Add,
-            iconColor = Color(0xFF34C759),
-            label = stringResource(R.string.backup_manage_destinations),
-            enabled = enabled,
-            onClick = onManage,
-            showDivider = false,
-        )
-    }
-}
 
-/**
- * One destination: name over "BACKEND · /path", with a switch. Mirrors the
- * server rows in iOS `destinationSection`.
- *
- * The switch controls DELIVERY, not existence — disabling keeps the server and
- * its credential, so skipping one destination for a while costs nothing to
- * undo. That is also why disabled rows stay visible: hiding them would leave
- * the user unable to see the destination still existed, let alone switch it
- * back on.
- */
-@Composable
-private fun DestinationRow(
-    remote: com.openminis.app.backup.remote.RcloneRemoteStore.Remote,
-    enabled: Boolean,
-    onToggle: (Boolean) -> Unit,
-    onClick: () -> Unit,
-) {
-    // Material equivalents of the SF Symbols iOS picks per backend.
-    val icon = when (remote.backend) {
-        "smb" -> Icons.Outlined.Dns
-        "webdav" -> Icons.Outlined.Cloud
-        "sftp" -> Icons.Outlined.Terminal
-        "s3" -> Icons.Outlined.Storage
-        "ftp" -> Icons.Outlined.SwapVert
-        else -> Icons.Outlined.Cloud
-    }
-    Column {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 56.dp)
-                .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier)
-                // 12dp, matching every other settings row — 10dp here left this
-                // row 4dp shorter than its neighbours.
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(
-                modifier = Modifier.size(30.dp).background(Color(0xFF007AFF), CircleShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(17.dp))
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    remote.name,
-                    style = MaterialTheme.typography.bodyLarge,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    stringResource(
-                        R.string.backup_dest_row_subtitle,
-                        remote.backend.uppercase(),
-                        remote.path,
-                    ),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            Spacer(Modifier.width(8.dp))
-            SettingsSwitch(checked = remote.enabled, onCheckedChange = onToggle, enabled = enabled)
-        }
-        Box(
-            Modifier.fillMaxWidth().padding(start = 56.dp)
-                .height(0.5.dp).background(MaterialTheme.colorScheme.outlineVariant),
-        )
-    }
-}
 
 /** Label + right-aligned value, for the just-finished card. */
 @Composable

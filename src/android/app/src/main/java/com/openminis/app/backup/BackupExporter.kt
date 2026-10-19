@@ -208,7 +208,11 @@ class BackupExporter(
             }
 
             onProgress?.invoke("Writing manifest…")
-            val manifest = buildManifest(backupId, stats, blobStore, staging, encryption, options)
+            // [T-android-backup-package-name-parity] One device name for both
+            // the filename and the manifest, so a package cannot claim to be
+            // from one phone and be named after another.
+            val deviceName = "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}".trim()
+            val manifest = buildManifest(backupId, stats, blobStore, staging, encryption, options, deviceName)
             val manifestFile = File(staging, "manifest.json")
             manifestFile.writeText(
                 BackupFormat.json.encodeToString(BackupManifest.serializer(), manifest)
@@ -226,7 +230,14 @@ class BackupExporter(
             }
 
             onProgress?.invoke("Packaging…")
-            val packageFile = archive(staging, backupId)
+            val packageFile = BackupPackageWriter.write(
+                backupsDirectory(context),
+                staging,
+                backupId,
+                options.snapshotAtMillis,
+                deviceName,
+                encrypted = encryption != null,
+            )
             val duration = System.currentTimeMillis() - started
             AppLogger.info(
                 TAG,
@@ -749,6 +760,7 @@ class BackupExporter(
         staging: File,
         encryption: BackupManifest.Encryption?,
         options: Options,
+        deviceName: String,
     ): BackupManifest {
         // Integrity covers every packaged file, hashed over whatever bytes
         // actually ship — ciphertext once encryption has run (§5.3).
@@ -768,7 +780,7 @@ class BackupExporter(
                 version = appVersion(),
                 build = appBuild(),
             ),
-            deviceName = "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}".trim(),
+            deviceName = deviceName,
             backupId = backupId,
             categories = categories,
             limits = BackupManifest.Limits(
@@ -782,36 +794,6 @@ class BackupExporter(
             manifestMac = null,
         )
     }
-
-    private fun archive(staging: File, backupId: String): File {
-        val stamp = IsoTime.formatCompactMinutes()
-        // Minute-resolution alone collides when two exports run in the same
-        // minute (trivially reachable when testing, or when a user retries with
-        // a different selection) — the second would silently replace the first.
-        val short = backupId.take(6).lowercase()
-        val out = File(backupsDirectory(context), "backup-$stamp-$short.${BackupFormat.FILE_EXTENSION}")
-        out.parentFile?.mkdirs()
-        out.delete()
-
-        // Write to a `.partial` sibling and rename on success. A kill or a full
-        // disk mid-write would otherwise leave a TRUNCATED file carrying a
-        // perfectly valid `.minisbak` name, which then shows up in the restore
-        // picker with a plausible size and date — discovered only when the
-        // restore fails, plausibly on a new device after wiping the old one.
-        val partial = File(out.parentFile, ".${out.name}.partial")
-        partial.delete()
-        try {
-            BackupZip.archive(staging, partial)
-            if (!partial.renameTo(out)) {
-                throw BackupException("Could not finalise the backup package.")
-            }
-        } catch (e: Exception) {
-            partial.delete()
-            throw e
-        }
-        return out
-    }
-
 
     // MARK: - Helpers
 

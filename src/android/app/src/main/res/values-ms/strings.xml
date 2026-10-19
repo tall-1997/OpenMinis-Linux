@@ -1392,6 +1392,8 @@
     <string name="backup_report_not_downloaded">%1$s: %2$d fail tiada dalam sandaran (belum dimuat turun pada peranti asal)</string>
     <string name="backup_report_missing_from_package">%1$s: %2$d fail disenaraikan dalam sandaran tetapi tiada di dalamnya — sandaran tidak lengkap</string>
     <string name="backup_report_unreadable">%1$s: %2$d item tidak dapat dibaca</string>
+    <string name="backup_report_notices">Tidak termasuk dalam sandaran ini</string>
+    <string name="backup_report_notices_footer">Item ini dikecualikan semasa sandaran dibuat, sama ada melebihi had saiz atau belum dimuat turun pada peranti itu. Pemulihan berjalan tanpa masalah.</string>
     <string name="backup_creds_restored">Kunci API berjaya dipulihkan bagi %1$d pembekal beserta tetapannya. Kunci sedia ada pada peranti ini dikekalkan. Log masuk OAuth mungkin masih perlu diperbaharui jika tokennya telah luput.</string>
     <string name="backup_creds_kept">Kunci API sedia ada anda dikekalkan — kunci dalam sandaran sepadan dengan kelayakan yang sudah ada pada peranti ini, jadi tiada apa-apa yang perlu ditulis ganti.</string>
     <string name="backup_creds_none">Sandaran ini dicipta tanpa kunci API, jadi pembekal yang dipulihkan tiada kelayakan — masukkan setiap kunci API atau log masuk semula sebelum menggunakannya.</string>
