@@ -9,7 +9,6 @@ import com.openminis.app.backup.BackupExporter
 import com.openminis.app.backup.BackupHistory
 import com.openminis.app.backup.BackupImporter
 import com.openminis.app.backup.BackupRunController
-import com.openminis.app.backup.BackupManifest
 import com.openminis.app.backup.BackupPackageReader
 import com.openminis.app.backup.BackupZip
 import com.openminis.app.backup.PhoneBackupFolderStore
@@ -376,13 +375,6 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
     private val _report = MutableStateFlow<BackupImporter.Report?>(null)
     val report: StateFlow<BackupImporter.Report?> = _report.asStateFlow()
 
-    /** A picked package, extracted and its manifest read, awaiting confirm. */
-    data class PendingRestore(
-        val extractedRoot: File,
-        val manifest: BackupManifest,
-        val availableCategories: Set<BackupCategory>,
-    )
-
     /**
      * Copy the SAF-picked `.minisbak` into cache, unzip it, and read its
      * manifest so the screen can preview contents + prompt for a passphrase
@@ -532,18 +524,6 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
 
     // -- Transfer state ---------------------------------------------------
 
-    /** Live download figures, so the sheet can show speed and time left. */
-    data class TransferInfo(
-        val name: String,
-        val bytesDone: Long,
-        val totalBytes: Long,
-        val bytesPerSecond: Double,
-        val secondsRemaining: Long?,
-    ) {
-        val fraction: Float
-            get() = if (totalBytes > 0) (bytesDone.toFloat() / totalBytes) else 0f
-    }
-
     private val _transfer = MutableStateFlow<TransferInfo?>(null)
     val transfer: StateFlow<TransferInfo?> = _transfer.asStateFlow()
 
@@ -565,17 +545,6 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
     private val _openStage = MutableStateFlow<Int?>(null)
     val openStage: StateFlow<Int?> = _openStage.asStateFlow()
 
-    /**
-     * [T-android-open-progress] What the open is ACTUALLY doing, as opposed to
-     * which label a timer has reached. [files]/[bytes] count entries already
-     * written, [current] is the one in flight; null when nothing is open.
-     *
-     * Deliberately no percentage: a forward `ZipInputStream` scan does not know
-     * the entry count until it hits the end, and a bar that crawls to 90% and
-     * then sits there is a worse lie than an honest running total.
-     */
-    data class OpenProgress(val files: Int, val bytes: Long, val current: String)
-
     private val _openProgress = MutableStateFlow<OpenProgress?>(null)
     val openProgress: StateFlow<OpenProgress?> = _openProgress.asStateFlow()
 
@@ -586,12 +555,14 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
     private val _restoreProgress = MutableStateFlow<BackupImporter.Progress?>(null)
     val restoreProgress: StateFlow<BackupImporter.Progress?> = _restoreProgress.asStateFlow()
 
-    /** [T-android-restore-ui] Remaining seconds; null until one can be made.
-     *  Separate flow so the button and the subtitle recompose apart. */
+    /** [T-android-restore-ui] Remaining seconds; null until one can be made. */
     private val _restoreEtaSeconds = MutableStateFlow<Long?>(null)
     val restoreEtaSeconds: StateFlow<Long?> = _restoreEtaSeconds.asStateFlow()
 
     private val restoreEta = RestoreEta()
+
+    /** [T-android-restore-ui] The running restore, so [stopRunningRestore] can cancel it. */
+    private var restoreJob: kotlinx.coroutines.Job? = null
 
     private var openJob: kotlinx.coroutines.Job? = null
 
@@ -612,12 +583,8 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * [T-backup-destination-browse] Delete one package from a destination and
-     * refresh the list.
-     *
-     * A deleted package is gone for good, so the caller confirms first; this
-     * only reports a failure, leaving the list as it was so the user can see
-     * the file is still there.
+     * [T-backup-destination-browse] Delete one package and refresh the list;
+     * the caller confirms first. A failure leaves the list as it was.
      */
     fun deleteServerPackage(
         remote: com.openminis.app.backup.remote.RcloneRemoteStore.Remote,
@@ -698,12 +665,9 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
 
     /**
      * Extract + read a package's manifest, with a rotating stage label and a
-     * working Cancel.
-     *
-     * The unzip itself cannot be interrupted partway, so cancellation is
-     * honoured AFTER it returns: the result is discarded and no pending
-     * restore is set. That still ends the wait for the user, which is the
-     * point — the alternative was a screen with no way out.
+     * working Cancel. The unzip cannot be interrupted partway, so cancellation
+     * is honoured after it returns — the result is discarded, no pending
+     * restore is set — but that still ends the user's wait.
      */
     private suspend fun openPackageFile(file: File) {
         _openStage.value = 0
@@ -770,7 +734,7 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
         _statusText.value = "Restoring…"
         restoreEta.reset()
         _restoreEtaSeconds.value = null
-        viewModelScope.launch {
+        restoreJob = viewModelScope.launch {
             try {
                 val report = withContext(Dispatchers.IO) {
                     BackupImporter(getApplication(), db).import(
@@ -788,16 +752,51 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
                 _pending.value?.extractedRoot?.deleteRecursively()
                 _pending.value = null
                 _statusText.value = null
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // [T-android-restore-ui] Stop is not a failure: rethrow so the
+                // generic handler below cannot report it as one, and leave the
+                // UI copy to stopRunningRestore(), which set it already.
+                AppLogger.info(TAG, "[Restore] cancelled by user")
+                throw e
             } catch (e: Exception) {
                 AppLogger.error(TAG, "[Restore] failed: ${e.message}")
                 _errorText.value = e.message ?: "Restore failed."
                 _statusText.value = null
+                _restoreProgress.value = null
             } finally {
-                _isRunning.value = false
-                _restoreEtaSeconds.value = null
-                restoreEta.reset()
+                // [T-restore-stale-finally] Stop frees the slot at once, so a
+                // newer restore can own it before this (cancelled) job's finally
+                // runs; only the job that still owns the slot may clear it.
+                if (restoreJob === coroutineContext[kotlinx.coroutines.Job]) {
+                    _isRunning.value = false
+                    restoreJob = null
+                    _restoreEtaSeconds.value = null
+                    restoreEta.reset()
+                }
             }
         }
+    }
+
+    /**
+     * [T-android-restore-ui] Stops a running restore at the user's request.
+     *
+     * The importer's batch in flight rolls back whole (cancellation is checked
+     * between rows inside its transaction) and earlier batches stay, except for
+     * [T-android-restore-cancel-empty-sessions] sessions it inserted whose
+     * messages rolled back — those are deleted on the way out. The UI copy is
+     * set HERE, because a cancelled coroutine's own handlers are not guaranteed
+     * to have run before this returns.
+     */
+    fun stopRunningRestore() {
+        val job = restoreJob ?: return
+        AppLogger.info(TAG, "[Restore] stop requested by user")
+        job.cancel()
+        restoreJob = null
+        _isRunning.value = false
+        _restoreProgress.value = null
+        _restoreEtaSeconds.value = null
+        restoreEta.reset()
+        _statusText.value = null
     }
 
     // -- Persistence helpers ---------------------------------------------
@@ -809,10 +808,7 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
         return restored.ifEmpty { BackupCategory.backupable.toSet() }
     }
 
-    /** Bytes as "32.0 MB", for a message rather than a UI row. */
-    // [T-android-human-bytes-one-place] Deliberately NOT a second formatter:
-    // this function used to duplicate BackupAndRestoreScreen.humanBytes with a
-    // different unit label for the same divisors. Both now read the same one.
+    /** [T-android-human-bytes-one-place] "32.0 MB"; both callers read [humanBytes]. */
     private fun humanBytesPlain(bytes: Long): String = humanBytes(bytes)
 
     companion object {

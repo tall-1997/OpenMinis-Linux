@@ -379,7 +379,7 @@ private fun ProgressSheet(
 
 /** Live download: bar, bytes, speed, time left, and a Cancel that works. */
 @Composable
-private fun TransferSheet(t: BackupViewModel.TransferInfo, onCancel: () -> Unit) {
+private fun TransferSheet(t: TransferInfo, onCancel: () -> Unit) {
     ProgressSheet(
         title = stringResource(R.string.restore_downloading),
         onCancel = onCancel,
@@ -421,7 +421,7 @@ private fun TransferSheet(t: BackupViewModel.TransferInfo, onCancel: () -> Unit)
 @Composable
 private fun OpenStageSheet(
     stage: Int,
-    progress: BackupViewModel.OpenProgress?,
+    progress: OpenProgress?,
     onCancel: () -> Unit,
 ) {
     val label = when (stage) {

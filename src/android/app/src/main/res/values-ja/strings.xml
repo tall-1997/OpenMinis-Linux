@@ -1388,6 +1388,11 @@
     <string name="backup_restore">復元を開始</string>
     <string name="backup_restoring">復元中…</string>
     <string name="backup_restoring_counted">%1$s を復元中 %2$d/%3$d</string>
+    <string name="restore_stop_action">復元を中止</string>
+    <string name="restore_stop_title">復元を中止</string>
+    <string name="restore_stop_message">今すぐ復元を中止しますか？復元済みの内容は保持され、残りはスキップされます。</string>
+    <string name="restore_stop_confirm">復元を中止</string>
+    <string name="restore_stop_cancel">続行</string>
     <string name="backup_restoring_running">%1$s を復元中 %2$d</string>
     <string name="backup_restoring_category">%1$s を復元中…</string>
     <string name="restore_eta_almost_done">まもなく完了…</string>

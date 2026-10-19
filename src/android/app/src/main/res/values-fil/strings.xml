@@ -1389,6 +1389,11 @@
     <string name="backup_restore">Simulan ang Pagbabalik</string>
     <string name="backup_restoring">Ibinabalik…</string>
     <string name="backup_restoring_counted">Ibinabalik ang %1$s %2$d/%3$d</string>
+    <string name="restore_stop_action">Itigil ang pag-restore</string>
+    <string name="restore_stop_title">Itigil ang pag-restore</string>
+    <string name="restore_stop_message">Itigil na ba ang pag-restore? Mananatili ang na-restore na; lalaktawan ang natitira.</string>
+    <string name="restore_stop_confirm">Itigil ang pag-restore</string>
+    <string name="restore_stop_cancel">Magpatuloy</string>
     <string name="backup_restoring_running">Ibinabalik ang %1$s %2$d</string>
     <string name="backup_restoring_category">Ibinabalik ang %1$s…</string>
     <string name="restore_eta_almost_done">Malapit na…</string>

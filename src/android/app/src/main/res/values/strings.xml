@@ -1940,6 +1940,11 @@
     <string name="backup_restore">Start Restore</string>
     <string name="backup_restoring">Restoring…</string>
     <string name="backup_restoring_counted">Restoring %1$s %2$d/%3$d</string>
+    <string name="restore_stop_action">Stop restoring</string>
+    <string name="restore_stop_title">Stop restoring</string>
+    <string name="restore_stop_message">Stop the restore now? What has already been restored is kept; the rest is skipped.</string>
+    <string name="restore_stop_confirm">Stop restoring</string>
+    <string name="restore_stop_cancel">Keep going</string>
     <string name="backup_restoring_running">Restoring %1$s %2$d</string>
     <string name="backup_restoring_category">Restoring %1$s…</string>
     <string name="restore_eta_almost_done">Almost done…</string>

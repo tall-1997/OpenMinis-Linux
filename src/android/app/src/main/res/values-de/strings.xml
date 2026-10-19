@@ -1389,6 +1389,11 @@
     <string name="backup_restore">Wiederherstellung starten</string>
     <string name="backup_restoring">Wird wiederhergestellt…</string>
     <string name="backup_restoring_counted">%1$s wird wiederhergestellt %2$d/%3$d</string>
+    <string name="restore_stop_action">Wiederherstellung stoppen</string>
+    <string name="restore_stop_title">Wiederherstellung stoppen</string>
+    <string name="restore_stop_message">Wiederherstellung jetzt stoppen? Was bereits wiederhergestellt wurde, bleibt erhalten; der Rest wird übersprungen.</string>
+    <string name="restore_stop_confirm">Wiederherstellung stoppen</string>
+    <string name="restore_stop_cancel">Fortfahren</string>
     <string name="backup_restoring_running">%1$s wird wiederhergestellt %2$d</string>
     <string name="backup_restoring_category">%1$s wird wiederhergestellt…</string>
     <string name="restore_eta_almost_done">Fast fertig…</string>

@@ -15,7 +15,7 @@
     "src/android/app/src/main/java/com/openminis/app/MainActivity.kt": 851,
     "src/android/app/src/main/java/com/openminis/app/MinisApp.kt": 1151,
     "src/android/app/src/main/java/com/openminis/app/agent/PersonaPromptLibrary.kt": 859,
-    "src/android/app/src/main/java/com/openminis/app/backup/BackupImporter.kt": 1167,
+    "src/android/app/src/main/java/com/openminis/app/backup/BackupImporter.kt": 1164,
     "src/android/app/src/main/java/com/openminis/app/browser/BrowserTabPool.kt": 1388,
     "src/android/app/src/main/java/com/openminis/app/browser/BrowserUseManager.kt": 1910,
     "src/android/app/src/main/java/com/openminis/app/config/ConfigBridge.kt": 927,
@@ -77,7 +77,7 @@
     "src/android/app/src/main/java/com/openminis/app/ui/settings/ProviderDetailScreen.kt": 1088,
     "src/android/app/src/main/java/com/openminis/app/ui/settings/SkillsManagementScreen.kt": 1271,
     "src/android/app/src/main/java/com/openminis/app/ui/settings/SoulSettingsScreen.kt": 1049,
-    "src/android/app/src/main/java/com/openminis/app/ui/settings/backup/BackupAndRestoreScreen.kt": 1669,
-    "src/android/app/src/main/java/com/openminis/app/ui/settings/backup/BackupViewModel.kt": 837
+    "src/android/app/src/main/java/com/openminis/app/ui/settings/backup/BackupAndRestoreScreen.kt": 1626,
+    "src/android/app/src/main/java/com/openminis/app/ui/settings/backup/BackupViewModel.kt": 833
   }
 }
