@@ -63,11 +63,16 @@ object ScheduledAgentRunner {
      * @return the session id once the action has been DISPATCHED (resolved +
      *   prompt sent), or null when the runner couldn't even start (no provider,
      *   target chat gone, MinisApp not initialized).
+     * @param scheduledFire true only when an alarm produced this run
+     *   ([ScheduledTaskAlarmReceiver]). It gates releasing the tasks waiting on
+     *   this one: a manual "Run now" or a CLI run must not finish a schedule
+     *   that still has fires left.
      */
     suspend fun run(
         context: Context,
         task: ScheduledTask,
         waitForCompletion: Boolean = true,
+        scheduledFire: Boolean = false,
     ): String? {
         // [T-android-scheduled-lateinit-crash-156] `as? MinisApp` only rules out
         // a null / wrong-type Application — it does NOT mean the Application is
@@ -119,6 +124,7 @@ object ScheduledAgentRunner {
             val ok = result.status != "Error" && result.status != "Timeout"
             ScheduledTaskManager(app).markFired(task.id, sessionId, preview, ok = ok)
             postCompletionNotification(app, task, sessionId, preview)
+            releaseDependentsIfFinished(app, task, result.responseText, scheduledFire)
             return sessionId
         }
 
@@ -134,8 +140,30 @@ object ScheduledAgentRunner {
             val ok = result.status != "Error" && result.status != "Timeout"
             ScheduledTaskManager(app).markFired(task.id, sessionId, preview, ok = ok)
             postCompletionNotification(app, task, sessionId, preview)
+            releaseDependentsIfFinished(app, task, result.responseText, scheduledFire)
         }
         return sessionId
+    }
+
+    /**
+     * [T-android-scheduled-triggers] A scheduled run just completed: let the
+     * on-completion tasks waiting on it fire if its whole schedule is done.
+     * Never lets a failure here break the run's own completion record.
+     */
+    private suspend fun releaseDependentsIfFinished(
+        app: MinisApp,
+        task: ScheduledTask,
+        result: String?,
+        scheduledFire: Boolean,
+    ) {
+        if (!scheduledFire) return
+        runCatching { ScheduledCompletionTriggers.onScheduledRunFinished(app, task.id, result) }
+            .onFailure {
+                AppLogger.warning(
+                    TAG,
+                    "on-completion release for ${task.id.take(8)} failed: ${it.message}",
+                )
+            }
     }
 
     /**

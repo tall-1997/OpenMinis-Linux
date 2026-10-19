@@ -86,7 +86,14 @@ class ScheduledTaskAlarmReceiver : BroadcastReceiver() {
                     // completion notification are finished off ScheduledAgent-
                     // Runner's app-scoped bgScope, which outlives this
                     // receiver.
-                    ScheduledAgentRunner.run(appContext, task, waitForCompletion = false)
+                    ScheduledAgentRunner.run(
+                        appContext,
+                        task,
+                        waitForCompletion = false,
+                        // This run came from the schedule, so it may finish it:
+                        // tasks waiting on this one are released when it does.
+                        scheduledFire = true,
+                    )
                 }
             } catch (t: Throwable) {
                 // Includes TimeoutCancellationException. The task stays
