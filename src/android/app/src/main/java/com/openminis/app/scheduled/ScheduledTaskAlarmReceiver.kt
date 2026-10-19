@@ -59,7 +59,14 @@ class ScheduledTaskAlarmReceiver : BroadcastReceiver() {
                     }
                     // Schedule the next occurrence FIRST so a long-running
                     // prompt doesn't block tomorrow's fire even if we crash.
-                    manager.rescheduleNext(taskId)
+                    // [T-android-scheduled-fire-claim] The same call claims the
+                    // fire: false means this delivery is a duplicate or a stale
+                    // registration (the row already moved past its slot), and
+                    // running it would fire the task twice.
+                    if (!manager.rescheduleNext(taskId)) {
+                        AppLogger.info(TAG, "task $taskId is not a due fire — not running")
+                        return@withTimeout
+                    }
 
                     // [GH#197] waitForCompletion=false is load-bearing, not a
                     // tweak. With the default (true) this call suspends until

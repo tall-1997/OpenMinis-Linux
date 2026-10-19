@@ -51,7 +51,31 @@ data class ScheduledRun(
  * [ScheduledTaskStore] (SharedPreferences). Schema lives here so the store
  * stays a thin layer over the JSON array.
  */
-enum class ScheduledRepeatMode { ONCE, DAILY, WEEKDAYS, CUSTOM, INTERVAL }
+enum class ScheduledRepeatMode { ONCE, DAILY, WEEKDAYS, CUSTOM }
+
+/**
+ * [T-android-scheduled-triggers] How a task decides when to fire.
+ *
+ *  - [CALENDAR]: a time of day plus [ScheduledTask.repeatMode] / days / window.
+ *    Every task written before this existed is one.
+ *  - [AFTER]: once, [ScheduledTask.delaySec] after [ScheduledTask.anchorMs]
+ *    (`--after 30m`).
+ *  - [INTERVAL]: every [ScheduledTask.intervalSec] from the anchor, at most
+ *    [ScheduledTask.maxFires] times (`--interval 10m --count 6`); unbounded
+ *    when `maxFires` is null.
+ *  - [ON_COMPLETION]: once, when the scheduled task named by
+ *    [ScheduledTask.onCompletionOf] finishes its whole schedule; `{{result}}`
+ *    in the prompt is replaced by that run's result. No alarm of its own:
+ *    armed by whoever observes the upstream finishing.
+ *
+ * [INTERVAL] lives here rather than in [ScheduledRepeatMode] on purpose. This
+ * fork had it in BOTH: `ScheduledRepeatMode.INTERVAL` with `intervalMinutes`
+ * + `fireAtMs`, and upstream's trigger model here. Two ways to say "repeat
+ * every N minutes" means every consumer has to handle both, and the ones that
+ * forgot silently did nothing. There is one way now; rows written by the old
+ * shape are migrated by [ScheduledTask.fromJson].
+ */
+enum class ScheduledTriggerKind { CALENDAR, AFTER, INTERVAL, ON_COMPLETION }
 
 /**
  * What the task does when it fires. Mirrors the iOS App Intent set.
@@ -133,9 +157,59 @@ data class ScheduledTask(
     // "Run records" menu opens a screen backed by this. Capped at
     // MAX_RUN_HISTORY by the manager when appending.
     val runHistory: List<ScheduledRun> = emptyList(),
-    val intervalMinutes: Long = 0,
-    val fireAtMs: Long? = null,
+    // [T-scheduled-task-detail] Total fires ever recorded. [runHistory] is
+    // capped at MAX_RUN_HISTORY, so its size stops counting after 50; this
+    // does not. null on tasks written before it existed — see [firesSoFar].
+    val fireCount: Int? = null,
+    // [T-android-scheduled-triggers] See [ScheduledTriggerKind]. All optional
+    // with defaults that reproduce the calendar model, so a task written
+    // before these existed deserializes to exactly what it was.
+    val triggerKind: ScheduledTriggerKind = ScheduledTriggerKind.CALENDAR,
+    /** [ScheduledTriggerKind.AFTER]: seconds from [anchorMs] to the fire. */
+    val delaySec: Long? = null,
+    /** [ScheduledTriggerKind.INTERVAL]: seconds between fires (>= 60). */
+    val intervalSec: Long? = null,
+    /** [ScheduledTriggerKind.INTERVAL]: total fires; null = until deleted. */
+    val maxFires: Int? = null,
+    /** [ScheduledTriggerKind.ON_COMPLETION]: the task id to wait for. */
+    val onCompletionOf: String? = null,
+    /**
+     * AFTER / INTERVAL: when the current countdown started — creation, the
+     * last alarm fire (INTERVAL), or re-enabling. Absolute, so a reboot or a
+     * killed process resumes the same schedule instead of restarting it.
+     */
+    val anchorMs: Long? = null,
+    /**
+     * AFTER / INTERVAL: alarm fires since the last (re)start. Counted when the
+     * alarm fires, not when the run completes, so the count can never race the
+     * next fire. A manual "Run now" does not count — it must not use up an
+     * interval's `--count` or finish its schedule early.
+     */
+    val triggeredCount: Int? = null,
 ) {
+
+    val isCalendar: Boolean get() = triggerKind == ScheduledTriggerKind.CALENDAR
+
+    /** AFTER / INTERVAL count from [anchorMs]. */
+    val usesAnchor: Boolean
+        get() = triggerKind == ScheduledTriggerKind.AFTER || triggerKind == ScheduledTriggerKind.INTERVAL
+
+    /** Fires at most once, then disables itself (and stays listed). */
+    val isOneShot: Boolean get() = when (triggerKind) {
+        ScheduledTriggerKind.CALENDAR -> repeatMode == ScheduledRepeatMode.ONCE
+        ScheduledTriggerKind.AFTER, ScheduledTriggerKind.ON_COMPLETION -> true
+        ScheduledTriggerKind.INTERVAL -> false
+    }
+
+    /** INTERVAL fires still to come; null when unbounded or not an interval. */
+    val remainingFires: Int?
+        get() = if (triggerKind == ScheduledTriggerKind.INTERVAL) {
+            maxFires?.let { (it - (triggeredCount ?: 0)).coerceAtLeast(0) }
+        } else null
+
+    /** [T-scheduled-task-detail] Fires recorded so far, falling back to the
+     *  history length for tasks that predate [fireCount]. */
+    val firesSoFar: Int get() = fireCount ?: runHistory.size
 
     /**
      * Wall-clock ms of the next firing time for this task, taking
@@ -149,17 +223,25 @@ data class ScheduledTask(
      */
     fun nextTriggerMs(now: Long = System.currentTimeMillis()): Long? {
         if (!enabled) return null
-        if (repeatMode == ScheduledRepeatMode.INTERVAL) {
-            val intervalMs = intervalMinutes * 60_000L
-            if (intervalMs <= 0L) return null
-            val first = fireAtMs ?: (createdAt + intervalMs)
-            if (first > now) return first
-            val steps = (now - first) / intervalMs + 1
-            return first + steps * intervalMs
-        }
-        if (fireAtMs != null && repeatMode == ScheduledRepeatMode.ONCE) {
-            if (lastFiredAt != null) return null
-            return if (fireAtMs > now) fireAtMs else now
+
+        // [T-android-scheduled-triggers] The relative triggers. An overdue
+        // slot (the phone was off, the process dead) answers `now`: the alarm
+        // then fires once, late, and INTERVAL continues from there — the same
+        // catch-up a missed deadline gets everywhere else.
+        when (triggerKind) {
+            ScheduledTriggerKind.AFTER -> {
+                if ((triggeredCount ?: 0) >= 1) return null
+                val d = delaySec ?: return null
+                return maxOf(now, (anchorMs ?: createdAt) + d * 1000)
+            }
+            ScheduledTriggerKind.INTERVAL -> {
+                val iv = intervalSec ?: return null
+                if (maxFires != null && (triggeredCount ?: 0) >= maxFires) return null
+                return maxOf(now, (anchorMs ?: createdAt) + iv * 1000)
+            }
+            // Event-driven: no clock time at all.
+            ScheduledTriggerKind.ON_COMPLETION -> return null
+            ScheduledTriggerKind.CALENDAR -> Unit
         }
 
         // Earliest instant we may fire: max(now, start-of-startDate). This lets
@@ -175,7 +257,6 @@ data class ScheduledTask(
         }
 
         val candidate: Long = when (repeatMode) {
-            ScheduledRepeatMode.INTERVAL -> return null
             ScheduledRepeatMode.ONCE, ScheduledRepeatMode.DAILY -> {
                 if (cal.timeInMillis < floor) cal.add(Calendar.DAY_OF_YEAR, 1)
                 cal.timeInMillis
@@ -239,46 +320,122 @@ data class ScheduledTask(
         if (runHistory.isNotEmpty()) {
             put("runHistory", JSONArray().apply { runHistory.forEach { put(it.toJson()) } })
         }
-        if (intervalMinutes > 0L) put("intervalMinutes", intervalMinutes)
-        if (fireAtMs != null) put("fireAtMs", fireAtMs)
+        if (fireCount != null) put("fireCount", fireCount)
+        if (triggerKind != ScheduledTriggerKind.CALENDAR) put("trigger", triggerKind.name)
+        if (delaySec != null) put("delaySec", delaySec)
+        if (intervalSec != null) put("intervalSec", intervalSec)
+        if (maxFires != null) put("maxFires", maxFires)
+        if (onCompletionOf != null) put("onCompletionOf", onCompletionOf)
+        if (anchorMs != null) put("anchorMs", anchorMs)
+        if (triggeredCount != null) put("triggeredCount", triggeredCount)
     }
 
     companion object {
+        /** `{{result}}` in an on-completion prompt, replaced by the upstream's result. */
+        const val RESULT_PLACEHOLDER = "{{result}}"
+
         /** Max recorded executions kept per task. */
         const val MAX_RUN_HISTORY = 50
 
-        fun fromJson(o: JSONObject): ScheduledTask = ScheduledTask(
-            id = o.getString("id"),
-            label = o.optString("label", ""),
-            timeOfDayHour = o.optInt("hour", 9),
-            timeOfDayMinute = o.optInt("minute", 0),
-            repeatMode = runCatching {
-                ScheduledRepeatMode.valueOf(o.optString("repeatMode", "ONCE"))
-            }.getOrDefault(ScheduledRepeatMode.ONCE),
-            customDays = o.optString("customDays", "")
-                .split(',').mapNotNull { it.trim().toIntOrNull() }.toSet(),
-            prompt = o.optString("prompt", ""),
-            targetMode = ScheduledTargetMode.decode(o.optString("targetMode", null)),
-            modelId = if (o.has("modelId")) o.optString("modelId", null) else null,
-            modelBinding = if (o.has("modelBinding")) o.optString("modelBinding", null) else null,
-            enabled = o.optBoolean("enabled", true),
-            createdAt = o.optLong("createdAt", System.currentTimeMillis()),
-            startDateMs = if (o.has("startDateMs")) o.optLong("startDateMs") else null,
-            endDateMs = if (o.has("endDateMs")) o.optLong("endDateMs") else null,
-            lastFiredAt = if (o.has("lastFiredAt")) o.optLong("lastFiredAt") else null,
-            lastResultPreview = if (o.has("lastResultPreview"))
-                o.optString("lastResultPreview", null) else null,
-            lastResultSessionId = if (o.has("lastResultSessionId"))
-                o.optString("lastResultSessionId", null) else null,
-            runHistory = o.optJSONArray("runHistory")?.let { arr ->
-                buildList {
-                    for (i in 0 until arr.length()) {
-                        arr.optJSONObject(i)?.let { add(ScheduledRun.fromJson(it)) }
+        /**
+         * [T-android-scheduled-triggers] Read a stored row, migrating the two
+         * retired shapes that carried an absolute fire time.
+         *
+         * Rows written before the trigger model stored a repeat-every-N as
+         * `repeatMode:"INTERVAL"` + `intervalMinutes` + `fireAtMs`. That value
+         * is no longer a member of [ScheduledRepeatMode] (there is one way to
+         * say "every N minutes" now), so a plain `valueOf` would throw and the
+         * whole row would be dropped by the store's per-row `runCatching` —
+         * the user's recurring task would silently vanish on upgrade. A
+         * one-shot reminder ("30m" from the cron tool) is the same problem in
+         * the other direction: `repeatMode:"ONCE"` + `fireAtMs`.
+         *
+         * Both are read into the trigger fields HERE, the single reader of the
+         * persisted schema, so no consumer has to know the old shapes existed.
+         * The migration is deterministic and idempotent: it is derived from the
+         * stored keys, so re-reading a row (or reading it on every `list()`)
+         * yields the same value, and the next write persists the new shape.
+         */
+        fun fromJson(o: JSONObject): ScheduledTask {
+            val rawRepeat = o.optString("repeatMode", "ONCE")
+            val createdAt = o.optLong("createdAt", System.currentTimeMillis())
+            val legacyIntervalMinutes = o.optLong("intervalMinutes", 0L)
+            val legacyFireAtMs = if (o.has("fireAtMs")) o.optLong("fireAtMs") else null
+            val legacyInterval = rawRepeat == "INTERVAL" && legacyIntervalMinutes > 0L
+            val legacyOneShot = rawRepeat == "ONCE" && legacyFireAtMs != null
+            val legacyIntervalSec = legacyIntervalMinutes * 60L
+            val storedTrigger = if (o.has("trigger")) o.optString("trigger") else null
+            // An unknown value (written by a newer build) reads as CALENDAR,
+            // which at worst fires on the stored time of day rather than never.
+            // `trigger` decides first: a migrated row has already been written
+            // back in the new shape and must not be re-derived from the legacy
+            // keys its `repeatMode` still names.
+            val triggerKind = when {
+                storedTrigger != null -> runCatching { ScheduledTriggerKind.valueOf(storedTrigger) }
+                    .getOrDefault(ScheduledTriggerKind.CALENDAR)
+                legacyInterval -> ScheduledTriggerKind.INTERVAL
+                legacyOneShot -> ScheduledTriggerKind.AFTER
+                else -> ScheduledTriggerKind.CALENDAR
+            }
+            return ScheduledTask(
+                id = o.getString("id"),
+                label = o.optString("label", ""),
+                timeOfDayHour = o.optInt("hour", 9),
+                timeOfDayMinute = o.optInt("minute", 0),
+                // A legacy "INTERVAL" is not a member any more and lands on
+                // ONCE; [triggerKind] already says the row repeats, and the
+                // calendar path is never taken for it.
+                repeatMode = runCatching { ScheduledRepeatMode.valueOf(rawRepeat) }
+                    .getOrDefault(ScheduledRepeatMode.ONCE),
+                customDays = o.optString("customDays", "")
+                    .split(',').mapNotNull { it.trim().toIntOrNull() }.toSet(),
+                prompt = o.optString("prompt", ""),
+                targetMode = ScheduledTargetMode.decode(o.optString("targetMode", null)),
+                modelId = if (o.has("modelId")) o.optString("modelId", null) else null,
+                modelBinding = if (o.has("modelBinding")) o.optString("modelBinding", null) else null,
+                enabled = o.optBoolean("enabled", true),
+                createdAt = o.optLong("createdAt", System.currentTimeMillis()),
+                startDateMs = if (o.has("startDateMs")) o.optLong("startDateMs") else null,
+                endDateMs = if (o.has("endDateMs")) o.optLong("endDateMs") else null,
+                lastFiredAt = if (o.has("lastFiredAt")) o.optLong("lastFiredAt") else null,
+                lastResultPreview = if (o.has("lastResultPreview"))
+                    o.optString("lastResultPreview", null) else null,
+                lastResultSessionId = if (o.has("lastResultSessionId"))
+                    o.optString("lastResultSessionId", null) else null,
+                runHistory = o.optJSONArray("runHistory")?.let { arr ->
+                    buildList {
+                        for (i in 0 until arr.length()) {
+                            arr.optJSONObject(i)?.let { add(ScheduledRun.fromJson(it)) }
+                        }
                     }
-                }
-            } ?: emptyList(),
-            intervalMinutes = o.optLong("intervalMinutes", 0L),
-            fireAtMs = if (o.has("fireAtMs")) o.optLong("fireAtMs") else null,
-        )
+                } ?: emptyList(),
+                fireCount = if (o.has("fireCount")) o.optInt("fireCount") else null,
+                triggerKind = triggerKind,
+                // A legacy one-shot's delay is whatever was left between its
+                // creation and its absolute fire time; recreating it from the
+                // pair keeps the very instant the user was promised.
+                delaySec = if (o.has("delaySec")) o.optLong("delaySec")
+                else if (legacyOneShot) legacyFireAtMs!!.minus(createdAt).coerceAtLeast(0L) / 1000L
+                else null,
+                intervalSec = o.optLong("intervalSec", 0L).takeIf { it > 0L }
+                    ?: legacyIntervalSec.takeIf { legacyInterval },
+                maxFires = if (o.has("maxFires")) o.optInt("maxFires") else null,
+                onCompletionOf = if (o.has("onCompletionOf")) o.optString("onCompletionOf", null) else null,
+                // A legacy interval kept its next slot in fireAtMs; anchoring the
+                // countdown one interval before it resumes the same rhythm
+                // instead of restarting from creation time.
+                anchorMs = if (o.has("anchorMs")) o.optLong("anchorMs")
+                else when {
+                    legacyInterval -> legacyFireAtMs?.minus(legacyIntervalSec * 1000L) ?: createdAt
+                    legacyOneShot -> createdAt
+                    else -> null
+                },
+                triggeredCount = if (o.has("triggeredCount")) o.optInt("triggeredCount")
+                // Already fired: an AFTER row must not replay a fire the old
+                // model considered done (it checked lastFiredAt before arming).
+                else if (legacyOneShot && o.has("lastFiredAt")) 1
+                else null,
+            )
+        }
     }
 }

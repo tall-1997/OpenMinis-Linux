@@ -57,6 +57,7 @@ import com.openminis.app.ui.settings.SettingsSwitch
 import com.openminis.app.R
 import com.openminis.app.scheduled.ScheduledBadgePrefs
 import com.openminis.app.scheduled.ScheduledRepeatMode
+import com.openminis.app.scheduled.ScheduledTriggerKind
 import com.openminis.app.scheduled.ScheduledTask
 import com.openminis.app.util.IsoTime
 
@@ -324,6 +325,24 @@ private fun ScheduledTaskRow(
 }
 
 internal fun formatScheduleSummary(task: ScheduledTask): String {
+    val nextSuffix = task.nextTriggerMs()?.let {
+        " · next ${IsoTime.formatPattern(it, "MMM d HH:mm")}"
+    } ?: ""
+    // [T-android-scheduled-triggers] Relative triggers have no time of day, so
+    // they get their own phrasing instead of the calendar line prefixed by a
+    // time that is not part of their schedule.
+    when (task.triggerKind) {
+        ScheduledTriggerKind.AFTER ->
+            return "Once after ${formatDuration(task.delaySec ?: 0L)}$nextSuffix"
+        ScheduledTriggerKind.INTERVAL -> {
+            val every = formatDuration(task.intervalSec ?: 0L)
+            val count = task.maxFires?.let { " ×$it (${task.remainingFires} left)" } ?: ""
+            return "Every $every$count$nextSuffix"
+        }
+        ScheduledTriggerKind.ON_COMPLETION ->
+            return "After ${task.onCompletionOf.orEmpty().take(8)} finishes$nextSuffix"
+        ScheduledTriggerKind.CALENDAR -> Unit
+    }
     val time = "%02d:%02d".format(task.timeOfDayHour, task.timeOfDayMinute)
     val repeat = when (task.repeatMode) {
         ScheduledRepeatMode.ONCE -> "Once"
@@ -333,20 +352,17 @@ internal fun formatScheduleSummary(task: ScheduledTask): String {
             val days = task.customDays.sorted().joinToString(",") { dowShort(it) }
             if (days.isBlank()) "Custom" else days
         }
-        ScheduledRepeatMode.INTERVAL -> {
-            val m = task.intervalMinutes
-            when {
-                m > 0 && m % 1440L == 0L -> "Every ${m / 1440L}d"
-                m > 0 && m % 60L == 0L -> "Every ${m / 60L}h"
-                m > 0 -> "Every ${m}m"
-                else -> "Interval"
-            }
-        }
     }
-    val next = task.nextTriggerMs()?.let {
-        " · next ${IsoTime.formatPattern(it, "MMM d HH:mm")}"
-    } ?: ""
-    return "$repeat $time$next"
+    return "$repeat $time$nextSuffix"
+}
+
+/** `600` → `10m`, `7200` → `2h`, `86400` → `1d`; units the CLI accepts. */
+private fun formatDuration(seconds: Long): String = when {
+    seconds <= 0L -> "—"
+    seconds % 86_400L == 0L -> "${seconds / 86_400L}d"
+    seconds % 3_600L == 0L -> "${seconds / 3_600L}h"
+    seconds % 60L == 0L -> "${seconds / 60L}m"
+    else -> "${seconds}s"
 }
 
 private fun dowShort(dow: Int): String = when (dow) {

@@ -4,6 +4,7 @@ import com.openminis.app.mcp.server.McpServerCore
 import com.openminis.app.scheduled.CronScheduler
 import com.openminis.app.scheduled.ScheduledTask
 import com.openminis.app.scheduled.ScheduledTaskManager
+import com.openminis.app.scheduled.ScheduledTriggerKind
 import com.openminis.app.scheduled.ScheduledRepeatMode
 import org.json.JSONArray
 import org.json.JSONObject
@@ -82,8 +83,7 @@ private fun alarmReminderCreate(deps: McpToolDeps, arguments: JSONObject): McpSe
     if (manager == null) return err!!
     return runCatching {
         val now = System.currentTimeMillis()
-        val fireAt = now + delaySec * 1000L
-        val cal = Calendar.getInstance().apply { timeInMillis = fireAt }
+        val cal = Calendar.getInstance().apply { timeInMillis = now + delaySec * 1000L }
         val task = ScheduledTask(
             id = UUID.randomUUID().toString(),
             label = arguments.optString("name", "").trim().ifBlank { message.take(32) },
@@ -91,7 +91,12 @@ private fun alarmReminderCreate(deps: McpToolDeps, arguments: JSONObject): McpSe
             timeOfDayMinute = cal.get(Calendar.MINUTE),
             repeatMode = ScheduledRepeatMode.ONCE,
             prompt = message,
-            fireAtMs = fireAt,
+            // [T-android-scheduled-triggers] "in N seconds" is an AFTER trigger;
+            // the hour/minute above are only the default a later edit starts from.
+            triggerKind = ScheduledTriggerKind.AFTER,
+            delaySec = delaySec.toLong(),
+            anchorMs = now,
+            triggeredCount = 0,
             createdAt = now,
         )
         val saved = manager.create(task)
@@ -102,7 +107,8 @@ private fun alarmReminderCreate(deps: McpToolDeps, arguments: JSONObject): McpSe
                         put("ok", true)
                         put("id", saved.id)
                         put("name", saved.label)
-                        put("fireAtMs", saved.fireAtMs ?: fireAt)
+                        put("trigger", saved.triggerKind.name.lowercase())
+                        put("nextTriggerMs", saved.nextTriggerMs() ?: JSONObject.NULL)
                         put("repeat", "ONCE")
                     }.toString(2),
                 ),
@@ -122,18 +128,22 @@ private fun createScheduledTask(
     val parsed = CronScheduler.parseSchedule(schedule)
         ?: return McpToolShared.error("Error: bad schedule '$schedule'")
     val now = System.currentTimeMillis()
-    val fireAt = now + parsed.firstDelayMs
-    val cal = Calendar.getInstance().apply { timeInMillis = fireAt }
+    val cal = Calendar.getInstance().apply { timeInMillis = now + parsed.firstDelayMs }
     val interval = parsed.kind == "interval"
     val task = ScheduledTask(
         id = UUID.randomUUID().toString(),
         label = name.ifBlank { prompt.take(32) },
         timeOfDayHour = cal.get(Calendar.HOUR_OF_DAY),
         timeOfDayMinute = cal.get(Calendar.MINUTE),
-        repeatMode = if (interval) ScheduledRepeatMode.INTERVAL else ScheduledRepeatMode.ONCE,
+        repeatMode = ScheduledRepeatMode.ONCE,
         prompt = prompt,
-        intervalMinutes = parsed.intervalMinutes,
-        fireAtMs = fireAt,
+        // [T-android-scheduled-triggers] "30m" = AFTER, "every 30m" = INTERVAL;
+        // one trigger model for both tool surfaces and the CLI.
+        triggerKind = if (interval) ScheduledTriggerKind.INTERVAL else ScheduledTriggerKind.AFTER,
+        intervalSec = if (interval) parsed.intervalMinutes * 60L else null,
+        delaySec = if (interval) null else parsed.firstDelayMs / 1000L,
+        anchorMs = now,
+        triggeredCount = 0,
         createdAt = now,
     )
     val saved = manager.create(task)
@@ -145,8 +155,9 @@ private fun createScheduledTask(
                     put("id", saved.id)
                     put("name", saved.label)
                     put("schedule", schedule)
-                    put("fireAtMs", saved.fireAtMs ?: fireAt)
-                    put("repeat", saved.repeatMode.name)
+                    put("trigger", saved.triggerKind.name.lowercase())
+                    put("nextTriggerMs", saved.nextTriggerMs() ?: JSONObject.NULL)
+                    if (saved.intervalSec != null) put("intervalSec", saved.intervalSec)
                     if (saved.id != task.id) put("already_existed", true)
                 }.toString(2),
             ),
@@ -166,9 +177,13 @@ private fun scheduleTaskList(deps: McpToolDeps): McpServerCore.CallResult {
                     put("id", t.id)
                     put("name", t.label)
                     put("enabled", t.enabled)
-                    put("repeat", t.repeatMode.name)
-                    if (t.intervalMinutes > 0) put("intervalMinutes", t.intervalMinutes)
-                    if (t.fireAtMs != null) put("fireAtMs", t.fireAtMs)
+                    put("trigger", t.triggerKind.name.lowercase())
+                    // `repeat` only ever described calendar rows; an interval has
+                    // no calendar repeat and printing "ONCE" for it would lie.
+                    if (t.isCalendar) put("repeat", t.repeatMode.name)
+                    t.intervalSec?.let { put("intervalSec", it) }
+                    t.maxFires?.let { put("maxFires", it) }
+                    put("firesSoFar", t.firesSoFar)
                     put("nextTriggerMs", t.nextTriggerMs() ?: JSONObject.NULL)
                     put("prompt", t.prompt.take(200))
                 },
