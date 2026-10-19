@@ -1307,6 +1307,17 @@
     <string name="backup_history_running">Çalışıyor…</string>
     <string name="backup_history_interrupted">Bitmeden kesintiye uğradı</string>
     <string name="backup_stop">Yedeklemeyi Durdur</string>
+    <string name="backup_notif_channel">Yedekler</string>
+    <string name="backup_notif_running_title">Yedekleniyor…</string>
+    <string name="backup_notif_running_text">Hazırlanıyor…</string>
+    <string name="backup_notif_done_title">Yedekleme tamamlandı</string>
+    <string name="backup_notif_done_text">Yedeğiniz teslim edildi.</string>
+    <string name="backup_notif_local_pending">Yalnızca Minis içinde tutulur. Cihazınıza kaydetmek veya paylaşmak için uygulamayı açın.</string>
+    <string name="backup_notif_issues_title">Yedekleme sorunlarla tamamlandı</string>
+    <string name="backup_notif_failed_title">Yedekleme başarısız</string>
+    <string name="backup_notif_stopped_title">Yedekleme durduruldu</string>
+    <string name="backup_notif_stopped_text">Yedekleme tamamlanmadan durduruldu.</string>
+    <string name="backup_result_local_pending">Henüz bu uygulamanın dışına kaydedilmedi. Cihazınıza kaydedin veya paylaşın — uygulamada kalan yedek, Minis kaldırılırsa kaybolur.</string>
     <string name="backup_history_stopped">Durduruldu</string>
     <string name="backup_history_delivered">%2$d hedeften %1$d tanesi</string>
     <string name="backup_history_destinations">HEDEFLER</string>

@@ -1307,6 +1307,17 @@
     <string name="backup_history_running">En cours…</string>
     <string name="backup_history_interrupted">Interrompue avant la fin</string>
     <string name="backup_stop">Arrêter la sauvegarde</string>
+    <string name="backup_notif_channel">Sauvegardes</string>
+    <string name="backup_notif_running_title">Sauvegarde en cours…</string>
+    <string name="backup_notif_running_text">Préparation…</string>
+    <string name="backup_notif_done_title">Sauvegarde terminée</string>
+    <string name="backup_notif_done_text">Votre sauvegarde a bien été livrée.</string>
+    <string name="backup_notif_local_pending">Conservée uniquement dans Minis. Ouvrez l\'app pour l\'enregistrer sur votre appareil ou la partager.</string>
+    <string name="backup_notif_issues_title">Sauvegarde terminée avec des problèmes</string>
+    <string name="backup_notif_failed_title">Échec de la sauvegarde</string>
+    <string name="backup_notif_stopped_title">Sauvegarde arrêtée</string>
+    <string name="backup_notif_stopped_text">La sauvegarde a été arrêtée avant la fin.</string>
+    <string name="backup_result_local_pending">Pas encore enregistrée en dehors de cette app. Enregistrez-la sur votre appareil ou partagez-la — une sauvegarde qui reste dans l\'app est perdue si Minis est désinstallée.</string>
     <string name="backup_history_stopped">Arrêtée</string>
     <string name="backup_history_delivered">%1$d destinations sur %2$d</string>
     <string name="backup_history_destinations">DESTINATIONS</string>

@@ -44,6 +44,17 @@ object ProductionSources {
         return f.readText()
     }
 
+    /**
+     * Read one file under `src/main` — the manifest, a resource, anything the
+     * source root above does not cover. Paths are relative to `src/main`.
+     */
+    fun readMain(relPath: String): String {
+        val root = mainRoot() ?: error("production source root not found from ${File("").absolutePath}")
+        val f = File(root, "../..").canonicalFile.resolve(relPath)
+        require(f.isFile) { "production file missing: ${f.absolutePath}" }
+        return f.readText()
+    }
+
     /** Every `.kt` file under `src/main`, for whole-tree symbol scans. */
     fun allKotlinFiles(): List<File> {
         val root = mainRoot() ?: error("production source root not found")

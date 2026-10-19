@@ -1307,6 +1307,17 @@
     <string name="backup_history_running">En curso…</string>
     <string name="backup_history_interrupted">Se interrumpió antes de terminar</string>
     <string name="backup_stop">Detener copia</string>
+    <string name="backup_notif_channel">Copias de seguridad</string>
+    <string name="backup_notif_running_title">Creando copia…</string>
+    <string name="backup_notif_running_text">Preparando…</string>
+    <string name="backup_notif_done_title">Copia de seguridad completada</string>
+    <string name="backup_notif_done_text">Tu copia de seguridad se ha entregado.</string>
+    <string name="backup_notif_local_pending">Solo se guarda en Minis. Abre la app para guardarla en tu dispositivo o compartirla.</string>
+    <string name="backup_notif_issues_title">Copia de seguridad finalizada con problemas</string>
+    <string name="backup_notif_failed_title">Error en la copia de seguridad</string>
+    <string name="backup_notif_stopped_title">Copia de seguridad detenida</string>
+    <string name="backup_notif_stopped_text">La copia de seguridad se detuvo antes de terminar.</string>
+    <string name="backup_result_local_pending">Aún no se ha guardado fuera de esta app. Guárdala en tu dispositivo o compártela: una copia que se queda en la app se pierde si se elimina Minis.</string>
     <string name="backup_history_stopped">Detenida</string>
     <string name="backup_history_delivered">%1$d de %2$d destinos</string>
     <string name="backup_history_destinations">DESTINOS</string>

@@ -1698,6 +1698,17 @@
     <string name="backup_history_running">进行中…</string>
     <string name="backup_history_interrupted">未完成即中断</string>
     <string name="backup_stop">停止备份</string>
+    <string name="backup_notif_channel">备份</string>
+    <string name="backup_notif_running_title">正在备份…</string>
+    <string name="backup_notif_running_text">准备中…</string>
+    <string name="backup_notif_done_title">备份完成</string>
+    <string name="backup_notif_done_text">备份已送达目的地。</string>
+    <string name="backup_notif_local_pending">仅保存在 Minis 内。请打开应用，将备份保存到设备或分享出去。</string>
+    <string name="backup_notif_issues_title">备份已完成，但有问题</string>
+    <string name="backup_notif_failed_title">备份失败</string>
+    <string name="backup_notif_stopped_title">备份已停止</string>
+    <string name="backup_notif_stopped_text">备份在完成前被停止。</string>
+    <string name="backup_result_local_pending">尚未保存到应用外。请保存到设备或分享出去——只留在应用内的备份会随 Minis 被删除而丢失。</string>
     <string name="backup_history_stopped">已停止</string>
     <string name="backup_history_delivered">%2$d 个目的地中成功 %1$d 个</string>
     <string name="backup_history_destinations">目的地</string>

@@ -1307,6 +1307,17 @@
     <string name="backup_history_running">Em execução…</string>
     <string name="backup_history_interrupted">Interrompido antes de terminar</string>
     <string name="backup_stop">Parar backup</string>
+    <string name="backup_notif_channel">Backups</string>
+    <string name="backup_notif_running_title">Fazendo backup…</string>
+    <string name="backup_notif_running_text">Preparando…</string>
+    <string name="backup_notif_done_title">Backup concluído</string>
+    <string name="backup_notif_done_text">Seu backup foi entregue.</string>
+    <string name="backup_notif_local_pending">Mantido apenas no Minis. Abra o app para salvo no dispositivo ou compartilhá-lo.</string>
+    <string name="backup_notif_issues_title">Backup concluído com problemas</string>
+    <string name="backup_notif_failed_title">Falha no backup</string>
+    <string name="backup_notif_stopped_title">Backup interrompido</string>
+    <string name="backup_notif_stopped_text">O backup foi interrompido antes de terminar.</string>
+    <string name="backup_result_local_pending">Ainda não salvo fora deste app. Salve no dispositivo ou compartilhe — um backup que fica no app se perde se o Minis for removido.</string>
     <string name="backup_history_stopped">Interrompido</string>
     <string name="backup_history_delivered">%1$d de %2$d destinos</string>
     <string name="backup_history_destinations">DESTINOS</string>

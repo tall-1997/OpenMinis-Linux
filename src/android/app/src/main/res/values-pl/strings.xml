@@ -1311,6 +1311,17 @@
     <string name="backup_history_running">W toku…</string>
     <string name="backup_history_interrupted">Przerwano przed zakończeniem</string>
     <string name="backup_stop">Zatrzymaj tworzenie kopii</string>
+    <string name="backup_notif_channel">Kopie zapasowe</string>
+    <string name="backup_notif_running_title">Tworzenie kopii…</string>
+    <string name="backup_notif_running_text">Przygotowywanie…</string>
+    <string name="backup_notif_done_title">Kopia zapasowa ukończona</string>
+    <string name="backup_notif_done_text">Twoja kopia zapasowa została dostarczona.</string>
+    <string name="backup_notif_local_pending">Przechowywana tylko w Minis. Otwórz aplikację, aby zapisać ją na urządzeniu lub udostępnić.</string>
+    <string name="backup_notif_issues_title">Kopia zapasowa ukończona z problemami</string>
+    <string name="backup_notif_failed_title">Kopia zapasowa nie powiodła się</string>
+    <string name="backup_notif_stopped_title">Kopia zapasowa zatrzymana</string>
+    <string name="backup_notif_stopped_text">Kopia zapasowa została zatrzymana przed ukończeniem.</string>
+    <string name="backup_result_local_pending">Nie zapisano jeszcze poza tą aplikacją. Zapisz na urządzeniu lub udostępnij — kopia, która zostaje w aplikacji, przepada po usunięciu Minis.</string>
     <string name="backup_history_stopped">Zatrzymano</string>
     <string name="backup_history_delivered">%1$d z %2$d miejsc docelowych</string>
     <string name="backup_history_destinations">MIEJSCA DOCELOWE</string>

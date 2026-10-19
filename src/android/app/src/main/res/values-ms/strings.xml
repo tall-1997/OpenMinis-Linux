@@ -1307,6 +1307,17 @@
     <string name="backup_history_running">Berjalan…</string>
     <string name="backup_history_interrupted">Terhenti sebelum selesai</string>
     <string name="backup_stop">Hentikan Sandaran</string>
+    <string name="backup_notif_channel">Sandaran</string>
+    <string name="backup_notif_running_title">Membuat sandaran…</string>
+    <string name="backup_notif_running_text">Menyediakan…</string>
+    <string name="backup_notif_done_title">Sandaran selesai</string>
+    <string name="backup_notif_done_text">Sandaran anda telah dihantar.</string>
+    <string name="backup_notif_local_pending">Hanya disimpan dalam Minis. Buka aplikasi untuk menyimpannya ke peranti atau berkongsi.</string>
+    <string name="backup_notif_issues_title">Sandaran selesai dengan masalah</string>
+    <string name="backup_notif_failed_title">Sandaran gagal</string>
+    <string name="backup_notif_stopped_title">Sandaran dihentikan</string>
+    <string name="backup_notif_stopped_text">Sandaran dihentikan sebelum selesai.</string>
+    <string name="backup_result_local_pending">Belum disimpan di luar aplikasi ini. Simpan ke peranti atau kongsi — sandaran yang kekal dalam aplikasi hilang jika Minis dialih keluar.</string>
     <string name="backup_history_stopped">Dihentikan</string>
     <string name="backup_history_delivered">%1$d daripada %2$d destinasi</string>
     <string name="backup_history_destinations">DESTINASI</string>

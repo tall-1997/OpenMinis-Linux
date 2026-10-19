@@ -1309,6 +1309,17 @@
     <string name="backup_history_running">În curs…</string>
     <string name="backup_history_interrupted">Întrerupt înainte de finalizare</string>
     <string name="backup_stop">Oprește copia de rezervă</string>
+    <string name="backup_notif_channel">Copii de siguranță</string>
+    <string name="backup_notif_running_title">Se creează copia…</string>
+    <string name="backup_notif_running_text">Se pregătește…</string>
+    <string name="backup_notif_done_title">Copie de siguranță finalizată</string>
+    <string name="backup_notif_done_text">Copia ta de siguranță a fost livrată.</string>
+    <string name="backup_notif_local_pending">Păstră doar în Minis. Deschide aplicația pentru a o salva pe dispozitiv sau a o partaja.</string>
+    <string name="backup_notif_issues_title">Copie de siguranță finalizată cu probleme</string>
+    <string name="backup_notif_failed_title">Copia de siguranță a eșuat</string>
+    <string name="backup_notif_stopped_title">Copie de siguranță oprită</string>
+    <string name="backup_notif_stopped_text">Copia de siguranță a fost oprită înainte de finalizare.</string>
+    <string name="backup_result_local_pending">Încă nu este salvată în afara acestei aplicații. Salveaz-o pe dispozitiv sau partajeaz-o — o copie care rămâne în aplicație se pierde dacă Minis este eliminat.</string>
     <string name="backup_history_stopped">Oprit</string>
     <string name="backup_history_delivered">%1$d din %2$d destinații</string>
     <string name="backup_history_destinations">DESTINAȚII</string>

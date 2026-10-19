@@ -2,17 +2,9 @@ package com.openminis.app.backup
 
 import android.content.Context
 import com.openminis.app.data.db.AppDatabase
-import com.openminis.app.data.db.ChatSessionEntity
-import com.openminis.app.data.db.CompactMarkerEntity
-import com.openminis.app.data.db.FolderEntity
-import com.openminis.app.data.db.MessageEntity
 import com.openminis.app.logging.AppLogger
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonNull
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.buildJsonObject
 import java.io.File
 import com.openminis.app.util.IsoTime
 import java.util.UUID
@@ -124,7 +116,14 @@ class BackupExporter(
             val stats = mutableMapOf<String, BackupManifest.CategoryStat>()
 
             BackupFileIndexWriter(File(staging, "files.index.jsonl")).use { fileIndex ->
-                val trees = BackupFileTreeExporter(blobStore, fileIndex, options.snapshotAtMillis)
+                // [T-android-backup-webdav-deadline] The tree walk is plain
+                // blocking code: without this hook Stop waited for a whole
+                // category (every session's files) to finish.
+                val runJob = kotlin.coroutines.coroutineContext[kotlinx.coroutines.Job]
+                val trees = BackupFileTreeExporter(
+                    blobStore, fileIndex, options.snapshotAtMillis,
+                    isCancelled = { runJob?.isActive == false },
+                )
 
                 if (BackupCategory.CHATS in options.categories) {
                     onProgress?.invoke("Exporting chats…")
@@ -295,7 +294,7 @@ class BackupExporter(
                                 )
                                 continue
                             }
-                            sessions.write("SessionV2", 1, sessionRecord(session))
+                            sessions.write("SessionV2", 1, BackupRecordJson.session(session))
 
                             var messageOffset = 0
                             while (true) {
@@ -303,7 +302,7 @@ class BackupExporter(
                                 if (page.isEmpty()) break
                                 for (msg in page) {
                                     if (msg.createdAt <= snapshotAtMillis) {
-                                        messages.write("MessageV2", 1, messageRecord(msg))
+                                        messages.write("MessageV2", 1, BackupRecordJson.message(msg))
                                         messageCount += 1
                                     }
                                 }
@@ -311,7 +310,7 @@ class BackupExporter(
                                 if (page.size < 50) break
                             }
                             for (marker in dao.listCompactMarkers(session.id)) {
-                                markers.write("CompactMarkerV2", 1, markerRecord(marker))
+                                markers.write("CompactMarkerV2", 1, BackupRecordJson.marker(marker))
                             }
 
                             // The session's whole on-disk tree: attachments /
@@ -325,7 +324,7 @@ class BackupExporter(
                         }
 
                         for (folder in dao.listFolders()) {
-                            folders.write("FolderV2", 1, folderRecord(folder))
+                            folders.write("FolderV2", 1, BackupRecordJson.folder(folder))
                         }
                         jsonlBytes = sessions.totalBytes + messages.totalBytes +
                             markers.totalBytes + folders.totalBytes
@@ -344,52 +343,14 @@ class BackupExporter(
     }
 
     /**
-     * The session row as iOS writes it.
+     * §2.2 — the out-of-line message bodies (`<filesDir>/bodies`, the blobs a
+     * `MessageEntity.bodyRef` points at). They are chats' data, so they land
+     * under `chats/_bodies/`; a long message whose body was offloaded would
+     * otherwise restore with a dangling `bodyRef`.
      *
-     * Field names and date format follow iOS's `ChatSession` under the
-     * synthesized Codable encoder (camelCase, ISO-8601), plus the two extras
-     * iOS keeps alongside it in `SessionRecord`. Android-only columns with no
-     * iOS counterpart (`editCount`, `thinkingOverride`) are carried too: §2.2
-     * rule 4 says platform-specific data is preserved and ignored by the other
-     * side, which is strictly better than dropping a user's per-session
-     * thinking override on a same-platform restore.
-     *
-     * Device-local fields are deliberately absent — see [messageRecord].
-     */
-    private fun sessionRecord(s: ChatSessionEntity): JsonElement = buildJsonObject {
-        put("id", JsonPrimitive(s.id))
-        put("title", s.title?.let(::JsonPrimitive) ?: JsonNull)
-        put("category", s.category?.let(::JsonPrimitive) ?: JsonNull)
-        put("modelId", JsonPrimitive(s.modelId))
-        put("createdAt", JsonPrimitive(iso8601(s.createdAt)))
-        put("updatedAt", JsonPrimitive(iso8601(s.updatedAt)))
-        put("lastMessage", s.lastMessage?.let(::JsonPrimitive) ?: JsonNull)
-        put("source", s.source?.let(::JsonPrimitive) ?: JsonNull)
-        put("pinnedAt", s.pinnedAt?.let { JsonPrimitive(iso8601(it)) } ?: JsonNull)
-        put("folderId", s.folderId?.let(::JsonPrimitive) ?: JsonNull)
-        // iOS's SessionRecord wrapper fields.
-        put("memoryEnabled", JsonPrimitive(s.memoryEnabled != 0))
-        put("modelBinding", s.modelBinding?.let(::JsonPrimitive) ?: JsonNull)
-        // Android-only, preserved per §2.2 rule 4.
-        put("editCount", JsonPrimitive(s.editCount))
-        put("thinkingOverride", s.thinkingOverride?.let(::JsonPrimitive) ?: JsonNull)
-    }
-
-    /**
-     * The message row as iOS writes it.
-     *
-     * `parts` is spliced in as pre-parsed JSON rather than re-encoded: the
-     * column already holds the exact `[ContentPart]` array iOS's ContentPart
-     * encoder produces (`{"type":…,"value":…}`), so passing it through keeps
-     * MediaRef paths and tool payloads byte-identical. Re-encoding through a
-     * Kotlin model would risk reordering or dropping a field the Android model
-     * doesn't know about.
-     *
-     * `errorInfo` is NOT written. §0.2 lists it with `part_flags` as a
-     * device-local field the portable record excludes: an error sticker for a
-     * failed turn on the old device is meaningless on the new one, and
-     * restoring it would resurrect a red error badge against a message that
-     * never failed for this install.
+     * Stays in this file rather than with the record builders: it needs the
+     * Context (the directory lives outside the database) and it packages
+     * files, which is what the exporter is for.
      */
     private fun exportBodyBlobs(blobStore: BackupBlobStore, fileIndex: BackupFileIndexWriter) {
         val root = File(context.filesDir, "bodies")
@@ -414,64 +375,6 @@ class BackupExporter(
                 }
             }
         }
-    }
-
-    private fun messageRecord(m: MessageEntity): JsonElement = buildJsonObject {
-        put("id", JsonPrimitive(m.id))
-        put("sessionId", JsonPrimitive(m.sessionId))
-        put("role", JsonPrimitive(m.role))
-        put("parts", parseParts(m.partsJson))
-        put("createdAt", JsonPrimitive(iso8601(m.createdAt)))
-        put("updatedAt", JsonPrimitive(iso8601(m.updatedAt ?: m.createdAt)))
-        put("tokenUsage", m.tokenUsage?.let { parseJsonOrNull(it) } ?: JsonNull)
-        put("reasoningContent", m.reasoningContent?.let(::JsonPrimitive) ?: JsonNull)
-        put("streamInterruptCount", JsonPrimitive(m.streamInterruptCount))
-        put("sortOrder", JsonPrimitive(m.sortOrder))
-        put("bodyBytes", JsonPrimitive(m.bodyBytes))
-        m.bodyRef?.let { put("bodyRef", JsonPrimitive(it)) }
-        m.bodySha?.let { put("bodySha", JsonPrimitive(it)) }
-        // [T-token-attribution-snapshot] Per-message model attribution. Emitted
-        // only when present, so a package from a device with no snapshots keeps
-        // its previous shape and older importers see nothing new.
-        //
-        // camelCase, NOT snake_case: iOS serializes `RawMessage` straight
-        // through Codable with no CodingKeys, so its wire keys are the Swift
-        // property names — the rest of this record already matches that
-        // (`tokenUsage`, `streamInterruptCount`, `sortOrder`). A snake_case key
-        // here would simply not decode on iOS, which is the same silent
-        // cross-platform drop we hit with the env-var `createdAt` format.
-        m.modelId?.let { put("modelId", JsonPrimitive(it)) }
-        m.modelDisplayName?.let { put("modelDisplayName", JsonPrimitive(it)) }
-        m.providerType?.let { put("providerType", JsonPrimitive(it)) }
-        m.providerInstanceId?.let { put("providerInstanceId", JsonPrimitive(it)) }
-    }
-
-    private fun markerRecord(c: CompactMarkerEntity): JsonElement = buildJsonObject {
-        put("id", JsonPrimitive(c.id))
-        put("sessionId", JsonPrimitive(c.sessionId))
-        put("summary", JsonPrimitive(c.summary))
-        put("firstKeptSortOrder", JsonPrimitive(c.firstKeptSortOrder))
-        put("compactedCount", JsonPrimitive(c.compactedCount))
-        put("createdAt", JsonPrimitive(iso8601(c.createdAt)))
-        put("uiBoundarySortOrder", c.uiBoundarySortOrder?.let(::JsonPrimitive) ?: JsonNull)
-        put("boundaryMessageId", c.boundaryMessageId?.let(::JsonPrimitive) ?: JsonNull)
-        put("firstKeptMessageId", c.firstKeptMessageId?.let(::JsonPrimitive) ?: JsonNull)
-        put("lastCompactedMessageId", c.lastCompactedMessageId?.let(::JsonPrimitive) ?: JsonNull)
-    }
-
-    private fun folderRecord(f: FolderEntity): JsonElement = buildJsonObject {
-        put("id", JsonPrimitive(f.id))
-        put("name", JsonPrimitive(f.name))
-        put("icon", f.icon?.let(::JsonPrimitive) ?: JsonNull)
-        put("color", f.color?.let(::JsonPrimitive) ?: JsonNull)
-        put("origin", JsonPrimitive(f.origin))
-        put("sortIndex", JsonPrimitive(f.sortIndex))
-        put("pinnedAt", f.pinnedAt?.let { JsonPrimitive(iso8601(it)) } ?: JsonNull)
-        put("description", f.description?.let(::JsonPrimitive) ?: JsonNull)
-        put("createdAt", JsonPrimitive(iso8601(f.createdAt)))
-        // Record edits only (rename / pin / icon) — a session moving in or out
-        // of the group must not touch it, so this is a stable merge key.
-        put("updatedAt", JsonPrimitive(iso8601(f.updatedAt)))
     }
 
     // MARK: - Shared files / Skills / Memory
@@ -796,12 +699,6 @@ class BackupExporter(
     }
 
     // MARK: - Helpers
-
-    private fun parseParts(partsJson: String): JsonElement =
-        parseJsonOrNull(partsJson) ?: BackupFormat.json.parseToJsonElement("[]")
-
-    private fun parseJsonOrNull(raw: String): JsonElement? =
-        runCatching { BackupFormat.json.parseToJsonElement(raw) }.getOrNull()
 
     private fun appVersion(): String = runCatching {
         context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "?"
