@@ -103,6 +103,11 @@ object ScheduledAgentRunner {
             return null
         }
 
+        // [T-scheduled-task-detail] One timestamp for this fire, written into
+        // its envelope and its run record so the two can be matched: the
+        // detail page finds "the fire whose card was tapped" by this value.
+        val firedAt = System.currentTimeMillis()
+
         val sessionId = withContext(Dispatchers.IO) {
             resolveSessionId(app, task)
         } ?: return null
@@ -119,10 +124,10 @@ object ScheduledAgentRunner {
         )
 
         if (waitForCompletion) {
-            val result = dispatch(app, task, sessionId, wait = true)
+            val result = dispatch(app, task, sessionId, wait = true, firedAt = firedAt)
             val preview = (result.responseText ?: "").take(200).ifBlank { "(no response)" }
             val ok = result.status != "Error" && result.status != "Timeout"
-            ScheduledTaskManager(app).markFired(task.id, sessionId, preview, ok = ok)
+            ScheduledTaskManager(app).markFired(task.id, sessionId, preview, ok = ok, firedAt = firedAt)
             postCompletionNotification(app, task, sessionId, preview)
             releaseDependentsIfFinished(app, task, result.responseText, scheduledFire)
             return sessionId
@@ -135,10 +140,10 @@ object ScheduledAgentRunner {
         // "task started" without blocking on the agent loop. Leaving the editor
         // can't cancel it because bgScope outlives the screen.
         bgScope.launch {
-            val result = dispatch(app, task, sessionId, wait = true)
+            val result = dispatch(app, task, sessionId, wait = true, firedAt = firedAt)
             val preview = (result.responseText ?: "").take(200).ifBlank { "(no response)" }
             val ok = result.status != "Error" && result.status != "Timeout"
-            ScheduledTaskManager(app).markFired(task.id, sessionId, preview, ok = ok)
+            ScheduledTaskManager(app).markFired(task.id, sessionId, preview, ok = ok, firedAt = firedAt)
             postCompletionNotification(app, task, sessionId, preview)
             releaseDependentsIfFinished(app, task, result.responseText, scheduledFire)
         }
@@ -181,7 +186,25 @@ object ScheduledAgentRunner {
         task: ScheduledTask,
         sessionId: String,
         wait: Boolean,
+        firedAt: Long,
     ): HeadlessChatRunner.PromptResult = runCatching {
+        // [T-android-scheduled-task-card] Wrap the prompt so the transcript can
+        // tell it apart from something the user typed. Without this the fired
+        // message is an ordinary user bubble: the user sees text they never
+        // wrote, with nothing saying which task produced it. The prompt follows
+        // the tag verbatim, so a reader that does not know the tag still shows
+        // the text rather than an empty bubble.
+        //
+        // RerunMessage is deliberately NOT wrapped — it replays an existing
+        // message rather than sending a new one, so there is nothing to mark.
+        val marked = ScheduledTaskMarker(
+            taskId = task.id,
+            label = task.label,
+            nextFireAtMs = task.nextTriggerMs(),
+            prompt = task.prompt,
+            firedAtMs = firedAt,
+        ).xml
+
         val mode = task.targetMode
         if (mode is ScheduledTargetMode.RerunMessage) {
             HeadlessChatRunner.retry(
@@ -195,7 +218,7 @@ object ScheduledAgentRunner {
             HeadlessChatRunner.prompt(
                 context = app,
                 sessionId = sessionId,
-                text = task.prompt,
+                text = marked,
                 attachments = emptyList(),
                 thinkingLevel = null,
                 wait = wait,

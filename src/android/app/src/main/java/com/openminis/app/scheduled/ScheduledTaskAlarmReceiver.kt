@@ -68,6 +68,11 @@ class ScheduledTaskAlarmReceiver : BroadcastReceiver() {
                         return@withTimeout
                     }
 
+                    // [T-android-scheduled-triggers] Run the row as it is NOW:
+                    // rescheduleNext just advanced an interval's anchor and
+                    // count, and the fire's envelope shows the NEXT fire time.
+                    val current = manager.get(taskId) ?: task
+
                     // [GH#197] waitForCompletion=false is load-bearing, not a
                     // tweak. With the default (true) this call suspends until
                     // the whole agent loop finishes — up to RUN_TIMEOUT_MS
@@ -88,7 +93,7 @@ class ScheduledTaskAlarmReceiver : BroadcastReceiver() {
                     // receiver.
                     ScheduledAgentRunner.run(
                         appContext,
-                        task,
+                        current,
                         waitForCompletion = false,
                         // This run came from the schedule, so it may finish it:
                         // tasks waiting on this one are released when it does.

@@ -154,6 +154,24 @@ object ChatViewModelStore {
     fun resolvePersistedId(sessionId: String): String = resolveKey(sessionId)
 
     /**
+     * [T-scheduled-task-detail] The already-created ChatViewModel for
+     * [sessionId], or null — never constructs one.
+     *
+     * For callers that only want to OBSERVE a session that is already live:
+     * the scheduled-task detail page asks whether the chat hosting the touched
+     * card is streaming right now, which is what makes that fire "running"
+     * before it is recorded. `ownerFor` would CREATE a VM, and a second
+     * instance for a live session means a second agent loop.
+     *
+     * Upstream reaches into the ViewModelStore with a refusing factory; here
+     * [models] already IS the authoritative map of live VMs (register adds,
+     * release / eviction / rename remove or move it), so under the object
+     * monitor this is the same answer with no reflection trick.
+     */
+    @Synchronized
+    fun existing(sessionId: String): ChatViewModel? = models[resolveKey(sessionId)]
+
+    /**
      * [T-android-split-draft-highlight] Compose-aware [resolvePersistedId].
      *
      * Reading [aliasGeneration] inside a composition subscribes the caller to
