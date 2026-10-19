@@ -60,6 +60,11 @@ class ScheduledTaskManager(private val context: Context) {
             it.onCompletionOf == task.onCompletionOf &&
             it.customDays == task.customDays &&
             it.prompt == task.prompt &&
+            // [T-scheduled-tool-prefill] Same label, prompt and schedule but a
+            // different prefilled command are two different tasks (both usually
+            // carry the same label, e.g. "Disk check"); without this the second
+            // create silently returns the first.
+            it.prefillToolCall == task.prefillToolCall &&
             it.targetMode == task.targetMode &&
             it.enabled == task.enabled
     }
@@ -375,6 +380,15 @@ class ScheduledTaskManager(private val context: Context) {
             val effectiveKind = if (keepTrigger) prev.triggerKind else incoming.triggerKind
             return incoming.copy(
                 runHistory = incoming.runHistory.ifEmpty { prev.runHistory },
+                // [T-scheduled-tool-prefill] The editor rebuilds a task from its
+                // form fields, which carry no prefill — keep the stored call so
+                // renaming a task does not silently strip its first step. A rerun
+                // target replays an old turn and sends nothing new, so a prefill
+                // cannot survive that switch (and must not come back if the user
+                // switches to new later: a call nobody can see is not a call
+                // anybody asked to keep).
+                prefillToolCall = incoming.prefillToolCall
+                    ?: prev.prefillToolCall.takeIf { incoming.targetMode !is ScheduledTargetMode.RerunMessage },
                 fireCount = incoming.fireCount ?: prev.fireCount,
                 triggerKind = effectiveKind,
                 delaySec = if (keepTrigger) prev.delaySec else incoming.delaySec,

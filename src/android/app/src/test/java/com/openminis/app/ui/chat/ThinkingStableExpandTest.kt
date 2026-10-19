@@ -195,10 +195,14 @@ class ThinkingStableExpandTest {
             "the queuedPromptInterrupted block must run after the stream loop",
             "if (queuedPromptInterrupted) {" in src,
         )
+        // Contract: both swap sites (tool-close boundary + thinking-phase cut) go
+        // through the extracted helper. The argument expression is free to move
+        // with the drain's return type — it is `handled` while the drain yields a
+        // bare id, `handled.newAssistantId` once it yields the whole turn.
         assertEquals(
             "two swap sites (tool-close boundary + thinking-phase cut) share the extracted swapLoopStateToInjectedBubble",
             2,
-            Regex("swapLoopStateToInjectedBubble\\(handled\\)").findAll(src).count(),
+            Regex("swapLoopStateToInjectedBubble\\(handled(?:\\.newAssistantId)?\\)").findAll(src).count(),
         )
     }
 

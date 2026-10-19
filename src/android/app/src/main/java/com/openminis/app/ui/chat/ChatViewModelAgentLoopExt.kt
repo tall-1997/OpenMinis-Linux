@@ -10,6 +10,8 @@ import com.openminis.app.data.model.LLMError
 import com.openminis.app.data.model.LLMMessage
 import com.openminis.app.data.model.LLMStreamChunk
 import com.openminis.app.data.model.LLMUsage
+import com.openminis.app.scheduled.PrefilledToolCall
+import com.openminis.app.scheduled.ScriptedToolTurn
 import com.openminis.app.data.model.ThinkingLevel
 import com.openminis.app.data.repository.MultiAgentSettings
 import com.openminis.app.logging.AppLogger
@@ -20,6 +22,7 @@ import com.openminis.app.tools.SubAgentKind
 import com.openminis.app.tools.ToolExecutionResult
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.asFlow
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -45,11 +48,16 @@ internal suspend fun ChatViewModel.runAgentLoop(
     fallbackProviders: List<ChatViewModel.FallbackCandidate> = emptyList(),
     fallbackStrategy: com.openminis.app.data.model.FallbackStrategy = com.openminis.app.data.model.FallbackStrategy.default,
     goalExecutionRun: Boolean = false,
+    /** [T-scheduled-tool-prefill] a task's prefilled call — see [ScriptedToolTurn]. */
+    prefill: List<PrefilledToolCall> = emptyList(),
     /** [T-android-instant-thinking] send 路径已预插占位气泡，复用其 id。 */
     overrideAssistantId: String? = null,
     /** [T-android-resume-latency] Caller already rebuilt agentHistory. */
     historyAlreadyRebuilt: Boolean = false,
 ) {
+    // [T-scheduled-tool-prefill] Resolved once, consumed by the FIRST turn only:
+    // a call these tools cannot run falls back to a plain prompt.
+    var pendingScriptedTurn = scriptedTurnFor(prefill)
     // Room is the transcript authority. See prepareRunHistory() for the
     // stop-cleanup ordering and the historyAlreadyRebuilt skip.
     prepareRunHistory(historyAlreadyRebuilt)
@@ -265,8 +273,7 @@ internal suspend fun ChatViewModel.runAgentLoop(
     // per run so a mid-run settings change can't shift the range end under
     // an in-flight iteration.
     val maxTurns = ToolLimitPrefs.mainSessionMaxTurns()
-    // [T-android-queued-message-interrupt-*] Shared by both mid-loop
-    // injection sites: switch loop-scope state to the injected bubble.
+    // [T-android-queued-message-interrupt-*] Both injection sites switch loop-scope state to the injected bubble.
     fun swapLoopStateToInjectedBubble(newAssistantId: String) {
         assistantId = newAssistantId
         accumulatedText = ""
@@ -664,38 +671,24 @@ internal suspend fun ChatViewModel.runAgentLoop(
                     effectiveAgentHistory(),
                     goalMount.prompt,
                     appendNewUser = goalExecutionRun && turn == 0,
-                ).let { history ->
-                    // [T-stall-resume] A previous attempt stalled mid-stream:
-                    // append the bounded continuation note so this attempt picks
-                    // up where it stopped instead of regenerating the same text.
-                    val resumeNote = stallResumeContext
-                    if (resumeNote == null) history else history + LLMMessage(
-                        role = LLMMessage.Role.USER,
-                        content = resumeNote,
-                        contentParts = listOf(
-                            com.openminis.app.data.model.AgentContentPart.Text(resumeNote),
-                        ),
-                    )
-                }
-                // [T-first-event-watchdog] A hung relay below the provider
-                // never throws — the stream below will cancel itself and surface
-                // a TransientError, letting the existing retry chain take over.
+                ).let { appendStallResumeNote(it, stallResumeContext) }
+                // [T-first-event-watchdog] A hung relay cancels into a TransientError the retry chain handles.
                 val firstEventTimeoutMs = if ((if (currentModelSupportsReasoning) _thinkingLevel.value else ThinkingLevel.OFF).isEnabled) 90_000L else 45_000L
-                // [T-stream-stall-watchdog] Phase 2: once the stream is alive,
-                // silence longer than twice the first-event budget means
-                // progress stopped, not that it is slow to start. Derived from
-                // the existing constant so there is no second number to tune
-                // per vendor, and it replaces a 600s transport read timeout as
-                // the only bound on a mid-stream stall.
+                // [T-stream-stall-watchdog] Phase 2: silence past twice the first-event budget = stalled.
                 val streamIdleTimeoutMs = firstEventTimeoutMs * 2
-                currentProvider.streamMessage(
+                // [T-scheduled-tool-prefill] A prefilled call answers the first turn
+                // with no request at all; the flow below replays what a provider
+                // would have streamed for that turn. Consumed once.
+                val scriptedTurn = pendingScriptedTurn?.also { pendingScriptedTurn = null }
+                val streamSource = scriptedTurn?.asStreamChunks()?.asFlow() ?: currentProvider.streamMessage(
                     applyRequestImageBudget(requestHistory),
                     systemPrompt, dynamicMaxTokens(currentProvider, lastContextTokens),
                     temperature = samplingTemperature(_activeEntryId.value),
                     tools = agentTools,
                     thinkingLevel = if (currentModelSupportsReasoning) _thinkingLevel.value else ThinkingLevel.OFF,
                     systemStablePrefixLen = systemPromptStablePrefixLen,
-                ).streamStallWatchdog(firstEventTimeoutMs, streamIdleTimeoutMs).collect { chunk ->
+                )
+                streamSource.streamStallWatchdog(firstEventTimeoutMs, streamIdleTimeoutMs).collect { chunk ->
             // [T-stream-trace-live] 运行时轨迹录制（日志页开关控制，默认关）。
             com.openminis.app.provider.StreamTraceRecorder.record(chunk)
             when (chunk) {
@@ -1148,8 +1141,7 @@ internal suspend fun ChatViewModel.runAgentLoop(
                 lastOtherToolInputMs = 0L
                 collectDone = true
                 com.openminis.app.agent.GenerationRunStore.finish(context, generationRunId, ok = true)
-                // [T-stall-resume] The stream attempt succeeded — no resume
-                // context should leak into a later turn.
+                // [T-stall-resume] Attempt succeeded — no resume context leaks into a later turn.
                 stallResumeContext = null
                 // Stream completed without error — clear any lingering retry UI state.
                 if (_autoRetryAttempt.value != 0 || _autoRetryCountdown.value != 0) {
@@ -1517,7 +1509,9 @@ internal suspend fun ChatViewModel.runAgentLoop(
             if (turn == 0) generateSessionTitleIfNeeded()
             val handled = drainQueueIntoStandaloneTurn(assistantId, accumulatedText, allToolBlocks, uiBatcher)
             if (handled != null) {
-                swapLoopStateToInjectedBubble(handled)
+                swapLoopStateToInjectedBubble(handled.newAssistantId)
+                // [T-scheduled-tool-prefill] A queued prompt may carry calls.
+                pendingScriptedTurn = scriptedTurnFor(handled.prefill)
                 continue
             }
             // null = queue drained concurrently / no content — the normal
@@ -2037,7 +2031,10 @@ internal suspend fun ChatViewModel.runAgentLoop(
             // Loop-detector check BEFORE execution. CRITICAL outcomes short-circuit
             // the call: synthesize an error result so the tool_use/tool_result pair
             // stays balanced and the LLM sees the block reason.
-            val precheck = toolLoopDetector.check(name, paramsMap)
+            // [T-scheduled-tool-prefill] A prefilled call is in history by design;
+            // rerunning it every fire is the point — see isScriptedId.
+            val precheck = if (ScriptedToolTurn.isScriptedId(id)) com.openminis.app.agent.LoopCheckResult.NONE
+                else toolLoopDetector.check(name, paramsMap)
             if (precheck.level == Level.CRITICAL) {
                 val blockedMsg = precheck.message ?: "[LOOP BLOCKED] tool execution blocked"
                 android.util.Log.w("ToolChain[VM]",
@@ -2365,9 +2362,8 @@ internal suspend fun ChatViewModel.runAgentLoop(
 
         if (turn == 0) generateSessionTitleIfNeeded()  // auto-title after first exchange
 
-        // [T-android-queued-message-interrupt-on-toolclose] At the post-tool-
-        // result boundary a queued prompt abandons the running plan and
-        // starts a standalone turn. See drainQueueIntoStandaloneTurn.
+        // [T-android-queued-message-interrupt-on-toolclose] At the post-tool-result
+        // boundary a queued prompt abandons the plan; see drainQueueIntoStandaloneTurn.
         if (_promptQueue.value.isNotEmpty()) {
             AppLogger.info(
                 ChatViewModel.TAG_STREAM,
@@ -2375,7 +2371,9 @@ internal suspend fun ChatViewModel.runAgentLoop(
             )
             val handled = drainQueueIntoStandaloneTurn(assistantId, accumulatedText, allToolBlocks, uiBatcher)
             if (handled != null) {
-                swapLoopStateToInjectedBubble(handled)
+                swapLoopStateToInjectedBubble(handled.newAssistantId)
+                // [T-scheduled-tool-prefill] A queued prompt may carry calls.
+                pendingScriptedTurn = scriptedTurnFor(handled.prefill)
                 continue
             }
             // null = empty-after-build / drain rejected; fall through to

@@ -180,7 +180,7 @@ internal suspend fun ChatViewModel.injectQueuedPromptsAsNewTurn(
         "injectQueuedPromptsAsNewTurn: injected ${queued.size} queued prompt(s) as new turn, " +
             "finishedId=$finishedAssistantId newId=$newAssistantId",
     )
-    return ChatViewModel.InjectedTurn(newAssistantId)
+    return ChatViewModel.InjectedTurn(newAssistantId, queued.flatMap { it.prefill })
 }
 
 /**
@@ -201,7 +201,10 @@ internal fun ChatViewModel.hasQueuedPromptDuringPureThinking(
  * queued-prompt injection sites — the post-tool-result boundary and the
  * thinking-phase cut: claim the queue and inject it as a standalone user
  * turn (bridge + persisted row + fresh assistant bubble; see
- * injectQueuedPromptsAsNewTurn), returning the new bubble's id.
+ * injectQueuedPromptsAsNewTurn), returning the new bubble's id. The result
+ * carries the id ([ChatViewModel.InjectedTurn.newAssistantId]) and any calls
+ * riding the queued prompts ([ChatViewModel.InjectedTurn.prefill]); a caller
+ * that only kept the id dropped them.
  *
  * Null = the queue was drained by a concurrent path or the prompts
  * produced no content; the caller falls through to its normal boundary
@@ -212,13 +215,13 @@ internal suspend fun ChatViewModel.drainQueueIntoStandaloneTurn(
     finishedAccumulatedText: String,
     finishedAllToolBlocks: List<AssistantBlock>,
     uiBatcher: UiUpdateBatcher,
-): String? = try {
+): ChatViewModel.InjectedTurn? = try {
     injectQueuedPromptsAsNewTurn(
         finishedAssistantId = finishedAssistantId,
         finishedAccumulatedText = finishedAccumulatedText,
         finishedAllToolBlocks = finishedAllToolBlocks,
         uiBatcher = uiBatcher,
-    )?.newAssistantId
+    )
 } catch (e: Exception) {
     Log.e(ChatViewModel.TAG, "injectQueuedPromptsAsNewTurn failed", e)
     null

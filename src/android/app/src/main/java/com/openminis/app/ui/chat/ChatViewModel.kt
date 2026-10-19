@@ -243,13 +243,10 @@ class ChatViewModel(
             val probe = lastUser.content.trim()
             if (probe.length < 4) return true
             val lower = trimmed.lowercase()
-            // [T-compact-summary-quality] Reuse the chunk tokenizer so the
-            // check looks for the user's CONTENT terms, not arbitrary
-            // character windows: a 4-gram test is fooled by filler that any
-            // summary shares ("trailing context", "the length floor"), while
-            // real terms ("notification", "pipeline", "压缩", "机制") are
-            // exactly what a faithful summary must echo. Short ASCII words
-            // are dropped - "the"/"and" match everything.
+            // [T-compact-summary-quality] Match the user's CONTENT terms with
+            // the chunk tokenizer, not a 4-gram window: filler ("the length
+            // floor") matches any summary, real terms ("pipeline", "压缩") do
+            // not. Short ASCII words are dropped - "the"/"and" match everything.
             val terms = summaryQueryTerms(probe).filter { t ->
                 t.length >= 4 || (t.first().code in 0x4E00..0x9FFF)
             }
@@ -2112,12 +2109,9 @@ class ChatViewModel(
             val built = AgentTools.makeAgentTools(
                 // [T-android-vision-group / GH#182] The main model's own vision
                 // capability. When false but a Vision Group is configured, read_image
-                // is still exposed and routes through the group (see
-                // executeReadImageTool). Note pre-vision-group Android always passed
-                // the default `true` here, so read_image was already always exposed;
-                // threading the real flag lets a text-only model without a Vision
-                // Group correctly LOSE the tool (iOS parity), while a configured
-                // Vision Group keeps it.
+                // stays exposed and routes through the group (see
+                // executeReadImageTool); a text-only model WITHOUT a group loses the
+                // tool (iOS parity). Android passed `true` here before this flag.
                 supportsImageInput = currentModelHasNativeVision,
                 visionGroupConfigured = com.openminis.app.tools.VisionGroupResolver.isConfigured(
                     providerRepository, context,
@@ -3532,31 +3526,28 @@ class ChatViewModel(
         ASK_USER,
     }
 
-    /**
-     * Text + attachments held back while the "Context Near Capacity" dialog is
-     * up. Mirrors iOS `pendingSendText` / `pendingSendAttachments`.
-     */
+    /** Text + attachments held while the "Context Near Capacity" dialog is up. */
     internal var pendingSendText: String? = null
+    /** [T-scheduled-tool-prefill] Prefills travelling with [pendingSendText]. */
+    internal var pendingSendPrefill: List<com.openminis.app.scheduled.PrefilledToolCall> = emptyList()
 
     internal val _showCompactBeforeSendPrompt = MutableStateFlow(false)
     val showCompactBeforeSendPrompt: StateFlow<Boolean> = _showCompactBeforeSendPrompt.asStateFlow()
 
-    /**
-     * Dialog action: compact the history, then send what the user was holding.
-     * [alsoEnableAutoCompact] backs iOS's one-tap opt-in button, which compacts
-     * now AND remembers the choice for every future conversation.
-     */
+    /** Dialog action: compact, then send what was held. [alsoEnableAutoCompact] is iOS's one-tap opt-in. */
     fun compactAndSendPending(alsoEnableAutoCompact: Boolean = false) {
         if (alsoEnableAutoCompact) setAutoCompactEnabled(true)
         _showCompactBeforeSendPrompt.value = false
         val text = pendingSendText ?: return
         pendingSendText = null
+        val prefill = pendingSendPrefill
+        pendingSendPrefill = emptyList()
         viewModelScope.launch {
             val ok = awaitCompaction()
             if (!ok) {
                 AppLogger.warning(TAG, "[Context] pre-send compaction failed — sending anyway")
             }
-            sendMessage(text, skipContextCheck = true)
+            sendMessage(text, skipContextCheck = true, prefill = prefill)
         }
     }
 
@@ -3565,7 +3556,9 @@ class ChatViewModel(
         _showCompactBeforeSendPrompt.value = false
         val text = pendingSendText ?: return
         pendingSendText = null
-        sendMessage(text, skipContextCheck = true)
+        val prefill = pendingSendPrefill
+        pendingSendPrefill = emptyList()
+        sendMessage(text, skipContextCheck = true, prefill = prefill)
     }
 
     /** Dialog dismissed — restore the text to the composer so it isn't lost. */
@@ -3573,11 +3566,10 @@ class ChatViewModel(
         _showCompactBeforeSendPrompt.value = false
         pendingSendText?.let { _inputText.value = it }
         pendingSendText = null
+        pendingSendPrefill = emptyList()
     }
 
-    /**
-     * [T-android-auto-compact-inloop] What the in-loop context guard decided.
-     */
+    /** [T-android-auto-compact-inloop] What the in-loop context guard decided. */
     internal enum class InLoopContextAction {
         /** Under threshold — issue the next API call as normal. */
         PROCEED,
@@ -4249,10 +4241,10 @@ class ChatViewModel(
         _hasNewerMessages.value = false
         _sessionTailReady.value = false
         _isLoadingHistory.value = false
-        // [T-task-anchor] Session-scoped — the next session re-reads its own
-        // opening turn; a cleared chat must not anchor on the old one.
+        // [T-task-anchor] Session-scoped — a cleared chat must not anchor on the old turn.
         _taskAnchorText.value = null
         pendingSendText = null
+        pendingSendPrefill = emptyList()
         _pendingCaret.value = null
         _showCompactBeforeSendPrompt.value = false
         _compactSummary.value = null
@@ -4841,12 +4833,15 @@ class ChatViewModel(
 
 
     /**
-     * Enqueue a prompt to be injected into the currently running agent loop.
-     * The message appears immediately in the chat with isQueued=true; when the
-     * current agent loop finishes, drainQueuedPrompts() consumes the queue.
+     * Enqueue a prompt to be injected into the running loop; the message shows
+     * immediately as isQueued=true and drainQueuedPrompts() consumes the queue.
      * Mirrors iOS AIChatViewModel.enqueuePrompt().
      */
-    fun enqueuePrompt(text: String) {
+    fun enqueuePrompt(
+        text: String,
+        /** [T-scheduled-tool-prefill] Runs as the next loop's first turn. */
+        prefill: List<com.openminis.app.scheduled.PrefilledToolCall> = emptyList(),
+    ) {
         val trimmed = text.trim()
         val pendingAttachments = _attachments.value
         if ((trimmed.isBlank() && pendingAttachments.isEmpty()) || !_isStreaming.value) return
@@ -4855,6 +4850,7 @@ class ChatViewModel(
             id = "queued_${System.currentTimeMillis()}_${(Math.random() * 1_000_000).toInt()}",
             text = trimmed,
             attachments = pendingAttachments,
+            prefill = prefill,
         )
         _promptQueue.update { it + prompt }
 
@@ -4902,22 +4898,24 @@ class ChatViewModel(
      * preceding tool_result), and spawn a new assistant placeholder for
      * the next iteration's response.
      *
-     * Returns an [InjectedTurn] carrying the new assistantId (which the
-     * caller swaps into its loop-scope `assistantId` before `continue`-ing
-     * the agent loop), or `null` if every queued prompt was empty after
-     * attachment processing (caller falls through to a normal next-turn
-     * dispatch in that case).
-     *
-     * Mirrors iOS `injectQueuedPromptsAsNewTurn`
-     * (AIChatViewModel.swift:2794). Unlike iOS we don't persist the bridge
-     * entry — its sole purpose is to break up the consecutive-user run for
-     * the next API call; chat history reconstruction would just hide it.
+     * Returns an [InjectedTurn] carrying the new assistantId to swap into the
+     * loop scope, or `null` if every queued prompt was empty after attachment
+     * processing (caller then dispatches a normal next turn). Mirrors iOS
+     * `injectQueuedPromptsAsNewTurn`.
      */
-    internal data class InjectedTurn(val newAssistantId: String)
+    internal data class InjectedTurn(
+        val newAssistantId: String,
+        /** [T-scheduled-tool-prefill] Calls riding the queued prompts. */
+        val prefill: List<com.openminis.app.scheduled.PrefilledToolCall> = emptyList(),
+    )
 
 
 
     override fun sendMessage(text: String) = sendMessage(text, skipContextCheck = false)
+
+    /** [T-scheduled-tool-prefill] A scheduled fire's calls ride the send funnel. */
+    override fun submitPrompt(text: String, prefill: List<com.openminis.app.scheduled.PrefilledToolCall>) =
+        sendMessage(text, skipContextCheck = false, prefill = prefill)
 
 
 

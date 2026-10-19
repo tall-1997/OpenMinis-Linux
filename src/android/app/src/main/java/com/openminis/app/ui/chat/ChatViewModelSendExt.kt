@@ -19,6 +19,10 @@ import kotlinx.coroutines.withContext
 import com.openminis.app.R
 
 /**
+ * [T-scheduled-tool-prefill] The send funnel. A scheduled fire enters through
+ * `ChatSessionPort.submitPrompt` ([ChatViewModel.submitPrompt]) with its
+ * prefilled call.
+ *
  * @param skipContextCheck set by the pre-send context dialog's own actions,
  *   which have already made the compact decision. Without it the re-entrant
  *   send would re-evaluate the same (still stale until the next usage
@@ -29,6 +33,12 @@ internal fun ChatViewModel.sendMessage(
     text: String,
     skipContextCheck: Boolean,
     internalGoalRun: Boolean = false,
+    /**
+     * [T-scheduled-tool-prefill] Tool calls a scheduled task already decided
+     * on, run as the loop's first turn instead of a model request. Empty for
+     * everything the user types.
+     */
+    prefill: List<com.openminis.app.scheduled.PrefilledToolCall> = emptyList(),
 ) {
     // [T-android-paste-mediaref] `[Pasted#N]` markers are NOT expanded here
     // any more.
@@ -49,7 +59,7 @@ internal fun ChatViewModel.sendMessage(
     val trimmed = text.trim()
     // While streaming, enqueue instead of silently dropping (iOS: send vs enqueuePrompt).
     if (_isStreaming.value) {
-        enqueuePrompt(text)
+        enqueuePrompt(text, prefill)
         return
     }
     // T180: allow attachments-only sends (no caption). Mirrors iOS, where
@@ -72,6 +82,7 @@ internal fun ChatViewModel.sendMessage(
             ChatViewModel.PreSendContextAction.PROCEED -> {}
             ChatViewModel.PreSendContextAction.COMPACT_THEN_SEND -> {
                 pendingSendText = text
+                pendingSendPrefill = prefill
                 _inputText.value = ""
                 compactAndSendPending()
                 return
@@ -80,6 +91,7 @@ internal fun ChatViewModel.sendMessage(
                 // Park the text on the VM (not the composer) so the dialog
                 // owns it; cancelCompactBeforeSend puts it back.
                 pendingSendText = text
+                pendingSendPrefill = prefill
                 _inputText.value = ""
                 _showCompactBeforeSendPrompt.value = true
                 return
@@ -382,6 +394,7 @@ internal fun ChatViewModel.sendMessage(
                     if (groupChat) {
                         AppLogger.info(ChatViewModel.TAG_STREAM, "send runGroupChat CALL")
                         groupChatCloseRequested = false
+                        reportPrefillUnused(prefill, "a group chat answers with its own discussion turn")
                         runGroupChat(provider, closing = false)
                         if (!run.isStopped && !groupChatCloseRequested) {
                             drainQueuedPrompts(provider, systemPrompt, fallbackProviders, activeFallbackStrategy)
@@ -389,6 +402,7 @@ internal fun ChatViewModel.sendMessage(
                         AppLogger.info(ChatViewModel.TAG_STREAM, "send runGroupChat RETURN")
                     } else if (provider.model.isPureVideoGenerator) {
                         AppLogger.info(ChatViewModel.TAG_STREAM, "send runVideoGenerationTurn CALL")
+                        reportPrefillUnused(prefill, "a video model renders instead of running tools")
                         runVideoGenerationTurn(provider, modelBody, activeSessionId)
                         AppLogger.info(ChatViewModel.TAG_STREAM, "send runVideoGenerationTurn RETURN")
                     } else {
@@ -399,7 +413,7 @@ internal fun ChatViewModel.sendMessage(
                             fallbackProviders = fallbackProviders,
                             fallbackStrategy = activeFallbackStrategy,
                             goalExecutionRun = internalGoalRun,
-
+                            prefill = prefill,
                         )
                         AppLogger.info(ChatViewModel.TAG_STREAM, "send runAgentLoop RETURN normal")
                         // Drain any prompts the user queued while this loop was running.
