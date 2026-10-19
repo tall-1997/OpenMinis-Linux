@@ -38,6 +38,29 @@ class ScheduledTaskStore(private val context: Context) {
 
     private val lock = Any()
 
+    /**
+     * [T-android-scheduled-fire-claim] Atomic read-modify-write of one row:
+     * [transform] sees the row as stored right now and returns its new value,
+     * or null to leave it unchanged. Returns what was written (null when the
+     * row is missing or nothing was written).
+     *
+     * Every write is a read-modify-write of the WHOLE list and writers run on
+     * several threads (the alarm receiver, a run's completion on IO, the task
+     * screens, the CLI). Read-then-[upsert] from the caller is not enough: the
+     * value it read can be stale by the time it writes, which is how a
+     * triggered count or an anchor that had just moved silently moved back —
+     * and an interval then overshot its `maxFires`. The decision has to happen
+     * inside the lock that serialises the write.
+     */
+    fun update(taskId: String, transform: (ScheduledTask) -> ScheduledTask?): ScheduledTask? =
+        synchronized(lock) {
+            val tasks = all()
+            val cur = tasks.firstOrNull { it.id == taskId } ?: return@synchronized null
+            val next = transform(cur) ?: return@synchronized null
+            write(tasks.map { if (it.id == taskId) next else it })
+            next
+        }
+
     fun upsert(task: ScheduledTask) {
         mutate { cur ->
             cur.removeAll { it.id == task.id }

@@ -2,7 +2,6 @@ package com.openminis.app.scheduled
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CronSchedulerTest {
@@ -39,28 +38,32 @@ class CronSchedulerTest {
     }
 
     @Test
-    fun intervalNextTriggerWalksForward() {
+    fun intervalNextTriggerCountsFromItsAnchor() {
         val now = 1_700_000_000_000L
         val task = ScheduledTask(
             id = "t1",
             label = "tick",
             timeOfDayHour = 0,
             timeOfDayMinute = 0,
-            repeatMode = ScheduledRepeatMode.INTERVAL,
+            // [T-android-scheduled-triggers] A repeat-every-N is an INTERVAL
+            // trigger now; repeatMode only ever described calendar rows.
+            repeatMode = ScheduledRepeatMode.ONCE,
             prompt = "ping",
             createdAt = now,
-            intervalMinutes = 30,
-            fireAtMs = now + 30 * 60_000L,
+            triggerKind = ScheduledTriggerKind.INTERVAL,
+            intervalSec = 30 * 60L,
+            anchorMs = now,
+            triggeredCount = 0,
         )
         assertEquals(now + 30 * 60_000L, task.nextTriggerMs(now))
+        // Overdue (phone off, process dead) answers `now`: the alarm fires once,
+        // late, and the fire re-anchors the countdown.
         val later = now + 90 * 60_000L
-        val next = task.nextTriggerMs(later)!!
-        assertTrue(next > later)
-        assertEquals(0L, (next - task.fireAtMs!!) % (30 * 60_000L))
+        assertEquals(later, task.nextTriggerMs(later))
     }
 
     @Test
-    fun onceDelayDoesNotRepeatAfterFire() {
+    fun afterDelayNeverRepeatsOnceFired() {
         val now = 1_700_000_000_000L
         val task = ScheduledTask(
             id = "t2",
@@ -69,9 +72,13 @@ class CronSchedulerTest {
             timeOfDayMinute = 0,
             repeatMode = ScheduledRepeatMode.ONCE,
             prompt = "once",
-            lastFiredAt = now,
-            fireAtMs = now - 1000,
+            createdAt = now,
+            triggerKind = ScheduledTriggerKind.AFTER,
+            delaySec = 1800,
+            anchorMs = now,
+            triggeredCount = 0,
         )
-        assertNull(task.nextTriggerMs(now))
+        assertEquals(now + 1_800_000L, task.nextTriggerMs(now))
+        assertNull(task.copy(triggeredCount = 1).nextTriggerMs(now))
     }
 }

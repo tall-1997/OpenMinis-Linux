@@ -7,6 +7,7 @@ import com.openminis.app.scheduled.CronScheduler
 import com.openminis.app.scheduled.ScheduledRepeatMode
 import com.openminis.app.scheduled.ScheduledTask
 import com.openminis.app.scheduled.ScheduledTaskManager
+import com.openminis.app.scheduled.ScheduledTriggerKind
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Calendar
@@ -74,9 +75,13 @@ object CronJobTool {
                     put("id", t.id)
                     put("name", t.label)
                     put("enabled", t.enabled)
-                    put("repeat", t.repeatMode.name)
-                    if (t.intervalMinutes > 0) put("intervalMinutes", t.intervalMinutes)
-                    if (t.fireAtMs != null) put("fireAtMs", t.fireAtMs)
+                    put("trigger", t.triggerKind.name.lowercase())
+                    // `repeat` only ever described calendar rows; an interval has
+                    // no calendar repeat and printing "ONCE" for it would lie.
+                    if (t.isCalendar) put("repeat", t.repeatMode.name)
+                    t.intervalSec?.let { put("intervalSec", it) }
+                    t.maxFires?.let { put("maxFires", it) }
+                    put("firesSoFar", t.firesSoFar)
                     put("nextTriggerMs", t.nextTriggerMs() ?: JSONObject.NULL)
                     put("prompt", t.prompt.take(200))
                 },
@@ -99,18 +104,29 @@ object CronJobTool {
                 false,
             )
         val now = System.currentTimeMillis()
-        val fireAt = now + parsed.firstDelayMs
-        val cal = Calendar.getInstance().apply { timeInMillis = fireAt }
+        val cal = Calendar.getInstance().apply { timeInMillis = now + parsed.firstDelayMs }
         val interval = parsed.kind == "interval"
         val task = ScheduledTask(
             id = UUID.randomUUID().toString(),
             label = name.ifBlank { prompt.take(32) },
             timeOfDayHour = cal.get(Calendar.HOUR_OF_DAY),
             timeOfDayMinute = cal.get(Calendar.MINUTE),
-            repeatMode = if (interval) ScheduledRepeatMode.INTERVAL else ScheduledRepeatMode.ONCE,
+            repeatMode = ScheduledRepeatMode.ONCE,
             prompt = prompt,
-            intervalMinutes = parsed.intervalMinutes,
-            fireAtMs = fireAt,
+            // [T-android-scheduled-triggers] Both shapes are relative triggers:
+            // "30m" fires once after 30m (AFTER), "every 30m" fires every 30m
+            // (INTERVAL). repeatMode stays ONCE — it only ever described a
+            // calendar row, and the hour/minute above are just a sane default
+            // for if the task is later edited into one.
+            triggerKind = if (interval) {
+                ScheduledTriggerKind.INTERVAL
+            } else {
+                ScheduledTriggerKind.AFTER
+            },
+            intervalSec = if (interval) parsed.intervalMinutes * 60L else null,
+            delaySec = if (interval) null else parsed.firstDelayMs / 1000L,
+            anchorMs = now,
+            triggeredCount = 0,
             createdAt = now,
         )
         val saved = manager.create(task)
@@ -120,8 +136,9 @@ object CronJobTool {
                 put("id", saved.id)
                 put("name", saved.label)
                 put("schedule", schedule)
-                put("fireAtMs", saved.fireAtMs ?: fireAt)
-                put("repeat", saved.repeatMode.name)
+                put("trigger", saved.triggerKind.name.lowercase())
+                put("nextTriggerMs", saved.nextTriggerMs() ?: JSONObject.NULL)
+                if (saved.intervalSec != null) put("intervalSec", saved.intervalSec)
                 if (saved.id != task.id) put("already_existed", true)
             }.toString(),
             true,

@@ -5,11 +5,13 @@ import com.openminis.app.logging.AppLogger
 import com.openminis.app.sandbox.NativeOffloadHandler
 import com.openminis.app.sandbox.NativeOffloadRequest
 import com.openminis.app.sandbox.NativeOffloadResult
+import com.openminis.app.scheduled.CronScheduler
 import com.openminis.app.scheduled.ScheduledModelResolver
 import com.openminis.app.scheduled.ScheduledRepeatMode
 import com.openminis.app.scheduled.ScheduledTargetMode
 import com.openminis.app.scheduled.ScheduledTask
 import com.openminis.app.scheduled.ScheduledTaskManager
+import com.openminis.app.scheduled.ScheduledTriggerKind
 import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
@@ -80,9 +82,23 @@ class ScheduledTaskOffloadHandler(private val context: Context) : NativeOffloadH
 
     private fun handleCreate(args: OffloadArgs): NativeOffloadResult {
         val label = args.get("label", "l") ?: ""
-        val (hour, minute) = parseTime(args.get("time", "t")
-            ?: throw IllegalArgumentException("--time HH:MM required"))
-        val repeat = parseRepeat(args.get("repeat", "r"))
+        // [T-android-scheduled-triggers] `--every` is the interval trigger; `--time
+        // --repeat` is the calendar one. They are the same field set the in-app
+        // editor and the cron tool write, so the CLI can no longer mint the
+        // dead row `--repeat interval` used to (no intervalMinutes was ever
+        // set here, so it never fired).
+        val everySec = args.get("every")?.let { parseEvery(it) }
+        if (everySec != null && (args.get("start") != null || args.get("end") != null)) {
+            throw IllegalArgumentException("--start/--end describe a calendar window; they do not apply to --every")
+        }
+        val repeat = if (everySec != null) ScheduledRepeatMode.ONCE
+        else parseRepeat(args.get("repeat", "r"))
+        val timeArg = args.get("time", "t")
+        val (hour, minute) = when {
+            timeArg != null -> parseTime(timeArg)
+            everySec != null -> 0 to 0
+            else -> throw IllegalArgumentException("--time HH:MM required (or --every 30m)")
+        }
         val customDays = if (repeat == ScheduledRepeatMode.CUSTOM) {
             parseDays(args.get("days") ?: throw IllegalArgumentException("--days required for custom repeat"))
         } else emptySet()
@@ -91,6 +107,7 @@ class ScheduledTaskOffloadHandler(private val context: Context) : NativeOffloadH
         if (target !is ScheduledTargetMode.RerunMessage && prompt.isBlank()) {
             throw IllegalArgumentException("--prompt required (except for rerun target)")
         }
+        val now = System.currentTimeMillis()
         val task = ScheduledTask(
             label = label,
             timeOfDayHour = hour,
@@ -103,6 +120,11 @@ class ScheduledTaskOffloadHandler(private val context: Context) : NativeOffloadH
             enabled = !args.hasFlag("disabled"),
             startDateMs = args.get("start")?.let { parseDate(it) },
             endDateMs = args.get("end")?.let { parseDate(it) },
+            triggerKind = if (everySec != null) ScheduledTriggerKind.INTERVAL
+            else ScheduledTriggerKind.CALENDAR,
+            intervalSec = everySec,
+            anchorMs = if (everySec != null) now else null,
+            triggeredCount = if (everySec != null) 0 else null,
         )
         val saved = manager.create(task)
         val out = JSONObject().put("created", taskJson(saved))
@@ -198,8 +220,17 @@ class ScheduledTaskOffloadHandler(private val context: Context) : NativeOffloadH
         "daily" -> ScheduledRepeatMode.DAILY
         "weekdays" -> ScheduledRepeatMode.WEEKDAYS
         "custom" -> ScheduledRepeatMode.CUSTOM
-        "interval" -> ScheduledRepeatMode.INTERVAL
-        else -> throw IllegalArgumentException("--repeat must be once|daily|weekdays|custom|interval")
+        // One way to say "every N": --every. Point at it instead of silently
+        // creating a row that never fires.
+        "interval" -> throw IllegalArgumentException("use --every 30m for an interval (--repeat describes calendar days)")
+        else -> throw IllegalArgumentException("--repeat must be once|daily|weekdays|custom")
+    }
+
+    /** Seconds between fires for `--every 30m` / `--every 2h` / `--every 1d`. */
+    private fun parseEvery(s: String): Long {
+        val parsed = CronScheduler.parseSchedule("every $s")
+            ?: throw IllegalArgumentException("--every must look like 30m, 2h or 1d")
+        return parsed.intervalMinutes * 60L
     }
 
     private fun parseDays(s: String): Set<Int> {
@@ -244,7 +275,12 @@ class ScheduledTaskOffloadHandler(private val context: Context) : NativeOffloadH
         put("id", t.id)
         put("label", t.label)
         put("time", "%02d:%02d".format(t.timeOfDayHour, t.timeOfDayMinute))
-        put("repeat", t.repeatMode.name.lowercase())
+        put("trigger", t.triggerKind.name.lowercase())
+        // `repeat` only ever described calendar rows.
+        if (t.isCalendar) put("repeat", t.repeatMode.name.lowercase())
+        t.intervalSec?.let { put("intervalSec", it) }
+        t.maxFires?.let { put("maxFires", it) }
+        if (!t.isCalendar) put("firesSoFar", t.firesSoFar)
         if (t.customDays.isNotEmpty()) put("days", JSONArray(t.customDays.toList()))
         put("prompt", t.prompt)
         put("target", t.targetMode.encode())
@@ -267,6 +303,7 @@ class ScheduledTaskOffloadHandler(private val context: Context) : NativeOffloadH
             list
             create --time HH:MM --prompt "..." [--label L]
                    [--repeat once|daily|weekdays|custom --days mon,tue,...]
+                   [--every 30m|2h|1d]   (repeat every N; no --time needed)
                    [--target new|follow-up|rerun --session <id> --message <id>]
                    [--model <modelId>] [--start YYYY-MM-DD] [--end YYYY-MM-DD] [--disabled]
             delete  --id <taskId>
