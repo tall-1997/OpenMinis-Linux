@@ -1379,6 +1379,9 @@
     <string name="backup_restoring_counted">%1$s を復元中 %2$d/%3$d</string>
     <string name="backup_restoring_running">%1$s を復元中 %2$d</string>
     <string name="backup_restoring_category">%1$s を復元中…</string>
+    <string name="restore_eta_almost_done">まもなく完了…</string>
+    <string name="restore_eta_seconds">残り約 %1$d 秒</string>
+    <string name="restore_eta_minutes">残り %1$d 分 %2$d 秒</string>
     <string name="backup_choose_different">別のファイルを選択</string>
     <string name="backup_restore_complete">復元が完了しました</string>
     <string name="backup_report_restored">復元済み</string>

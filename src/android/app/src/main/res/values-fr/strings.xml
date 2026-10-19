@@ -1380,6 +1380,9 @@
     <string name="backup_restoring_counted">Restauration de %1$s %2$d/%3$d</string>
     <string name="backup_restoring_running">Restauration de %1$s %2$d</string>
     <string name="backup_restoring_category">Restauration de %1$s…</string>
+    <string name="restore_eta_almost_done">Presque terminé…</string>
+    <string name="restore_eta_seconds">environ %1$d secondes restantes</string>
+    <string name="restore_eta_minutes">environ %1$d min %2$d s restantes</string>
     <string name="backup_choose_different">Choisir un autre fichier</string>
     <string name="backup_restore_complete">Restauration terminée</string>
     <string name="backup_report_restored">Restaurés</string>

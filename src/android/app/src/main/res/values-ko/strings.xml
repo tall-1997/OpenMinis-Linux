@@ -1379,6 +1379,9 @@
     <string name="backup_restoring_counted">%1$s 복원 중 %2$d/%3$d</string>
     <string name="backup_restoring_running">%1$s 복원 중 %2$d</string>
     <string name="backup_restoring_category">%1$s 복원 중…</string>
+    <string name="restore_eta_almost_done">거의 완료됨…</string>
+    <string name="restore_eta_seconds">약 %1$d초 남음</string>
+    <string name="restore_eta_minutes">약 %1$d분 %2$d초 남음</string>
     <string name="backup_choose_different">다른 파일 선택</string>
     <string name="backup_restore_complete">복원 완료</string>
     <string name="backup_report_restored">복원됨</string>

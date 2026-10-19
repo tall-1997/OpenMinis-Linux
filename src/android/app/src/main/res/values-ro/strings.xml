@@ -1382,6 +1382,9 @@
     <string name="backup_restoring_counted">Se restaurează: %1$s %2$d/%3$d</string>
     <string name="backup_restoring_running">Se restaurează: %1$s %2$d</string>
     <string name="backup_restoring_category">Se restaurează: %1$s…</string>
+    <string name="restore_eta_almost_done">Aproape gata…</string>
+    <string name="restore_eta_seconds">mai sunt aproximativ %1$d secunde</string>
+    <string name="restore_eta_minutes">mai sunt aproximativ %1$d min %2$d s</string>
     <string name="backup_choose_different">Alege alt fișier</string>
     <string name="backup_restore_complete">Restaurare finalizată</string>
     <string name="backup_report_restored">Restaurate</string>
