@@ -1392,6 +1392,8 @@
     <string name="backup_report_not_downloaded">%1$s: %2$d archivo(s) no estaban en la copia (no descargados en el dispositivo de origen)</string>
     <string name="backup_report_missing_from_package">%1$s: la copia listaba %2$d archivo(s) que no contiene: está incompleta</string>
     <string name="backup_report_unreadable">%1$s: no se pudieron leer %2$d elemento(s)</string>
+    <string name="backup_report_notices">No incluido en esta copia de seguridad</string>
+    <string name="backup_report_notices_footer">Se omitieron al crear la copia: por el límite de tamaño o porque no se habían descargado en ese dispositivo. La restauración no falló.</string>
     <string name="backup_creds_restored">Se restauraron las API keys de %1$d proveedor(es) junto con sus ajustes. Se conservaron las claves existentes en este dispositivo. Puede que aún debas renovar los inicios de sesión con OAuth si sus tokens vencieron.</string>
     <string name="backup_creds_kept">Se conservaron tus claves API actuales: las claves de la copia de seguridad coincidían con las credenciales que ya había en este dispositivo, así que no hubo nada que sobrescribir.</string>
     <string name="backup_creds_none">Esta copia de seguridad se creó sin claves API, así que los proveedores restaurados no tienen credenciales: introduce cada API key o vuelve a iniciar sesión antes de usarlos.</string>

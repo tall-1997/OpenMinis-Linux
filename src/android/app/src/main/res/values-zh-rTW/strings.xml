@@ -1469,6 +1469,8 @@
     <string name="backup_report_not_downloaded">%1$s：有 %2$d 個檔案不在備份中（來源裝置上未下載）</string>
     <string name="backup_report_missing_from_package">%1$s：有 %2$d 個檔案列在備份清單中卻不存在於備份內——這份備份並不完整</string>
     <string name="backup_report_unreadable">%1$s：有 %2$d 個項目無法讀取</string>
+    <string name="backup_report_notices">未包含在此備份中</string>
+    <string name="backup_report_notices_footer">這些內容在建立備份時被排除：可能是超出備份的大小限制，或是在當時的裝置上並未下載。還原過程並沒有出錯。</string>
     <string name="backup_creds_restored">已為 %1$d 個供應商連同設定一併復原 API 金鑰。這台裝置上既有的金鑰予以保留。若 OAuth 的 Token 已過期，可能仍需要重新登入。</string>
     <string name="backup_creds_kept">已保留您既有的 API 金鑰——備份中的金鑰與這台裝置上的憑證相符，因此不需要覆寫任何內容。</string>
     <string name="backup_creds_none">這份備份建立時未包含 API 金鑰，因此復原的供應商沒有憑證——使用前請逐一輸入 API 金鑰或重新登入。</string>

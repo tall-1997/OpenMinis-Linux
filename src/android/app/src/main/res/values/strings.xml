@@ -1944,6 +1944,8 @@
     <string name="backup_report_not_downloaded">%1$s: %2$d file(s) weren\'t in the backup (not downloaded on the source device)</string>
     <string name="backup_report_missing_from_package">%1$s: %2$d file(s) were listed in the backup but missing from it — the backup is incomplete</string>
     <string name="backup_report_unreadable">%1$s: %2$d item(s) could not be read</string>
+    <string name="backup_report_notices">Not included in this backup</string>
+    <string name="backup_report_notices_footer">These were left out when the backup was created, by its size limit or because they weren\'t downloaded on that device. Nothing went wrong during the restore.</string>
     <string name="backup_creds_restored">API keys were restored for %1$d provider(s) along with their settings. Existing keys on this device were kept. OAuth logins may still need to be renewed if their tokens have expired.</string>
     <string name="backup_creds_kept">Your existing API keys were kept — the backup\'s keys matched credentials already on this device, so nothing needed to be overwritten.</string>
     <string name="backup_creds_none">This backup was created without API keys, so restored providers have no credentials — enter each API key or sign in again before use.</string>

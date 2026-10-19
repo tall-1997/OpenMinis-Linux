@@ -1392,6 +1392,8 @@
     <string name="backup_report_not_downloaded">%1$s: %2$d arquivos não estavam no backup (não baixados no aparelho de origem)</string>
     <string name="backup_report_missing_from_package">%1$s: %2$d arquivos estavam listados no backup, mas ausentes dele — o backup está incompleto</string>
     <string name="backup_report_unreadable">%1$s: não foi possível ler %2$d itens</string>
+    <string name="backup_report_notices">Não incluído neste backup</string>
+    <string name="backup_report_notices_footer">Estes itens ficaram de fora quando o backup foi criado, pelo limite de tamanho ou porque não haviam sido baixados naquele dispositivo. Nada deu errado durante a restauração.</string>
     <string name="backup_creds_restored">As chaves de API foram restauradas para %1$d provedores, junto com as configurações deles. As chaves que já existiam neste aparelho foram mantidas. Logins OAuth ainda podem precisar de renovação se os tokens tiverem expirado.</string>
     <string name="backup_creds_kept">Suas chaves de API atuais foram mantidas — as chaves do backup coincidiam com as credenciais já presentes neste aparelho, então nada precisou ser sobrescrito.</string>
     <string name="backup_creds_none">Este backup foi criado sem chaves de API, então os provedores restaurados ficam sem credenciais — informe cada chave de API ou faça login de novo antes de usar.</string>

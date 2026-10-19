@@ -1392,6 +1392,8 @@
     <string name="backup_report_not_downloaded">%1$s: %2$d file ang wala sa backup (hindi na-download sa pinagmulang device)</string>
     <string name="backup_report_missing_from_package">%1$s: %2$d file ang nakalista sa backup pero wala rito — hindi kumpleto ang backup</string>
     <string name="backup_report_unreadable">%1$s: %2$d item ang hindi mabasa</string>
+    <string name="backup_report_notices">Hindi kasama sa backup na ito</string>
+    <string name="backup_report_notices_footer">Hindi isinama ang mga ito nang gawin ang backup — dahil sa limitasyon sa laki o hindi pa na-download sa device na iyon. Walang naging problema sa pag-restore.</string>
     <string name="backup_creds_restored">Naibalik ang mga API key para sa %1$d provider kasama ang mga setting nila. Napanatili ang mga key na nasa device na. Maaaring kailangan pa ring i-renew ang mga OAuth login kung nag-expire na ang token nila.</string>
     <string name="backup_creds_kept">Napanatili ang mga umiiral mong API key — tumugma ang mga key sa backup sa mga credential na nasa device na, kaya walang kailangang palitan.</string>
     <string name="backup_creds_none">Ginawa ang backup na ito nang walang API key, kaya walang credential ang mga naibalik na provider — ilagay ang bawat API key o mag-sign in muli bago gamitin.</string>

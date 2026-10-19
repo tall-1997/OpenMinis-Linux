@@ -1391,6 +1391,8 @@
     <string name="backup_report_not_downloaded">%1$s: 파일 %2$d개가 백업에 없었습니다(원본 기기에 내려받지 않음)</string>
     <string name="backup_report_missing_from_package">%1$s: 파일 %2$d개가 백업 목록에는 있지만 실제로는 없습니다. 이 백업은 완전하지 않습니다</string>
     <string name="backup_report_unreadable">%1$s: 항목 %2$d개를 읽지 못했습니다</string>
+    <string name="backup_report_notices">이 백업에 포함되지 않음</string>
+    <string name="backup_report_notices_footer">백업을 만들 때 크기 제한을 넘었거나 해당 기기에서 내려받지 않아 제외된 항목입니다. 복원 중 문제는 발생하지 않았습니다.</string>
     <string name="backup_creds_restored">제공자 %1$d개의 설정과 함께 API 키를 복원했습니다. 이 기기에 있던 기존 키는 그대로 두었습니다. OAuth 토큰이 만료된 경우에는 다시 로그인해야 할 수 있습니다.</string>
     <string name="backup_creds_kept">기존 API 키를 그대로 두었습니다. 백업의 키가 이 기기의 인증 정보와 같아서 덮어쓸 필요가 없었습니다.</string>
     <string name="backup_creds_none">이 백업은 API 키 없이 만들어져서 복원된 제공자에는 인증 정보가 없습니다. 사용하기 전에 각 API 키를 입력하거나 다시 로그인하세요.</string>

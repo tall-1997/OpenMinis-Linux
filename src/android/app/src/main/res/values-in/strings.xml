@@ -1397,6 +1397,8 @@
     <string name="backup_report_not_downloaded">%1$s: %2$d berkas tidak ada dalam cadangan (belum diunduh di perangkat asal)</string>
     <string name="backup_report_missing_from_package">%1$s: %2$d berkas tercatat dalam cadangan tetapi tidak ada di dalamnya — cadangan tidak lengkap</string>
     <string name="backup_report_unreadable">%1$s: %2$d item tidak dapat dibaca</string>
+    <string name="backup_report_notices">Tidak disertakan dalam cadangan ini</string>
+    <string name="backup_report_notices_footer">Item ini dilewati saat cadangan dibuat, karena batas ukuran atau belum diunduh di perangkat tersebut. Pemulihan tidak mengalami masalah.</string>
     <string name="backup_creds_restored">Kunci API berhasil dipulihkan untuk %1$d penyedia beserta pengaturannya. Kunci yang sudah ada di perangkat ini tetap dipertahankan. Login OAuth mungkin masih perlu diperbarui jika tokennya sudah kedaluwarsa.</string>
     <string name="backup_creds_kept">Kunci API Anda yang sudah ada tetap dipertahankan — kunci dalam cadangan sama dengan kredensial yang sudah ada di perangkat ini, sehingga tidak ada yang perlu ditimpa.</string>
     <string name="backup_creds_none">Cadangan ini dibuat tanpa kunci API, sehingga penyedia yang dipulihkan tidak memiliki kredensial — masukkan setiap kunci API atau masuk kembali sebelum menggunakannya.</string>

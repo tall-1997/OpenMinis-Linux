@@ -1394,6 +1394,8 @@
     <string name="backup_report_not_downloaded">%1$s: %2$d fișiere nu erau în copie (nedescărcate pe dispozitivul sursă)</string>
     <string name="backup_report_missing_from_package">%1$s: %2$d fișiere erau consemnate în copie, dar lipsesc din ea — copia este incompletă</string>
     <string name="backup_report_unreadable">%1$s: %2$d elemente nu au putut fi citite</string>
+    <string name="backup_report_notices">Neinclus în această copie de siguranță</string>
+    <string name="backup_report_notices_footer">Acestea au fost omise la crearea copiei: fie din cauza limitei de dimensiune, fie pentru că nu fuseseră descărcate pe acel dispozitiv. Restaurarea nu a întâmpinat probleme.</string>
     <string name="backup_creds_restored">Cheile API au fost restaurate pentru %1$d furnizori, împreună cu setările lor. Cheile existente pe acest dispozitiv au fost păstrate. Autentificările OAuth pot avea nevoie de reînnoire dacă tokenurile lor au expirat.</string>
     <string name="backup_creds_kept">Cheile tale API existente au fost păstrate — cheile din copie corespundeau credențialelor deja prezente pe acest dispozitiv, așa că nu a fost nevoie să fie suprascris nimic.</string>
     <string name="backup_creds_none">Această copie de rezervă a fost creată fără chei API, așa că furnizorii restaurați nu au credențiale — introdu fiecare cheie API sau autentifică-te din nou înainte de utilizare.</string>

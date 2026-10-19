@@ -1396,6 +1396,8 @@
     <string name="backup_report_not_downloaded">%1$s: plików spoza kopii (nie pobrano ich na urządzeniu źródłowym): %2$d</string>
     <string name="backup_report_missing_from_package">%1$s: plików wymienionych w kopii, lecz w niej nieobecnych: %2$d — kopia jest niekompletna</string>
     <string name="backup_report_unreadable">%1$s: nie udało się odczytać pozycji: %2$d</string>
+    <string name="backup_report_notices">Nieuwzględnione w tej kopii zapasowej</string>
+    <string name="backup_report_notices_footer">Pominięto je podczas tworzenia kopii — z powodu limitu rozmiaru lub ponieważ nie zostały pobrane na tamtym urządzeniu. Przywracanie przebiegło bez błędów.</string>
     <string name="backup_creds_restored">Przywrócono klucze API dla dostawców (%1$d) wraz z ich ustawieniami. Klucze istniejące na tym urządzeniu zostały zachowane. Logowania OAuth mogą wymagać odnowienia, jeśli ich tokeny wygasły.</string>
     <string name="backup_creds_kept">Zachowano Twoje dotychczasowe klucze API — klucze z kopii odpowiadały poświadczeniom już obecnym na tym urządzeniu, więc nic nie wymagało nadpisania.</string>
     <string name="backup_creds_none">Tę kopię zapasową utworzono bez kluczy API, więc przywróceni dostawcy nie mają poświadczeń — przed użyciem podaj każdy klucz API lub zaloguj się ponownie.</string>

@@ -1392,6 +1392,8 @@
     <string name="backup_report_not_downloaded">%1$s: %2$d Datei(en) waren nicht in der Sicherung enthalten (auf dem Quellgerät nicht heruntergeladen)</string>
     <string name="backup_report_missing_from_package">%1$s: %2$d Datei(en) waren in der Sicherung aufgeführt, fehlen darin aber — die Sicherung ist unvollständig</string>
     <string name="backup_report_unreadable">%1$s: %2$d Eintrag/Einträge konnten nicht gelesen werden</string>
+    <string name="backup_report_notices">Nicht in dieser Sicherung enthalten</string>
+    <string name="backup_report_notices_footer">Diese wurden beim Erstellen der Sicherung ausgelassen – wegen des Größenlimits oder weil sie auf dem Gerät nicht heruntergeladen waren. Bei der Wiederherstellung ist nichts schiefgegangen.</string>
     <string name="backup_creds_restored">Für %1$d Anbieter wurden neben den Einstellungen auch die API Keys wiederhergestellt. Vorhandene Keys auf diesem Gerät blieben erhalten. OAuth-Anmeldungen müssen möglicherweise erneuert werden, falls ihre Token abgelaufen sind.</string>
     <string name="backup_creds_kept">Ihre vorhandenen API Keys blieben erhalten — die Keys der Sicherung stimmten mit den Zugangsdaten auf diesem Gerät überein, es musste also nichts überschrieben werden.</string>
     <string name="backup_creds_none">Diese Sicherung wurde ohne API Keys erstellt, daher haben wiederhergestellte Anbieter keine Zugangsdaten — geben Sie jeden API Key ein oder melden Sie sich erneut an, bevor Sie sie verwenden.</string>

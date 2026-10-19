@@ -1392,6 +1392,8 @@
     <string name="backup_report_not_downloaded">%1$s: %2$d dosya yedekte yoktu (kaynak cihazda indirilmemiş)</string>
     <string name="backup_report_missing_from_package">%1$s: %2$d dosya yedekte listelenmiş ancak içinde yok — yedek eksik</string>
     <string name="backup_report_unreadable">%1$s: %2$d öğe okunamadı</string>
+    <string name="backup_report_notices">Bu yedeğe dahil edilmedi</string>
+    <string name="backup_report_notices_footer">Bunlar yedek oluşturulurken boyut sınırı nedeniyle ya da o cihazda indirilmedikleri için atlandı. Geri yükleme sırasında bir sorun oluşmadı.</string>
     <string name="backup_creds_restored">%1$d sağlayıcı için API anahtarları, ayarlarıyla birlikte geri yüklendi. Bu cihazdaki mevcut anahtarlar korundu. Token\'ları süresi dolmuşsa OAuth oturumlarının yenilenmesi gerekebilir.</string>
     <string name="backup_creds_kept">Mevcut API anahtarlarınız korundu — yedekteki anahtarlar bu cihazda zaten bulunan kimlik bilgileriyle eşleşti, bu yüzden hiçbir şeyin üzerine yazılmadı.</string>
     <string name="backup_creds_none">Bu yedek API anahtarları olmadan oluşturulmuş, bu yüzden geri yüklenen sağlayıcıların kimlik bilgisi yok — kullanmadan önce her API anahtarını girin ya da yeniden oturum açın.</string>
