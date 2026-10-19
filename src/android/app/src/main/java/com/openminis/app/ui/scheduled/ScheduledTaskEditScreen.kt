@@ -27,7 +27,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -107,6 +106,12 @@ fun ScheduledTaskEditScreen(
     var lastFiredAt by remember { mutableStateOf<Long?>(null) }
     var lastResultPreview by remember { mutableStateOf<String?>(null) }
     var lastResultSessionId by remember { mutableStateOf<String?>(null) }
+    // [T-android-scheduled-triggers] Non-null for an AFTER / INTERVAL /
+    // ON_COMPLETION task: the form has no controls for those, so it shows the
+    // real schedule read-only instead of pretending the task is a calendar one
+    // (editing its calendar fields would misrepresent it; the row keeps its
+    // trigger because the save path merges it back).
+    var relativeSummary by remember { mutableStateOf<String?>(null) }
 
     // [T-android-scheduled-tasks-full] target mode + model + date window
     var targetKind by remember { mutableStateOf(TargetKind.NEW) }
@@ -139,6 +144,7 @@ fun ScheduledTaskEditScreen(
         lastResultSessionId = existing.lastResultSessionId
         startDateMs = existing.startDateMs
         endDateMs = existing.endDateMs
+        relativeSummary = if (existing.isCalendar) null else formatScheduleSummary(existing)
         when (val m = existing.targetMode) {
             ScheduledTargetMode.NewSession -> targetKind = TargetKind.NEW
             is ScheduledTargetMode.AppendToSession -> {
@@ -256,6 +262,7 @@ fun ScheduledTaskEditScreen(
             onPickModel = { binding, display -> modelBinding = binding; modelDisplay = display },
             startDateMs = startDateMs, onStartDateChange = { startDateMs = it },
             endDateMs = endDateMs, onEndDateChange = { endDateMs = it },
+            relativeSummary = relativeSummary,
             vm = vm,
             isNew = isNew,
             canRunNow = canRunNow,
@@ -354,6 +361,7 @@ private fun EditFormBody(
     modelDisplay: String?, onPickModel: (binding: String?, display: String?) -> Unit,
     startDateMs: Long?, onStartDateChange: (Long?) -> Unit,
     endDateMs: Long?, onEndDateChange: (Long?) -> Unit,
+    relativeSummary: String?,
     vm: ScheduledTasksViewModel,
     isNew: Boolean,
     canRunNow: Boolean,
@@ -427,84 +435,60 @@ private fun EditFormBody(
             }
         }
 
-        // ── Time (compact) ──
-        Column {
-            SectionLabel(stringResource(R.string.scheduled_task_field_time))
-            Spacer(Modifier.height(8.dp))
-            TimeInput(state = timeState)
-        }
-
-        // ── Repeat ──
-        Column {
-            SectionLabel(stringResource(R.string.scheduled_task_field_repeat))
-            Spacer(Modifier.height(8.dp))
-            val options = listOf(
-                ScheduledRepeatMode.ONCE to R.string.scheduled_task_repeat_once,
-                ScheduledRepeatMode.DAILY to R.string.scheduled_task_repeat_daily,
-                ScheduledRepeatMode.WEEKDAYS to R.string.scheduled_task_repeat_weekdays,
-                ScheduledRepeatMode.CUSTOM to R.string.scheduled_task_repeat_custom,
-            )
-            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                options.forEachIndexed { idx, (mode, resId) ->
-                    SegmentedButton(
-                        selected = repeatMode == mode,
-                        onClick = { onRepeatModeChange(mode) },
-                        shape = SegmentedButtonDefaults.itemShape(idx, options.size),
-                    ) { Text(stringResource(resId), fontSize = 13.sp) }
-                }
+        if (relativeSummary == null) {
+            // ── Time (compact) ──
+            Column {
+                SectionLabel(stringResource(R.string.scheduled_task_field_time))
+                Spacer(Modifier.height(8.dp))
+                TimeInput(state = timeState)
             }
-            if (repeatMode == ScheduledRepeatMode.CUSTOM) {
-                Spacer(Modifier.height(12.dp))
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    val days = listOf(
-                        Calendar.MONDAY to "Mon", Calendar.TUESDAY to "Tue",
-                        Calendar.WEDNESDAY to "Wed", Calendar.THURSDAY to "Thu",
-                        Calendar.FRIDAY to "Fri", Calendar.SATURDAY to "Sat",
-                        Calendar.SUNDAY to "Sun",
-                    )
-                    days.forEach { (dow, name) ->
-                        FilterChip(
-                            selected = dow in customDays,
-                            onClick = {
-                                val next = customDays.toMutableSet().apply {
-                                    if (dow in this) remove(dow) else add(dow)
-                                }
-                                onCustomDaysChange(next)
-                            },
-                            label = { Text(name, fontSize = 12.sp) },
-                            modifier = Modifier.weight(1f),
+
+            // ── Repeat ──
+            RepeatSelector(
+                repeatMode = repeatMode,
+                onRepeatModeChange = onRepeatModeChange,
+                customDays = customDays,
+                onCustomDaysChange = onCustomDaysChange,
+            )
+
+            // ── Active window (start / end date) ──
+            Column {
+                SectionLabel(stringResource(R.string.scheduled_task_field_active_window))
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(Modifier.weight(1f)) {
+                        PickerRow(
+                            title = stringResource(R.string.scheduled_task_field_start_date),
+                            value = startDateMs?.let { dateLabel(it) }
+                                ?: stringResource(R.string.scheduled_task_date_any),
+                            onClick = { showStartPicker = true },
+                            onClear = if (startDateMs != null) ({ onStartDateChange(null) }) else null,
+                        )
+                    }
+                    Box(Modifier.weight(1f)) {
+                        PickerRow(
+                            title = stringResource(R.string.scheduled_task_field_end_date),
+                            value = endDateMs?.let { dateLabel(it) }
+                                ?: stringResource(R.string.scheduled_task_date_any),
+                            onClick = { showEndPicker = true },
+                            onClear = if (endDateMs != null) ({ onEndDateChange(null) }) else null,
                         )
                     }
                 }
             }
-        }
-
-        // ── Active window (start / end date) ──
-        Column {
-            SectionLabel(stringResource(R.string.scheduled_task_field_active_window))
-            Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box(Modifier.weight(1f)) {
-                    PickerRow(
-                        title = stringResource(R.string.scheduled_task_field_start_date),
-                        value = startDateMs?.let { dateLabel(it) }
-                            ?: stringResource(R.string.scheduled_task_date_any),
-                        onClick = { showStartPicker = true },
-                        onClear = if (startDateMs != null) ({ onStartDateChange(null) }) else null,
-                    )
-                }
-                Box(Modifier.weight(1f)) {
-                    PickerRow(
-                        title = stringResource(R.string.scheduled_task_field_end_date),
-                        value = endDateMs?.let { dateLabel(it) }
-                            ?: stringResource(R.string.scheduled_task_date_any),
-                        onClick = { showEndPicker = true },
-                        onClear = if (endDateMs != null) ({ onEndDateChange(null) }) else null,
-                    )
-                }
+        } else {
+            // ── Trigger (read-only) ──
+            // [T-android-scheduled-triggers] The form has no controls for a
+            // relative trigger, so it states the real schedule instead of
+            // offering calendar fields that do not describe this task.
+            Column {
+                SectionLabel(stringResource(R.string.scheduled_task_field_repeat))
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = relativeSummary.orEmpty(),
+                    fontSize = 14.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
 
@@ -648,11 +632,6 @@ private fun EditFormBody(
             onEndDateChange(it); showEndPicker = false
         }
     }
-}
-
-@Composable
-private fun SectionLabel(text: String) {
-    Text(text, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
 }
 
 @Composable

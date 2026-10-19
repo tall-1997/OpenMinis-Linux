@@ -204,7 +204,22 @@ class ScheduledTaskManager(private val context: Context) {
         }
     }
 
+    /**
+     * [T-android-scheduled-triggers] Atomically take a one-shot fire that is
+     * not driven by an alarm (on-completion): false when it is disabled or has
+     * already fired, so two callers cannot both fire it.
+     */
+    fun claimOneShotFire(taskId: String): Boolean =
+        store.update(taskId) { t ->
+            if (!t.enabled || (t.triggeredCount ?: 0) >= 1) null
+            else t.copy(enabled = false, triggeredCount = 1)
+        } != null
+
     private fun registerAlarm(task: ScheduledTask) {
+        // [T-android-scheduled-triggers] An on-completion task has no clock time
+        // at all; it is fired by [ScheduledCompletionTriggers] when its upstream
+        // finishes. Registering it here would only log "no next trigger".
+        if (!task.isCalendar && !task.usesAnchor) return
         val triggerAt = task.nextTriggerMs() ?: run {
             AppLogger.warning(TAG, "task ${task.id} has no next trigger — skipping register")
             return
