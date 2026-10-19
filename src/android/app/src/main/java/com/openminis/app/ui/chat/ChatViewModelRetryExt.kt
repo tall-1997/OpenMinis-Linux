@@ -92,6 +92,12 @@ fun ChatViewModel.retryLast() {
         // mid-turn process kill or any commit path memory missed; the DB is
         // authoritative. Rebuild FIRST, then run the pop/GC steps below on
         // the rebuilt (authoritative) history.
+        //
+        // [T-android-stop-cleanup-race] Wait for the previous stop's
+        // interrupted-turn write first: a retry issued right after Stop could
+        // otherwise rebuild from a transcript without the partial turn, then
+        // the late write appends it AFTER the retry's own rows.
+        awaitInterruptedTurnPersisted()
         rebuildAgentHistoryFromDatabase(sid)
 
         // 2. Pop ONLY a trailing assistant entry from agentHistory (mirrors
@@ -216,6 +222,12 @@ fun ChatViewModel.retryLast() {
                         systemPrompt = systemPrompt,
                         fallbackProviders = fallbackProviders,
                         fallbackStrategy = activeFallbackStrategy,
+                        // [T-android-resume-latency] Agent history was rebuilt
+                        // and reconciled with the DB above (trailing row
+                        // deleted, orphans GC'd) — a second rebuild inside the
+                        // loop only repeated that read and delayed the first
+                        // visible process row.
+                        historyAlreadyRebuilt = true,
                     )
                     AppLogger.info(ChatViewModel.TAG_STREAM, "retryLast runAgentLoop RETURN normal")
                     if (com.openminis.app.service.ActiveRunContext.current()?.isStopped == false) {

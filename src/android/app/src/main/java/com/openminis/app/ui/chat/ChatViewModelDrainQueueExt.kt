@@ -45,6 +45,19 @@ internal suspend fun ChatViewModel.drainQueuedPrompts(
     fallbackProviders: List<ChatViewModel.FallbackCandidate>,
     fallbackStrategy: com.openminis.app.data.model.FallbackStrategy,
 ) {
+    // Nothing queued yet: skip the interrupted-turn wait below (this runs on
+    // every agent-loop completion). The loop still claims, so a prompt that
+    // arrives during the wait is drained too.
+    if (_promptQueue.value.isNotEmpty()) {
+        // [T-android-stop-cleanup-race] The stop path persists the interrupted
+        // turn (assistant tail + cancelled tool pair) in the background.
+        // Persist the queued USER row only after that write: this is what
+        // keeps the DB order assistant(interrupted) → user(queued), so the
+        // rebuilt history and the UI rounds agree that the queued prompt
+        // starts a NEW turn instead of continuing the cancelled one
+        // ("同一个步骤 / 运行卡片无间隔").
+        awaitInterruptedTurnPersisted()
+    }
     while (true) {
         val queued = claimPromptQueue() ?: break
         Log.i(ChatViewModel.TAG, "📨[DRAIN] Draining ${queued.size} queued prompt(s): " +
@@ -54,7 +67,16 @@ internal suspend fun ChatViewModel.drainQueuedPrompts(
         // T189: also clear queuedPromptId so a later retry of this bubble
         // doesn't try to drop a phantom queue entry (and so the field state
         // matches what retryFromMessage's truncate path now produces).
+        //
+        // [T-android-queued-ui-id] Resolve the bubble id BEFORE the flip: the
+        // old lookup after it filtered on `isQueued`, which the flip had just
+        // cleared, so it always returned null and notePersistedUiRow never
+        // linked the persisted user row to the bubble (breaking edit/retry and
+        // the timeline cursor for the queued turn).
         val queuedIds = queued.map { it.id }.toSet()
+        val queuedUiId = _messages.value.firstOrNull { m ->
+            m.queuedPromptId != null && queuedIds.contains(m.queuedPromptId)
+        }?.id
         _messages.value = _messages.value.map { m ->
             if (m.queuedPromptId != null && queuedIds.contains(m.queuedPromptId)) {
                 m.copy(isQueued = false, queuedPromptId = null)
@@ -103,9 +125,6 @@ internal suspend fun ChatViewModel.drainQueuedPrompts(
             bodyPartsJson = drainPaste?.partsJson,
         )
         val persistedUser = chatRepository.appendMessage(sid, "user", userPartsJson)
-        val queuedUiId = withContext(Dispatchers.Main.immediate) {
-            _messages.value.firstOrNull { it.isQueued && it.content == userText }?.id
-        }
         withContext(Dispatchers.Main.immediate) {
             notePersistedUiRow(queuedUiId, persistedUser.id)
         }

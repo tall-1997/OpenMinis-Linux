@@ -20,9 +20,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Accessibility
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Bolt
@@ -196,10 +193,14 @@ fun SettingsScreen(
             }
 
             // -- Agent Runtime --
+            // [T-android-agent-runtime-expanded] Always expanded. The section
+            // used to be collapsible and started CLOSED, which hid all eleven
+            // Agent Runtime rows (Multi-Agent, Skills, Web Search, Translate,
+            // Soul, Memory, MCP, Plugin Market, Env vars) behind a header tap —
+            // users reported the settings page looked like those options had
+            // disappeared. Restored to the default: every row visible.
             SettingsSection(
                 title = stringResource(R.string.settings_section_agent_runtime),
-                collapsible = true,
-                initiallyExpanded = false,
             ) {
                 SettingsItem(
                     icon = Icons.Outlined.Groups,
@@ -577,30 +578,26 @@ private fun buildFeedbackMailto(): String {
 /**
  * A grouped settings section with header and optional footer, matching iOS grouped List sections.
  *
- * [T-android-settings-collapsible] Sections with many rows (Agent Runtime has
- * 11) can be collapsed by tapping the header. The collapsed state is held in
- * the caller's rememberSaveable so it survives rotation and process death.
- * Sections with ≤2 rows stay always-expanded (collapsing them saves nothing).
+ * Sections are always expanded. The old collapsible header (Agent Runtime could
+ * be folded away and started folded) hid most of that section's rows by
+ * default, so the fold was removed rather than merely flipped open: a settings
+ * section that can hide its rows reads as "my options are gone".
  */
 @Composable
 private fun SettingsSection(
     title: String,
     footer: String? = null,
-    collapsible: Boolean = false,
-    initiallyExpanded: Boolean = true,
     content: @Composable () -> Unit,
 ) {
-    var expanded by rememberSaveable(title) { mutableStateOf(initiallyExpanded) }
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 20.dp),
     ) {
-        // Section header — tappable when collapsible
+        // Section header
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .then(if (collapsible) Modifier.clickable { expanded = !expanded } else Modifier)
                 .padding(horizontal = 16.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -612,18 +609,9 @@ private fun SettingsSection(
                 letterSpacing = 0.5.sp,
                 modifier = Modifier.weight(1f),
             )
-            if (collapsible) {
-                Icon(
-                    imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(18.dp),
-                )
-            }
         }
 
-        // Section card — animated collapse
-        if (expanded) {
+        // Section card
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -643,7 +631,6 @@ private fun SettingsSection(
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
                 lineHeight = 16.sp,
             )
-        }
         }
     }
 }

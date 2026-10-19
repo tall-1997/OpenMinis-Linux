@@ -460,7 +460,17 @@ internal fun ChatViewModel.loadSession() {
                     allToolResults || isContinueReminder || isUnansweredUserTurn
                 }
                 LLMMessage.Role.ASSISTANT -> {
-                    lastEntry.contentParts.any { it is AgentContentPart.ToolUse }
+                    // Case B (tool_use with no result) — or Case E: the stop
+                    // path's partial-text row. That row ends with the
+                    // "The user stopped this response" system reminder, which
+                    // only `persistInterruptedTurn` writes, so a text-cancel
+                    // tail stays resumable after a reload instead of looking
+                    // like a finished reply (previously the Resume banner and
+                    // PAUSED badge vanished on reopen even though the turn was
+                    // cut off mid-reply).
+                    lastEntry.contentParts.any { it is AgentContentPart.ToolUse } ||
+                        lastEntry.contentParts.filterIsInstance<AgentContentPart.Text>()
+                            .any { it.text.contains("The user stopped this response") }
                 }
                 else -> false
             }
@@ -481,7 +491,10 @@ internal fun ChatViewModel.loadSession() {
                 // user tail) is the one that used to be invisible, so a
                 // field log has to be able to tell it from A/C.
                 val shape = when {
-                    lastEntry.role == LLMMessage.Role.ASSISTANT -> "B/assistant-toolUse"
+                    lastEntry.role == LLMMessage.Role.ASSISTANT &&
+                        lastEntry.contentParts.any { it is AgentContentPart.ToolUse } ->
+                        "B/assistant-toolUse"
+                    lastEntry.role == LLMMessage.Role.ASSISTANT -> "E/assistant-stopped-text"
                     lastEntry.contentParts.isNotEmpty() &&
                         lastEntry.contentParts.all { it is AgentContentPart.ToolResult } -> "A/toolResult-tail"
                     lastEntry.contentParts.size == 1 &&

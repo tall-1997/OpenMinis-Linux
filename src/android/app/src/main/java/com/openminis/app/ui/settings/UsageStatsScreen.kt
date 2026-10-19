@@ -405,9 +405,6 @@ fun UsageStatsScreen(
             CacheHealthCard(
                 grandTotal = grandTotal,
                 providerRows = aggregateCacheByProvider(rows),
-                hasAnthropicUsage = rows.any {
-                    it.stats.provider.contains("anthropic", ignoreCase = true)
-                },
             )
         }
 

@@ -2875,6 +2875,8 @@ fun ChatScreen(
                 // "user opened it, it stays open" — and nothing else closes a
                 // settled card either.
                 val manualReopenedCards = remember(sessionId) { mutableSetOf<String>() }
+                // [T-android-process-card-anchor] Pins a manually toggled card.
+                val processCardAnchor = remember(sessionId) { ProcessCardAnchorState(coroutineScope, scrollController) }
                 // [P-process-card] The running-card set and the expand/settle
                 // effect live BELOW the `flatItems` declaration: they derive
                 // from the published rows instead of re-running the flatten
@@ -4077,6 +4079,9 @@ fun ChatScreen(
                             modifier = Modifier
                                 .padding(top = rhythmGap)
                                 .alpha(rowAlpha)
+                                // [T-android-process-card-anchor] Record row Y.
+                                .then(processCardAnchor.modifierFor(
+                                    (item as? FlatChatItem.AssistantProcessSummary)?.key))
                                 .then(
                                     if (searchFocusAlpha > 0.01f) {
                                         Modifier.background(
@@ -4287,20 +4292,12 @@ fun ChatScreen(
                                 startedAtMs = item.startedAtMs,
                                 onOpenStep = { viewModel.openToolDetail(it) },
                                 onToggle = {
-                                    val id = item.messageId
-                                    if (id in expandedProcessIds) {
-                                        expandedProcessIds = expandedProcessIds - id
-                                        // Collapse by hand: this card stays
-                                        // collapsed for the rest of its run.
-                                        userCollapsedCards += id
-                                    } else {
-                                        expandedProcessIds = expandedProcessIds + id
-                                        userCollapsedCards -= id
-                                        // [P-process-card] Open by hand: from
-                                        // now on this card is never auto-closed
-                                        // (the 500ms settle skips it). "User
-                                        // opened it, it stays open."
-                                        manualReopenedCards += id
+                                    // [T-android-process-card-anchor] Capture, toggle, then re-pin.
+                                    processCardAnchor.toggle(item.key) {
+                                        expandedProcessIds = processCardToggleTargets(
+                                            item.messageId, expandedProcessIds,
+                                            userCollapsedCards, manualReopenedCards,
+                                        )
                                     }
                                 },
                             )

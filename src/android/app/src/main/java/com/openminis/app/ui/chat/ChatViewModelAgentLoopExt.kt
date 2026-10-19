@@ -47,14 +47,12 @@ internal suspend fun ChatViewModel.runAgentLoop(
     goalExecutionRun: Boolean = false,
     /** [T-android-instant-thinking] send 路径已预插占位气泡，复用其 id。 */
     overrideAssistantId: String? = null,
+    /** [T-android-resume-latency] Caller already rebuilt agentHistory. */
+    historyAlreadyRebuilt: Boolean = false,
 ) {
-    // Room is the transcript authority. Rebuild before the first request so
-    // UI paging / cold-open tail limits / hot-cache can't hide older user
-    // instructions from the model. sendMessage already persisted the current
-    // user row; this also restores raw BodyStore bodies.
-    withContext(Dispatchers.IO) {
-        rebuildAgentHistoryFromDatabase(activeSessionId)
-    }
+    // Room is the transcript authority. See prepareRunHistory() for the
+    // stop-cleanup ordering and the historyAlreadyRebuilt skip.
+    prepareRunHistory(historyAlreadyRebuilt)
     // [T-android-resume-banner-race] Snapshot epochs so mid-run side effects
     // (resume banner, model fallback writeback) only land while this snapshot
     // is current. A newer send / model switch bumps the epoch; stale tails drop.

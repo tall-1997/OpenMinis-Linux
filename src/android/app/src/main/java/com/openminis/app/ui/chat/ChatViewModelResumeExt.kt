@@ -21,6 +21,14 @@ import kotlinx.coroutines.withContext
  *
  * Safe to call only when [canResume] is true and [isStreaming] is false.
  * Clears [_canResume] on entry so repeated taps don't stack.
+ *
+ * [T-android-resume-latency] `_isStreaming` is claimed SYNCHRONOUSLY at entry,
+ * before the DB rebuild / history append / system-prompt build. Previously it
+ * flipped only after all of that work, so a long session (or a large system
+ * prompt) left the screen looking idle — the resume banner had already
+ * disappeared, but neither the Stop affordance nor the "thinking" turn had
+ * appeared, which read as "the model is running but the process doesn't show
+ * up". The stream job's own tail resets the flag when it exits.
  */
 fun ChatViewModel.resume() {
     if (_isStreaming.value || !_canResume.value) return
@@ -47,8 +55,20 @@ fun ChatViewModel.resume() {
     // streams — ChatScreen would otherwise leave the placeholder
     // behind the input bar.
     _forceScrollToBottom.tryEmit(Unit)
+    // [T-android-resume-latency] Claim the streaming flag NOW so the composer
+    // switches to Stop and the session reads as running at tap time. The
+    // stream job resets it on exit (identity-guarded); the launch below resets
+    // it if setup fails before the job exists.
+    _isStreaming.value = true
 
     viewModelScope.launch {
+        var streamLaunched = false
+        try {
+        // [T-android-stop-cleanup-race] The previous stop persists the
+        // interrupted tail on a background scope. Wait for that write before
+        // rebuilding: a rebuild that beats it resumes from the OLD context and
+        // loses the progress made before the interruption.
+        awaitInterruptedTurnPersisted()
         // Rebuild agentHistory from the DB before continuing — a fresh
         // sendMessage() does exactly this (rebuildAgentHistoryFromDatabase),
         // which is why a normal send never carries stale context while a
@@ -57,7 +77,7 @@ fun ChatViewModel.resume() {
         // partial in-memory tail, or any path committed rows the in-memory
         // list missed. The DB is the authoritative store; trusting memory
         // here is how a resume picks up an old, pre-interruption context.
-        rebuildAgentHistoryFromDatabase(activeSessionId)
+        withContext(Dispatchers.IO) { rebuildAgentHistoryFromDatabase(activeSessionId) }
         // If history ends with assistant (Case 2: text-cancel committed a
         // partial assistant turn), append a continue reminder as a user
         // message. If it ends with user tool_result (Case 1), it's already
@@ -92,8 +112,7 @@ fun ChatViewModel.resume() {
                 else "$prefix\n\n${baseSystemPrompt ?: ""}"
             } else baseSystemPrompt
 
-        AppLogger.info(ChatViewModel.TAG_STREAM, "resume _isStreaming=true (sid=$activeSessionId)")
-        _isStreaming.value = true
+        AppLogger.info(ChatViewModel.TAG_STREAM, "resume launching streamJob (sid=$activeSessionId)")
         streamJob = launchActiveRun(activeSessionId, Dispatchers.IO, ownerSessionIds = setOf(activeSessionId, sessionId, realSessionId), beforeStart = { streamJob = it }) {
             AppLogger.info(ChatViewModel.TAG_STREAM, "resume streamJob ENTER sid=$activeSessionId")
             try {
@@ -114,6 +133,10 @@ fun ChatViewModel.resume() {
                         systemPrompt = systemPrompt,
                         fallbackProviders = fallbackProviders,
                         fallbackStrategy = activeFallbackStrategy,
+                        // [T-android-resume-latency] History was rebuilt above
+                        // (and the reminder appended); don't redo the whole DB
+                        // read inside the loop.
+                        historyAlreadyRebuilt = true,
                     )
                     AppLogger.info(ChatViewModel.TAG_STREAM, "resume runAgentLoop RETURN normal")
                     if (com.openminis.app.service.ActiveRunContext.current()?.isStopped == false) {
@@ -159,6 +182,16 @@ fun ChatViewModel.resume() {
                 AppLogger.info(ChatViewModel.TAG_STREAM, "resume _isStreaming SKIPPED (stale job)")
             }
             AppLogger.info(ChatViewModel.TAG_STREAM, "resume streamJob EXIT")
+        }
+        streamLaunched = true
+        } finally {
+            // [T-android-resume-latency] Setup failed before the stream job
+            // existed: release the flag claimed at entry so the composer
+            // doesn't stay stuck on Stop.
+            if (!streamLaunched) {
+                AppLogger.info(ChatViewModel.TAG_STREAM, "resume _isStreaming=false (setup aborted)")
+                _isStreaming.value = false
+            }
         }
     }
 }

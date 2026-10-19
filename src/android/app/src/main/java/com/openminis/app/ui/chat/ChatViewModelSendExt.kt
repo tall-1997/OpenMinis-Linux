@@ -189,6 +189,12 @@ internal fun ChatViewModel.sendMessage(
     viewModelScope.launch {
         var streamLaunched = false
         try {
+        // [T-android-stop-cleanup-race] Persist the previous stop's
+        // interrupted turn before appending this turn's user row. If the
+        // cleanup lands after it, the DB order becomes user(new) →
+        // assistant(interrupted), and the next history rebuild / UI round
+        // split treats the new turn as a continuation of the old one.
+        awaitInterruptedTurnPersisted()
         // Ensure session exists in DB (creates on first message for draft sessions)
         val activeSessionId = ensureSession()
 
