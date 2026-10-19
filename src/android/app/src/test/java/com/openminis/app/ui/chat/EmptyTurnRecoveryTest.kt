@@ -381,10 +381,15 @@ class EmptyTurnRecoveryTest {
         assertTrue("both branches mutate agentHistory only", vm.contains("agentHistory.removeAt(agentHistory.size - 1)"))
         assertTrue(branches.contains("EmptyTurnRecovery.REMINDER"))
         // Format: a <system-reminder> element, so the UI-side synthetic-row
-        // filter (`trimStart().startsWith("<system-reminder>")`) and
-        // stripSystemReminders both recognise it.
+        // filter (`trimStart().startsWith("<system-reminder>")` in
+        // BubbleRowLocator.isVisibleUserRow) and stripSystemReminders both
+        // recognise it.
         assertTrue(EmptyTurnRecovery.REMINDER.trimStart().startsWith("<system-reminder>"))
         assertTrue(EmptyTurnRecovery.REMINDER.trimEnd().endsWith("</system-reminder>"))
-        assertTrue(vm.contains("trimStart().startsWith(\"<system-reminder>\")"))
+        // The synthetic-row filter is owned by BubbleRowLocator, not by the
+        // agent-loop file where the recovery branches live: pin it where it
+        // actually is, so the reminder format and the filter cannot drift.
+        val locator = ProductionSources.read("ui/chat/BubbleRowLocator.kt")
+        assertTrue(locator.contains("trimStart().startsWith(\"<system-reminder>\")"))
     }
 }
