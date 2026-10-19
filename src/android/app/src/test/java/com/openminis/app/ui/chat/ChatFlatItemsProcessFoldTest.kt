@@ -61,6 +61,7 @@ class ChatFlatItemsProcessFoldTest {
     private fun kinds(items: List<FlatChatItem>): List<String> = items.map { item ->
         when (item) {
             is FlatChatItem.UserBubble -> "user"
+            is ScheduledTaskCardItem -> "card"
             is FlatChatItem.AssistantHeader -> "header"
             is FlatChatItem.AssistantMarkdownBlock -> "md"
             is FlatChatItem.AssistantProcessSummary -> "summary"

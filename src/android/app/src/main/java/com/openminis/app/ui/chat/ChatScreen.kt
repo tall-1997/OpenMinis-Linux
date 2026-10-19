@@ -3189,7 +3189,8 @@ fun ChatScreen(
         val visible = info.visibleItemsInfo
         if (visible.isEmpty()) return@scrollToPreviousUserTurn
         // Oldest → newest snapshot of the loaded window, as (id, isUser).
-        var loaded = messages.map { it.id to (it.role == "user") }
+        // [T-android-fab-up-target] Not `role == "user"` — see the predicate.
+        var loaded = messages.map { it.id to it.rendersAsUserBubble() }
         val firstUserIds = loaded.filter { it.second }.map { it.first }
         if (firstUserIds.isEmpty()) {
             // No user turns (rare) — fall back to the oldest item (the HIGHEST
@@ -3254,7 +3255,7 @@ fun ChatScreen(
             jumped = floorBeforeLoad
             // `messages` is a composition snapshot. Paging publishes a newer
             // list asynchronously, so re-resolve from the VM after the load.
-            loaded = viewModel.uiMessages.value.map { it.id to (it.role == "user") }
+            loaded = viewModel.uiMessages.value.map { it.id to it.rendersAsUserBubble() }
         }
         if (target == null) return@scrollToPreviousUserTurn
         val targetKey = FlatKeys.of(FlatKeys.KIND_USER, target)
@@ -3669,26 +3670,10 @@ fun ChatScreen(
                 // (FlatKeys + buildFlatChatItems) the native key-follow keeps
                 // the reading position across appends/prepends — nothing here
                 // needs to re-scroll.
-                // messageId → isCompactedHistory map. Used to fade entire
-                // assistant-row clusters (header + text + tool pills) at
-                // render time — mirrors iOS isCompactedHistory opacity(0.5).
-                // message.id / flat messageId fields are clean ids (the
-                // dedupe suffix lives only in the row key, see FlatKeys), so
-                // the lookup is direct.
+                // messageId → isCompactedHistory map, read by
+                // FlatChatItem.isCompacted (see ChatFlatItems).
                 val grayedMap = remember(messages) {
                     messages.associate { it.id to it.isCompactedHistory }
-                }
-                fun FlatChatItem.isCompacted(): Boolean = when (this) {
-                    is FlatChatItem.UserBubble -> grayedMap[message.id] == true
-                    is FlatChatItem.AssistantHeader -> grayedMap[messageId] == true
-                    is FlatChatItem.AssistantMarkdownBlock -> grayedMap[messageId] == true
-                    is FlatChatItem.AssistantThinking -> grayedMap[messageId] == true
-                    is FlatChatItem.AssistantProcessSummary -> grayedMap[messageId] == true
-                    is FlatChatItem.AssistantToolUse -> grayedMap[messageId] == true
-                    is FlatChatItem.AssistantInfo -> false  // system rows never grayed
-                    is FlatChatItem.AssistantTyping -> false
-                    is FlatChatItem.AssistantError -> grayedMap[messageId] == true
-                    is FlatChatItem.AssistantLegacyContent -> grayedMap[messageId] == true
                 }
                 // SelectionContainer must wrap the WHOLE LazyColumn — placing
                 // it per-item breaks long-press because items get disposed
@@ -4041,7 +4026,7 @@ fun ChatScreen(
                         // 0.4f matches iOS .opacity(0.5) closely once Compose's
                         // sRGB compositing is factored in. Renders below normal
                         // intensity but the message stays selectable + readable.
-                        val rowAlpha = if (item.isCompacted()) 0.4f else 1f
+                        val rowAlpha = if (item.isCompacted(grayedMap)) 0.4f else 1f
                         // [T-HANG-DIAG] log on first composition of any item
                         // whose content is large enough to be a likely hang
                         // suspect. SideEffect runs after the first successful
@@ -4223,6 +4208,13 @@ fun ChatScreen(
                                 },
                             )
                             } // close UserBubble SideEffect + UserMessageBubble block
+                            // [T-android-scheduled-task-card] A fired task is a
+                            // card, not a bubble: it says what wrote the text,
+                            // and can show / stop the next run.
+                            is ScheduledTaskCardItem -> ScheduledTaskCard(
+                                marker = item.marker,
+                                hostSessionId = sessionId,
+                            )
                             is FlatChatItem.AssistantHeader -> AssistantHeader(item.speakerName, item.speakerVendor)
                             // Assistant text renders ONLY here: the
                             // FlatChatItem.AssistantText row class was deleted

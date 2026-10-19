@@ -190,8 +190,23 @@ class ScheduledTaskManager(private val context: Context) {
         return true
     }
 
-    fun markFired(taskId: String, sessionId: String?, resultPreview: String?, ok: Boolean = true) {
-        val now = System.currentTimeMillis()
+    /**
+     * Record that a fire finished.
+     *
+     * [T-scheduled-task-detail] [firedAt] is the timestamp the fire STARTED
+     * with — the same value its prompt envelope carries — so the run record
+     * and the transcript's card are the same fire. Defaults to now for callers
+     * with no envelope (a manual run, a CLI run), which is also what this used
+     * to hardcode.
+     */
+    fun markFired(
+        taskId: String,
+        sessionId: String?,
+        resultPreview: String?,
+        ok: Boolean = true,
+        firedAt: Long? = null,
+    ) {
+        val now = firedAt ?: System.currentTimeMillis()
         // [T-android-scheduled-tasks-run-records] Prepend a run record
         // (newest-first), capped at MAX_RUN_HISTORY. lastResult* are kept in
         // sync for back-compat but are no longer surfaced in the list UI.

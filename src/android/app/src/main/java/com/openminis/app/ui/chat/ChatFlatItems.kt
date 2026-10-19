@@ -14,8 +14,6 @@ import androidx.compose.material.icons.filled.Build
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.input.key.key
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
 import com.mikepenz.markdown.m3.Markdown
 import com.openminis.app.data.model.ThinkingLevel
 
@@ -766,6 +764,14 @@ internal fun buildFlatChatItems(
             )
         }
         if (message.role == "user") {
+            // [T-android-scheduled-task-card] A task's prompt arrives as a
+            // user row; lift it into a card. `continue` must sit in the loop
+            // itself — a lambda cannot (unparsed text stays a plain bubble).
+            val scheduled = scheduledRow(message)
+            if (scheduled != null) {
+                out.add(dedupe(scheduled))
+                continue
+            }
             // [T-android-candidate-bubble-gap] Flag when the previous message
             // is also a user message so the bubble can add a separating top
             // gap — back-to-back candidate / queued sends otherwise have no
@@ -1172,50 +1178,6 @@ internal fun floatingOverlayBlocks(
                 it.id.substringBefore("#sub-") in activeSubAgentToolIds)
     }
 
-// ── [P1-3] Row rhythm ───────────────────────────────────────────────────
-//
-// Vertical spacing between list rows, replacing the flat LazyColumn
-// spacedBy(2.dp) plus per-row ad-hoc paddings. flatItems is oldest-first and
-// rendered via asReversed() under reverseLayout, so the row at index p-1
-// renders directly ABOVE the row at index p — the "top gap" of row p is the
-// visual gap between p-1 and p, and it is applied as top padding on row p.
-//
-// Rhythm (taixu ChatMessageList-derived, adapted to our row kinds):
-//  - above a user bubble: 12dp turn boundary (16dp between back-to-back
-//    user bubbles — candidate/queued pairs, T-android-candidate-bubble-gap);
-//  - above an assistant header: 16dp after a user bubble
-//    (T-android-user-assistant-spacing-16), else 12dp;
-//  - process row → process row: 2.5dp (dense activity cluster);
-//  - process row → reply text: 4dp (process hands off to the answer);
-//  - header → first row of its turn: 4dp;
-//  - md fragment → md fragment of the SAME message: 2dp (paragraph flow);
-//  - everything else: 8dp (default breath).
-
-internal val ChatRowDefaultGap: Dp = 8.dp
-
-internal fun isProcessRow(item: FlatChatItem): Boolean =
-    item is FlatChatItem.AssistantThinking ||
-        item is FlatChatItem.AssistantToolUse ||
-        item is FlatChatItem.AssistantProcessSummary
-
-private fun isTextRow(item: FlatChatItem): Boolean =
-    item is FlatChatItem.AssistantMarkdownBlock
-
-internal fun flatItemTopGap(prev: FlatChatItem?, cur: FlatChatItem): Dp = when {
-    cur is FlatChatItem.UserBubble ->
-        if (prev is FlatChatItem.UserBubble) 16.dp else 12.dp
-    cur is FlatChatItem.AssistantHeader ->
-        if (prev is FlatChatItem.UserBubble) 16.dp else 12.dp
-    prev == null -> 0.dp
-    isTextRow(cur) && isTextRow(prev) &&
-        (prev as? FlatChatItem.AssistantMarkdownBlock)?.messageId ==
-        (cur as? FlatChatItem.AssistantMarkdownBlock)?.messageId -> 2.dp
-    isProcessRow(prev) && isProcessRow(cur) -> 2.5.dp
-    isProcessRow(prev) && isTextRow(cur) -> 4.dp
-    prev is FlatChatItem.AssistantHeader -> 4.dp
-    else -> ChatRowDefaultGap
-}
-
 /**
  * [T-android-thinking-stable-expand] True when a readable text block sits
  * after [idx] — the reply has started, so this block's reasoning phase is
@@ -1229,4 +1191,28 @@ internal fun hasReplyTextAfter(blocks: List<AssistantBlock>, idx: Int): Boolean 
         if (b.kind == "text" && b.content.isNotBlank()) return true
     }
     return false
+}
+
+/**
+ * True when the row should render dimmed (0.4 alpha): its source message sits
+ * inside a compacted-history block (mirrors iOS isCompactedHistory). The map
+ * is messageId → flag; ids stay clean because the dedupe suffix lives only in
+ * the row key (see FlatKeys), so the lookup is direct.
+ *
+ * Lives beside the row classes (moved out of ChatScreen's render path) so a
+ * new row kind has to answer the dimming question here rather than compile
+ * against a stale `when` three files away.
+ */
+internal fun FlatChatItem.isCompacted(grayedMap: Map<String, Boolean>): Boolean = when (this) {
+    is FlatChatItem.UserBubble -> grayedMap[message.id] == true
+    is ScheduledTaskCardItem -> grayedMap[message.id] == true
+    is FlatChatItem.AssistantHeader -> grayedMap[messageId] == true
+    is FlatChatItem.AssistantMarkdownBlock -> grayedMap[messageId] == true
+    is FlatChatItem.AssistantThinking -> grayedMap[messageId] == true
+    is FlatChatItem.AssistantProcessSummary -> grayedMap[messageId] == true
+    is FlatChatItem.AssistantToolUse -> grayedMap[messageId] == true
+    is FlatChatItem.AssistantInfo -> false  // system rows never grayed
+    is FlatChatItem.AssistantTyping -> false
+    is FlatChatItem.AssistantError -> grayedMap[messageId] == true
+    is FlatChatItem.AssistantLegacyContent -> grayedMap[messageId] == true
 }

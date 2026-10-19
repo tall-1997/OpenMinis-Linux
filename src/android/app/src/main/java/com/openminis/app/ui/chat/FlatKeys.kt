@@ -21,6 +21,9 @@ package com.openminis.app.ui.chat
  */
 internal object FlatKeys {
     const val KIND_USER = "user"
+    // [T-android-scheduled-task-card] A user-role row that renders as a card,
+    // not a bubble — its own kind so key consumers can tell them apart.
+    const val KIND_SCHEDULED = "scheduled"
     const val KIND_HEADER = "header"
     const val KIND_TEXT = "text"
     const val KIND_MDBLOCK = "mdblock"
