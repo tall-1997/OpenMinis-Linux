@@ -36,8 +36,6 @@ class ScheduledTaskStore(private val context: Context) {
 
     fun get(taskId: String): ScheduledTask? = all().firstOrNull { it.id == taskId }
 
-    private val lock = Any()
-
     /**
      * [T-android-scheduled-fire-claim] Atomic read-modify-write of one row:
      * [transform] sees the row as stored right now and returns its new value,
@@ -53,7 +51,7 @@ class ScheduledTaskStore(private val context: Context) {
      * inside the lock that serialises the write.
      */
     fun update(taskId: String, transform: (ScheduledTask) -> ScheduledTask?): ScheduledTask? =
-        synchronized(lock) {
+        synchronized(LOCK) {
             val tasks = all()
             val cur = tasks.firstOrNull { it.id == taskId } ?: return@synchronized null
             val next = transform(cur) ?: return@synchronized null
@@ -85,7 +83,7 @@ class ScheduledTaskStore(private val context: Context) {
     }
 
     private fun mutate(block: (MutableList<ScheduledTask>) -> Unit) {
-        synchronized(lock) {
+        synchronized(LOCK) {
             val cur = all().toMutableList()
             block(cur)
             write(cur)
@@ -160,6 +158,17 @@ class ScheduledTaskStore(private val context: Context) {
 
     companion object {
         private const val TAG = "ScheduledTaskStore"
+
+        /**
+         * Process-wide, not per instance: this store is constructed per call
+         * site ([com.openminis.app.scheduled.ScheduledTaskManager], the model
+         * picker's provider repository, the session list drawer) while the
+         * prefs file it guards is one process-wide resource. An instance lock
+         * let two call sites run the read-whole-list-modify-write-whole-list
+         * cycle at the same time, and the later write silently dropped the
+         * other's change — a fire count or a freshly moved anchor moving back.
+         */
+        private val LOCK = Any()
         private const val PREFS_NAME = "minis_scheduled_tasks_prefs"
         private const val KEY_TASKS = "tasks_json"
     }

@@ -177,8 +177,14 @@ class ScheduledTaskManager(private val context: Context) {
         if (t.repeatMode == ScheduledRepeatMode.ONCE) {
             // Mark fired ONCE task as disabled — keep row so the user can
             // see its last result, re-enable if they want to re-run.
-            store.upsert(t.copy(enabled = false))
-            return true
+            //
+            // [T-android-scheduled-fire-claim] The flip IS the claim, done
+            // atomically: a duplicate delivery of the same alarm finds the row
+            // already disabled and must not run it a second time. It also
+            // copies the row as stored right now instead of upserting the
+            // snapshot read at the top of this call, so a run record written in
+            // between is not overwritten.
+            return store.update(taskId) { claimOnceFire(it) } != null
         }
         registerAlarm(t)
         return true
@@ -283,6 +289,19 @@ class ScheduledTaskManager(private val context: Context) {
          * registration, not the fire.
          */
         private const val ALARM_EARLY_SLACK_MS = 5_000L
+
+        /**
+         * [T-android-scheduled-fire-claim] A calendar ONCE row after its alarm
+         * fires: disabled in place, so it stays in the list with its last
+         * result and can be re-enabled. Null when the row is already disabled —
+         * that fire already happened, and a duplicate delivery of the same
+         * alarm must not run the task (and spend the user's tokens) twice.
+         *
+         * Pure, for tests; the caller makes the flip atomic by running it inside
+         * [ScheduledTaskStore.update].
+         */
+        internal fun claimOnceFire(cur: ScheduledTask): ScheduledTask? =
+            if (cur.enabled) cur.copy(enabled = false) else null
 
         /**
          * [T-android-scheduled-fire-claim] Whether an alarm delivered at [now]
