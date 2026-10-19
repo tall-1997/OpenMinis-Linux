@@ -66,7 +66,7 @@
     "src/android/app/src/main/java/com/openminis/app/ui/navigation/ChatSplitScaffold.kt": 973,
     "src/android/app/src/main/java/com/openminis/app/ui/sandbox/FilePreviewScreen.kt": 1339,
     "src/android/app/src/main/java/com/openminis/app/ui/sandbox/MirrorSettingsScreen.kt": 868,
-    "src/android/app/src/main/java/com/openminis/app/ui/scheduled/ScheduledTaskEditScreen.kt": 839,
+    "src/android/app/src/main/java/com/openminis/app/ui/scheduled/ScheduledTaskEditScreen.kt": 838,
     "src/android/app/src/main/java/com/openminis/app/ui/sessions/SessionListScreen.kt": 3311,
     "src/android/app/src/main/java/com/openminis/app/ui/sessions/SessionListViewModel.kt": 1202,
     "src/android/app/src/main/java/com/openminis/app/ui/settings/AddProviderScreen.kt": 940,
