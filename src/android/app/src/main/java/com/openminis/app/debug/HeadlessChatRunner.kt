@@ -3,6 +3,7 @@ package com.openminis.app.debug
 import android.content.Context
 import com.openminis.app.MinisApp
 import com.openminis.app.data.model.ThinkingLevel
+import com.openminis.app.scheduled.PrefilledToolCall
 import com.openminis.app.session.ChatRuntime
 import com.openminis.app.session.ChatSessionPort
 import com.openminis.app.session.InputAttachment
@@ -134,6 +135,12 @@ internal object HeadlessChatRunner {
         thinkingLevel: ThinkingLevel? = null,
         wait: Boolean,
         timeoutMs: Long,
+        /**
+         * [T-scheduled-tool-prefill] Tool calls the send loop should run as its
+         * first turn, before asking the model anything. Empty for every caller
+         * that is not a scheduled task.
+         */
+        prefill: List<PrefilledToolCall> = emptyList(),
     ): PromptResult = withContext(Dispatchers.Main) {
         val vm = viewModel(context, sessionId)
         // Apply per-call thinking override BEFORE sendMessage so streamMessage
@@ -189,7 +196,7 @@ internal object HeadlessChatRunner {
             )
         }
         for (att in attachments) vm.addAttachment(att)
-        vm.sendMessage(text)
+        vm.submitPrompt(text, prefill)
         if (!wait) return@withContext PromptResult(status = "Running", responseText = null, timedOut = false)
 
         // Wait for isStreaming to be false (sendMessage flips it true synchronously

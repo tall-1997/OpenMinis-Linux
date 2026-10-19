@@ -131,6 +131,13 @@ data class ScheduledTask(
     val repeatMode: ScheduledRepeatMode,
     val customDays: Set<Int> = emptySet(),   // Calendar.DAY_OF_WEEK values when repeatMode=CUSTOM
     val prompt: String,
+    /**
+     * [T-scheduled-tool-prefill] A tool call executed before the model is
+     * asked anything: a fired prompt arrives with that call already made and
+     * answered, so "run this fixed command, then tell me what it says" costs
+     * one request instead of two. Null = an ordinary prompt.
+     */
+    val prefillToolCall: PrefilledToolCall? = null,
     val targetMode: ScheduledTargetMode = ScheduledTargetMode.NewSession,
     val modelId: String? = null,             // null → use app default (or fall back from modelBinding's resolved entry)
     // [T-android-scheduled-task-model-binding] Mirrors ChatSessionEntity.modelBinding.
@@ -311,6 +318,7 @@ data class ScheduledTask(
         if (modelId != null) put("modelId", modelId)
         if (modelBinding != null) put("modelBinding", modelBinding)
         put("enabled", enabled)
+        if (prefillToolCall != null) put("prefillToolCall", prefillToolCall.toJson())
         put("createdAt", createdAt)
         if (startDateMs != null) put("startDateMs", startDateMs)
         if (endDateMs != null) put("endDateMs", endDateMs)
@@ -390,6 +398,7 @@ data class ScheduledTask(
                 customDays = o.optString("customDays", "")
                     .split(',').mapNotNull { it.trim().toIntOrNull() }.toSet(),
                 prompt = o.optString("prompt", ""),
+                prefillToolCall = PrefilledToolCall.fromJson(o.optJSONObject("prefillToolCall")),
                 targetMode = ScheduledTargetMode.decode(o.optString("targetMode", null)),
                 modelId = if (o.has("modelId")) o.optString("modelId", null) else null,
                 modelBinding = if (o.has("modelBinding")) o.optString("modelBinding", null) else null,

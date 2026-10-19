@@ -6,6 +6,7 @@ package com.openminis.app.ui.chat
 
 import android.net.Uri
 import com.openminis.app.data.model.ThinkingLevel
+import com.openminis.app.scheduled.PrefilledToolCall
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 
@@ -154,6 +155,8 @@ data class QueuedPrompt(
     val id: String,
     val text: String,
     val attachments: List<InputAttachment> = emptyList(),
+    /** [T-scheduled-tool-prefill] Tool calls to run as the next loop's first turn. */
+    val prefill: List<PrefilledToolCall> = emptyList(),
 )
 
 /**

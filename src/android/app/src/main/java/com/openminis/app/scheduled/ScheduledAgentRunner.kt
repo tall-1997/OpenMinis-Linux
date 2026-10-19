@@ -197,11 +197,18 @@ object ScheduledAgentRunner {
         //
         // RerunMessage is deliberately NOT wrapped — it replays an existing
         // message rather than sending a new one, so there is nothing to mark.
+        //
+        // [T-scheduled-tool-prefill] The prefilled call, if any, runs as the
+        // loop's first turn instead of a model request; the envelope names it
+        // so the model knows the scheduler made that call, not itself. A rerun
+        // ignores it along with the prompt — it sends nothing new.
+        val prefill = listOfNotNull(task.prefillToolCall?.takeIf { it.validationError() == null })
         val marked = ScheduledTaskMarker(
             taskId = task.id,
             label = task.label,
             nextFireAtMs = task.nextTriggerMs(),
             prompt = task.prompt,
+            prefilledTool = prefill.firstOrNull()?.toolName,
             firedAtMs = firedAt,
         ).xml
 
@@ -223,6 +230,7 @@ object ScheduledAgentRunner {
                 thinkingLevel = null,
                 wait = wait,
                 timeoutMs = RUN_TIMEOUT_MS,
+                prefill = prefill,
             )
         }
     }.getOrElse { t ->

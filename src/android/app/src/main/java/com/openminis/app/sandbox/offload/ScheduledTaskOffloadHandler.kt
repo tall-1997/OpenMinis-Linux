@@ -6,6 +6,7 @@ import com.openminis.app.sandbox.NativeOffloadHandler
 import com.openminis.app.sandbox.NativeOffloadRequest
 import com.openminis.app.sandbox.NativeOffloadResult
 import com.openminis.app.scheduled.CronScheduler
+import com.openminis.app.scheduled.PrefilledToolCall
 import com.openminis.app.scheduled.ScheduledModelResolver
 import com.openminis.app.scheduled.ScheduledRepeatMode
 import com.openminis.app.scheduled.ScheduledSessionLookup
@@ -32,6 +33,8 @@ import java.util.Calendar
  *                          [--session <id>] [--message <id>]
  *                          [--model <modelId>]
  *                          [--start YYYY-MM-DD] [--end YYYY-MM-DD]
+ *                          [--command 'shell command'] [--command-timeout 2m]
+ *                          [--tool <name> --tool-args '<json>']
  *                          [--disabled]
  *   minis-scheduled delete --id <taskId>
  *   minis-scheduled enable  --id <taskId>
@@ -119,6 +122,11 @@ class ScheduledTaskOffloadHandler(private val context: Context) : NativeOffloadH
         if (target !is ScheduledTargetMode.RerunMessage && prompt.isBlank()) {
             throw IllegalArgumentException("--prompt required (except for rerun target)")
         }
+        // [T-scheduled-tool-prefill] --command / --tool make the task run a
+        // fixed call before the model is asked. Refused up front (exit 2) for
+        // the same reason --model is resolved up front: a bad call must not
+        // save cleanly and then fail on every unattended fire.
+        val prefill = parsePrefill(args, target, label)
         val now = System.currentTimeMillis()
         val task = ScheduledTask(
             label = label,
@@ -145,6 +153,7 @@ class ScheduledTaskOffloadHandler(private val context: Context) : NativeOffloadH
             onCompletionOf = ofRaw?.let { raw ->
                 manager.resolveId(raw) ?: throw IllegalArgumentException("no task with id=$raw")
             },
+            prefillToolCall = prefill,
         )
         val saved = manager.create(task)
         val destination = destinationOf(target, label, callerSessionId)
@@ -347,10 +356,95 @@ class ScheduledTaskOffloadHandler(private val context: Context) : NativeOffloadH
         if (t.lastFiredAt != null) put("lastFiredAt", t.lastFiredAt)
         if (t.lastResultPreview != null) put("lastResultPreview", t.lastResultPreview)
         if (t.lastResultSessionId != null) put("lastResultSessionId", t.lastResultSessionId)
+        // [T-scheduled-tool-prefill] What the fire runs before the model is
+        // asked; absent for ordinary tasks.
+        t.prefillToolCall?.let { put("prefill", JSONObject().put("tool", it.toolName).put("args", it.args())) }
     }
 
     companion object {
         private const val TAG = "ScheduledTaskOffload"
+
+        /**
+         * [T-scheduled-tool-prefill] `--command` (alias `--shell`) → a
+         * shell_execute call, or `--tool NAME [--tool-args JSON]` for the
+         * general form (NAME defaults to shell_execute, as on iOS). Null when
+         * no prefill flag was passed.
+         *
+         * Static on purpose: the parsing rules — not the task manager — are
+         * what the unit tests need, and a handler cannot be constructed
+         * without an Android Context.
+         */
+        internal fun parsePrefill(
+            args: OffloadArgs,
+            target: ScheduledTargetMode,
+            title: String? = null,
+        ): PrefilledToolCall? {
+            val command = args.get("command", "shell")
+            val toolName = args.get("tool")
+            val toolArgs = args.get("tool-args")
+            val timeoutRaw = args.get("command-timeout", "shell-timeout")
+            if (command != null && (toolName != null || toolArgs != null)) {
+                throw IllegalArgumentException(
+                    "--command is shorthand for `--tool shell_execute`; pass one of the two, not both",
+                )
+            }
+            if (command == null && toolName == null && toolArgs == null) {
+                // A timeout with nothing to time out is a typo, not a default.
+                if (timeoutRaw != null) {
+                    throw IllegalArgumentException("--command-timeout only applies with --command/--shell")
+                }
+                return null
+            }
+            if (target is ScheduledTargetMode.RerunMessage) {
+                throw IllegalArgumentException(
+                    "a rerun replays an existing turn and sends nothing new; " +
+                        "a prefilled call needs --target new or follow-up",
+                )
+            }
+            val flagTimeout = timeoutRaw?.let { requireTimeout(it) }
+            val call = if (command != null) {
+                PrefilledToolCall.shell(command, title = title, timeoutSec = flagTimeout)
+            } else {
+                val parsed = runCatching { JSONObject(toolArgs ?: "{}") }.getOrElse {
+                    throw IllegalArgumentException("--tool-args must be a JSON object")
+                }
+                // The flag wins over a timeout inside --tool-args, as on iOS.
+                flagTimeout?.let { parsed.put("timeout", it) }
+                PrefilledToolCall.of(toolName ?: PrefilledToolCall.SHELL_TOOL, parsed, title = title)
+            }
+            call.validationError()?.let { throw IllegalArgumentException(it) }
+            return call
+        }
+
+        /** `2.5m` / `2H` / `90s` / `45` → seconds, or null when not a duration. */
+        internal fun parseDurationSec(raw: String): Int? {
+            val t = raw.trim().lowercase()
+            if (t.isEmpty()) return null
+            val (num, unit) = when {
+                t.endsWith("ms") -> t.dropLast(2) to 0.001
+                t.endsWith("s") -> t.dropLast(1) to 1.0
+                t.endsWith("m") -> t.dropLast(1) to 60.0
+                t.endsWith("h") -> t.dropLast(1) to 3600.0
+                else -> t to 1.0
+            }
+            val n = num.toDoubleOrNull() ?: return null
+            return PrefilledToolCall.saturatingSeconds(n * unit).takeIf { it != Int.MIN_VALUE }
+        }
+
+        private fun requireTimeout(raw: String): Int {
+            val secs = parseDurationSec(raw)
+                ?: throw IllegalArgumentException(
+                    "--command-timeout must be a duration like 90s, 2m or 1h (or plain seconds)",
+                )
+            if (secs !in PrefilledToolCall.TIMEOUT_RANGE_SEC) {
+                throw IllegalArgumentException(
+                    "--command-timeout must be between ${PrefilledToolCall.TIMEOUT_RANGE_SEC.first}s " +
+                        "and ${PrefilledToolCall.TIMEOUT_RANGE_SEC.last / 3600}h",
+                )
+            }
+            return secs
+        }
+
         private val HELP = """
             minis-scheduled — manage timed AI tasks (mirrors the in-app Scheduled Tasks).
 
@@ -362,6 +456,8 @@ class ScheduledTaskOffloadHandler(private val context: Context) : NativeOffloadH
                    [--of <taskId>]       (once, when that task's schedule finishes)
                    [--target new|follow-up|rerun --session <id> --message <id>]
                    [--model <modelId>] [--start YYYY-MM-DD] [--end YYYY-MM-DD] [--disabled]
+                   [--command 'shell command'] [--command-timeout 2m]
+                   [--tool <name> --tool-args '{"command":"…"}']
             delete  --id <taskId>
             enable  --id <taskId>
             disable --id <taskId>
@@ -378,6 +474,14 @@ class ScheduledTaskOffloadHandler(private val context: Context) : NativeOffloadH
             canonical id. An unknown value fails now instead of at every fire; pass
             --allow-unknown-model to store it verbatim anyway (e.g. a model that
             arrives with a later provider refresh).
+
+            --command / --tool make the task run that call BEFORE the model is asked;
+            its real output is handed to the model as an already-completed tool call,
+            so "run this fixed command and report" costs one request instead of two.
+            --shell and --shell-timeout are the iOS aliases. --tool defaults to
+            shell_execute (the only tool supported today), so
+            --tool-args '{"command":"date"}' alone works. A rerun target replays an
+            old turn and cannot prefill.
         """.trimIndent()
     }
 }

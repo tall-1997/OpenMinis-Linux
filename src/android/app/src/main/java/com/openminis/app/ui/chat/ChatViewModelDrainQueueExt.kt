@@ -142,6 +142,7 @@ internal suspend fun ChatViewModel.drainQueuedPrompts(
 
         try {
             if (groupChatEnabled.value && !provider.model.isPureVideoGenerator) {
+                reportPrefillUnused(queued.flatMap { it.prefill }, "a group chat answers with its own discussion turn")
                 runGroupChat(provider, closing = false)
             } else {
             runAgentLoop(
@@ -149,6 +150,9 @@ internal suspend fun ChatViewModel.drainQueuedPrompts(
                 systemPrompt = systemPrompt,
                 fallbackProviders = fallbackProviders,
                 fallbackStrategy = fallbackStrategy,
+                // [T-scheduled-tool-prefill] A scheduled fire queued behind a
+                // running loop keeps its call for this fresh loop's first turn.
+                prefill = queued.flatMap { it.prefill },
             )
             }
         } catch (e: CancellationException) {
