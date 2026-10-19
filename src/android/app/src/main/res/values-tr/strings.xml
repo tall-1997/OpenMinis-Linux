@@ -1380,6 +1380,9 @@
     <string name="backup_restoring_counted">Geri yükleniyor: %1$s %2$d/%3$d</string>
     <string name="backup_restoring_running">Geri yükleniyor: %1$s %2$d</string>
     <string name="backup_restoring_category">Geri yükleniyor: %1$s…</string>
+    <string name="restore_eta_almost_done">Neredeyse bitti…</string>
+    <string name="restore_eta_seconds">yaklaşık %1$d saniye kaldı</string>
+    <string name="restore_eta_minutes">yaklaşık %1$d dk %2$d sn kaldı</string>
     <string name="backup_choose_different">Başka bir dosya seç</string>
     <string name="backup_restore_complete">Geri Yükleme Tamamlandı</string>
     <string name="backup_report_restored">Geri yüklendi</string>

@@ -1380,6 +1380,9 @@
     <string name="backup_restoring_counted">Ibinabalik ang %1$s %2$d/%3$d</string>
     <string name="backup_restoring_running">Ibinabalik ang %1$s %2$d</string>
     <string name="backup_restoring_category">Ibinabalik ang %1$s…</string>
+    <string name="restore_eta_almost_done">Malapit na…</string>
+    <string name="restore_eta_seconds">mga %1$d segundo ang natitira</string>
+    <string name="restore_eta_minutes">mga %1$d min %2$d s ang natitira</string>
     <string name="backup_choose_different">Pumili ng ibang file</string>
     <string name="backup_restore_complete">Tapos na ang Pagbabalik</string>
     <string name="backup_report_restored">Naibalik</string>

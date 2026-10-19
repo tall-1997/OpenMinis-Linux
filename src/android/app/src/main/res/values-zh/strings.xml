@@ -1777,6 +1777,9 @@
     <string name="backup_restoring_counted">正在恢复 %1$s %2$d/%3$d</string>
     <string name="backup_restoring_running">正在恢复 %1$s %2$d</string>
     <string name="backup_restoring_category">正在恢复 %1$s…</string>
+    <string name="restore_eta_almost_done">即将完成…</string>
+    <string name="restore_eta_seconds">预计剩余约 %1$d 秒</string>
+    <string name="restore_eta_minutes">预计剩余 %1$d 分 %2$d 秒</string>
     <string name="backup_choose_different">选择其他文件</string>
     <string name="backup_restore_complete">恢复完成</string>
     <string name="backup_report_restored">已恢复</string>

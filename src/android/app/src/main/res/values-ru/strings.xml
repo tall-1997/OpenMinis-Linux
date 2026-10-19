@@ -1384,6 +1384,9 @@
     <string name="backup_restoring_counted">Восстановление: %1$s %2$d/%3$d</string>
     <string name="backup_restoring_running">Восстановление: %1$s %2$d</string>
     <string name="backup_restoring_category">Восстановление: %1$s…</string>
+    <string name="restore_eta_almost_done">Почти готово…</string>
+    <string name="restore_eta_seconds">осталось около %1$d с</string>
+    <string name="restore_eta_minutes">осталось около %1$d мин %2$d с</string>
     <string name="backup_choose_different">Выбрать другой файл</string>
     <string name="backup_restore_complete">Восстановление завершено</string>
     <string name="backup_report_restored">Восстановлено</string>

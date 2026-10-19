@@ -1380,6 +1380,9 @@
     <string name="backup_restoring_counted">%1$s wird wiederhergestellt %2$d/%3$d</string>
     <string name="backup_restoring_running">%1$s wird wiederhergestellt %2$d</string>
     <string name="backup_restoring_category">%1$s wird wiederhergestellt…</string>
+    <string name="restore_eta_almost_done">Fast fertig…</string>
+    <string name="restore_eta_seconds">noch etwa %1$d Sekunden</string>
+    <string name="restore_eta_minutes">noch etwa %1$d Min. %2$d Sek.</string>
     <string name="backup_choose_different">Eine andere Datei wählen</string>
     <string name="backup_restore_complete">Wiederherstellung abgeschlossen</string>
     <string name="backup_report_restored">Wiederhergestellt</string>

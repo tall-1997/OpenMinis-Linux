@@ -109,12 +109,11 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
     /**
      * Re-read configured destinations. Call on screen resume.
      *
-     * Lists ALL remotes, not just the enabled ones (iOS parity). Filtering to
-     * `enabledRemotes` here made a disabled destination vanish from the screen
-     * entirely — the user could neither see that it still existed nor switch it
-     * back on, which is the opposite of what disabling is for: it keeps the
-     * server and its credential precisely so skipping one for a while costs
-     * nothing to undo.
+     * Lists ALL remotes, not just the enabled ones (iOS parity): filtering to
+     * `enabledRemotes` made a disabled destination vanish from the screen
+     * entirely, so the user could neither see that it still existed nor switch
+     * it back on. Disabling keeps the server and its credential precisely so
+     * skipping one for a while costs nothing to undo.
      */
     fun refreshDestinations() {
         _destinations.value = runCatching {
@@ -214,15 +213,11 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
         prefs.edit().putBoolean(KEY_ENCRYPT, on).apply()
     }
 
-    // [T-backup-credentials-always] There used to be a setIncludeCredentials()
-    // here, mutually interlocked with setEncrypt: turning encryption off forced
-    // credentials off, and turning credentials on forced encryption on. Both
-    // directions are gone. Credentials are part of a backup, full stop —
-    // BackupExporter.Options already defaulted includeCredentials to true, so
-    // every path except this screen (scheduled/agent backups) was including
-    // them anyway. The interlock only made the manual export the odd one out,
-    // and a restore from a credential-less backup silently comes back without
-    // any working provider, which reads as data loss.
+    // [T-backup-credentials-always] A setIncludeCredentials() used to live here,
+    // interlocked with setEncrypt in both directions. Both are gone: credentials
+    // are part of a backup, full stop — every other path (scheduled/agent
+    // backups) already included them, and a restore from a credential-less
+    // package comes back without any working provider, which reads as data loss.
 
     fun setMaxFileSizeMB(value: Int) {
         _maxFileSizeMB.value = value
@@ -473,16 +468,12 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         // [T-android-backup-delete-cancelled-scope] Application scope, NOT
-        // viewModelScope. The only caller is the history-detail screen, which
-        // pops itself right after calling this; that pop clears the entry's
-        // ViewModelStore, so viewModelScope was cancelled before the first IO
-        // line ran. Both the rclone package deletions and the local
-        // removeHistoryRecord(id) that ends the block were therefore silently
-        // dropped — the inner runCatching swallowed the cancellation, the row
-        // reappeared on the next visit, and the UI had already implied success.
-        // A process-lifetime scope lets the cleanup finish whoever navigates in
-        // the meantime. Falls back to viewModelScope when the Application is not
-        // the real MinisApp (unit tests), so behaviour there is unchanged.
+        // viewModelScope: the only caller is the history-detail screen, which
+        // pops itself right after calling this, clearing the entry's
+        // ViewModelStore before the first IO line ran — so the rclone deletions
+        // and the local removeHistoryRecord(id) were silently dropped while the
+        // UI implied success. A process-lifetime scope finishes the cleanup
+        // anyway; unit tests keep viewModelScope (Application is not MinisApp).
         deletionScope().launch {
             withContext(Dispatchers.IO) {
                 runCatching {
@@ -800,26 +791,21 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
     // -- Opening a package ------------------------------------------------
 
     /**
-     * Stage of a package being opened, rotated while the work runs.
-     *
-     * Not a fake percentage: unzip reports nothing along the way, and inventing
-     * a bar that jumps 0 -> 100 is worse than saying which step is underway.
+     * Stage of a package being opened, rotated while the work runs. Not a fake
+     * percentage: unzip reports nothing along the way, and a bar that jumps
+     * 0 -> 100 is worse than saying which step is underway.
      */
     private val _openStage = MutableStateFlow<Int?>(null)
     val openStage: StateFlow<Int?> = _openStage.asStateFlow()
 
     /**
      * [T-android-open-progress] What the open is ACTUALLY doing, as opposed to
-     * which label a timer has reached.
+     * which label a timer has reached. [files]/[bytes] count entries already
+     * written, [current] is the one in flight; null when nothing is open.
      *
-     * [files] and [bytes] count entries already written; [current] is the one
-     * in flight. Null when nothing is open.
-     *
-     * There is deliberately no percentage: a forward `ZipInputStream` scan does
-     * not know the entry count until it hits the end, and a bar that crawls to
-     * 90% and then sits there is a worse lie than an honest running total. On a
-     * multi-GB package the numbers moving is the signal that matters — it is
-     * the difference between "working" and "hung".
+     * Deliberately no percentage: a forward `ZipInputStream` scan does not know
+     * the entry count until it hits the end, and a bar that crawls to 90% and
+     * then sits there is a worse lie than an honest running total.
      */
     data class OpenProgress(val files: Int, val bytes: Long, val current: String)
 
@@ -832,6 +818,13 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
      */
     private val _restoreProgress = MutableStateFlow<BackupImporter.Progress?>(null)
     val restoreProgress: StateFlow<BackupImporter.Progress?> = _restoreProgress.asStateFlow()
+
+    /** [T-android-restore-ui] Remaining seconds; null until one can be made.
+     *  Separate flow so the button and the subtitle recompose apart. */
+    private val _restoreEtaSeconds = MutableStateFlow<Long?>(null)
+    val restoreEtaSeconds: StateFlow<Long?> = _restoreEtaSeconds.asStateFlow()
+
+    private val restoreEta = RestoreEta()
 
     private var openJob: kotlinx.coroutines.Job? = null
 
@@ -1004,6 +997,8 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
         }
         _isRunning.value = true
         _statusText.value = "Restoring…"
+        restoreEta.reset()
+        _restoreEtaSeconds.value = null
         viewModelScope.launch {
             try {
                 val report = withContext(Dispatchers.IO) {
@@ -1011,7 +1006,10 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
                         pending.extractedRoot,
                         BackupImporter.Options(categories = cats, passphrase = passphrase),
                         onProgress = { line -> _statusText.value = line },
-                        onCount = { _restoreProgress.value = it },
+                        onCount = { p ->
+                            _restoreProgress.value = p
+                            _restoreEtaSeconds.value = restoreEta.update(p.categoryKey, p.done, p.total)
+                        },
                     )
                 }
                 _report.value = report
@@ -1025,6 +1023,8 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
                 _statusText.value = null
             } finally {
                 _isRunning.value = false
+                _restoreEtaSeconds.value = null
+                restoreEta.reset()
             }
         }
     }

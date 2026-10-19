@@ -819,6 +819,7 @@ private fun RestoreTab(
     val report by vm.report.collectAsState()
     val error by vm.errorText.collectAsState()
     val restoreProgress by vm.restoreProgress.collectAsState()
+    val etaSeconds by vm.restoreEtaSeconds.collectAsState()
 
     // Which destination the user is browsing for a package to restore from.
     var browsing by remember {
@@ -1085,8 +1086,7 @@ private fun RestoreTab(
             // progress from a hang — which is exactly the question the user is
             // asking by then.
             //
-            // Falls back to the plain label before the first count arrives, and
-            // for categories whose manifest carried no total.
+            // Falls back before the first count, or with no declared total.
             val liveLabel = when {
                 !running -> stringResource(R.string.backup_restore)
                 restoreProgress == null -> stringResource(R.string.backup_restoring)
@@ -1107,14 +1107,14 @@ private fun RestoreTab(
                 busy = running,
             )
         }
-        // The live step ("Importing chats…") used to BE the button's label.
-        // Moving it below keeps the control a fixed size while a restore runs,
-        // without losing the only readout of what it is currently doing —
-        // the source pickers that carry the same status are hidden by now.
+        // The live step ("Importing chats…") used to BE the button's label;
+        // below it, the control keeps a fixed size while a restore runs.
         if (running) {
-            status?.let {
+            // Step and estimate share a row: both answer "how long?".
+            val line = listOfNotNull(status, restoreEtaLabel(etaSeconds)).joinToString(" · ")
+            if (line.isNotEmpty()) {
                 Text(
-                    it,
+                    line,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
