@@ -1307,6 +1307,17 @@
     <string name="backup_history_running">กำลังทำงาน…</string>
     <string name="backup_history_interrupted">หยุดชะงักก่อนเสร็จสิ้น</string>
     <string name="backup_stop">หยุดการสำรองข้อมูล</string>
+    <string name="backup_notif_channel">การสำรองข้อมูล</string>
+    <string name="backup_notif_running_title">กำลังสำรองข้อมูล…</string>
+    <string name="backup_notif_running_text">กำลังเตรียมการ…</string>
+    <string name="backup_notif_done_title">สำรองข้อมูลเสร็จสิ้น</string>
+    <string name="backup_notif_done_text">ส่งสำรองข้อมูลของคุณแล้ว</string>
+    <string name="backup_notif_local_pending">เก็บไว้ใน Minis เท่านั้น เปิดแอปเพื่อบันทึกลงอุปกรณ์หรือแชร์</string>
+    <string name="backup_notif_issues_title">สำรองข้อมูลเสร็จสิ้นแต่มีปัญหา</string>
+    <string name="backup_notif_failed_title">สำรองข้อมูลล้มเหลว</string>
+    <string name="backup_notif_stopped_title">หยุดการสำรองข้อมูลแล้ว</string>
+    <string name="backup_notif_stopped_text">การสำรองข้อมูลถูกหยุดก่อนเสร็จสิ้น</string>
+    <string name="backup_result_local_pending">ยังไม่ได้บันทึกไว้นอกแอปนี้ บันทึกลงอุปกรณ์หรือแชร์ — สำรองข้อมูลที่อยู่ในแอปจะหายไปหากถอนการติดตั้ง Minis</string>
     <string name="backup_history_stopped">หยุดแล้ว</string>
     <string name="backup_history_delivered">%1$d จาก %2$d ปลายทาง</string>
     <string name="backup_history_destinations">ปลายทาง</string>

@@ -44,6 +44,25 @@ object ProductionSources {
         return f.readText()
     }
 
+    /**
+     * Read one file under `src/main` — the manifest, a resource, anything the
+     * source root above does not cover. Paths are relative to `src/main`
+     * (`AndroidManifest.xml`, `java/com/openminis/app/...`).
+     */
+    fun readMain(relPath: String): String {
+        val root = mainRoot() ?: error("production source root not found from ${File("").absolutePath}")
+        // [mainRoot] is `<module>/src/main/java/com/openminis/app`, so `src/main`
+        // sits four levels up. Checked rather than assumed: a layout change
+        // should say so here, not surface later as a confusing missing file.
+        val main = File(root, "../../../../").canonicalFile
+        check(main.name == "main" && main.parentFile?.name == "src") {
+            "unexpected module layout: $main (from $root)"
+        }
+        val f = File(main, relPath)
+        require(f.isFile) { "production file missing: ${f.absolutePath}" }
+        return f.readText()
+    }
+
     /** Every `.kt` file under `src/main`, for whole-tree symbol scans. */
     fun allKotlinFiles(): List<File> {
         val root = mainRoot() ?: error("production source root not found")

@@ -84,6 +84,7 @@ import com.openminis.app.ui.settings.SettingsSwitch
 import com.openminis.app.R
 import com.openminis.app.backup.BackupCategory
 import com.openminis.app.backup.BackupHistory
+import com.openminis.app.backup.BackupRunController
 import com.openminis.app.ui.components.MinisMenu
 import com.openminis.app.ui.components.MinisButton
 import com.openminis.app.ui.theme.ChatColors
@@ -1342,8 +1343,8 @@ private fun ResultDestinationRow(
 
 /** Where the package ended up, in words. */
 @Composable
-private fun backupResultFooter(r: BackupViewModel.RunResult): String {
-    if (r.destinations.isEmpty()) return stringResource(R.string.backup_result_local_only)
+private fun backupResultFooter(r: BackupRunController.RunResult): String {
+    if (r.localOnly) return stringResource(R.string.backup_result_local_only)
     val ok = r.destinations.count { it.succeeded }
     // Once every destination is verified the local package is deleted, so the
     // footer has to say that rather than claim a copy is still on the device.
@@ -1656,24 +1657,12 @@ private fun categoryCountLabel(
 }
 
 /**
- * The ONE byte-size formatter for this feature (UI rows and ViewModel log /
- * note lines alike — BackupViewModel used to carry a second private copy with
- * the same divisors but `kB` and a hard-coded US locale).
- *
- * `String.format` is pinned to Locale.US on purpose: the VM's copy formats
- * numbers that are then embedded in a persisted AppLogger line, where "32,0 MB"
- * from a comma-locale is worse than a stable decimal point. Labels follow SI
- * (`kB` = 1000 bytes), matching the divisors actually used here.
+ * [T-android-human-bytes-one-place] The one byte-size formatter for this
+ * feature. The implementation moved to `backup/BackupBytes.kt` when the run
+ * left the ViewModel: [com.openminis.app.backup.BackupRunController] needs it
+ * too, and three copies is one more than a formatter is worth.
  */
-internal fun humanBytes(bytes: Long): String = when {
-    bytes >= 1_000_000_000 ->
-        String.format(java.util.Locale.US, "%.1f GB", bytes / 1e9)
-    bytes >= 1_000_000 ->
-        String.format(java.util.Locale.US, "%.1f MB", bytes / 1e6)
-    bytes >= 1_000 ->
-        String.format(java.util.Locale.US, "%.0f kB", bytes / 1e3)
-    else -> "$bytes B"
-}
+internal fun humanBytes(bytes: Long): String = com.openminis.app.backup.humanBytes(bytes)
 
 // Max Per-File Size sentinel tags, matching iOS noFilesTag / unlimitedTag.
 internal const val MAX_FILE_NO_FILES = -1

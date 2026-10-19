@@ -8,6 +8,7 @@ import com.openminis.app.backup.BackupCategory
 import com.openminis.app.backup.BackupExporter
 import com.openminis.app.backup.BackupHistory
 import com.openminis.app.backup.BackupImporter
+import com.openminis.app.backup.BackupRunController
 import com.openminis.app.backup.BackupManifest
 import com.openminis.app.backup.BackupPackageReader
 import com.openminis.app.backup.BackupZip
@@ -17,8 +18,11 @@ import com.openminis.app.logging.AppLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -56,16 +60,27 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
     private val _maxFileSizeMB = MutableStateFlow(prefs.getInt(KEY_MAX_FILE_MB, MAX_FILE_UNLIMITED))
     val maxFileSizeMB: StateFlow<Int> = _maxFileSizeMB.asStateFlow()
 
+    // [T-android-backup-run-controller] The EXPORT run lives in
+    // [BackupRunController] so it survives this screen; RESTORE stays a
+    // screen job on purpose (see _isRunning uses below). One flow reports
+    // both, because the screen has one Start button, one spinner and one
+    // error line — reporting them separately is how the button came to say
+    // "idle" while a backup was still running.
     private val _isRunning = MutableStateFlow(false)
-    val isRunning: StateFlow<Boolean> = _isRunning.asStateFlow()
 
-    /**
-     * [T-android-backup-stop] The in-flight export, held so it can be
-     * cancelled. iOS keeps the same handle in BackupRunController for the same
-     * reason: "a running task nobody holds is one nobody can stop" — and the
-     * screen can be left mid-backup.
-     */
-    private var exportJob: kotlinx.coroutines.Job? = null
+    val isRunning: StateFlow<Boolean> =
+        combine(BackupRunController.isRunning, _isRunning) { exporting, busy ->
+            exporting || busy
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    init {
+        // The controller writes the history record as the run proceeds
+        // (running row, per-line log). Re-read when it says so, so the list
+        // shows the live run instead of the state at screen entry.
+        viewModelScope.launch {
+            BackupRunController.historyVersion.collect { refreshHistory() }
+        }
+    }
 
     /**
      * Stop the running backup.
@@ -74,12 +89,13 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
      * package under construction is left where it is; Start Backup begins a
      * NEW run of the data as it stands then, matching iOS (which only resumes
      * a stopped run from its own history row).
+     *
+     * [T-android-backup-stop-reaches-delivery] Cancelling the job ALSO stops
+     * the blocking upload: the run passes its job state down as a flag that
+     * the upload and the package copy poll, because job.cancel() alone cannot
+     * interrupt them.
      */
-    fun stopExport() {
-        val job = exportJob ?: return
-        AppLogger.info(TAG, "[Backup] user requested stop")
-        job.cancel()
-    }
+    fun stopExport() = BackupRunController.stop()
 
     /**
      * [T-android-backup-destination-gate] Enabled rclone destinations, refreshed
@@ -147,15 +163,20 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
         refreshDestinations()
     }
 
+    /** Restore-side progress line; the export's comes from the controller. */
     private val _statusText = MutableStateFlow<String?>(null)
-    val statusText: StateFlow<String?> = _statusText.asStateFlow()
-
-    /** Non-null once an export finished and its package is ready to share/save. */
-    private val _exportReady = MutableStateFlow<ExportResult?>(null)
-    val exportReady: StateFlow<ExportResult?> = _exportReady.asStateFlow()
-
     private val _errorText = MutableStateFlow<String?>(null)
-    val errorText: StateFlow<String?> = _errorText.asStateFlow()
+
+    /** The line under the Start button: whichever run is talking. */
+    val statusText: StateFlow<String?> =
+        combine(BackupRunController.statusText, _statusText) { exporting, busy ->
+            exporting ?: busy
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    val errorText: StateFlow<String?> =
+        combine(BackupRunController.errorText, _errorText) { exporting, busy ->
+            exporting ?: busy
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     /**
      * [T-android-backup-transient-success] The run that just finished, shown
@@ -163,41 +184,16 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
      *
      * Deliberately transient: the same facts live permanently in Backup
      * History, so keeping the card forever would make every later visit open
-     * onto a stale result. Cleared by [clearSettledSuccess] on appear.
+     * onto a stale result. Stored by the controller (the run is its, so the
+     * result is too) and dropped only when it reports a settled, fully
+     * successful run — a failed destination or a local-only run stays, since
+     * that is the result the user needs to come back to. Mirrors iOS
+     * `clearIfSettledAndSuccessful`.
      */
-    private val _lastResult = MutableStateFlow<RunResult?>(null)
-    val lastResult: StateFlow<RunResult?> = _lastResult.asStateFlow()
+    val lastResult: StateFlow<BackupRunController.RunResult?> =
+        BackupRunController.lastResult
 
-    data class RunResult(
-        val totalBytes: Long,
-        val skippedFiles: Int,
-        val destinations: List<BackupHistory.DestinationOutcome>,
-        val localCopyRemoved: Boolean = false,
-    ) {
-        val allDelivered: Boolean
-            get() = destinations.isNotEmpty() && destinations.all { it.succeeded }
-    }
-
-    /**
-     * Drop the finished card, but ONLY when it reports a settled, fully
-     * successful run.
-     *
-     * A run still in flight obviously stays. A run with a failed destination
-     * stays too: that is the one result a user actually needs to come back
-     * to, and it is the case where "it vanished before I read it" costs them
-     * something. Mirrors iOS `clearIfSettledAndSuccessful`.
-     */
-    fun clearSettledSuccess() {
-        if (_isRunning.value) return
-        val r = _lastResult.value ?: return
-        if (r.allDelivered) _lastResult.value = null
-    }
-
-    data class ExportResult(
-        val packageFile: File,
-        val totalBytes: Long,
-        val skippedFiles: Int,
-    )
+    fun clearSettledSuccess() = BackupRunController.clearSettledSuccess()
 
     fun toggleCategory(category: BackupCategory, on: Boolean) {
         _selected.value = _selected.value.toMutableSet().apply {
@@ -232,15 +228,17 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
         else -> mb.toLong() * 1024L * 1024L
     }
 
-    fun clearError() { _errorText.value = null }
-    fun clearExportReady() { _exportReady.value = null }
+    fun clearError() {
+        _errorText.value = null
+        BackupRunController.clearError()
+    }
 
     /**
      * Run an export. Credentials are an explicit user choice and are never
      * emitted into an unencrypted package.
      */
     fun startExport(passphrase: String?) {
-        if (_isRunning.value) return
+        if (isRunning.value) return
         val cats = _selected.value
         if (cats.isEmpty()) { _errorText.value = "Choose at least one thing to include."; return }
         // [T-android-backup-destination-gate] Refuse to produce a package that
@@ -258,187 +256,24 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
             _errorText.value = "Set a passphrase to encrypt this backup."
             return
         }
-        // Encryption is a user choice. Credentials are still opt-in and the
-        // unencrypted export warning is shown by the backup screen/exporter;
-        // do not turn that warning into a forced encryption policy.
-        _isRunning.value = true
-        _lastResult.value = null
-        _statusText.value = "Starting…"
-        _exportReady.value = null
-        // [T-android-backup-history] Open the record BEFORE any work, so a run
-        // killed mid-flight still leaves evidence. BackupHistory reconciles a
-        // record left RUNNING into FAILED on next launch.
-        val log = mutableListOf<BackupHistory.LogEntry>()
-        var record = BackupHistory.Record(
-            backupId = "",
-            startedAt = System.currentTimeMillis(),
-            status = BackupHistory.Status.RUNNING,
-            categories = cats.map { it.key }.sorted(),
-            encrypted = encrypting,
+        // Encryption is a user choice. Credentials are not ([T-backup-
+        // credentials-always]): a restore from a credential-less package comes
+        // back unable to reach any provider, which reads as data loss.
+        //
+        // The run itself is the controller's
+        // ([T-android-backup-run-controller]): it outlives this screen, and it
+        // is what the foreground service below reports on.
+        val app = getApplication<Application>()
+        BackupRunController.start(
+            app,
+            BackupRunController.Request(
+                categories = cats,
+                maxFileBytes = maxFileBytesOption(),
+                passphrase = passphrase?.takeIf { encrypting },
+            ),
         )
-        history.upsert(record)
-        _historyRecords.value = history.records()
-
-        fun note(line: String, problem: Boolean = false) {
-            BackupHistory.appendLog(log, line, problem)  // [T-android-backup-log-cap] capped append
-        }
-        exportJob = viewModelScope.launch {
-            try {
-                val summary = withContext(Dispatchers.IO) {
-                    BackupExporter(getApplication(), db).export(
-                        BackupExporter.Options(
-                            categories = cats,
-                            maxFileBytes = maxFileBytesOption(),
-                            // [T-backup-credentials-always] Not a user option any
-                            // more: a backup without credentials restores into an
-                            // app that cannot reach any provider.
-                            includeCredentials = true,
-                            passphrase = passphrase?.takeIf { encrypting },
-                        ),
-                    ) { line ->
-                        _statusText.value = line
-                        note(line)
-                        // Push the live line into the record so the history row
-                        // can show it. iOS does the same: the running row's
-                        // subtitle IS `record.log.last`, so progress lives with
-                        // the run rather than inside the button.
-                        publishRunning(record, log)
-                    }
-                }
-
-                // Deliver to every enabled rclone remote. Failures are surfaced
-                // but do NOT discard the local package — the user can still
-                // Share / Save it, and re-run delivery later. Mirrors iOS's
-                // "package is ready even if a destination failed" behaviour.
-                val outcomes = withContext(Dispatchers.IO) {
-                    deliverToRemotes(summary.packageFile, summary.backupId) { line ->
-                        _statusText.value = line
-                        note(line)
-                        publishRunning(record, log)
-                    }
-                }
-                outcomes.forEach {
-                    note(
-                        if (it.succeeded) "Delivered to ${it.name}"
-                        else "Delivery to ${it.name} failed: ${it.detail}",
-                        problem = !it.succeeded,
-                    )
-                }
-                // [T-android-backup-local-cleanup] The local package is a
-                // FALLBACK, not an archive. Once every enabled destination
-                // holds a verified copy, a third one on the phone just spends
-                // the user's storage — this device was accumulating 32 MB a
-                // run, permanently. Any failure, or having no destinations at
-                // all, keeps it, so the backup always exists somewhere.
-                var localRemoved = false
-                if (outcomes.isNotEmpty() && outcomes.all { it.succeeded }) {
-                    val freed = summary.packageFile.length()
-                    if (withContext(Dispatchers.IO) { summary.packageFile.delete() }) {
-                        localRemoved = true
-                        // Say so. Deleting the package is the right call once
-                        // every destination is verified, but doing it silently
-                        // is the wrong way: the user has no way to tell
-                        // "cleaned up" from "the backup is gone". The line
-                        // also lands in the record, because "did it clean up
-                        // after itself?" is asked long after the card is gone.
-                        val msg = getApplication<Application>().getString(
-                            com.openminis.app.R.string.backup_local_removed,
-                            humanBytesPlain(freed),
-                        )
-                        AppLogger.info(TAG, "[Backup] $msg")
-                        note(msg)
-                    }
-                } else if (outcomes.isNotEmpty()) {
-                    note(
-                        getApplication<Application>()
-                            .getString(com.openminis.app.R.string.backup_local_kept),
-                    )
-                }
-
-                _exportReady.value = ExportResult(
-                    packageFile = summary.packageFile,
-                    totalBytes = summary.totalBytes,
-                    skippedFiles = summary.skippedFiles,
-                )
-                _lastResult.value = RunResult(
-                    totalBytes = summary.totalBytes,
-                    skippedFiles = summary.skippedFiles,
-                    destinations = outcomes,
-                    localCopyRemoved = localRemoved,
-                )
-                val failed = outcomes.filterNot { it.succeeded }
-                if (failed.isNotEmpty()) {
-                    _errorText.value = "Saved locally, but delivery failed for: " +
-                        failed.joinToString("; ") { "${it.name}: ${it.detail ?: "failed"}" }
-                }
-                record = record.copy(
-                    backupId = summary.backupId,
-                    finishedAt = System.currentTimeMillis(),
-                    // A run that produced a package but couldn't reach every
-                    // destination, or dropped files at the cap, is neither a
-                    // clean success nor a failure — that distinction is the
-                    // whole point of the record.
-                    status = if (failed.isEmpty() && summary.skippedFiles == 0) {
-                        BackupHistory.Status.SUCCEEDED
-                    } else {
-                        BackupHistory.Status.COMPLETED_WITH_ISSUES
-                    },
-                    totalBytes = summary.totalBytes,
-                    skippedFiles = summary.skippedFiles,
-                    skippedEntries = summary.skippedPaths.map {
-                        BackupHistory.SkippedEntry(it.path, it.size)
-                    },
-                    packageName = summary.packageFile.name,
-                    destinations = outcomes,
-                    log = log.toList(),
-                )
-                _statusText.value = null
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                // Stopped by the user. Recorded as a real outcome rather than
-                // vanishing: a run that was cancelled deliberately still
-                // explains where the time went, and leaving it RUNNING would
-                // render as a permanent spinner.
-                AppLogger.info(TAG, "[Backup] export cancelled by user")
-                note(STOPPED_MARKER, problem = true)
-                record = record.copy(
-                    finishedAt = System.currentTimeMillis(),
-                    status = BackupHistory.Status.FAILED,
-                    errorMessage = STOPPED_MARKER,
-                    log = log.toList(),
-                )
-                _statusText.value = null
-                throw e
-            } catch (e: Exception) {
-                AppLogger.error(TAG, "[Backup] export failed: ${e.message}")
-                _errorText.value = e.message ?: "Backup failed."
-                note(e.message ?: "Backup failed.", problem = true)
-                record = record.copy(
-                    finishedAt = System.currentTimeMillis(),
-                    status = BackupHistory.Status.FAILED,
-                    errorMessage = e.message,
-                    log = log.toList(),
-                )
-                _statusText.value = null
-            } finally {
-                exportJob = null
-                history.upsert(record)
-                _historyRecords.value = history.records()
-                _isRunning.value = false
-            }
-        }
-    }
-
-    /**
-     * Write the in-flight record so the history list reflects it live.
-     *
-     * Cheap enough per progress line (one small JSON file), and the alternative
-     * — updating only at the end — is what left a running backup invisible in
-     * the very list that exists to report it.
-     */
-    private fun publishRunning(base: BackupHistory.Record, log: List<BackupHistory.LogEntry>) {
-        val snapshot = base.copy(log = log.toList())
-        history.upsert(snapshot)
-        _historyRecords.value = history.records()
+        // The foreground service that keeps the run alive once the app is in
+        // the background is started by the controller, which owns the run.
     }
 
     // -- History ----------------------------------------------------------
@@ -509,74 +344,6 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
     fun removeHistoryRecord(id: String) {
         history.remove(id)
         _historyRecords.value = history.records()
-    }
-
-    /**
-     * Upload the produced package to every enabled rclone remote as a single
-     * verified `.minisbak` (see RcloneChunkedUpload, which no longer chunks).
-     * Returns a list of "name: reason"
-     * strings for remotes that failed; empty when all succeeded (or none are
-     * configured). Never throws — a failed remote must not lose the local copy.
-     */
-    private fun deliverToRemotes(
-        packageFile: File,
-        backupId: String,
-        onProgress: (String) -> Unit,
-    ): List<BackupHistory.DestinationOutcome> {
-        val store = com.openminis.app.backup.remote.RcloneRemoteStore(getApplication())
-        val enabled = store.enabledRemotes
-        val phone = phoneStore.enabledFolders
-        if (enabled.isEmpty() && phone.isEmpty()) return emptyList()
-        if (enabled.isNotEmpty()) store.syncToRclone()
-        val uploader = com.openminis.app.backup.remote.RcloneChunkedUpload(getApplication())
-        // [T-android-backup-history] Report EVERY destination, not just the
-        // failures. "Which servers did last night's backup actually reach?"
-        // was unanswerable while only errors were returned.
-        val outcomes = mutableListOf<BackupHistory.DestinationOutcome>()
-        for (remote in enabled) {
-            try {
-                onProgress("Sending to ${remote.name}…")
-                uploader.upload(packageFile, remote, backupId) { p ->
-                    val pct = if (p.totalBytes > 0) (p.bytesSent * 100 / p.totalBytes) else 0
-                    onProgress("Sending to ${remote.name}… $pct%")
-                }
-                outcomes.add(
-                    BackupHistory.DestinationOutcome(
-                        remote.name, succeeded = true,
-                        kind = remote.backend, path = remote.path,
-                    ),
-                )
-            } catch (e: Exception) {
-                AppLogger.error(TAG, "[Backup] delivery to ${remote.name} failed: ${e.message}")
-                outcomes.add(
-                    BackupHistory.DestinationOutcome(
-                        remote.name, succeeded = false, detail = e.message ?: "failed",
-                        kind = remote.backend, path = remote.path,
-                    ),
-                )
-            }
-        }
-        for (folder in phone) {
-            try {
-                onProgress("Copying to ${folder.name}…")
-                phoneStore.copyPackage(folder, packageFile, packageFile.name)
-                outcomes.add(
-                    BackupHistory.DestinationOutcome(
-                        folder.name, succeeded = true,
-                        kind = "phone", path = folder.treeUri,
-                    ),
-                )
-            } catch (e: Exception) {
-                AppLogger.error(TAG, "[Backup] phone copy to ${folder.name} failed: ${e.message}")
-                outcomes.add(
-                    BackupHistory.DestinationOutcome(
-                        folder.name, succeeded = false, detail = e.message ?: "failed",
-                        kind = "phone", path = folder.treeUri,
-                    ),
-                )
-            }
-        }
-        return outcomes
     }
 
     data class PhoneRestoreItem(val uri: Uri, val name: String, val size: Long)
@@ -988,7 +755,11 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
     /** Confirm + run the restore of the currently pending package. */
     fun startRestore(passphrase: String?) {
         val pending = _pending.value ?: return
-        if (_isRunning.value) return
+        // [T-android-restore-single-run] The combined flag, not just this
+        // screen's: an export can be running in the background now (it outlives
+        // the screen), and importing while a package is being written reads the
+        // same database the importer is about to rewrite.
+        if (isRunning.value) return
         val cats = _restoreSelected.value
         if (cats.isEmpty()) { _errorText.value = "Choose at least one thing to restore."; return }
         if (pending.manifest.encryption != null && passphrase.isNullOrEmpty()) {

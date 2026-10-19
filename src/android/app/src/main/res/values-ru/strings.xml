@@ -1311,6 +1311,17 @@
     <string name="backup_history_running">Выполняется…</string>
     <string name="backup_history_interrupted">Прервано до завершения</string>
     <string name="backup_stop">Остановить копирование</string>
+    <string name="backup_notif_channel">Резервные копии</string>
+    <string name="backup_notif_running_title">Создание резервной копии…</string>
+    <string name="backup_notif_running_text">Подготовка…</string>
+    <string name="backup_notif_done_title">Резервная копия готова</string>
+    <string name="backup_notif_done_text">Ваша резервная копия доставлена.</string>
+    <string name="backup_notif_local_pending">Хранится только в Minis. Откройте приложение, чтобы сохранить её на устройстве или поделиться.</string>
+    <string name="backup_notif_issues_title">Резервная копия готова с замечаниями</string>
+    <string name="backup_notif_failed_title">Не удалось создать резервную копию</string>
+    <string name="backup_notif_stopped_title">Резервная копия остановлена</string>
+    <string name="backup_notif_stopped_text">Резервная копия была остановлена до завершения.</string>
+    <string name="backup_result_local_pending">Ещё не сохранена вне приложения. Сохраните её на устройстве или поделитесь — копия, которая остаётся в приложении, теряется при удалении Minis.</string>
     <string name="backup_history_stopped">Остановлено</string>
     <string name="backup_history_delivered">%1$d из %2$d назначений</string>
     <string name="backup_history_destinations">НАЗНАЧЕНИЯ</string>

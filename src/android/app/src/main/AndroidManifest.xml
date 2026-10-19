@@ -29,8 +29,14 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <!-- T50: PARTIAL_WAKE_LOCK held by AgentForegroundService while sessions
          are streaming so Doze + OEM CPU throttling don't stall long shell
-         tools after screen-off. -->
+         tools after screen-off. BackupForegroundService holds one for the
+         same reason while a backup uploads. -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- [T-android-backup-fgs] ACCESS_WIFI_STATE for the WIFI_MODE_FULL_HIGH_PERF
+         lock BackupForegroundService takes while uploading: without it the
+         radio drops to power-save with the screen off and a Wi-Fi upload can
+         stall to a crawl. Normal (install-time) permission, no prompt. -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <!-- T-bg-overlay phase 2: floating tool-status capsule rendered via
          WindowManager TYPE_APPLICATION_OVERLAY while Minis is backgrounded
          and an agent task is in flight. The user must additionally grant
@@ -489,6 +495,17 @@
              FOREGROUND_SERVICE_DATA_SYNC permission comment. -->
         <service
             android:name=".data.UpdateDownloadService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <!-- [T-android-backup-fgs] Keeps a running backup alive while the app
+             is backgrounded (progress notification + wake lock). dataSync is
+             the semantically correct type, and the service is bounded by the
+             run: it stops itself the moment BackupRunController reports the
+             run over, and onTimeout releases rather than lingering past the
+             Android 14+ dataSync cap. -->
+        <service
+            android:name=".service.BackupForegroundService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 

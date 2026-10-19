@@ -1307,6 +1307,17 @@
     <string name="backup_history_running">Tumatakbo…</string>
     <string name="backup_history_interrupted">Naantala bago matapos</string>
     <string name="backup_stop">Ihinto ang Backup</string>
+    <string name="backup_notif_channel">Mga backup</string>
+    <string name="backup_notif_running_title">Nagba-backup…</string>
+    <string name="backup_notif_running_text">Naghahanda…</string>
+    <string name="backup_notif_done_title">Kumpleto ang backup</string>
+    <string name="backup_notif_done_text">Naihatid ang iyong backup.</string>
+    <string name="backup_notif_local_pending">Nasa Minis lang ito. Buksan ang app para i-save sa device o ibahagi.</string>
+    <string name="backup_notif_issues_title">Natapos ang backup na may mga isyu</string>
+    <string name="backup_notif_failed_title">Nabigo ang backup</string>
+    <string name="backup_notif_stopped_title">Huminto ang backup</string>
+    <string name="backup_notif_stopped_text">Huminto ang backup bago ito matapos.</string>
+    <string name="backup_result_local_pending">Hindi pa naka-save sa labas ng app na ito. I-save ito sa device o ibahagi — mawawala ang backup na mananatili sa app kapag tinanggal ang Minis.</string>
     <string name="backup_history_stopped">Inihinto</string>
     <string name="backup_history_delivered">%1$d sa %2$d destinasyon</string>
     <string name="backup_history_destinations">MGA DESTINASYON</string>

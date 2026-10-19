@@ -1306,6 +1306,17 @@
     <string name="backup_history_running">진행 중…</string>
     <string name="backup_history_interrupted">완료 전에 중단되었습니다</string>
     <string name="backup_stop">백업 중지</string>
+    <string name="backup_notif_channel">백업</string>
+    <string name="backup_notif_running_title">백업 중…</string>
+    <string name="backup_notif_running_text">준비 중…</string>
+    <string name="backup_notif_done_title">백업 완료</string>
+    <string name="backup_notif_done_text">백업이 전송되었습니다.</string>
+    <string name="backup_notif_local_pending">Minis 안에만 보관됩니다. 앱을 열어 기기에 저장하거나 공유하세요.</string>
+    <string name="backup_notif_issues_title">문제가 있는 상태로 백업 완료</string>
+    <string name="backup_notif_failed_title">백업 실패</string>
+    <string name="backup_notif_stopped_title">백업 중지됨</string>
+    <string name="backup_notif_stopped_text">백업이 완료되기 전에 중지되었습니다.</string>
+    <string name="backup_result_local_pending">아직 이 앱 밖에 저장되지 않았습니다. 기기에 저장하거나 공유하세요. 앱 안에만 있는 백업은 Minis를 삭제하면 사라집니다.</string>
     <string name="backup_history_stopped">중지됨</string>
     <string name="backup_history_delivered">대상 %2$d개 중 %1$d개</string>
     <string name="backup_history_destinations">대상</string>

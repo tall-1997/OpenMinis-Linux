@@ -1312,6 +1312,17 @@
     <string name="backup_history_running">Berjalan…</string>
     <string name="backup_history_interrupted">Terhenti sebelum selesai</string>
     <string name="backup_stop">Hentikan Pencadangan</string>
+    <string name="backup_notif_channel">Cadangan</string>
+    <string name="backup_notif_running_title">Mencadangkan…</string>
+    <string name="backup_notif_running_text">Menyiapkan…</string>
+    <string name="backup_notif_done_title">Pencadangan selesai</string>
+    <string name="backup_notif_done_text">Cadangan Anda telah terkirim.</string>
+    <string name="backup_notif_local_pending">Hanya disimpan di Minis. Buka aplikasi untuk menyimpannya ke perangkat atau membagikannya.</string>
+    <string name="backup_notif_issues_title">Pencadangan selesai dengan masalah</string>
+    <string name="backup_notif_failed_title">Pencadangan gagal</string>
+    <string name="backup_notif_stopped_title">Pencadangan dihentikan</string>
+    <string name="backup_notif_stopped_text">Pencadangan dihentikan sebelum selesai.</string>
+    <string name="backup_result_local_pending">Belum disimpan di luar aplikasi ini. Simpan ke perangkat atau bagikan — cadangan yang hanya ada di aplikasi akan hilang jika Minis dihapus.</string>
     <string name="backup_history_stopped">Dihentikan</string>
     <string name="backup_history_delivered">%1$d dari %2$d tujuan</string>
     <string name="backup_history_destinations">TUJUAN</string>

@@ -1307,6 +1307,17 @@
     <string name="backup_history_running">Läuft…</string>
     <string name="backup_history_interrupted">Vor dem Abschluss unterbrochen</string>
     <string name="backup_stop">Sicherung stoppen</string>
+    <string name="backup_notif_channel">Sicherungen</string>
+    <string name="backup_notif_running_title">Sicherung läuft…</string>
+    <string name="backup_notif_running_text">Vorbereitung…</string>
+    <string name="backup_notif_done_title">Sicherung abgeschlossen</string>
+    <string name="backup_notif_done_text">Ihre Sicherung wurde zugestellt.</string>
+    <string name="backup_notif_local_pending">Nur in Minis gespeichert. Öffnen Sie die App, um sie auf Ihrem Gerät zu speichern oder zu teilen.</string>
+    <string name="backup_notif_issues_title">Sicherung mit Problemen beendet</string>
+    <string name="backup_notif_failed_title">Sicherung fehlgeschlagen</string>
+    <string name="backup_notif_stopped_title">Sicherung gestoppt</string>
+    <string name="backup_notif_stopped_text">Die Sicherung wurde vor dem Abschluss gestoppt.</string>
+    <string name="backup_result_local_pending">Noch nicht außerhalb dieser App gespeichert. Speichern Sie sie auf Ihrem Gerät oder teilen Sie sie — eine Sicherung, die in der App bleibt, geht verloren, wenn Minis entfernt wird.</string>
     <string name="backup_history_stopped">Gestoppt</string>
     <string name="backup_history_delivered">%1$d von %2$d Zielen</string>
     <string name="backup_history_destinations">ZIELE</string>
