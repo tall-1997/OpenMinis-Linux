@@ -8,6 +8,8 @@ import com.openminis.app.sandbox.NativeOffloadResult
 import com.openminis.app.scheduled.CronScheduler
 import com.openminis.app.scheduled.ScheduledModelResolver
 import com.openminis.app.scheduled.ScheduledRepeatMode
+import com.openminis.app.scheduled.ScheduledSessionLookup
+import com.openminis.app.scheduled.ScheduledTargetDelivery
 import com.openminis.app.scheduled.ScheduledTargetMode
 import com.openminis.app.scheduled.ScheduledTask
 import com.openminis.app.scheduled.ScheduledTaskManager
@@ -40,6 +42,10 @@ import java.util.Calendar
  *   new        ≈ SendPrompt(no session)   — run prompt in a fresh chat
  *   follow-up  ≈ FollowUpSession           — append prompt to --session
  *   rerun      ≈ RetryRun                  — re-run --session from --message
+ *
+ * [T-android-scheduled-default-follow-up] Without --target, a create that runs
+ * inside a chat defaults to follow-up on THAT chat; outside a chat it stays
+ * new. Create always prints a `delivery` sentence saying where fires land.
  */
 class ScheduledTaskOffloadHandler(private val context: Context) : NativeOffloadHandler {
 
@@ -58,7 +64,7 @@ class ScheduledTaskOffloadHandler(private val context: Context) : NativeOffloadH
         return try {
             when (val sub = args.positional.firstOrNull() ?: "list") {
                 "list" -> handleList()
-                "create", "add" -> handleCreate(args)
+                "create", "add" -> handleCreate(args, request.sessionId)
                 "delete", "remove", "rm" -> handleDelete(args)
                 "enable" -> handleSetEnabled(args, true)
                 "disable" -> handleSetEnabled(args, false)
@@ -80,7 +86,7 @@ class ScheduledTaskOffloadHandler(private val context: Context) : NativeOffloadH
         return NativeOffloadResult(0, out.toString(2))
     }
 
-    private fun handleCreate(args: OffloadArgs): NativeOffloadResult {
+    private fun handleCreate(args: OffloadArgs, callerSessionId: String?): NativeOffloadResult {
         val label = args.get("label", "l") ?: ""
         // [T-android-scheduled-triggers] `--every` is the interval trigger,
         // `--of` the on-completion one, `--time --repeat` the calendar one.
@@ -106,7 +112,9 @@ class ScheduledTaskOffloadHandler(private val context: Context) : NativeOffloadH
         val customDays = if (repeat == ScheduledRepeatMode.CUSTOM) {
             parseDays(args.get("days") ?: throw IllegalArgumentException("--days required for custom repeat"))
         } else emptySet()
-        val target = parseTarget(args)
+        // [T-android-scheduled-default-follow-up] Where fires land is settled
+        // here, at create time — see resolveTarget.
+        val (target, defaulted) = resolveTarget(args, callerSessionId)
         val prompt = args.get("prompt", "p") ?: ""
         if (target !is ScheduledTargetMode.RerunMessage && prompt.isBlank()) {
             throw IllegalArgumentException("--prompt required (except for rerun target)")
@@ -139,7 +147,11 @@ class ScheduledTaskOffloadHandler(private val context: Context) : NativeOffloadH
             },
         )
         val saved = manager.create(task)
-        val out = JSONObject().put("created", taskJson(saved))
+        val destination = destinationOf(target, label, callerSessionId)
+        val out = JSONObject()
+            .put("created", taskJson(saved))
+            .put("delivery", ScheduledTargetDelivery.sentence(destination, defaulted))
+            .put("deliveryTarget", JSONObject(ScheduledTargetDelivery.summary(destination, defaulted)))
         if (saved.id != task.id) out.put("already_existed", true)
         return NativeOffloadResult(0, out.toString(2))
     }
@@ -254,22 +266,52 @@ class ScheduledTaskOffloadHandler(private val context: Context) : NativeOffloadH
         return s.split(",").mapNotNull { map[it.trim().lowercase().take(3)] }.toSet()
     }
 
-    private fun parseTarget(args: OffloadArgs): ScheduledTargetMode {
-        return when (args.get("target")?.lowercase() ?: "new") {
-            "new" -> ScheduledTargetMode.NewSession
+    /**
+     * [T-android-scheduled-default-follow-up] The target mode and whether it
+     * was defaulted. An explicit follow-up to a session that does not exist is
+     * an error (instead of a failure on every fire); a DEFAULTED follow-up
+     * whose caller session is gone falls back to `new`.
+     */
+    private fun resolveTarget(args: OffloadArgs, callerSessionId: String?): Pair<ScheduledTargetMode, Boolean> {
+        val session = args.get("session", "s")
+        val (target, defaulted) = ScheduledTargetDelivery.resolveTarget(args.get("target"), session, callerSessionId)
+        val lookup = ScheduledSessionLookup(context)
+        return when (target) {
+            "new" -> ScheduledTargetMode.NewSession to defaulted
             "follow-up", "followup", "follow" -> {
-                val sid = args.get("session", "s")
+                val sid = session ?: callerSessionId
                     ?: throw IllegalArgumentException("--session required for follow-up target")
-                ScheduledTargetMode.AppendToSession(sid)
+                when {
+                    lookup.exists(sid) -> ScheduledTargetMode.AppendToSession(sid) to defaulted
+                    defaulted -> ScheduledTargetMode.NewSession to true
+                    else -> throw IllegalArgumentException("no chat session with id=$sid for the follow-up target")
+                }
             }
             "rerun", "re-run", "retry" -> {
-                val sid = args.get("session", "s")
-                    ?: throw IllegalArgumentException("--session required for rerun target")
+                val sid = session ?: throw IllegalArgumentException("--session required for rerun target")
                 val mid = args.get("message")
                     ?: throw IllegalArgumentException("--message required for rerun target")
-                ScheduledTargetMode.RerunMessage(sid, mid)
+                ScheduledTargetMode.RerunMessage(sid, mid) to defaulted
             }
-            else -> throw IllegalArgumentException("--target must be new|follow-up|rerun")
+            else -> throw IllegalArgumentException("--target must be follow-up|new|rerun")
+        }
+    }
+
+    /** The saved target, enriched with the chat's name for the delivery sentence. */
+    private fun destinationOf(
+        target: ScheduledTargetMode,
+        label: String,
+        callerSessionId: String?,
+    ): ScheduledTargetDelivery.Destination {
+        val lookup = ScheduledSessionLookup(context)
+        return when (target) {
+            is ScheduledTargetMode.AppendToSession -> ScheduledTargetDelivery.Destination.FollowUp(
+                target.sessionId, lookup.title(target.sessionId), target.sessionId == callerSessionId,
+            )
+            is ScheduledTargetMode.RerunMessage -> ScheduledTargetDelivery.Destination.Rerun(
+                target.sessionId, target.messageId, lookup.title(target.sessionId),
+            )
+            ScheduledTargetMode.NewSession -> ScheduledTargetDelivery.Destination.NewChat(label.ifBlank { null })
         }
     }
 
@@ -327,7 +369,9 @@ class ScheduledTaskOffloadHandler(private val context: Context) : NativeOffloadH
 
             Target modes: new = run prompt in a fresh chat; follow-up = append prompt
             to an existing chat (--session); rerun = re-run a chat (--session) from a
-            chosen user message (--message, prompt ignored).
+            chosen user message (--message, prompt ignored). Without --target, a create
+            INSIDE a chat defaults to follow-up on THAT chat; the output's `delivery`
+            sentence always says where the fires will land.
 
             --model is resolved when the task is CREATED: a wire model id, an entry
             uuid or an unambiguous display name all work, and the stored value is the
