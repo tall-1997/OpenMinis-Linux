@@ -1466,6 +1466,11 @@
     <string name="backup_restore">開始復原</string>
     <string name="backup_restoring">復原中…</string>
     <string name="backup_restoring_counted">正在復原 %1$s %2$d/%3$d</string>
+    <string name="restore_stop_action">停止還原</string>
+    <string name="restore_stop_title">停止還原</string>
+    <string name="restore_stop_message">確定要停止目前的還原過程嗎？已還原的內容將保留，未還原的內容將中止。</string>
+    <string name="restore_stop_confirm">停止還原</string>
+    <string name="restore_stop_cancel">繼續還原</string>
     <string name="backup_restoring_running">正在復原 %1$s %2$d</string>
     <string name="backup_restoring_category">正在復原 %1$s…</string>
     <string name="restore_eta_almost_done">即將完成…</string>

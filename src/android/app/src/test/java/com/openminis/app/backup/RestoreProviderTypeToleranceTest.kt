@@ -38,7 +38,7 @@ class RestoreProviderTypeToleranceTest {
     private fun config(vararg instances: String) =
         """{"instances":[${instances.joinToString(",")}],"modelEntries":[],"modelGroups":[]}"""
 
-    private fun parse(json: String) = BackupImporter.parseProviderConfigLeniently(json)
+    private fun parse(json: String) = parseProviderConfigLeniently(json)
 
     // ─── The exact field regression ──────────────────────────────────────
 

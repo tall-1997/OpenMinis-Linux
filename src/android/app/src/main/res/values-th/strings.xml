@@ -1389,6 +1389,11 @@
     <string name="backup_restore">เริ่มการกู้คืน</string>
     <string name="backup_restoring">กำลังกู้คืน…</string>
     <string name="backup_restoring_counted">กำลังกู้คืน %1$s %2$d/%3$d</string>
+    <string name="restore_stop_action">หยุดการกู้คืน</string>
+    <string name="restore_stop_title">หยุดการกู้คืน</string>
+    <string name="restore_stop_message">หยุดการกู้คืนตอนนี้หรือไม่? สิ่งที่กู้คืนแล้วจะยังคงอยู่ ส่วนที่เหลือจะถูกข้าม</string>
+    <string name="restore_stop_confirm">หยุดการกู้คืน</string>
+    <string name="restore_stop_cancel">ดำเนินการต่อ</string>
     <string name="backup_restoring_running">กำลังกู้คืน %1$s %2$d</string>
     <string name="backup_restoring_category">กำลังกู้คืน %1$s…</string>
     <string name="restore_eta_almost_done">ใกล้เสร็จแล้ว…</string>

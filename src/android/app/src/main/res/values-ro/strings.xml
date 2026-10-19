@@ -1391,6 +1391,11 @@
     <string name="backup_restore">Începe restaurarea</string>
     <string name="backup_restoring">Se restaurează…</string>
     <string name="backup_restoring_counted">Se restaurează: %1$s %2$d/%3$d</string>
+    <string name="restore_stop_action">Oprește restaurarea</string>
+    <string name="restore_stop_title">Oprește restaurarea</string>
+    <string name="restore_stop_message">Oprești restaurarea acum? Ce a fost deja restaurat se păstrează; restul este omis.</string>
+    <string name="restore_stop_confirm">Oprește restaurarea</string>
+    <string name="restore_stop_cancel">Continuă</string>
     <string name="backup_restoring_running">Se restaurează: %1$s %2$d</string>
     <string name="backup_restoring_category">Se restaurează: %1$s…</string>
     <string name="restore_eta_almost_done">Aproape gata…</string>

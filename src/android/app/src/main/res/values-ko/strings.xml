@@ -1388,6 +1388,11 @@
     <string name="backup_restore">복원 시작</string>
     <string name="backup_restoring">복원 중…</string>
     <string name="backup_restoring_counted">%1$s 복원 중 %2$d/%3$d</string>
+    <string name="restore_stop_action">복원 중지</string>
+    <string name="restore_stop_title">복원 중지</string>
+    <string name="restore_stop_message">지금 복원을 중지할까요? 이미 복원된 내용은 유지되고 나머지는 건너뜁니다.</string>
+    <string name="restore_stop_confirm">복원 중지</string>
+    <string name="restore_stop_cancel">계속</string>
     <string name="backup_restoring_running">%1$s 복원 중 %2$d</string>
     <string name="backup_restoring_category">%1$s 복원 중…</string>
     <string name="restore_eta_almost_done">거의 완료됨…</string>

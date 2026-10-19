@@ -1394,6 +1394,11 @@
     <string name="backup_restore">Mulai Pemulihan</string>
     <string name="backup_restoring">Memulihkan…</string>
     <string name="backup_restoring_counted">Memulihkan %1$s %2$d/%3$d</string>
+    <string name="restore_stop_action">Hentikan pemulihan</string>
+    <string name="restore_stop_title">Hentikan pemulihan</string>
+    <string name="restore_stop_message">Hentikan pemulihan sekarang? Yang sudah dipulihkan tetap tersimpan; sisanya dilewati.</string>
+    <string name="restore_stop_confirm">Hentikan pemulihan</string>
+    <string name="restore_stop_cancel">Lanjutkan</string>
     <string name="backup_restoring_running">Memulihkan %1$s %2$d</string>
     <string name="backup_restoring_category">Memulihkan %1$s…</string>
     <string name="restore_eta_almost_done">Hampir selesai…</string>

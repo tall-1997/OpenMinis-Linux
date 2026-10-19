@@ -1389,6 +1389,11 @@
     <string name="backup_restore">Geri Yüklemeyi Başlat</string>
     <string name="backup_restoring">Geri yükleniyor…</string>
     <string name="backup_restoring_counted">Geri yükleniyor: %1$s %2$d/%3$d</string>
+    <string name="restore_stop_action">Geri yüklemeyi durdur</string>
+    <string name="restore_stop_title">Geri yüklemeyi durdur</string>
+    <string name="restore_stop_message">Geri yükleme şimdi durdurulsun mu? Zaten geri yüklenenler korunur; geri kalanı atlanır.</string>
+    <string name="restore_stop_confirm">Geri yüklemeyi durdur</string>
+    <string name="restore_stop_cancel">Devam et</string>
     <string name="backup_restoring_running">Geri yükleniyor: %1$s %2$d</string>
     <string name="backup_restoring_category">Geri yükleniyor: %1$s…</string>
     <string name="restore_eta_almost_done">Neredeyse bitti…</string>

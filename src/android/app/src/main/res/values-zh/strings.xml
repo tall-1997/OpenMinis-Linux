@@ -1786,6 +1786,11 @@
     <string name="backup_restore">开始恢复</string>
     <string name="backup_restoring">恢复中…</string>
     <string name="backup_restoring_counted">正在恢复 %1$s %2$d/%3$d</string>
+    <string name="restore_stop_action">停止恢复</string>
+    <string name="restore_stop_title">停止恢复</string>
+    <string name="restore_stop_message">现在停止恢复？已恢复的内容会保留，其余部分将被跳过。</string>
+    <string name="restore_stop_confirm">停止恢复</string>
+    <string name="restore_stop_cancel">继续恢复</string>
     <string name="backup_restoring_running">正在恢复 %1$s %2$d</string>
     <string name="backup_restoring_category">正在恢复 %1$s…</string>
     <string name="restore_eta_almost_done">即将完成…</string>

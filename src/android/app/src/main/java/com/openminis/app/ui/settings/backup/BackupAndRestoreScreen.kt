@@ -19,9 +19,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ErrorOutline
@@ -56,6 +56,7 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -71,9 +72,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -87,7 +93,6 @@ import com.openminis.app.backup.BackupHistory
 import com.openminis.app.backup.BackupRunController
 import com.openminis.app.ui.components.MinisMenu
 import com.openminis.app.ui.components.MinisButton
-import com.openminis.app.ui.theme.ChatColors
 import com.openminis.app.ui.components.MinisOutlinedButton
 import com.openminis.app.ui.components.MinisTextButton
 import com.openminis.app.ui.settings.SettingsScaffold
@@ -112,13 +117,62 @@ private fun RowScope.PrimaryActionContent(
     icon: ImageVector,
     label: String,
     busy: Boolean,
+    /** [T-android-restore-perf] 0f..1f once a total is known; null before. */
+    fraction: Float? = null,
+    /**
+     * [T-android-restore-ui] Non-null while the run is stoppable: turns the
+     * busy ring into a tap target with a stop glyph at its centre.
+     */
+    onStopClick: (() -> Unit)? = null,
 ) {
     if (busy) {
-        CircularProgressIndicator(
-            modifier = Modifier.size(18.dp),
-            strokeWidth = 2.dp,
-            color = LocalContentColor.current,
-        )
+        // [T-android-restore-perf] A DETERMINATE arc, not the indeterminate
+        // spinner: the no-argument form animates forever, repainting the whole
+        // surface every frame for as long as it is on screen (measured with
+        // perfetto during a live restore: 478 frames in 10 s, RenderThread at
+        // 2.49 s of CPU per 10 s) on a device whose restore is I/O-bound
+        // anyway. This form repaints only when the importer reports, every
+        // 200 records.
+        val stopActionLabel = stringResource(R.string.restore_stop_action)
+        if (onStopClick != null) {
+            // Ring + stop glyph in one tap target. The hit rect is 36.dp even
+            // though the ring is 24.dp: the visible arc is under the 48.dp
+            // accessibility minimum and cannot grow without unbalancing the
+            // button, so the touch area grows around it instead. It is the
+            // ONLY live control while a restore runs — the bar behind it is
+            // disabled — so a near miss does nothing.
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .clickable(onClick = onStopClick)
+                    .semantics {
+                        role = Role.Button
+                        contentDescription = stopActionLabel
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                CircularProgressIndicator(
+                    progress = { fraction ?: 0f },
+                    modifier = Modifier.size(24.dp),
+                    strokeWidth = 2.5.dp,
+                    color = LocalContentColor.current,
+                )
+                Box(
+                    Modifier
+                        .size(8.dp)
+                        .clip(RoundedCornerShape(1.5.dp))
+                        .background(LocalContentColor.current),
+                )
+            }
+        } else {
+            CircularProgressIndicator(
+                progress = { fraction ?: 0f },
+                modifier = Modifier.size(18.dp),
+                strokeWidth = 2.dp,
+                color = LocalContentColor.current,
+            )
+        }
     } else {
         Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
     }
@@ -821,6 +875,8 @@ private fun RestoreTab(
     val error by vm.errorText.collectAsState()
     val restoreProgress by vm.restoreProgress.collectAsState()
     val etaSeconds by vm.restoreEtaSeconds.collectAsState()
+    // [T-android-restore-ui] Stop abandons work in progress, so it asks first.
+    var confirmStop by rememberSaveable { mutableStateOf(false) }
 
     // Which destination the user is browsing for a package to restore from.
     var browsing by remember {
@@ -1075,6 +1131,10 @@ private fun RestoreTab(
     }
 
     Column(Modifier.padding(16.dp)) {
+        // [T-android-restore-perf] 0f..1f drives the determinate ring; null
+        // before the importer has reported a total, which draws an empty arc
+        // rather than a spinning one.
+        val doneFraction = restoreFraction(restoreProgress)
         MinisButton(
             onClick = { vm.startRestore(passphrase.takeIf { p.manifest.encryption != null }) },
             enabled = !running && restoreSelected.isNotEmpty(),
@@ -1106,6 +1166,11 @@ private fun RestoreTab(
                 icon = Icons.Outlined.CloudDownload,
                 label = liveLabel,
                 busy = running,
+                fraction = doneFraction,
+                // [T-android-backup-stop] The bar itself is inert while a
+                // restore runs; the ring in the icon slot is the only live
+                // control, so a stray tap cannot start or abort anything.
+                onStopClick = { confirmStop = true }.takeIf { running },
             )
         }
         // The live step ("Importing chats…") used to BE the button's label;
@@ -1137,140 +1202,32 @@ private fun RestoreTab(
             )
         }
     }
-}
 
-@Composable
-private fun RestoreReport(
-    report: com.openminis.app.backup.BackupImporter.Report,
-    onDone: () -> Unit,
-) {
-    SettingsSection(header = stringResource(R.string.backup_restore_complete)) {
-        Column(Modifier.padding(16.dp)) {
-            InfoLine(stringResource(R.string.backup_report_restored), report.totalImported.toString())
-            InfoLine(stringResource(R.string.backup_report_updated), report.totalUpdated.toString())
-            InfoLine(stringResource(R.string.backup_report_up_to_date), report.totalSkipped.toString())
-            if (report.totalMissingBlobs > 0) {
-                InfoLine(stringResource(R.string.backup_report_missing_files), report.totalMissingBlobs.toString())
-            }
-        }
-    }
-
-    // Per-category outcomes. The totals above say a restore had issues; these
-    // say WHICH data was affected and why, which is the difference between
-    // "something went wrong" and knowing whether it matters. Each line names
-    // the category, as on iOS.
-    //
-    // [T-android-restore-report-severity] Split by severity. Everything used to
-    // render in the error colour, so a file the SOURCE device deliberately left
-    // out — over the size cap, or never downloaded there — read as if the
-    // restore had broken. Those are the backup's own policy, recorded as
-    // tombstones in the index, and they get their own amber section.
-    //
-    // Which counter is which severity is decided in restoreIssues(), not here,
-    // so the rule is tested as data rather than inferred from colours.
-    val issues = restoreIssues(report)
-    val lines = issues.map { issue ->
-        val name = BackupCategory.fromKey(issue.categoryKey)
-            ?.let { stringResource(categoryNameRes(it)) } ?: issue.categoryKey
-        issue.severity to when (issue.kind) {
-            RestoreIssueKind.FAILED ->
-                stringResource(R.string.backup_report_failed, name, issue.detail.orEmpty())
-            RestoreIssueKind.MISSING_FROM_PACKAGE ->
-                stringResource(R.string.backup_report_missing_from_package, name, issue.count)
-            RestoreIssueKind.UNREADABLE ->
-                stringResource(R.string.backup_report_unreadable, name, issue.count)
-            RestoreIssueKind.SIZE_SKIPPED ->
-                stringResource(R.string.backup_report_size_skipped, name, issue.count)
-            RestoreIssueKind.NOT_DOWNLOADED ->
-                stringResource(R.string.backup_report_not_downloaded, name, issue.count)
-        }
-    }
-    val errors = lines.filter { it.first == RestoreIssueSeverity.ERROR }.map { it.second }
-    // report.warnings are advisories (count mismatches and the like), already
-    // sentences rather than counts; they read as notices, not failures.
-    val notices = lines.filter { it.first == RestoreIssueSeverity.NOTICE }.map { it.second } +
-        report.warnings
-    if (errors.isNotEmpty()) {
-        SettingsSection(header = stringResource(R.string.backup_report_issues)) {
-            Column(Modifier.padding(16.dp)) {
-                errors.forEach {
-                    ReportLine(it, Icons.Outlined.ErrorOutline, MaterialTheme.colorScheme.error)
+    if (confirmStop) {
+        AlertDialog(
+            onDismissRequest = { confirmStop = false },
+            title = { Text(stringResource(R.string.restore_stop_title)) },
+            text = { Text(stringResource(R.string.restore_stop_message)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmStop = false
+                    vm.stopRunningRestore()
+                }) {
+                    Text(
+                        stringResource(R.string.restore_stop_confirm),
+                        // Destructive: this abandons work in progress.
+                        color = MaterialTheme.colorScheme.error,
+                    )
                 }
-            }
-        }
-    }
-    if (notices.isNotEmpty()) {
-        SettingsSection(
-            header = stringResource(R.string.backup_report_notices),
-            footer = stringResource(R.string.backup_report_notices_footer),
-        ) {
-            Column(Modifier.padding(16.dp)) {
-                val amber = reportNoticeColor()
-                notices.forEach { ReportLine(it, Icons.Outlined.Warning, amber) }
-            }
-        }
-    }
-
-    // 3-way credentials message, keyed on the providers category (iOS parity).
-    val prov = report.categories.firstOrNull {
-        it.category == BackupCategory.PROVIDERS.key
-    }
-    if (prov != null) {
-        val msg = when {
-            prov.credentialsRestored > 0 ->
-                stringResource(R.string.backup_creds_restored, prov.credentialsRestored)
-            prov.credentialsKept > 0 ->
-                stringResource(R.string.backup_creds_kept)
-            else ->
-                stringResource(R.string.backup_creds_none)
-        }
-        SettingsSection(footer = msg) {}
-    }
-
-    Column(Modifier.padding(16.dp)) {
-        MinisButton(onClick = onDone, modifier = Modifier.fillMaxWidth()) {
-            Text(stringResource(R.string.backup_done))
-        }
-    }
-}
-
-@Composable
-private fun ReportLine(text: String, icon: ImageVector, tint: Color) {
-    Row(
-        modifier = Modifier.padding(vertical = 3.dp),
-        verticalAlignment = Alignment.Top,
-    ) {
-        Icon(
-            icon,
-            contentDescription = null,
-            tint = tint,
-            // Nudged down to sit on the first text line rather than centring on
-            // a paragraph that may wrap.
-            modifier = Modifier.padding(top = 1.dp).size(16.dp),
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmStop = false }) {
+                    Text(stringResource(R.string.restore_stop_cancel))
+                }
+            },
         )
-        Spacer(Modifier.width(8.dp))
-        Text(text, style = MaterialTheme.typography.bodySmall, color = tint)
     }
 }
-
-/**
- * [T-android-restore-report-severity] Amber for "left out on purpose".
- *
- * Two values because no single amber works on both grounds at body-text size.
- * The commonly used #E6A23C measures 2.19:1 against a light surface — well
- * under the 4.5:1 small text needs — so it would be close to unreadable in
- * light mode. #B45309 gives 5.02:1 on light; #FFB74D gives 9.83:1 on dark.
- *
- * Keyed on ChatColors.isDark, the theme the app actually resolved, so it
- * follows the in-app Appearance setting rather than the OS one (GH#187).
- */
-@Composable
-private fun reportNoticeColor(): Color =
-    if (ChatColors.isDark) {
-        Color(0xFFFFB74D)
-    } else {
-        Color(0xFFB45309)
-    }
 
 // ─── Restore sources ─────────────────────────────────────────────────────
 
@@ -1468,7 +1425,7 @@ private fun ServerPackagePicker(
 // ─── Helpers ─────────────────────────────────────────────────────────────
 
 @Composable
-private fun InfoLine(label: String, value: String) {
+internal fun InfoLine(label: String, value: String) {
     Row(
         Modifier.fillMaxWidth().padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,

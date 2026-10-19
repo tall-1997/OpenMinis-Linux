@@ -1389,6 +1389,11 @@
     <string name="backup_restore">Iniciar restauración</string>
     <string name="backup_restoring">Restaurando…</string>
     <string name="backup_restoring_counted">Restaurando %1$s %2$d/%3$d</string>
+    <string name="restore_stop_action">Detener la restauración</string>
+    <string name="restore_stop_title">Detener la restauración</string>
+    <string name="restore_stop_message">¿Detener la restauración ahora? Lo que ya se ha restaurado se conserva; el resto se omite.</string>
+    <string name="restore_stop_confirm">Detener la restauración</string>
+    <string name="restore_stop_cancel">Continuar</string>
     <string name="backup_restoring_running">Restaurando %1$s %2$d</string>
     <string name="backup_restoring_category">Restaurando %1$s…</string>
     <string name="restore_eta_almost_done">Casi listo…</string>

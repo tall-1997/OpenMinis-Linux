@@ -135,39 +135,41 @@ class RestoreReportSeverityTest {
         assertTrue(restoreIssues(r).isEmpty())
     }
 
-    // ── the screen's mapping ─────────────────────────────────────────────
+    // ── the report's mapping ─────────────────────────────────────────────
 
-    private val screen by lazy {
-        ProductionSources.read("ui/settings/backup/BackupAndRestoreScreen.kt")
+    // The report moved to its own file when the screen hit its
+    // architecture-policy ceiling, so the mapping guards follow it there.
+    private val reportSource by lazy {
+        ProductionSources.read("ui/settings/backup/RestoreReportSection.kt")
     }
 
     @Test
     fun `the screen classifies through restoreIssues, not its own rules`() {
-        assertTrue(screen.contains("val issues = restoreIssues(report)"))
+        assertTrue(reportSource.contains("val issues = restoreIssues(report)"))
         // The old single list painted everything in the error colour.
-        assertTrue("the single problems list must be gone", !screen.contains("val problems = buildList"))
+        assertTrue("the single problems list must be gone", !reportSource.contains("val problems = buildList"))
     }
 
     @Test
     fun `errors are red and notices are amber, in separate sections`() {
         assertTrue(
             "errors must use the theme error colour",
-            screen.contains("ReportLine(it, Icons.Outlined.ErrorOutline, MaterialTheme.colorScheme.error)"),
+            reportSource.contains("ReportLine(it, Icons.Outlined.ErrorOutline, MaterialTheme.colorScheme.error)"),
         )
         assertTrue(
             "notices must use the amber helper",
-            screen.contains("notices.forEach { ReportLine(it, Icons.Outlined.Warning, amber) }"),
+            reportSource.contains("notices.forEach { ReportLine(it, Icons.Outlined.Warning, amber) }"),
         )
-        assertTrue("notices get their own header", screen.contains("R.string.backup_report_notices"))
+        assertTrue("notices get their own header", reportSource.contains("R.string.backup_report_notices"))
     }
 
     @Test
     fun `report warnings read as notices, not errors`() {
-        val notices = screen.substringAfter("val notices =").substringBefore("if (errors.isNotEmpty())")
+        val notices = reportSource.substringAfter("val notices =").substringBefore("if (errors.isNotEmpty())")
         assertTrue(notices.contains("report.warnings"))
         // The expression line only: the comment that follows it names
         // report.warnings, and a region check would match the comment.
-        val errors = screen.substringAfter("val errors =").substringBefore("\n")
+        val errors = reportSource.substringAfter("val errors =").substringBefore("\n")
         assertTrue(!errors.contains("report.warnings"))
     }
 
@@ -175,7 +177,7 @@ class RestoreReportSeverityTest {
     fun `the amber stays readable in light mode`() {
         // #E6A23C measures 2.19:1 on a light surface, far under the 4.5:1 that
         // small text needs. The light-mode value must be the darker amber.
-        val fn = screen.substringAfter("private fun reportNoticeColor()")
+        val fn = reportSource.substringAfter("private fun reportNoticeColor()")
         assertTrue("light-mode amber must be #B45309", fn.contains("Color(0xFFB45309)"))
         assertTrue("dark-mode amber must be #FFB74D", fn.contains("Color(0xFFFFB74D)"))
         assertTrue("the too-light amber must not be used", !fn.contains("0xFFE6A23C"))

@@ -1393,6 +1393,11 @@
     <string name="backup_restore">Rozpocznij przywracanie</string>
     <string name="backup_restoring">Przywracanie…</string>
     <string name="backup_restoring_counted">Przywracanie: %1$s %2$d/%3$d</string>
+    <string name="restore_stop_action">Zatrzymaj przywracanie</string>
+    <string name="restore_stop_title">Zatrzymaj przywracanie</string>
+    <string name="restore_stop_message">Zatrzymać teraz przywracanie? To, co już przywrócono, zostanie zachowane; reszta zostanie pominięta.</string>
+    <string name="restore_stop_confirm">Zatrzymaj przywracanie</string>
+    <string name="restore_stop_cancel">Kontynuuj</string>
     <string name="backup_restoring_running">Przywracanie: %1$s %2$d</string>
     <string name="backup_restoring_category">Przywracanie: %1$s…</string>
     <string name="restore_eta_almost_done">Prawie gotowe…</string>
