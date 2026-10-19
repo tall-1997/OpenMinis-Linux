@@ -31,14 +31,11 @@ import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.CloudDownload
 import androidx.compose.material.icons.outlined.CloudUpload
 import androidx.compose.material.icons.outlined.Stop
-import androidx.compose.material.icons.outlined.SwapVert
 import androidx.compose.material.icons.outlined.Storage
-import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.FolderZip
 import androidx.compose.material.icons.outlined.Folder
-import androidx.compose.material.icons.outlined.CreateNewFolder
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Forum
 import androidx.compose.material.icons.outlined.Layers
@@ -58,7 +55,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -87,7 +83,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.openminis.app.ui.settings.SettingsSwitch
 import com.openminis.app.R
 import com.openminis.app.backup.BackupCategory
-import com.openminis.app.backup.BackupFormat
 import com.openminis.app.backup.BackupHistory
 import com.openminis.app.ui.components.MinisMenu
 import com.openminis.app.ui.components.MinisButton
