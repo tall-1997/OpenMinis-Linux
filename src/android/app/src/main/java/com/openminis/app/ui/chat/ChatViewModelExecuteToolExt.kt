@@ -204,7 +204,9 @@ internal suspend fun ChatViewModel.executeTool(
             )
             ToolExecutionResult(out, true, toolTitle = "translate_text")
         }
-        CronJobTool.NAME -> CronJobTool.execute(argsJson, context)
+        // [T-android-scheduled-default-follow-up] activeSessionId: a task
+        // created here fires back into this chat unless target="new".
+        CronJobTool.NAME -> CronJobTool.execute(argsJson, context, activeSessionId)
         SubAgentKind.SPAWN_AGENT, SubAgentKind.RUN_SUBAGENT ->
             executeRunSubAgent(argsJson, toolId, toolBlocks, assistantId, currentText)
         com.openminis.app.tools.WebSearchTool.NAME,

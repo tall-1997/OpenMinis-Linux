@@ -5,6 +5,9 @@ import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.model.AgentToolParam
 import com.openminis.app.scheduled.CronScheduler
 import com.openminis.app.scheduled.ScheduledRepeatMode
+import com.openminis.app.scheduled.ScheduledSessionLookup
+import com.openminis.app.scheduled.ScheduledTargetDelivery
+import com.openminis.app.scheduled.ScheduledTargetMode
 import com.openminis.app.scheduled.ScheduledTask
 import com.openminis.app.scheduled.ScheduledTaskManager
 import com.openminis.app.scheduled.ScheduledTriggerKind
@@ -27,7 +30,8 @@ object CronJobTool {
         description = "Create, list, or remove AlarmManager scheduled tasks that run an agent prompt. " +
             "Prefer this for delay/interval schedules (30m, 2h, every 2h). Clock-of-day HH:MM tasks " +
             "can also be managed via minis-scheduled. Schedules: '30m'/'2h'/'1d' (once) or " +
-            "'every 30m'/'every 2h'/'every 1d' (repeating).",
+            "'every 30m'/'every 2h'/'every 1d' (repeating). A task created inside a chat fires " +
+            "INTO that chat by default; target='new' opens a separate chat per fire instead.",
         parameters = mapOf(
             "tool_title" to AgentToolParam(
                 "string",
@@ -44,13 +48,18 @@ object CronJobTool {
                 "For create: '30m', '2h', '1d', or 'every 30m' / 'every 2h' / 'every 1d'.",
             ),
             "prompt" to AgentToolParam("string", "Agent prompt to run when the task fires."),
+            "target" to AgentToolParam(
+                "string",
+                "For create: where each fire lands. Default 'follow-up' (this chat); 'new' opens a separate chat per fire.",
+                enumValues = listOf("follow-up", "new"),
+            ),
             "id" to AgentToolParam("string", "Task id or a unique id prefix for remove (from list)."),
         ),
         required = listOf("tool_title", "action"),
-        propertyOrdering = listOf("tool_title", "action", "name", "schedule", "prompt", "id"),
+        propertyOrdering = listOf("tool_title", "action", "name", "schedule", "prompt", "target", "id"),
     )
 
-    fun execute(argsJson: String, context: Context): ToolExecutionResult {
+    fun execute(argsJson: String, context: Context, sessionId: String? = null): ToolExecutionResult {
         val args = try {
             JSONObject(argsJson)
         } catch (_: Exception) {
@@ -60,7 +69,7 @@ object CronJobTool {
         val manager = ScheduledTaskManager(context)
         return when (action) {
             "list" -> listJobs(manager)
-            "create" -> createJob(manager, args)
+            "create" -> createJob(manager, args, sessionId, context)
             "remove" -> removeJob(manager, args)
             else -> ToolExecutionResult("Error: action must be create, list, or remove", false)
         }
@@ -75,6 +84,7 @@ object CronJobTool {
                     put("id", t.id)
                     put("name", t.label)
                     put("enabled", t.enabled)
+                    put("target", t.targetMode.encode())
                     put("trigger", t.triggerKind.name.lowercase())
                     // `repeat` only ever described calendar rows; an interval has
                     // no calendar repeat and printing "ONCE" for it would lie.
@@ -93,7 +103,12 @@ object CronJobTool {
         )
     }
 
-    private fun createJob(manager: ScheduledTaskManager, args: JSONObject): ToolExecutionResult {
+    private fun createJob(
+        manager: ScheduledTaskManager,
+        args: JSONObject,
+        sessionId: String?,
+        context: Context,
+    ): ToolExecutionResult {
         val name = args.optString("name").trim()
         val schedule = args.optString("schedule").trim()
         val prompt = args.optString("prompt").trim()
@@ -103,6 +118,23 @@ object CronJobTool {
                 "Error: schedule must look like '30m', '2h', '1d', or 'every 30m'/'every 2h'/'every 1d'",
                 false,
             )
+        // [T-android-scheduled-default-follow-up] Where each fire lands. Run
+        // from inside a chat (the only way this tool runs today), the default
+        // is a follow-up turn in THAT chat: a reminder created here used to
+        // fire into a brand-new chat the user never saw. `target: "new"`
+        // restores the separate-chat behaviour; the reply's `delivery`
+        // sentence says which one was used.
+        val explicitTarget = args.optString("target").trim().takeIf { it.isNotEmpty() }
+        val (targetKind, defaulted) = ScheduledTargetDelivery.resolveTarget(explicitTarget, null, sessionId)
+        val targetMode: ScheduledTargetMode = when (targetKind) {
+            "new" -> ScheduledTargetMode.NewSession
+            "follow-up", "followup", "follow" -> sessionId?.let { ScheduledTargetMode.AppendToSession(it) }
+                ?: return ToolExecutionResult(
+                    "Error: target=follow-up needs a chat to fire into; use target=new",
+                    false,
+                )
+            else -> return ToolExecutionResult("Error: target must be follow-up or new", false)
+        }
         val now = System.currentTimeMillis()
         val cal = Calendar.getInstance().apply { timeInMillis = now + parsed.firstDelayMs }
         val interval = parsed.kind == "interval"
@@ -113,6 +145,7 @@ object CronJobTool {
             timeOfDayMinute = cal.get(Calendar.MINUTE),
             repeatMode = ScheduledRepeatMode.ONCE,
             prompt = prompt,
+            targetMode = targetMode,
             // [T-android-scheduled-triggers] Both shapes are relative triggers:
             // "30m" fires once after 30m (AFTER), "every 30m" fires every 30m
             // (INTERVAL). repeatMode stays ONCE — it only ever described a
@@ -130,6 +163,14 @@ object CronJobTool {
             createdAt = now,
         )
         val saved = manager.create(task)
+        val destination = when (targetMode) {
+            is ScheduledTargetMode.AppendToSession -> ScheduledTargetDelivery.Destination.FollowUp(
+                targetMode.sessionId,
+                ScheduledSessionLookup(context).title(targetMode.sessionId),
+                isCallerSession = true,
+            )
+            else -> ScheduledTargetDelivery.Destination.NewChat(saved.label.ifBlank { null })
+        }
         return ToolExecutionResult(
             JSONObject().apply {
                 put("ok", true)
@@ -140,6 +181,8 @@ object CronJobTool {
                 put("nextTriggerMs", saved.nextTriggerMs() ?: JSONObject.NULL)
                 if (saved.intervalSec != null) put("intervalSec", saved.intervalSec)
                 if (saved.id != task.id) put("already_existed", true)
+                put("delivery", ScheduledTargetDelivery.sentence(destination, defaulted))
+                put("deliveryTarget", JSONObject(ScheduledTargetDelivery.summary(destination, defaulted)))
             }.toString(),
             true,
         )
