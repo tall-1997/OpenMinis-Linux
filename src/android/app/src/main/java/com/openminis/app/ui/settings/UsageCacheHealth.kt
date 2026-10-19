@@ -83,15 +83,20 @@ internal fun aggregateCacheByProvider(rows: List<UsageRow>): List<ProviderCacheR
  * Everything here answers "am I actually paying cache prices?". The hit rate
  * is one number, but the per-provider rows are the diagnosis — a relay that
  * never reports cached tokens shows up as `looksUnreported` here instead of
- * silently costing full price. The enhanced-cache switch is offered inline
- * because it is a 1-hour TTL that only official Anthropic honors; relays hide
- * it in the chat menu and most users never find it.
+ * silently costing full price.
+ *
+ * [T-enhanced-cache-explicit-switch] The enhanced-cache switch (1-hour
+ * Anthropic cache TTL) is an EXPLICIT control on this card, always rendered:
+ * it used to appear only when the window already contained Anthropic usage,
+ * so a user who wanted to turn it on (or check that it was off) before the
+ * first cached request never saw it. Default is OFF — the switch reflects
+ * [EnhancedCachePrefs.enabled], which primes from prefs with a false default
+ * and only turns on when the user flips it here or in the chat menu.
  */
 @Composable
 internal fun CacheHealthCard(
     grandTotal: GrandTotal,
     providerRows: List<ProviderCacheRow>,
-    hasAnthropicUsage: Boolean,
 ) {
     val context = LocalContext.current
     val enhancedOn by com.openminis.app.data.EnhancedCachePrefs.enabled.collectAsState()
@@ -181,38 +186,39 @@ internal fun CacheHealthCard(
             }
         }
 
-        if (hasAnthropicUsage) {
-            Spacer(Modifier.height(12.dp))
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        stringResource(R.string.usage_cache_health_enhanced_title),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Text(
-                        stringResource(R.string.usage_cache_health_enhanced_body),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(
-                    checked = enhancedOn,
-                    onCheckedChange = { want ->
-                        if (want && !com.openminis.app.data.EnhancedCachePrefs.isConfirmed(context)) {
-                            showEnhancedConfirm = true
-                        } else {
-                            com.openminis.app.data.EnhancedCachePrefs.setEnabled(context, want)
-                        }
-                    },
+        // [T-enhanced-cache-explicit-switch] Always shown — see the KDoc.
+        // The switch is the explicit opt-in for the 1-hour TTL; it stays OFF
+        // until the user flips it (first enable confirms the extra billing).
+        Spacer(Modifier.height(12.dp))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    stringResource(R.string.usage_cache_health_enhanced_title),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    stringResource(R.string.usage_cache_health_enhanced_body),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            Switch(
+                checked = enhancedOn,
+                onCheckedChange = { want ->
+                    if (want && !com.openminis.app.data.EnhancedCachePrefs.isConfirmed(context)) {
+                        showEnhancedConfirm = true
+                    } else {
+                        com.openminis.app.data.EnhancedCachePrefs.setEnabled(context, want)
+                    }
+                },
+            )
         }
     }
 

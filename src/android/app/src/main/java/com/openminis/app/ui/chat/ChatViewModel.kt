@@ -1966,6 +1966,15 @@ class ChatViewModel(
     @Volatile
     internal var stoppedRun: com.openminis.app.service.ActiveRun? = null
 
+    /**
+     * [T-android-stop-cleanup-race] Background persistence of the interrupted
+     * turn, started by [cancelStream]. New runs await it via
+     * [awaitInterruptedTurnPersisted] before rebuilding history.
+     */
+    @Volatile
+    internal var stopCleanupJob: Job? = null
+
+    // awaitInterruptedTurnPersisted() lives in ChatViewModelStopRunExt.kt.
     internal var currentProvider: LLMProvider? = null
     internal var currentModel: LLMModel? = null
 
@@ -3091,43 +3100,9 @@ class ChatViewModel(
         }
     }
 
-    /**
-     * If `text` is a slash command literal (e.g. "/compact"), run it and
-     * return true so the caller can skip the normal send path. Mirrors iOS
-     * `tryExecuteInputAsSlashCommand()`. Recognized titles are matched
-     * case-insensitively against [availableSlashCommands].
-     *
-     * Accepts both ASCII `/` and the full-width `／` (U+FF0F): some Chinese/
-     * Japanese IMEs auto-substitute the full-width form when the user types
-     * `/` while a CJK keyboard layout is active. We treat them identically.
-     */
-    fun tryExecuteInputAsSlashCommand(text: String): Boolean {
-        val trimmed = text.trim()
-        if (trimmed.isEmpty()) return false
-        val first = trimmed[0]
-        if (first != '/' && first != '／') return false
-        val body = trimmed.drop(1)
-        if (body.equals("goal", ignoreCase = true) || body.startsWith("goal ", ignoreCase = true)) {
-            viewModelScope.launch { executeGoalCommand(body.removeRange(0, 4).trim()) }
-            return true
-        }
-        val name = body.lowercase()
-        val cmd = availableSlashCommands.firstOrNull { it.title.lowercase() == name }
-        if (cmd != null) {
-            executeSlashCommand(cmd)
-            return true
-        }
-        // [T-android-slash-literal-not-chat] A bare "/" or an unmatched
-        // "/xyz" is a slash-panel interaction, not a chat message. Sending
-        // it to the model made the assistant answer the literal string.
-        // Swallow it with a local notice instead; the composer's slash
-        // panel stays open so the user can pick a real command.
-        appendSystemInfo(
-            text = "未知命令: $trimmed（可用命令见 / 面板）",
-            iconKind = "info",
-        )
-        return true
-    }
+    // [T-android-slash-with-args] tryExecuteInputAsSlashCommand /
+    // isKnownChatSlashTarget / unknownSlashCommandNotice moved to
+    // ChatViewModelSlashParseExt.kt (architecture ceiling).
 
     /**
      * Append a system-info block to the conversation. Not persisted — matches the
@@ -4692,6 +4667,11 @@ class ChatViewModel(
             try {
             val sid = realSessionId.takeIf { it.isNotEmpty() } ?: sessionId
 
+            // [T-android-stop-cleanup-race] A Stop's interrupted-turn write
+            // lands asynchronously. Await it before truncating: a late append
+            // would otherwise resurrect rows the retry just deleted.
+            awaitInterruptedTurnPersisted()
+
             // [T-delete-anchor-by-id] Find the DB sort_order cutoff for this
             // user message DIRECTLY by row id. The old ordinal walk
             // (visibleUserIndex → visibleUserCutoff) counted a different set
@@ -5524,6 +5504,13 @@ class ChatViewModel(
             .filter(String::isNotBlank).distinct()
         val capturedRun = com.openminis.app.service.ActiveRunRegistry.current(job)
         val capturedAssistantId = capturedRun?.assistantMessageId
+        // [T-android-stop-cleanup-race] Fallback bubble id for a run that died
+        // before attachAssistantMessage: the streaming assistant bubble that
+        // existed at stop time. Captured NOW, not in the late cleanup, so a
+        // newer turn's bubble can never be mistaken for it.
+        val fallbackAssistantId = _messages.value
+            .lastOrNull { it.role == "assistant" && it.isStreaming }
+            ?.id
         val capturedModelSnapshot = currentModelSnapshot()
         val interruptedLabel = context.getString(R.string.chat_response_interrupted)
         val stopCleanupScope = (context.applicationContext as com.openminis.app.MinisApp).appCoroutineScopes.io
@@ -5537,6 +5524,11 @@ class ChatViewModel(
         capturedRun?.let(com.openminis.app.service.ActiveRunRegistry::stopExact)
             ?: capturedSessionIds.forEach { com.openminis.app.service.ActiveRunRegistry.stop(it) }
         job.cancel(CancellationException("Stopped by user"))
+        // [T-android-stop-double-tap] Mark the job as already stopped so a
+        // second tap (or a tool's own stop request) cannot run the cleanup
+        // twice — two finishStoppedRun passes would persist the interrupted
+        // turn and resume the queue twice.
+        stoppedStreamJob = job
         _isStreaming.value = false
         capturedSessionIds.forEach { sid -> ExecutionCoordinator.stopCurrentCommand(sid) }
         if (activeSessionId == stoppedSessionId) {
@@ -5550,18 +5542,26 @@ class ChatViewModel(
         // Wait for tool callbacks/finally blocks before committing the last
         // stream delta. Otherwise a late successful tool result could overwrite
         // CANCELLED, or the text snapshot could miss its final chunk.
-        stopCleanupScope.launch {
+        val cleanupJob = stopCleanupScope.launch {
             withTimeoutOrNull(STOP_CLEANUP_JOIN_TIMEOUT_MS) { job.join() }
             withContext(NonCancellable + kotlinx.coroutines.Dispatchers.Main.immediate) {
                 finishStoppedRun(
                     run = capturedRun,
                     stoppedSessionId = stoppedSessionId,
+                    stoppedJob = job,
                     capturedSessionIds = capturedSessionIds,
                     capturedAssistantId = capturedAssistantId,
+                    fallbackAssistantId = fallbackAssistantId,
                     capturedModelSnapshot = capturedModelSnapshot,
                     interruptedLabel = interruptedLabel,
                 )
             }
+        }
+        // [T-android-stop-cleanup-race] Published for the next run's history
+        // rebuild — see awaitInterruptedTurnPersisted().
+        stopCleanupJob = cleanupJob
+        cleanupJob.invokeOnCompletion {
+            if (stopCleanupJob === cleanupJob) stopCleanupJob = null
         }
     }
 

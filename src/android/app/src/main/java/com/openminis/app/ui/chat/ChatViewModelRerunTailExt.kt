@@ -88,6 +88,12 @@ internal suspend fun ChatViewModel.runRerunStreamTail(
                     systemPrompt = systemPrompt,
                     fallbackProviders = fallbackProviders,
                     fallbackStrategy = activeFallbackStrategy,
+                    // Contract above: callers already truncated and rebuilt
+                    // agentHistory. Rebuilding again inside the loop doubled
+                    // the pre-first-token DB work on long sessions, which is
+                    // the stretch where the UI showed "running" but no
+                    // process bubble yet.
+                    historyAlreadyRebuilt = true,
                 )
                 }
                 AppLogger.info(ChatViewModel.TAG_STREAM, "$label runAgentLoop RETURN normal")
