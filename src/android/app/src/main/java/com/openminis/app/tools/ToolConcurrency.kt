@@ -50,7 +50,7 @@ import java.util.concurrent.atomic.AtomicInteger
  * 120 s) is intentionally NOT part of this file: it was reviewed during the
  * 1.15-beta.5 port and kept at 120 s rather than upstream's 300 s, because a
  * longer human-wait window only extends the time a wedged handler holds its
- * slot — see docs/upstream-beta5-triage.md §4.
+ * slot — see docs/upstream-parity.md §6.
  */
 object ToolConcurrency {
 

@@ -51,7 +51,7 @@ Android 只需要 `deps/proot` 这一个子模块；`deps/ish` 是 iOS 遗留子
 src/android/    Android 应用（Kotlin / Compose）与 JNI
 src/shared/     共享资源
 deps/           原生依赖构建脚本
-docs/           说明与发行注记
+docs/           上游对齐进度台账与技术记录
 scripts/        rootfs 与开发脚本
 ```
 
@@ -120,7 +120,7 @@ Do not replace the guest's aarch64 `aapt2` with the sdkmanager x86_64 package. M
 src/android/    Android app (Kotlin / Compose) and JNI
 src/shared/     Shared resources
 deps/           Native dependency build scripts
-docs/           Notes and release notes
+docs/           Upstream-parity ledger and technical notes
 scripts/        Rootfs and development scripts
 ```
 
