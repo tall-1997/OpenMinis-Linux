@@ -5403,13 +5403,7 @@ class ChatViewModel(
         val content = try {
             JSONObject(argsJson).optString("content", "")
         } catch (_: Exception) { "" }
-        _memoryToolRecords.value = _memoryToolRecords.value + MemoryToolRecord(
-            title = result.toolTitle,
-            isWrite = true,
-            preview = content.lines().firstOrNull { it.isNotBlank() }?.take(100) ?: "",
-            output = result.output,
-            writtenContent = content,
-        )
+        recordMemoryWrite(result, content)
         return result
     }
 
@@ -5778,6 +5772,9 @@ class ChatViewModel(
         // Second pass: convert messages, merging tool results into blocks
         // Filter out user messages that only contain toolResult parts (no visible text)
         return mapNotNull { entity ->
+            // [T-prompt-cache-turn-context] Hidden context rows are model-visible
+            // (toLLMMessage maps them to a user text) but never render.
+            if (entity.role == "context") return@mapNotNull null
             var text = ""
             val blocks = mutableListOf<AssistantBlock>()
             // T128: media attachments persisted under user messages as `mediaRef`
@@ -6076,11 +6073,11 @@ class ChatViewModel(
             agentHistory.subList(0, byBytes).clear()
             llmHistoryStartOffset += byBytes
         }
+        dropOrphanedContextHead(dropped)
         if (dropped.isNotEmpty()) {
             rememberDigestLines(dropped.map { HistoryDigest.fromMessage(it) })
         }
     }
-
     /**
      * Rebuild the request-side history from Room immediately before a new send.
      * The UI is intentionally paged, so `_messages` and the resident cache are
@@ -6125,7 +6122,7 @@ class ChatViewModel(
     private data class ToolResultData(val output: String, val success: Boolean)
 
     internal fun MessageEntity.toLLMMessage(): LLMMessage {
-        val r = if (role == "user") LLMMessage.Role.USER else LLMMessage.Role.ASSISTANT
+        val r = if (role == "user" || role == "context") LLMMessage.Role.USER else LLMMessage.Role.ASSISTANT
         val contentParts = mutableListOf<AgentContentPart>()
         val imageParts = mutableListOf<LLMMessage.ImagePart>()
         var textContent = ""
@@ -6135,7 +6132,7 @@ class ChatViewModel(
             for (i in 0 until array.length()) {
                 val obj = array.getJSONObject(i)
                 when (obj.optString("type")) {
-                    "text" -> {
+                    "text", "context" -> {
                         val value = obj.optString("value", "")
                         // [T-android-retry-attachment-loss] The persisted
                         // <user-attached-files> XML must reach the model via a

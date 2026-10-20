@@ -88,6 +88,9 @@ class PromptCacheLayoutContractTest {
         assertTrue(body.contains("promptCache.turnContext"))
         // The digest is part of the tail now, never a rewrite of the head.
         assertFalse(body.contains("HistoryDigest.inject"))
+        // Persona binding rides in the persisted context row now; no
+        // request-only rewrite of the latest user message.
+        assertFalse(body.contains("applyHistorySteering"))
     }
 
     @Test

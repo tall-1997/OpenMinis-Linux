@@ -93,25 +93,48 @@
   Responses API，值由首条 user 文本派生，稳定；
 - 同一会话切换 provider/模型会换 tools/system，属一次性失效，不是每轮问题。
 
+## P0/P1 追加（2026-10-20）
+
+- **turn context 持久化（DSH 式）**：每次 run 把包装后的上下文写成隐藏
+  `role=context` 行（parts 类型 `context`），同时镜像进 `agentHistory`；
+  下一次从 Room 重建得到相同字节，历史严格只追加。UI 在
+  `toChatMessages` 跳过该行，预览/标题/搜索不把它当用户消息；重试/编辑
+  按 sort order 截断时一起删除。DB 写失败或内部 goal 才回退到 request-side。
+- **memory 新鲜度补偿**：`memory_write` 成功后把首行放进
+  `PromptCacheState.pendingMemoryWriteNote`，下一次 turn context 带一句
+  “Memory update … use memory_get”，既不改 system 前缀，也不会让模型说
+  “没记住”。
+- **图片省略粘性化**：`ImagePartId` 改为内容哈希，已省略的图片记在
+  `PromptCacheState.elidedImageIds`；即使 compaction 后预算重新够用也保持
+  占位符，避免旧消息反复改写。
+- **Responses cache key**：`OpenAIProvider.sessionCacheKey` 由 agent loop
+  设为 session id，优先于“首条 user 文本哈希”，避免同开头两个会话撞 key。
+- **用量拆解**：Cache Health 卡增加每个 provider 的 cache read / creation
+  数字和总输入 pill；`[CacheDiag] usage input/cacheRead/cacheWrite/total/hit`
+  每请求一行，首轮写入与后续命中可分辨。
+- **skills 稳定顺序**：>120 个技能时先按优先级选择，再按
+  `updatedAt desc, id` 渲染，避免一次技能使用重排 system 片段。
+
 ## 预期与残留
 
-- 稳定态命中率 ≈ 上一轮 prompt / 本轮 prompt。仍会损失**当轮 user 消息**的
-  重新计入（turn context 不落库，下一轮该消息回退为原始文本），通常是一轮里
-  的几百到几千 token；其余 system + tools + 历史全部命中。
+- 正常用户轮：上下文已持久化，稳定态命中率 ≈ 上一轮 prompt / 本轮 prompt；
+  只有**队列中途插入的 prompt** 仍走 request-side fallback，会损失该轮
+  几百到几千 token。内部 goal、DB 写失败同理。
 - 次要失效点（未在本次改动）：
   - `find_tools` 动态扩充工具列表、插件安装 → tools 变化，一次全量失效；
   - thinking 开关切换会改变历史 assistant 的 `reasoning_content` 形状；
-  - 图片预算裁剪会按总字节把更老的图片替换成占位符；
+  - compaction 仍然会改写历史头部（一次全量失效，预期行为）；
   - 5 分钟 TTL 过期（建议长间隔测试开启增强缓存 1h）。
 
 ## 验证
 
-- 本地全量：`:app:testReleaseUnitTest` 492 suites / 3947 tests 全绿；
-  新增/扩充 `TurnContextInjectionTest`（9，含“只有最后一条 user 消息变化、
-  更早消息逐字节不变”的前缀保持测试）、`ToolSchemaSerializationStabilityTest`
-  （4，工具 schema 两次构建逐字节一致 / 参数声明顺序 / canonical 顺序）、
+- 本地全量：`:app:testReleaseUnitTest` 496 suites / 3985 tests 全绿；
+  新增/扩充 `TurnContextInjectionTest`（10，含持久化 context 行抑制重复注入、
+  前缀保持）、`ToolSchemaSerializationStabilityTest`（4）、
+  `ImageBudgetForcedDropTest`（2，强制省略 / 内容哈希跨重建稳定）、
+  `PersonaPromptLibraryTest`（hidden context 不算 user turn）、
   `PromptCacheFingerprintTest`、`PromptCacheLayoutContractTest`
-  （源码守卫，防止动态片段被加回 system）。
+  （源码守卫，防止动态片段被加回 system / 防止 persona 再改 user 消息）。
 - 三个 CI 门禁（架构/CJK/未翻译）本地通过。
 - 真机 A/B：同一会话连续 6+ 轮，`adb logcat -s ChatVMStream` 看
   `[CacheDiag] fingerprint` 是否逐轮一致；用量页看 cache read 占比。

@@ -640,13 +640,12 @@ internal suspend fun ChatViewModel.runAgentLoop(
         }
         while (!collectDone) {
             try {
-                // [T-android-enhanced-cache] Stamp the per-turn Enhanced
-                // Cache flag onto the active provider here — the single
-                // choke point every turn passes through, regardless of how
-                // currentProvider was (re)assigned by the fallback loop.
-                // Non-Anthropic providers ignore it (cast fails silently).
+                // [T-android-enhanced-cache] Per-turn flags on the active provider (fallback-safe).
                 (currentProvider as? com.openminis.app.provider.anthropic.AnthropicProvider)
                     ?.enhancedCache = com.openminis.app.data.EnhancedCachePrefs.isEnabled()
+                // [T-cache-session-affinity] Responses cache key follows the chat.
+                (currentProvider as? com.openminis.app.provider.openai.OpenAIProvider)
+                    ?.sessionCacheKey = activeSessionId
                 try {
                 // Route through effectiveAgentHistory() so a populated
                 // [_compactSummary] is prepended as a `<context-summary>`
@@ -1057,6 +1056,7 @@ internal suspend fun ChatViewModel.runAgentLoop(
                         // [T-cache-hit-rate] Per-turn cache hit rate for TokenUsageSheet.
                         val inputTotal = chunk.usage.inputTokens + (chunk.usage.cacheReadInputTokens ?: 0) + 
                             (chunk.usage.cacheCreationInputTokens ?: 0)
+                        logCacheUsage(chunk.usage)
                         if (inputTotal > 0) {
                             _lastCacheHitRate.value = 
                                 ((chunk.usage.cacheReadInputTokens ?: 0).toDouble() / inputTotal)

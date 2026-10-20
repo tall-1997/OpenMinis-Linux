@@ -39,7 +39,13 @@ internal fun applyTurnContext(history: List<LLMMessage>, context: String?): List
     val index = history.indexOfLast { PersonaPromptLogic.isUserTextTurn(it) }
     if (index < 0) return history
     val message = history[index]
-    if (message.content.contains(TURN_CONTEXT_OPEN) ||
+    // A persisted `context` row directly after the user turn already carries
+    // the same bytes; appending again would duplicate it.
+    val persisted = history.drop(index + 1).any { msg ->
+        msg.content.contains(TURN_CONTEXT_OPEN) ||
+            msg.contentParts.any { it is AgentContentPart.Text && it.text.contains(TURN_CONTEXT_OPEN) }
+    }
+    if (persisted || message.content.contains(TURN_CONTEXT_OPEN) ||
         message.contentParts.any { it is AgentContentPart.Text && it.text.contains(TURN_CONTEXT_OPEN) }
     ) {
         return history

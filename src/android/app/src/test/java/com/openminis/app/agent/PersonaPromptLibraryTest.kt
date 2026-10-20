@@ -200,4 +200,14 @@ class PersonaPromptLibraryTest {
         val none = PersonaPromptLogic.classifyImportConflict("fresh.md", "new body", existing)
         assertEquals(PersonaImportConflictKind.NONE, none.kind)
     }
+
+    @Test
+    fun `hidden turn-context rows are not user text turns`() {
+        val context = LLMMessage(
+            role = LLMMessage.Role.USER,
+            content = "<system-reminder id=\"turn-context\">\nrecall + digest\n</system-reminder>",
+        )
+        assertFalse(PersonaPromptLogic.isUserTextTurn(context))
+        assertTrue(PersonaPromptLogic.isUserTextTurn(LLMMessage(LLMMessage.Role.USER, "hello")))
+    }
 }

@@ -49,6 +49,7 @@ internal data class ProviderCacheRow(
     val label: String,
     val hitRate: Double?,
     val cacheReadTokens: Long,
+    val cacheWriteTokens: Long,
     val totalInput: Long,
 ) {
     val looksUnreported: Boolean get() = totalInput > 0 && cacheReadTokens == 0L
@@ -63,6 +64,7 @@ internal fun aggregateCacheByProvider(rows: List<UsageRow>): List<ProviderCacheR
     rows.groupBy { it.stats.subtitle }
         .map { (label, group) ->
             val cacheRead = group.sumOf { it.stats.cacheReadTokens }
+            val cacheWrite = group.sumOf { it.stats.cacheCreationTokens }
             val totalInput = group.sumOf { it.stats.totalInput }
             ProviderCacheRow(
                 label = label,
@@ -72,6 +74,7 @@ internal fun aggregateCacheByProvider(rows: List<UsageRow>): List<ProviderCacheR
                     null
                 },
                 cacheReadTokens = cacheRead,
+                cacheWriteTokens = cacheWrite,
                 totalInput = totalInput,
             )
         }
@@ -143,6 +146,12 @@ internal fun CacheHealthCard(
                         value = formatCount(grandTotal.cacheCreationTokens),
                     )
                 }
+                if (grandTotal.totalInput > 0) {
+                    UsagePill(
+                        label = stringResource(R.string.usage_label_total_input),
+                        value = formatCount(grandTotal.totalInput),
+                    )
+                }
             }
         }
 
@@ -159,14 +168,26 @@ internal fun CacheHealthCard(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(
-                        provider.label,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
-                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            provider.label,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        // [T-cache-breakdown] Writes are the "miss" half of the
+                        // ratio: a short test that only sends two messages is
+                        // ~50% by construction (turn 1 writes, turn 2 reads).
+                        Text(
+                            "${stringResource(R.string.usage_label_cache_read)} ${formatCount(provider.cacheReadTokens)}" +
+                                " · ${stringResource(R.string.usage_label_cache_creation)} ${formatCount(provider.cacheWriteTokens)}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                     if (provider.looksUnreported) {
                         Text(
                             stringResource(R.string.usage_cache_health_unreported),

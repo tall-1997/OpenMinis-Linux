@@ -59,8 +59,12 @@ internal fun ChatViewModel.applyRequestImageBudget(messages: List<LLMMessage>): 
     }
     if (images.isEmpty()) return messages
 
-    val plan = ImageBudget.planRequestBudget(images.map { it.image })
+    val plan = ImageBudget.planRequestBudget(images.map { it.image }, forceDrop = promptCache.forcedImageDrops())
     if (!plan.mutated) return messages
+    // [T-image-elision-sticky] Once an image is elided it stays elided for the
+    // rest of the session. Re-including it after compaction lowers the total
+    // would rewrite a historical message and invalidate the whole prefix.
+    promptCache.rememberElidedImages(plan.droppedIds)
 
     // For dropped images without a linuxPath, lazily spill to disk so
     // the placeholder still gives the model an addressable reference.
