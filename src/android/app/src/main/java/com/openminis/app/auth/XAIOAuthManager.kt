@@ -512,6 +512,9 @@ class XAIOAuthManager(context: Context, instanceId: String) : OAuthManager(conte
                     throw Exception("xAI OAuth state mismatch — possible CSRF, refusing to exchange")
                 }
 
+                // [T-android-oauth-foreground-exchange] Hold until Minis is
+                // foreground: background network is refused with "no address".
+                OAuthForegroundGate.awaitForeground(TAG)
                 exchangeCodeForToken(code)
             }
 

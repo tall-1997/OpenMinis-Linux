@@ -41,6 +41,12 @@ internal class OpenAIRequestBodies(
         val isXAI: Boolean
         val usesUnifiedReasoningEffort: Boolean
         val thinkingRuleInstanceId: String?
+        /**
+         * [T-android-copilot-per-request-headers] Body-derived headers for
+         * providers whose wire identity depends on the request (Copilot). Null
+         * → no derived headers, which is every other provider.
+         */
+        val perRequestHeaders: ((JSONObject) -> Map<String, String>)?
         fun resolvedServiceTier(): String?
         fun endpointURL(defaultPath: String): String
         fun azureUrl(path: String): String?
@@ -479,68 +485,9 @@ internal class OpenAIRequestBodies(
     }
 
     /**
-     * Walk every assistant.tool_calls entry and every role:"tool"
-     * tool_call_id in order, renaming any duplicate id to `{id}-{N}`.
-     * The first occurrence keeps the raw id; subsequent collisions get
-     * a numeric suffix starting at 2. Renames propagate to each pair's
-     * matching role:"tool" reply by remembering the latest rename per
-     * raw id (the reply is required to immediately follow its claiming
-     * assistant tool_calls on this provider).
-     */
-    private fun globallyDedupeToolCallIds(messagesArray: JSONArray) {
-        // raw id → max suffix already issued (0 = unused, 1 = raw kept,
-        // 2+ = renamed copies).
-        val seen = HashMap<String, Int>()
-        // raw id → latest renamed id, so the next role:"tool" reply
-        // claiming this raw id can pick up the same rewrite.
-        val renameForPendingResults = HashMap<String, String>()
-        var renamedCount = 0
-        val n = messagesArray.length()
-        for (i in 0 until n) {
-            val msg = messagesArray.optJSONObject(i) ?: continue
-            val role = msg.optString("role")
-            when (role) {
-                "assistant" -> {
-                    val toolCalls = msg.optJSONArray("tool_calls") ?: continue
-                    for (j in 0 until toolCalls.length()) {
-                        val call = toolCalls.optJSONObject(j) ?: continue
-                        val rawId = call.optString("id", "")
-                        if (rawId.isEmpty()) continue
-                        val used = seen[rawId] ?: 0
-                        val renamedId: String
-                        if (used == 0) {
-                            renamedId = rawId
-                            seen[rawId] = 1
-                        } else {
-                            val next = used + 1
-                            renamedId = "$rawId-$next"
-                            seen[rawId] = next
-                            renamedCount += 1
-                            call.put("id", renamedId)
-                        }
-                        renameForPendingResults[rawId] = renamedId
-                    }
-                }
-                "tool" -> {
-                    val rawId = msg.optString("tool_call_id", "")
-                    if (rawId.isEmpty()) continue
-                    val renamedId = renameForPendingResults[rawId] ?: continue
-                    if (renamedId != rawId) {
-                        msg.put("tool_call_id", renamedId)
-                    }
-                }
-            }
-        }
-        if (renamedCount > 0) {
-            android.util.Log.w("OpenAIProvider", "[dedupe-tool-call-id] renamed $renamedCount duplicate tool_call_id(s) across messages — likely DB-loaded history or cross-provider switch")
-        }
-    }
-
-    /**
-     * T302: takes the pre-serialized body string instead of the JSONObject so
-     * the caller can serialize once and reuse the result for the debug log,
-     * the OAuth byte build, and the OkHttp RequestBody. Per-call peak heap
-     * dropped by ~2× the body size (often tens of MB on long agent loops).
+     * T302: takes the pre-serialized body string so the caller serializes once
+     * and reuses it for the debug log, the OAuth byte build and the OkHttp
+     * RequestBody (per-call peak heap drops by ~2× the body size).
      */
     internal suspend fun buildRequest(bodyStr: String): Request {
         val token = host.getToken()
@@ -589,13 +536,9 @@ internal class OpenAIRequestBodies(
             host.isAzure -> host.azureUrl(endpointPath) ?: "${host.basePath}$endpointPath"
             else -> "${host.basePath}$endpointPath"
         }
-        // T-responses-include: match iOS bare `application/json` Content-Type
-        // by using a custom RequestBody (same workaround the OAuth branch
-        // above already does). OkHttp's `String.toRequestBody(MediaType)`
-        // helper attaches the MediaType to the body and several proxies/
-        // backends end up seeing `application/json; charset=utf-8`. iOS sends
-        // bare `application/json`; some third-party Responses-API proxies are
-        // stricter and reject the charset suffix.
+        // [T-responses-include] Bare `application/json`, no charset: several
+        // Responses-API proxies reject the charset suffix OkHttp's string
+        // helper attaches (iOS sends it bare).
         val jsonMediaType = "application/json".toMediaType()
         val bodyBytes = bodyStr.toByteArray(Charsets.UTF_8)
         val requestBody = object : okhttp3.RequestBody() {
@@ -616,6 +559,15 @@ internal class OpenAIRequestBodies(
         // default (incl. Authorization/Content-Type). Empty on normal calls.
         for ((key, value) in host.chatExtraHeaders) {
             builder.header(key, value)
+        }
+        // [T-android-copilot-per-request-headers] Headers derived from THIS
+        // request's body; a malformed body degrades to "no derived headers"
+        // rather than failing the send.
+        host.perRequestHeaders?.let { derive ->
+            val parsed = runCatching { JSONObject(bodyStr) }.getOrNull()
+            if (parsed != null) {
+                for ((key, value) in derive(parsed)) builder.header(key, value)
+            }
         }
         // [T-provider-custom-user-agent] Covers both chat/completions and
         // /responses (this builder serves both). Applied after extraHeaders

@@ -16,6 +16,21 @@ enum class ProviderType(val displayName: String) {
     // name-based (ProviderCredential.valueOf), so appending is migration-safe.
     kimiCode("Kimi Code"),
 
+    /**
+     * [T-copilot-provider] GitHub Copilot via device-flow OAuth. Chat is
+     * OpenAI-compatible at api.githubcopilot.com, but auth is two-tier (see
+     * CopilotOAuthManager), which is why it cannot reuse the API-key path.
+     *
+     * ⚠️ Unofficial: borrows the VS Code client identity, and GitHub's terms
+     * treat proxying Copilot as grounds for account restriction. Gated behind
+     * an explicit in-app risk notice (CopilotDisclaimerDialog).
+     *
+     * Appended before the decode-only iOS-parity cases — DB round-trips are
+     * name-based (ProviderCredential.valueOf), so adding a case is
+     * migration-safe.
+     */
+    githubCopilot("GitHub Copilot"),
+
     // [T-android-provider-type-parity] The cases below exist on iOS but were
     // missing here. They are declared so a cross-platform restore or sync can
     // DECODE them: without a case, kotlinx.serialization throws on the unknown
@@ -65,7 +80,8 @@ enum class ProviderType(val displayName: String) {
         get() = when (this) {
             // openAIResponses included: it routes through the OpenAI provider
             // with the Responses endpoint forced on.
-            anthropic, gemini, openAI, openRouter, xAI, kimiCode, openAIResponses -> true
+            anthropic, gemini, openAI, openRouter, xAI, kimiCode, githubCopilot,
+            openAIResponses -> true
             antigravity, unsupported -> false
         }
 
@@ -77,6 +93,11 @@ enum class ProviderType(val displayName: String) {
             openRouter -> LLMModel.allOpenRouter
             xAI -> LLMModel.allXAI
             kimiCode -> LLMModel.allKimi
+            // [T-copilot-provider] Copilot has NO built-in catalog: the account's
+            // usable models come from `/models` (CopilotOAuthManager.fetchModels)
+            // and differ per subscription. A literal here would offer models the
+            // account cannot call.
+            githubCopilot -> emptyList()
             // No built-in catalog for the decode-only types; models restored
             // alongside the instance still appear as custom entries.
             openAIResponses, antigravity, unsupported -> emptyList()

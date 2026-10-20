@@ -140,6 +140,10 @@ fun ProviderDetailScreen(
 
     val exportContext = androidx.compose.ui.platform.LocalContext.current
     var refreshNote by remember { mutableStateOf(ProviderRefreshMarks.get(exportContext, instance.id)) }
+    // [T-codex-dynamic-discovery GH#319] A refresh that failed for an auth
+    // reason is not a ModelRefreshResult — it needs its own line so the user is
+    // told to sign in rather than shown the stale catalogue as success.
+    var refreshError by remember { mutableStateOf<String?>(null) }
 
     SettingsScaffold(
         title = instance.label,
@@ -549,7 +553,7 @@ fun ProviderDetailScreen(
             // tap-to-refresh affordance in the section header area.
             SettingsRow(
                 title = stringResource(if (isRefreshing) R.string.provider_detail_refreshing else R.string.provider_detail_refresh_models),
-                subtitle = refreshNote?.let { note ->
+                subtitle = refreshError ?: refreshNote?.let { note ->
                     stringResource(when (note) {
                         ModelRefreshResult.NO_KEY -> R.string.provider_sync_mark_nokey
                         ModelRefreshResult.PRESERVED -> R.string.provider_sync_mark_unchanged
@@ -562,12 +566,21 @@ fun ProviderDetailScreen(
                 } else {
                     {
                         isRefreshing = true
+                        refreshError = null
                         scope.launch {
                             try {
                                 val result = providerRepository.refreshModels(instance, forceRefresh = true, clearFirst = true)
                                 ProviderRefreshMarks.record(exportContext, instance.id, result)
                                 refreshNote = ProviderRefreshMarks.get(exportContext, instance.id)
                                 AppLogger.info(TAG, "Refreshed models for ${instance.id}: $result")
+                            } catch (e: com.openminis.app.data.repository.CodexDiscoveryAuthException) {
+                                // [T-codex-dynamic-discovery GH#319] The backend
+                                // rejected the credential on an explicit Refresh.
+                                // Do NOT present the old list as a success: say
+                                // sign-in expired, which is the action the user
+                                // must take.
+                                AppLogger.warning(TAG, "Codex discovery auth failure (HTTP ${e.status})")
+                                refreshError = exportContext.getString(R.string.provider_codex_refresh_auth_failed)
                             } finally {
                                 isRefreshing = false
                             }
@@ -725,6 +738,10 @@ private fun OAuthCredentialBlock(
         mutableStateOf<com.openminis.app.auth.KimiDeviceFlow.DeviceAuthorization?>(null)
     }
     var kimiLoginJob by remember(instance.id) { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    // [T-copilot-provider] Same device-code surface, Copilot's own copy.
+    var copilotDeviceAuth by remember(instance.id) {
+        mutableStateOf<com.openminis.app.auth.CopilotDeviceFlow.DeviceAuthorization?>(null)
+    }
     kimiDeviceAuth?.let { auth ->
         KimiDeviceLoginDialog(
             userCode = auth.userCode,
@@ -732,6 +749,18 @@ private fun OAuthCredentialBlock(
             onCancel = {
                 kimiLoginJob?.cancel()
                 kimiDeviceAuth = null
+            },
+        )
+    }
+    copilotDeviceAuth?.let { auth ->
+        KimiDeviceLoginDialog(
+            userCode = auth.userCode,
+            verificationUrl = auth.verificationUri,
+            titleRes = R.string.copilot_login_title,
+            instructionsRes = R.string.copilot_login_instructions,
+            onCancel = {
+                kimiLoginJob?.cancel()
+                copilotDeviceAuth = null
             },
         )
     }
@@ -829,6 +858,11 @@ private fun OAuthCredentialBlock(
                                 com.openminis.app.auth.XAIOAuthManager.login(
                                     context, instance.id, providerRepository,
                                 )
+                            ProviderType.githubCopilot ->
+                                com.openminis.app.auth.CopilotOAuthManager.login(
+                                    context, instance.id,
+                                    onDeviceCode = { auth -> copilotDeviceAuth = auth },
+                                ).also { copilotDeviceAuth = null }
                             else -> null
                         }
                         // login() persists the token via providerRepository.saveApiKey;
@@ -846,6 +880,7 @@ private fun OAuthCredentialBlock(
                     } finally {
                         isAuthenticating = false
                         kimiDeviceAuth = null
+                        copilotDeviceAuth = null
                     }
                 }
             },
@@ -853,89 +888,6 @@ private fun OAuthCredentialBlock(
             Text(stringResource(R.string.provider_detail_sign_in))
         }
     }
-}
-
-@Composable
-private fun ApiKeyCredentialBlock(
-    storedKey: String,
-    keyVisible: Boolean,
-    onToggleVisibility: () -> Unit,
-    isEditing: Boolean,
-    editValue: String,
-    onEditValueChange: (String) -> Unit,
-    onBeginEdit: () -> Unit,
-    onCancelEdit: () -> Unit,
-    onSave: () -> Unit,
-) {
-    if (isEditing) {
-        SectionTextField(
-            value = editValue,
-            onValueChange = onEditValueChange,
-            singleLine = true,
-            visualTransformation = if (keyVisible) {
-                VisualTransformation.None
-            } else {
-                PasswordVisualTransformation()
-            },
-            trailingIcon = {
-                IconButton(onClick = onToggleVisibility) {
-                    Icon(
-                        if (keyVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                        contentDescription = if (keyVisible) "Hide" else "Show",
-                    )
-                }
-            },
-            fieldModifier = Modifier.bringIntoViewOnFocus(),
-        )
-        Row(modifier = Modifier.padding(top = 8.dp)) {
-            // [T-android-settings-ui-md3] #4 + #12 Cancel is the SECONDARY action:
-            // a neutral outlined pill (onSurfaceVariant content/border), forming
-            // the standard MD3 outlined-vs-filled pair with the filled Save below.
-            // Previously a primary-teal text button — indistinguishable from Save.
-            MinisSmallOutlinedButton(
-                onClick = onCancelEdit,
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                ),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-            ) {
-                Text(stringResource(R.string.common_cancel))
-            }
-            Spacer(modifier = Modifier.width(8.dp))
-            // [T-key-clear-entry] Enabled when the edit text is non-blank
-            // (save) OR a stored key exists (clear with blank text).
-            MinisSmallButton(onClick = onSave, enabled = editValue.isNotBlank() || storedKey.isNotBlank()) {
-                Text(
-                    stringResource(
-                        if (editValue.isBlank() && storedKey.isNotBlank()) R.string.common_delete
-                        else R.string.provider_detail_save_key
-                    )
-                )
-            }
-        }
-    } else {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = if (keyVisible) storedKey else maskedKey(storedKey),
-                style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
-                modifier = Modifier.weight(1f),
-            )
-            IconButton(onClick = onToggleVisibility) {
-                Icon(
-                    if (keyVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                    contentDescription = if (keyVisible) "Hide" else "Show",
-                )
-            }
-            MinisSmallTextButton(onClick = onBeginEdit) {
-                Text(stringResource(R.string.common_edit))
-            }
-        }
-    }
-}
-
-private fun maskedKey(key: String): String {
-    if (key.length <= 10) return key.replace(Regex("."), "•")
-    return key.take(6) + "..." + key.takeLast(4)
 }
 
 /**

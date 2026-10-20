@@ -871,15 +871,25 @@ internal fun OpenAIProvider.rawStreamMessage(
 
                         // Reasoning / thinking content (DeepSeek, Kimi, etc.)
                         delta?.let { d ->
-                            // Track presence of either field — even an empty string
+                            // Track presence of any spelling — even an empty string
                             // counts so we can round-trip DeepSeek V4's `reasoning_content: ""`.
                             val hasRcKey = d.has("reasoning_content")
                             val hasReasoningKey = d.has("reasoning")
-                            if (hasRcKey || hasReasoningKey) {
+                            // [M23] Copilot streams reasoning as `reasoning_text`
+                            // (a third spelling the chat branch never read), so
+                            // presence tracking must include it or an all-empty
+                            // reasoning turn looks like a model without thinking.
+                            val hasReasoningTextKey = d.has("reasoning_text")
+                            if (hasRcKey || hasReasoningKey || hasReasoningTextKey) {
                                 sawReasoningField = true
                             }
+                            // Precedence: reasoning_content → reasoning →
+                            // reasoning_text, each falling through only on an
+                            // EMPTY value, so a delta carrying several spellings
+                            // yields exactly one copy (not a concatenation).
                             val rc = d.safeOptString("reasoning_content", "")
                                 .ifEmpty { d.safeOptString("reasoning", "") }
+                                .ifEmpty { d.safeOptString("reasoning_text", "") }
                             if (rc.isNotEmpty()) {
                                 reasoningAccum.append(rc)
                                 if (!sawReasoningDelta) {

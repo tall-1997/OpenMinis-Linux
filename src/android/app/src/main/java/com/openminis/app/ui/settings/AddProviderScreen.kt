@@ -98,7 +98,7 @@ fun AddProviderScreen(
     var selectedType by remember { mutableStateOf<ProviderType?>(null) }
     var selectedCredential by remember { mutableStateOf<ProviderCredential?>(null) }
     // [T-android-provider-voice] Non-null when the flow was entered from a
-    // Voice Chat Provider template row — preseeds type/base URL/label/appendV1
+    // Voice Chat Provider template row �?preseeds type/base URL/label/appendV1
     // on the configure step (mirrors iOS applyVoiceTemplate).
     var selectedVoiceTemplate by remember {
         mutableStateOf<com.openminis.app.data.model.VoiceProviderTemplate?>(null)
@@ -114,8 +114,7 @@ fun AddProviderScreen(
                 selectedType = null
             }
             AddProviderStep.CONFIGURE -> {
-                // Voice-template entry skipped the credential step entirely —
-                // back returns straight to the type/template list.
+                // Voice-template entry skipped the credential step entirely �?                // back returns straight to the type/template list.
                 if (selectedVoiceTemplate != null) {
                     step = AddProviderStep.CHOOSE_TYPE
                     selectedType = null
@@ -180,57 +179,6 @@ fun AddProviderScreen(
 }
 
 /** Display order matching iOS. */
-private val providerDisplayOrder = listOf(
-    ProviderType.openAI,
-    ProviderType.anthropic,
-    ProviderType.gemini,
-    ProviderType.xAI,
-    ProviderType.kimiCode,
-    ProviderType.openRouter,
-)
-
-/** Icon and color per provider type, matching iOS SF Symbols. */
-private fun providerIcon(type: ProviderType): Pair<ImageVector, Color> = when (type) {
-    ProviderType.openAI -> Icons.Default.Hub to Color(0xFF4CAF50)           // green
-    ProviderType.anthropic -> Icons.Default.AutoAwesome to Color(0xFFAB47BC) // purple
-    ProviderType.gemini -> Icons.Default.Diamond to Color(0xFF42A5F5)        // blue
-    ProviderType.openRouter -> Icons.Default.AltRoute to Color(0xFF00BCD4)    // cyan
-    ProviderType.xAI -> Icons.Default.FlashOn to Color(0xFFFF7043)           // orange — Grok visual cue
-    // [T-kimi-oauth] Indigo — matches iOS's Kimi accent.
-    ProviderType.kimiCode -> Icons.Default.Terminal to Color(0xFF5C6BC0)
-    // [T-android-provider-type-parity] Types that arrive only from an iOS
-    // package / newer build; never offered in addableProviderTypes, but the
-    // icon helper is also used to render an already-restored instance.
-    ProviderType.openAIResponses -> Icons.Default.Hub to Color(0xFF4CAF50)
-    ProviderType.antigravity,
-    ProviderType.unsupported -> Icons.Default.Cloud to Color(0xFF9E9E9E)
-}
-
-/** Returns available credential types per provider. */
-private fun availableCredentials(type: ProviderType): List<ProviderCredential> {
-    return when (type) {
-        ProviderType.openRouter -> listOf(ProviderCredential.apiKey, ProviderCredential.oauth)
-        ProviderType.anthropic,
-        ProviderType.openAI -> listOf(ProviderCredential.apiKey, ProviderCredential.oauth)
-        ProviderType.gemini -> listOf(ProviderCredential.apiKey)
-        // xAI Grok primarily targets SuperGrok / X Premium+ OAuth, but also
-        // offers a plain API key path (api.x.ai). Mirror OpenAI's pattern
-        // of exposing both so users on tiers without OAuth API access can
-        // still configure manually.
-        ProviderType.xAI -> listOf(ProviderCredential.oauth, ProviderCredential.apiKey)
-        // [T-kimi-oauth] Primary target is the Coding Plan device-code
-        // sign-in; a manual Moonshot API key remains available.
-        ProviderType.kimiCode -> listOf(ProviderCredential.oauth, ProviderCredential.apiKey)
-        // [T-android-provider-type-parity] Responses API instances authenticate
-        // exactly like OpenAI ones (API key, or a Codex OAuth login).
-        ProviderType.openAIResponses -> listOf(ProviderCredential.apiKey, ProviderCredential.oauth)
-        // Undrivable types: an API key is the only thing worth showing, and the
-        // screen never offers them for creation anyway.
-        ProviderType.antigravity,
-        ProviderType.unsupported -> listOf(ProviderCredential.apiKey)
-    }
-}
-
 // -- Step 1: Choose Provider Type --
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -256,6 +204,7 @@ private fun ChooseProviderScreen(
                     ProviderType.openRouter -> "OpenRouter"
                     ProviderType.xAI -> "xAI (Grok)"
                     ProviderType.kimiCode -> "Kimi Code"
+                    ProviderType.githubCopilot -> "GitHub Copilot"
                     // [T-android-provider-type-parity] Fall back to the enum's
                     // own display name for types this screen doesn't curate.
                     ProviderType.openAIResponses,
@@ -271,6 +220,8 @@ private fun ChooseProviderScreen(
                     ProviderType.openRouter -> R.string.add_provider_subtitle_openrouter
                     ProviderType.xAI -> R.string.add_provider_subtitle_xai
                     ProviderType.kimiCode -> R.string.add_provider_subtitle_kimi
+                    // [T-copilot-provider] The subtitle carries the risk line �?                    // the disclaimer dialog is the gate, this is the signpost.
+                    ProviderType.githubCopilot -> R.string.add_provider_subtitle_copilot
                     // [T-android-provider-type-parity] Not offered for
                     // creation; reuse the OpenAI copy for the Responses API and
                     // a generic line for the undrivable types.
@@ -290,7 +241,7 @@ private fun ChooseProviderScreen(
             }
         }
 
-        // [T-android-provider-voice] Voice Chat Providers — one row per voice
+        // [T-android-provider-voice] Voice Chat Providers �?one row per voice
         // vendor template. Tapping prefills the underlying protocol + base URL
         // and jumps to configure (mirrors iOS voiceProviderSection).
         val templates = com.openminis.app.data.model.VoiceProviderTemplate.all
@@ -368,30 +319,6 @@ private fun ChooseCredentialScreen(
     }
 }
 
-private fun apiKeyDescription(type: ProviderType): String = when (type) {
-    ProviderType.openAI -> "Supports OpenAI official API and compatible third-party endpoints"
-    ProviderType.anthropic -> "Use an API key from your Anthropic account"
-    ProviderType.gemini -> "Use an API key from your Google Gemini account"
-    ProviderType.openRouter -> "Use an API key from your OpenRouter account"
-    ProviderType.xAI -> "Use an API key from your xAI Console (api.x.ai)"
-    ProviderType.kimiCode -> "Use an API key from your Moonshot account"
-    ProviderType.openAIResponses -> "Supports the OpenAI Responses API and compatible endpoints"
-    ProviderType.antigravity,
-    ProviderType.unsupported -> "This provider type is not supported on Android"
-}
-
-private fun oauthDescription(type: ProviderType): String = when (type) {
-    ProviderType.anthropic -> "Sign in with your Claude account"
-    ProviderType.gemini -> "Sign in with Google for Cloud Code Assist"
-    ProviderType.openAI -> "Sign in with OpenAI Codex"
-    ProviderType.xAI -> "Sign in with xAI (requires SuperGrok or X Premium+)"
-    ProviderType.openRouter -> "Sign in with OpenRouter"
-    ProviderType.kimiCode -> "Sign in with your Kimi account (Coding Plan)"
-    ProviderType.openAIResponses -> "Sign in with OpenAI Codex"
-    ProviderType.antigravity,
-    ProviderType.unsupported -> "This provider type is not supported on Android"
-}
-
 // -- Step 3: Configure & Save --
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -424,12 +351,12 @@ private fun ConfigureProviderScreen(
     // LaunchedEffect below keeps `label` glued to the auto-incremented
     // default, so adding a second OpenAI instance picks up "OpenAI 2"
     // automatically. Once the user edits the label (even just to clear
-    // it for typing — including non-ASCII like CJK / kana / emoji),
+    // it for typing �?including non-ASCII like CJK / kana / emoji),
     // the seed is suppressed so further provider-list changes never
     // clobber what they typed. Without this gate the `remember(config)`
     // recomputation, combined with Compose tearing down + recreating
     // ConfigureProviderScreen on step navigation, makes the field
-    // appear to reject Chinese — the iOS root cause Telegram 34602
+    // appear to reject Chinese �?the iOS root cause Telegram 34602
     // reported, with the same Android equivalent here.
     var labelEdited by remember { mutableStateOf(false) }
     androidx.compose.runtime.LaunchedEffect(defaultLabel, labelEdited) {
@@ -442,7 +369,7 @@ private fun ConfigureProviderScreen(
         title = stringResource(R.string.add_provider_configure_provider, providerType.displayName),
         onBack = onBack,
     ) {
-        // Identity section — Label only. Each provider auto-suggests a
+        // Identity section �?Label only. Each provider auto-suggests a
         // unique label so users don't have to type one for the common case.
         SettingsSection(
             header = stringResource(R.string.add_provider_identity),
@@ -509,17 +436,7 @@ private fun ColumnScope.ApiKeyConfigSection(
     var useResponsesAPI by remember { mutableStateOf(false) }
 
     // ── Credential ──────────────────────────────────────────────────────
-    val keyPlaceholder = when (providerType) {
-        ProviderType.anthropic -> "sk-ant-..."
-        ProviderType.openAI -> "sk-..."
-        ProviderType.gemini -> "Gemini API Key..."
-        ProviderType.openRouter -> "sk-or-..."
-        ProviderType.xAI -> "xai-..."
-        ProviderType.kimiCode -> "sk-..."
-        ProviderType.openAIResponses -> "sk-..."
-        ProviderType.antigravity,
-        ProviderType.unsupported -> "API Key..."
-    }
+    val keyPlaceholder = apiKeyPlaceholder(providerType)
     SettingsSection(
         header = stringResource(R.string.add_provider_credential),
         footer = stringResource(R.string.add_provider_your_key_is_stored_securely_in_encrypted),
@@ -544,7 +461,7 @@ private fun ColumnScope.ApiKeyConfigSection(
         }
     }
 
-    // ── Endpoint (skip for OpenRouter — fixed base URL) ─────────────────
+    // ── Endpoint (skip for OpenRouter �?fixed base URL) ─────────────────
     if (providerType != ProviderType.openRouter) {
         val defaultUrl = when (providerType) {
             ProviderType.gemini -> "https://generativelanguage.googleapis.com/v1beta"
@@ -566,7 +483,7 @@ private fun ColumnScope.ApiKeyConfigSection(
         } else if (providerType == ProviderType.anthropic) {
             stringResource(R.string.add_provider_endpoint_anthropic_hint)
         } else if (appendV1Suffix) {
-            "Leave empty to use the default endpoint. \"/v1\" is appended automatically — enter the base host only."
+            "Leave empty to use the default endpoint. \"/v1\" is appended automatically �?enter the base host only."
         } else {
             "The URL is used verbatim. Include the full path up to (but not including) the endpoint."
         }
@@ -583,7 +500,7 @@ private fun ColumnScope.ApiKeyConfigSection(
                     singleLine = true,
                 )
             }
-            // Auto Append "/v1" toggle (not for Gemini — Gemini uses full path)
+            // Auto Append "/v1" toggle (not for Gemini �?Gemini uses full path)
             if (providerType != ProviderType.gemini) {
                 SettingsSwitchRow(
                     title = stringResource(R.string.add_provider_auto_append_v1_quoted),
@@ -622,7 +539,7 @@ private fun ColumnScope.ApiKeyConfigSection(
         }
     }
 
-    // ── Save button (outside any section — terminal action) ────────────
+    // ── Save button (outside any section �?terminal action) ────────────
     Spacer(Modifier.height(20.dp))
     MinisButton(
         onClick = {
@@ -639,7 +556,7 @@ private fun ColumnScope.ApiKeyConfigSection(
             )
             providerRepository.addInstance(instance)
             // [T-empty-key-compat-endpoints] Never persist an empty string as
-            // the key — usableApiKey() treats absent as the keyless-valid case.
+            // the key �?usableApiKey() treats absent as the keyless-valid case.
             if (apiKey.isNotBlank()) {
                 providerRepository.saveApiKey(instance.id, apiKey.trim())
             }
@@ -652,7 +569,7 @@ private fun ColumnScope.ApiKeyConfigSection(
             .padding(horizontal = 16.dp),
         // [T-empty-key-compat-endpoints] An empty key is a valid input when
         // targeting a third-party OpenAI/Anthropic-compatible endpoint
-        // (custom base URL filled in) — ollama / LM Studio / LiteLLM /
+        // (custom base URL filled in) �?ollama / LM Studio / LiteLLM /
         // private relays need no key. Official endpoints and OAuth flows
         // keep requiring a credential. Mirrors iOS AddProviderView.
         enabled = apiKey.isNotBlank() || (
@@ -684,39 +601,68 @@ private fun ColumnScope.OAuthConfigSection(
     var customBaseURL by remember { mutableStateOf("") }
     var appendV1Suffix by remember { mutableStateOf(providerType != ProviderType.gemini) }
 
-    val signInLabel = when (providerType) {
-        ProviderType.anthropic -> "Sign in with Claude"
-        ProviderType.gemini -> "Sign in with Google"
-        ProviderType.openAI -> "Sign in with OpenAI"
-        ProviderType.openRouter -> "Sign in with OpenRouter"
-        ProviderType.xAI -> "Sign in with xAI"
-        ProviderType.kimiCode -> "Sign in with Kimi Code"
-        ProviderType.openAIResponses -> "Sign in with OpenAI"
-        ProviderType.antigravity,
-        ProviderType.unsupported -> "Sign in"
-    }
+    val signInLabel = oauthSignInLabel(providerType)
 
     // [T-kimi-oauth] Device-code dialog state: non-null while a Kimi login is
     // waiting for the user to authorize on auth.kimi.com. Set by the login
-    // coroutine's onDeviceCode callback and RENDERED below — the iOS lesson
+    // coroutine's onDeviceCode callback and RENDERED below �?the iOS lesson
     // was a write-only state nobody displayed ("button does nothing").
-    var kimiDeviceAuth by remember {
+    var kimiLoginJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+
+    // [T-copilot-provider] Same device-code surface as Kimi, with Copilot's own
+    // copy. Kept as one state so the dialog cannot be shown with the wrong
+    // provider's instructions.
+    var deviceAuth by remember {
         mutableStateOf<com.openminis.app.auth.KimiDeviceFlow.DeviceAuthorization?>(null)
     }
-    var kimiLoginJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
-    kimiDeviceAuth?.let { auth ->
+    var copilotDeviceAuth by remember {
+        mutableStateOf<com.openminis.app.auth.CopilotDeviceFlow.DeviceAuthorization?>(null)
+    }
+
+    // [T-copilot-disclaimer] The notice is a GATE, not a banner: sign-in starts
+    // only from onAccept, so cancelling performs no network call at all.
+    var showCopilotDisclaimer by remember { mutableStateOf(false) }
+    val copilotConsentAccepted = remember {
+        com.openminis.app.util.CopilotFeatureFlag.hasAcceptedConsent(context)
+    }
+    var copilotConsent by remember { mutableStateOf(copilotConsentAccepted) }
+
+    if (showCopilotDisclaimer) {
+        CopilotDisclaimerDialog(
+            onAccept = {
+                com.openminis.app.util.CopilotFeatureFlag.recordConsent(context)
+                copilotConsent = true
+                showCopilotDisclaimer = false
+            },
+            onCancel = { showCopilotDisclaimer = false },
+        )
+    }
+
+    deviceAuth?.let { auth ->
         KimiDeviceLoginDialog(
             userCode = auth.userCode,
             verificationUrl = auth.openUrl,
             onCancel = {
                 kimiLoginJob?.cancel()
-                kimiDeviceAuth = null
+                deviceAuth = null
+            },
+        )
+    }
+    copilotDeviceAuth?.let { auth ->
+        KimiDeviceLoginDialog(
+            userCode = auth.userCode,
+            verificationUrl = auth.verificationUri,
+            titleRes = R.string.copilot_login_title,
+            instructionsRes = R.string.copilot_login_instructions,
+            onCancel = {
+                kimiLoginJob?.cancel()
+                copilotDeviceAuth = null
             },
         )
     }
 
     if (isAuthenticated) {
-        // ── Authenticated state — Token + Save ─────────────────────────
+        // ── Authenticated state �?Token + Save ─────────────────────────
         SettingsSection(
             header = stringResource(R.string.add_provider_authentication),
             footer = stringResource(R.string.add_provider_sign_in_succeeded_the_token_is_stored_in),
@@ -772,6 +718,12 @@ private fun ColumnScope.OAuthConfigSection(
             SettingsCardBlock {
                 MinisButton(
                     onClick = {
+                        // [T-copilot-disclaimer] Refuse to start a network call
+                        // before the user has read the notice.
+                        if (providerType == ProviderType.githubCopilot && !copilotConsent) {
+                            showCopilotDisclaimer = true
+                            return@MinisButton
+                        }
                         isAuthenticating = true
                         errorMessage = null
                         kimiLoginJob = scope.launch {
@@ -785,9 +737,22 @@ private fun ColumnScope.OAuthConfigSection(
                                         // returns once the user authorizes.
                                         val key = com.openminis.app.auth.KimiOAuthManager.login(
                                             context, pendingInstanceId, providerRepository,
-                                            onDeviceCode = { auth -> kimiDeviceAuth = auth },
+                                            onDeviceCode = { auth -> deviceAuth = auth },
                                         )
-                                        kimiDeviceAuth = null
+                                        deviceAuth = null
+                                        maskedToken = maskOAuthToken(key)
+                                    }
+                                    ProviderType.githubCopilot -> {
+                                        // [T-copilot-provider] Two-tier device
+                                        // flow; login() also performs the
+                                        // session-token exchange so a missing
+                                        // Copilot entitlement fails HERE rather
+                                        // than on the first send.
+                                        val key = com.openminis.app.auth.CopilotOAuthManager.login(
+                                            context, pendingInstanceId,
+                                            onDeviceCode = { auth -> copilotDeviceAuth = auth },
+                                        )
+                                        copilotDeviceAuth = null
                                         maskedToken = maskOAuthToken(key)
                                     }
                                     ProviderType.openRouter -> {
@@ -813,11 +778,13 @@ private fun ColumnScope.OAuthConfigSection(
                                 isAuthenticated = true
                             } catch (e: kotlinx.coroutines.CancellationException) {
                                 // [T-kimi-oauth] User dismissed the device-code
-                                // dialog — not an error; just reset the button.
-                                kimiDeviceAuth = null
+                                // dialog �?not an error; just reset the button.
+                                deviceAuth = null
+                                copilotDeviceAuth = null
                                 throw e
                             } catch (e: Exception) {
-                                kimiDeviceAuth = null
+                                deviceAuth = null
+                                copilotDeviceAuth = null
                                 // T-android-codex-oauth-dns: surface a
                                 // localized "check network / proxy" hint
                                 // when the OAuth manager flags a DNS /
@@ -862,18 +829,7 @@ private fun ColumnScope.OAuthConfigSection(
         }
 
         // ── Or Configure Manually ──────────────────────────────────────
-        val defaultUrl = when (providerType) {
-            ProviderType.gemini -> "https://generativelanguage.googleapis.com/v1beta"
-            ProviderType.anthropic -> "https://api.anthropic.com"
-            ProviderType.openAI -> "https://api.openai.com"
-            ProviderType.openRouter -> "https://openrouter.ai/api/v1"
-            ProviderType.xAI -> "https://api.x.ai/v1"
-            // [T-kimi-oauth] /v1 is load-bearing (…/coding/… 404s without it).
-            ProviderType.kimiCode -> "https://api.kimi.com/coding/v1"
-            ProviderType.openAIResponses -> "https://api.openai.com"
-            ProviderType.antigravity,
-            ProviderType.unsupported -> ""
-        }
+        val defaultUrl = providerDefaultBaseURL(providerType)
         SettingsSection(
             header = stringResource(R.string.add_provider_or_configure_manually),
             footer = stringResource(R.string.add_provider_for_third_party_coding_plans_e_g_minimax),
@@ -918,7 +874,7 @@ private fun ColumnScope.OAuthConfigSection(
                     appendV1Suffix = appendV1Suffix,
                 )
                 providerRepository.addInstance(instance)
-                // Store the manual token as API key — ProviderFactory uses loadApiKey() for all credential types
+                // Store the manual token as API key �?ProviderFactory uses loadApiKey() for all credential types
                 providerRepository.saveApiKey(instance.id, manualToken.trim())
                 scope.launch { providerRepository.refreshModels(instance) }
                 onSaved()

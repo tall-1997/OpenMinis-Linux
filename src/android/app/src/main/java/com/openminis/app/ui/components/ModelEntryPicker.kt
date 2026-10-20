@@ -482,6 +482,8 @@ fun providerDotColor(providerType: ProviderType?): Color = when (providerType) {
     ProviderType.openRouter -> Color(0xFF00BCD4)
     ProviderType.xAI -> Color(0xFFFF7043)
     ProviderType.kimiCode -> Color(0xFF5C6BC0) // indigo — Kimi accent
+    // [T-copilot-provider] Purple — GitHub accent.
+    ProviderType.githubCopilot -> Color(0xFF6E5494)
     // [T-android-provider-type-parity] Responses API instances are
     // OpenAI under the hood — same green dot. Undrivable types share
     // the neutral gray used for "no provider".

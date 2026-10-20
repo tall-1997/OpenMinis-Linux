@@ -65,6 +65,9 @@ internal class ProviderBackupCoordinator(
         ProviderType.xAI -> com.openminis.app.auth.XAIOAuthManager(context, instance.id)
         ProviderType.gemini -> com.openminis.app.auth.GeminiOAuthManager(context, instance.id)
         ProviderType.kimiCode -> com.openminis.app.auth.KimiOAuthManager(context, instance.id)
+        // [T-copilot-provider] Its two-tier credential is exported/imported by
+        // the explicit branches in collect/restore below.
+        ProviderType.githubCopilot -> com.openminis.app.auth.CopilotOAuthManager(context, instance.id)
         else -> null
     }
 
@@ -177,7 +180,19 @@ internal class ProviderBackupCoordinator(
             // OAuth provider type via oauthManagerFor (not just the forInstance set).
             run {
                 val mgr = oauthManagerFor(instance)
-                mgr?.exportStoredTokensJson()?.let { tokenJson ->
+                // [T-android-copilot-backup-token] Copilot keeps its credential
+                // in its own two keys, not the generic `oauth_tokens_<id>` blob
+                // that exportStoredTokensJson reads — so without this branch the
+                // export found nothing and a restore silently produced a
+                // signed-out instance. Written in iOS CopilotTokenStorage's
+                // shape so a package from either platform restores on the other.
+                val oauth = if (instance.providerType == ProviderType.githubCopilot) {
+                    (mgr as? com.openminis.app.auth.CopilotOAuthManager)
+                        ?.exportCopilotTokensJson()
+                } else {
+                    mgr?.exportStoredTokensJson()
+                }
+                oauth?.let { tokenJson ->
                     put("oauthToken", Base64.encodeToString(tokenJson.toByteArray(), Base64.NO_WRAP))
                 }
                 // Gemini also stores the resolved account email + GCP project as
@@ -227,7 +242,13 @@ internal class ProviderBackupCoordinator(
         var oauthGcpProject: String? = null
         val mgr = oauthManagerFor(instance)
         if (mgr != null) {
-            oauthToken = mgr.exportStoredTokensJson()?.let(::b64)
+            // [T-android-copilot-backup-token] Mirror of the export split above.
+            oauthToken = if (instance.providerType == ProviderType.githubCopilot) {
+                (mgr as? com.openminis.app.auth.CopilotOAuthManager)
+                    ?.exportCopilotTokensJson()?.let(::b64)
+            } else {
+                mgr.exportStoredTokensJson()?.let(::b64)
+            }
             if (instance.providerType == ProviderType.gemini) {
                 oauthEmail = mgr.exportOAuthString("email")
                     ?.takeIf { it.isNotEmpty() }?.let(::b64)
@@ -284,7 +305,18 @@ internal class ProviderBackupCoordinator(
         val mgr = oauthManagerFor(instance)
         if (mgr != null) {
             deb64(secret.oauthToken)?.let { json ->
-                if (mgr.exportStoredTokensJson().isNullOrEmpty()) {
+                // [T-android-copilot-backup-token] Mirror of the export split
+                // above; the keep-existing check has to ask the same store the
+                // write would touch, or a signed-in device would be reported as
+                // restored (or a signed-out one skipped).
+                val copilotMgr = (mgr as? com.openminis.app.auth.CopilotOAuthManager)
+                    ?.takeIf { instance.providerType == ProviderType.githubCopilot }
+                if (copilotMgr != null) {
+                    if (copilotMgr.exportCopilotTokensJson().isNullOrEmpty()) {
+                        copilotMgr.importCopilotTokensJson(json)
+                        wrote = true
+                    }
+                } else if (mgr.exportStoredTokensJson().isNullOrEmpty()) {
                     mgr.importStoredTokensJson(json)
                     wrote = true
                 }

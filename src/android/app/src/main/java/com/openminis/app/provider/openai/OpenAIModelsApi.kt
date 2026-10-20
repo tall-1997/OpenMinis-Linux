@@ -59,7 +59,18 @@ object OpenAIModelsApi {
     ).let {
         AppLogger.info(TAG, "Codex OAuth model list (${it.size} models): ${it.joinToString { m -> m.id }}")
         ModelsDevApi.enrichModels(it)
-    } + listOf(
+    } + codexImageModels()
+
+    /**
+     * The Codex-OAuth image-generation models.
+     *
+     * [T-codex-dynamic-discovery GH#319] Extracted from the inline tail of
+     * [fetchModelsOAuth] so the live-discovery path can append the same set.
+     * Discovery returns CHAT SKUs only — these are not in it — so without a
+     * shared accessor a successful discovery would drop models that do work on
+     * this auth path. Same list, one definition, two callers.
+     */
+    fun codexImageModels(): List<LLMModel> = listOf(
         // [T-codex-gpt-image2-oauth-android] Special image-generation model on
         // the Codex OAuth path. Appended AFTER enrichModels so its declared
         // image input/output modalities survive (models.dev doesn't know it).
