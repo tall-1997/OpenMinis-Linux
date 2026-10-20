@@ -439,7 +439,6 @@ class MinisApp : Application(), ImageLoaderFactory {
         com.openminis.app.diagnostics.HangDetector.hasLiveWorkload = {
             com.openminis.app.sandbox.SandboxWorkload.hasLiveWork()
         }
-        com.openminis.app.diagnostics.HangDetector.onCountedHang = { _, _ -> }
         com.openminis.app.sandbox.SandboxWorkload.attach(this)
         com.openminis.app.sandbox.kernel.remediation.RemediationLoop.start(filesDir) { reason ->
             com.openminis.app.sandbox.SandboxWorkload.stopUnprotected(reason)

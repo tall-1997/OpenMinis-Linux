@@ -142,7 +142,7 @@ object HangDetector {
      * instead of only degrading markdown.
      */
     @Volatile var hasLiveWorkload: () -> Boolean = { false }
-    @Volatile var onCountedHang: (count: Int, durationMs: Long) -> Unit = { _, _ -> }
+
 
     private val _renderBreakerActive = MutableStateFlow(false)
 
@@ -488,11 +488,6 @@ object HangDetector {
         if (newCount >= RENDER_DEGRADE_HANG_COUNT && !_renderBreakerActive.value) {
             _renderBreakerActive.value = true
             Log.w(TAG, "render breaker TRIPPED at hang count=$newCount — streaming markdown degrades to plain text")
-        }
-        val hook = onCountedHang
-        thread(name = "HangDetector-breaker", isDaemon = true) {
-            runCatching { hook(newCount, durationMs) }
-                .onFailure { Log.w(TAG, "hang breaker hook failed: ${it.message}") }
         }
         val tail = "hang detected duration=${durationMs}ms count=$newCount " +
             "breakerActive=${newCount >= HANG_LIMIT_FOR_BREAKER}"
