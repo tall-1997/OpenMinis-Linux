@@ -226,13 +226,19 @@ class BrowserActionGuardTest {
 
     @Test
     fun `acquireTab retires unusable tabs before picking one`() {
-        // This fork's shape: the sweep is inline in acquireTab and hands the tab
-        // to the existing removeTab(), which already defers native teardown
-        // while an operation is suspended inside it.
-        val acquire = pool.substringAfter("private suspend fun acquireTab(")
-            .substringBefore("_tabs.value = ")
-        assertTrue(acquire.contains("_tabs.value.filter { it.manager.isUnusable }"))
-        assertTrue(acquire.contains("removeTab(dead, rememberUrl = true)"))
+        // Dead-tab cleanup moved from acquireTab to runAcquiredAction
+        // to avoid removing the per-tab serial lock while the caller holds it.
+        // The cleanup runs BEFORE acquireTab is called, preserving the contract.
+        val runAction = pool.substringAfter("private suspend fun runAcquiredAction(")
+            .substringBefore("acquireTab(")
+        assertTrue(
+            "cleanup must run before acquireTab is called",
+            runAction.contains("_tabs.value.filter { it.manager.isUnusable }"),
+        )
+        assertTrue(
+            "removeTab defers teardown for in-flight calls",
+            runAction.contains("removeTab(dead, rememberUrl = true)"),
+        )
         // The replacement arrives under a NEW id (ids are never reused), so the
         // model has to be told rather than silently reading the wrong tab.
         val dispatch = pool.substringAfter("val rebuildNote = if (acquireTabId != null")

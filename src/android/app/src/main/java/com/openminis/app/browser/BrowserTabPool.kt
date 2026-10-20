@@ -31,7 +31,12 @@ import java.util.concurrent.ConcurrentHashMap
  * Manages up to 3 browser tabs for the agent, mirroring iOS BrowserTabPool.
  * All tabs share the same cookie store by default on Android.
  */
-class BrowserTabPool(private val context: Context) {
+class BrowserTabPool(private val context: Context) : BrowserTabPoolRegistry.RegistryPool {
+
+    init {
+        // [T-android-browser-global-tab-cap] Join the process-wide gate.
+        BrowserTabPoolRegistry.register(this)
+    }
 
     companion object {
         private const val TAG = "BrowserTabPool"
@@ -69,8 +74,7 @@ class BrowserTabPool(private val context: Context) {
         /**
          * [T-browser-implicit-tab-inuse-until-load-android] Grace window a tab
          * stays `inUse` after a tab_id-less action. During it acquireTab(null)
-         * fans out to a fresh tab instead of trampling the busy one, so N
-         * back-to-back tab-less navigates open N tabs; re-armed on every call.
+         * fans out to a fresh tab instead of trampling the busy one.
          */
         private const val IMPLICIT_TAB_GRACE_MS = 15_000L
 
@@ -85,11 +89,9 @@ class BrowserTabPool(private val context: Context) {
      * [T-browser-use-per-tab-serial-android] Per-tab-id serial locks. Parallel
      * tool execution can fire two browser_use calls at the same explicit tab id;
      * letting both drive the one WebView corrupts state, so calls targeting the
-     * SAME existing tab id run one-at-a-time through that tab's Mutex. Different
-     * tab ids keep their own Mutex and still run concurrently. Calls with NO
-     * tab_id are deliberately NOT funneled through a shared lock — they fan out
-     * to separate (free / freshly-created) tabs in [acquireTab] so two
-     * tab-less navigates run in parallel instead of deadlocking on one tab.
+     * SAME existing tab id run one-at-a-time through that tab's Mutex. Calls
+     * with NO tab_id are NOT funneled — they fan out to separate tabs in
+     * [acquireTab] so two tab-less navigates run in parallel.
      */
     private val tabLocks = ConcurrentHashMap<Int, Mutex>()
     private val runningActions = mutableMapOf<Int, Int>()
@@ -102,6 +104,15 @@ class BrowserTabPool(private val context: Context) {
         check(android.os.Looper.myLooper() == android.os.Looper.getMainLooper())
         if (disposed) return false
         pools[this] = Unit
+        // [T-android-browser-global-tab-cap] Ask the process-wide registry for a slot.
+        // It arbitrates across ALL pools (idle sibling first, then in-use, then deny),
+        // holding pools weakly so a closed chat's pool stops being counted.
+        if (!BrowserTabPoolRegistry.requestSlot(this)) {
+            Log.i(TAG, "Registry denied a global tab slot (cap ${BrowserTabPoolRegistry.GLOBAL_TAB_CAP})")
+            return false
+        }
+        // Local ceiling: registry guarantees a global slot, not room in THIS pool.
+        // Fall back to cross-pool eviction when the local pool is full.
         fun count() = pools.keys.sumOf { it._tabs.value.size + it.closingTabs.size }
         while (count() >= MAX_GLOBAL_TABS) {
             val candidate = pools.keys.filter { it !== this && !it.isVisible && !it.hasActiveDownloads }
@@ -113,6 +124,27 @@ class BrowserTabPool(private val context: Context) {
         }
         return true
     }
+
+    // -- Registry-driven reclaim  [T-android-browser-global-tab-cap] ---------
+    // Delegated to BrowserTabPoolReclaim to keep this file under its ceiling.
+
+    private val reclaim = BrowserTabPoolReclaim(
+        getTabs = { _tabs.value },
+        setTabs = { _tabs.value = it },
+        saveUrl = { id, url -> savedURLs[id] = url },
+        isRunning = { id -> (runningActions[id] ?: 0) != 0 },
+        removeTab = { removeTab(it) },
+    )
+
+    override fun registrySnapshot(): List<BrowserTabPoolRegistry.TabInfo> = reclaim.snapshot()
+
+    override fun evictTabForRegistry(id: Int) = reclaim.evictTab(id)
+
+    override fun preemptTabForRegistry(id: Int) = reclaim.preemptTab(id)
+
+    override fun evictAllIdleForMemoryPressure(): Int = reclaim.evictAllIdleForMemoryPressure()
+
+    private fun consumePreemptNotice(id: Int): String? = reclaim.consumePreemptNotice(id)
 
     // Remove immediately from discovery, but defer native destruction until any
     // suspended page operation has left its finally block.
@@ -152,6 +184,7 @@ class BrowserTabPool(private val context: Context) {
         onDownloadEvent = null
         _tabs.value.toList().forEach { removeTab(it) }
         if (closingTabs.isEmpty()) pools.remove(this)
+        BrowserTabPoolRegistry.unregister(this)
     }
 
     /** Pressure cleanup never destroys the visible page or a running operation. */
@@ -168,21 +201,12 @@ class BrowserTabPool(private val context: Context) {
         val manager: BrowserUseManager,
         var inUse: Boolean = false,
         var lastActivityDate: Date = Date(),
-        /**
-         * Flag set by `createTab` when a tab is created with no initial URL.
-         * `acquireTab` / `newTab` consume it and call `manager.loadBlankPage()`
-         * from their suspend contexts so `window.innerWidth/Height` reflects
-         * the session viewport instead of the `about:blank` 980px fallback.
-         */
+        // Set by createTab when tab has no URL; acquireTab/newTab call loadBlankPage()
+        // so window.innerWidth/Height reflects the session viewport, not the 980px fallback.
         var needsInitialBlankPage: Boolean = false,
-        /**
-         * [T-browser-implicit-tab-inuse-until-load-android] Pending job that
-         * clears [inUse] after the post-action grace window. Cancelled and
-         * re-armed by [armImplicitGraceRelease] on every implicit-tab action so
-         * a same-task follow-up keeps the tab held; fires once the tab has been
-         * idle for [IMPLICIT_TAB_GRACE_MS]. Excluded from equals/hashCode/copy
-         * since it's transient scheduling state, not tab identity.
-         */
+        // [T-browser-implicit-tab-inuse-until-load-android] Grace job that clears
+        // inUse after idle. Re-armed by armImplicitGraceRelease on each implicit
+        // action. Excluded from equals/hashCode/copy (transient scheduling state).
         var inUseGraceJob: Job? = null,
     )
 
@@ -214,23 +238,15 @@ class BrowserTabPool(private val context: Context) {
     private val activeRunJobs = ConcurrentHashMap<Int, Job>()
     private val savedURLs = mutableMapOf<Int, String>()
 
-    /**
-     * Global custom viewport. `0` means "use the UA profile default".
-     * Persisted across launches via SharedPreferences. Session-level overrides
-     * ([sessionViewportWidth]/[sessionViewportHeight]) shadow this.
-     * Mirrors iOS `BrowserTabPool.customViewportWidth/Height`.
-     */
+    // Global custom viewport (0 = UA default). Persisted via SharedPreferences.
+    // Session overrides shadow this. Mirrors iOS customViewportWidth/Height.
     private val _customViewportWidth = MutableStateFlow(0)
     val customViewportWidth: StateFlow<Int> = _customViewportWidth.asStateFlow()
     private val _customViewportHeight = MutableStateFlow(0)
     val customViewportHeight: StateFlow<Int> = _customViewportHeight.asStateFlow()
 
-    /**
-     * Per-session viewport override set via `set_viewport`. Both > 0 means
-     * active; shadows global custom and UA profile default. Persisted in the
-     * session's tab JSON file, not SharedPreferences — matches iOS
-     * `BrowserTabPool.sessionViewportWidth/Height`.
-     */
+    // Per-session viewport override (set_viewport). Both > 0 = active, shadows
+    // global custom and UA default. Persisted in session tab JSON, not prefs.
     private val _sessionViewportWidth = MutableStateFlow(0)
     val sessionViewportWidth: StateFlow<Int> = _sessionViewportWidth.asStateFlow()
     private val _sessionViewportHeight = MutableStateFlow(0)
@@ -281,18 +297,10 @@ class BrowserTabPool(private val context: Context) {
         }
     }
 
-    /**
-     * Current idle timeout in minutes. Exposed for Settings UIs that want to
-     * read the active value without parsing SharedPreferences themselves.
-     */
-    val idleTimeoutMinutes: Int
-        get() = (idleTimeoutMs / 60_000L).toInt()
+    // Exposed for Settings UIs that want the value without parsing prefs.
+    val idleTimeoutMinutes: Int get() = (idleTimeoutMs / 60_000L).toInt()
 
-    /**
-     * Update the idle-eviction timeout. Persists to SharedPreferences and
-     * takes effect on the next eviction tick (within [IDLE_CHECK_INTERVAL_MS]).
-     * Values outside [MIN_IDLE_TIMEOUT_MINUTES]..[MAX_IDLE_TIMEOUT_MINUTES] are clamped.
-     */
+    // Persisted to SharedPreferences; takes effect on next eviction tick.
     fun setIdleTimeoutMinutes(minutes: Int) {
         val clamped = minutes.coerceIn(MIN_IDLE_TIMEOUT_MINUTES, MAX_IDLE_TIMEOUT_MINUTES)
         idleTimeoutMs = clamped * 60_000L
@@ -317,13 +325,10 @@ class BrowserTabPool(private val context: Context) {
     val activeDownload: StateFlow<DownloadUiState?> = _activeDownload.asStateFlow()
 
     /**
-     * [T-android-browser-download-ux] Session-scoped download registry — the
-     * Android port of iOS BrowserDownloadCenter (T-browser-download-ux v1-v3).
-     * Replaces the single-slot banner state as the source of truth: every
-     * download becomes an entry with live progress, a terminal state, a
-     * cancel handle, and a `seen` flag driving the toolbar badge. The pool is
-     * 1:1 with a chat session, so the registry lives here instead of a global
-     * center keyed by a mutable session id.
+     * [T-android-browser-download-ux] Session-scoped download registry (Android
+     * port of iOS BrowserDownloadCenter v1-v3). Every download is an entry with
+     * live progress, terminal state, cancel handle, and `seen` flag for the
+     * badge. The pool is 1:1 with a chat session, so the registry lives here.
      */
     enum class DownloadState { DOWNLOADING, COMPLETED, FAILED }
 
@@ -561,18 +566,14 @@ class BrowserTabPool(private val context: Context) {
 
     /**
      * Execute a browser action. Routes to the correct tab, acquires it, and executes.
-     */
-    /**
+     *
      * @param singleTab [T-browser-readaction-follow-tab-and-yolo-android] YOLO
      *   mode: when true, ALL tab-less actions (including navigate) bypass the
-     *   implicit-tab fan-out and target [selectedTabId] serially. This is the
-     *   headless / CLI / RPC driver path — a single agent runs a strictly
-     *   SERIAL sequence (navigate → execute_js → navigate → …) and expects
-     *   "operate on the page I just navigated to", so fan-out (which exists to
-     *   keep an agent's CONCURRENT navigates from stomping each other) is wrong.
-     *   The UI / in-app agent-tool path leaves this false. Mirrors iOS
-     *   `BrowserTabPool.execute(action:singleTab:)`. Explicit tab_id always
-     *   routes to that tab regardless of this flag.
+     *   implicit-tab fan-out and target [selectedTabId] serially. Headless / CLI
+     *   / RPC driver path — a single agent runs a strictly SERIAL sequence and
+     *   expects "operate on the page I just navigated to". The UI path leaves
+     *   this false. Mirrors iOS `execute(action:singleTab:)`. Explicit tab_id
+     *   always routes to that tab regardless of this flag.
      */
     suspend fun execute(
         input: BrowserActionInput,
@@ -638,11 +639,9 @@ class BrowserTabPool(private val context: Context) {
     /**
      * [T-browser-use-per-tab-serial-android] Run [input] against an existing
      * tab id under that tab's serial Mutex. Waits at most
-     * [TAB_SERIAL_WAIT_TIMEOUT_MS] to acquire the lock; on timeout returns a
-     * guidance error telling the model to open a new tab and retry there
-     * (rather than keep contending the busy one). The wait timeout is purely
-     * the lock-acquisition wait — once the lock is held, the underlying page
-     * operation runs with its own existing timeout, unchanged.
+     * [TAB_SERIAL_WAIT_TIMEOUT_MS] for the lock; on timeout returns a guidance
+     * error telling the model to open a new tab and retry there. The wait is
+     * purely lock acquisition — the page operation keeps its own timeout.
      */
     private suspend fun executeSerialized(tabId: Int, input: BrowserActionInput): BrowserActionResult {
         val mutex = lockForTab(tabId)
@@ -672,7 +671,7 @@ class BrowserTabPool(private val context: Context) {
     /**
      * Acquire a tab (creating / selecting per [acquireTab]) and run the action.
      * Shared by the serialized (explicit existing tab id) and unlocked (tab-less
-     * / new-tab) execution paths. [T-browser-use-per-tab-serial-android]
+     * / new-tab) paths. [T-browser-use-per-tab-serial-android]
      *
      * @param acquireTabId [T-browser-readaction-follow-tab-and-yolo-android]
      *   when non-null, acquire exactly this tab id instead of `input.tabId` —
@@ -687,7 +686,24 @@ class BrowserTabPool(private val context: Context) {
         var acquired: Tab? = null
         return try {
             val tab = withContext(Dispatchers.Main) {
-                if (acquireTabId != null && _tabs.value.none { it.id == acquireTabId }) return@withContext null
+                // [T-browser-deadlock-acquireTab] Clean up dead tabs here, NOT in
+                // acquireTab, because the caller already holds the per-tab serial
+                // lock.  Removing a dead tab's lock from tabLocks inside
+                // acquireTab could corrupt the lock the caller is holding.
+                _tabs.value.filter { it.manager.isUnusable }.forEach { dead ->
+                    Log.w(
+                        TAG,
+                        "Retiring unusable browser tab ${dead.id}: " +
+                            (dead.manager.wedgeReason ?: "renderer unusable"),
+                    )
+                    removeTab(dead, rememberUrl = true)
+                }
+                // For explicit tab ids (acquireTabId != null), fail fast if the tab
+                // no longer exists after cleanup. The caller (executeSerialized)
+                // already holds the per-tab lock; creating a new tab would bypass it.
+                if (acquireTabId != null && _tabs.value.none { it.id == acquireTabId }) {
+                    return@withContext null
+                }
                 acquireTab(acquireTabId ?: input.tabId)?.also {
                     acquired = it
                     runningActions[it.id] = (runningActions[it.id] ?: 0) + 1
@@ -758,7 +774,10 @@ class BrowserTabPool(private val context: Context) {
             // navigate. Without this the agent had to guess tab_id for its
             // follow-up reads/scrolls and routinely picked the wrong tab.
             val stamped = stampTabId(withDialogs.copy(pageURL = tab.manager.currentURL.value), tab.id)
-            if (rebuildNote == null) stamped else stamped.copy(text = "$rebuildNote\n${stamped.text}")
+            val withPreempt = consumePreemptNotice(tab.id)?.let { notice ->
+                stamped.copy(text = "$notice\n${stamped.text}")
+            } ?: stamped
+            if (rebuildNote == null) withPreempt else withPreempt.copy(text = "$rebuildNote\n${withPreempt.text}")
         } finally {
             withContext(NonCancellable + Dispatchers.Main) {
             val tab = acquired ?: return@withContext
@@ -798,15 +817,6 @@ class BrowserTabPool(private val context: Context) {
     }
 
     /**
-     * [T-android-browser-result-tab-id] Stamp [targetId] onto a tab-contextual
-     * result so the agent can see exactly which tab it just operated on, with no
-     * need to guess for follow-up reads/scrolls. Sets the structured [tabId]
-     * field and appends a `  tab_id: <N>` line to the human-readable text in the
-     * same indent style as the existing `Title:` / `Viewport:` lines. Idempotent
-     * — if the text already mentions `tab_id:` (e.g. newTab embeds it in its
-     * narrative), skip the append.
-     */
-    /**
      * [T-browser-implicit-tab-inuse-until-load-android] Hold [tab] inUse for a
      * grace window after an implicit-tab action, re-arming on each call. The
      * tab stays inUse=true now; a freshly-launched job flips it false after
@@ -831,27 +841,19 @@ class BrowserTabPool(private val context: Context) {
     /**
      * Acquire a tab for agent use. Creates tab 0 if none exist.
      *
-     * Mirrors iOS BrowserTabPool behavior: even when the model explicitly
-     * sends `tab_id: 0` (strict-schema providers like OpenAI Responses API
-     * always populate every field), fall back to the default tab when no
-     * such tab exists yet, instead of returning null. Otherwise the very
-     * first browser_use call in a session fails with "Failed to acquire
-     * browser tab" because the model can't know that tab 0 hasn't been
-     * lazily created.
+     * Mirrors iOS: even when the model explicitly sends `tab_id: 0`
+     * (strict-schema providers always populate every field), fall back to the
+     * default tab when no such tab exists, instead of returning null — else
+     * the first browser_use call fails with "Failed to acquire browser tab".
      */
     private suspend fun acquireTab(requestedTabId: Int? = null): Tab? = withContext(Dispatchers.Main) {
         if (disposed) return@withContext null
-        // (GH#245) Retire unusable tabs BEFORE picking one: a wedged renderer
-        // never recovers, and leaving it in the pool routed every action back to
-        // the same frozen WebView. removeTab defers teardown for in-flight calls.
-        _tabs.value.filter { it.manager.isUnusable }.forEach { dead ->
-            Log.w(
-                TAG,
-                "Retiring unusable browser tab ${dead.id}: " +
-                    (dead.manager.wedgeReason ?: "renderer unusable"),
-            )
-            removeTab(dead, rememberUrl = true)
-        }
+        // [T-browser-deadlock-acquireTab] Dead-tab cleanup is intentionally
+        // REMOVED from acquireTab.  The caller already holds the per-tab
+        // serial lock (lockForTab), and running removeTab→destroyTab→
+        // tabLocks.remove() here could remove the very lock the caller is
+        // holding, corrupting the lock state.  Dead-tab retirement is now
+        // done by the caller *before* lock acquisition (see runAcquiredAction).
         var currentTabs = _tabs.value.toMutableList()
 
         // Find requested tab, falling back to default-or-create when the
@@ -859,22 +861,21 @@ class BrowserTabPool(private val context: Context) {
         val tab = if (requestedTabId != null && currentTabs.any { it.id == requestedTabId }) {
             currentTabs.first { it.id == requestedTabId }
         } else {
-            // [T-browser-use-per-tab-serial-android] No explicit (existing)
-            // tab id: prefer a tab that is NOT already in use, and create a new
-            // one when every existing tab is busy (up to MAX_TABS). This runs on
-            // the Main dispatcher so concurrent tab-less calls resolve here one
-            // after another — the first claims a free tab and marks it in-use,
-            // the second then skips it and lands on a different / freshly-created
-            // tab. That lets two parallel tab-less navigates open two tabs and
-            // run concurrently instead of both trampling tab 0. A sequential
-            // follow-up (e.g. screenshot after navigate) still reuses the same
-            // tab because it's no longer in use by then.
+            // [T-browser-use-per-tab-serial-android] No explicit (existing) tab id:
+            // prefer a tab NOT already in use; create a new one when every existing
+            // tab is busy (up to MAX_TABS). Runs on Main so concurrent tab-less calls
+            // resolve one after another — the first claims a free tab and marks it
+            // in-use, the second skips it and lands on a different/freshly-created
+            // tab. Two parallel tab-less navigates thus open two tabs and run
+            // concurrently instead of both trampling tab 0. A sequential follow-up
+            // (screenshot after navigate) still reuses the same tab because it's no
+            // longer in use by then.
             // [T-browser-implicit-tab-inuse-until-load-android] When every tab is
-            // busy (inUse, incl. the post-action grace hold) AND we're at
-            // MAX_TABS so a new tab can't be created, do NOT overwrite a busy tab
-            // — that's the trampling this task forbids. Wait (bounded) for a tab
-            // to free up; only fall back to reusing the least-recently-active tab
-            // if nothing frees within the wait window.
+            // busy (inUse, incl. post-action grace hold) AND we're at MAX_TABS so a
+            // new tab can't be created, do NOT overwrite a busy tab — that's the
+            // trampling this task forbids. Wait (bounded) for a tab to free up; only
+            // fall back to reusing the least-recently-active tab if nothing frees
+            // within the wait window.
             var picked = currentTabs.firstOrNull { !it.inUse } ?: createTab(currentTabs)
             if (picked == null) {
                 val waitDeadline = IMPLICIT_TAB_WAIT_MS
@@ -1096,10 +1097,10 @@ class BrowserTabPool(private val context: Context) {
      * matches, create a new tab loaded with [url]. Returns the resolved tab,
      * or null if the pool is at capacity and creation failed.
      *
-     * Mirrors the "if it's in the pool show it, otherwise reload" UX flow for the
-     * tool-call preview's globe button — the user expects to land on the
-     * agent's existing tab if it's still around, otherwise spawn a new one
-     * rather than clobber an unrelated tab.
+     * Mirrors the "if it's in the pool show it, otherwise reload" UX for the
+     * tool-call preview's globe button — land on the agent's existing tab if
+     * it's still around, otherwise spawn a new one rather than clobbering an
+     * unrelated tab.
      */
     fun selectOrCreateTabForURL(url: String): Tab? {
         if (url.isBlank()) return _tabs.value.firstOrNull()
@@ -1119,11 +1120,10 @@ class BrowserTabPool(private val context: Context) {
     }
 
     /**
-     * Ensure at least one tab exists (for user-facing browser sheet).
-     * Does NOT mark as inUse. Must be called on the main thread.
-     *
-     * Also sets the selected tab id so the sheet's `selectedTab` lookup
-     * resolves on first composition, and persists state.
+     * Ensure at least one tab exists (for user-facing browser sheet). Does NOT
+     * mark as inUse. Must be called on the main thread. Also sets the selected
+     * tab id so the sheet's `selectedTab` lookup resolves on first composition,
+     * and persists state.
      */
     fun ensureTabForUI(): Tab? {
         val currentTabs = _tabs.value.toMutableList()
@@ -1248,7 +1248,6 @@ class BrowserTabPool(private val context: Context) {
      * Set the session-scoped viewport override. Persisted into the session's
      * tab JSON (not SharedPreferences) so a set_viewport survives restarts but
      * doesn't leak to other sessions. Mirrors iOS `setSessionViewport`.
-     *
      * Awaits tab reloads so a follow-up get_page_info sees the new
      * `window.innerWidth/Height`.
      */
