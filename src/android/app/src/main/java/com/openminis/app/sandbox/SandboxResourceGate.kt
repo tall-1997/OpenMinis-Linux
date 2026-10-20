@@ -114,9 +114,17 @@ object SandboxResourceGate {
         block: suspend () -> T,
     ): T {
         val heavy = resourceClass == ResourceClass.HEAVY || isHeavy(command)
+        // [T-android-global-shell-throttle] Every command — light or heavy —
+        // is admitted against the app-wide child-process budget. Light
+        // commands used to run fully concurrent (only their per-lane mutex
+        // applied), so a fan-out of sub-agents could spawn past Android's
+        // phantom-process cap and have processes SIGKILLed mid-command. The
+        // process gate sits innermost, immediately around [block]: a command
+        // queueing for a heavy permit or the dpkg lock holds no budget.
+        suspend fun budgeted(): T = withProcessBudget(command, onWaiting, block)
         // Light commands (including cleanup) do not consume heavy permits.
         // Their per-lane serialization remains in ExecutionCoordinator.
-        if (!heavy) return block()
+        if (!heavy) return budgeted()
         val queuedAt = System.nanoTime()
         suspend fun admitted(): T = executionGate.run(
             heavy, if (aptWaitMs <= 0) 0 else
@@ -126,11 +134,46 @@ object SandboxResourceGate {
             limits = { limits().let { AdaptiveExecutionGate.Limits(it.first, it.second) } },
             pressure = { if (heavy) pressure() else null },
             onWaiting = onWaiting,
-            block = block,
+            block = { budgeted() },
         )
         return if (isPackageManager(command) && !isReadOnlyPackageManager(command)) {
             withAptLock(aptWaitMs, onWaiting) { admitted() }
         } else admitted()
+    }
+
+    /**
+     * [T-android-shell-process-budget] Admit one command against the app-wide
+     * process budget and unwrap the outcome into this gate's contract: a
+     * command that never got room throws instead of running, matching the
+     * "queued out, nothing started" message callers already handle.
+     *
+     * Only the tag is derived from the command text: the budget is per
+     * PROCESS, so what the command does is irrelevant to admission.
+     */
+    private suspend fun <T> withProcessBudget(
+        command: String,
+        onWaiting: (String) -> Unit,
+        block: suspend () -> T,
+    ): T {
+        val outcome = GlobalShellThrottle.run(
+            tag = GlobalShellThrottle.commandTag(command),
+            onWaiting = { live ->
+                onWaiting(
+                    "WAITING_RESOURCE: 沙箱进程已满（$live/${GlobalShellThrottle.PROCESS_BUDGET}），" +
+                        "命令已排队，腾出后自动开始",
+                )
+            },
+            block = block,
+        )
+        return when (outcome) {
+            is GlobalShellThrottle.Outcome.Ran -> outcome.value
+            is GlobalShellThrottle.Outcome.QueueTimedOut -> throw IllegalStateException(
+                "Not run: waited ${outcome.waitedMs / 1000}s for Android's per-app process limit " +
+                    "to free up (${outcome.lastLiveCount} Minis processes running, budget " +
+                    "${GlobalShellThrottle.PROCESS_BUDGET}). Nothing was executed; retry once " +
+                    "other commands or background processes have finished.",
+            )
+        }
     }
 
     private suspend fun <T> withAptLock(waitMs: Long, onWaiting: (String) -> Unit, block: suspend () -> T): T {
