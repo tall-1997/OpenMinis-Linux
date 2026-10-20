@@ -383,17 +383,11 @@ internal fun ChatViewModel.executeMemoryWriteTool(argsJson: String): ToolExecuti
         return ToolExecutionResult(msg, false, toolTitle = "Memory (disabled)")
     }
     val result = MemoryTools.executeMemoryWrite(argsJson, repo)
-    // Record for SessionMemorySheet
+    // Record for SessionMemorySheet + queue the next-turn freshness note.
     val content = try {
         JSONObject(argsJson).optString("content", "")
     } catch (_: Exception) { "" }
-    _memoryToolRecords.value = _memoryToolRecords.value + MemoryToolRecord(
-        title = result.toolTitle,
-        isWrite = true,
-        preview = content.lines().firstOrNull { it.isNotBlank() }?.take(100) ?: "",
-        output = result.output,
-        writtenContent = content,
-    )
+    recordMemoryWrite(result, content)
     return ToolExecutionResult(result.output, result.success, toolTitle = result.toolTitle)
 }
 

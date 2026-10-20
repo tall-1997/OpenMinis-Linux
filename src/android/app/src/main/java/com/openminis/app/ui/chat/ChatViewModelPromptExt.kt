@@ -389,9 +389,26 @@ internal fun ChatViewModel.buildTurnContextFragment(): String? {
         personalityReminder = if (personaHistorySteering) PERSONALITY_REMINDER else null,
         taskAnchor = taskAnchorFragment(),
     )
+    // [T-memory-freeze-freshness] One-shot: the system prompt's memory snapshot
+    // is frozen per session, so a just-written entry would otherwise be
+    // invisible until the next session. The tail carries its first line; the
+    // full entry stays available through memory_get.
+    val memoryNote = promptCache.pendingMemoryWriteNote?.also {
+        promptCache.pendingMemoryWriteNote = null
+    }?.let { "Memory update (saved just now; use memory_get for the full entry): $it" }
+    // [T-prompt-cache-persona-tail] Persisted with the turn context instead of
+    // rewriting the latest user message at request time (see
+    // ChatViewModelHistoryExt).
+    val personaBinding = if (personaHistorySteering) {
+        com.openminis.app.agent.PersonaPromptLogic.historySteeringBlock()
+    } else {
+        null
+    }
     return listOfNotNull(
         digest?.takeIf { it.isNotBlank() },
         compactExcerpts,
+        memoryNote,
+        personaBinding,
         tail.takeIf { it.isNotBlank() },
     ).joinToString("\n\n").ifBlank { null }
 }

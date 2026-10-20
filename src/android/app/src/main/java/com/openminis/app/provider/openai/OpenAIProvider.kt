@@ -1670,10 +1670,10 @@ class OpenAIProvider private constructor(
     ): JSONObject = requestBodies.buildRequestBody(
         messages, systemPrompt, maxTokens, stream, temperature, imageParts, tools, thinkingLevel,
     )
-
+    /** [T-cache-session-affinity] Responses `prompt_cache_key` = session id (no first-message collisions). */
+    @Volatile var sessionCacheKey: String? = null
     internal suspend fun buildRequest(bodyStr: String): Request =
         requestBodies.buildRequest(bodyStr)
-
     internal fun buildResponsesAPIBody(
         messages: List<LLMMessage>,
         systemPrompt: String?,
@@ -1685,7 +1685,7 @@ class OpenAIProvider private constructor(
         temperature: Double? = null,
     ): JSONObject = requestBodies.buildResponsesAPIBody(
         messages, systemPrompt, maxTokens, stream, imageParts, tools, thinkingLevel, temperature,
-    )
+    ).also { b -> sessionCacheKey?.takeIf { it.isNotBlank() }?.let { b.put("prompt_cache_key", "minis-$it") } }
 
 
 

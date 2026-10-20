@@ -205,7 +205,14 @@ object ImageBudget {
     @JvmInline
     value class ImagePartId(val identityHash: Int) {
         companion object {
-            fun of(data: ByteArray): ImagePartId = ImagePartId(System.identityHashCode(data))
+            /**
+             * [T-image-elision-sticky] Content-derived, not identity-derived:
+             * restored history rebuilds image bytes into fresh arrays, so an
+             * identity hash changed on every reload and a session's sticky
+             * elision set could never match. Equal bytes now share one id,
+             * which is exactly the unit the budget planner drops.
+             */
+            fun of(data: ByteArray): ImagePartId = ImagePartId(data.contentHashCode())
         }
     }
 
@@ -254,6 +261,7 @@ object ImageBudget {
     fun planRequestBudget(
         images: List<BudgetImage>,
         maxBytes: Long = MAX_REQUEST_BYTES,
+        forceDrop: Set<ImagePartId> = emptySet(),
     ): RequestBudgetPlan {
         if (images.isEmpty()) {
             return RequestBudgetPlan(emptySet(), emptyMap(), 0L, 0L, 0, 0)
@@ -268,7 +276,7 @@ object ImageBudget {
             // Per-image cap-clamped size — same ceiling
             // `compressUnderBudget` would have produced if invoked.
             val effectiveSize = minOf(img.data.size.toLong(), MAX_PER_IMAGE_BYTES)
-            if (kept + effectiveSize <= maxBytes) {
+            if (id !in forceDrop && kept + effectiveSize <= maxBytes) {
                 kept += effectiveSize
             } else {
                 dropped.add(id)

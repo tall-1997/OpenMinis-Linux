@@ -261,8 +261,8 @@ object PersonaPromptLogic {
         val parts = msg.contentParts
         if (parts.any { it is AgentContentPart.ToolUse }) return false
         val hasToolResult = parts.any { it is AgentContentPart.ToolResult }
-        val hasText = msg.content.isNotBlank() ||
-            parts.any { it is AgentContentPart.Text && it.text.isNotBlank() }
+        val hasText = !msg.content.contains("<system-reminder id=\"turn-context\">") &&
+            (msg.content.isNotBlank() || parts.any { it is AgentContentPart.Text && it.text.isNotBlank() })
         if (hasToolResult && !hasText) return false
         return hasText
     }

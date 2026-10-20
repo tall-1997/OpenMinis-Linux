@@ -126,11 +126,23 @@ class TurnContextInjectionTest {
     }
 
     @Test
+    fun `persisted context row suppresses request-side injection`() {
+        val wrapped = "$TURN_CONTEXT_OPEN\nctx1\n$TURN_CONTEXT_CLOSE"
+        val contextRow = LLMMessage(
+            role = LLMMessage.Role.USER,
+            content = wrapped,
+            contentParts = listOf(AgentContentPart.Text(wrapped)),
+        )
+        // Retry rebuild: the context row still follows the user turn.
+        val history = listOf(user("q1"), contextRow, assistant("a1"))
+        assertSame(history, applyTurnContext(history, "ctx2"))
+    }
+
+    @Test
     fun `next turn rebuild keeps the assistant reply while the request-only block drops`() {
-        // Simulates what prepareRunHistory does between turns: the DB has the
-        // raw user text, not the request-only turn context. Turn 2's rebuilt
-        // history therefore diverges only on the OLD user message's tail — the
-        // new assistant reply and everything after stay byte-identical.
+        // Fallback path (no persisted context row): simulates what
+        // prepareRunHistory does between turns. Divergence stays confined to
+        // the old user message's tail.
         val turn1 = applyTurnContext(listOf(user("q1")), "ctx1")
         val rebuilt = listOf(user("q1"), assistant("a1"), user("q2"))
         val turn2 = applyTurnContext(rebuilt, "ctx2")
