@@ -80,12 +80,10 @@ class BrowserUseManager(
          */
         private const val BLANK_PAGE_HTML =
             "<!doctype html><html><head><meta name=\"viewport\" content=\"width=device-width\"></head><body></body></html>"
-        // [T-android-domstable-min-budget] C5: with the old 200ms floor and a
-        // 200ms poll interval the loop could only ever take ONE sample
-        // (first sample never matches lastSize=-1, then the delay exhausts
-        // the budget) — wait_for_dom_stable failed on every page at the
-        // minimum. 1000ms fits >=4 samples so the smallest budget can
-        // actually observe two equal readings.
+        // [T-android-domstable-min-budget] C5: with the old 200ms floor and
+        // 200ms poll the loop could only take ONE sample (first never matches
+        // lastSize=-1) — wait_for_dom_stable failed at the minimum budget.
+        // 1000ms fits >=4 samples so the smallest budget observes stability.
         private const val MIN_DOM_STABLE_TIMEOUT_MS = 1_000
         private const val MAX_DOM_STABLE_TIMEOUT_MS = 60_000
 
@@ -96,13 +94,10 @@ class BrowserUseManager(
             customUA: String? = null,
             systemUa: String? = null,
         ) {
-            // [T-android-browser-blank] The browser lives inside a Material3
-            // ModalBottomSheet, which hosts content in its own secondary
-            // window. On some OEM GPUs the WebView's hardware draw functor
-            // fails to composite in that window — the page loads (title/URL
-            // update normally) but the content area stays black or white.
-            // Rendering the WebView through its own hardware layer texture is
-            // the standard workaround for WebView-in-dialog blank rendering.
+            // [T-android-browser-blank] ModalBottomSheet hosts content in its
+            // own secondary window; on some OEM GPUs the WebView's hardware
+            // draw functor fails to composite there — page loads but content
+            // stays black/white. Hardware-layer texture is the workaround.
             webView.setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
             webView.settings.apply {
                 javaScriptEnabled = true
@@ -125,15 +120,11 @@ class BrowserUseManager(
             }
             WebViewEngine.applyCompat(webView)
             // T-android-webview-v3-port: enable first- + third-party cookies.
-            // WebView ships with third-party cookies disabled by default; that
-            // breaks hCaptcha / Turnstile / reCAPTCHA flows where the
-            // verification widget lives in a cross-origin iframe and posts its
-            // token back to the parent through a Set-Cookie round-trip. The
-            // agent-driven browser is the user's surrogate; matching Chrome's
-            // default unblocks the same captcha flows the user would clear in
-            // a real browser tab. First-party setAcceptCookie defaults to
-            // true on every Android version we support — calling it
-            // explicitly anyway so the intent is grep-able.
+            // Third-party cookies default to off, breaking captcha iframes
+            // (hCaptcha/Turnstile/reCAPTCHA) that post tokens via Set-Cookie.
+            // Chrome's default is on; match it here. First-party defaults to
+            // true on every supported Android version — calling explicitly
+            // so the intent is grep-able.
             CookieManager.getInstance().apply {
                 setAcceptCookie(true)
                 setAcceptThirdPartyCookies(webView, true)
@@ -279,12 +270,10 @@ class BrowserUseManager(
             }
         }
         // Track the on-screen WebView width so applyViewport() can compute a
-        // shrink-to-fit initial scale. The synthetic measure/layout pass that
-        // applyViewport performs to make `window.innerWidth` match the agent
-        // viewport is independent of the container the AndroidView is hosted
-        // in — without this listener we have no way to learn the container's
-        // visible width, and oversize CSS viewports (e.g. 1280×800 on a
-        // ~1080px-wide phone) would render off-screen to the right.
+        // shrink-to-fit initial scale. The synthetic measure/layout pass is
+        // independent of the container — without this listener we can't learn
+        // the visible width, and oversize CSS viewports (e.g. 1280×800 on a
+        // ~1080px phone) would render off-screen to the right.
         webView.addOnLayoutChangeListener { _, l, _, r, _, _, _, _, _ ->
             val w = r - l
             if (w > 0 && w != lastKnownContainerWidthPx) {
@@ -298,10 +287,9 @@ class BrowserUseManager(
     }
 
     /**
-     * Read a blob: URL from inside the page's JS context and deliver its bytes
-     * through the `__minis__.saveBlobDownload` bridge. blob: object URLs are
-     * scoped to the page — they cannot be fetched from native code, so this
-     * injected fetch + FileReader round-trip is the only way to get the data.
+     * Read a blob: URL from inside the page via `__minis__.saveBlobDownload`.
+     * blob: URLs are scoped to the page and cannot be fetched from native code,
+     * so the injected fetch + FileReader round-trip is the only way to get data.
      */
     private fun fetchBlobDownload(blobUrl: String, contentDisposition: String?, mimeType: String?) {
         val guessedName = android.webkit.URLUtil.guessFileName(blobUrl, contentDisposition, mimeType)
@@ -355,11 +343,10 @@ class BrowserUseManager(
             0 // CSS viewport already fits — let WebView use its default scale.
         }
         // [T-android-browser-blank] Guard against a corrupted container width
-        // (e.g. a synthetic 1px layout leaking into the layout listener): a
-        // microscopic sticky initial scale renders the next page load
-        // effectively blank. No legitimate shrink-to-fit is below ~10%
-        // (desktop 1280 CSS on a 360dp phone is ~28%) — fall back to the
-        // WebView default instead.
+        // (e.g. synthetic 1px layout leaking into the layout listener): a
+        // microscopic sticky scale renders the next load effectively blank.
+        // No legitimate shrink-to-fit is below ~10% (1280 CSS on 360dp phone
+        // is ~28%) — fall back to the WebView default instead.
         if (scalePct in 1..9) {
             Log.w(TAG, "applyShrinkToFit: implausible scale $scalePct% (container=${containerPx}px, css=${cssWidthPx}px) — using default")
             scalePct = 0
@@ -775,7 +762,7 @@ class BrowserUseManager(
     private suspend fun attachSnapshot(result: BrowserActionResult): BrowserActionResult {
         return try {
             delay(300) // Let page settle
-            val bitmap = captureWebViewBitmap() ?: return result
+            val bitmap = captureWebViewBitmap(gpu = true) ?: return result
             val file = try {
                 withContext(Dispatchers.IO) { saveScreenshotBitmap(bitmap, screenshotsDir, "snapshot", SNAPSHOT_QUALITY) }
             } finally {
@@ -929,7 +916,7 @@ class BrowserUseManager(
         }
 
         val bitmap = try {
-            captureWebViewBitmap()
+            captureWebViewBitmap(gpu = !didStretch)
         } finally {
             if (didStretch) {
                 withContext(kotlinx.coroutines.NonCancellable + Dispatchers.Main) {
@@ -1025,7 +1012,7 @@ class BrowserUseManager(
      */
     suspend fun captureLiveSnapshot(): Bitmap? = captureWebViewBitmap()
 
-    private suspend fun captureWebViewBitmap(): Bitmap? = withContext(Dispatchers.Main) {
+    private suspend fun captureWebViewBitmap(gpu: Boolean = false): Bitmap? = withContext(Dispatchers.Main) {
         if (isDisposed) return@withContext null
         try {
             // WebView may be detached (pool-owned, never added to a window), so
@@ -1047,13 +1034,26 @@ class BrowserUseManager(
                 webView.layout(0, 0, targetW, targetH)
                 w = targetW; h = targetH
             }
+            // [T-android-browser-gpu-capture] GPU path: render through the real
+            // compositor so WebGL/<video>/GPU-only layers appear. Falls back to
+            // software draw if the GPU surface cannot be created (returns null).
+            if (gpu) {
+                HeadlessRenderHost.capture(webView, w, h)?.let { return@withContext it }
+                Log.w(TAG, "GPU capture returned null, falling back to software draw")
+            }
             val (boundedW, boundedH) = ScreenshotBudget.size(w, h)
             val bitmap = Bitmap.createBitmap(boundedW, boundedH, Bitmap.Config.ARGB_8888)
             try {
                 val canvas = Canvas(bitmap)
                 canvas.scale(boundedW.toFloat() / w, boundedH.toFloat() / h)
+                // [T-android-browser-scroll-offset] Detached WebView scrollY is
+                // 0 even when scrolled — CSS offset from JS is the source of truth.
+                val cssScroll = BrowserScrollOffset.read(webView)
+                val offsetX = if (webView.scrollX != 0) webView.scrollX.toFloat() else cssScroll.first * density
+                val offsetY = if (webView.scrollY != 0) webView.scrollY.toFloat() else cssScroll.second * density
+                if (offsetX != 0f || offsetY != 0f) canvas.translate(-offsetX, -offsetY)
                 webView.draw(canvas)
-                Log.d(TAG, "captureWebViewBitmap ${w}x$h -> ${boundedW}x$boundedH")
+                Log.d(TAG, "captureWebViewBitmap ${w}x$h -> ${boundedW}x$boundedH (offset=${offsetX},${offsetY})")
                 bitmap
             } catch (t: Throwable) {
                 bitmap.recycle()

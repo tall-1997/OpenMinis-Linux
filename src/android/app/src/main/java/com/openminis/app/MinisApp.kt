@@ -1126,6 +1126,7 @@ class MinisApp : Application(), ImageLoaderFactory {
         if (level == TRIM_MEMORY_RUNNING_CRITICAL || level >= TRIM_MEMORY_COMPLETE) {
             com.openminis.app.sandbox.SandboxWorkload.stopUnprotected("trim-memory level=$level")
         }
+        com.openminis.app.browser.BrowserTabPoolRegistry.onTrimMemory(level)
         if (level >= TRIM_MEMORY_COMPLETE) {
             Log.i("MinisApp", "onTrimMemory(level=$level): tearing down the offscreen KaTeX WebView")
             runCatching { com.openminis.app.ui.chat.KatexWebViewPool.releaseWebView() }
@@ -1137,8 +1138,7 @@ class MinisApp : Application(), ImageLoaderFactory {
         // onTerminate is called only on emulators or when the system
         // explicitly tears down — real devices usually skip it. Still
         // worth marking the beacon: a present clean_exit on a real
-        // device proves we shut down voluntarily; its absence is the
-        // signal we care about for [LaunchCycleBeacon].
+        // device proves we shut down voluntarily.
         try {
             com.openminis.app.diagnostics.LaunchCycleBeacon.recordCleanExit(this)
         } catch (t: Throwable) {

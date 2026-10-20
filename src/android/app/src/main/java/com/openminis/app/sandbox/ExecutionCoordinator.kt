@@ -38,7 +38,14 @@ object ExecutionCoordinator {
     data class CommandResult(
         val output: String,
         val exitCode: Int,
-        val durationMs: Long
+        val durationMs: Long,
+        /**
+         * [T-android-shell-process-budget] A <system-reminder> for the model
+         * when the command waited in [GlobalShellThrottle]'s queue; null when
+         * it started at once. Kept apart from [output] so the caller can put
+         * it after everything else it appends (exit status, redaction).
+         */
+        val queueNote: String? = null,
     )
 
     private var appContextRef: Context? = null
@@ -48,8 +55,24 @@ object ExecutionCoordinator {
     /** Thread-safe per-session shell registry. */
     private val shells = ConcurrentHashMap<String, PersistentShell>()
 
+    /** [T-android-shell-fresh-process] Live fresh-process commands per session. */
+    private val freshShells = ConcurrentHashMap<String, MutableSet<FreshProcessShell>>()
+
+    /** [T-android-fresh-shells-concurrent] Thread-safe per-session set for [freshShells]. */
+    private fun newFreshShellSet(): MutableSet<FreshProcessShell> = ConcurrentHashMap.newKeySet()
+
     /** Thread-safe per-session mutex registry. */
     private val mutexes = ConcurrentHashMap<String, Mutex>()
+
+    /**
+     * [T-android-a11y-helper-mount] dispatch session id -> the session whose
+     * `/var/minis` directories its shell binds (fsSessionId), recorded only
+     * when they differ (a helper / sub agent sharing its parent's workspace).
+     */
+    private val mountedSessionIds = ConcurrentHashMap<String, String>()
+
+    /** Which mechanism runs a shell_execute. */
+    internal var executionStrategy: ShellExecutionStrategy = ShellExecutionStrategy.DEFAULT
 
     /**
      * Per-session snapshot of the env-var keys injected on the previous
@@ -109,6 +132,33 @@ object ExecutionCoordinator {
     }
 
     /**
+     * [T-android-a11y-helper-mount] The session id whose per-session dirs are
+     * mounted at `/var/minis/...` for a command dispatched as [sessionId].
+     * Defaults to [sessionId] when no helper mount was recorded.
+     */
+    fun mountedSessionIdFor(sessionId: String): String = mountedSessionIds[sessionId] ?: sessionId
+
+    /**
+     * A fresh process that could not be spawned ran nothing and is safe to
+     * retry. Everything else - a warm shell that died, a command killed
+     * mid-run - may have had effects.
+     */
+    internal fun isStartFailure(result: CommandResult): Boolean =
+        result.exitCode == -1 && result.output.startsWith(FreshProcessShell.SPAWN_FAILED_PREFIX)
+
+    /**
+     * [T-android-shell-process-budget] Tell the model a command sat in the
+     * queue, so a slow result is not read as a slow command.
+     */
+    internal fun queueNote(queuedMs: Long, startRetries: Int): String {
+        val secs = String.format(java.util.Locale.US, "%.1f", queuedMs / 1000.0)
+        val retried = if (startRetries > 0) " Its process failed to start $startRetries time(s) and was retried." else ""
+        return "<system-reminder>This command was queued for ${secs}s before it started, because Android " +
+            "limits how many processes an app may run at once.$retried It then ran to completion and its output " +
+            "is complete, but its measured duration may be inaccurate.</system-reminder>"
+    }
+
+    /**
      * Execute a command in the session's persistent shell.
      *
      * Flow:
@@ -126,6 +176,13 @@ object ExecutionCoordinator {
         timeout: Long = 600_000L,
         lineCallback: ((String) -> Unit)? = null,
         resourceClass: SandboxResourceGate.ResourceClass = SandboxResourceGate.ResourceClass.AUTO,
+        /**
+         * [T-android-a11y-helper-mount] Session whose `/var/minis` dirs the
+         * shell binds (a helper's PARENT). The shell process itself stays
+         * keyed by [sessionId], so stop / cleanup never reach the parent's
+         * shell.
+         */
+        fsSessionId: String? = null,
     ): CommandResult {
         MCPToolPolicy.blockedMessage(appContext, command)?.let { msg ->
             lineCallback?.invoke(msg)
@@ -133,6 +190,22 @@ object ExecutionCoordinator {
         }
         SandboxJobKeepAlive.onStart(appContext, sessionId, command)
         try {
+        // [T-android-a11y-helper-mount] Remember whose /var/minis dirs this
+        // dispatch id is mounted with, so native offloads (which only learn
+        // the MINIS_CHAT_SESSION_ID = dispatch id) resolve guest paths
+        // against the directory the guest actually sees. See
+        // [mountedSessionIdFor].
+        if (fsSessionId != null && fsSessionId != sessionId) {
+            mountedSessionIds[sessionId] = fsSessionId
+        }
+
+        // [T-android-shell-fresh-process] Route through the strategy.
+        // FRESH_PROCESS needs no lease, no pool slot and no mutex — a command
+        // that owns its own process cannot collide with another one, so the
+        // serialisation the warm path requires is simply absent here.
+        if (executionStrategy == ShellExecutionStrategy.FRESH_PROCESS) {
+            return executeFresh(sessionId, command, timeout, lineCallback, fsSessionId)
+        }
         // ConcurrentHashMap.getOrPut (the Kotlin extension) is NOT atomic — it
         // does get→compute→put, so two first-touching coroutines can both
         // construct a Mutex and the loser's callers serialise on an orphan.
@@ -196,47 +269,18 @@ object ExecutionCoordinator {
             }
             val startTime = System.currentTimeMillis()
 
-            // Auto-boot PRoot if not already booted
-            if (!PRootKernel.isBooted) {
-                Log.i(TAG, "[$sessionId] Auto-booting PRootKernel")
-                PRootKernel.boot(appContext)
-            }
-
-            // [diag] trace the sessionId that shell_execute is dispatched with —
-            // suspected source of the Chinese-emoji filename vanishing bug.
-            // S-14: only a redacted summary (program/len/hash), never the line.
-            Log.w(TAG, "[diag] execute sessionId=$sessionId ${LogRedaction.command(command)}")
-
-            // Get or create shell — protected by globalLock to avoid duplicate creation
-            val shell = getOrCreateShell(sessionId)
-            recordLastCommand(sessionId, command)
-
-            // Inject user-defined environment variables as a *full snapshot*
-            // (T124a). Pass the previously-injected key set so applyEnvironment
-            // can `unset` anything the user has since removed from settings;
-            // otherwise the long-lived shell would keep stale values.
-            val envVars = envVarRepository?.allAsDict() ?: emptyMap()
-            val previousKeys = lastInjectedKeys[sessionId] ?: emptySet()
-            if (envVars.isNotEmpty() || previousKeys.isNotEmpty()) {
-                shell.applyEnvironment(envVars, previousKeys = previousKeys)
-                lastInjectedKeys[sessionId] = envVars.keys.toSet()
-            }
-            // Plugin installers add command links to the guest PATH while this
-            // persistent shell remains alive. Refresh both PATH and bash's
-            // command hash before every command so the next command sees it.
-            shell.refreshPath()
-
-            val (rawOutput, exitCode) = shell.executeCommand(
+            // Route: fresh process vs. warm shell.
+            // Fresh path already handled before withCommandLock.
+            // This block is warm-shell execution only.
+            val (rawOutput, exitCode, durationMs) = executeWarmRaw(
+                sessionId = sessionId,
                 command = command,
                 timeout = armed,
                 lineCallback = lineCallback,
-                // [T-resource-class-honoured] Pass the budget this function
-                // already computed. Re-deriving it downstream from the command
-                // text alone silently dropped `resourceClass`.
-                callerBudget = budget,
+                budget = budget,
             )
 
-            val durationMs = System.currentTimeMillis() - startTime
+            // Common post-processing (shared with fresh path)
             val sanitized = TerminalSanitizer.sanitize(rawOutput)
             val (stripped, loggedExit) = TerminalSanitizer.dropOffloadTrace(sanitized)
             var effectiveExit = exitCode
@@ -265,6 +309,162 @@ object ExecutionCoordinator {
         }
     }
 
+    /**
+     * [T-android-shell-fresh-process] Run [command] in a throwaway process
+     * that owns its own pipe — no pool slot, no mutex, no warm shell. A
+     * command that owns its own process cannot collide with another one, so
+     * the serialisation the warm path requires is simply absent here.
+     *
+     * The process budget ([SandboxResourceGate.withCommandLock]) is NOT taken
+     * here: a fresh process is admitted directly by [GlobalShellThrottle]
+     * inside [FreshProcessShell] via the strategy's own spawn path. This
+     * matches upstream, where the budget gate wraps the whole [execute] and
+     * the fresh path is a leaf that the budget already admitted.
+     *
+     * Seccomp self-heal ([SeccompFallbackPolicy]): if the child dies on an
+     * early fatal signal with no output, retry once with
+     * PROOT_NO_SECCOMP=1 — the same narrow gate the warm path uses.
+     */
+    private suspend fun executeFresh(
+        sessionId: String,
+        command: String,
+        timeout: Long,
+        lineCallback: ((String) -> Unit)?,
+        fsSessionId: String?,
+    ): CommandResult {
+        val startTime = System.currentTimeMillis()
+        val bindMounts = buildSessionBindMounts(fsSessionId ?: sessionId)
+        val envVars = envVarRepository?.allAsDict() ?: emptyMap()
+
+        suspend fun attempt(noSeccomp: Boolean): Pair<String, Int> {
+            val shell = FreshProcessShell(
+                context = appContext,
+                sessionId = sessionId,
+                sessionBindMounts = bindMounts,
+                useNoSeccomp = noSeccomp,
+            )
+            // [T-android-shell-fresh-process] Register before running so
+            // stopCurrentCommand() can reach this command. A fresh shell is
+            // owned by this call frame, unlike a pooled PersistentShell, so
+            // without the registry the Stop button would have nothing to
+            // kill and a running command would ignore it.
+            freshShells.compute(sessionId) { _, existing ->
+                (existing ?: newFreshShellSet()).also { it.add(shell) }
+            }
+            return try {
+                shell.execute(
+                    command = command,
+                    timeout = timeout,
+                    envVars = envVars,
+                    lineCallback = lineCallback,
+                )
+            } finally {
+                freshShells.computeIfPresent(sessionId) { _, set ->
+                    set.remove(shell)
+                    if (set.isEmpty()) null else set
+                }
+            }
+        }
+
+        var (rawOutput, exitCode) = attempt(noSeccomp = false)
+        // [T-android-fresh-seccomp-selfheal / GH#186] The warm path retries
+        // once with PROOT_NO_SECCOMP=1 when the child dies on an early fatal
+        // signal with no output. The fresh path needs the same self-heal or
+        // a GH#186 device sees every shell_execute die with 135/139.
+        val firstDurationMs = System.currentTimeMillis() - startTime
+        if (SeccompFallbackPolicy.shouldRetryWithoutSeccomp(
+                exitCode = exitCode,
+                durationMs = firstDurationMs,
+                producedOutput = rawOutput.isNotEmpty(),
+                alreadyRetried = false,
+            )
+        ) {
+            com.openminis.app.logging.AppLogger.warning(
+                TAG,
+                SeccompFallbackPolicy.retryLogLine(exitCode, firstDurationMs, "fresh shell command"),
+            )
+            // No output came out of the first attempt (a precondition of the
+            // retry), so reusing lineCallback cannot duplicate anything.
+            val retried = attempt(noSeccomp = true)
+            rawOutput = retried.first
+            exitCode = retried.second
+        }
+        val durationMs = System.currentTimeMillis() - startTime
+        val sanitized = TerminalSanitizer.sanitize(rawOutput)
+        val (stripped, loggedExit) = TerminalSanitizer.dropOffloadTrace(sanitized)
+        var effectiveExit = exitCode
+        if (effectiveExit == 0 && loggedExit != null && loggedExit != 0) effectiveExit = loggedExit
+        if (effectiveExit == 0 && stripped.contains("handler_timeout")) effectiveExit = 124
+        val truncated = TerminalSanitizer.truncateIfNeeded(stripped)
+        val output = if (effectiveExit != 0 && effectiveExit != 124) {
+            "$truncated\n(exit code: $effectiveExit)"
+        } else {
+            truncated
+        }
+        return CommandResult(
+            output = MCPToolPolicy.filterToolsOutput(appContext, command, output),
+            exitCode = effectiveExit,
+            durationMs = durationMs,
+        )
+    }
+
+    /**
+     * Warm-shell execution core — the body that runs inside the per-session
+     * mutex and the process-budget gate. Returns the raw (output, exitCode,
+     * durationMs) triple; the caller applies the shared post-processing.
+     */
+    private suspend fun executeWarmRaw(
+        sessionId: String,
+        command: String,
+        timeout: Long,
+        lineCallback: ((String) -> Unit)?,
+        budget: com.openminis.app.sandbox.kernel.ProcessBudget,
+    ): Triple<String, Int, Long> {
+        val startTime = System.currentTimeMillis()
+
+        // Auto-boot PRoot if not already booted
+        if (!PRootKernel.isBooted) {
+            Log.i(TAG, "[$sessionId] Auto-booting PRootKernel")
+            PRootKernel.boot(appContext)
+        }
+
+        // [diag] trace the sessionId that shell_execute is dispatched with —
+        // suspected source of the Chinese-emoji filename vanishing bug.
+        // S-14: only a redacted summary (program/len/hash), never the line.
+        Log.w(TAG, "[diag] execute sessionId=$sessionId ${LogRedaction.command(command)}")
+
+        // Get or create shell — protected by globalLock to avoid duplicate creation
+        val shell = getOrCreateShell(sessionId)
+        recordLastCommand(sessionId, command)
+
+        // Inject user-defined environment variables as a *full snapshot*
+        // (T124a). Pass the previously-injected key set so applyEnvironment
+        // can `unset` anything the user has since removed from settings;
+        // otherwise the long-lived shell would keep stale values.
+        val envVars = envVarRepository?.allAsDict() ?: emptyMap()
+        val previousKeys = lastInjectedKeys[sessionId] ?: emptySet()
+        if (envVars.isNotEmpty() || previousKeys.isNotEmpty()) {
+            shell.applyEnvironment(envVars, previousKeys = previousKeys)
+            lastInjectedKeys[sessionId] = envVars.keys.toSet()
+        }
+        // Plugin installers add command links to the guest PATH while this
+        // persistent shell remains alive. Refresh both PATH and bash's
+        // command hash before every command so the next command sees it.
+        shell.refreshPath()
+
+        val (rawOutput, exitCode) = shell.executeCommand(
+            command = command,
+            timeout = timeout,
+            lineCallback = lineCallback,
+            // [T-resource-class-honoured] Pass the budget this function
+            // already computed. Re-deriving it downstream from the command
+            // text alone silently dropped `resourceClass`.
+            callerBudget = budget,
+        )
+
+        val durationMs = System.currentTimeMillis() - startTime
+        return Triple(rawOutput, exitCode, durationMs)
+    }
 
     private fun recordLastCommand(sessionId: String, command: String) {
         if (sessionId.startsWith("__") || sessionId == "self-build") return
@@ -430,6 +630,8 @@ object ExecutionCoordinator {
             val prefix = lanePrefix(sessionId)
             shells.keys.filter { it.startsWith(prefix) }.forEach { terminateOne(it) }
         }
+        // [T-android-shell-fresh-process] Drop the mount mapping too.
+        mountedSessionIds.remove(sessionId)
     }
 
     private fun terminateOne(sessionId: String) {
@@ -440,6 +642,10 @@ object ExecutionCoordinator {
         // shouldn't try to `unset` keys that don't exist in the new shell.
         lastInjectedKeys.remove(sessionId)
         shell?.stop()
+        // [T-android-shell-fresh-process] Stop any fresh-process commands
+        // still running for this session (a session can run several
+        // concurrently). Safe if none are live.
+        stopFreshShells(sessionId)
         if (shell != null) Log.i(TAG, "[$sessionId] Shell terminated")
     }
 
@@ -454,11 +660,17 @@ object ExecutionCoordinator {
                 val prefix = lanePrefix(sessionId)
                 shells.keys.filter { it.startsWith(prefix) }.forEach { stopOne(it) }
             }
+            // [T-android-shell-fresh-process] Stop fresh-process commands too.
+            stopFreshShells(sessionId)
         } else {
             // Stop all sessions (legacy/fallback)
             shells.values.forEach { it.stop() }
             shells.clear()
             lastInjectedKeys.clear()
+            // [T-android-shell-fresh-process] Stop all fresh shells across
+            // all sessions.
+            freshShells.values.flatten().forEach { runCatching { it.stop() } }
+            freshShells.clear()
             ShellExecutor.destroyCurrent()
         }
     }
@@ -511,7 +723,22 @@ object ExecutionCoordinator {
         val shell = shells.remove(sessionId)
         lastInjectedKeys.remove(sessionId)
         shell?.stop()
+        // [T-android-shell-fresh-process] Also stop fresh-process commands
+        // for this session — Stop means "stop everything this conversation
+        // is running", not just the warm shell.
+        stopFreshShells(sessionId)
         Log.i(TAG, "[$sessionId] Shell stopped by user")
+    }
+
+    /**
+     * [T-android-shell-fresh-process] Stop every live [FreshProcessShell]
+     * for [sessionId]. Safe to call when none are running.
+     */
+    private fun stopFreshShells(sessionId: String) {
+        val set = freshShells.remove(sessionId) ?: return
+        for (shell in set) {
+            runCatching { shell.stop() }
+        }
     }
 
     fun ownerSessionId(sessionId: String): String {
