@@ -157,6 +157,34 @@ class DevSuiteCatalogTest {
     }
 
     @Test
+    fun `nodejs core installs the pinned tarball and gates on the major version`() {
+        // [T-devsuite-node24-tarball] The distro node is 18.19.1 (upstream EOL
+        // 2025-04-30) and noble has no newer major, so this component must not
+        // apt-install node/npm — it installs the SHA256-pinned official arm64
+        // tarball and leaves the distro package in place as the fallback.
+        val core = DevSuiteCatalog.bundleById("nodejs-suite")?.component("nodejs-core")
+        assertNotNull("nodejs-core missing", core)
+        core!!
+        assertTrue(
+            "nodejs-core must run minis-setup-node: ${core.postInstallSteps}",
+            core.postInstallSteps.contains("/usr/local/bin/minis-setup-node"),
+        )
+        assertFalse("nodejs-core must not apt-install the distro node", core.aptPackages.contains("nodejs"))
+        assertFalse("nodejs-core must not apt-install the distro npm", core.aptPackages.contains("npm"))
+        // A distro node 18 on PATH must fail the probe, or the upgrade never runs.
+        assertTrue(
+            "probe must be version-gated: ${core.checkCommand}",
+            core.checkCommand.contains("process.versions.node"),
+        )
+        assertTrue(core.checkCommand.contains(">= 24"))
+        // Uninstall rolls back to the distro node.
+        assertTrue(core.purgePaths.contains("/opt/nodejs"))
+        assertTrue(core.purgeLinks.containsAll(listOf("node", "npm", "npx", "corepack")))
+        // 189 MiB unpacked + 30 MiB tarball + cache headroom.
+        assertTrue("estimate too small: ${core.estimatedBytes}", core.estimatedBytes >= 300_000_000L)
+    }
+
+    @Test
     fun `expected catalog surface is present`() {
         val bundleIds = DevSuiteCatalog.bundles.map { it.id }.toSet()
         assertEquals(

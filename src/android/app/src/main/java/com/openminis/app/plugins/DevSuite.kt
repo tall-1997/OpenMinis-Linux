@@ -177,12 +177,23 @@ object DevSuiteCatalog {
             components = listOf(
                 DevComponent(
                     id = "nodejs-core",
-                    name = "Node.js 核心运行时",
-                    description = "node + npm",
+                    name = "Node.js 24 LTS 核心运行时",
+                    description = "node 24 + npm 11（官方 arm64 tarball，SHA256 钉死校验；系统 node 18 保留作回退）",
                     isRequired = true,
-                    aptPackages = listOf("nodejs", "npm"),
-                    checkCommand = "command -v node && command -v npm",
-                    estimatedBytes = 250_000_000L,
+                    // [T-devsuite-node24-tarball] No apt nodejs/npm here: noble's
+                    // nodejs is 18.19.1 (upstream EOL 2025-04-30) and NodeSource
+                    // is a trap in this guest (minis-mirror deletes
+                    // sources.list.d/*.sources, and the deb Conflicts: npm).
+                    // xz-utils unpacks the .tar.xz; curl/ca-certificates are
+                    // re-asserted so a stripped rootfs can still fetch it.
+                    aptPackages = listOf("ca-certificates", "curl", "xz-utils"),
+                    postInstallSteps = listOf("/usr/local/bin/minis-setup-node"),
+                    // Version-gated: a distro node 18 already on PATH must NOT
+                    // read as ready, or the upgrade would never run.
+                    checkCommand = "node -e 'process.exit((+process.versions.node.split(\".\")[0]) >= 24 ? 0 : 1)'",
+                    estimatedBytes = 350_000_000L,
+                    purgePaths = listOf("/opt/nodejs"),
+                    purgeLinks = listOf("node", "npm", "npx", "corepack"),
                 ),
                 DevComponent(
                     id = "nodejs-pkg",

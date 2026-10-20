@@ -146,10 +146,21 @@ if wants "$sel" all llama-cpp; then
   echo "        because a source archive carries no commit object to verify)."
 fi
 
-if wants "$sel" all qemu-x86-64-compat nodejs-pkg code-search-toolkit python-core python-ai-dev nodejs-core go-toolchain; then
+if wants "$sel" all nodejs-core; then
+  echo
+  echo "== nodejs-core (minis-setup-node, pinned tarball) =="
+  # Node 24 LTS from the official arm64 build; the distro node 18 stays
+  # installed as the fallback and is shadowed on PATH via /usr/local/bin.
+  emit "node-v24.22.0-linux-arm64.tar.xz" \
+    "https://nodejs.org/dist/v24.22.0/node-v24.22.0-linux-arm64.tar.xz" \
+    "https://registry.npmmirror.com/-/binary/node/v24.22.0/node-v24.22.0-linux-arm64.tar.xz"
+  echo "  DIGEST SOURCE: https://nodejs.org/dist/v24.22.0/SHASUMS256.txt"
+fi
+
+if wants "$sel" all qemu-x86-64-compat nodejs-pkg code-search-toolkit python-core python-ai-dev go-toolchain; then
   echo
   echo "== apt / npm components =="
-  echo "  qemu-user-static, rg/fd/fzf/bat, python3, nodejs/npm, golang-go come from the guest's apt"
+  echo "  qemu-user-static, rg/fd/fzf/bat, python3, golang-go come from the guest's apt"
   echo "  sources (apt verifies the repository signature + per-package checksum itself), and pnpm/yarn"
   echo "  from the npm registry (integrity hashes in the package metadata). Nothing to pre-fetch here:"
   echo "  on a restricted network switch the mirror with 'minis-mirror set tuna|ustc|sjtu|...' instead."
