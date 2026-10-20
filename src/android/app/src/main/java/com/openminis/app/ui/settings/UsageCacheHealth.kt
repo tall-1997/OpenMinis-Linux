@@ -146,12 +146,6 @@ internal fun CacheHealthCard(
                         value = formatCount(grandTotal.cacheCreationTokens),
                     )
                 }
-                if (grandTotal.totalInput > 0) {
-                    UsagePill(
-                        label = stringResource(R.string.usage_label_total_input),
-                        value = formatCount(grandTotal.totalInput),
-                    )
-                }
             }
         }
 

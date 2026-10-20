@@ -110,7 +110,7 @@
 - **Responses cache key**：`OpenAIProvider.sessionCacheKey` 由 agent loop
   设为 session id，优先于“首条 user 文本哈希”，避免同开头两个会话撞 key。
 - **用量拆解**：Cache Health 卡增加每个 provider 的 cache read / creation
-  数字和总输入 pill；`[CacheDiag] usage input/cacheRead/cacheWrite/total/hit`
+  数字；`[CacheDiag] usage input/cacheRead/cacheWrite/total/hit`
   每请求一行，首轮写入与后续命中可分辨。
 - **skills 稳定顺序**：>120 个技能时先按优先级选择，再按
   `updatedAt desc, id` 渲染，避免一次技能使用重排 system 片段。
