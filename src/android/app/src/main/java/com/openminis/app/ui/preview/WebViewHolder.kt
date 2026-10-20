@@ -65,6 +65,15 @@ class WebViewHolder(
         )
         mobileUserAgent = settings.userAgentString
         webViewClient = object : WebViewClient() {
+            // [T-android-webview-render-process-gone] (GH#341) Handled, or the
+            // host app dies with the renderer. destroy() stays in our own
+            // cleanup path (this holder owns it), not here.
+            override fun onRenderProcessGone(
+                view: android.webkit.WebView?,
+                detail: android.webkit.RenderProcessGoneDetail?,
+            ): Boolean = com.openminis.app.ui.webview.WebViewRenderProcess
+                .handle("WebViewHolder", detail)
+
             override fun shouldOverrideUrlLoading(
                 view: WebView,
                 request: android.webkit.WebResourceRequest,

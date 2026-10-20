@@ -19,7 +19,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import com.openminis.app.R
@@ -55,22 +54,13 @@ class BrowserTabPool(private val context: Context) {
         /** Global custom viewport height SharedPreferences key (0 = use UA default). */
         const val PREF_GLOBAL_VIEWPORT_HEIGHT = "browser_custom_viewport_height"
 
-        /**
-         * [T-browser-use-per-tab-serial-android] Max time a browser_use call
-         * waits to acquire the per-tab-id serial lock before giving up. This is
-         * ONLY the lock-acquisition wait (waiting for another tool's operation
-         * on the SAME explicit tab id to finish) — it is NOT the browser task
-         * timeout. Once the lock is held the actual page operation keeps its
-         * existing per-action timeout (BrowserUseManager), untouched.
-         */
-        private const val TAB_SERIAL_WAIT_TIMEOUT_MS = 60_000L
+        /** [T-browser-use-per-tab-serial-android] Lock wait only — NOT the
+         *  action timeout, which the manager enforces once the lock is held. */
+        private const val TAB_SERIAL_WAIT_TIMEOUT_MS =
+            BrowserActionGuard.TAB_SERIAL_WAIT_TIMEOUT_MS
 
-        /**
-         * [T-android-browser-download-ux] Files-app-style middle truncation
-         * (iOS v3 String.middleTruncated): keeps the head and the tail so the
-         * extension stays visible. Used for the human-facing chat notices;
-         * panel rows truncate adaptively in Compose.
-         */
+        /** [T-android-browser-download-ux] Middle truncation (iOS v3): keeps
+         *  the extension visible. Compose panel rows truncate adaptively. */
         fun middleTruncated(name: String, head: Int = 22, tail: Int = 10): String {
             if (name.length <= head + tail + 1) return name
             return name.take(head) + "…" + name.takeLast(tail)
@@ -78,25 +68,15 @@ class BrowserTabPool(private val context: Context) {
 
         /**
          * [T-browser-implicit-tab-inuse-until-load-android] Grace window a tab
-         * stays `inUse` after an implicit-tab (tab_id-less) action completes.
-         * `navigate` already suspends until onPageFinished / its 30s timeout, so
-         * inUse is held through the page load itself; this grace then keeps it
-         * held a further 15s, re-armed on every subsequent action to that tab.
-         * During the grace window acquireTab(null) sees inUse=true and fans out
-         * to a fresh tab (createTab) instead of trampling the busy one — so N
-         * back-to-back tab-less navigates open N independent tabs rather than
-         * all overwriting tab 0. A same-task follow-up chain re-arms the timer
-         * each call, so the tab survives between consecutive operations.
+         * stays `inUse` after a tab_id-less action. During it acquireTab(null)
+         * fans out to a fresh tab instead of trampling the busy one, so N
+         * back-to-back tab-less navigates open N tabs; re-armed on every call.
          */
         private const val IMPLICIT_TAB_GRACE_MS = 15_000L
 
-        /**
-         * [T-browser-implicit-tab-inuse-until-load-android] When all tabs are
-         * busy and the pool is at MAX_TABS, an implicit-tab acquire waits up to
-         * this long (polling) for a tab to free instead of trampling a busy one.
-         * Bounded so a stuck tab can't hang the agent forever — after the window
-         * it falls back to the least-recently-active tab.
-         */
+        /** [T-browser-implicit-tab-inuse-until-load-android] When every tab is
+         *  busy at MAX_TABS, wait this long (polling) for one to free, then fall
+         *  back to the least-recently-active tab. */
         private const val IMPLICIT_TAB_WAIT_MS = 20_000L
         private const val IMPLICIT_TAB_WAIT_POLL_MS = 250L
     }
@@ -666,25 +646,27 @@ class BrowserTabPool(private val context: Context) {
      */
     private suspend fun executeSerialized(tabId: Int, input: BrowserActionInput): BrowserActionResult {
         val mutex = lockForTab(tabId)
-        val result = withTimeoutOrNull(TAB_SERIAL_WAIT_TIMEOUT_MS) {
-            mutex.withLock {
-                // [T-browser-readaction-follow-tab-and-yolo-android] Pin
-                // acquisition to the locked tab id. The follow-selected and
-                // YOLO paths resolve a target tab id whose lock we hold here,
-                // but input.tabId may be null (tab-less call) — without this
-                // override acquireTab(null) would re-run the fan-out and could
-                // land on a DIFFERENT tab than the one we locked, defeating
-                // both the serialization and the follow-tab fix.
-                runAcquiredAction(input, implicitTab = false, acquireTabId = tabId)
-            }
+        // (GH#245) Lock wait only: "tab busy" means ANOTHER call held the lock.
+        // The action itself has its own deadline inside runAcquiredAction.
+        if (!BrowserActionGuard.lockWithin(mutex, TAB_SERIAL_WAIT_TIMEOUT_MS)) {
+            return BrowserActionResult.error(
+                context.getString(
+                    R.string.browser_use_tab_busy_timeout,
+                    tabId,
+                    (TAB_SERIAL_WAIT_TIMEOUT_MS / 1000L).toInt(),
+                ),
+            )
         }
-        return result ?: BrowserActionResult.error(
-            context.getString(
-                R.string.browser_use_tab_busy_timeout,
-                tabId,
-                (TAB_SERIAL_WAIT_TIMEOUT_MS / 1000L).toInt(),
-            ),
-        )
+        try {
+            // [T-browser-readaction-follow-tab-and-yolo-android] Pin acquisition
+            // to the locked id: input.tabId may be null, and acquireTab(null)
+            // would fan out to a DIFFERENT tab than the one we locked.
+            return runAcquiredAction(input, implicitTab = false, acquireTabId = tabId)
+        } finally {
+            // Also runs on cancellation (the CLI's 90s timeout), so an
+            // abandoned call never leaves the tab locked.
+            mutex.unlock()
+        }
     }
 
     /**
@@ -724,8 +706,36 @@ class BrowserTabPool(private val context: Context) {
                 { activeRunJobs.remove(tab.id, actionJob); tab.manager.stopActiveAction() }
             } else null
             val unregisterStop = if (stopAction != null) run!!.registerStopAction(stopAction) else null
+            // (GH#245) A retired tab comes back under a NEW id (never reused),
+            // so say so first: earlier element references and page state are gone.
+            val rebuildNote = if (acquireTabId != null && tab.id != acquireTabId) {
+                "Tab $acquireTabId was rebuilt because its WebView stopped responding; " +
+                    "this result comes from replacement tab ${tab.id}. Re-read the page " +
+                    "before acting on element references taken earlier."
+            } else {
+                null
+            }
             val result = try {
-                tab.manager.execute(input)
+                // (GH#245) Hard deadline on every path. A deadline hit, or a
+                // cancellation after the action already ran long (the CLI giving
+                // up at 90s), flags the tab; the next acquireTab rebuilds it.
+                when (
+                    val outcome = BrowserActionGuard.runGuarded(
+                        onSuspect = { reason -> tab.manager.markWedged(reason) },
+                    ) { tab.manager.execute(input) }
+                ) {
+                    is BrowserActionGuard.Outcome.Done -> outcome.value
+                    is BrowserActionGuard.Outcome.DeadlineExceeded -> return BrowserActionResult.error(
+                        "Browser action '${input.action.value}' timed out on tab ${tab.id} after " +
+                            "${BrowserActionGuard.ACTION_DEAD_TIMEOUT_MS / 1000}s — the page stopped " +
+                            "responding. The tab has been reset and will be rebuilt on your next " +
+                            "browser call; retry the action.",
+                    )
+                    is BrowserActionGuard.Outcome.Wedged -> return BrowserActionResult.error(
+                        "Browser tab ${tab.id} is not usable: ${outcome.message}. It will be " +
+                            "rebuilt on your next browser call; retry the action.",
+                    )
+                }
             } finally {
                 unregisterStop?.invoke()
                 if (actionJob != null) activeRunJobs.remove(tab.id, actionJob)
@@ -747,7 +757,8 @@ class BrowserTabPool(private val context: Context) {
             // overwrites mid-flight when it spawns a fresh tab for a concurrent
             // navigate. Without this the agent had to guess tab_id for its
             // follow-up reads/scrolls and routinely picked the wrong tab.
-            stampTabId(withDialogs.copy(pageURL = tab.manager.currentURL.value), tab.id)
+            val stamped = stampTabId(withDialogs.copy(pageURL = tab.manager.currentURL.value), tab.id)
+            if (rebuildNote == null) stamped else stamped.copy(text = "$rebuildNote\n${stamped.text}")
         } finally {
             withContext(NonCancellable + Dispatchers.Main) {
             val tab = acquired ?: return@withContext
@@ -795,17 +806,6 @@ class BrowserTabPool(private val context: Context) {
      * — if the text already mentions `tab_id:` (e.g. newTab embeds it in its
      * narrative), skip the append.
      */
-    private fun stampTabId(result: BrowserActionResult, targetId: Int): BrowserActionResult {
-        val needsLine = !result.text.contains("tab_id:")
-        val text = if (needsLine) {
-            val needsNewline = result.text.isNotEmpty() && !result.text.endsWith("\n")
-            result.text + (if (needsNewline) "\n" else "") + "  tab_id: $targetId"
-        } else {
-            result.text
-        }
-        return result.copy(text = text, tabId = targetId)
-    }
-
     /**
      * [T-browser-implicit-tab-inuse-until-load-android] Hold [tab] inUse for a
      * grace window after an implicit-tab action, re-arming on each call. The
@@ -841,6 +841,17 @@ class BrowserTabPool(private val context: Context) {
      */
     private suspend fun acquireTab(requestedTabId: Int? = null): Tab? = withContext(Dispatchers.Main) {
         if (disposed) return@withContext null
+        // (GH#245) Retire unusable tabs BEFORE picking one: a wedged renderer
+        // never recovers, and leaving it in the pool routed every action back to
+        // the same frozen WebView. removeTab defers teardown for in-flight calls.
+        _tabs.value.filter { it.manager.isUnusable }.forEach { dead ->
+            Log.w(
+                TAG,
+                "Retiring unusable browser tab ${dead.id}: " +
+                    (dead.manager.wedgeReason ?: "renderer unusable"),
+            )
+            removeTab(dead, rememberUrl = true)
+        }
         var currentTabs = _tabs.value.toMutableList()
 
         // Find requested tab, falling back to default-or-create when the
@@ -1105,19 +1116,6 @@ class BrowserTabPool(private val context: Context) {
         _selectedTabId.value = tab.id
         saveState()
         return tab
-    }
-
-    private fun normalizeUrlForMatch(raw: String): String {
-        if (raw.isEmpty()) return ""
-        return try {
-            val uri = android.net.Uri.parse(raw)
-            val scheme = uri.scheme?.lowercase() ?: ""
-            val host = uri.host?.lowercase() ?: ""
-            val path = (uri.path ?: "").trimEnd('/')
-            "$scheme://$host$path"
-        } catch (_: Exception) {
-            raw.trimEnd('/')
-        }
     }
 
     /**

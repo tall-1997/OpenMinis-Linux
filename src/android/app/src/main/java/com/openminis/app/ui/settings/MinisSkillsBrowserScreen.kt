@@ -147,6 +147,14 @@ fun MinisSkillsBrowserScreen(
                         settings.domStorageEnabled = true
                         com.openminis.app.browser.WebViewEngine.applyCompat(this)
                         webViewClient = object : WebViewClient() {
+                            // [T-android-webview-render-process-gone] (GH#341)
+                            // Handled, or the host app dies with the renderer.
+                            override fun onRenderProcessGone(
+                                view: android.webkit.WebView?,
+                                detail: android.webkit.RenderProcessGoneDetail?,
+                            ): Boolean = com.openminis.app.ui.webview.WebViewRenderProcess
+                                .handle("MinisSkillsBrowser", detail)
+
                             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                                 url?.let { currentUrl = it }
                             }

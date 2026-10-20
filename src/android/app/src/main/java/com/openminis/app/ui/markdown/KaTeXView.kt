@@ -308,6 +308,15 @@ fun KaTeXRenderView(
                     }, "AndroidBridge")
 
                     webViewClient = object : WebViewClient() {
+                        // [T-android-webview-render-process-gone] (GH#341) See
+                        // WebViewRenderProcess: returning false/unhandled here
+                        // takes the whole app down with the renderer.
+                        override fun onRenderProcessGone(
+                            view: android.webkit.WebView?,
+                            detail: android.webkit.RenderProcessGoneDetail?,
+                        ): Boolean = com.openminis.app.ui.webview.WebViewRenderProcess
+                            .handle("KaTeXView", detail)
+
                         override fun onPageFinished(view: WebView?, url: String?) {
                             super.onPageFinished(view, url)
                             val escapedLatex = latex

@@ -241,6 +241,19 @@ internal object KatexWebViewPool {
                 p.second.complete(Triple(w, h, err))
             }, "AndroidBridge")
             webViewClient = object : WebViewClient() {
+                // [T-android-webview-render-process-gone] (GH#341) The renderer
+                // is shared process-wide, so this fires for the KaTeX view too.
+                // Report handled — an unhandled death kills the host app with
+                // SIGTRAP — and clear isReady so the next render rebuilds.
+                override fun onRenderProcessGone(
+                    view: android.webkit.WebView?,
+                    detail: android.webkit.RenderProcessGoneDetail?,
+                ): Boolean {
+                    isReady = false
+                    return com.openminis.app.ui.webview.WebViewRenderProcess
+                        .handle("KatexWebViewPool", detail)
+                }
+
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
                     isReady = true
