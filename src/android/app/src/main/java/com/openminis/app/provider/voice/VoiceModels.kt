@@ -45,6 +45,9 @@ data class VoiceOutputRequest(
     /** 0.25 ~ 4.0, null = 1.0 (provider default). */
     val speed: Float? = null,
     val responseFormat: VoiceOutputFormat = VoiceOutputFormat.MP3,
+    /** The resolved model — lets the provider route TTS by catalog tag
+     *  ([T-openrouter-voice-catalog]); null for template voices. */
+    val resolvedModel: LLMModel? = null,
 )
 
 enum class VoiceOutputFormat(val wireValue: String) {

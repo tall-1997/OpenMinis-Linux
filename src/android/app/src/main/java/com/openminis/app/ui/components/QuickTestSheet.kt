@@ -483,6 +483,7 @@ internal suspend fun performTest(
                                 input = "Hi! This is Minis testing text to speech.",
                                 model = entry.model.id,
                                 voice = entry.model.id,
+                                resolvedModel = entry.model,
                             ),
                         )
                         if (data.isEmpty()) {

@@ -45,6 +45,14 @@ data class LLMModel(
     // these fields existed.
     val budgetTokensMin: Int? = null,
     val budgetTokensMax: Int? = null,
+    // [T-openrouter-voice-catalog] OpenMinis#280. Which OpenRouter catalog
+    // endpoint this model came from: "tts" (?output_modalities=speech), "stt"
+    // (?output_modalities=transcription) or "none" (the default chat
+    // catalog). null = not catalog-sourced (custom entries, other providers,
+    // models saved before this field) — those keep the modality-based voice
+    // rules. See VoiceRole. Nullable so older persisted models decode as null.
+    // Mirrors iOS LLMModel.voiceRole.
+    val voiceRole: String? = null,
 ) {
     companion object {
         // Anthropic — mirrors iOS LLMTypes.swift allAnthropic.
@@ -381,3 +389,86 @@ fun String.normalizeModalityName(): String =
 
 fun List<String>?.normalizeModalities(): List<String>? =
     this?.map { it.normalizeModalityName() }?.distinct()?.takeIf { it.isNotEmpty() }
+
+// -- [T-android-modality-provider-fallback] provider default table ------------
+//
+// Providers absent from iOS's table are absent here too, and fall through to
+// text-only. That is deliberate: DeepSeek and every third-party OpenAI-compatible
+// endpoint (vLLM, Ollama, LiteLLM…, labelled "Custom" by OpenAIModelsApi) keep
+// deriving modality from what their /v1/models actually returned. Inventing a
+// default for them is exactly the regression this table must not cause — a
+// relay that serves a text-only model would start advertising image input.
+
+private val VISION_INPUT = listOf("text", "image", "pdf")
+private val FULL_MULTIMODAL_INPUT = listOf("text", "image", "pdf", "audio", "video")
+
+private val PROVIDER_DEFAULT_INPUT_MODALITIES: Map<String, List<String>> = mapOf(
+    "Anthropic" to VISION_INPUT,
+    "OpenAI" to VISION_INPUT,
+    "OpenRouter" to VISION_INPUT,
+    "Google" to FULL_MULTIMODAL_INPUT,
+    // [T-android-image-input-preflight] `LLMModel.provider` carries
+    // ProviderType.displayName, and the Gemini type's display name is
+    // "Google Gemini" — the "Google" row above never matched a real model, so
+    // un-catalogued Gemini models fell through with no default at all.
+    "Google Gemini" to FULL_MULTIMODAL_INPUT,
+    // [T-provider-default-modality-key] Port of iOS 97577e81d. iOS's enum
+    // (`ProviderType.defaultModality`) already said .vision for xAI, Kimi Code
+    // and GitHub Copilot, but its capability table had no rows for them, and a
+    // miss there is silent: it falls through to text-only. Android had the same
+    // gap. The shape is GH#265's: a Grok released after the last models.dev
+    // snapshot (grok-4.6 on its first day) declares no modalities, so it
+    // reported no image input — the model detail screen showed every input
+    // switch off and the image-input preflight refused photos for it.
+    //
+    // Keyed under BOTH spellings a real model can carry, the lesson of the
+    // Gemini row above: the catalog and the models APIs write "xAI" / "Kimi" /
+    // "GitHub Copilot" (the same strings iOS keys on), while the provider import
+    // path stamps ProviderType.displayName ("xAI (Grok)", "Kimi Code"). A model
+    // that declares its own list is unaffected; this only fills a null.
+    "xAI" to VISION_INPUT,
+    "xAI (Grok)" to VISION_INPUT,
+    "Kimi" to VISION_INPUT,
+    "Kimi Code" to VISION_INPUT,
+    "GitHub Copilot" to VISION_INPUT,
+)
+
+/** Output side of the same table. Every entry above is input-multimodal only
+ *  (iOS's `.fullMultimodal` is aliased to `.fullMultimodalInput`), so text out
+ *  is the correct default across the board. */
+private val PROVIDER_DEFAULT_OUTPUT_MODALITIES: Map<String, List<String>> = mapOf(
+    "Anthropic" to listOf("text"),
+    "OpenAI" to listOf("text"),
+    "OpenRouter" to listOf("text"),
+    "Google" to listOf("text"),
+    "Google Gemini" to listOf("text"),
+    "xAI" to listOf("text"),
+    "xAI (Grok)" to listOf("text"),
+    "Kimi" to listOf("text"),
+    "Kimi Code" to listOf("text"),
+    "GitHub Copilot" to listOf("text"),
+)
+
+/**
+ * [T-android-modality-provider-fallback] Input modalities to USE, with the
+ * provider default applied only as a last resort.
+ *
+ * Precedence, lowest priority last:
+ *   1. the model's own list (a catalog literal, or models.dev enrichment)
+ *   2. the provider default table
+ *
+ * The user's per-model override sits ABOVE both and is applied by the caller
+ * (ModelEntryDetailScreen / ModelOverrides), which never reaches this property
+ * when an override exists.
+ *
+ * Read this — not the raw field — for capability questions like "can it take an
+ * image". Do NOT read it for the voice SHAPE predicates: those match the stored
+ * lists exactly and must keep seeing null as null (see VoiceModality).
+ */
+val LLMModel.effectiveInputModalities: List<String>?
+    get() = inputModalities.normalizeModalities()
+        ?: PROVIDER_DEFAULT_INPUT_MODALITIES[provider]
+
+val LLMModel.effectiveOutputModalities: List<String>?
+    get() = outputModalities.normalizeModalities()
+        ?: PROVIDER_DEFAULT_OUTPUT_MODALITIES[provider]

@@ -162,6 +162,16 @@
             <action android:name="android.intent.action.SENDTO" />
             <data android:scheme="mailto" />
         </intent>
+        <!-- [T-android-tts-engine-visibility] TTS engines. Under Android 11+
+             package visibility (targetSdk 35) a user-installed engine
+             (Sogou, iFlytek, RHVoice…) is INVISIBLE without this: getEngines()
+             returns [] and TextToSpeech cannot bind it, so android-speak and
+             read-aloud's system fallback go silent. Google TTS works without
+             it only because it is force-queryable on GMS devices, which is why
+             our own test phones never showed the bug (OPPO PEHM00 report). -->
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
     </queries>
 
     <!-- [T-android-tablet-split] enableOnBackInvokedCallback (on <application>):

@@ -29,6 +29,9 @@ import com.openminis.app.data.model.hasAudioInput
 import com.openminis.app.data.model.hasAudioOutput
 import com.openminis.app.data.model.hasImageInput
 import com.openminis.app.data.model.hasVoiceModality
+import com.openminis.app.data.model.isVoiceCandidate
+import com.openminis.app.data.model.isVoiceInputCandidate
+import com.openminis.app.data.model.isVoiceOutputCandidate
 import com.openminis.app.data.model.isVoiceTemplateSeedShape
 import com.openminis.app.provider.ModelReleaseIndex
 import com.openminis.app.provider.ModelsDevApi
@@ -1946,9 +1949,9 @@ class ProviderRepository(private val context: Context) {
     /**
      * The resolved ACTIVE voice-input choice for the panel: either the on-device
      * System engine (with an online/offline preference) or a provider entry.
-     * Resolution order mirrors iOS VoiceProviderResolver: explicit override
-     * first, then the Voice Input group's members in fallback order (a System
-     * sentinel member selects the System engine), then the System default.
+     * Resolution order mirrors iOS VoiceProviderResolver: explicit override,
+     * then the Voice Input group's members (a System sentinel selects the
+     * System engine), then the System default.
      */
     data class VoiceInputChoice(
         /** null → provider-backed; non-null → System engine (true = prefer offline). */
@@ -1970,7 +1973,7 @@ class ProviderRepository(private val context: Context) {
         fun providerEntry(memberId: String): Pair<ProviderInstance, ModelEntry>? {
             val entry = config.modelEntries.find { it.id == memberId } ?: return null
             val inst = config.instances.find { it.id == entry.providerInstanceId } ?: return null
-            if (!inst.isEnabled || !entry.model.hasAudioInput) return null
+            if (!inst.isEnabled || !entry.model.isVoiceInputCandidate) return null
             return inst to entry
         }
 
@@ -2026,7 +2029,7 @@ class ProviderRepository(private val context: Context) {
         fun providerEntry(memberId: String): Pair<ProviderInstance, ModelEntry>? {
             val entry = config.modelEntries.find { it.id == memberId } ?: return null
             val inst = config.instances.find { it.id == entry.providerInstanceId } ?: return null
-            if (!inst.isEnabled || !entry.model.hasAudioInput) return null
+            if (!inst.isEnabled || !entry.model.isVoiceInputCandidate) return null
             return inst to entry
         }
 
@@ -2094,14 +2097,10 @@ class ProviderRepository(private val context: Context) {
     }
 
     /**
-     * Resolution order mirrors [resolveVoiceInputChoice] exactly: explicit
-     * override first, then the Voice Output group's members in fallback order
-     * (a System sentinel member selects the device engine), then the System
-     * default as the terminal fallback.
-     *
-     * The capability gate is `hasAudioOutput` (vs `hasAudioInput` on the input
-     * side) — a model that only *accepts* audio must never be picked to
-     * *produce* it.
+     * Resolution order mirrors [resolveVoiceInputChoice]: explicit override,
+     * then the Voice Output group's members, then the System default. Gate is
+     * `isVoiceOutputCandidate` (vs `isVoiceInputCandidate` on the input side) —
+     * a model that only *accepts* audio must never be picked to *produce* it.
      */
     fun resolveVoiceOutputChoice(): VoiceOutputChoice {
         ensureConfigLoaded()
@@ -2110,7 +2109,7 @@ class ProviderRepository(private val context: Context) {
         fun providerEntry(memberId: String): Pair<ProviderInstance, ModelEntry>? {
             val entry = config.modelEntries.find { it.id == memberId } ?: return null
             val inst = config.instances.find { it.id == entry.providerInstanceId } ?: return null
-            if (!inst.isEnabled || !entry.model.hasAudioOutput) return null
+            if (!inst.isEnabled || !entry.model.isVoiceOutputCandidate) return null
             return inst to entry
         }
 
@@ -2170,7 +2169,7 @@ class ProviderRepository(private val context: Context) {
             val entry = config.modelEntries.find { it.id == memberId } ?: continue
             val inst = config.instances.find { it.id == entry.providerInstanceId } ?: continue
             if (!inst.isEnabled) continue
-            val usable = if (output) entry.model.hasAudioOutput else entry.model.hasAudioInput
+            val usable = if (output) entry.model.isVoiceOutputCandidate else entry.model.isVoiceInputCandidate
             if (usable) return memberId
         }
         return null
@@ -2197,7 +2196,7 @@ class ProviderRepository(private val context: Context) {
     /** True if [instanceId] has ANY model entry with an audio modality. */
     fun hasVoiceModels(instanceId: String): Boolean =
         _config.value.modelEntries.any {
-            it.providerInstanceId == instanceId && it.model.hasVoiceModality
+            it.providerInstanceId == instanceId && it.model.isVoiceCandidate
         }
 
     /**
@@ -2247,7 +2246,7 @@ class ProviderRepository(private val context: Context) {
         val candidates = config.instances.toList().filter { inst ->
             inst.isEnabled &&
                 config.modelEntries.any { entry ->
-                    entry.providerInstanceId == inst.id && entry.model.hasVoiceModality
+                    entry.providerInstanceId == inst.id && entry.model.isVoiceCandidate
                 } &&
                 !isVoiceShadowDisabled(inst.id) &&
                 com.openminis.app.provider.voice.VoiceProviderFactory.supports(inst, loadApiKey(inst.id))
@@ -2273,8 +2272,8 @@ class ProviderRepository(private val context: Context) {
             ShadowVoiceProvider(
                 instanceId = rep.id,
                 displayName = rep.label,
-                inputModels = entries.filter { it.model.hasAudioInput },
-                outputModels = entries.filter { it.model.hasAudioOutput },
+                inputModels = entries.filter { it.model.isVoiceInputCandidate },
+                outputModels = entries.filter { it.model.isVoiceOutputCandidate },
             )
         }.sortedWith(compareBy({ it.displayName }, { it.instanceId }))
         val hasFoldedDuplicates = candidates
