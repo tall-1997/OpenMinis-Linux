@@ -54,6 +54,45 @@
   `[CacheDiag] fingerprint=… systemChars=… tools=… turnCtxChars=… history=…`；
   连续轮次指纹相同即 system/tools 稳定，可直接在日志里验证。
 
+## 其余链路的审计证据
+
+**工具定义顺序 / 序列化不确定性：不是根因（已加测试钉住）**
+
+- `AgentTools.makeAgentTools` 是按字面顺序 `add(...)` 的固定列表；`enabledToolNames`
+  只做成员过滤，保持 canonical 顺序，`find_tools` 固定追加在最后；
+- 插件工具按 `PluginRegistry.cached()` 的 List 顺序、本地插件按 JSON 数组顺序追加；
+- `parameters` 全部由 `mapOf` / `associate`（LinkedHashMap）构建，
+  `toOpenAIJson` / `toAnthropicJson` / `toGeminiJson` 按插入顺序迭代，
+  `org.json.JSONObject` 也保序；
+- `agentTools` 有 memo + 变更 stamp，stamp 只随真实输入变化。
+  `ToolSchemaSerializationStabilityTest` 对同一构建连续序列化两次做逐字节比较，
+  并钉住“参数声明顺序 / long-tail 工具 canonical 位置 / find_tools 最后”。
+
+**cache_control 布局**
+
+- Anthropic 4 个断点：最后一个 tool、system（现在整段一个稳定块）、最后 2 条
+  user 消息的最后一个 block；system 断点的前缀已包含 tools，tool 断点冗余但
+  在 system 变化（skills/MCP）时仍能单独命中，保留。
+- OpenAI / DeepSeek 无显式断点，走自动前缀缓存；OpenRouter 的 Anthropic 模型
+  才按 block 注入 `cache_control`。Gemini 为隐式缓存，App 不控制断点。
+
+**历史重建差异**
+
+- 每轮从 Room 重建（`prepareRunHistory` → `rebuildAgentHistoryFromDatabase`）；
+  `dropOrphanedToolParts` / `sanitizeAgentHistory` / `MessageTransformerChain`
+  都是确定性变换。
+- 请求侧临时内容（turn context、persona steering、stall resume note、goal mount、
+  nudge）只加在尾部；digest 与 compaction excerpts 已从头部移到尾部。
+- 残留：超预算时 `progressivelyTrimmed` 会按 tier stub 旧工具输出、图片预算会
+  按总字节把更老的图片换成占位符——两者都只在阈值变化时一次性失效。
+
+**provider 差异**
+
+- Anthropic：显式断点 + 5 分钟 TTL（增强缓存 1h 开关）；
+- OpenAI / DeepSeek：自动前缀缓存，无需 key；`prompt_cache_key` 只用于
+  Responses API，值由首条 user 文本派生，稳定；
+- 同一会话切换 provider/模型会换 tools/system，属一次性失效，不是每轮问题。
+
 ## 预期与残留
 
 - 稳定态命中率 ≈ 上一轮 prompt / 本轮 prompt。仍会损失**当轮 user 消息**的
@@ -67,9 +106,12 @@
 
 ## 验证
 
-- 本地全量：`:app:testReleaseUnitTest` 491 suites / 3937 tests 全绿；
-  新增 `TurnContextInjectionTest`、`PromptCacheFingerprintTest`、
-  `PromptCacheLayoutContractTest`（源码守卫，防止动态片段被加回 system）。
+- 本地全量：`:app:testReleaseUnitTest` 492 suites / 3947 tests 全绿；
+  新增/扩充 `TurnContextInjectionTest`（9，含“只有最后一条 user 消息变化、
+  更早消息逐字节不变”的前缀保持测试）、`ToolSchemaSerializationStabilityTest`
+  （4，工具 schema 两次构建逐字节一致 / 参数声明顺序 / canonical 顺序）、
+  `PromptCacheFingerprintTest`、`PromptCacheLayoutContractTest`
+  （源码守卫，防止动态片段被加回 system）。
 - 三个 CI 门禁（架构/CJK/未翻译）本地通过。
 - 真机 A/B：同一会话连续 6+ 轮，`adb logcat -s ChatVMStream` 看
   `[CacheDiag] fingerprint` 是否逐轮一致；用量页看 cache read 占比。
