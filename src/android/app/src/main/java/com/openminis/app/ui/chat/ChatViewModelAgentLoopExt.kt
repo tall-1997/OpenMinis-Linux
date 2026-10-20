@@ -58,9 +58,8 @@ internal suspend fun ChatViewModel.runAgentLoop(
     // [T-scheduled-tool-prefill] Resolved once, consumed by the FIRST turn only:
     // a call these tools cannot run falls back to a plain prompt.
     var pendingScriptedTurn = scriptedTurnFor(prefill)
-    // Room is the transcript authority. See prepareRunHistory() for the
-    // stop-cleanup ordering and the historyAlreadyRebuilt skip.
-    prepareRunHistory(historyAlreadyRebuilt)
+    // Room is transcript authority; preparePromptForRun builds the turn context.
+    preparePromptForRun(historyAlreadyRebuilt, systemPrompt)
     // [T-android-resume-banner-race] Snapshot epochs so mid-run side effects
     // (resume banner, model fallback writeback) only land while this snapshot
     // is current. A newer send / model switch bumps the epoch; stale tails drop.

@@ -9,31 +9,27 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 
+/**
+ * The STATIC system prompt: identity, tool/environment docs, skills, MCP
+ * disclosure and the session's global/daily memory snapshot.
+ *
+ * [T-prompt-cache-turn-context] Everything that varies per turn was moved out
+ * (see [buildTurnContextFragment] and [applyTurnContext]). Cache semantics:
+ * prompt caching is prefix-based, so a per-turn block inside `system` makes
+ * the first differing byte land BEFORE the conversation — OpenAI/DeepSeek
+ * re-ingest every message, and Anthropic's message-level breakpoints include
+ * that block so they never hit across turns. With the system string fully
+ * stable, the previous turn's request is a prefix of the next one up to the
+ * latest user message, and all providers can reuse tools + system + history.
+ *
+ * Memory fragments are snapshotted per session/day/toggle
+ * ([PromptCacheState.frozenMemory]) because `memory_write` mutates
+ * today's daily log; re-reading it every turn used to rewrite this "stable"
+ * head mid-session. The model still has `memory_get` for fresh entries.
+ */
 internal fun ChatViewModel.buildSystemPrompt(): String? {
-    // Cache-friendly layout: keep `base` byte-stable by stripping out anything
-    // that varies per request, then append the per-turn / per-day fragments at
-    // the very end. OpenAI / DeepSeek prompt caching is prefix-based, so the
-    // longer the static head, the better the hit rate.
-    // Pre-T122 the prompt embedded `Current time: yyyy-MM-dd HH:mm` mid-base,
-    // which guaranteed cache misses across minute boundaries — even a quick
-    // follow-up could land on a different minute and pay full ingestion.
-    //
-    // The prompt therefore has exactly one stable/dynamic boundary: everything
-    // up to and including the daily-memory fragment is byte-stable for a
-    // session within a day; everything after it (WorldBook keyword hits,
-    // scene-classified learned prefs, FTS recall keyed on the latest user
-    // message, runtime context) varies per turn or per day. The boundary offset
-    // is published as [ChatViewModel.systemPromptStablePrefixLen] so
-    // AnthropicProvider can put its system cache_control breakpoint exactly
-    // there instead of at the end of a tail that changes every turn.
     val today = java.time.LocalDate.now()
     val dateStr = today.format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE)
-    val tzId = java.util.TimeZone.getDefault().id
-    val lang = context.resources.configuration.locales[0].toLanguageTag()
-
-    // Count of agent-loop-visible models for the `minis-model-use` CLI
-    // (exposed as a shell command via the native_offload handler).
-    val modelUseCount = try { providerRepository.resolvedAgentLoopEntries().size } catch (_: Exception) { 0 }
 
     // [T-soul-md] Layer 1 is rendered by SystemPromptBuilder, which
     // owns the "You are <name>, a capable AI assistant running on an
@@ -48,13 +44,9 @@ internal fun ChatViewModel.buildSystemPrompt(): String? {
     val providerInstanceId = _activeEntryId.value?.let { id ->
         providerRepository.config.value.modelEntries.find { it.id == id }?.providerInstanceId
     }
-    // WorldBook used to be concatenated into the identity section, i.e. at the
-    // very HEAD of the system prompt. It is keyword-triggered per turn
-    // (WorldBook.injection returns "" unless an entry matches the recent
-    // transcript), so a single lorebook hit rewrote the prompt from byte zero
-    // and invalidated the entire prefix cache for that turn and the next —
-    // the worst possible position for per-turn content. It now lives in the
-    // dynamic tail with the other per-turn fragments.
+    // WorldBook is per-turn (keyword-triggered) content and lives in the turn
+    // context now — see buildTurnContextFragment. Keeping it out of this
+    // function is what makes the whole system prompt byte-stable.
     // One session id for everything session-scoped in this prompt: the persona
     // override file, the session GLOBAL.md and the assembly snapshot. Using the
     // same owner id the session memory directory uses keeps "what the session
@@ -66,10 +58,6 @@ internal fun ChatViewModel.buildSystemPrompt(): String? {
         context,
         providerInstanceId,
         ownerSessionId,
-    )
-    val worldBookFragment = com.openminis.app.agent.WorldBook.injection(
-        context,
-        recentWorldBookText(),
     )
     personaHistorySteering = identitySection.contains("Personality (from")
     // [T-memory-toggle-gates-injection-and-tools-android] Mirror the iOS
@@ -255,13 +243,100 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
     // intentionally NOT gated by this toggle: skills are part of the
     // tool surface and SOUL.md is part of identity, both orthogonal
     // to the memory feature.
-    val sessionMem = if (memoryOn) sessionMemoryRepo() else null
-    val standingGlobal = if (memoryOn) memoryRepository?.loadGlobalMemoryFragment() else null
-    val sessionGlobal = sessionMem?.loadGlobalMemoryFragment(sessionScoped = true)
-    val globalMemoryFragment = if (memoryOn) {
-        listOfNotNull(standingGlobal, sessionGlobal).joinToString("\n\n").ifBlank { null }
-    } else null
-    val dailyMemoryFragment = sessionMem?.loadRecentDailyMemoryFragment()
+    //
+    // [T-prompt-cache-memory-freeze] Snapshot per session/date/toggle.
+    // memory_write mutates today's daily log, and the file is injected near
+    // the head of the system prompt: re-reading it every turn meant one
+    // proactive memory write rewrote the "stable" head and invalidated the
+    // whole prefix cache for the rest of the session. The model still has
+    // memory_get for anything written after this snapshot; a new session or
+    // the next day picks the files up again.
+    val memorySnapshotKey = "$ownerSessionId|$dateStr|$memoryOn"
+    val frozenMemory = promptCache.frozenMemory?.takeIf { it.key == memorySnapshotKey } ?: run {
+        val sessionMem = if (memoryOn) sessionMemoryRepo() else null
+        val standingGlobal = if (memoryOn) memoryRepository?.loadGlobalMemoryFragment() else null
+        val sessionGlobal = sessionMem?.loadGlobalMemoryFragment(sessionScoped = true)
+        val global = listOfNotNull(standingGlobal, sessionGlobal)
+            .joinToString("\n\n").ifBlank { null }
+        val daily = sessionMem?.loadRecentDailyMemoryFragment()
+        FrozenMemoryFragments(memorySnapshotKey, global, daily).also {
+            promptCache.frozenMemory = it
+        }
+    }
+    val globalMemoryFragment = frozenMemory.global
+    val dailyMemoryFragment = frozenMemory.daily
+    // [XSessionDiag] ties the injected fragment sizes to a SESSION id. Emitted
+    // once per system-prompt build, not per request iteration.
+    AppLogger.info(
+        "XSessionDiag",
+        "[XSessionDiag] prompt/stable: session=${activeSessionId.take(8)} " +
+            "memoryEnabled=$memoryOn frozen=true " +
+            "personaChars=${identitySection.length} " +
+            "globalChars=${globalMemoryFragment?.length ?: 0} " +
+            "dailyChars=${dailyMemoryFragment?.length ?: 0}",
+    )
+
+    val prompt = buildString {
+        append(base)
+        if (skillFragment != null) {
+            append("\n\n")
+            append(skillFragment)
+        }
+        if (mcpFragment != null) {
+            append("\n\n")
+            append(mcpFragment)
+        }
+        if (globalMemoryFragment != null) {
+            append("\n\n")
+            append(globalMemoryFragment)
+        }
+        if (dailyMemoryFragment != null) {
+            append("\n\n")
+            append(dailyMemoryFragment)
+        }
+    }
+    // [T-prompt-cache-turn-context] The ENTIRE system prompt is stable now.
+    // Per-turn fragments (WorldBook, learned prefs, FTS recall, task anchor,
+    // runtime date/language/model count, personality reminder) are computed
+    // once per agent run by buildTurnContextFragment() and appended to the
+    // latest user message at request time. That keeps this string byte-for-
+    // byte identical across turns, which is what lets Anthropic's message
+    // breakpoints and OpenAI/DeepSeek automatic prefix caching reuse the
+    // conversation instead of re-ingesting it after a changed system block.
+    systemPromptStablePrefixLen = -1
+    return prompt
+}
+
+/**
+ * [T-prompt-cache-turn-context] The per-turn context fragment.
+ *
+ * Returned as a standalone string (not appended to the system prompt) so the
+ * caller can attach it to the LATEST user message: a per-turn block inside
+ * `system` sits before the whole conversation, so every provider's prefix
+ * cache ends there and the history is re-ingested on every user turn. At the
+ * tail it only costs that turn's own suffix.
+ *
+ * Computed once per agent run (runAgentLoop) and reused for every tool-loop
+ * iteration of that run, so the bytes are identical within the turn.
+ */
+internal fun ChatViewModel.buildTurnContextFragment(): String? {
+    val dateStr = java.time.LocalDate.now()
+        .format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE)
+    val tzId = java.util.TimeZone.getDefault().id
+    val lang = context.resources.configuration.locales[0].toLanguageTag()
+    // Count of agent-loop-visible models for the `minis-model-use` CLI
+    // (exposed as a shell command via the native_offload handler).
+    val modelUseCount = try {
+        providerRepository.resolvedAgentLoopEntries().size
+    } catch (_: Exception) {
+        0
+    }
+
+    val worldBookFragment = com.openminis.app.agent.WorldBook.injection(
+        context,
+        recentWorldBookText(),
+    )
+    val memoryOn = _memoryEnabled.value
     // [T-memory-recall] Lightweight FTS recall: search ALL historical memory
     // entries for keywords from the latest user message, inject top-4 hits.
     // No embedding service: keyword density + recency + recall-count scoring.
@@ -286,73 +361,50 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
         learnedSample,
     )
     val learnedPrefsFragment = memoryRepository?.loadLearnedPrefsFragment(learnedScene)
-    // [XSessionDiag] Hypothesis 3: ties the memory-injection sizes to a
-    // SESSION id. MemoryRepository itself has no session context, so its own
-    // `memory/daily-inject` line (which names the source files) cannot say who
-    // received them — this line is the join key between the two. Emitted once
-    // per system-prompt build, not per request iteration.
-    AppLogger.info(
-        "XSessionDiag",
-        "[XSessionDiag] prompt/memory: session=${activeSessionId.take(8)} " +
-            "memoryEnabled=$memoryOn " +
-            "personaChars=${identitySection.length} " +
-            "worldBookChars=${worldBookFragment.length} " +
-            "globalChars=${globalMemoryFragment?.length ?: 0} " +
-            "dailyChars=${dailyMemoryFragment?.length ?: 0} recallChars=${recalledMemoryFragment?.length ?: 0}",
-    )
-
-    var stablePrefixLen = -1
-    val prompt = buildString {
-        append(base)
-        if (skillFragment != null) {
-            append("\n\n")
-            append(skillFragment)
+    // [T-prompt-cache-digest] Rows trimmed out of the model window used to be
+    // injected into the FIRST user message, so every trim rewrote the head of
+    // the conversation and invalidated the entire prefix cache. The digest now
+    // rides in the turn context at the tail: it is re-sent (small, ≤6k chars)
+    // but the system + history prefix survives.
+    val digest = HistoryDigest.render(llmDigestLines, llmDigestOmitted)
+    // [T-prompt-cache-compact-chunks] Query-selected compaction excerpts are
+    // per-turn too (the query is the latest user message). They used to be
+    // spliced into the first post-anchor user message, rewriting the head on
+    // every turn after a compaction; they ride in this tail instead.
+    val compactExcerpts = run {
+        val chunksJson = _cachedLatestMarker?.summaryChunks ?: return@run null
+        val query = _messages.value.lastOrNull { it.role == "user" && !it.isQueued }?.content.orEmpty()
+        val picked = ChatViewModel.selectSummaryChunks(chunksJson, query)
+        if (picked.isEmpty()) {
+            null
+        } else {
+            "<compaction-excerpts>\n" + picked.joinToString("\n\n---\n\n") + "\n</compaction-excerpts>"
         }
-        if (mcpFragment != null) {
-            append("\n\n")
-            append(mcpFragment)
-        }
-        if (globalMemoryFragment != null) {
-            append("\n\n")
-            append(globalMemoryFragment)
-        }
-        if (dailyMemoryFragment != null) {
-            append("\n\n")
-            append(dailyMemoryFragment)
-        }
-        // ---- stable / dynamic boundary: see the header comment ----
-        stablePrefixLen = length
-        append(
-            assembleDynamicTail(
-                worldBookFragment = worldBookFragment,
-                learnedPrefsFragment = learnedPrefsFragment,
-                recalledMemoryFragment = recalledMemoryFragment,
-                runtimeContext = renderRuntimeContext(dateStr, tzId, lang, modelUseCount),
-                personalityReminder = if (identitySection.contains("Personality (from")) {
-                    PERSONALITY_REMINDER
-                } else {
-                    null
-                },
-                taskAnchor = taskAnchorFragment(),
-            ),
-        )
     }
-    systemPromptStablePrefixLen = stablePrefixLen
-    // [T-context-assembly-preview] 每次组装落快照：构成明细+全文，
-    // 调试"模型实际收到了什么"直接看 offloads/context-assembly/latest.md。
-    com.openminis.app.agent.ContextAssemblySnapshot.capture(
-        prompt,
-        sessionId,
-        context,
+    val tail = assembleDynamicTail(
+        worldBookFragment = worldBookFragment,
+        learnedPrefsFragment = learnedPrefsFragment,
+        recalledMemoryFragment = recalledMemoryFragment,
+        runtimeContext = renderRuntimeContext(dateStr, tzId, lang, modelUseCount),
+        personalityReminder = if (personaHistorySteering) PERSONALITY_REMINDER else null,
+        taskAnchor = taskAnchorFragment(),
     )
-    return prompt
+    return listOfNotNull(
+        digest?.takeIf { it.isNotBlank() },
+        compactExcerpts,
+        tail.takeIf { it.isNotBlank() },
+    ).joinToString("\n\n").ifBlank { null }
 }
 
 /**
- * The per-turn-varying tail of the system prompt, as a pure function so the
- * ordering contract is testable without a ViewModel: WorldBook first among the
- * dynamic fragments (it is lore the model should read as context), runtime
- * context last, absent fragments leaving no separator behind.
+ * The per-turn context block, as a pure function so the ordering contract is
+ * testable without a ViewModel: WorldBook first among the dynamic fragments
+ * (it is lore the model should read as context), runtime context last, absent
+ * fragments leaving no separator behind.
+ *
+ * [T-prompt-cache-turn-context] This is NOT appended to the system prompt: it
+ * is attached to the latest user message by [applyTurnContext] at request
+ * time, so the system string stays byte-identical across turns.
  *
  * [worldBookFragment] already carries its own leading blank line when
  * non-empty — that is WorldBook.injection's contract — so it is appended
