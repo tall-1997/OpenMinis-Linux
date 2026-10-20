@@ -209,8 +209,10 @@ class BackupExporter(
             onProgress?.invoke("Writing manifest…")
             // [T-android-backup-package-name-parity] One device name for both
             // the filename and the manifest, so a package cannot claim to be
-            // from one phone and be named after another.
-            val deviceName = "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}".trim()
+            // from one phone and be named after another. DeviceIdentity adds
+            // the user's custom name and a readable fallback over the raw
+            // Build.MANUFACTURER/MODEL concatenation.
+            val deviceName = com.openminis.app.data.DeviceIdentity.displayName(context)
             val manifest = buildManifest(backupId, stats, blobStore, staging, encryption, options, deviceName)
             val manifestFile = File(staging, "manifest.json")
             manifestFile.writeText(

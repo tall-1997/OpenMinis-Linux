@@ -2136,4 +2136,20 @@
         <string name="copilot_disclaimer_cancel">取消</string>
 
     <string name="provider_codex_refresh_auth_failed">Sign-in expired — sign in again to refresh this account\'s models.</string>
+
+    <!-- First-run onboarding -->
+        <string name="onboarding_welcome_title">歡迎使用 Minis</string>
+        <string name="onboarding_welcome_subtitle">集終端、瀏覽器與裝置本機存取於一身的 AI 助手。</string>
+        <string name="onboarding_get_started">開始使用</string>
+        <string name="onboarding_provider_title">新增提供方</string>
+        <string name="onboarding_provider_subtitle">請至少為一個提供方輸入 API 金鑰以開始使用。</string>
+        <string name="onboarding_provider_api_key_label">%1$s API 金鑰</string>
+        <string name="onboarding_saved">已儲存</string>
+        <string name="onboarding_save_api_key">儲存 API 金鑰</string>
+        <string name="common_next">下一步</string>
+        <string name="onboarding_search_models">搜尋模型</string>
+
+    <string name="about_built_format">构建于 %1$s</string>
+
+    <string name="onboarding_retry">Retry</string>
 </resources>

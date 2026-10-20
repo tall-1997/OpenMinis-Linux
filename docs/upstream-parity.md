@@ -4,7 +4,7 @@
 
 - **更新**：2026-10-20，`main` = `3415f87e`
 - **上游基准**：`b4c0661d`（= tag `1.14`；`upstream/v1.14` 只多一条文档提交）
-- **结论**：12 批中 6 批关闭，2 批进行中，4 批未开始
+- **结论**：12 批中 7 批关闭，3 批进行中，2 批未开始
 
 > 说明：`upstream-beta5` tag 与 `1.17-linux`…`1.36.53-linux` 系列都不是更完整的实现。前者指向同一个 `b4c0661d`，后者是更早、更瘦的 Linux 快照（android 文件 845–1102），不含本台账列出的特性。
 
@@ -38,8 +38,8 @@
 | 7 | 语音链路 | **完成** 5/5：#103 #104 #105 #107 #108 |
 | 8 | 沙箱 / 浏览器稳定性 | **完成** 6 件：#111 #112 #117 |
 | 9 | helper / 子代理控制台 | 未开始（最大件，约 4286 行 + 95 键） |
-| 10 | Copilot / Codex 接入 | 未开始（约 1651 行 + 10 键） |
-| 11 | 诊断 / 杂项 / 首启引导 | 未开始（约 1541 行 + 10 键） |
+| 10 | Copilot / Codex 接入 | **完成** #118 |
+| 11 | 诊断 / 杂项 / 首启引导 | **进行中** #119：首启引导、构建时间、进程退出诊断、设备名、模型排序已落地；`data/session` 4 件依赖批次 9 |
 | 12 | 终端模拟器 | 未开始（约 861 行，无上游单测） |
 | 自研 | F2 堆叠趋势图、P1 大会话占位、B4-F3 提问缩略、B4-X2 问题类型推断 | 未开始（无上游参考，可穿插） |
 
@@ -100,6 +100,18 @@ token 端点迁到 `claude.ai/v1/oauth/token`，并把聊天路径与 auth 路�
 
 **未做 9 件**中的 3 件各有硬前置：`ImageInputPreflight`（需 `LLMError.httpStatus` 与 `effectiveInputModalities`）、`QueuedPromptBatching`（需 `QueuedPrompt.origin`/`isScheduledFire`）、`TitleCandidates`（需改标题管线签名）。
 
+### 批次 10 · Copilot / Codex（#118）
+
+**已落地**：`CopilotDeviceFlow`（纯协议）+ `CopilotOAuthManager`（GitHub 账号令牌 → 25 分钟会话令牌，懒刷新、单飞）、`CopilotDisclaimerDialog` + `CopilotFeatureFlag`（同意门，取消不发请求）、`ProviderType.githubCopilot` 全链路（OAuthManager / ProviderFactory / 模型发现 / 备份导入导出 / 调试接口 / 颜色 / 17 locale）。
+
+**关键行为**：Copilot 的 `X-Initiator` / `X-Request-Id` / 视觉标记由请求体逐次推导（构造期写死会把 agent 流量误标成人类）；`/models` 的上下文窗口、输出上限、推理档位、视觉能力随模型透传。
+
+**Codex 动态发现**：`GET /backend-api/codex/models` 优先，失败回退内置清单；显式刷新 401/403 抛 `CodexDiscoveryAuthException`，界面提示重新登录，不把旧列表伪装成刷新成功。
+
+**OAuth 前台门**：回调到达时若应用在后台，等回到前台再换 token（后台网络被系统拒绝，表现为 UnknownHostException）；Claude 交换 3 次重试；回调页改为「Return to Minis to finish signing in.」。
+
+**已知边界**：非中文 locale 的免责声明暂用英文原文（键位齐全，CI 的 l10n 门通过）；`OAuthProgressLine` 那套「等待授权/正在完成」进度界面未移植，上游两条 UI 断言已裁掉并注明原因。
+
 ### 批次 8 · 沙箱 / 浏览器（6 件）
 
 - #111 `GlobalShellThrottle`：跨会话 child-process 总预算（24），按 `/proc` 后代计数 FIFO 排队；`pid<=0` 直接返回 0，否则在 stub 环境下会数到全机所有进程。
@@ -114,10 +126,10 @@ token 端点迁到 `claude.ai/v1/oauth/token`，并把聊天路径与 auth 路�
 按前置依赖排序，前置越少的越先做：
 
 ```
-批次 10 Copilot/Codex   ← 独立，无前置
-批次 11 诊断/引导        ← 解锁批次 4 的 ContextUsageHint
-批次 9 helper 控制台     ← 最大件；解锁批次 4b 的 EmptyTurnRecovery 后半
+批次 11 诊断/引导        ← 进行中：data/session 并入批次 9
+批次 9 helper 控制台     ← 最大件；解锁 4b 的 EmptyTurnRecovery 后半 + 批次 11 的 session 4 件
 批次 12 终端            ← 无上游单测，需实机验证 htop 类交互程序
+批次 1 收尾            ← MathLineBreaker + InlineMathPlaceholder 断行
 自研 4 项               ← 穿插做
 ```
 

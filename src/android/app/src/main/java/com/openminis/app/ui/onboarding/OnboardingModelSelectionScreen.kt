@@ -1,5 +1,9 @@
 package com.openminis.app.ui.onboarding
 
+import androidx.compose.ui.text.style.TextAlign
+
+import androidx.compose.runtime.rememberCoroutineScope
+
 import com.openminis.app.R
 import androidx.compose.ui.res.stringResource
 import com.openminis.app.ui.components.MinisButton
@@ -67,21 +71,54 @@ fun OnboardingModelSelectionScreen(
     val config by providerRepository.config.collectAsState()
     val selected = remember { mutableStateListOf<String>() }
     var searchText by remember { mutableStateOf("") }
+    // [T-onboarding-model-fetch-fallback] The page used to spin forever when a
+    // provider's /models call failed: the repository logs the failure and tells
+    // no one, so an unreachable provider left the list empty with Skip as the
+    // only way forward. A bounded fetch, then an explicit failure panel.
+    var fetching by remember { mutableStateOf(false) }
+    var failureDetail by remember { mutableStateOf<String?>(null) }
+    var fetchAttempted by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    val enabledInstances = config.instances.filter { it.isEnabled }
+    val enabledInstanceIds = enabledInstances.map { it.id }.toSet()
+    val allEntries = config.modelEntries.filter {
+        it.providerInstanceId in enabledInstanceIds && !it.isHidden
+    }
+
+    suspend fun runBoundedFetch() {
+        if (fetching) return // Retry while in flight is a no-op.
+        fetching = true
+        failureDetail = null
+        val result = OnboardingModelFetch.run(enabledInstances.map { it.id }) { id ->
+            val instance = enabledInstances.firstOrNull { it.id == id } ?: return@run null
+            val outcome = providerRepository.refreshModels(instance)
+            if (outcome == com.openminis.app.data.repository.ModelRefreshResult.FAILURE) {
+                "Could not load models for ${instance.label}"
+            } else null
+        }
+        fetching = false
+        fetchAttempted = true
+        failureDetail = when {
+            result.errors.isNotEmpty() -> result.errors.joinToString("\n")
+            result.timedOut -> "Timed out loading models"
+            else -> null
+        }
+    }
 
     // Refresh model lists for every enabled instance when the screen appears, so the
     // user sees the live provider catalog (not just the built-in placeholder list
     // seeded by addInstance). Mirrors iOS fetchModelsWithFallback chain.
     LaunchedEffect(Unit) {
-        val enabled = config.instances.filter { it.isEnabled }
-        for (instance in enabled) {
-            launch(Dispatchers.IO) { providerRepository.refreshModels(instance) }
+        if (allEntries.isEmpty()) {
+            runBoundedFetch()
+        } else {
+            for (instance in enabledInstances) {
+                launch(Dispatchers.IO) { providerRepository.refreshModels(instance) }
+            }
         }
     }
 
-    val enabledInstanceIds = config.instances.filter { it.isEnabled }.map { it.id }.toSet()
-    val allEntries = config.modelEntries.filter {
-        it.providerInstanceId in enabledInstanceIds && !it.isHidden
-    }
     val filteredEntries = if (searchText.isBlank()) allEntries else {
         val q = searchText.lowercase()
         allEntries.filter {
@@ -138,14 +175,30 @@ fun OnboardingModelSelectionScreen(
                         .fillMaxWidth(),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator()
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            stringResource(R.string.onboarding_loading_models),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                    if (fetchAttempted && !fetching && failureDetail != null) {
+                        // Explicit, actionable failure instead of a dead spinner.
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                failureDetail!!,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                                textAlign = TextAlign.Center,
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            MinisButton(onClick = { scope.launch { runBoundedFetch() } }) {
+                                Text(stringResource(R.string.onboarding_retry))
+                            }
+                        }
+                    } else {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            CircularProgressIndicator()
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                stringResource(R.string.onboarding_loading_models),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                 }
             } else {

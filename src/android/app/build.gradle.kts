@@ -113,6 +113,11 @@ android {
         buildConfigField("String", "GIT_SHA", "\"$gitSha\"")
         buildConfigField("boolean", "GIT_DIRTY", "$gitDirty")
 
+        // [T-android-dev-tools] Gates on-device developer tooling (debug
+        // server, request log, StreamJitterProbe markers). False for release;
+        // any build type that wants the tooling overrides it to true.
+        buildConfigField("boolean", "DEV_TOOLS", "false")
+
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // System prompt prefix required by Anthropic for Claude Code OAuth
@@ -324,6 +329,32 @@ androidComponents {
         if (variantBuilder.buildType == "debug") {
             variantBuilder.enable = false
         }
+    }
+}
+
+// [T-android-about-build-date] Stamp the APK's build time into an asset so the
+// About screen can show "Built …" (AppBuildInfo). Regenerated on every build —
+// a cached timestamp would make two builds indistinguishable, which is the one
+// thing this line exists to tell apart.
+abstract class WriteBuildInfoTask : org.gradle.api.DefaultTask() {
+    @get:org.gradle.api.tasks.OutputDirectory
+    abstract val outputDir: org.gradle.api.file.DirectoryProperty
+
+    @org.gradle.api.tasks.TaskAction
+    fun write() {
+        val file = outputDir.file("build_info/build_time.txt").get().asFile
+        file.parentFile.mkdirs()
+        file.writeText(System.currentTimeMillis().toString())
+    }
+}
+
+androidComponents {
+    onVariants { variant ->
+        val cap = variant.name.replaceFirstChar { it.uppercase() }
+        val task = tasks.register<WriteBuildInfoTask>("write${cap}BuildInfo") {
+            outputs.upToDateWhen { false }
+        }
+        variant.sources.assets?.addGeneratedSourceDirectory(task, WriteBuildInfoTask::outputDir)
     }
 }
 

@@ -157,10 +157,16 @@ fun LazyListScope.modelEntryPickerItems(
     val instanceWithEntries = listOfNotNull(systemPair) + instances
         .filter { it.isEnabled && !SystemVoiceEntries.isSystemEntryId(it.id) }
         .mapNotNull { instance ->
-            val entries = availableEntries.filter { entry ->
-                entry.providerInstanceId == instance.id &&
-                    (modalityFilter == null || modalityFilter.matches(entry.model))
-            }
+            // [T-model-release-ranking] Same newest-first order as the
+            // provider-detail list; this sheet builds its per-provider lists
+            // from a config snapshot and used to show raw config order.
+            val entries = com.openminis.app.data.repository.ModelEntryRanking
+                .sortedByReleaseRank(
+                    availableEntries.filter { entry ->
+                        entry.providerInstanceId == instance.id &&
+                            (modalityFilter == null || modalityFilter.matches(entry.model))
+                    },
+                )
             val filtered = entries.filter { matchesSearch(it) }
             if (filtered.isEmpty()) null else instance to filtered
         }
