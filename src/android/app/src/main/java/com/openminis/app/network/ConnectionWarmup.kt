@@ -78,6 +78,7 @@ internal object ConnectionWarmup {
         com.openminis.app.data.model.ProviderType.openRouter -> "openrouter.ai"
         com.openminis.app.data.model.ProviderType.xAI -> "api.x.ai"
         com.openminis.app.data.model.ProviderType.kimiCode -> "api.kimi.com"
+        com.openminis.app.data.model.ProviderType.githubCopilot -> "api.githubcopilot.com"
         else -> "api.openai.com"
     }
 

@@ -57,6 +57,11 @@ fun KimiDeviceLoginDialog(
     userCode: String,
     verificationUrl: String,
     onCancel: () -> Unit,
+    // [T-copilot-provider] Copilot reuses this surface — the copy differs, the
+    // protocol (RFC 8628: show a code, open the verification page, poll) does
+    // not. Defaults keep every existing Kimi call site unchanged.
+    @androidx.annotation.StringRes titleRes: Int = R.string.kimi_login_title,
+    @androidx.annotation.StringRes instructionsRes: Int = R.string.kimi_login_instructions,
 ) {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
@@ -64,11 +69,11 @@ fun KimiDeviceLoginDialog(
 
     AlertDialog(
         onDismissRequest = onCancel,
-        title = { Text(stringResource(R.string.kimi_login_title)) },
+        title = { Text(stringResource(titleRes)) },
         text = {
             Column {
                 Text(
-                    stringResource(R.string.kimi_login_instructions),
+                    stringResource(instructionsRes),
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Spacer(Modifier.height(16.dp))

@@ -181,6 +181,9 @@ class ClaudeOAuthManager(context: Context, instanceId: String) : OAuthManager(co
             }
 
             // Step 3: Exchange code for tokens (JSON body, NOT form-urlencoded)
+            // [T-android-oauth-foreground-exchange] Hold until Minis is
+            // foreground: background network is refused with "no address".
+            OAuthForegroundGate.awaitForeground(TAG)
             exchangeCodeJson(code)
         }
 
@@ -213,7 +216,27 @@ class ClaudeOAuthManager(context: Context, instanceId: String) : OAuthManager(co
             .applyClaudeCliMimicryHeaders()
             .post(body.toString().toRequestBody("application/json".toMediaType()))
             .build()
-        val response = httpClient.newCall(request).execute()
+        // [T-android-oauth-foreground-exchange] Even after the foreground gate
+        // there is a brief lag before the OS lifts the background network
+        // block; retry rather than surfacing "no address" as an authorization
+        // failure.
+        var lastError: java.io.IOException? = null
+        var result: okhttp3.Response? = null
+        for (attempt in 1..3) {
+            try {
+                result = httpClient.newCall(request).execute()
+                break
+            } catch (e: java.io.IOException) {
+                lastError = e
+                Log.w(TAG, "Token exchange network error (attempt $attempt/3): ${e.message}")
+                if (attempt < 3) {
+                    try { Thread.sleep(1_000L) } catch (_: InterruptedException) { Thread.currentThread().interrupt() }
+                }
+            }
+        }
+        val response = result ?: throw OAuthNetworkUnreachableException(
+            lastError ?: java.io.IOException("network unreachable"),
+        )
         val responseCode = response.code
         val responseBody = response.body?.string() ?: ""
         response.close()

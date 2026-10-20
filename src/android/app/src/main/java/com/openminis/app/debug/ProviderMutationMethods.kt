@@ -215,6 +215,8 @@ internal object ProviderMutationMethods {
             ProviderType.openRouter -> "https://openrouter.ai/api/v1"
             ProviderType.xAI -> "https://api.x.ai/v1"
             ProviderType.kimiCode -> "https://api.kimi.com/coding/v1"
+            // [T-copilot-provider] No /v1 — Copilot serves off the API root.
+            ProviderType.githubCopilot -> com.openminis.app.auth.CopilotDeviceFlow.API_BASE
             ProviderType.antigravity, ProviderType.unsupported -> ""
         }
         val probeURL = when (instance.providerType) {
@@ -227,6 +229,8 @@ internal object ProviderMutationMethods {
             ProviderType.xAI -> if (baseURL.endsWith("/v1")) "$baseURL/models" else "$baseURL/v1/models"
             // Kimi Coding: OpenAI-compatible /models under /coding/v1.
             ProviderType.kimiCode -> if (baseURL.endsWith("/v1")) "$baseURL/models" else "$baseURL/v1/models"
+            // [T-copilot-provider] OpenAI-compatible /models straight off the root.
+            ProviderType.githubCopilot -> "$baseURL/models"
             // No probe endpoint for a type this build cannot drive.
             ProviderType.antigravity, ProviderType.unsupported -> baseURL
         }
@@ -248,6 +252,11 @@ internal object ProviderMutationMethods {
             ProviderType.xAI -> if (!key.isNullOrEmpty()) builder.header("Authorization", "Bearer $key")
             // Kimi Coding: OpenAI-compat bearer (OAuth access token or key).
             ProviderType.kimiCode -> if (!key.isNullOrEmpty()) builder.header("Authorization", "Bearer $key")
+            // [T-copilot-provider] The session token is minted on demand by the
+            // OAuth manager and is not in the api-key store, so there is no
+            // credential to attach here; the probe reports the HTTP status,
+            // which is what a debug caller wants anyway.
+            ProviderType.githubCopilot -> { /* session token not available here */ }
             // [T-android-provider-type-parity] No auth scheme known for a type
             // this build cannot drive; the probe will simply fail.
             ProviderType.antigravity, ProviderType.unsupported -> { /* no auth */ }

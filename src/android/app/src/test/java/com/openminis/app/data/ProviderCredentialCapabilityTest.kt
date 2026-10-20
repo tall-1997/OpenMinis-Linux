@@ -21,9 +21,19 @@ class ProviderCredentialCapabilityTest {
             ProviderType.xAI,
             ProviderType.kimiCode,
             ProviderType.openAIResponses,
+            // [T-copilot-provider] OAuth only — no API-key path exists into
+            // api.githubcopilot.com.
+            ProviderType.githubCopilot,
         )
         for (type in ProviderType.values()) {
-            assertTrue(ProviderRepository.supportsCredential(type, ProviderCredential.apiKey))
+            if (type == ProviderType.githubCopilot) {
+                assertFalse(
+                    "Copilot must not advertise an API-key credential",
+                    ProviderRepository.supportsCredential(type, ProviderCredential.apiKey),
+                )
+            } else {
+                assertTrue(ProviderRepository.supportsCredential(type, ProviderCredential.apiKey))
+            }
             assertEquals(type in oauthTypes, ProviderRepository.supportsCredential(type, ProviderCredential.oauth))
         }
     }

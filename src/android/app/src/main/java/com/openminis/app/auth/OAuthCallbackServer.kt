@@ -153,7 +153,12 @@ class OAuthCallbackServer(
                             val state = params["state"]
 
                             // Send response
-                            val html = "<html><body><h1>Authorization complete</h1><p>You can close this tab.</p><script>window.close()</script></body></html>"
+                            // [T-android-oauth-foreground-exchange] "You can
+                            // close this tab" after merely receiving the code
+                            // is what made a still-pending token exchange look
+                            // finished. The exchange happens back in Minis, so
+                            // say that.
+                            val html = "<html><body><h1>Authorization received</h1><p>Return to Minis to finish signing in.</p><script>window.close()</script></body></html>"
                             writeResponse(socket, 200, html)
                             Log.i(TAG, "OAuth callback accepted: codePresent=${!code.isNullOrEmpty()} statePresent=${!state.isNullOrEmpty()}")
 

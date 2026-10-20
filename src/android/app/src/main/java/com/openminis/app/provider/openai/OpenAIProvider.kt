@@ -122,6 +122,13 @@ class OpenAIProvider private constructor(
     var thinkingRuleInstanceId: String? = null
 
     /**
+     * [T-android-copilot-per-request-headers] Headers derived from THIS
+     * request's body (Copilot: X-Initiator / X-Request-Id / vision), applied in
+     * [OpenAIRequestBodies.buildRequest]. Null for every other provider.
+     */
+    var perRequestHeaders: ((JSONObject) -> Map<String, String>)? = null
+
+    /**
      * [T-android-xai-priority] Whether this provider speaks xAI's Priority
      * Processing extension, i.e. whether it is eligible to carry
      * `service_tier: "priority"` when the user's global Fast Mode is on.
@@ -196,7 +203,7 @@ class OpenAIProvider private constructor(
          * match the CLIProxyAPI/sub2api upstream (fixes a gpt-5.6-luna 404 seen
          * on the older client). Shared constant so future bumps touch one place.
          */
-        private const val CODEX_CLIENT_VERSION = "0.144.1"
+        internal const val CODEX_CLIENT_VERSION = "0.144.1"
 
         /**
          * Factory for OAuth-bearer OpenAI-compatible providers that aren't
@@ -213,11 +220,13 @@ class OpenAIProvider private constructor(
             oauthTokenProvider: suspend () -> String,
             model: LLMModel,
             basePath: String,
+            extraHeaders: Map<String, String> = emptyMap(),
         ): OpenAIProvider = OpenAIProvider(
             apiKey = null,
             oauthTokenProvider = oauthTokenProvider,
             model = model,
             basePath = basePath,
+            extraHeaders = extraHeaders,
             forceChatCompletions = true,
         )
     }
@@ -760,21 +769,11 @@ class OpenAIProvider private constructor(
     }
 
     /**
-     * [T-android-image-endpoint-mode] Generate an image via the OpenAI Images
-     * API (`POST $basePath/images/generations`). Mirrors iOS
-     * OpenAIProvider.generateImage. Used only by ModelUseOffloadHandler's
-     * image-output routing for API-key OpenAI-compat instances — the Codex
-     * OAuth gpt-image-2 path goes through the existing isCodexImageModel branch
-     * and never reaches here.
-     *
-     * Request body: `{ model, prompt, n, size?, quality?, response_format:
-     * "b64_json" }`. Some gateways (e.g. xAI) reject `response_format` — on a
-     * 400 mentioning it, we retry once without the field (iOS parity).
-     *
-     * On a non-2xx response throws [mapHttpError]'s result. A route-missing
-     * error (404 / "got chat completions response") surfaces as
-     * LLMError.ProviderError whose message the handler matches with
-     * looksLikeEndpointMissing() to drive the auto-mode fallback.
+     * [T-android-image-endpoint-mode] Generate an image via `POST
+     * $basePath/images/generations` (iOS OpenAIProvider.generateImage parity).
+     * Body: `{ model, prompt, n, size?, quality?, response_format: "b64_json" }`
+     * — some gateways (xAI) reject `response_format`, so a 400 mentioning it
+     * retries once without the field. Non-2xx throws [mapHttpError]'s result.
      */
     override suspend fun generateImage(
         prompt: String,
@@ -1647,6 +1646,7 @@ class OpenAIProvider private constructor(
         override val isXAI get() = this@OpenAIProvider.isXAI
         override val usesUnifiedReasoningEffort get() = this@OpenAIProvider.usesUnifiedReasoningEffort
         override val thinkingRuleInstanceId get() = this@OpenAIProvider.thinkingRuleInstanceId
+        override val perRequestHeaders get() = this@OpenAIProvider.perRequestHeaders
         override fun resolvedServiceTier() = this@OpenAIProvider.resolvedServiceTier()
         override fun endpointURL(defaultPath: String) = this@OpenAIProvider.endpointURL(defaultPath)
         override fun azureUrl(path: String) = this@OpenAIProvider.azureUrl(path)

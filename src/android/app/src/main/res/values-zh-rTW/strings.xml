@@ -2119,4 +2119,21 @@
     <string name="scheduled_unit_hour">%1$d 小時</string>
     <string name="scheduled_unit_min">%1$d 分鐘</string>
     <string name="scheduled_unit_sec">%1$d 秒</string>
+
+    <!-- GitHub Copilot (unofficial device-flow provider) -->
+        <string name="add_provider_subtitle_copilot">使用 GitHub 帳號登入 — 非官方接入，風險自負</string>
+        <string name="copilot_login_title">使用 GitHub 登入</string>
+        <string name="copilot_login_instructions">開啟驗證頁面並輸入此代碼，以連結你的 GitHub 帳號：</string>
+        <string name="copilot_disclaimer_title">關於非官方接入的聲明</string>
+        <string name="copilot_disclaimer_p1">此登入方式未獲官方授權。Minis 與 GitHub 無從屬關係，未獲其認可或支援，本接入也未經 GitHub 審核或批准。</string>
+        <string name="copilot_disclaimer_p2">授權使用的是發給第三方開發者工具的用戶端身分，而非 Minis 自己的身分，並依賴未公開用於此用途的服務介面。</string>
+        <string name="copilot_disclaimer_p3">存取權限可能在沒有通知的情況下被收回。服務方可隨時變更或停用這些介面，導致請求失敗或此功能完全停止運作。</string>
+        <string name="copilot_disclaimer_p4">使用本功能可能違反服務方的服務條款，並可能導致限流、暫停，或永久終止你的 Copilot 權益或 GitHub 帳號。此類後果作用於你的帳號，Minis 無法撤銷。</string>
+        <string name="copilot_disclaimer_p5">強烈不建議使用組織、企業或生產帳號。請使用一個你能接受失去的個人帳號登入。</string>
+        <string name="copilot_disclaimer_p6">你的存取權杖保存在本裝置的加密儲存中，且只會傳送給服務方。Minis 不會收集它，也不會經由我們營運的任何伺服器中轉。你自行匯出的備份可能包含它。</string>
+        <string name="copilot_disclaimer_p7">本功能按“現狀”提供，不附帶任何形式的擔保。繼續即表示你已閱讀本聲明，並完全自行承擔這些風險。</string>
+        <string name="copilot_disclaimer_accept">我已閱讀並接受這些條款</string>
+        <string name="copilot_disclaimer_cancel">取消</string>
+
+    <string name="provider_codex_refresh_auth_failed">Sign-in expired — sign in again to refresh this account\'s models.</string>
 </resources>

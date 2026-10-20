@@ -103,6 +103,9 @@ class ProviderRepository(private val context: Context) {
             ProviderType.xAI, ProviderType.kimiCode, ProviderType.openAIResponses ->
                 listOf(ProviderCredential.apiKey, ProviderCredential.oauth)
             ProviderType.gemini -> listOf(ProviderCredential.apiKey)
+            // [T-copilot-provider] OAuth only — there is no API-key path into
+            // api.githubcopilot.com.
+            ProviderType.githubCopilot -> listOf(ProviderCredential.oauth)
             ProviderType.antigravity, ProviderType.unsupported -> listOf(ProviderCredential.apiKey)
         }
 
@@ -2341,8 +2344,21 @@ class ProviderRepository(private val context: Context) {
         // not refreshed. That inconsistency was the bug.
         var apiKey = usableApiKey(instance)
 
+        // [T-copilot-provider] Copilot's session token is minted on demand and
+        // never mirrored into the api-key store — resolve it so the fetch runs.
+        if (instance.providerType == ProviderType.githubCopilot && apiKey == null) {
+            apiKey = try {
+                com.openminis.app.auth.CopilotOAuthManager(context, instance.id).validAccessToken()
+            } catch (e: Exception) {
+                android.util.Log.w("ProviderRepo", "Copilot session token unavailable: ${e.message}")
+                null
+            }
+        }
+
         // For OAuth providers, try to refresh the token before using it (mirrors iOS validAccessToken)
-        if (instance.credentialType == com.openminis.app.data.model.ProviderCredential.oauth && apiKey != null) {
+        if (instance.credentialType == com.openminis.app.data.model.ProviderCredential.oauth &&
+            apiKey != null && instance.providerType != ProviderType.githubCopilot
+        ) {
             try {
                 val manager = com.openminis.app.auth.OAuthManager.forInstance(context, instance)
                 val freshToken = manager?.validAccessToken()
@@ -2358,11 +2374,22 @@ class ProviderRepository(private val context: Context) {
 
         android.util.Log.i("ProviderRepo", "refreshModels: id=${instance.id} type=${instance.providerType} credential=${instance.credentialType} hasKey=${apiKey != null} keyLen=${apiKey?.length ?: 0} baseURL=${instance.effectiveBaseURL} forceRefresh=$forceRefresh")
 
-        // OpenAI Codex OAuth: use static model list (OAuth tokens can't call /v1/models)
+        // [T-codex-dynamic-discovery GH#319] OpenAI Codex OAuth: live discovery
+        // first, compiled-in list as the floor — otherwise a model the user's
+        // plan just gained stayed invisible until an app update (and Refresh
+        // re-ran the same literal).
         if (instance.providerType == ProviderType.openAI
             && instance.credentialType == ProviderCredential.oauth
         ) {
-            val models = OpenAIModelsApi.fetchModelsOAuth()
+            val discovered = try {
+                discoverCodexModels(context, instance, apiKey, forceRefresh)
+            } catch (e: CodexDiscoveryAuthException) {
+                throw e
+            } catch (e: Exception) {
+                android.util.Log.w("ProviderRepo", "Codex discovery threw: ${e.message}")
+                null
+            }
+            val models = discovered ?: OpenAIModelsApi.fetchModelsOAuth()
             if (models.isNotEmpty()) {
                 hardClearIfNeeded()
                 replaceEntries(instance.id, models)
@@ -2380,88 +2407,7 @@ class ProviderRepository(private val context: Context) {
         if (apiKey != null) {
             val baseURL = instance.effectiveBaseURL
             val models = try {
-                when (instance.providerType) {
-                    ProviderType.anthropic -> AnthropicModelsApi.fetchModels(
-                        apiKey, baseURL,
-                        isOAuth = instance.credentialType == com.openminis.app.data.model.ProviderCredential.oauth,
-                        context = context,
-                        forceRefresh = liveForce,
-                        // [T-provider-custom-user-agent] models-list UA override.
-                        customUserAgent = instance.customUserAgent,
-                        cacheScope = instance.id,
-                    )
-                    ProviderType.gemini -> GeminiModelsApi.fetchModels(
-                        apiKey,
-                        isOAuth = instance.credentialType == com.openminis.app.data.model.ProviderCredential.oauth,
-                        context = context,
-                        forceRefresh = liveForce,
-                        cacheScope = instance.id,
-                    )
-                    // [T-provider-custom-user-agent] models-list UA override.
-                    // [T-android-provider-type-parity] openAIResponses lists
-                    // models from the same /v1/models endpoint — only the
-                    // completion endpoint differs.
-                    ProviderType.openAI, ProviderType.openAIResponses ->
-                        OpenAIModelsApi.fetchModels(apiKey, baseURL, context = context, forceRefresh = liveForce, customUserAgent = instance.customUserAgent, cacheScope = instance.id)
-                    ProviderType.openRouter -> OpenRouterModelsApi.fetchModels(apiKey, context = context, forceRefresh = liveForce, cacheScope = instance.id)
-                    // [T-provider-dynamic-catalog-reconcile] xAI: fetch the live
-                    // catalog, fall back to the built-in list.
-                    //
-                    // This used to return the static list unconditionally, with
-                    // a comment saying a dynamic endpoint was hypothetical ("if
-                    // xAI later exposes a dynamic /v1/models endpoint this is
-                    // the place"). It exists and is OpenAI-compatible: an
-                    // unauthenticated GET https://api.x.ai/v1/models answers 401
-                    // with `{"code":"invalid-argument","error":"Incorrect API
-                    // key…"}` — an auth challenge, not a 404. So the built-in
-                    // set was the ONLY set anyone could ever get, on both the
-                    // OAuth and the API-key path, and any model shipped after a
-                    // release (GH#265: grok-4.6) stayed invisible until the app
-                    // itself was updated. Manual Refresh could not help because
-                    // it runs this same code.
-                    //
-                    // `fetchModels` treats api.x.ai as a custom base, so on any
-                    // failure it returns EMPTY rather than a wrong-vendor guess;
-                    // the `models.isNotEmpty()` gate below then leaves the
-                    // seeded catalog in place. That makes the live call additive
-                    // — it can enrich the list but never empty it.
-                    //
-                    // The `?:` default is load-bearing, not cosmetic: an xAI
-                    // instance added through the OAuth button carries no
-                    // customBaseURL, so `effectiveBaseURL` is null — and
-                    // `OpenAIModelsApi.buildURL(null)` resolves to
-                    // api.openai.com/v1/models. Passing the null straight
-                    // through would send an xAI token to OpenAI and, on the
-                    // official-endpoint path, fall back to `LLMModel.allOpenAI`,
-                    // i.e. show GPT models under a Grok provider. That is the
-                    // same class of bug the addInstance seeding comment already
-                    // warns about ("Refresh on Grok returns GPT-5.5").
-                    ProviderType.xAI -> OpenAIModelsApi.fetchModels(
-                        apiKey,
-                        baseURL ?: "https://api.x.ai/v1",
-                        context = context,
-                        forceRefresh = liveForce,
-                        customUserAgent = instance.customUserAgent,
-                        cacheScope = instance.id,
-                    ).ifEmpty { com.openminis.app.provider.xai.XAIModelsApi.fetchModelsOAuth() }
-                    // [T-kimi-oauth] Kimi Code: unlike Codex OAuth, the Kimi
-                    // OAuth token CAN call the models endpoint — real fetch
-                    // from GET /coding/v1/models (OpenAI-compatible shape).
-                    // The upstream lineup shifts across generations, so the
-                    // live list replaces the minimal built-in fallback.
-                    ProviderType.kimiCode -> OpenAIModelsApi.fetchModels(
-                        apiKey,
-                        baseURL ?: "${com.openminis.app.auth.KimiDeviceFlow.CODING_API_BASE}/v1",
-                        context = context,
-                        forceRefresh = liveForce,
-                        customUserAgent = instance.customUserAgent,
-                        cacheScope = instance.id,
-                    )
-                    // [T-android-provider-type-parity] No models endpoint to
-                    // query for a type this build cannot drive; the instance
-                    // keeps whatever entries the restore brought with it.
-                    ProviderType.antigravity, ProviderType.unsupported -> emptyList()
-                }
+                fetchProviderModelsForRefresh(context, instance, apiKey, baseURL, liveForce)
             } catch (e: Exception) {
                 android.util.Log.e("ProviderRepo", "refreshModels fetch error: ${e.message}", e)
                 emptyList()
@@ -2618,6 +2564,9 @@ class ProviderRepository(private val context: Context) {
             ProviderType.openRouter -> "https://openrouter.ai/api/v1"
             ProviderType.xAI -> "https://api.x.ai/v1"
             ProviderType.kimiCode -> "${com.openminis.app.auth.KimiDeviceFlow.CODING_API_BASE}/v1"
+            // [T-copilot-provider] No /v1 — Copilot serves /chat/completions
+            // and /models straight off the API root.
+            ProviderType.githubCopilot -> com.openminis.app.auth.CopilotDeviceFlow.API_BASE
             // No canonical host for a type this build cannot drive. Callers
             // reaching here have already exhausted effectiveBaseURL.
             ProviderType.antigravity, ProviderType.unsupported -> "https://api.openai.com/v1"

@@ -182,6 +182,12 @@ abstract class OAuthManager(
                 com.openminis.app.data.model.ProviderType.openAI -> OpenAIOAuthManager(context, instance.id)
                 com.openminis.app.data.model.ProviderType.xAI -> XAIOAuthManager(context, instance.id)
                 com.openminis.app.data.model.ProviderType.kimiCode -> KimiOAuthManager(context, instance.id)
+                // [T-copilot-provider] Two-tier device-flow auth; see
+                // CopilotOAuthManager. Present here so every existing
+                // "is this instance signed in / give me a token" caller works
+                // without learning about Copilot.
+                com.openminis.app.data.model.ProviderType.githubCopilot ->
+                    CopilotOAuthManager(context, instance.id)
                 else -> null
             }
         }
@@ -272,6 +278,10 @@ abstract class OAuthManager(
                 return@OAuthCallbackServer
             }
             ioScope.launch(Dispatchers.IO) {
+                // [T-android-oauth-foreground-exchange] The user is still in the
+                // browser at this instant, and Android blocks a background app's
+                // network — so the exchange would fail on DNS before it is sent.
+                OAuthForegroundGate.awaitForeground(TAG)
                 val success = exchangeCode(code)
                 withContext(Dispatchers.Main) { onComplete(success) }
             }
@@ -453,7 +463,7 @@ abstract class OAuthManager(
         return token
     }
 
-    fun isAuthenticated(): Boolean {
+    open fun isAuthenticated(): Boolean {
         if (loadManualBearerToken()?.isNotEmpty() == true) return true
         val stored = loadStoredTokens() ?: return false
         return stored.optString("access_token", "").isNotEmpty()

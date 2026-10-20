@@ -871,15 +871,15 @@ internal fun OpenAIProvider.rawStreamMessage(
 
                         // Reasoning / thinking content (DeepSeek, Kimi, etc.)
                         delta?.let { d ->
-                            // Track presence of either field — even an empty string
-                            // counts so we can round-trip DeepSeek V4's `reasoning_content: ""`.
+                            // [M23] Presence + precedence across all three
+                            // spellings: reasoning_content → reasoning →
+                            // reasoning_text (empty falls through; one copy).
                             val hasRcKey = d.has("reasoning_content")
                             val hasReasoningKey = d.has("reasoning")
-                            if (hasRcKey || hasReasoningKey) {
-                                sawReasoningField = true
-                            }
+                            val hasReasoningTextKey = d.has("reasoning_text")
+                            if (hasRcKey || hasReasoningKey || hasReasoningTextKey) sawReasoningField = true
                             val rc = d.safeOptString("reasoning_content", "")
-                                .ifEmpty { d.safeOptString("reasoning", "") }
+                                .ifEmpty { d.safeOptString("reasoning", "") }.ifEmpty { d.safeOptString("reasoning_text", "") }
                             if (rc.isNotEmpty()) {
                                 reasoningAccum.append(rc)
                                 if (!sawReasoningDelta) {

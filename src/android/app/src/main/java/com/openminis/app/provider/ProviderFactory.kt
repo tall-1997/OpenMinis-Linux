@@ -274,6 +274,35 @@ object ProviderFactory {
                     )
                 }
             }
+            ProviderType.githubCopilot -> {
+                // [T-copilot-provider] Chat is plain OpenAI Chat Completions at
+                // api.githubcopilot.com, so the existing provider carries it —
+                // what Copilot adds is auth and headers.
+                //
+                // The token provider hands back the SHORT-LIVED session token
+                // (CopilotOAuthManager refreshes it lazily); the long-lived
+                // GitHub account token never reaches the request layer.
+                //
+                // The static editor identity goes on extraHeaders;
+                // X-Initiator, X-Request-Id and the vision flag are derived per
+                // request (the factory cannot see the message list, which is
+                // why that derivation lives in CopilotDeviceFlow.perRequestHeaders).
+                if (context == null) throw com.openminis.app.data.model.LLMError.InvalidApiKey()
+                val oauthManager = com.openminis.app.auth.CopilotOAuthManager(context, instance.id)
+                OpenAIProvider.oauthOpenAICompat(
+                    oauthTokenProvider = {
+                        oauthManager.validAccessToken()
+                            ?: throw com.openminis.app.data.model.LLMError.InvalidApiKey()
+                    },
+                    model = model,
+                    basePath = basePath ?: com.openminis.app.auth.CopilotDeviceFlow.API_BASE,
+                    extraHeaders = com.openminis.app.auth.CopilotDeviceFlow.staticChatHeaders(),
+                ).also { p ->
+                    p.perRequestHeaders = { body ->
+                        com.openminis.app.auth.CopilotDeviceFlow.perRequestHeaders(body)
+                    }
+                }
+            }
             // [T-android-provider-type-parity] Types this build can decode and
             // display but not drive. Reaching here means the user selected a
             // model on an instance restored from another platform (or a newer

@@ -102,6 +102,9 @@ object OpenRouterOAuthManager {
             }
 
             // Exchange code for permanent API key
+            // [T-android-oauth-foreground-exchange] Hold until Minis is
+            // foreground: background network is refused with "no address".
+            OAuthForegroundGate.awaitForeground(TAG)
             exchangeCode(code, verifier)
         }
 
