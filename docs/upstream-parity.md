@@ -36,7 +36,7 @@
 | 5 | 计划任务补全 | **完成** 6/6：#92 #93 #94 #99 #100 #102 |
 | 6 | 备份运行侧 + 恢复收尾 | **完成** 3/3：#95 #96 #97 #98 |
 | 7 | 语音链路 | **完成** 5/5：#103 #104 #105 #107 #108 |
-| 8 | 沙箱 / 浏览器稳定性 | **进行中** 2 件：#111 #112 |
+| 8 | 沙箱 / 浏览器稳定性 | **完成** 6 件：#111 #112 #117 |
 | 9 | helper / 子代理控制台 | 未开始（最大件，约 4286 行 + 95 键） |
 | 10 | Copilot / Codex 接入 | 未开始（约 1651 行 + 10 键） |
 | 11 | 诊断 / 杂项 / 首启引导 | 未开始（约 1541 行 + 10 键） |
@@ -100,12 +100,14 @@ token 端点迁到 `claude.ai/v1/oauth/token`，并把聊天路径与 auth 路�
 
 **未做 9 件**中的 3 件各有硬前置：`ImageInputPreflight`（需 `LLMError.httpStatus` 与 `effectiveInputModalities`）、`QueuedPromptBatching`（需 `QueuedPrompt.origin`/`isScheduledFire`）、`TitleCandidates`（需改标题管线签名）。
 
-### 批次 8 · 沙箱 / 浏览器（2 件）
+### 批次 8 · 沙箱 / 浏览器（6 件）
 
 - #111 `GlobalShellThrottle`：跨会话 child-process 总预算（24），按 `/proc` 后代计数 FIFO 排队；`pid<=0` 直接返回 0，否则在 stub 环境下会数到全机所有进程。
 - #112 浏览器韧性：`BrowserActionGuard` 把「等锁 60s」与「动作 75s」拆开，长取消判 wedged，下次 `acquireTab` 前清扫并重建；7 处 WebView 宿主全接 `onRenderProcessGone`（只记日志不 destroy，各家 cleanup 走自己的入口）。
-
-**剩余 4 件**：`FreshProcessShell`、`ForegroundCommandGroup`、`BrowserTabPoolRegistry`、`HeadlessRenderHost`。
+- #117 批次 8 收官三件：
+  - `FreshProcessShell`：独立 proot 进程执行、seccomp 失败自动 retry（`PROOT_NO_SECCOMP=1`）、Stop 按钮跨路径 kill（proot + traced guest 后代）
+  - `BrowserTabPoolRegistry`：全局 tab 仲裁（`GLOBAL_TAB_CAP` 上限）、内存压力驱逐（`onTrimMemory` → `evictAllIdleForMemoryPressure`）
+  - `HeadlessRenderHost`：GPU 截图（`PixelCopy.request`）+ Scroll Offset 修复（CSS scroll 双源防 double-count）
 
 ## 5. 未开始
 
@@ -113,7 +115,6 @@ token 端点迁到 `claude.ai/v1/oauth/token`，并把聊天路径与 auth 路�
 
 ```
 批次 10 Copilot/Codex   ← 独立，无前置
-批次 8 剩余 4 件        ← 承接 #111/#112 的上下文
 批次 11 诊断/引导        ← 解锁批次 4 的 ContextUsageHint
 批次 9 helper 控制台     ← 最大件；解锁批次 4b 的 EmptyTurnRecovery 后半
 批次 12 终端            ← 无上游单测，需实机验证 htop 类交互程序
