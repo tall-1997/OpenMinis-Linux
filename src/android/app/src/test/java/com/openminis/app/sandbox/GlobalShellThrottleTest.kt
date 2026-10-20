@@ -277,7 +277,7 @@ class GlobalShellThrottleTest {
         // every top-level process and reported 154, which queued all commands.
         assertEquals(0, GlobalShellThrottle.countDescendants(proc, 0))
         assertEquals(0, GlobalShellThrottle.countDescendants(proc, -1))
-        assertEquals(2, GlobalShellThrottle.countDescendants(proc, 1))
+        assertEquals("the root itself is not a descendant", 1, GlobalShellThrottle.countDescendants(proc, 1))
         proc.deleteRecursively()
     }
 
