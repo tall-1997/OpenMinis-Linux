@@ -76,6 +76,10 @@ object VoiceProviderFactory {
                     }
                     normalizedBase.contains("deepgram") ->
                         DeepgramVoiceProvider(instance.id, custom ?: "https://api.deepgram.com", apiKey)
+                    // Zhipu: chat base path varies, voice paths are absolute
+                    // from the origin — see ZhipuVoiceProvider.
+                    ZhipuVoiceProvider.matches(normalizedBase) ->
+                        ZhipuVoiceProvider(instance.id, custom ?: ZhipuVoiceProvider.DEFAULT_ORIGIN, apiKey)
                     else ->
                         VoiceProvider(instance.id, custom ?: "https://api.openai.com", apiKey)
                 }

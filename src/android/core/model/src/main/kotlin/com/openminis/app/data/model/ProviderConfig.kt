@@ -392,16 +392,68 @@ data class ModelEntry(
 ) {
     val id: String get() = uuid
 
-    /** Effective model as seen by the rest of the app: baseModel with overrides applied. */
+    /**
+     * Effective model as seen by the rest of the app: baseModel with overrides
+     * applied.
+     *
+     * [T-android-modality-provider-fallback] The two modality fields resolve
+     * through `effective*Modalities`, i.e. the full chain
+     *   user override > model's own declared list > provider default table.
+     * Every other field keeps the plain "null override means inherit baseModel
+     * verbatim" semantics — only modality has a provider-level default to fall
+     * back to.
+     *
+     * The `overrides.isEmpty` early return had to go, and that was the actual
+     * bug: `isEmpty` only asks whether the USER set anything, so the common
+     * case (new model, no override) returned baseModel without ever calling
+     * copy(), leaving no opportunity to apply any fallback at all. It is now
+     * gated on "nothing to apply from EITHER source" — no overrides AND no
+     * modality fallback pending — so the allocation is still skipped for the
+     * genuinely-unchanged case.
+     */
     val model: LLMModel
         get() {
-            val resolved = if (overrides.isEmpty) baseModel else baseModel.copy(
+            val effIn = baseModel.effectiveInputModalities
+            val effOut = baseModel.effectiveOutputModalities
+            // "Did the provider table contribute anything?" — asked as
+            // was-null-and-now-is-not, NOT by comparing list identity:
+            // effective* runs the list through normalizeModalities(), whose
+            // `.map {}` allocates a fresh list every call, so a referential
+            // check would be true even when nothing was added and the early
+            // return would be dead code.
+            val fallbackPending =
+                (baseModel.inputModalities == null && effIn != null) ||
+                    (baseModel.outputModalities == null && effOut != null)
+            val resolved = if (overrides.isEmpty && !fallbackPending) baseModel else baseModel.copy(
                 displayName = overrides.displayName ?: baseModel.displayName,
                 maxOutputTokens = overrides.maxOutputTokens ?: baseModel.maxOutputTokens,
                 contextWindow = overrides.contextWindow ?: baseModel.contextWindow,
                 supportsReasoning = overrides.supportsReasoning ?: baseModel.supportsReasoning,
-                inputModalities = overrides.inputModalities ?: baseModel.inputModalities,
-                outputModalities = overrides.outputModalities ?: baseModel.outputModalities,
+                // [T-android-modality-normalize-override] (GH#305) Normalize the
+                // OVERRIDE too, not just the fallback.
+                //
+                // `effIn`/`effOut` come from effective*Modalities, which already
+                // runs normalizeModalities(). The override branch did not, so a
+                // user who ticked audio-input by hand stored the suffixed spelling
+                // ("audio_input", the OpenAI/OpenRouter form the detail screen
+                // writes) and every `contains("audio")` reader — hasAudioInput,
+                // hasImageInput, the Vision Group filter — compared it against the
+                // bare name and answered false. The switch showed ON while the
+                // capability stayed off, so the manual override silently did
+                // nothing: exactly the workaround a user reaches for when
+                // inference misses their model.
+                //
+                // [T-android-modality-override-off] …but an EMPTY override is
+                // user intent too: the detail screen saves only the ticked
+                // non-text modalities, so switching the last one off stores
+                // `[]`. normalizeModalities() maps empty to null, which fell
+                // back to inference and made it impossible to switch a
+                // mis-inferred TTS/ASR model OFF (the switch re-opened ON).
+                // Only a null override (never set) falls back.
+                inputModalities = overrides.inputModalities
+                    ?.let { it.normalizeModalities() ?: emptyList() } ?: effIn,
+                outputModalities = overrides.outputModalities
+                    ?.let { it.normalizeModalities() ?: emptyList() } ?: effOut,
             )
             // A user who explicitly saved output modalities wins over the
             // empty-catalog repair. Otherwise a persisted ["text"] stamp on

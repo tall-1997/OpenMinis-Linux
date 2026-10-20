@@ -419,6 +419,7 @@ class ReadAloudPlayer(context: Context) {
                         input = text,
                         model = modelEntry.model.id,
                         voice = modelEntry.model.id,
+                        resolvedModel = modelEntry.model,
                     ),
                 )
             }
