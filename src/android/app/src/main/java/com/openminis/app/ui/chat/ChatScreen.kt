@@ -840,30 +840,13 @@ fun ChatScreen(
     val coroutineScope = rememberCoroutineScope()
 
     var showModelPicker by remember { mutableStateOf(false) }
-    // [T-android-modelpicker-stuck-ripple] Interaction source for the navbar
-    // model-picker row, owned here so the press can be drained when the picker
-    // closes. See the clickable's comment for why the release never arrives on
-    // its own.
-    // [T-android-modelpicker-stuck-ripple] The row owns an InteractionSource
-    // that is REPLACED whenever the picker closes, rather than one whose
-    // presses we try to cancel individually.
-    //
-    // Why replacement: opening the picker puts a modal sheet over this row, so
-    // the pointer's UP never reaches the clickable — Compose emits
-    // PressInteraction.Press with no matching Release and the ripple stays
-    // lit, still visible after the sheet closes as a permanent grey highlight.
-    //
-    // The obvious fix (collect the interactions, remember the open presses,
-    // emit Cancel for each on close) does NOT work reliably, and shipping it
-    // was the first attempt: MutableInteractionSource's flow has replay=0 and
-    // the collector is started by a LaunchedEffect coroutine, so a Press that
-    // lands before that coroutine is dispatched is never observed. The
-    // bookkeeping list is then empty, no Cancel is emitted, and the ripple
-    // stays exactly as stuck as before — while the ripple's own internal
-    // subscriber, registered during composition, did see it.
-    //
-    // Handing the clickable a brand-new source drops every interaction the old
-    // one was holding, with no dependence on collector timing.
+    // [T-android-modelpicker-stuck-ripple] The navbar model-picker row owns an
+    // InteractionSource that is REPLACED whenever the picker closes. A modal
+    // sheet swallows the pointer UP, so Compose emits a Press with no Release
+    // and the ripple stays lit after the sheet closes. Collecting presses and
+    // emitting Cancel does not work: the flow replays nothing and the
+    // collector starts in a LaunchedEffect, so presses that land before it
+    // runs are never seen. A fresh source drops them without timing luck.
     var modelPickerInteractionGeneration by remember { mutableIntStateOf(0) }
     val modelPickerInteraction = remember(modelPickerInteractionGeneration) {
         MutableInteractionSource()
@@ -1405,7 +1388,12 @@ fun ChatScreen(
         }
     }
 
+    // [T-voice-send-waits-for-asr] A send tapped while voice mode still owes
+    // text waits for recognition instead of clearing the composer, which
+    // cancelled the capture and lost the last sentence spoken before the tap.
+    val voiceSend = remember { com.openminis.app.ui.chat.voice.VoiceSendCoordinator(viewModel) }
     val performSendOrEnqueue: (String) -> Unit = handler@{ rawText ->
+        if (voiceSend.defer(coroutineScope, context)) return@handler
         if (viewModel.tryExecuteInputAsSlashCommand(rawText)) {
             viewModel.setInputText("")
             releaseComposerAfterSend()
@@ -1437,6 +1425,7 @@ fun ChatScreen(
             tracedScrollToItem("SEND-PATH/settle", 0, 0)
         }
     }
+    voiceSend.send = performSendOrEnqueue
     // Last drag-stop. Content-driven follow is suppressed briefly after a
     // gesture even when the viewport is still "near bottom"; the controller's
     // generation guard drops commands that were already queued.
@@ -5482,7 +5471,10 @@ fun ChatScreen(
                                     // is text to send; otherwise keep the
                                     // overlay hidden and defer keyboard
                                     // activation to onEnd.
-                                    val hasText = viewModel.inputText.value.isNotBlank()
+                                    // [T-voice-send-waits-for-asr] Owed voice
+                                    // text counts: the swipe finishes it.
+                                    val hasText = viewModel.inputText.value.isNotBlank() ||
+                                        com.openminis.app.ui.chat.voice.VoiceSendGate.owesText()
                                     if (hasText) {
                                         val newProgress = (-totalDy / swipeThresholdPx).coerceIn(0f, 1f)
                                         if (newProgress >= swipeArmFraction && sendSwipeProgress < swipeArmFraction) {
@@ -5501,7 +5493,8 @@ fun ChatScreen(
                                 }
                             }
                             // Drag ended (finger up or pointer cancel).
-                            val hasText = viewModel.inputText.value.isNotBlank()
+                            val hasText = viewModel.inputText.value.isNotBlank() ||
+                                com.openminis.app.ui.chat.voice.VoiceSendGate.owesText()
                             val swipedUp = claimed && totalDy < 0 &&
                                 kotlin.math.abs(totalDy) > kotlin.math.abs(totalDx)
                             if (swipedUp && hasText) {
@@ -5946,6 +5939,9 @@ fun ChatScreen(
                         // onSend; this lambda is the single source of
                         // truth for what "press Enter to send" means.
                         val performEnterSend: () -> Boolean = handler@{
+                            // [T-voice-send-waits-for-asr] Same gate as the
+                            // button: finish owed voice text first.
+                            if (voiceSend.defer(coroutineScope, context)) return@handler true
                             if (inputText.isBlank() && attachments.isEmpty()) return@handler false
                             // Intercept slash commands so "/compact" et al.
                             // run locally instead of being sent as a chat
@@ -6935,7 +6931,10 @@ fun ChatScreen(
                         // valid message — mirrors iOS where !attachments.isEmpty
                         // satisfies the composer's send guard. Without this an
                         // image-only "look at this" send is impossible.
-                        val hasText = inputText.isNotBlank()
+                        // [T-voice-send-waits-for-asr] Owed voice text counts as
+                        // content: the tap finishes it, then sends.
+                        val voiceOwesText = com.openminis.app.ui.chat.voice.VoiceSendGate.owesText()
+                        val hasText = inputText.isNotBlank() || voiceOwesText
                         val hasContent = hasText || attachments.isNotEmpty()
                         val showStop = isStreaming && !hasContent
                         if (showStop) {

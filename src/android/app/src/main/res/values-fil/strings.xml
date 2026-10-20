@@ -197,6 +197,12 @@
     <string name="mcp_form_env_placeholder">GITHUB_TOKEN=$GITHUB_TOKEN</string>
     <string name="mcp_form_startup_timeout">Timeout sa pagsisimula (segundo)</string>
     <string name="mcp_form_startup_timeout_placeholder">Default 60</string>
+    <string name="voice_asr_failed_title">Nabigo ang transkripsyon</string>
+    <string name="voice_asr_failed_message">Hindi na-transcribe ang %1$d segundong pagsasalita (%2$s). Subukan muli?</string>
+    <string name="voice_asr_timed_out">Nag-time out ang speech recognition</string>
+    <string name="voice_asr_retry">Subukan muli</string>
+    <string name="voice_asr_discard">Itapon</string>
+    <string name="voice_send_still_transcribing">Nag-tra-transcribe pa. Pindutin muli ang Ipadala kapag lumabas ang teksto.</string>
     <string name="voice_services_section">Mga Voice Service</string>
     <string name="voice_services_duplicate_hint">May voice service na nakatakda nang higit sa isang beses. Pinagsama ang voice sa isang row dito; puwede mong burahin ang sobrang provider sa itaas kung gusto mo.</string>
     <string name="voice_services_stt_count">%1$d speech-to-text</string>

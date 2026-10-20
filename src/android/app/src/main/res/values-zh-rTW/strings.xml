@@ -245,6 +245,12 @@
     <string name="mcp_form_env_placeholder">GITHUB_TOKEN=$GITHUB_TOKEN</string>
     <string name="mcp_form_startup_timeout">啟動逾時（秒）</string>
     <string name="mcp_form_startup_timeout_placeholder">預設 60</string>
+    <string name="voice_asr_failed_title">辨識失敗</string>
+    <string name="voice_asr_failed_message">%1$d 秒的語音未能轉寫（%2$s）。要重試嗎？</string>
+    <string name="voice_asr_timed_out">語音辨識逾時</string>
+    <string name="voice_asr_retry">重試</string>
+    <string name="voice_asr_discard">捨棄</string>
+    <string name="voice_send_still_transcribing">仍在轉寫，文字出現後再點傳送。</string>
     <string name="voice_services_section">語音服務</string>
     <string name="voice_services_duplicate_hint">有語音服務被重複設定。語音在此會合併為單一列；若您願意，可以刪除上方多餘的供應商。</string>
     <string name="voice_services_stt_count">%1$d 個語音轉文字</string>

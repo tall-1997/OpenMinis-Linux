@@ -202,6 +202,12 @@
     <string name="mcp_form_env_placeholder">GITHUB_TOKEN=$GITHUB_TOKEN</string>
     <string name="mcp_form_startup_timeout">Batas waktu mulai (detik)</string>
     <string name="mcp_form_startup_timeout_placeholder">Bawaan 60</string>
+    <string name="voice_asr_failed_title">Transkripsi gagal</string>
+    <string name="voice_asr_failed_message">%1$d detik ucapan tidak dapat ditranskripsikan (%2$s). Coba lagi?</string>
+    <string name="voice_asr_timed_out">Pengenalan suara kehabisan waktu</string>
+    <string name="voice_asr_retry">Coba lagi</string>
+    <string name="voice_asr_discard">Buang</string>
+    <string name="voice_send_still_transcribing">Masih mentranskripsikan. Ketuk Kirim lagi saat teksnya muncul.</string>
     <string name="voice_services_section">Layanan Suara</string>
     <string name="voice_services_duplicate_hint">Sebuah layanan suara dikonfigurasi lebih dari sekali. Layanan suara digabungkan menjadi satu baris di sini; Anda dapat menghapus penyedia berlebih di atas jika mau.</string>
     <string name="voice_services_stt_count">%1$d ucapan ke teks</string>

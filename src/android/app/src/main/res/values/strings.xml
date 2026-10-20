@@ -399,6 +399,12 @@
     <string name="mcp_form_startup_timeout">Startup timeout (seconds)</string>
     <string name="mcp_form_startup_timeout_placeholder">Default 60</string>
     <!-- [T-android-provider-voice] Voice Services (shadow voice providers) -->
+    <string name="voice_asr_failed_title">Transcription failed</string>
+    <string name="voice_asr_failed_message">%1$d seconds of speech could not be transcribed (%2$s). Try again?</string>
+    <string name="voice_asr_timed_out">Speech recognition timed out</string>
+    <string name="voice_asr_retry">Retry</string>
+    <string name="voice_asr_discard">Discard</string>
+    <string name="voice_send_still_transcribing">Still transcribing. Tap Send again when the text appears.</string>
     <string name="voice_services_section">Voice Services</string>
     <string name="voice_services_duplicate_hint">A voice service is configured more than once. Voice is merged into a single row here; you can delete the extra provider above if you want.</string>
     <string name="voice_services_stt_count">%1$d speech-to-text</string>

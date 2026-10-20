@@ -197,6 +197,12 @@
     <string name="mcp_form_env_placeholder">GITHUB_TOKEN=$GITHUB_TOKEN</string>
     <string name="mcp_form_startup_timeout">Startzeitlimit (Sekunden)</string>
     <string name="mcp_form_startup_timeout_placeholder">Standard 60</string>
+    <string name="voice_asr_failed_title">Transkription fehlgeschlagen</string>
+    <string name="voice_asr_failed_message">%1$d Sekunden Sprache konnten nicht transkribiert werden (%2$s). Erneut versuchen?</string>
+    <string name="voice_asr_timed_out">Spracherkennung hat das Zeitlimit überschritten</string>
+    <string name="voice_asr_retry">Erneut versuchen</string>
+    <string name="voice_asr_discard">Verwerfen</string>
+    <string name="voice_send_still_transcribing">Wird noch transkribiert. Tippe erneut auf Senden, sobald der Text erscheint.</string>
     <string name="voice_services_section">Sprachdienste</string>
     <string name="voice_services_duplicate_hint">Ein Sprachdienst ist mehrfach konfiguriert. Die Sprachfunktion wird hier in einer Zeile zusammengefasst; Sie können den überzähligen Anbieter oben löschen, wenn Sie möchten.</string>
     <string name="voice_services_stt_count">%1$d × Sprache-zu-Text</string>
