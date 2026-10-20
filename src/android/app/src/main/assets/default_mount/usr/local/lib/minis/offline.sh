@@ -57,6 +57,9 @@ minis_sha1_file()   { _ms_path=$1; sha1sum "$_ms_path" 2>/dev/null | cut -d' ' -
 #     of pinning it here, so a FLUTVER override stays covered.
 #   * rustup / CMake: rustup-init.sha256 and cmake-<ver>-SHA-256.txt are
 #     fetched from the origin host by the scripts that use them.
+#   * Node.js: nodejs.org/dist/<ver>/SHASUMS256.txt ships a sha256 per archive;
+#     minis-setup-node pins the value it needs (and declares it via
+#     _MINIS_EXPECTED before resume_fetch).
 #   * lzhiyong/android-sdk-tools, lzhiyong/termux-ndk and skylot/jadx publish
 #     NO digest. Those downloads run origin-only (github.com over TLS) and the
 #     proxy mirrors are disabled unless the user pins a digest themselves.
@@ -68,6 +71,11 @@ minis_catalog_digest() {
       echo "sha1 2c1a80dd4d9f7d0e6dd336ec603d9b5c55a6f576" ;;
     platform-35_r02.zip)
       echo "sha1 0bb560a90a7a2cbd0dd8348224d518b638fe7949" ;;
+    # Node.js: official SHASUMS256.txt digest, pinned to the exact version the
+    # dev-suite nodejs-core recipe installs. Keep in step with NODE_SHA256 in
+    # minis-setup-node (NodeSetupScriptTest asserts the two literals match).
+    node-v24.22.0-linux-arm64.tar.xz)
+      echo "sha256 fef00bb4d36e1c50104a9775a10359beee98f162b4104dd12472c75065c6a143" ;;
     *) echo "" ;;
   esac
 }

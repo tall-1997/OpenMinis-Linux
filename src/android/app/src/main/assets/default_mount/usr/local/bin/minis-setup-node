@@ -1,0 +1,101 @@
+#!/bin/sh
+# Install Node.js 24 LTS into /opt/nodejs and link it onto PATH.
+# Part of the dev-suite "nodejs-core" component; idempotent.
+#
+# Why a tarball instead of apt: Ubuntu 24.04 (noble) ships nodejs 18.19.1 and
+# no newer major in -updates/-backports, and Node 18 reached upstream EOL on
+# 2025-04-30. The distro package is deliberately LEFT INSTALLED as a fallback
+# (/usr/bin/node); this script only shadows it on PATH through /usr/local/bin,
+# so uninstalling the component rolls back to 18 with no apt surgery.
+#
+# Why not NodeSource: (1) minis-mirror rewrites the apt mirror and deletes
+# /etc/apt/sources.list.d/*.sources, which is exactly where NodeSource writes
+# its deb822 repo — the source would vanish on the next mirror switch;
+# (2) the NodeSource deb Conflicts: npm, while the guest also has the distro
+# npm. The pinned tarball has neither problem.
+#
+# Trust: the official arm64 archive is pinned to an exact version + SHA-256
+# taken from nodejs.org's own SHASUMS256.txt. offline.sh fails closed, so a
+# mirror (npmmirror, for CN networks) can only serve bytes matching the pin.
+set -eu
+export TMPDIR=/tmp TMP=/tmp TEMP=/tmp
+
+NODE_VERSION=24.22.0
+# SHA-256 of node-v24.22.0-linux-arm64.tar.xz from
+# https://nodejs.org/dist/v24.22.0/SHASUMS256.txt
+# Keep in step with minis_catalog_digest() in /usr/local/lib/minis/offline.sh
+# (NodeSetupScriptTest asserts the two literals match).
+NODE_SHA256="fef00bb4d36e1c50104a9775a10359beee98f162b4104dd12472c75065c6a143"
+NODE_MAJOR=24
+ROOT=/opt/nodejs
+DEST="$ROOT/v$NODE_VERSION"
+LINK_DIR=/usr/local/bin
+TARBALL="node-v$NODE_VERSION-linux-arm64.tar.xz"
+
+# Idempotent: a working >= 24 install wins. A distro node 18 on PATH does not.
+if [ -x "$ROOT/current/bin/node" ]; then
+  have=$("$ROOT/current/bin/node" -e 'process.stdout.write(process.versions.node.split(".")[0])' 2>/dev/null || echo 0)
+  if [ "${have:-0}" -ge "$NODE_MAJOR" ] 2>/dev/null; then
+    echo "node $("$ROOT/current/bin/node" -v) already present at $ROOT/current"
+    exit 0
+  fi
+fi
+
+command -v curl >/dev/null 2>&1 || { echo "curl missing — run minis-dev-setup first" >&2; exit 1; }
+command -v sha256sum >/dev/null 2>&1 || { echo "sha256sum missing (coreutils)" >&2; exit 1; }
+command -v tar >/dev/null 2>&1 || { echo "tar missing" >&2; exit 1; }
+
+# .tar.xz needs xz; the recipe installs xz-utils too, this is the belt.
+if ! command -v xz >/dev/null 2>&1; then
+  . /usr/local/lib/minis/apt-lock.sh
+  minis_acquire_apt_lock 1800 || exit 1
+  trap minis_release_apt_lock EXIT
+  apt-get install -y --no-install-recommends xz-utils
+fi
+
+tmp="/tmp/$TARBALL.$$"
+. /usr/local/lib/minis/offline.sh
+# Caller-resolved publisher digest: mandatory for this payload, and what lets
+# resume_fetch use the npmmirror fallback instead of origin-only.
+_MINIS_EXPECTED="sha256 $NODE_SHA256"
+if ! resume_fetch "$tmp" "$TARBALL" \
+  "https://nodejs.org/dist/v$NODE_VERSION/$TARBALL" \
+  "https://registry.npmmirror.com/-/binary/node/v$NODE_VERSION/$TARBALL"
+then
+  echo "node download failed (all sources) or checksum mismatch." >&2
+  echo "Offline fallback: put $TARBALL in /var/minis/shared/offline/ and set MINIS_ALLOW_OFFLINE=1." >&2
+  exit 1
+fi
+
+# Verified by resume_fetch before this point; only now does the archive expand.
+stage="/tmp/node-unpack-$$"
+rm -rf "$stage"
+mkdir -p "$stage"
+tar -xJf "$tmp" -C "$stage" --strip-components=1
+rm -f "$tmp"
+[ -x "$stage/bin/node" ] || { echo "unexpected node tarball layout" >&2; rm -rf "$stage"; exit 1; }
+
+mkdir -p "$ROOT"
+rm -rf "$DEST"
+mv "$stage" "$DEST"
+# `current` is always a symlink; if some earlier partial run left a real
+# directory there, plain `ln -sfn` would nest the link inside it.
+if [ -d "$ROOT/current" ] && [ ! -L "$ROOT/current" ]; then
+  rm -rf "$ROOT/current"
+fi
+ln -sfn "$DEST" "$ROOT/current"
+for b in node npm npx corepack; do
+  if [ -e "$ROOT/current/bin/$b" ]; then
+    ln -sfn "$ROOT/current/bin/$b" "$LINK_DIR/$b"
+  fi
+done
+
+got=$("$ROOT/current/bin/node" -e 'process.stdout.write(process.versions.node.split(".")[0])')
+[ "$got" -ge "$NODE_MAJOR" ] || { echo "installed node major $got < $NODE_MAJOR" >&2; exit 1; }
+[ -x "$LINK_DIR/npm" ] || { echo "npm missing from $LINK_DIR after install" >&2; exit 1; }
+npm_v=$("$ROOT/current/bin/node" "$ROOT/current/bin/npm" -v)
+
+echo "node $("$ROOT/current/bin/node" -v) / npm $npm_v -> $ROOT/current"
+echo "  system node stays at /usr/bin/node as the fallback."
+echo "  heavy builds (Vite/Next) can raise the heap for one command:"
+echo "    NODE_OPTIONS=--max-old-space-size=512 npm run build"
