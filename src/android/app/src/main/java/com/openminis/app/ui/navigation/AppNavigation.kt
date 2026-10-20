@@ -93,6 +93,7 @@ import com.openminis.app.ui.onboarding.OnboardingModelSelectionScreen
 private val EmphasizedDecelerate = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1.0f)
 private val EmphasizedAccelerate = CubicBezierEasing(0.3f, 0.0f, 0.8f, 0.15f)
 
+
 object Routes {
     const val SESSION_LIST = "sessions"
     const val CHAT = "chat/{sessionId}"
@@ -203,6 +204,8 @@ object Routes {
     const val BACKGROUND = "background"
     const val ABOUT = "about"
     const val ONBOARDING_MODELS = "onboarding_models"
+    // [T-android-onboarding-flow] First-run welcome / API key / default models.
+    const val ONBOARDING = "onboarding"
     /** T219-2: Mount external folders settings + detail. */
     const val MOUNTED_FOLDERS = "mounted_folders"
     const val MOUNTED_FOLDERS_DETAIL = "mounted_folders_detail/{mountId}"
@@ -392,7 +395,7 @@ fun AppNavigation(
         // stall shape the note measures at 119s; the reads move to
         // Dispatchers.IO and the application context (this coroutine can outlive
         // the Activity it was composed in).
-        val (rawMode, mode) = withContext(Dispatchers.IO) {
+        val (rawMode, mode, onboardingDone) = withContext(Dispatchers.IO) {
             val app = context.applicationContext
             val raw = getAppearancePrefs(app).getInt(KEY_LAUNCH_SESSION, 0)
             // Hang-detector circuit breaker: if the previous launches racked up
@@ -417,7 +420,11 @@ fun AppNavigation(
                 com.openminis.app.diagnostics.LaunchCycleBeacon.shouldForceHomeOnLaunch() ||
                 com.openminis.app.diagnostics.RouteFuse.blocksAnyUnhealthy(app)
             ) 3 else raw
-            raw to effective
+            // [T-android-onboarding-flow] First run only: the flow is shown once,
+            // and completing or skipping it records that fact.
+            val done = app.getSharedPreferences(ONBOARDING_PREFS, android.content.Context.MODE_PRIVATE)
+                .getBoolean(KEY_ONBOARDING_DONE, false)
+            Triple(raw, effective, done)
         }
         val autoThresholdMs = 15L * 60 * 1000
         // [T-android-startup-splash-hang] The workspace-owner warmup no longer
@@ -432,12 +439,8 @@ fun AppNavigation(
         // branches: "is this device set up at all?" is the question that
         // outranks the launch preference.
         //
-        // [T-android-startup-splash-hang] `hasAnySession` was
-        // `listSessions().isNotEmpty()` — a full hydration of the widest table
-        // in the schema, including every session's `last_message` preview, to
-        // answer a yes/no question. This resolver ran that same full query up to
-        // three times per cold start (emptiness, then `firstOrNull()` for the
-        // target session), all on the main-dispatcher LaunchedEffect.
+        // [T-android-startup-splash-hang] hasAnySession used to hydrate the
+        // widest table (previews included) up to three times per cold start.
         val hasAnySession = chatRepository.dao.hasAnySession()
         val hasAnyProvider = providerRepository.instances.isNotEmpty()
         // [XSessionDiag] Hypothesis 1 context: which launch mode actually applied.
@@ -452,11 +455,10 @@ fun AppNavigation(
                 "hasAnyProvider=$hasAnyProvider",
         )
         val target: String? = when {
-            // T185: if a system share is buffered and the configured launch
-            // mode would leave us on the session list (mode 3 = Home), the
-            // ChatScreen consumer never mounts and the buffer expires —
-            // exactly the symptom from the bug report. Force a new draft
-            // chat so the share lands in a composer.
+            // [T-android-onboarding-flow] First run only (see OnboardingRoute).
+            !hasAnySession && !hasAnyProvider && !onboardingDone -> Routes.ONBOARDING
+            // T185: a buffered share with Home as the mode would expire before
+            // ChatScreen mounts — force a draft so it lands in a composer.
             hasPendingShare && mode == 3 -> Routes.chat("__new__${java.util.UUID.randomUUID()}")
             // [T-android-first-launch-lands-home] Nothing configured AND no
             // history: land on Home whatever the mode says. Mode 2 ("always a
@@ -503,19 +505,10 @@ fun AppNavigation(
             if (autoSession.isNotEmpty() && !autoSession.startsWith("__new__")) {
                 com.openminis.app.diagnostics.RouteFuse.noteAutoEnter(context, autoSession)
             }
-            // T314: navigate directly without the safeNavigate guard.
-            // safeNavigate exists to defang back-then-tap-settings races
-            // where a popped destination is mid-tear-down — it requires
-            // RESUMED to be safe. But this LaunchedEffect fires on the
-            // first composition pass, when the start destination is
-            // STARTED but not yet RESUMED. There's no race here: we're
-            // the deterministic startup dispatcher, the start destination
-            // hasn't even rendered, and we want to navigate to it BEFORE
-            // it shows. Calling navigate() unconditionally produces the
-            // intended cold-start dispatch (mode 1 → last session, mode 2
-            // → new chat, mode 0 → auto). Pre-T314 the safeNavigate guard
-            // silently dropped this navigation and stranded the user on
-            // the SESSION_LIST start destination regardless of mode.
+            // T314: navigate directly, not via safeNavigate — that guard needs
+            // RESUMED, but this fires on the first pass (STARTED only) and is
+            // the deterministic startup dispatcher, so there is no race to
+            // defuse. safeNavigate silently dropped this navigation.
             navController.navigate(target) {
                 popUpTo(Routes.SESSION_LIST) { inclusive = false }
             }
@@ -1688,6 +1681,9 @@ fun AppNavigation(
                 onBack = { navController.safePopBackStack() },
             )
         }
+
+        composable(Routes.ONBOARDING) { OnboardingRoute(providerRepository, navController) }
+
 
         composable(Routes.ONBOARDING_MODELS) {
             OnboardingModelSelectionScreen(

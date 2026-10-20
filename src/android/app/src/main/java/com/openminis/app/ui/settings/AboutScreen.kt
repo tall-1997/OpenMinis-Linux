@@ -119,6 +119,17 @@ fun AboutScreen(onBack: () -> Unit) {
                     commitCopied = true
                 },
             )
+            // [T-android-about-build-date] When this APK was built — read from
+            // the asset stamped by WriteBuildInfoTask on every build. Degrades
+            // to "unknown" for a source tarball with no Gradle build.
+            Text(
+                stringResource(
+                    R.string.about_built_format,
+                    com.openminis.app.AppBuildInfo.buildDate(context),
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             Text(
                 stringResource(R.string.about_minis_tagline),
                 style = MaterialTheme.typography.bodyMedium,

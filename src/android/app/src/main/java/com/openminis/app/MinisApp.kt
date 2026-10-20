@@ -298,13 +298,9 @@ class MinisApp : Application(), ImageLoaderFactory {
         com.openminis.app.data.ToolLimitPrefs.prime(this)
         com.openminis.app.security.SecurityGateHolder.load(this)
 
-        // T283: install NDK signal handler for native crashes (SIGSEGV/
-        // SIGABRT/SIGBUS/SIGFPE/SIGILL/SIGSYS). Writes a one-shot text
-        // report to filesDir/logs/native-crash-<stamp>.log before re-raising
-        // the signal so the system tombstone is also generated. Runs
-        // before any other native lib (proot, jieba, …) is dlopen'd
-        // by the rest of onCreate so the handler is in place when those
-        // libs first execute.
+        // T283: install the NDK signal handler before any other native lib is
+        // dlopen'd, so a native crash writes native-crash-*.log and still lets
+        // the system tombstone generate.
         try {
             com.openminis.app.crash.NativeCrashHandler.install(
                 java.io.File(filesDir, "logs"),
@@ -312,6 +308,10 @@ class MinisApp : Application(), ImageLoaderFactory {
         } catch (t: Throwable) {
             Log.w("MinisApp", "NativeCrashHandler install failed: ${t.message}")
         }
+
+        // [OpenMinis#363] Recover the previous process death from the system
+        // (a native abort leaves nothing in-process); self-dispatches off-main.
+        com.openminis.app.crash.ExitInfoCollector.collect(this)
 
         // T-android-fgs-timeout-crash: chain an UncaughtExceptionHandler
         // ahead of ACRA's so we can intercept
