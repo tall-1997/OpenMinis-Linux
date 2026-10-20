@@ -42,7 +42,7 @@
     "src/android/app/src/main/java/com/openminis/app/sandbox/offload/ShizukuOffloadHandler.kt": 1238,
     "src/android/app/src/main/java/com/openminis/app/service/AgentForegroundService.kt": 1516,
     "src/android/app/src/main/java/com/openminis/app/service/ToolOverlayController.kt": 1008,
-    "src/android/app/src/main/java/com/openminis/app/speech/SystemSpeechRecognitionEngine.kt": 1099,
+    "src/android/app/src/main/java/com/openminis/app/speech/SystemSpeechRecognitionEngine.kt": 1086,
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatAssistantMessageUI.kt": 1222,
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatFlatItems.kt": 1218,
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatMiscViews.kt": 887,

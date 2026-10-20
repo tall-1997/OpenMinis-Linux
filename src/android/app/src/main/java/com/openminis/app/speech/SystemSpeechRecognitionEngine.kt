@@ -6,7 +6,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
-import android.media.AudioFormat
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -62,6 +61,10 @@ class SystemSpeechRecognitionEngine(private val appContext: Context) : SpeechRec
             return services.isNotEmpty()
         }
 
+    private val fallbackLocales: List<Locale> by lazy {
+        systemAsrFallbackLocales(recognizerLanguageTag(Locale.getDefault()))
+    }
+
     override val supportedLocales: List<Locale>
         get() = cachedSupportedLocales ?: fallbackLocales
 
@@ -115,34 +118,6 @@ class SystemSpeechRecognitionEngine(private val appContext: Context) : SpeechRec
      * Curated locale list used when the system refuses to enumerate. Covers
      * the major languages that Google and most OEM recognizers support.
      */
-    private val fallbackLocales: List<Locale> by lazy {
-        listOf(
-            // [T-android-asr-script-subtag] Script-stripped: the raw default on
-            // a Simplified-Chinese device is zh-Hans-CN, which the recognizer
-            // rejects. Since this list is also what SpeechRecognitionManager
-            // re-validates the saved locale against, leaving the raw default
-            // here made the broken locale look "supported" and the fallback
-            // never fired.
-            Locale.forLanguageTag(recognizerLanguageTag(Locale.getDefault())),
-            Locale.forLanguageTag("en-US"),
-            Locale.forLanguageTag("zh-CN"),
-            Locale.forLanguageTag("zh-TW"),
-            Locale.forLanguageTag("ja-JP"),
-            Locale.forLanguageTag("ko-KR"),
-            Locale.forLanguageTag("es-ES"),
-            Locale.forLanguageTag("fr-FR"),
-            Locale.forLanguageTag("de-DE"),
-            Locale.forLanguageTag("it-IT"),
-            Locale.forLanguageTag("pt-BR"),
-            Locale.forLanguageTag("ru-RU"),
-            Locale.forLanguageTag("ar-SA"),
-            Locale.forLanguageTag("hi-IN"),
-            Locale.forLanguageTag("id-ID"),
-            Locale.forLanguageTag("th-TH"),
-            Locale.forLanguageTag("vi-VN"),
-            Locale.forLanguageTag("tr-TR"),
-        ).distinctBy { it.toLanguageTag() }
-    }
 
     override fun start(locale: Locale, listener: SpeechRecognitionEngine.Listener) {
         this.listener = listener
@@ -152,6 +127,9 @@ class SystemSpeechRecognitionEngine(private val appContext: Context) : SpeechRec
         heldSpokenSeconds = 0f
         holdFlushRunnable?.let { mainHandler.removeCallbacks(it) }
         holdFlushRunnable = null
+        cancelWatchdog()
+        retainedPcmBuffer.reset()
+        replayPcm = null
 
         if (ContextCompat.checkSelfPermission(appContext, Manifest.permission.RECORD_AUDIO)
             != PackageManager.PERMISSION_GRANTED
@@ -403,11 +381,27 @@ class SystemSpeechRecognitionEngine(private val appContext: Context) : SpeechRec
                     Log.w(TAG, "[vad] endpointing unavailable, platform timing applies: $message")
                     stopVad()
                 }
+
+                // [T-voice-mic-preempted] The shared capture is silent or
+                // gone because another app holds the mic, so the recogniser
+                // would only wait out its timeout: end the take now and say why.
+                override fun onMicInUse(detail: String) {
+                    Log.w(TAG, "[vad] microphone in use by another app: $detail")
+                    mainHandler.post {
+                        stopVad()
+                        cancel()
+                        listener?.onError(RecognitionError.MIC_IN_USE, detail)
+                    }
+                }
             },
         )
         // ONE capture serves both: the VAD judges these samples and the very
         // same frames go down the pipe to the recogniser.
         det.rawAudioSink = { bytes, len ->
+            // [T-voice-asr-failure-retry-prompt] Keep a copy of what the
+            // recognizer is fed, so a failed take can be retried instead of
+            // re-dictated.
+            retainedPcmBuffer.retain(bytes, len)
             val out = audioPipeStream
             if (out != null) {
                 try {
@@ -453,12 +447,6 @@ class SystemSpeechRecognitionEngine(private val appContext: Context) : SpeechRec
     }
 
     /** Everything heard this dictation, including the segment just closed. */
-    private fun joinedTranscript(lastSegment: String): String {
-        if (segmentTranscript.isEmpty()) return lastSegment
-        if (lastSegment.isEmpty()) return segmentTranscript.toString()
-        return "$segmentTranscript $lastSegment"
-    }
-
     /**
      * [T-android-continuous-dictation] Open a new recogniser for the next
      * segment, leaving the microphone capture untouched.
@@ -502,7 +490,7 @@ class SystemSpeechRecognitionEngine(private val appContext: Context) : SpeechRec
     private fun endContinuousSession() {
         continuousSession = false
         continuousLocale = null
-        val all = joinedTranscript(bufferedPartial.orEmpty())
+        val all = joinedTranscript(segmentTranscript, bufferedPartial.orEmpty())
         segmentTranscript.setLength(0)
         bufferedPartial = null
         if (all.isNotEmpty()) listener?.onFinal(all) else listener?.onFinal("")
@@ -567,7 +555,7 @@ class SystemSpeechRecognitionEngine(private val appContext: Context) : SpeechRec
                 pendingLocale = locale
                 recognizer = r
                 r.setRecognitionListener(callbacks)
-                r.startListening(buildIntent(locale))
+                r.startListening(buildAsrIntent(locale, preferOffline, audioPipeRead, appContext.packageName))
             } catch (e: Throwable) {
                 Log.w(TAG, "startListening threw: ${e.message}")
                 this.listener?.onError(RecognitionError.UNKNOWN, e.message)
@@ -612,7 +600,148 @@ class SystemSpeechRecognitionEngine(private val appContext: Context) : SpeechRec
             closeAudioPipe()
             try { recognizer?.stopListening() }
             catch (e: Throwable) { Log.w(TAG, "stopListening: ${e.message}") }
+            // [T-voice-asr-failure-retry-prompt] Never hang in "Recognizing…":
+            // a send waiting on this take would otherwise sit out its full
+            // minute. Scaled with the audio so long dictation gets its time.
+            if (recognizer != null && !sessionCommitted) {
+                armWatchdog(VoiceAsrWatchdog.pcmSeconds(retainedPcmBuffer.sizeBytes(), VoiceActivityDetector.SAMPLE_RATE))
+            }
         }
+    }
+
+    // ── [T-voice-asr-failure-retry-prompt] Kept audio, replay, watchdog ────
+
+    /**
+     * Raw PCM16 mono of the current take at [VoiceActivityDetector.SAMPLE_RATE],
+     * exactly as fed to the recognizer. Held as chunks (no doubling copies)
+     * and capped at the VAD's 300 s session ceiling. Empty when the recognizer
+     * opened the mic itself (API < 33), in which case nothing can be retried.
+     */
+
+    private val retainedPcmBuffer = RetainedPcmBuffer(MAX_RETAINED_PCM_BYTES)
+
+    /** PCM being replayed by [transcribeRetained]; survives the on-device fallback restart. */
+    @Volatile
+    private var replayPcm: ByteArray? = null
+
+    private var watchdogRunnable: Runnable? = null
+
+
+    /**
+     * Hand the take's audio to the listener just before a terminal onError,
+     * so SpeechRecognitionManager can offer a retry.
+     */
+    private fun handBackAudio() {
+        val pcm = retainedPcmBuffer.snapshot()
+        if (pcm.isEmpty()) return
+        listener?.onRetainedAudio(
+            com.openminis.app.provider.voice.VoiceProvider.wrapPcm16InWav(pcm, VoiceActivityDetector.SAMPLE_RATE),
+        )
+    }
+
+    /**
+     * Watchdog over one recognition. Scales with the audio (see
+     * [VoiceAsrWatchdog]); on expiry, whatever text the recognizer produced is
+     * committed, and "nothing at all" is a TIMED_OUT failure with the audio
+     * kept — not a "no speech" result that silently drops it.
+     */
+    private fun armWatchdog(audioSeconds: Double) {
+        cancelWatchdog()
+        val seconds = VoiceAsrWatchdog.seconds(audioSeconds)
+        val r = Runnable {
+            watchdogRunnable = null
+            if (sessionCommitted || listener == null) return@Runnable
+            sessionCommitted = true
+            val salvage = joinedTranscript(segmentTranscript, bufferedPartial.orEmpty())
+            try { recognizer?.cancel() } catch (_: Throwable) {}
+            if (salvage.isNotEmpty()) {
+                Log.i(TAG, "[watchdog] fired after ${seconds.toInt()}s — committing ${salvage.length} salvaged chars")
+                listener?.onFinal(salvage)
+            } else {
+                Log.w(TAG, "[watchdog] fired after ${seconds.toInt()}s with no text — reporting timeout")
+                handBackAudio()
+                listener?.onError(RecognitionError.TIMED_OUT, "Speech recognition timed out")
+            }
+            tearDown()
+        }
+        watchdogRunnable = r
+        mainHandler.postDelayed(r, (seconds * 1000).toLong())
+    }
+
+    private fun cancelWatchdog() {
+        watchdogRunnable?.let { mainHandler.removeCallbacks(it) }
+        watchdogRunnable = null
+    }
+
+    /**
+     * Re-recognize a take kept from a failed session by feeding its PCM to a
+     * fresh recognizer through EXTRA_AUDIO_SOURCE — the same pipe live capture
+     * uses, minus the microphone. Needs API 33+; below that the audio is
+     * handed straight back (still retryable / discardable by the user).
+     */
+    override fun transcribeRetained(wav: ByteArray, locale: Locale, listener: SpeechRecognitionEngine.Listener) {
+        val header = VoiceActivityDetector.WAV_HEADER_BYTES
+        val pcm = if (wav.size > header) wav.copyOfRange(header, wav.size) else ByteArray(0)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || pcm.isEmpty()) {
+            listener.onRetainedAudio(wav)
+            listener.onError(RecognitionError.UNKNOWN, "Re-transcribing saved audio needs Android 13 or later")
+            return
+        }
+        mainHandler.post {
+            this.listener = listener
+            bufferedPartial = null
+            // The take was already judged to contain speech: an empty result
+            // is a failure (kept, asked again), not "you said nothing".
+            heardSpeech = true
+            sessionCommitted = false
+            heldSpokenSeconds = 0f
+            segmentTranscript.setLength(0)
+            continuousSession = false
+            continuousLocale = null
+            startReplay(pcm, locale, allowOnDeviceRetry = true)
+        }
+    }
+
+    private fun startReplay(pcm: ByteArray, locale: Locale, allowOnDeviceRetry: Boolean) {
+        replayPcm = pcm
+        // The replayed take becomes the retained audio: a retry of a retry
+        // must hand back the replay PCM, not the original dictation.
+        retainedPcmBuffer.reset()
+        retainedPcmBuffer.retain(pcm, pcm.size)
+        val pipe = try {
+            android.os.ParcelFileDescriptor.createPipe()
+        } catch (t: Throwable) {
+            Log.w(TAG, "[replay] pipe creation failed: ${t.message}")
+            sessionCommitted = true
+            handBackAudio()
+            listener?.onError(RecognitionError.UNKNOWN, t.message)
+            tearDown()
+            return
+        }
+        audioPipeRead = pipe[0]
+        audioPipeWrite = pipe[1]
+        val out = android.os.ParcelFileDescriptor.AutoCloseOutputStream(pipe[1])
+        audioPipeStream = out
+        feedingAudio = true
+        // Write on a worker: the pipe holds ~64 KB and blocks until the
+        // recognizer reads. Closing the write end is what tells it the audio
+        // has ended and makes it deliver its result.
+        Thread({
+            try {
+                var pos = 0
+                while (pos < pcm.size) {
+                    val n = minOf(REPLAY_CHUNK_BYTES, pcm.size - pos)
+                    out.write(pcm, pos, n)
+                    pos += n
+                }
+            } catch (t: Throwable) {
+                Log.i(TAG, "[replay] pipe closed early: ${t.javaClass.simpleName}")
+            } finally {
+                runCatching { out.close() }
+            }
+        }, "asr-replay").start()
+        startInternal(locale, allowOnDeviceRetry)
+        armWatchdog(VoiceAsrWatchdog.pcmSeconds(pcm.size, VoiceActivityDetector.SAMPLE_RATE))
     }
 
     override fun cancel() {
@@ -651,6 +780,11 @@ class SystemSpeechRecognitionEngine(private val appContext: Context) : SpeechRec
         holdFlushRunnable?.let { mainHandler.removeCallbacks(it) }
         holdFlushRunnable = null
         heldSpokenSeconds = 0f
+        // [T-voice-asr-failure-retry-prompt] Every terminal path hands the
+        // audio back BEFORE calling tearDown, so it is safe to drop here.
+        cancelWatchdog()
+        retainedPcmBuffer.reset()
+        replayPcm = null
     }
 
     /**
@@ -668,116 +802,6 @@ class SystemSpeechRecognitionEngine(private val appContext: Context) : SpeechRec
      */
     @Volatile var preferOffline: Boolean = false
 
-    /**
-     * [T-android-asr-script-subtag] Strip the SCRIPT subtag from a language tag
-     * before handing it to the recognizer.
-     *
-     * `Locale.getDefault()` on a Simplified-Chinese device is `zh-Hans-CN`, and
-     * `toLanguageTag()` faithfully returns "zh-Hans-CN". Google's recognizer
-     * matches its language packs on plain `language-REGION` tags, so the script
-     * subtag makes it report "Locale not supported" / "Failed to get language
-     * pack of required locale" and fail the session with ERROR_LANGUAGE_
-     * UNAVAILABLE (12) — the mic opens and immediately closes. Observed on a
-     * Pixel 4a whose system locale is zh-Hans-CN.
-     *
-     * Reducing to language(+region) keeps the meaningful part ("zh-CN") and is
-     * safe for every other locale: tags without a script subtag are unchanged.
-     */
-    private fun recognizerLanguageTag(locale: Locale): String {
-        val lang = locale.language
-        var region = locale.country
-        // A script-only locale carries no region ("zh-Hans"), and a bare "zh"
-        // is just as unresolvable to the recognizer as "zh-Hans" — it needs a
-        // concrete language pack. Derive the region from the script, which is
-        // exactly the information the script subtag encodes.
-        if (region.isNullOrEmpty() && lang == "zh") {
-            region = if (locale.script == "Hant") "TW" else "CN"
-        }
-        // Last resort for any other script-only/region-less locale: ask ICU to
-        // fill in the likely region (zh-Hans -> zh-Hans-CN, etc.).
-        if (region.isNullOrEmpty()) {
-            region = runCatching { Locale.Builder().setLocale(locale).build() }
-                .getOrNull()?.country.orEmpty()
-        }
-        return if (region.isEmpty()) lang else "$lang-$region"
-    }
-
-    private fun buildIntent(locale: Locale): Intent {
-        return Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, recognizerLanguageTag(locale))
-            // [T-android-vad] Partials are still REQUESTED but never surfaced —
-            // see onPartialResults. iOS does exactly this: its
-            // SFSpeechURLRecognitionRequest sets shouldReportPartialResults =
-            // true purely as a salvage path when the recognizer never emits a
-            // final (VoiceProvider+System.swift:139-143), and buffers the text
-            // in a local rather than showing it.
-            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-            putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, appContext.packageName)
-            if (preferOffline) putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
-            // [T-android-vad] Endpointing now belongs to our Silero VAD, so ask
-            // the platform to sit still and let it decide. These extras are
-            // advisory (Google's recognizer has largely ignored them since
-            // Android 4.x), which is precisely why we can no longer rely on
-            // them: the same app segmented differently per OEM. Padding them
-            // well past the VAD's ~5 s window keeps the platform from cutting
-            // a segment before the VAD does on ROMs that DO honour them.
-            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, PLATFORM_SILENCE_GUARD_MS)
-            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, PLATFORM_SILENCE_GUARD_MS)
-            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 1500)
-
-            // [T-android-vad] Feed OUR capture instead of letting the
-            // recogniser open the mic. This is what makes a VAD possible at
-            // all: two AudioRecords on one device leaves one silent, and it
-            // was the recogniser that starved — it reported onStartOfSpeech
-            // and then `withSpeech: false`, having been given no audio.
-            //
-            // With a single source the VAD judges the same samples the
-            // recogniser transcribes, and closing the pipe ends the session:
-            // "The recognition session will end when and only when the audio
-            // is closed" (RecognizerIntent.EXTRA_AUDIO_SOURCE).
-            audioPipeRead?.let { readEnd ->
-                putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE, readEnd)
-                putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_ENCODING, AudioFormat.ENCODING_PCM_16BIT)
-                putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_SAMPLING_RATE, VoiceActivityDetector.SAMPLE_RATE)
-                putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_CHANNEL_COUNT, 1)
-                // [T-android-asr-silent-failure] EXTRA_SEGMENTED_SESSION is
-                // back ON — and this time the segment callbacks below are
-                // implemented, which is the piece the first attempt missed.
-                //
-                // History: the extra was originally set, results went to
-                // onSegmentResults (unimplemented) and the panel spun forever,
-                // so the "fix" was to drop the extra. That made things WORSE,
-                // not better: Google's recognizer classifies an injected-audio
-                // session as AMBIENT_CONTINUOUS with multi-utterance
-                // endpointing REGARDLESS (its own logcat: `Initialize Soda
-                // [applicationDomain: AMBIENT_CONTINUOUS]`, `multi = true`).
-                // Per-utterance finals then had no compliant delivery path:
-                // every terminal onResults arrived with an EMPTY
-                // RESULTS_RECOGNITION (finalLen=0 on 100% of sessions in
-                // minis-2026-08-16.log) while Google's own process logged
-                // `#onResults withSpeech: true` two ms earlier — the text
-                // existed and went nowhere. The engine then salvaged only the
-                // LAST buffered partial, which resets at every internal
-                // utterance boundary: a 30.72 s dictation committed 3 chars
-                // (13:58:42), and when the tail utterance held no clean speech
-                // the whole session collapsed to ERROR_NO_MATCH (the 13:58 /
-                // 14:29 error-7 bursts) even though the VAD heard speech.
-                //
-                // The documented contract (RecognizerIntent.EXTRA_SEGMENTED_
-                // SESSION): with the extra set to EXTRA_AUDIO_SOURCE, results
-                // arrive per segment via onSegmentResults and the session
-                // terminates with onEndOfSegmentedSession when the audio
-                // closes. Both are implemented below; segment finals accumulate
-                // in segmentTranscript, so nothing rides on the partial-salvage
-                // path anymore.
-                putExtra(
-                    RecognizerIntent.EXTRA_SEGMENTED_SESSION,
-                    RecognizerIntent.EXTRA_AUDIO_SOURCE,
-                )
-            }
-        }
-    }
 
     private val callbacks = object : RecognitionListener {
         override fun onReadyForSpeech(params: Bundle?) { listener?.onReadyForSpeech() }
@@ -859,7 +883,7 @@ class SystemSpeechRecognitionEngine(private val appContext: Context) : SpeechRec
                 return
             }
 
-            commitFinal(joinedTranscript(committed))
+            commitFinal(joinedTranscript(segmentTranscript, committed))
         }
 
         /**
@@ -899,7 +923,7 @@ class SystemSpeechRecognitionEngine(private val appContext: Context) : SpeechRec
             )
             continuousSession = false
             continuousLocale = null
-            commitFinal(joinedTranscript(tail))
+            commitFinal(joinedTranscript(segmentTranscript, tail))
         }
 
         /**
@@ -921,6 +945,8 @@ class SystemSpeechRecognitionEngine(private val appContext: Context) : SpeechRec
             sessionCommitted = true
             if (text.isBlank() && heardSpeech) {
                 Log.w(TAG, "[commit] speech heard but zero text — surfacing TRANSCRIPTION_FAILED")
+                // [T-voice-asr-failure-retry-prompt] Keep the take for a retry.
+                handBackAudio()
                 listener?.onError(
                     RecognitionError.TRANSCRIPTION_FAILED,
                     "Speech detected but nothing was transcribed. If this keeps happening, " +
@@ -935,7 +961,12 @@ class SystemSpeechRecognitionEngine(private val appContext: Context) : SpeechRec
         }
 
         override fun onError(errorCode: Int) {
-            val err = mapError(errorCode)
+            // [T-voice-mic-preempted] ERROR_AUDIO while a call owns the audio
+            // path is the mic being taken, not a broken recognizer - and must
+            // not mark the engine degraded for the rest of the process below.
+            val err = mapError(errorCode).let {
+                if (it == RecognitionError.AUDIO_ERROR) MicInUse.captureFailure(appContext) else it
+            }
             val msg = errorMessage(errorCode)
             // [T-android-asr-ondevice-fallback] The on-device recognizer has no
             // language pack for this locale. That is a property of THIS
@@ -946,8 +977,15 @@ class SystemSpeechRecognitionEngine(private val appContext: Context) : SpeechRec
             if (err == RecognitionError.LANGUAGE_UNSUPPORTED && usingOnDevice && retryLocale != null) {
                 Log.i(TAG, "on-device recognizer lacks a pack for the locale — retrying via the default recognizer")
                 usingOnDevice = false
+                // [T-voice-asr-failure-retry-prompt] A replay must restart on
+                // its saved audio — a bare restart would open the microphone.
+                val replay = replayPcm
                 tearDown()
-                startInternal(retryLocale, allowOnDeviceRetry = false)
+                if (replay != null) {
+                    startReplay(replay, retryLocale, allowOnDeviceRetry = false)
+                } else {
+                    startInternal(retryLocale, allowOnDeviceRetry = false)
+                }
                 return
             }
             // First-class ROM-level failures poison the engine for the rest of
@@ -998,7 +1036,7 @@ class SystemSpeechRecognitionEngine(private val appContext: Context) : SpeechRec
             // recoverable independently of the flag.
             continuousSession = false
             continuousLocale = null
-            val salvaged = joinedTranscript(bufferedPartial.orEmpty())
+            val salvaged = joinedTranscript(segmentTranscript, bufferedPartial.orEmpty())
             segmentTranscript.setLength(0)
             if (salvaged.isNotEmpty()) {
                 Log.i(TAG, "[continuous] salvaging ${salvaged.length} chars from error $errorCode")
@@ -1026,6 +1064,9 @@ class SystemSpeechRecognitionEngine(private val appContext: Context) : SpeechRec
                     "install the offline language pack in system voice-input settings, " +
                     "or switch to a provider recognizer."
             } else msg
+            // [T-voice-asr-failure-retry-prompt] A real failure keeps the take
+            // for a retry; "you said nothing" (plain NO_MATCH) does not.
+            if (effErr != RecognitionError.NO_MATCH) handBackAudio()
             listener?.onError(effErr, effMsg)
             tearDown()
         }
@@ -1034,66 +1075,12 @@ class SystemSpeechRecognitionEngine(private val appContext: Context) : SpeechRec
     companion object {
         private const val TAG = "SystemSTT"
 
-        // ── [T-android-vad] ──
-        /**
-         * Silence-close minimum, matching iOS `minSegmentSeconds`
-         * (VoiceInputPanel.swift:607). Shorter utterances are discarded.
-         */
-        private const val MIN_SEGMENT_SECONDS = 2.0f
 
-        /** Below this we stay silent; above it the user is told why (iOS :661). */
-        private const val TOO_SHORT_FLOOR_SECONDS = 0.3f
+        /** [T-voice-asr-failure-retry-prompt] 300 s of capture-rate PCM16 mono. */
+        private const val MAX_RETAINED_PCM_BYTES = 300 * VoiceActivityDetector.SAMPLE_RATE * 2
 
-        /**
-         * [T-android-vad-merge-segments] How long the session stays open
-         * waiting for the user to top up a sub-2s utterance. Matches the iOS
-         * force-flush timer (VoiceInputPanel.swift:609).
-         */
-        private const val HOLD_FLUSH_MS = 5_000L
+        /** Pipe write granularity when replaying kept audio. */
+        private const val REPLAY_CHUNK_BYTES = 8_192
 
-        /**
-         * What we ask the platform to wait before endpointing itself. Our VAD
-         * closes at ~5 s, so this is padded well past that: on a ROM that DOES
-         * honour the extra, the platform must not cut first.
-         */
-        private const val PLATFORM_SILENCE_GUARD_MS = 15_000
-
-        private fun mapError(code: Int): RecognitionError = when (code) {
-            SpeechRecognizer.ERROR_NO_MATCH,
-            SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> RecognitionError.NO_MATCH
-            SpeechRecognizer.ERROR_NETWORK,
-            SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> RecognitionError.NETWORK
-            SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> RecognitionError.PERMISSION_DENIED
-            SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> RecognitionError.RECOGNIZER_BUSY
-            SpeechRecognizer.ERROR_AUDIO -> RecognitionError.AUDIO_ERROR
-            SpeechRecognizer.ERROR_CLIENT -> RecognitionError.OEM_NO_SERVICE
-            SpeechRecognizer.ERROR_SERVER -> RecognitionError.NETWORK
-            // Codes added in API 33; referenced by literal for compatibility.
-            11 /* ERROR_LANGUAGE_NOT_SUPPORTED */,
-            12 /* ERROR_LANGUAGE_UNAVAILABLE   */ -> RecognitionError.LANGUAGE_UNSUPPORTED
-            else -> RecognitionError.UNKNOWN
-        }
-
-        private fun errorMessage(code: Int): String = when (code) {
-            SpeechRecognizer.ERROR_AUDIO -> "Audio recording error"
-            SpeechRecognizer.ERROR_CLIENT -> "Client error (no recognition service?)"
-            SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "RECORD_AUDIO required"
-            SpeechRecognizer.ERROR_NETWORK -> "Network error"
-            SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Network timeout"
-            SpeechRecognizer.ERROR_NO_MATCH -> "No speech recognized"
-            SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Recognizer busy"
-            SpeechRecognizer.ERROR_SERVER -> "Server error"
-            SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "Speech timeout"
-            // [T-android-asr-script-subtag] mapError already classifies 11/12 as
-            // LANGUAGE_UNSUPPORTED, but this function built the user-visible
-            // string and had no case for them — so a language-pack problem
-            // surfaced as the useless "Unknown error (12)". Name the actual
-            // cause, and point at the fix the user can act on.
-            11 /* ERROR_LANGUAGE_NOT_SUPPORTED */ ->
-                "Language not supported by the recognizer"
-            12 /* ERROR_LANGUAGE_UNAVAILABLE */ ->
-                "Language pack unavailable — download it in the system speech settings"
-            else -> "Unknown error ($code)"
-        }
     }
 }
