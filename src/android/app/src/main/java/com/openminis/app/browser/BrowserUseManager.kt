@@ -10,7 +10,6 @@ import android.os.Message
 import android.util.Base64
 import android.util.Log
 import android.webkit.CookieManager
-import android.webkit.JavascriptInterface
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
@@ -142,6 +141,31 @@ class BrowserUseManager(
         }
     }
 
+    /** (GH#341) True once this tab's renderer process is gone. Unhandled, that
+     *  death takes the whole app down (SIGTRAP); the pool must rebuild. */
+    @Volatile
+    var isRendererDead: Boolean = false
+        private set
+
+    /** (GH#245) Alive but no longer answering: a JS eval got no callback in
+     *  [BrowserActionGuard.JS_EVAL_TIMEOUT_MS]; never fires onRenderProcessGone. */
+    @Volatile
+    var isWedged: Boolean = false
+        private set
+
+    @Volatile
+    var wedgeReason: String? = null
+        private set
+
+    val isUnusable: Boolean get() = isDisposed || isRendererDead || isWedged
+
+    fun markWedged(reason: String) {
+        if (isWedged) return
+        wedgeReason = reason
+        isWedged = true
+        Log.w(TAG, "Tab marked unresponsive: $reason")
+    }
+
     @Volatile
     var isDisposed: Boolean = false
         private set
@@ -226,53 +250,11 @@ class BrowserUseManager(
     /** Deferred used by executeJS to receive results from async scripts via JS bridge. */
     private var asyncJsDeferred: CompletableDeferred<String>? = null
 
-    /** JavaScript interface for async script result callbacks. */
-    private val jsBridge = object {
-        @JavascriptInterface
-        fun resolve(result: String) {
-            asyncJsDeferred?.complete(result)
-        }
-
-        @JavascriptInterface
-        fun reject(error: String) {
-            asyncJsDeferred?.complete("{\"error\":${JSONObject.quote(error)}}")
-        }
-
-        /**
-         * Receives a blob: download read as a data URL by [fetchBlobDownload]'s
-         * injected FileReader. Runs on the WebView's JavaBridge thread — file
-         * I/O downstream is fine, but don't touch the WebView from here.
-         */
-        @JavascriptInterface
-        fun saveBlobDownload(dataUrl: String, filename: String) {
-            val comma = dataUrl.indexOf(',')
-            if (comma < 0 || !dataUrl.startsWith("data:")) {
-                Log.w(TAG, "blob download: malformed data URL (len=${dataUrl.length})")
-                return
-            }
-            val header = dataUrl.substring(5, comma)
-            val mime = header.substringBefore(';').ifEmpty { null }
-            val bytes = try {
-                if (header.endsWith(";base64")) {
-                    android.util.Base64.decode(dataUrl.substring(comma + 1), android.util.Base64.DEFAULT)
-                } else {
-                    // Non-base64 data: URL — payload is percent-encoded text.
-                    java.net.URLDecoder.decode(dataUrl.substring(comma + 1), "UTF-8")
-                        .toByteArray(Charsets.UTF_8)
-                }
-            } catch (t: Throwable) {
-                Log.w(TAG, "blob download: payload decode failed: ${t.message}")
-                return
-            }
-            Log.i(TAG, "blob download decoded: $filename (${bytes.size} bytes, mime=$mime)")
-            onBlobDownloadData?.invoke(bytes, filename, mime)
-        }
-
-        @JavascriptInterface
-        fun blobDownloadError(error: String) {
-            Log.w(TAG, "blob download failed in page JS: $error")
-        }
-    }
+    /** JavaScript interface for async script results and blob downloads. */
+    private val jsBridge = BrowserJsBridge(
+        pendingDeferred = { asyncJsDeferred },
+        onBlobDownloadData = { data, name, mime -> onBlobDownloadData?.invoke(data, name, mime) },
+    )
 
     init {
         configureWebView(webView, profile, systemUa = systemUserAgent)
@@ -388,6 +370,23 @@ class BrowserUseManager(
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupWebViewClient() {
         webView.webViewClient = object : WebViewClient() {
+            // [T-android-webview-render-process-gone] (GH#341) Nothing here
+            // owns a teardown routine the way the Katex pool and WebViewHolder
+            // do, so we only mark the tab unusable and let the pool replace it.
+            // Deliberately NOT calling webView.destroy(): the pool still holds
+            // this instance and may have it attached to a live composition
+            // (BrowserWebView mounts it into a FrameLayout), so destroying it
+            // from under the view tree is how you turn a survivable renderer
+            // death into a UI crash.
+            override fun onRenderProcessGone(
+                view: WebView?,
+                detail: android.webkit.RenderProcessGoneDetail?,
+            ): Boolean {
+                isRendererDead = true
+                return com.openminis.app.ui.webview.WebViewRenderProcess
+                    .handle("BrowserUseManager", detail)
+            }
+
             override fun shouldOverrideUrlLoading(
                 view: WebView,
                 request: WebResourceRequest,
@@ -587,26 +586,6 @@ class BrowserUseManager(
         return rewritten.toByteArray(Charsets.UTF_8).inputStream()
     }
 
-    private fun guessMimeType(filename: String): String {
-        val ext = filename.substringAfterLast('.', "").lowercase()
-        return when (ext) {
-            "html", "htm" -> "text/html"
-            "css" -> "text/css"
-            "js" -> "application/javascript"
-            "json" -> "application/json"
-            "png" -> "image/png"
-            "jpg", "jpeg" -> "image/jpeg"
-            "gif" -> "image/gif"
-            "svg" -> "image/svg+xml"
-            "webp" -> "image/webp"
-            "mp4" -> "video/mp4"
-            "mp3" -> "audio/mpeg"
-            "pdf" -> "application/pdf"
-            "txt", "md" -> "text/plain"
-            "xml" -> "text/xml"
-            else -> "application/octet-stream"
-        }
-    }
 
     private fun setupWebChromeClient() {
         webView.webChromeClient = object : WebChromeClient() {
@@ -733,6 +712,16 @@ class BrowserUseManager(
 
     suspend fun execute(input: BrowserActionInput): BrowserActionResult {
         if (isDisposed) return BrowserActionResult.error("Browser tab is closed")
+        // (GH#245) A tab whose renderer died or stopped answering is not an
+        // "error result" — it is a tab the pool must throw away. Throwing here
+        // lets [BrowserTabPool] report the real cause and rebuild on the next
+        // call instead of streaming another misleading success/failure from a
+        // WebView that cannot answer.
+        if (isWedged || isRendererDead) {
+            throw WebViewWedgedException(
+                wedgeReason ?: "browser tab renderer process died",
+            )
+        }
         val prevUrl = withContext(Dispatchers.Main) { webView.url }
         var result: BrowserActionResult = when (input.action) {
             BrowserAction.NAVIGATE -> navigate(input.url)
@@ -788,7 +777,7 @@ class BrowserUseManager(
             delay(300) // Let page settle
             val bitmap = captureWebViewBitmap() ?: return result
             val file = try {
-                withContext(Dispatchers.IO) { saveBitmapToFile(bitmap, "snapshot", SNAPSHOT_QUALITY) }
+                withContext(Dispatchers.IO) { saveScreenshotBitmap(bitmap, screenshotsDir, "snapshot", SNAPSHOT_QUALITY) }
             } finally {
                 bitmap.recycle()
             }
@@ -951,7 +940,7 @@ class BrowserUseManager(
 
         val w = bitmap.width; val h = bitmap.height
         val file = try {
-            withContext(Dispatchers.IO) { saveBitmapToFile(bitmap, "screenshot") }
+            withContext(Dispatchers.IO) { saveScreenshotBitmap(bitmap, screenshotsDir, "screenshot", SCREENSHOT_QUALITY) }
         } finally {
             bitmap.recycle()
         }
@@ -1076,14 +1065,6 @@ class BrowserUseManager(
         }
     }
 
-    private fun saveBitmapToFile(bitmap: Bitmap, prefix: String, quality: Int = SCREENSHOT_QUALITY): File {
-        val filename = "${prefix}_${System.currentTimeMillis()}.jpg"
-        val file = File(screenshotsDir, filename)
-        file.outputStream().use { out ->
-            check(bitmap.compress(Bitmap.CompressFormat.JPEG, quality, out)) { "Screenshot encoding failed" }
-        }
-        return file
-    }
 
     // -- Click --
 
@@ -1477,23 +1458,41 @@ class BrowserUseManager(
 
     // -- JS Evaluation Helpers --
 
-    private suspend fun evaluateJavascript(js: String): String = withContext(Dispatchers.Main) {
+    /**
+     * (GH#245) Bounded by [timeoutMs]: the callback never fires on a hung
+     * renderer, and this helper used to await it with no limit — where navigate
+     * actually got stuck. On timeout the tab is flagged via [markWedged] and
+     * [WebViewWedgedException] is thrown. The await sits outside
+     * `withContext(Main)` so the wait does not occupy a main continuation.
+     */
+    private suspend fun evaluateJavascript(
+        js: String,
+        timeoutMs: Long = BrowserActionGuard.JS_EVAL_TIMEOUT_MS,
+    ): String {
+        if (isRendererDead) throw WebViewWedgedException("browser tab renderer process died")
         check(!isDisposed) { "Browser tab is closed" }
         val deferred = CompletableDeferred<String>()
-        webView.evaluateJavascript(js) { result ->
-            // Android WebView returns JSON-encoded strings, so unquote
-            val unquoted = if (result != null && result.startsWith("\"") && result.endsWith("\"")) {
-                try {
-                    JSONObject("{\"v\":$result}").getString("v")
-                } catch (_: Exception) {
-                    result
+        withContext(Dispatchers.Main) {
+            webView.evaluateJavascript(js) { result ->
+                // Android WebView returns JSON-encoded strings, so unquote
+                val unquoted = if (result != null && result.startsWith("\"") && result.endsWith("\"")) {
+                    try {
+                        JSONObject("{\"v\":$result}").getString("v")
+                    } catch (_: Exception) {
+                        result
+                    }
+                } else {
+                    result ?: "null"
                 }
-            } else {
-                result ?: "null"
+                deferred.complete(unquoted)
             }
-            deferred.complete(unquoted)
         }
-        deferred.await()
+        return withTimeoutOrNull(timeoutMs) { deferred.await() } ?: run {
+            markWedged("evaluateJavascript got no callback within ${timeoutMs / 1000}s")
+            throw WebViewWedgedException(
+                "browser tab stopped responding (JS evaluation timed out after ${timeoutMs / 1000}s)",
+            )
+        }
     }
 
     /** Alias of [evaluateJSAndParse]; the bodies were identical copies and one

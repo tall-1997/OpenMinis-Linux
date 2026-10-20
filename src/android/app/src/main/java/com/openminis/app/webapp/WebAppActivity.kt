@@ -507,6 +507,15 @@ class WebAppActivity : ComponentActivity() {
             .build()
 
         webView.webViewClient = object : WebViewClient() {
+            // [T-android-webview-render-process-gone] (GH#341) Handled, or the
+            // host app dies with the renderer. A webapp whose renderer died is
+            // reloaded by its own Activity lifecycle, not from here.
+            override fun onRenderProcessGone(
+                view: android.webkit.WebView?,
+                detail: android.webkit.RenderProcessGoneDetail?,
+            ): Boolean = com.openminis.app.ui.webview.WebViewRenderProcess
+                .handle("WebAppActivity", detail)
+
             override fun shouldInterceptRequest(
                 view: WebView,
                 request: WebResourceRequest,

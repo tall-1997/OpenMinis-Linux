@@ -1043,19 +1043,12 @@ private fun ArchivePreview(item: FileItem) {
 @Composable
 private fun OfficeOpenExternal(item: FileItem) {
     val context = LocalContext.current
-    // T149: was full-screen-centered placeholder + button only — restored
-    // metadata block beneath. Top half = preview hint + Open externally,
-    // bottom = Name/Size/Type/Modified/Path so the user always sees the
-    // basic file info that existed pre-T144.
-    // T164: outer scrollable wrapper pumps overscroll deltas into our
-    // IosBounceOverscrollEffect — `Modifier.verticalScroll` doesn't
-    // expose an overscrollEffect slot, so we mirror the
-    // AlwaysStretchOverscrollBox trick (wrap with a noop scrollable
-    // that consumes 0 deltas, pipe the same effect through both
-    // Modifier.scrollable's overscrollEffect param and Modifier.overscroll
-    // for the visual rubber-band). The inner verticalScroll still owns
-    // the actual scroll position; only the over-edge component gets
-    // routed through the spring bounce.
+    // T149: restored the metadata block beneath the preview hint, so the basic
+    // file info survives. T164: Modifier.verticalScroll exposes no
+    // overscrollEffect slot, so wrap with a noop scrollable that consumes 0
+    // deltas and pipe the same IosBounceOverscrollEffect through both; the inner
+    // verticalScroll still owns the scroll position, only the over-edge part
+    // goes through the spring bounce.
     val bounce = rememberIosBounceOverscrollEffect()
     val noopState = rememberScrollableState { 0f }
     Column(
@@ -1255,6 +1248,12 @@ private fun printFile(context: Context, item: FileItem) {
         // Keep a reference alive until the print job is dispatched.
         var holder: WebView? = webView
         webView.webViewClient = object : WebViewClient() {
+            // [T-android-webview-render-process-gone] (GH#341) Unhandled = host dies too.
+            override fun onRenderProcessGone(
+                v: android.webkit.WebView?,
+                d: android.webkit.RenderProcessGoneDetail?,
+            ): Boolean = com.openminis.app.ui.webview.WebViewRenderProcess.handle("FilePreviewScreen", d)
+
             override fun onPageFinished(view: WebView, url: String) {
                 val printManager =
                     context.getSystemService(Context.PRINT_SERVICE) as PrintManager
