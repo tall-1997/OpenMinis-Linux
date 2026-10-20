@@ -83,8 +83,11 @@ object RareContentScorer {
 data class ConversationContext(
     val rareTermsDigest: String? = null,
     val recentExcerpts: List<String> = emptyList(),
+    /** [T-android-voice-viewport-context] What is on screen; null when unavailable. */
+    val screen: ScreenContext? = null,
 ) {
-    val isEmpty: Boolean get() = rareTermsDigest.isNullOrEmpty() && recentExcerpts.isEmpty()
+    val isEmpty: Boolean
+        get() = rareTermsDigest.isNullOrEmpty() && recentExcerpts.isEmpty() && screen == null
 
     companion object {
         val EMPTY = ConversationContext()

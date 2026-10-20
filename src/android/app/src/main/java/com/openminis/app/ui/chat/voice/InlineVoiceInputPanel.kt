@@ -70,6 +70,8 @@ import com.openminis.app.R
 import com.openminis.app.data.repository.ProviderRepository
 import com.openminis.app.speech.RecognitionState
 import com.openminis.app.speech.SpeechRecognitionManager
+import com.openminis.app.speech.correction.ConversationContext
+import com.openminis.app.speech.correction.ScreenContextBuilder
 import com.openminis.app.ui.theme.ChatColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -175,13 +177,17 @@ fun InlineVoiceInputPanel(
     onInputTextChange: (String) -> Unit,
     ensureMicPermission: suspend () -> Boolean,
     modifier: Modifier = Modifier,
-    // [T-android-correction-context-wiring] Supplies the conversation context
-    // for AI correction, built from the chat's current messages. Mirrors iOS
-    // InlineVoiceInputView's `conversationContext` closure. Defaults to EMPTY so
-    // the legacy/standalone construction still compiles and runs.
-    conversationContextProvider: () -> com.openminis.app.speech.correction.ConversationContext = {
-        com.openminis.app.speech.correction.ConversationContext.EMPTY
+    // [T-android-correction-context-wiring] Conversation context for AI
+    // correction, built from the chat's current messages. Mirrors iOS
+    // InlineVoiceInputView's `conversationContext` closure. Defaults to EMPTY
+    // so the legacy/standalone construction still compiles and runs.
+    // [T-android-voice-viewport-context] Receives the snapshot from `captureScreen`.
+    conversationContextProvider: (ScreenContextBuilder.Snapshot?) -> ConversationContext = {
+        ConversationContext.EMPTY
     },
+    // [T-android-voice-viewport-context] Captured on the MAIN thread when
+    // correction starts (layout info is consistent only there).
+    captureScreen: () -> ScreenContextBuilder.Snapshot? = { null },
 ) {
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     val sttState by SpeechRecognitionManager.state.collectAsState()
@@ -198,10 +204,9 @@ fun InlineVoiceInputPanel(
     var transcript by remember { mutableStateOf(inputText) }
     var isEditing by remember { mutableStateOf(false) }
 
-    // [T-android-voice-correction] Transcript captured when edit mode opens, so
-    // leaving it can hand the before/after pair to the learning recorder. The
-    // recorder decides whether the change is a CORRECTION (phonetically close)
-    // or the user simply rewriting; nothing here needs to judge that.
+    // [T-android-voice-correction] Transcript captured when edit mode opens;
+    // leaving hands the before/after pair to the learning recorder, which
+    // decides CORRECTION vs plain rewrite. Nothing here judges that.
     var editSnapshot by remember { mutableStateOf<String?>(null) }
 
     // [T-android-voice-correction] Manual AI correction of the transcript.
@@ -209,8 +214,7 @@ fun InlineVoiceInputPanel(
     var showCorrectionConsent by remember { mutableStateOf(false) }
 
     // Every exit path funnels through here so no route can silently skip
-    // capture. Capture is fire-and-forget — leaving edit mode never waits on
-    // segmentation or SQLite.
+    // capture (fire-and-forget: never waits on segmentation or SQLite).
     fun leaveEditMode() {
         val before = editSnapshot
         editSnapshot = null
@@ -275,14 +279,16 @@ fun InlineVoiceInputPanel(
             return
         }
         isCorrecting = true
+        // [T-android-voice-viewport-context] Main thread only: layout info is
+        // consistent only here; the coroutine below hops to Default.
+        val screenSnapshot = runCatching { captureScreen() }.getOrNull()
         scope.launch {
-            // [T-android-correction-context-wiring] Feed the real conversation
-            // context (rare-term digest + recent excerpts) instead of EMPTY, so
-            // the model can resolve homophones against proper nouns / terms the
-            // conversation already established. Built off the UI thread.
+            // [T-android-correction-context-wiring] Real conversation context
+            // (rare-term digest + recent excerpts) instead of EMPTY, so the
+            // model can resolve homophones against terms the chat established.
             val convoContext = withContext(Dispatchers.Default) {
-                runCatching { conversationContextProvider() }
-                    .getOrDefault(com.openminis.app.speech.correction.ConversationContext.EMPTY)
+                runCatching { conversationContextProvider(screenSnapshot) }
+                    .getOrDefault(ConversationContext.EMPTY)
             }
             val suggestion = engine.correct(text, context = convoContext)
             isCorrecting = false
@@ -334,14 +340,11 @@ fun InlineVoiceInputPanel(
         captureBase = transcript
         transcribeError = null
         SpeechRecognitionManager.startRecording(
-            // [T-android-vad] Commit only on a FINAL result.
-            //
-            // Previously every interim hypothesis was written straight into the
-            // composer, which is what made Android feel live while iOS waited
-            // for a silence window. The engines no longer forward partials at
-            // all, so in practice this fires once per utterance — but the guard
-            // is explicit rather than assumed, so a future engine that does
-            // emit partials cannot silently reintroduce streaming.
+            // [T-android-vad] Commit only on a FINAL result. The engines no
+            // longer forward partials at all, so in practice this fires once
+            // per utterance — but the guard is explicit rather than assumed,
+            // so a future engine that does emit partials cannot silently
+            // reintroduce streaming.
             //
             // Appending (not replacing) matches iOS: successive utterances join
             // with a single space (VoiceInputPanel.swift:931).
@@ -390,10 +393,9 @@ fun InlineVoiceInputPanel(
     LaunchedEffect(Unit) {
         providerRepository.ensureDefaultVoiceInputGroup()
         providerRepository.ensureDefaultVoiceOutputGroup()
-        // [T-android-voice-correction] Load the jieba dictionaries now, while
-        // the user is still reaching for the mic. The first segment call costs
-        // seconds (~5MB dictionary + HMM model); paying it here rather than on
-        // the first capture keeps correction from feeling broken.
+        // [T-android-voice-correction] Load the jieba dictionaries while the
+        // user is still reaching for the mic; the first segment call costs
+        // seconds, and paying it here keeps correction from feeling broken.
         com.openminis.app.speech.correction.VoiceCorrection.warmUp(panelContext)
         // Seed the transcript from whatever was typed (text→voice carry).
         transcript = inputText
@@ -486,10 +488,9 @@ fun InlineVoiceInputPanel(
                 modifier = Modifier.align(Alignment.TopStart),
             ) { persistExpanded(!expanded) }
 
-            // [T-android-voice-correction] One-time collection-consent prompt,
-            // shown on the very first tap of the correction button. After the
-            // user answers — either way — it never appears again, and the
-            // correction runs regardless: consent governs whether we STORE the
+            // [T-android-voice-correction] One-time consent prompt, first tap
+            // of the correction button. After the user answers — either way —
+            // it never appears again; consent governs whether we STORE the
             // learning data, not whether the feature works.
             if (showCorrectionConsent) {
                 androidx.compose.material3.AlertDialog(
@@ -526,11 +527,10 @@ fun InlineVoiceInputPanel(
             }
 
             // [T-android-voice-correction] Top-right slot: the AI-correction
-            // button REPLACES the language globe once there is a transcript to
-            // fix (mirrors iOS). Same 30dp circle, so swapping the glyph never
-            // reflows the panel. Correction is a manual, one-shot action — no
-            // debounce, no automatic pass — because a surprise rewrite of what
-            // the user just dictated is worse than no correction at all.
+            // button REPLACES the language globe once there is a transcript
+            // to fix (mirrors iOS). Same 30dp circle, so swapping the glyph
+            // never reflows the panel. Manual one-shot — a surprise rewrite
+            // of what the user just dictated is worse than no correction.
             if (!isEditing && transcript.isNotBlank()) {
                 Box(modifier = Modifier.align(Alignment.TopEnd)) {
                     if (isCorrecting) {
@@ -847,9 +847,8 @@ private fun TranscriptArea(
     val screenH = LocalConfiguration.current.screenHeightDp.dp
     val bandMax = screenH * 0.6f - ExpandedBase
     // [T-android-voice-dbltap-select] Word range computed by the double-tap
-    // below, consumed once when the editor composes. Declared outside the
-    // branch split so the display state can write it and the editor state
-    // can read it across the same recomposition.
+    // below, consumed once when the editor composes; lives here so display
+    // and editor states share it across one recomposition.
     var pendingSelection by remember { mutableStateOf<TextRange?>(null) }
     if (isEditing) {
         val focus = remember { FocusRequester() }

@@ -429,8 +429,7 @@ private const val SLASH_PICKER_VISIBLE_ROWS = 4
 // [T-android-tool-autoscroll] Combined signal for the streaming auto-follow
 // LaunchedEffect. data class so distinctUntilChanged uses structural equality
 // — any field flip propagates a tick. Per-block (id, kind, status, length)
-// folded into [blockSig] (FNV-1a 64-bit hash) so a RUNNING→SUCCESS flip on a
-// tool block, a new block appearing (id flips), or a kind change all wake the
+// folded into [blockSig] (FNV-1a 64-bit hash) so any block flip wakes the
 // collector even when growth/size/awaiting alone would have stayed equal.
 private data class ScrollFollowKey(
     val lastIndex: Int,
@@ -521,10 +520,9 @@ fun ChatScreen(
     // the loaded cursor are attached automatically, so the tail is not left
     // behind a second control.
     // [T-android-tts-scene-announcements] Bind the announcement sink for as
-    // long as this screen is composed. The engine binding lives in
-    // ReadAloudPlayer/TextToSpeechManager (UI layer); the ViewModel only sees
-    // the (String) -> Unit sink and never the engine itself. Cleared on
-    // dispose so a popped screen stops announcing.
+    // long as this screen is composed; cleared on dispose so a popped
+    // screen stops announcing. The ViewModel only sees the (String) -> Unit
+    // sink, never the engine itself.
     val announcementTts = remember {
         com.openminis.app.speech.TextToSpeechManager()
     }
@@ -565,8 +563,7 @@ fun ChatScreen(
     val sessionTitle by viewModel.sessionTitle.collectAsState()
     val sessionCategory by viewModel.sessionCategory.collectAsState()
     val attachments by viewModel.attachments.collectAsState()
-    // [T-android-paste-placeholder] Folded pastes, rendered as chips above the
-    // attachment row.
+    // [T-android-paste-placeholder] Folded pastes, as chips above the attachment row.
     val pastedTexts by viewModel.pastedTexts.collectAsState()
     val availableGroups by viewModel.availableGroups.collectAsState()
     val selectedGroupId by viewModel.selectedGroupId.collectAsState()
@@ -632,6 +629,8 @@ fun ChatScreen(
     // across forward navigation (file preview, env vars, etc.); see
     // ChatViewModel.listState for the why.
     val listState = viewModel.listState
+    // [T-android-voice-viewport-context] Rows for the voice screen snapshot.
+    val voiceScreenItems = rememberVoiceScreenItems()
     // T325: draft persists on the VM so navigation (e.g. push EnvVars and
     // pop back) doesn't wipe what the user has typed. Mirrors iOS
     // `AIChatView` which binds the composer against `vm.inputText`.
@@ -659,11 +658,9 @@ fun ChatScreen(
         )
         val sharedDir = com.openminis.app.share.SharedShareStore.sharedFileDirectory(context)
         // [T-android-share-buffer-merge] Accumulate locally rather than
-        // reading `inputText` inside the loop. `inputText` is captured from
-        // composition and does NOT observe the setInputText calls made here,
-        // so every text item was appended to the same stale base and only the
-        // last one survived — a two-text share landed as just the second one
-        // even after the store-level merge delivered both.
+        // reading `inputText` inside the loop: it does NOT observe the
+        // setInputText calls made here, so every text item was appended to
+        // the same stale base and only the last one survived.
         var draft = viewModel.inputText.value
         for (item in pending.items) {
             when (item.kind) {
@@ -697,17 +694,13 @@ fun ChatScreen(
     // T311: publish "this is the active chat" while ChatScreen is composed,
     // so `minis-config session.*` reads/writes target it. Mirrors iOS
     // `AIChatViewModel.activeSessionId` which is updated on appear / disappear.
-    // [T-HANG-DIAG] capture the application context so we can read the
-    // current hang count from non-composable scopes below. LocalContext is
-    // already used elsewhere in this file via `context`, but DisposableEffect
-    // is a non-composable scope so we lift the read up here.
+    // [T-HANG-DIAG] Lift the context read up here: DisposableEffect below
+    // is a non-composable scope and needs the app context.
     val tHangDiagAppContext = androidx.compose.ui.platform.LocalContext.current.applicationContext
     androidx.compose.runtime.DisposableEffect(sessionId) {
         ChatViewModelStore.screenEntered(sessionId)
         // [T-HANG-DIAG] enter / dispose markers around the ChatScreen lifetime
-        // so we can correlate "user tapped session X" → loadSession timings
-        // and any subsequent hang record. Removable by grepping out
-        // `[T-HANG-DIAG]` from this file.
+        // for correlation with hang records. Removable by grepping `[T-HANG-DIAG]`.
         println(
             "[T-HANG-DIAG] ChatScreen MOUNT session=$sessionId hangCount=" +
                 com.openminis.app.diagnostics.HangDetector.currentHangCount(tHangDiagAppContext),
@@ -769,8 +762,8 @@ fun ChatScreen(
     // button inserts it) — a plain String overload would reset cursor to 0
     // on every external write.
     // [T-update-download-fgs] rememberSaveable: a process death during a
-    // background update download used to wipe a half-typed message. The
-    // TextFieldValue saver preserves text AND selection across recreation.
+    // background update download used to wipe a half-typed message; the saver
+    // preserves text AND selection across recreation.
     var inputFieldValue by androidx.compose.runtime.saveable.rememberSaveable(
         stateSaver = androidx.compose.ui.text.input.TextFieldValue.Saver,
     ) {
@@ -783,9 +776,8 @@ fun ChatScreen(
     // cleared inputText. Drop those late commits during a short window.
     var lastSendTimeMs by remember { mutableStateOf(0L) }
     // [T-voice-mode-memory-refine-android] True when a voice recording started
-    // since the composer was last cleared. The SEND is what commits the mode:
-    // mic-start no longer writes "voice" (an accidental mic tap with no send
-    // must not flip the default) — instead this flag is consulted on send.
+    // since the composer was last cleared. The SEND commits the mode — an
+    // accidental mic tap with no send must not flip the default.
     var voiceUsedSinceClear by remember { mutableStateOf(false) }
     // Shared by both send paths (send button / Enter): commit the composer
     // mode at send time — "voice" if this composition used voice, otherwise
@@ -2988,6 +2980,9 @@ fun ChatScreen(
                     mutableStateOf<List<FlatChatItem>>(emptyList())
                 }
                 var flatItemsVersion by remember(sessionId) { mutableLongStateOf(0L) }
+                // [T-android-voice-viewport-context] Keep the snapshot holder
+                // in sync with the rows the LazyColumn just rendered.
+                syncVoiceScreenItems(voiceScreenItems, flatItems)
                 // [T-android-selection-offscreen-order] (GH#296) Row key →
                 // flattened index, published by the same pass that builds
                 // flatItems. The selection's document order reads it so a
@@ -5867,14 +5862,19 @@ fun ChatScreen(
                                 viewModel.updateSlashMenuState(text)
                             },
                             ensureMicPermission = { ensureMicPermissionFlow() },
-                            // [T-android-correction-context-wiring] Feed AI
-                            // correction the live conversation context. Reads the
-                            // FULL message list (not the windowed uiMessages) so
-                            // older turns still contribute rare-term grounding;
-                            // evaluated lazily at correction time.
-                            conversationContextProvider = {
+                            // [T-android-correction-context-wiring] Live conversation
+                            // context for AI correction: reads the FULL message list
+                            // (not windowed uiMessages) so older turns still contribute
+                            // rare-term grounding. [T-android-voice-viewport-context]
+                            // The snapshot argument carries what the user is looking at.
+                            conversationContextProvider = { screenSnapshot ->
                                 com.openminis.app.speech.correction.VoiceCorrection
-                                    .buildConversationContext(context, viewModel.messages.value)
+                                    .buildConversationContext(context, viewModel.messages.value, screenSnapshot)
+                            },
+                            // [T-android-voice-viewport-context] Main thread only:
+                            // layout info is consistent only there.
+                            captureScreen = {
+                                captureVoiceScreenSnapshot(listState, voiceScreenItems.items, reverseLayout = true)
                             },
                         )
                     } else if (recIsRecording) {

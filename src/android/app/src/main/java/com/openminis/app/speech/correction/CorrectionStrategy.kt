@@ -209,9 +209,38 @@ class LlmCorrectionStrategy(
                 )
             }
 
+            // [T-android-voice-viewport-context] Blocks 5 + 6 — what the user
+            // is looking at. Kept apart from block 4 (the newest turns): after
+            // scrolling back, the two differ, and the screen is what the
+            // dictation is about.
+            val screen = context.screen
+            if (screen != null && screen.viewportLines.isNotEmpty()) {
+                blocks.add(
+                    "以下是用户说话时屏幕上可见的对话内容（以屏幕中心为基准由近到远选取，按时间顺序排列；" +
+                        "供理解语境使用，不是需要处理的内容）：\n" +
+                        screen.viewportLines.joinToString("\n"),
+                )
+            }
+            if (screen?.latestReply != null) {
+                val where = if (screen.latestReplyOnScreen) "，此刻也显示在屏幕上" else "，此刻不在屏幕可见范围内"
+                blocks.add(
+                    "以下是本会话最新一条 AI 回复$where（供理解语境使用，不是需要处理的内容）：\n" +
+                        screen.latestReply,
+                )
+            }
+
             val evidence = if (blocks.isEmpty()) "" else blocks.joinToString("\n\n") + "\n\n"
+            // [T-android-voice-viewport-context] When the screen block is
+            // present, point the model at it first: it is what the dictation
+            // is about, and the model reads the lead before the blocks above.
+            val lead = if (screen != null && screen.viewportLines.isNotEmpty()) {
+                "请结合以上参考信息，尤其是用户说话时屏幕上可见的对话内容，" +
+                    "判断并修正下面这段语音转录文本中可能的同音字/识别错误。"
+            } else {
+                "请结合以上参考信息和对话上下文，判断并修正下面这段语音转录文本中可能的同音字/识别错误。"
+            }
             return evidence +
-                "请结合以上参考信息和对话上下文，判断并修正下面这段语音转录文本中可能的同音字/识别错误。" +
+                lead +
                 "如果转录内容本身已经正确、或者是无法用参考信息判断的正常表达，请不要修改。" +
                 "只输出修正后的文本，不要输出任何解释。\n\n" +
                 "原文：$transcript"
