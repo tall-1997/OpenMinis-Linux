@@ -47,7 +47,7 @@
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatFlatItems.kt": 1218,
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatMiscViews.kt": 887,
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatModelPickerSheet.kt": 1106,
-    "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatScreen.kt": 7498,
+    "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatScreen.kt": 7497,
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatToolDetailUI.kt": 1516,
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatViewModel.kt": 6275,
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatViewModelAgentLoopExt.kt": 2476,
