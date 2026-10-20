@@ -197,6 +197,12 @@
     <string name="mcp_form_env_placeholder">GITHUB_TOKEN=$GITHUB_TOKEN</string>
     <string name="mcp_form_startup_timeout">시작 제한 시간(초)</string>
     <string name="mcp_form_startup_timeout_placeholder">기본값 60</string>
+    <string name="voice_asr_failed_title">전사 실패</string>
+    <string name="voice_asr_failed_message">%1$d초 분량의 음성을 전사하지 못했습니다(%2$s). 다시 시도할까요?</string>
+    <string name="voice_asr_timed_out">음성 인식 시간 초과</string>
+    <string name="voice_asr_retry">다시 시도</string>
+    <string name="voice_asr_discard">버리기</string>
+    <string name="voice_send_still_transcribing">아직 전사 중입니다. 텍스트가 나타나면 보내기를 다시 누르세요.</string>
     <string name="voice_services_section">음성 서비스</string>
     <string name="voice_services_duplicate_hint">음성 서비스가 중복으로 구성되어 있습니다. 여기서는 한 줄로 합쳐서 표시하며, 원하시면 위쪽의 중복된 제공자를 삭제할 수 있습니다.</string>
     <string name="voice_services_stt_count">음성 인식 %1$d개</string>

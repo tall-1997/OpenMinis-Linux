@@ -199,6 +199,12 @@
     <string name="mcp_form_env_placeholder">GITHUB_TOKEN=$GITHUB_TOKEN</string>
     <string name="mcp_form_startup_timeout">Тайм-аут запуска (секунды)</string>
     <string name="mcp_form_startup_timeout_placeholder">По умолчанию 60</string>
+    <string name="voice_asr_failed_title">Не удалось распознать речь</string>
+    <string name="voice_asr_failed_message">Не удалось расшифровать %1$d с речи (%2$s). Повторить?</string>
+    <string name="voice_asr_timed_out">Истекло время распознавания речи</string>
+    <string name="voice_asr_retry">Повторить</string>
+    <string name="voice_asr_discard">Отбросить</string>
+    <string name="voice_send_still_transcribing">Расшифровка ещё идёт. Нажмите «Отправить» снова, когда появится текст.</string>
     <string name="voice_services_section">Голосовые сервисы</string>
     <string name="voice_services_duplicate_hint">Голосовой сервис настроен несколько раз. Здесь он объединён в одну строку; при желании вы можете удалить лишнего провайдера выше.</string>
     <string name="voice_services_stt_count">%1$d речь в текст</string>

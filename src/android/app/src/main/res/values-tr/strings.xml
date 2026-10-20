@@ -197,6 +197,12 @@
     <string name="mcp_form_env_placeholder">GITHUB_TOKEN=$GITHUB_TOKEN</string>
     <string name="mcp_form_startup_timeout">Başlatma zaman aşımı (saniye)</string>
     <string name="mcp_form_startup_timeout_placeholder">Varsayılan 60</string>
+    <string name="voice_asr_failed_title">Yazıya dökme başarısız</string>
+    <string name="voice_asr_failed_message">%1$d saniyelik konuşma yazıya dökülemedi (%2$s). Yeniden denensin mi?</string>
+    <string name="voice_asr_timed_out">Konuşma tanıma zaman aşımına uğradı</string>
+    <string name="voice_asr_retry">Yeniden dene</string>
+    <string name="voice_asr_discard">At</string>
+    <string name="voice_send_still_transcribing">Hâlâ yazıya dökülüyor. Metin göründüğünde Gönder\'e tekrar dokun.</string>
     <string name="voice_services_section">Ses Hizmetleri</string>
     <string name="voice_services_duplicate_hint">Bir ses hizmeti birden fazla kez yapılandırılmış. Ses hizmeti burada tek satırda birleştirildi; isterseniz yukarıdaki fazladan sağlayıcıyı silebilirsiniz.</string>
     <string name="voice_services_stt_count">%1$d konuşmadan metne</string>

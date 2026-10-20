@@ -258,6 +258,8 @@ fun InlineVoiceInputPanel(
 
     fun setTranscript(text: String) {
         transcript = text
+        // [T-voice-send-waits-for-asr] A deferred send copies this explicitly.
+        VoiceSendGate.transcript = text
         if (inputText != text) onInputTextChange(text)
     }
 
@@ -329,6 +331,15 @@ fun InlineVoiceInputPanel(
         SpeechRecognitionManager.stopRecording()
     }
 
+    // [T-voice-asr-failure-retry-prompt] A failure whose audio the engine kept
+    // goes to the Retry / Discard prompt instead of being dropped. Bound to the
+    // composition generation at capture start, so a failure that lands after
+    // the composition was sent or cleared is logged but not prompted.
+    fun failureSink(captureGeneration: Int): (SpeechRecognitionManager.FailedAudio) -> Unit = { failed ->
+        com.openminis.app.speech.VoicePipelineLog.event("panel.failedAudio", "kind" to failed.error.name)
+        VoiceSendGate.recordFailure(failed, captureGeneration)
+    }
+
     fun startCapture() {
         // Route the engine per the resolved choice (mirrors iOS provider resolve
         // on prepare/refresh).
@@ -365,7 +376,39 @@ fun InlineVoiceInputPanel(
                     else -> transcribeError = message ?: error.name
                 }
             },
+            onFailedAudio = failureSink(VoiceSendGate.generation),
         )
+    }
+
+    // [T-voice-asr-failure-retry-prompt] Retry: re-transcribe the kept audio;
+    // its result appends to the transcript like any take, and a second failure
+    // queues it again.
+    fun retryFailedUtterance() {
+        val item = VoiceSendGate.takeForRetry() ?: return
+        captureBase = transcript
+        transcribeError = null
+        val started = SpeechRecognitionManager.retryTranscription(
+            failed = item.audio,
+            onPartialOrFinal = { text, isFinal ->
+                if (isEditing) return@retryTranscription
+                if (!isFinal) return@retryTranscription
+                if (text.isBlank()) return@retryTranscription
+                val sep = if (captureBase.isEmpty() || captureBase.endsWith(" ")) "" else " "
+                val joined = captureBase + sep + text
+                captureBase = joined
+                setTranscript(joined)
+            },
+            onError = { error, message ->
+                when (error) {
+                    com.openminis.app.speech.RecognitionError.NO_MATCH -> {}
+                    com.openminis.app.speech.RecognitionError.PERMISSION_DENIED ->
+                        permissionDenied = true
+                    else -> transcribeError = message ?: error.name
+                }
+            },
+            onFailedAudio = failureSink(VoiceSendGate.generation),
+        )
+        if (!started) VoiceSendGate.requeue(item)
     }
 
     fun handleMicTap() {
@@ -399,6 +442,7 @@ fun InlineVoiceInputPanel(
         com.openminis.app.speech.correction.VoiceCorrection.warmUp(panelContext)
         // Seed the transcript from whatever was typed (text→voice carry).
         transcript = inputText
+        VoiceSendGate.transcript = inputText
         if (VoiceModePrefs.enteredFromText) {
             VoiceModePrefs.enteredFromText = false
             persistExpanded(true)
@@ -417,8 +461,12 @@ fun InlineVoiceInputPanel(
     LaunchedEffect(inputText) {
         if (inputText != transcript) {
             transcript = inputText
+            VoiceSendGate.transcript = inputText
             captureBase = inputText
             if (inputText.isEmpty()) {
+                // [T-voice-asr-failure-retry-prompt] The composition is gone
+                // (sent): a failure still in flight for it must not prompt.
+                VoiceSendGate.bumpGeneration()
                 // A send emptied the composer → collapse to compact (iOS
                 // collapseAfterSendToken) and stop any live capture.
                 if (SpeechRecognitionManager.state.value != RecognitionState.IDLE) {
@@ -629,6 +677,44 @@ fun InlineVoiceInputPanel(
         }
     }
 
+    // [T-voice-asr-failure-retry-prompt] A failed transcription keeps its audio
+    // and asks, one utterance at a time, instead of dropping it — long speech
+    // is hard to repeat. Shown only while no session runs (a retry needs the
+    // recognizer idle) and outside transcript editing. Not dismissable by
+    // back / outside tap: the audio stays until the user decides.
+    val failedPrompt = VoiceSendGate.queue.current
+    if (failedPrompt != null && sttState == RecognitionState.IDLE && !isEditing) {
+        val failed = failedPrompt.audio
+        val reason = if (failed.error == com.openminis.app.speech.RecognitionError.TIMED_OUT) {
+            stringResource(R.string.voice_asr_timed_out)
+        } else {
+            failed.message?.takeIf { it.isNotBlank() } ?: failed.error.name
+        }
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = {},
+            title = { Text(stringResource(R.string.voice_asr_failed_title)) },
+            text = {
+                Text(
+                    stringResource(
+                        R.string.voice_asr_failed_message,
+                        kotlin.math.round(failed.seconds).toInt(),
+                        reason,
+                    ),
+                )
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = { retryFailedUtterance() }) {
+                    Text(stringResource(R.string.voice_asr_retry))
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { VoiceSendGate.discardCurrent() }) {
+                    Text(stringResource(R.string.voice_asr_discard))
+                }
+            },
+        )
+    }
+
     if (showModelSelector) {
         VoiceInputPickerSheet(
             providerRepository = providerRepository,
@@ -833,108 +919,3 @@ private fun CompactContent(
         )
     }
 }
-
-// ── Pieces ──────────────────────────────────────────────────────────────────
-
-@Composable
-private fun TranscriptArea(
-    transcript: String,
-    isEditing: Boolean,
-    onTranscriptChange: (String) -> Unit,
-    onBeginEdit: () -> Unit,
-    onClearAll: () -> Unit,
-) {
-    val screenH = LocalConfiguration.current.screenHeightDp.dp
-    val bandMax = screenH * 0.6f - ExpandedBase
-    // [T-android-voice-dbltap-select] Word range computed by the double-tap
-    // below, consumed once when the editor composes; lives here so display
-    // and editor states share it across one recomposition.
-    var pendingSelection by remember { mutableStateOf<TextRange?>(null) }
-    if (isEditing) {
-        val focus = remember { FocusRequester() }
-        // TextFieldValue overload (not the String one) so entering edit mode
-        // can arrive with the double-tapped word already selected. Keyed on
-        // isEditing: re-seeded on every entry, preserved across keystrokes.
-        var editValue by remember(isEditing) {
-            mutableStateOf(
-                TextFieldValue(transcript, pendingSelection ?: TextRange(transcript.length))
-            )
-        }
-        // Mirror external transcript changes (input-text carry) into the
-        // field — the String overload did this implicitly. Keystrokes round
-        // trip as no-ops because editValue.text already equals transcript.
-        LaunchedEffect(transcript) {
-            if (editValue.text != transcript) {
-                val sel = editValue.selection
-                editValue = TextFieldValue(
-                    transcript,
-                    TextRange(
-                        sel.start.coerceIn(0, transcript.length),
-                        sel.end.coerceIn(0, transcript.length),
-                    ),
-                )
-            }
-        }
-        BasicTextField(
-            value = editValue,
-            onValueChange = { new ->
-                editValue = new
-                onTranscriptChange(new.text)
-            },
-            textStyle = TextStyle(
-                color = MaterialTheme.colorScheme.onSurface,
-                fontSize = 16.sp,
-                textAlign = TextAlign.Center,
-            ),
-            cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary),
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 28.dp, max = bandMax)
-                .padding(horizontal = 32.dp)
-                .verticalScroll(rememberScrollState())
-                .focusRequester(focus),
-        )
-        LaunchedEffect(Unit) { focus.requestFocus() }
-    } else {
-        var textLayout by remember { mutableStateOf<TextLayoutResult?>(null) }
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(max = bandMax)
-                .padding(horizontal = 32.dp)
-                .verticalScroll(rememberScrollState()),
-            contentAlignment = Alignment.Center,
-        ) {
-            // Tap detection lives on the Text itself (not the band) so the
-            // reported position is already in text-layout space and maps
-            // straight onto getOffsetForPosition — no coordinate algebra
-            // across the band's padding/scroll.
-            Text(
-                transcript,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-                textAlign = TextAlign.Center,
-                onTextLayout = { textLayout = it },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .pointerInput(transcript) {
-                        detectTapGestures(
-                            onDoubleTap = { pos ->
-                                val layout = textLayout
-                                val charOffset = if (layout != null) {
-                                    runCatching { layout.getOffsetForPosition(pos) }
-                                        .getOrDefault(transcript.length)
-                                } else {
-                                    transcript.length
-                                }
-                                pendingSelection = voiceWordRangeAt(transcript, charOffset)
-                                onBeginEdit()
-                            },
-                            onLongPress = { onClearAll() },
-                        )
-                    },
-            )
-        }
-    }
-}
-

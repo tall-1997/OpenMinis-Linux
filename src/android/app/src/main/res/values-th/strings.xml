@@ -197,6 +197,12 @@
     <string name="mcp_form_env_placeholder">GITHUB_TOKEN=$GITHUB_TOKEN</string>
     <string name="mcp_form_startup_timeout">เวลารอเริ่มทำงาน (วินาที)</string>
     <string name="mcp_form_startup_timeout_placeholder">ค่าเริ่มต้น 60</string>
+    <string name="voice_asr_failed_title">ถอดเสียงไม่สำเร็จ</string>
+    <string name="voice_asr_failed_message">ไม่สามารถถอดเสียง %1$d วินาทีได้ (%2$s) ลองอีกครั้งไหม</string>
+    <string name="voice_asr_timed_out">การรู้จำเสียงหมดเวลา</string>
+    <string name="voice_asr_retry">ลองอีกครั้ง</string>
+    <string name="voice_asr_discard">ทิ้ง</string>
+    <string name="voice_send_still_transcribing">กำลังถอดเสียงอยู่ แตะส่งอีกครั้งเมื่อข้อความปรากฏ</string>
     <string name="voice_services_section">บริการเสียง</string>
     <string name="voice_services_duplicate_hint">มีบริการเสียงที่ตั้งค่าซ้ำมากกว่าหนึ่งครั้ง ระบบได้รวมบริการเสียงไว้ในแถวเดียวที่นี่ คุณสามารถลบผู้ให้บริการที่เกินออกด้านบนได้หากต้องการ</string>
     <string name="voice_services_stt_count">แปลงเสียงเป็นข้อความ %1$d รายการ</string>

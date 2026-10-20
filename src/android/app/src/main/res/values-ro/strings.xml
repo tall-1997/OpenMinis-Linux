@@ -198,6 +198,12 @@
     <string name="mcp_form_env_placeholder">GITHUB_TOKEN=$GITHUB_TOKEN</string>
     <string name="mcp_form_startup_timeout">Timp maxim de pornire (secunde)</string>
     <string name="mcp_form_startup_timeout_placeholder">Implicit 60</string>
+    <string name="voice_asr_failed_title">Transcrierea a eșuat</string>
+    <string name="voice_asr_failed_message">Nu s-au putut transcrie %1$d secunde de vorbire (%2$s). Încerci din nou?</string>
+    <string name="voice_asr_timed_out">Recunoașterea vocală a expirat</string>
+    <string name="voice_asr_retry">Încearcă din nou</string>
+    <string name="voice_asr_discard">Renunță</string>
+    <string name="voice_send_still_transcribing">Se transcrie încă. Atinge din nou Trimite când apare textul.</string>
     <string name="voice_services_section">Servicii vocale</string>
     <string name="voice_services_duplicate_hint">Un serviciu vocal a fost configurat de mai multe ori. Serviciul vocal a fost unificat aici într-un singur rând; dacă vrei, poți șterge furnizorul suplimentar de mai sus.</string>
     <string name="voice_services_stt_count">%1$d servicii de transcriere</string>

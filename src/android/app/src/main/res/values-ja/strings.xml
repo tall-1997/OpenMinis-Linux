@@ -197,6 +197,12 @@
     <string name="mcp_form_env_placeholder">GITHUB_TOKEN=$GITHUB_TOKEN</string>
     <string name="mcp_form_startup_timeout">起動タイムアウト（秒）</string>
     <string name="mcp_form_startup_timeout_placeholder">デフォルト 60</string>
+    <string name="voice_asr_failed_title">文字起こしに失敗しました</string>
+    <string name="voice_asr_failed_message">%1$d 秒分の音声を文字起こしできませんでした（%2$s）。もう一度試しますか？</string>
+    <string name="voice_asr_timed_out">音声認識がタイムアウトしました</string>
+    <string name="voice_asr_retry">再試行</string>
+    <string name="voice_asr_discard">破棄</string>
+    <string name="voice_send_still_transcribing">まだ文字起こし中です。テキストが表示されたら、もう一度送信をタップしてください。</string>
     <string name="voice_services_section">音声サービス</string>
     <string name="voice_services_duplicate_hint">音声サービスが重複して設定されています。ここでは 1 行にまとめて表示しています。必要であれば上の余分なプロバイダーを削除できます。</string>
     <string name="voice_services_stt_count">音声認識 %1$d 件</string>

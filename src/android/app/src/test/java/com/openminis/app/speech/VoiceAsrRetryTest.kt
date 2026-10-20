@@ -76,20 +76,21 @@ class VoiceAsrRetryTest {
     @Test
     fun `retry takes the head and a second failure re-queues it at the tail`() {
         val q = RetryPromptQueue<String>().enqueue("a").enqueue("b")
-        val (retry, rest) = q.takeForRetry()
+        val result = q.takeForRetry()
+        val retry = result.first
         assertEquals("a", retry)
-        assertEquals("b", rest.current)
+        assertEquals("b", result.second.current)
         // The retry failed again → queued again, asked after "b".
-        val requeued = rest.enqueue(retry!!)
+        val requeued = result.second.enqueue(retry!!)
         assertEquals(listOf("b", "a"), requeued.items)
     }
 
     @Test
     fun `retry and discard on an empty queue are no-ops`() {
         val empty = RetryPromptQueue<String>()
-        val (item, rest) = empty.takeForRetry()
-        assertNull(item)
-        assertTrue(rest.isEmpty())
+        val result = empty.takeForRetry()
+        assertNull(result.first)
+        assertTrue(result.second.isEmpty())
         assertTrue(empty.discard().isEmpty())
         assertNull(empty.current)
     }
@@ -97,7 +98,9 @@ class VoiceAsrRetryTest {
     @Test
     fun `queue is immutable - operations never change the original`() {
         val q = RetryPromptQueue<String>().enqueue("a")
-        q.enqueue("b"); q.discard(); q.takeForRetry()
+        q.enqueue("b")
+        q.discard()
+        q.takeForRetry()
         assertEquals(listOf("a"), q.items)
     }
 
@@ -153,7 +156,8 @@ class VoiceAsrRetryTest {
         val src = ProductionSources.read("speech/ProviderSpeechRecognitionEngine.kt")
         // [T-android-voice-asr-stall-skip] The shared fail-over (one-shot take
         // and VAD segments) now lives in transcribeAndDeliver.
-        val body = src.substringAfter("private suspend fun transcribeAndDeliver(").substringBefore("private fun transcribeWithSystem(")
+        val body = src.substringAfter("private suspend fun transcribeAndDeliver(")
+            .substringBefore("private fun transcribeWithSystem(")
         val tail = body.substringAfterLast("val kind = when {")
         assertTrue(tail.indexOf("listener.onRetainedAudio(wav)") in 0 until tail.indexOf("listener.onError("))
         assertTrue("retry must be implemented", src.contains("override fun transcribeRetained("))
@@ -163,10 +167,12 @@ class VoiceAsrRetryTest {
     fun `system engine scales its watchdog and treats an empty timeout as a failure`() {
         val src = ProductionSources.read("speech/SystemSpeechRecognitionEngine.kt")
         assertTrue(src.contains("VoiceAsrWatchdog.seconds("))
-        val watchdog = src.substringAfter("private fun armWatchdog(").substringBefore("private fun cancelWatchdog(")
+        val watchdog = src.substringAfter("private fun armWatchdog(")
+            .substringBefore("private fun cancelWatchdog(")
         assertTrue(watchdog.contains("RecognitionError.TIMED_OUT"))
         assertTrue(watchdog.indexOf("handBackAudio()") < watchdog.indexOf("RecognitionError.TIMED_OUT"))
-        val stop = src.substringAfter("override fun stop() {").substringBefore("// ── [T-voice-asr-failure-retry-prompt]")
+        val stop = src.substringAfter("override fun stop() {")
+            .substringBefore("// ── [T-voice-asr-failure-retry-prompt]")
         assertTrue("stop() must arm the watchdog", stop.contains("armWatchdog("))
     }
 
@@ -180,10 +186,59 @@ class VoiceAsrRetryTest {
         assertTrue(queued >= 0 && idle > queued)
     }
 
-    // NOTE(fork, batch 7a): upstream's "every composer send entry goes through
-    // the voice gate" test was deferred to the panel PR (batch 7c) — it reads
-    // ui/chat/ChatScreen.kt for deferSendUntilVoiceFinished()/voiceOwesText,
-    // which land with VoiceSendGate, not with the engine layer.
+    /**
+     * Every composer send entry asks the gate before it clears the input. This
+     * fork routes all three through one coordinator (`voiceSend`), so the
+     * assertion is the call, not upstream's `deferSendUntilVoiceFinished()`
+     * name; the third entry (drag-to-send) only needs the button to be
+     * tappable, which is the `owesText()` arm of `hasText`.
+     */
+    @Test
+    fun `every composer send entry goes through the voice gate`() {
+        val src = ProductionSources.read("ui/chat/ChatScreen.kt")
+        val sendOrEnqueue = src.substringAfter("val performSendOrEnqueue: (String) -> Unit = handler@{")
+            .substringBefore("\n    }")
+        assertTrue("send button/queue path must defer", sendOrEnqueue.contains("voiceSend.defer("))
+        val enter = src.substringAfter("val performEnterSend: () -> Boolean = handler@{")
+            .substringBefore("tryExecuteInputAsSlashCommand")
+        assertTrue("hardware Enter must defer", enter.contains("voiceSend.defer("))
+        // Tappable while voice still owes text: without this an empty composer
+        // renders a disabled Send button and the tap that says "I'm done" never
+        // happens.
+        assertTrue(src.contains("val hasText = inputText.isNotBlank() || voiceOwesText"))
+        assertTrue(src.contains("val hasContent = hasText || attachments.isNotEmpty()"))
+        // Drag-to-send: both the drag-in-progress and the released branch gate.
+        assertTrue(src.split("VoiceSendGate.owesText()").size - 1 >= 2)
+    }
+
+    /**
+     * The panel side of both features: failures are reported with the
+     * composition generation, retries re-enter the same pipeline, and the
+     * transcript is mirrored so a deferred send never races the callbacks.
+     */
+    @Test
+    fun `panel reports failures, retries them and mirrors the transcript`() {
+        val src = ProductionSources.read("ui/chat/voice/InlineVoiceInputPanel.kt")
+        assertTrue(src.contains("VoiceSendGate.recordFailure(failed, captureGeneration)"))
+        assertTrue(src.contains("SpeechRecognitionManager.retryTranscription("))
+        assertTrue(src.contains("if (!started) VoiceSendGate.requeue(item)"))
+        assertEquals(2, src.split("onFailedAudio = failureSink(VoiceSendGate.generation)").size - 1)
+        assertTrue(src.split("VoiceSendGate.transcript = ").size - 1 >= 3)
+        assertTrue(src.contains("VoiceSendGate.bumpGeneration()"))
+        assertTrue(src.contains("retryFailedUtterance()"))
+        assertTrue(src.contains("VoiceSendGate.discardCurrent()"))
+    }
+
+    /** A deferred send replays the ordinary send path, not a copy of it. */
+    @Test
+    fun `the coordinator replays the installed send lambda`() {
+        val src = ProductionSources.read("ui/chat/voice/VoiceSendWiring.kt")
+        assertTrue(src.contains("send?.invoke(text)"))
+        assertTrue(src.contains("VoiceSendGate.transcript"))
+        val gate = ProductionSources.read("ui/chat/voice/VoiceSendGate.kt")
+        assertTrue(gate.contains("if (!owesText()) return false"))
+        assertTrue(gate.contains("if (isFinishingForSend) {"))
+    }
 
     private fun wav(pcmBytes: Int, byteRate: Int): ByteArray {
         val b = ByteArray(44 + pcmBytes)

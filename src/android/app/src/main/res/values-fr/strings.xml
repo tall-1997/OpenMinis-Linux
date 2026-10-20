@@ -197,6 +197,12 @@
     <string name="mcp_form_env_placeholder">GITHUB_TOKEN=$GITHUB_TOKEN</string>
     <string name="mcp_form_startup_timeout">Délai de démarrage (secondes)</string>
     <string name="mcp_form_startup_timeout_placeholder">60 par défaut</string>
+    <string name="voice_asr_failed_title">Échec de la transcription</string>
+    <string name="voice_asr_failed_message">%1$d secondes de parole n\'ont pas pu être transcrites (%2$s). Réessayer ?</string>
+    <string name="voice_asr_timed_out">La reconnaissance vocale a expiré</string>
+    <string name="voice_asr_retry">Réessayer</string>
+    <string name="voice_asr_discard">Ignorer</string>
+    <string name="voice_send_still_transcribing">Transcription en cours. Appuyez à nouveau sur Envoyer quand le texte apparaît.</string>
     <string name="voice_services_section">Services vocaux</string>
     <string name="voice_services_duplicate_hint">Un service vocal est configuré plusieurs fois. La partie vocale est regroupée ici en une seule ligne ; vous pouvez supprimer le fournisseur en trop ci-dessus si vous le souhaitez.</string>
     <string name="voice_services_stt_count">%1$d parole vers texte</string>

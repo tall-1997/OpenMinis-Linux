@@ -199,6 +199,12 @@
     <string name="mcp_form_env_placeholder">GITHUB_TOKEN=$GITHUB_TOKEN</string>
     <string name="mcp_form_startup_timeout">Limit czasu uruchamiania (sekundy)</string>
     <string name="mcp_form_startup_timeout_placeholder">Domyślnie 60</string>
+    <string name="voice_asr_failed_title">Transkrypcja nie powiodła się</string>
+    <string name="voice_asr_failed_message">Nie udało się transkrybować %1$d s mowy (%2$s). Spróbować ponownie?</string>
+    <string name="voice_asr_timed_out">Rozpoznawanie mowy przekroczyło limit czasu</string>
+    <string name="voice_asr_retry">Spróbuj ponownie</string>
+    <string name="voice_asr_discard">Odrzuć</string>
+    <string name="voice_send_still_transcribing">Wciąż trwa transkrypcja. Dotknij Wyślij ponownie, gdy tekst się pojawi.</string>
     <string name="voice_services_section">Usługi głosowe</string>
     <string name="voice_services_duplicate_hint">Usługa głosowa została skonfigurowana więcej niż raz. Głos scalono tutaj w jeden wiersz; w razie potrzeby możesz usunąć nadmiarowego dostawcę powyżej.</string>
     <string name="voice_services_stt_count">%1$d usług mowy na tekst</string>
