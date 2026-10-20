@@ -1874,8 +1874,26 @@ class ChatViewModel(
      * AnthropicProvider places its system cache_control breakpoint exactly here
      * so the stable head is a cross-turn cache hit; -1 means "unknown, cache
      * the whole system prompt as before".
+     *
+     * [T-prompt-cache-turn-context] The per-turn tail no longer lives in the
+     * system prompt at all: it is appended to the LATEST user message at
+     * request time (see [PromptCacheState.turnContext]). That keeps the whole system
+     * string byte-identical across turns, so Anthropic's message-level
+     * breakpoints AND OpenAI/DeepSeek automatic prefix caching can reuse the
+     * conversation prefix instead of re-ingesting everything after a system
+     * block that changed. -1 (single cached block) is therefore the correct
+     * value, not "unknown".
      */
     @Volatile internal var systemPromptStablePrefixLen: Int = -1
+
+    /**
+     * [T-prompt-cache-turn-context] Request-side cache state: the per-turn
+     * context attached to the latest user message, and the frozen memory
+     * snapshot. The whole system prompt is stable now, so
+     * [systemPromptStablePrefixLen] is -1 (one cached block) — the per-turn
+     * tail is NOT part of it. See PromptCacheState.kt / TurnContextInjection.kt.
+     */
+    internal val promptCache = PromptCacheState()
 
     /** True when a compact-summary LLM call is in flight (UI disables further sends). */
     internal val _isCompacting = MutableStateFlow(false)
@@ -3365,34 +3383,10 @@ class ChatViewModel(
      * to lose continuity (the model got confused by the dual representation).
      */
 
-    /**
-     * [T-android-compact-orphan-toolcall] The outgoing history, with tool
-     * call/result pairing repaired. Every request goes through here — see
-     * [dropOrphanedToolParts] for why the sweep exists and what it can and
-     * cannot fix.
-     */
-    internal fun effectiveAgentHistory(): List<LLMMessage> {
-        val repaired = dropOrphanedToolParts(effectiveAgentHistoryUncounted())
-        val steered = if (personaHistorySteering) {
-            com.openminis.app.agent.PersonaPromptLogic.applyHistorySteering(repaired)
-        } else {
-            repaired
-        }
-        // Rows trimmed out of the model window stay as a clipped excerpt.
-        // A compact summary, when present, still replaces the older prefix;
-        // this digest covers what this process actually dropped.
-        // [T-message-transformers] 发送前清洗 assistant 文本里的思考残留。
-        return HistoryDigest.inject(
-            steered,
-            HistoryDigest.render(llmDigestLines, llmDigestOmitted),
-        ).map { msg ->
-            if (msg.role == com.openminis.app.data.model.LLMMessage.Role.ASSISTANT && msg.content.isNotBlank()) {
-                msg.copy(content = com.openminis.app.agent.MessageTransformerChain.apply(msg.content))
-            } else msg
-        }
-    }
+    // [T-prompt-cache-turn-context] effectiveAgentHistory() moved to
+    // ChatViewModelHistoryExt.kt (per-turn context injection + architecture
+    // ceiling). dropOrphanedToolParts lives there too.
 
-    // dropOrphanedToolParts lives in ChatViewModelHistoryExt.kt
 
     /** Latest in-memory compact marker, used by [effectiveAgentHistory] to
      * resolve boundaries the same way iOS `cachedLatestMarker` does. Refreshed

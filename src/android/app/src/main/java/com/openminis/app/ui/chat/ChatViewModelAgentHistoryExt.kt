@@ -18,34 +18,14 @@ internal fun ChatViewModel.effectiveAgentHistoryUncounted(): List<LLMMessage> {
         summary +
         "\n</context-summary>"
 
-    // [T-compact-chunk-pool] When the marker carries a rolling chunk
-    // pool, retrieve the chunks that match the current instruction
-    // instead of injecting the whole monolithic summary. A single-chunk
-    // pool is byte-identical to the v2 blob, so retrieval only kicks in
-    // once several compactions have accumulated.
-    val chunkRetrieved: String? = marker.summaryChunks?.let { json ->
-        val query = agentHistory.lastOrNull { it.role == LLMMessage.Role.USER }?.content.orEmpty()
-        ChatViewModel.selectSummaryChunks(json, query)
-            .takeIf { it.isNotEmpty() }
-            ?.joinToString("\n\n---\n\n")
-    }
-    val effectiveSummaryWrappedText = if (chunkRetrieved != null && chunkRetrieved != summary) {
-        // The chunk pool is an accelerator for relevance, not the source of
-        // truth. It intentionally evicts old per-compaction chunks, while
-        // `summary` is regenerated from previousSummary and therefore carries
-        // the cumulative history. Always retain that cumulative summary so a
-        // long-running chat cannot lose early decisions merely because the
-        // rolling pool crossed SUMMARY_CHUNK_POOL_MAX.
-        "<context-summary>\n" +
-            "The following cumulative summary preserves the earlier conversation. A few relevant compaction excerpts follow as additional detail.\n" +
-            "Treat it as background context only. The user's most recent message (below or in the next turn) takes precedence — if it changes the task, the goal, or any numbers/scope, follow the new instruction and do not resume the old plan from this summary.\n\n" +
-            summary +
-            "\n\n--- relevant compaction excerpts ---\n" +
-            chunkRetrieved +
-            "\n</context-summary>"
-    } else {
-        summaryWrappedText
-    }
+    // [T-prompt-cache-compact-chunks] Query-selected compaction excerpts used
+    // to be spliced into the FIRST post-anchor user message. The query is the
+    // latest user message, so the head was rewritten on every turn after a
+    // compaction — a guaranteed prefix-cache miss for the whole conversation.
+    // Only the CUMULATIVE summary stays here (it changes only when a new
+    // compaction runs); the relevant excerpts ride in the per-turn context at
+    // the tail (buildTurnContextFragment).
+    val effectiveSummaryWrappedText = summaryWrappedText
 
     // ─── v2 markers (id-only anchor model) ─────────────────────────
     //
