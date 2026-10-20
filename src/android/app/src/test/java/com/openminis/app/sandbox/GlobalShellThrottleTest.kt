@@ -71,10 +71,10 @@ class GlobalShellThrottleTest {
             }
         }.awaitAll()
         assertTrue("peak ${peak.get()}", peak.get() <= GlobalShellThrottle.PROCESS_BUDGET)
-        assertEquals("16 / 4 = 4 at once", 16, peak.get())
+        assertEquals("24 / 4 = 6 at once", 24, peak.get())
         val ran = results.map { it as GlobalShellThrottle.Outcome.Ran }
         assertEquals((1..12).toList(), ran.map { it.value })
-        assertEquals("the first four start at once", 4, ran.count { !it.queued })
+        assertEquals("the first six start at once", 6, ran.count { !it.queued })
         assertTrue(ran.filter { it.queued }.all { it.queuedMs > 0 })
         assertIdle()
     }
@@ -94,11 +94,11 @@ class GlobalShellThrottleTest {
                 }
             }
         }.awaitAll()
-        // 10 outside + 3 for the first one; the second sees 3 live and 4 of
-        // headroom for its own spawn (13 + 4 = 17 > 16, so it takes the last
-        // seat only because the reservation nets off against the growth it
-        // has not produced yet). The third is over.
-        assertEquals(2, peak.get())
+        // 10 outside, then 3 per command: 13 + 1 + 4, 16 + 2 + 4, and at 19
+        // the fourth one's 3 of unseen growth leaves 19 + 3 + 4 = 26 > 24.
+        // Three at a time is the "leftover daemons slow commands down" case,
+        // not the stall the next test covers.
+        assertEquals(3, peak.get())
         baseline.set(0)
         assertIdle()
     }
@@ -128,7 +128,7 @@ class GlobalShellThrottleTest {
                 }
             }
         }.awaitAll()
-        assertEquals("16 / 4 reserved each", 4, peak.get())
+        assertEquals("24 / 4 reserved each", 6, peak.get())
         assertIdle()
     }
 
@@ -136,9 +136,9 @@ class GlobalShellThrottleTest {
     fun `queue time does not come out of the command's timeout`() = runTest {
         useFakes(); assertIdle()
         val release = CompletableDeferred<Unit>()
-        val holders = (1..4).map { launch { GlobalShellThrottle.run("hold$it") { live.addAndGet(4); release.await(); live.addAndGet(-4) } } }
+        val holders = (1..6).map { launch { GlobalShellThrottle.run("hold$it") { live.addAndGet(4); release.await(); live.addAndGet(-4) } } }
         testScheduler.advanceTimeBy(100)
-        assertEquals(4, GlobalShellThrottle.runningCount)
+        assertEquals(6, GlobalShellThrottle.runningCount)
         // The late command's own run is timed inside block; queueing is not.
         val late = async { GlobalShellThrottle.run("late") { testScheduler.currentTime } }
         testScheduler.advanceTimeBy(30_000)
@@ -154,12 +154,12 @@ class GlobalShellThrottleTest {
     fun `the queue has a safety cap, and a command that hits it runs nothing`() = runTest {
         useFakes(); assertIdle()
         val release = CompletableDeferred<Unit>()
-        val holders = (1..4).map { launch { GlobalShellThrottle.run("hold$it") { live.addAndGet(4); release.await(); live.addAndGet(-4) } } }
+        val holders = (1..6).map { launch { GlobalShellThrottle.run("hold$it") { live.addAndGet(4); release.await(); live.addAndGet(-4) } } }
         testScheduler.advanceTimeBy(100)
         var ran = false
         val outcome = GlobalShellThrottle.run("late", maxQueueWaitMs = 5_000) { ran = true }
         assertTrue(outcome is GlobalShellThrottle.Outcome.QueueTimedOut)
-        assertEquals(16, (outcome as GlobalShellThrottle.Outcome.QueueTimedOut).lastLiveCount)
+        assertEquals(24, (outcome as GlobalShellThrottle.Outcome.QueueTimedOut).lastLiveCount)
         assertFalse("nothing executed", ran)
         release.complete(Unit)
         holders.forEach { it.join() }
@@ -204,7 +204,7 @@ class GlobalShellThrottleTest {
     fun `cancelling a queued command (Stop) leaks nothing`() = runTest {
         useFakes(); assertIdle()
         val release = CompletableDeferred<Unit>()
-        val holders = (1..4).map { launch { GlobalShellThrottle.run("hold$it") { live.addAndGet(4); release.await(); live.addAndGet(-4) } } }
+        val holders = (1..6).map { launch { GlobalShellThrottle.run("hold$it") { live.addAndGet(4); release.await(); live.addAndGet(-4) } } }
         testScheduler.advanceTimeBy(100)
         val queued = launch { GlobalShellThrottle.run("queued") { error("must not run") } }
         testScheduler.advanceTimeBy(1_000)
@@ -228,12 +228,12 @@ class GlobalShellThrottleTest {
     fun `the wait is announced once, with the live count, and only when it queues`() = runTest {
         useFakes(); assertIdle()
         val release = CompletableDeferred<Unit>()
-        val holders = (1..4).map { launch { GlobalShellThrottle.run("hold$it") { live.addAndGet(4); release.await(); live.addAndGet(-4) } } }
+        val holders = (1..6).map { launch { GlobalShellThrottle.run("hold$it") { live.addAndGet(4); release.await(); live.addAndGet(-4) } } }
         testScheduler.advanceTimeBy(100)
         val seen = mutableListOf<Int>()
         val late = async { GlobalShellThrottle.run("late", onWaiting = { seen.add(it) }) { 1 } }
         testScheduler.advanceTimeBy(5_000)
-        assertEquals("one notice per command, at the first queue", listOf(16), seen)
+        assertEquals("one notice per command, at the first queue", listOf(24), seen)
         release.complete(Unit)
         holders.forEach { it.join() }
         late.await()
@@ -266,6 +266,19 @@ class GlobalShellThrottleTest {
     fun `the parent pid is read after the last parenthesis`() {
         assertEquals(7, GlobalShellThrottle.parseParentPid("12 (a) b) c) S 7 12 12"))
         assertNull(GlobalShellThrottle.parseParentPid("garbage"))
+    }
+
+    @Test
+    fun `an invalid root pid counts nothing instead of the whole device`() {
+        val proc = kotlin.io.path.createTempDirectory("proc").toFile()
+        File(proc, "1").apply { mkdirs(); File(this, "stat").writeText("1 (init) S 0 1 1\n") }
+        File(proc, "2").apply { mkdirs(); File(this, "stat").writeText("2 (app) S 1 1 1\n") }
+        // Process.myPid() is 0 under a stub android.jar; walking pid 0 reaches
+        // every top-level process and reported 154, which queued all commands.
+        assertEquals(0, GlobalShellThrottle.countDescendants(proc, 0))
+        assertEquals(0, GlobalShellThrottle.countDescendants(proc, -1))
+        assertEquals(2, GlobalShellThrottle.countDescendants(proc, 1))
+        proc.deleteRecursively()
     }
 
     @Test

@@ -36,6 +36,16 @@ import kotlinx.coroutines.withTimeoutOrNull
  *    user-owned PTY) is not; queueing a person's keystrokes behind agent
  *    work would be the wrong trade. Its processes still count toward the
  *    live total, so agent commands give way to it.
+ *  - [T-shell-budget-headroom] 24, not the upstream 16. The limit this
+ *    guards against is Android's `max_phantom_processes`, 32 by default
+ *    (read as INT_MAX on the measured Redmi/HyperOS device, i.e. not
+ *    enforced there at all — the gate is for the default case). Upstream
+ *    runs one fresh PRoot per command, so 16 holds four of them. This fork
+ *    keeps a persistent shell per session: libproot + bash + the watchdog
+ *    sleep is 4 processes standing before any command runs, so 16 leaves
+ *    two commands in one session and exactly one in three, which is the
+ *    serial crawl this gate exists to avoid. 24 keeps five commands in
+ *    flight on one session and still sits 8 under the default limit.
  *  - A command is always admitted when no other gated command is running,
  *    so processes nobody is waiting on (a leaked daemon) can slow commands
  *    to one at a time but never stall them.
@@ -52,7 +62,7 @@ object GlobalShellThrottle {
     private const val TAG = "GlobalShellThrottle"
 
     /** Live Minis child processes the gate admits up to. */
-    const val PROCESS_BUDGET = 16
+    const val PROCESS_BUDGET = 24
 
     /**
      * What a command is assumed to cost before its processes show up in
@@ -249,6 +259,12 @@ object GlobalShellThrottle {
      * a process that exits mid-walk is simply missed.
      */
     internal fun countDescendants(procRoot: File, rootPid: Int): Int {
+        // pid 0 is "the scheduler", never a process we own: walking its
+        // descendants counts the whole device from init down. A stub
+        // android.jar (unit tests) returns 0 from Process.myPid(), and a
+        // count of 154 there queued every command behind a budget that only
+        // looked full.
+        if (rootPid <= 0) return 0
         val parentOf = HashMap<Int, Int>()
         procRoot.listFiles()?.forEach { dir ->
             val pid = dir.name.toIntOrNull() ?: return@forEach
