@@ -257,6 +257,6 @@ private val ShizukuCapabilities: List<ShizukuCapability> = listOf(
     ShizukuCapability("input", R.string.shizuku_cap_input_desc, Icons.Default.TouchApp),
     ShizukuCapability("notification", R.string.shizuku_cap_notification_desc, Icons.Outlined.Notifications),
     ShizukuCapability("file", R.string.shizuku_cap_file_desc, Icons.Outlined.Folder),
-    ShizukuCapability("device", R.string.shizuku_cap_device_desc, Icons.Outlined.PhoneAndroid),
+    ShizukuCapability("device", R.string.shizuku_cap_device_desc, Icons.Filled.PhoneAndroid),
     ShizukuCapability("service", R.string.shizuku_cap_service_desc, Icons.Default.Dns),
 )
