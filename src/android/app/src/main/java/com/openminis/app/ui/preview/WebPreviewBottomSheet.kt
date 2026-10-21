@@ -380,7 +380,7 @@ internal fun WebPreviewToolbar(
                     },
                     leadingIcon = {
                         Icon(
-                            if (desktopMode) Icons.Outlined.PhoneAndroid
+                            if (desktopMode) Icons.Filled.PhoneAndroid
                             else Icons.Default.DesktopWindows,
                             contentDescription = null,
                         )
