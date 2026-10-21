@@ -110,7 +110,7 @@ internal fun CompactProgressIndicator(
                 .size(18.dp)
                 .scale(scale)
                 .alpha(alpha),
-            imageVector = Icons.Outlined.HourglassEmpty,
+            imageVector = Icons.Default.HourglassEmpty,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
         )
