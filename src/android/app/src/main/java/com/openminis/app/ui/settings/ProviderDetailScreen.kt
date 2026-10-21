@@ -109,10 +109,8 @@ fun ProviderDetailScreen(
     var menuEntryId by remember { mutableStateOf<String?>(null) }
     var deleted by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-
     if (instance == null && !deleted) { onBack(); return }
     if (instance == null) return
-
     var label by remember { mutableStateOf(instance.label) }
     val labelChanged = label != instance.label
 
@@ -421,7 +419,6 @@ fun ProviderDetailScreen(
                 )
             }
         }
-
 
         // ─── Image Generation Endpoint ──────────────────────────────
         // [T-android-image-endpoint-mode] OpenAI-compatible providers only.
@@ -1202,7 +1199,6 @@ private fun ManualBearerTokenSection(
 
 /** Input modalities that get a (muted) capability badge in the model list. */
 private val modalityIconKeys = setOf("image", "pdf", "audio", "video")
-
 /** Output modalities that get a (tinted, generate-style) badge in the model list. */
 private val modalityOutputIconKeys = setOf("image", "audio", "video")
 /**
