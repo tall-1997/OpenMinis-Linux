@@ -80,8 +80,6 @@ internal fun CompactProgressIndicator(
     progress: ChatViewModel.CompactProgress,
     onCancel: () -> Unit,
 ) {
-    // Re-reads the clock every second; the changing value is what makes the
-    // row demonstrably alive.
     var elapsedSec by remember(progress.startedAtMs) { mutableStateOf(0) }
     LaunchedEffect(progress.startedAtMs) {
         while (true) {
@@ -90,10 +88,33 @@ internal fun CompactProgressIndicator(
         }
     }
 
+    // 呼吸动画：缩放+透明度脉冲，避免用户以为压缩过程卡住。
+    val breath = rememberInfiniteTransition(label = "compact")
+    val scale by breath.animateFloat(
+        initialValue = 0.85f, targetValue = 1.05f,
+        animationSpec = infiniteRepeatable(tween(900, easing = LinearEasing), RepeatMode.Reverse),
+        label = "breath_scale",
+    )
+    val alpha by breath.animateFloat(
+        initialValue = 0.4f, targetValue = 1.0f,
+        animationSpec = infiniteRepeatable(tween(900, easing = LinearEasing), RepeatMode.Reverse),
+        label = "breath_alpha",
+    )
+
     Row(
         modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        Icon(
+            modifier = Modifier
+                .size(18.dp)
+                .scale(scale)
+                .alpha(alpha),
+            imageVector = Icons.Outlined.HourglassEmpty,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+        )
+        Spacer(modifier = Modifier.width(8.dp))
         Text(
             text = when (progress.stageKind) {
                 "fallback" -> stringResource(

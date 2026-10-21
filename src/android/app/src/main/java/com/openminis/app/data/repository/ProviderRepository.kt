@@ -2368,6 +2368,7 @@ class ProviderRepository(private val context: Context) {
             val clearedIds = clearFetchedModelEntries(instance.id)
             if (clearedIds.isNotEmpty()) scrubExternalEntryRefs(clearedIds)
         }
+        var lastFetchError: ModelRefreshResult? = null
         // [T-android-refresh-models-empty-key] usableApiKey, NOT loadApiKey.
         //
         // A self-hosted OpenAI/Anthropic-compatible endpoint (ollama, LM
@@ -2514,6 +2515,21 @@ class ProviderRepository(private val context: Context) {
                 }
             } catch (e: Exception) {
                 android.util.Log.e("ProviderRepo", "refreshModels fetch error: ${e.message}", e)
+                // 细分错误原因，存到可变变量里，供后面的空列表分支返回。
+                lastFetchError = when {
+                    e is java.net.ConnectException || e is java.net.SocketTimeoutException ||
+                        e is java.net.UnknownHostException || e is javax.net.ssl.SSLException ||
+                        e.message?.contains("Unable to resolve host") == true ||
+                        e.message?.contains("Connection refused") == true ||
+                        e.message?.contains("connect timed out") == true ||
+                        e.message?.contains("timeout") == true ||
+                        e.message?.contains("Network is unreachable") == true ->
+                        ModelRefreshResult.CONNECTION_FAILED
+                    e is java.io.FileNotFoundException || e.message?.contains("404") == true ||
+                        e.message?.contains("Not Found") == true ->
+                        ModelRefreshResult.NOT_FOUND
+                    else -> ModelRefreshResult.FAILURE
+                }
                 emptyList()
             }
             android.util.Log.i("ProviderRepo", "refreshModels: got ${models.size} models")
@@ -2531,7 +2547,8 @@ class ProviderRepository(private val context: Context) {
         // catalog is a per-credential refresh. Same API address used to make
         // every sibling provider look freshly synced.
         if (liveForce) {
-            return if (apiKey == null) ModelRefreshResult.NO_KEY else ModelRefreshResult.FAILURE
+            return if (apiKey == null) ModelRefreshResult.NO_KEY
+            else lastFetchError ?: ModelRefreshResult.FAILURE
         }
 
         // Step 3: Fallback to models.dev by base URL.
@@ -2758,6 +2775,12 @@ enum class ModelRefreshResult {
     NO_KEY,
     PRESERVED,
     FAILURE,
+    /** HTTP 404 from the provider's /v1/models endpoint. */
+    NOT_FOUND,
+    /** Network error: DNS, TLS, timeout, or refused. */
+    CONNECTION_FAILED,
+    /** 2xx body that is not valid JSON or has no "data" array. */
+    INVALID_RESPONSE,
 }
 /**
  * Id of the OpenCode Zen provider this app used to seed.
