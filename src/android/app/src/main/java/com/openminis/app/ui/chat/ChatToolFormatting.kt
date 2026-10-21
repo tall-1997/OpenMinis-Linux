@@ -52,7 +52,7 @@ internal fun toolIconFor(toolName: String) = when (toolName) {
     "search_sessions", "read_session" -> Icons.Default.Search
     "spawn_agent", "run_subagent" -> Icons.Default.Groups
     "cronjob" -> Icons.Default.Alarm
-    else -> if (toolName.startsWith("online_")) Icons.Default.Language else Icons.Default.Build
+    else -> if (toolName.startsWith("online_")) Icons.Default.Language else Icons.Default.Search
 }
 
 // Helper: tool display name for "Minis is using X"
