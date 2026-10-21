@@ -759,11 +759,10 @@ class BackupImporter(
             )
         }
 
-        val (before, after) = repo.mergeBackupProviderConfig(config)
-        report.imported = maxOf(0, after - before)
-        // Everything the package carried that did not newly insert was already
-        // present and left untouched — skipped, not updated.
-        report.skipped = maxOf(0, config.instances.size - report.imported)
+        // 第一个返回值是实际改动数量（替换 + 新增），页面显示它。
+        val (changed, _) = repo.mergeBackupProviderConfig(config)
+        report.imported = changed
+        report.skipped = 0
 
         // Thinking rules AFTER the instance merge, so a rule's instance exists.
         val ruleRecords = readJsonlList(File(root, "data"), "thinking_rules").mapNotNull { env ->

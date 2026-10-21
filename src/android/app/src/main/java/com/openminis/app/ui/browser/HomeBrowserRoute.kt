@@ -11,6 +11,7 @@ import com.openminis.app.browser.BrowserTabPool
 fun HomeBrowserRoute(
     settings: Boolean,
     onBack: () -> Unit,
+    initialUrl: String? = null,
 ) {
     val context = LocalContext.current
     val pool = remember { BrowserTabPool(context) }
@@ -18,7 +19,10 @@ fun HomeBrowserRoute(
         pool.isVisible = true
         onDispose { pool.dispose() }
     }
-    LaunchedEffect(Unit) { pool.ensureTabForUI() }
+    LaunchedEffect(initialUrl) {
+        if (initialUrl.isNullOrBlank()) pool.ensureTabForUI()
+        else pool.selectOrCreateTabForURL(initialUrl)
+    }
     if (settings) {
         BrowserSettingsSheet(tabPool = pool, onDismiss = onBack)
     } else {

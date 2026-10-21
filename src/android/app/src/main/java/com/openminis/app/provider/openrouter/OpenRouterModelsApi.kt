@@ -102,9 +102,9 @@ object OpenRouterModelsApi {
             val inputModalities = arch?.optJSONArray("input_modalities")?.toStringList().normalizeModalities()
             val outputModalities = arch?.optJSONArray("output_modalities")?.toStringList().normalizeModalities()
 
-            val contextWindow = obj.optInt("context_length").takeIf { it > 0 }
-            val maxOutputTokens = obj.optJSONObject("top_provider")
-                ?.optInt("max_completion_tokens")?.takeIf { it > 0 }
+            // 与通用解析共用同一套字段兼容（context_length、top_provider 都覆盖）。
+            val (contextWindow, maxOutputTokens) =
+                com.openminis.app.provider.EndpointModelLimits.read(obj)
 
             val supportedParams = obj.optJSONArray("supported_parameters")?.toStringList() ?: emptyList()
             val supportsReasoning = "reasoning" in supportedParams

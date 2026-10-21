@@ -151,6 +151,9 @@ object OpenAIModelsApi {
                 }
 
                 val displayName = obj.optString("name", id)
+                // 端点返回的窗口参数优先于目录与兜底，这里必须读出来带下去。
+                val (contextWindow, maxOutputTokens) =
+                    com.openminis.app.provider.EndpointModelLimits.read(obj)
                 // Third-party gateways (vLLM, OpenRouter-compat proxies) often
                 // report per-model modalities under `architecture.{input,output}_modalities`
                 // the same way OpenRouter does — pick them up so vision/audio
@@ -181,6 +184,8 @@ object OpenAIModelsApi {
                         id = id,
                         displayName = displayName,
                         provider = if (isCustomBase) "Custom" else "OpenAI",
+                        contextWindow = contextWindow,
+                        maxOutputTokens = maxOutputTokens,
                         inputModalities = inputModalities,
                         outputModalities = outputModalities,
                         supportsReasoning = if (knownReasoning) true else null,

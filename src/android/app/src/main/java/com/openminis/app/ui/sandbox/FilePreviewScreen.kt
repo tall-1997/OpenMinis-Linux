@@ -98,6 +98,8 @@ private const val MAX_TEXT_PREVIEW_BYTES = 512_000 // 500 KB; markdown compose s
 fun FilePreviewScreen(
     item: FileItem,
     onBack: () -> Unit,
+    /** 预览中 Markdown 链接的目标，由导航层决定怎么开。 */
+    onOpenLink: (com.openminis.app.ui.markdown.MarkdownLinkResolver.Target) -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -229,7 +231,9 @@ fun FilePreviewScreen(
             // Order matters: markdown / html before generic text — both are
             // technically text but warrant richer renderers.
             when {
-                item.isMarkdownFile -> MarkdownPreview(item)
+                item.isMarkdownFile -> MarkdownPreview(item) { href ->
+                    com.openminis.app.ui.markdown.MarkdownLinkResolver.resolve(href, item.file.parent ?: "/var/minis", "/var/minis")?.let(onOpenLink)
+                }
                 item.isHtmlFile -> HtmlPreview(item)
                 item.isImageFile -> ImagePreview(item)
                 item.isAudioFile -> AudioPreview(item)
@@ -416,7 +420,7 @@ private fun TextPreview(item: FileItem) {
 // ==================== Markdown Preview ====================
 
 @Composable
-private fun MarkdownPreview(item: FileItem) {
+private fun MarkdownPreview(item: FileItem, onLinkClick: (String) -> Unit) {
     var content by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -446,6 +450,7 @@ private fun MarkdownPreview(item: FileItem) {
             // first frame — transition completes before the off-screen blocks
             // are touched.
             content = content!!,
+            onLinkClick = onLinkClick,
             modifier = Modifier.fillMaxSize(),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(
                 horizontal = 16.dp, vertical = 12.dp,
@@ -1294,15 +1299,12 @@ private fun printFile(context: Context, item: FileItem) {
         Toast.makeText(context, context.getString(R.string.file_print_failed_toast, e.message ?: ""), Toast.LENGTH_SHORT).show()
     }
 }
-
 private fun escapeHtml(s: String): String =
     s.replace("&", "&amp;")
         .replace("<", "&lt;")
         .replace(">", "&gt;")
-
 // saveImageToGallery moved to FileSaveActions.kt (architecture-policy
 // ceiling on this file); the save contract lives in io/VerifiedCopy + io/FileSaveGuard.
-
 /**
  * Build the swipe-able gallery's (items, startIndex) for a tapped image
  * file: enumerate all image siblings in its parent directory (sorted by
@@ -1315,7 +1317,6 @@ private fun escapeHtml(s: String): String =
  */
 private val IMAGE_GALLERY_EXTENSIONS =
     setOf("png", "jpg", "jpeg", "gif", "bmp", "webp", "ico")
-
 private fun collectImageGallery(
     file: java.io.File,
 ): Pair<List<com.openminis.app.ui.components.ImageGalleryItem>, Int> {
@@ -1337,4 +1338,3 @@ private fun collectImageGallery(
     }
     return items to startIdx
 }
-

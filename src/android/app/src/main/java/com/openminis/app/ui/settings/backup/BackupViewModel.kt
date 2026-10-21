@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.openminis.app.backup.BackupCategory
 import com.openminis.app.backup.BackupExporter
 import com.openminis.app.backup.BackupHistory
+import com.openminis.app.backup.BackupLogCompaction
 import com.openminis.app.backup.BackupImporter
 import com.openminis.app.backup.BackupManifest
 import com.openminis.app.backup.BackupPackageReader
@@ -441,7 +442,8 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
      * the very list that exists to report it.
      */
     private fun publishRunning(base: BackupHistory.Record, log: List<BackupHistory.LogEntry>) {
-        val snapshot = base.copy(log = log.toList())
+        // 连续进度行只留最后一条，避免记录堆上万行。
+        val snapshot = base.copy(log = BackupLogCompaction.compact(log, BackupHistory.MAX_LOG_LINES))
         history.upsert(snapshot)
         _historyRecords.value = history.records()
     }
@@ -1050,7 +1052,6 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
         /** Stage labels shown while a package is being opened. */
         const val OPEN_STAGE_COUNT = 4
         private const val OPEN_STAGE_MS = 2_500L
-
         /**
          * Stored sentinel for a user-cancelled run, mapped to a translated
          * string at render time — the same treatment as
@@ -1058,7 +1059,6 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
          * persisted, so it must not be locale-dependent.
          */
         const val STOPPED_MARKER = "stopped"
-
         private const val KEY_CATEGORIES = "selectedCategories"
         private const val KEY_ENCRYPT = "encrypt"
         private const val KEY_MAX_FILE_MB = "maxFileSizeMB"

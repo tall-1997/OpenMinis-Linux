@@ -450,6 +450,11 @@ data class ProviderConfig(
     // has exactly one source of truth — TranslationPrefs. The property stays so an
     // older persisted JSON mirror still decodes instead of failing the whole load.
     var defaultTranslationModelId: String? = null,
+    // 用户长按删除的 API 下发模型。键是 providerInstanceId，值是被删模型的
+    // baseModel.id 集合。刷新按 id 重建非自定义条目，没有这份记录被删的模型
+    // 会在下次刷新时复活。自定义条目不进这里（它们不走重建路径）。
+    // 旧数据没有该键，反序列化为空 map，行为与之前一致。
+    val deletedModelIds: MutableMap<String, List<String>> = mutableMapOf(),
     // Models and groups exposed to the agent loop (minis-model-use terminal
     // command) — mirrors iOS agentLoopModelEntryIds / agentLoopGroupIds.
     val agentLoopModelEntryIds: MutableList<String> = mutableListOf(),

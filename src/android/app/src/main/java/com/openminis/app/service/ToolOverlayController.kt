@@ -256,22 +256,17 @@ class ToolOverlayController(
         ).apply {
             gravity = Gravity.TOP or Gravity.START
             val metrics = context.resources.displayMetrics
-            val maxX = (metrics.widthPixels - width).coerceAtLeast(0)
-            val maxY = (metrics.heightPixels - height).coerceAtLeast(0)
-            val savedX = backgroundRepo?.getOverlayX() ?: -1
-            val savedY = backgroundRepo?.getOverlayY() ?: -1
-            if (savedX >= 0 && savedY >= 0) {
-                x = savedX.coerceIn(0, maxX)
-                y = savedY.coerceIn(0, maxY)
+            val portrait = metrics.heightPixels >= metrics.widthPixels
+            val (savedX, savedY) = backgroundRepo?.getOverlayPosition(portrait) ?: (-1 to -1)
+            val (clampedX, clampedY) = if (savedX >= 0 && savedY >= 0) {
+                clampToSafeArea(context, savedX, savedY, width, height)
             } else {
-                // First-paint default: bottom-left, 10 dp from the left
-                // edge and 10 dp above an approximate nav-bar region.
+                // 默认位置：左下角，留出边距并避开底部手势条。
                 val padding = dpToPx(EDGE_PADDING_DP)
-                val approxNavBar = dpToPx(48)
-                x = padding.coerceIn(0, maxX)
-                y = (metrics.heightPixels - height - approxNavBar - padding)
-                    .coerceIn(0, maxY)
+                clampToSafeArea(context, padding, metrics.heightPixels, width, height)
             }
+            x = clampedX
+            y = clampedY
         }
         layoutParams = params
         // Software-compose the capsule. A hardware-accelerated overlay
@@ -730,11 +725,9 @@ class ToolOverlayController(
                     if (!dragging && (abs(dx) > slopPx || abs(dy) > slopPx)) dragging = true
                     if (dragging) {
                         val windowView = view ?: return@setOnTouchListener true
-                        val dm = context.resources.displayMetrics
-                        val maxX = (dm.widthPixels - params.width).coerceAtLeast(0)
-                        val maxY = (dm.heightPixels - params.height.coerceAtLeast(1)).coerceAtLeast(0)
-                        params.x = (startParamX + dx).coerceIn(0, maxX)
-                        params.y = (startParamY + dy).coerceIn(0, maxY)
+                        val (cx, cy) = clampToSafeArea(context, startParamX + dx, startParamY + dy, params.width, params.height)
+                        params.x = cx
+                        params.y = cy
                         try {
                             // Must update the WindowManager root, not the
                             // inner capsule row the touch listener is on.
@@ -747,7 +740,11 @@ class ToolOverlayController(
                 }
                 MotionEvent.ACTION_UP -> {
                     if (dragging) {
-                        backgroundRepo?.setOverlayPosition(params.x, params.y)
+                        val dm = context.resources.displayMetrics
+                        backgroundRepo?.setOverlayPosition(
+                            portrait = dm.heightPixels >= dm.widthPixels,
+                            x = params.x, y = params.y,
+                        )
                     } else {
                         onTap()
                     }
@@ -845,25 +842,28 @@ class ToolOverlayController(
             val dm = context.resources.displayMetrics
             val width = fixedCapsuleWidthPx()
             val height = dpToPx(CAPSULE_HEIGHT_DP)
-            val maxX = (dm.widthPixels - width).coerceAtLeast(0)
-            val maxY = (dm.heightPixels - height).coerceAtLeast(0)
-            val clampedX = params.x.coerceIn(0, maxX)
-            val clampedY = params.y.coerceIn(0, maxY)
+            val portrait = dm.heightPixels >= dm.widthPixels
+            // 旋转后读该方向上次记住的位置；没有就用当前位置夹进新的安全区。
+            val (savedX, savedY) = backgroundRepo?.getOverlayPosition(portrait)
+                ?: (params.x to params.y)
+            val (clampedX, clampedY) = clampToSafeArea(
+                context, if (savedX >= 0) savedX else params.x,
+                if (savedY >= 0) savedY else params.y, width, height,
+            )
             if (params.width == width && params.x == clampedX && params.y == clampedY) return@post
             params.width = width
             params.x = clampedX
             params.y = clampedY
             try {
                 windowManager.updateViewLayout(v, params)
-                backgroundRepo?.setOverlayPosition(clampedX, clampedY)
+                backgroundRepo?.setOverlayPosition(portrait, clampedX, clampedY)
             } catch (e: Throwable) {
                 Log.w(TAG, "onConfigurationChanged relayout failed: ${e.message}")
             }
         }
     }
 
-    private fun dpToPx(dp: Int): Int =
-        (dp * context.resources.displayMetrics.density + 0.5f).toInt()
+    private fun dpToPx(dp: Int): Int = (dp * context.resources.displayMetrics.density + 0.5f).toInt()
 
     /**
      * Mirrors [AgentForegroundService.toolDisplayLabel] but trims the

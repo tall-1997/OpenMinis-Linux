@@ -124,8 +124,16 @@ class BackupHistory private constructor(private val context: Context) {
                 ?.let { JSON.decodeFromString(RECORD_LIST, it) }
         }.getOrNull() ?: emptyList()
         val cutoff = System.currentTimeMillis() - RETENTION_MS
-        val kept = loaded.filter { it.startedAt >= cutoff }.sortedByDescending { it.startedAt }
-        if (kept.size != loaded.size) persist(kept)
+        val fresh = loaded.filter { it.startedAt >= cutoff }
+        // 旧版本把每个百分比都写成一行，受影响的记录打开历史页就卡死。
+        // 加载时压缩，有变化才回写，一次清理永久生效。
+        val kept = fresh.map { record ->
+            val compacted = BackupLogCompaction.compact(record.log, MAX_LOG_LINES)
+            if (compacted.size == record.log.size) record else record.copy(log = compacted)
+        }.sortedByDescending { it.startedAt }
+        if (kept.size != loaded.size || kept.zip(fresh).any { (a, b) -> a.log.size != b.log.size }) {
+            persist(kept)
+        }
         cache = kept
         return kept
     }
@@ -133,8 +141,18 @@ class BackupHistory private constructor(private val context: Context) {
     @Synchronized
     private fun persist(list: List<Record>) {
         cache = list
-        runCatching { storeFile.writeText(JSON.encodeToString(RECORD_LIST, list)) }
-            .onFailure { AppLogger.error(TAG, "[Backup] history write failed: ${it.message}") }
+        // 先写临时文件再改名。直接覆盖时进程在写到一半被杀，会留下半截 JSON，
+        // 下次加载整份历史报废。rename 在同一目录内是原子的，失败时原文件不动。
+        runCatching {
+            val target = storeFile
+            target.parentFile?.mkdirs()
+            val tmp = java.io.File(target.parentFile, "${target.name}.tmp")
+            tmp.writeText(JSON.encodeToString(RECORD_LIST, list))
+            if (!tmp.renameTo(target)) {
+                tmp.delete()
+                error("rename ${tmp.name} -> ${target.name} failed")
+            }
+        }.onFailure { AppLogger.error(TAG, "[Backup] history write failed: ${it.message}") }
     }
 
     // MARK: - Mutation
@@ -187,6 +205,9 @@ class BackupHistory private constructor(private val context: Context) {
 
         /** 30 days, matching iOS `BackupHistory.retention`. */
         const val RETENTION_MS: Long = 30L * 24 * 60 * 60 * 1000
+
+        /** 单条记录保留的日志行数上限。进度行压缩后仍超限时保留尾部。 */
+        const val MAX_LOG_LINES: Int = 200
 
         /**
          * Recorded as the error for a run that never reported a terminal state.

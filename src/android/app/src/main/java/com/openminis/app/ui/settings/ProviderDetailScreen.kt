@@ -704,7 +704,8 @@ fun ProviderDetailScreen(
                                 )
                             },
                         )
-                        if (entry.isCustom) {
+                        run {
+                            // 删除对所有模型开放；仓库对非自定义条目写墓碑，刷新不复活。
                             DropdownMenuItem(
                                 text = {
                                     Text(
@@ -1201,7 +1202,6 @@ private val modalityIconKeys = setOf("image", "pdf", "audio", "video")
 
 /** Output modalities that get a (tinted, generate-style) badge in the model list. */
 private val modalityOutputIconKeys = setOf("image", "audio", "video")
-
 /**
  * [T-android-model-capability-output-tags] Capability badges for one model row.
  * Input modalities render in the muted onSurfaceVariant tint; output modalities

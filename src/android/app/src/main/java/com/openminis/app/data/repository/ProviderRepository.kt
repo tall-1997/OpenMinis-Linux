@@ -17,6 +17,7 @@ import com.openminis.app.data.db.toSnapshot
 import com.openminis.app.data.model.ImageEndpointMode
 import com.openminis.app.data.model.LLMModel
 import com.openminis.app.data.model.applyUnrecognizedModelDefaults
+import com.openminis.app.data.model.ModelDeletion
 import com.openminis.app.data.model.ModelEntry
 import com.openminis.app.data.model.ModelOverrides
 import com.openminis.app.data.model.ModelGroup
@@ -1021,8 +1022,9 @@ class ProviderRepository(private val context: Context) {
             }
         }
 
+        val admitted = ModelDeletion.filterDeleted(config, instanceId, models)
         // Build new entries, carrying forward uuid / overrides / isHidden from prior entries
-        val refreshedModelIds = models.map { it.id }.toSet()
+        val refreshedModelIds = admitted.map { it.id }.toSet()
         // [T-android-provider-voice] Template-sourced voice models carry an
         // authoritative modality that API-inferred modality (typically no audio
         // bits) must never overwrite. Mirrors iOS replaceEntries
@@ -1033,7 +1035,7 @@ class ProviderRepository(private val context: Context) {
             ?.filter { it.hasVoiceModality }
             ?.associateBy { it.id }
             ?: emptyMap()
-        val newEntries = models.map { model ->
+        val newEntries = admitted.map { model ->
             val prior = existingByModelId[model.id]
             // Dedicated ASR/TTS id/name patterns fill the exact voice shape when
             // the API returned no modality info; the template's shape wins last.
@@ -1244,6 +1246,7 @@ class ProviderRepository(private val context: Context) {
             // entries get their uuid appended); see ProviderConfigMappingRoundTripTest.
         }
         config.modelEntries.add(entry)
+        ModelDeletion.clearDeletion(config, entry)
         saveConfig(config)
     }
 
@@ -1260,6 +1263,8 @@ class ProviderRepository(private val context: Context) {
     fun removeEntry(entryId: String): Unit = synchronized(configLock) {
         ensureConfigLoaded()
         val config = workingCopy()
+        // 非自定义条目记墓碑，刷新不复活。
+        config.modelEntries.firstOrNull { it.id == entryId }?.let { ModelDeletion.recordDeletion(config, it) }
         config.modelEntries.removeAll { it.id == entryId }
         config.modelGroups.forEach { group ->
             group.memberEntryIds.removeAll { it == entryId }
@@ -2742,23 +2747,18 @@ class ProviderRepository(private val context: Context) {
 
     fun mergeBackupProviderConfig(remote: ProviderConfig): Pair<Int, Int> =
         backupCoordinator.mergeBackupProviderConfig(remote)
-
     fun restoreBackupThinkingRules(
         rules: List<com.openminis.app.backup.BackupThinkingRuleRecord>,
     ): Pair<Int, Int> = backupCoordinator.restoreBackupThinkingRules(rules)
-
     fun importInstanceJSON(jsonStr: String): String? =
         backupCoordinator.importInstanceJSON(jsonStr)
-
 }
-
 enum class ModelRefreshResult {
     SUCCESS_API,
     NO_KEY,
     PRESERVED,
     FAILURE,
 }
-
 /**
  * Id of the OpenCode Zen provider this app used to seed.
  *

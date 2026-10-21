@@ -84,6 +84,22 @@ class BackgroundSettingsRepository(context: Context) {
         prefs.edit().putInt(KEY_BG_OVERLAY_X, x).putInt(KEY_BG_OVERLAY_Y, y).apply()
     }
 
+    /** 横竖屏各记一份位置。没有单独记录时回退到旧的共用值。 */
+    fun getOverlayPosition(portrait: Boolean): Pair<Int, Int> {
+        val suffix = if (portrait) "Portrait" else "Landscape"
+        val x = prefs.getInt(KEY_BG_OVERLAY_X + suffix, -1)
+        val y = prefs.getInt(KEY_BG_OVERLAY_Y + suffix, -1)
+        return if (x >= 0 && y >= 0) x to y else getOverlayX() to getOverlayY()
+    }
+
+    fun setOverlayPosition(portrait: Boolean, x: Int, y: Int) {
+        val suffix = if (portrait) "Portrait" else "Landscape"
+        prefs.edit()
+            .putInt(KEY_BG_OVERLAY_X + suffix, x)
+            .putInt(KEY_BG_OVERLAY_Y + suffix, y)
+            .apply()
+    }
+
     companion object {
         private const val PREFS_NAME = "background_settings"
         private const val KEY_TASK_NOTIFICATIONS = "taskNotificationsEnabled"

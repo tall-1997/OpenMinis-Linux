@@ -11,6 +11,7 @@ import com.openminis.app.data.model.LLMMessage
 import com.openminis.app.data.model.LLMStreamChunk
 import com.openminis.app.data.model.LLMUsage
 import com.openminis.app.data.model.ThinkingLevel
+import com.openminis.app.data.model.ToolIdNormalization
 import com.openminis.app.data.repository.MultiAgentSettings
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.provider.LLMProvider
@@ -678,7 +679,8 @@ internal suspend fun ChatViewModel.runAgentLoop(
                     loopExitedNormally = true
                     break
                 }
-                val requestHistory = com.openminis.app.goal.withGoalContext(
+                val requestHistory = ToolIdNormalization.normalizeMessages(
+                    com.openminis.app.goal.withGoalContext(
                     effectiveAgentHistory(),
                     goalMount.prompt,
                     appendNewUser = goalExecutionRun && turn == 0,
@@ -694,7 +696,7 @@ internal suspend fun ChatViewModel.runAgentLoop(
                             com.openminis.app.data.model.AgentContentPart.Text(resumeNote),
                         ),
                     )
-                }
+                })
                 // [T-first-event-watchdog] A hung relay below the provider
                 // never throws — the stream below will cancel itself and surface
                 // a TransientError, letting the existing retry chain take over.
@@ -2411,7 +2413,6 @@ internal suspend fun ChatViewModel.runAgentLoop(
     }
     // [T-context-ring] Refresh the live token ring after the turn settles.
     refreshContextUsage()
-
     // [T-android-tts-scene-announcements] Loop converged — announce to the
     // user if they opted in (scene pref, default off). The sink is owned by
     // the UI layer; every failure mode (no engine bound, engine not yet
@@ -2422,7 +2423,6 @@ internal suspend fun ChatViewModel.runAgentLoop(
             .onScene(context, com.openminis.app.speech.AnnouncementScene.IDLE_AGENT_DONE)
     }
 }
-
 /**
  * [T-android-model-switch-next-request] Persist a group-fallback model
  * switch onto the VM so the next sendMessage() starts from it. Extracted
