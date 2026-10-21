@@ -189,7 +189,7 @@ internal fun ToolDetailSheet(
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
-                        Icons.Default.Close,
+                        Icons.Outlined.Close,
                         contentDescription = "Close",
                         tint = ChatColors.primaryText,
                         modifier = Modifier.size(16.dp),
@@ -256,7 +256,7 @@ internal fun ToolDetailSheet(
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(
-                            Icons.Default.Description,
+                            Icons.Outlined.Description,
                             contentDescription = "Open full output",
                             tint = ChatColors.primaryText,
                             modifier = Modifier.size(16.dp),
@@ -304,10 +304,10 @@ internal fun ToolDetailSheet(
                 ) {
                     Icon(
                         when {
-                            copyDone -> Icons.Default.Check
+                            copyDone -> Icons.Outlined.Check
                             isShellTool -> Icons.Default.Terminal
                             isBrowserTool -> Icons.Outlined.Public
-                            else -> Icons.Default.ContentCopy
+                            else -> Icons.Outlined.ContentCopy
                         },
                         contentDescription = when {
                             isShellTool -> "Open in terminal"
@@ -546,7 +546,7 @@ internal fun ToolDetailSheet(
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Icon(
-                                        Icons.Default.EditNote,
+                                        Icons.Outlined.EditNote,
                                         contentDescription = null,
                                         tint = Color(0xFFFF9500),
                                         modifier = Modifier.size(12.dp),
@@ -676,7 +676,7 @@ internal fun ToolDetailSheet(
                         }
                         EditorCard(
                             title = fileName.ifEmpty { "file" },
-                            icon = if (block.toolName == "file_read") Icons.Default.Description
+                            icon = if (block.toolName == "file_read") Icons.Outlined.Description
                                    else Icons.AutoMirrored.Filled.NoteAdd,
                             iconTint = ChatColors.secondaryText,
                             titleColor = ChatColors.primaryText,
@@ -1035,11 +1035,11 @@ internal fun ToolDetailSheet(
                         )
                     } else {
                         val (icon, tint) = when (block.toolStatus) {
-                            ToolBlockStatus.SUCCESS -> Icons.Default.CheckCircle to ToolCheckColor
+                            ToolBlockStatus.SUCCESS -> Icons.Outlined.CheckCircle to ToolCheckColor
                             ToolBlockStatus.FAILED -> Icons.Default.Error to ToolErrorColor
-                            ToolBlockStatus.CANCELLED -> Icons.Default.Cancel to ToolCancelColor
+                            ToolBlockStatus.CANCELLED -> Icons.Outlined.Cancel to ToolCancelColor
                             ToolBlockStatus.TIMEOUT -> Icons.Default.Schedule to ToolErrorColor
-                            else -> Icons.Default.CheckCircle to ToolCheckColor
+                            else -> Icons.Outlined.CheckCircle to ToolCheckColor
                         }
                         Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(18.dp))
                     }

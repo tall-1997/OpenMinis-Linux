@@ -97,7 +97,7 @@ fun KimiDeviceLoginDialog(
                         )
                         Spacer(Modifier.width(10.dp))
                         Icon(
-                            if (copied) Icons.Default.CheckCircle else Icons.Default.ContentCopy,
+                            if (copied) Icons.Outlined.CheckCircle else Icons.Outlined.ContentCopy,
                             contentDescription = stringResource(R.string.kimi_login_copy_code),
                             tint = if (copied) {
                                 androidx.compose.ui.graphics.Color(0xFF34C759)

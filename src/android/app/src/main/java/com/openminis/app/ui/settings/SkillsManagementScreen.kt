@@ -242,7 +242,7 @@ fun SkillsManagementScreen(
                 }
             }
             IconButton(onClick = { showAddMenu = true }) {
-                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.skill_add))
+                Icon(Icons.Outlined.Add, contentDescription = stringResource(R.string.skill_add))
             }
         },
     ) {
@@ -760,7 +760,7 @@ fun SkillDetailScreen(
                     Text(skill.name, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.width(4.dp))
                     Icon(
-                        Icons.Default.Edit, contentDescription = "Edit name",
+                        Icons.Outlined.Edit, contentDescription = "Edit name",
                         modifier = Modifier.size(14.dp).clickable {
                             editName = skill.name
                             showEditNameDialog = true
@@ -816,7 +816,7 @@ fun SkillDetailScreen(
                             }
                         }
                     }) {
-                        SettingsActionIcon(Icons.Default.Refresh, SettingsIconBlue)
+                        SettingsActionIcon(Icons.Outlined.Refresh, SettingsIconBlue)
                         Spacer(Modifier.width(14.dp))
                         Text(stringResource(R.string.skill_detail_update_url), color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
                         Text(relativeTime(skill.updatedAt), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -841,7 +841,7 @@ fun SkillDetailScreen(
                     updateStatus = if (refreshed != null) UpdateStatus.Done
                         else UpdateStatus.Failed(context.getString(R.string.skill_detail_error_missing))
                 }) {
-                    SettingsActionIcon(Icons.Default.Refresh, SettingsIconGreen)
+                    SettingsActionIcon(Icons.Outlined.Refresh, SettingsIconGreen)
                     Spacer(Modifier.width(14.dp))
                     Text(stringResource(R.string.skill_detail_rescan), color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
                 }
@@ -861,7 +861,7 @@ fun SkillDetailScreen(
                     is UpdateStatus.Done -> {
                         DetailDivider()
                         DetailRow {
-                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF34C759), modifier = Modifier.size(16.dp))
+                            Icon(Icons.Outlined.CheckCircle, contentDescription = null, tint = Color(0xFF34C759), modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(10.dp))
                             Text(stringResource(R.string.skill_detail_updated), style = MaterialTheme.typography.bodySmall, color = Color(0xFF34C759))
                         }

@@ -58,7 +58,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.FolderOff
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Refresh
@@ -791,7 +791,7 @@ fun SessionListScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onSettingsClick) {
-                        Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.sessionlist_settings))
+                        Icon(Icons.Outlined.Settings, contentDescription = stringResource(R.string.sessionlist_settings))
                     }
                 },
                 actions = {
@@ -1176,7 +1176,7 @@ fun SessionListScreen(
                                     },
                             ) {
                                 Icon(
-                                    Icons.Default.KeyboardArrowUp,
+                                    Icons.Outlined.KeyboardArrowUp,
                                     contentDescription = stringResource(R.string.group_collapse),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(20.dp),
@@ -1622,7 +1622,7 @@ private fun DualFabRow(
                         )
                     } else {
                         IconButton(onClick = onSearchDismiss) {
-                            Icon(Icons.Default.Close, contentDescription = stringResource(R.string.sessionlist_dismiss), modifier = Modifier.size(18.dp))
+                            Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.sessionlist_dismiss), modifier = Modifier.size(18.dp))
                         }
                     }
                 },
@@ -1684,7 +1684,7 @@ private fun SectionHeader(title: String) {
     ) {
         if (isPinned) {
             Icon(
-                imageVector = Icons.Default.PushPin,
+                imageVector = Icons.Outlined.PushPin,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
@@ -1830,7 +1830,7 @@ private fun SessionItemContent(
                 },
                 leadingIcon = {
                     Icon(
-                        if (isPinned) Icons.Default.Close else Icons.Default.PushPin,
+                        if (isPinned) Icons.Outlined.Close else Icons.Outlined.PushPin,
                         contentDescription = null,
                     )
                 },
@@ -1846,7 +1846,7 @@ private fun SessionItemContent(
                 },
                 onClick = { showExportSub = !showExportSub },
                 leadingIcon = {
-                    Icon(Icons.Default.Share, contentDescription = null)
+                    Icon(Icons.Outlined.Share, contentDescription = null)
                 },
             )
             if (showExportSub) {
@@ -1873,7 +1873,7 @@ private fun SessionItemContent(
                     onEditRequest(session)
                 },
                 leadingIcon = {
-                    Icon(Icons.Default.Edit, contentDescription = null)
+                    Icon(Icons.Outlined.Edit, contentDescription = null)
                 },
             )
             // Regenerate Title
@@ -1884,7 +1884,7 @@ private fun SessionItemContent(
                     onRegenerateTitle(session.id)
                 },
                 leadingIcon = {
-                    Icon(Icons.Default.Refresh, contentDescription = null)
+                    Icon(Icons.Outlined.Refresh, contentDescription = null)
                 },
             )
             // Duplicate
@@ -1895,7 +1895,7 @@ private fun SessionItemContent(
                     onDuplicate(session.id)
                 },
                 leadingIcon = {
-                    Icon(Icons.Default.ContentCopy, contentDescription = null)
+                    Icon(Icons.Outlined.ContentCopy, contentDescription = null)
                 },
             )
             // Move to / Change Group
@@ -1923,7 +1923,7 @@ private fun SessionItemContent(
                 leadingIcon = {
                     Icon(
                         if (isFiled) Icons.Default.DriveFileMove
-                        else Icons.Default.Folder,
+                        else Icons.Outlined.Folder,
                         contentDescription = null,
                     )
                 },
@@ -1938,7 +1938,7 @@ private fun SessionItemContent(
                 },
                 leadingIcon = {
                     Icon(
-                        Icons.Default.Delete,
+                        Icons.Outlined.Delete,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.error,
                     )
@@ -2301,14 +2301,14 @@ private fun FolderCard(
                 ) {
                     if (block.folder.isPinned) {
                         Icon(
-                            Icons.Default.PushPin,
+                            Icons.Outlined.PushPin,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.outline,
                             modifier = Modifier.size(12.dp),
                         )
                     }
                     Icon(
-                        Icons.Default.KeyboardArrowDown,
+                        Icons.Outlined.KeyboardArrowDown,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.outline,
                         modifier = Modifier
@@ -2990,7 +2990,7 @@ private fun SetupStepCard(
         ) {
             if (isDone) {
                 Icon(
-                    imageVector = Icons.Default.Check,
+                    imageVector = Icons.Outlined.Check,
                     contentDescription = null,
                     tint = Color.White,
                     modifier = Modifier.size(16.dp),
@@ -3184,7 +3184,7 @@ internal fun SessionEditSheet(
                     Text(stringResource(R.string.sessionlist_regenerating_title))
                 } else {
                     Icon(
-                        Icons.Default.Refresh,
+                        Icons.Outlined.Refresh,
                         contentDescription = null,
                         modifier = Modifier.size(18.dp),
                     )

@@ -256,7 +256,7 @@ private fun EngineNavRow(
         trailing = {
             if (selected) {
                 Icon(
-                    Icons.Default.Check,
+                    Icons.Outlined.Check,
                     contentDescription = stringResource(R.string.web_search_in_use),
                     tint = MaterialTheme.colorScheme.primary,
                 )

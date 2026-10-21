@@ -185,7 +185,7 @@ fun FilePreviewScreen(
                     // T142: Share works for any file — FileProvider URI +
                     // ACTION_SEND + FLAG_GRANT_READ_URI_PERMISSION. iOS parity.
                     IconButton(onClick = { shareFile(context, item) }) {
-                        Icon(Icons.Default.Share, contentDescription = stringResource(R.string.filepreview_share))
+                        Icon(Icons.Outlined.Share, contentDescription = stringResource(R.string.filepreview_share))
                     }
                     // Print: HTML renders via WebView; markdown / plain text /
                     // json / csv print their raw text wrapped in a WebView so we
@@ -211,12 +211,12 @@ fun FilePreviewScreen(
                                 ).show()
                             }
                         }) {
-                            Icon(Icons.Default.Download, contentDescription = stringResource(R.string.filepreview_save_to_gallery))
+                            Icon(Icons.Outlined.Download, contentDescription = stringResource(R.string.filepreview_save_to_gallery))
                         }
                     } else {
                         // T144 non-image → SAF Save-As (user picks location).
                         IconButton(onClick = { saveAsLauncher.launch(item.name) }) {
-                            Icon(Icons.Default.Download, contentDescription = stringResource(R.string.filepreview_save_as))
+                            Icon(Icons.Outlined.Download, contentDescription = stringResource(R.string.filepreview_save_as))
                         }
                     }
                 },

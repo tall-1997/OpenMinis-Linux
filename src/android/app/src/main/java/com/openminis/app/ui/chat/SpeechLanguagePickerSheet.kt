@@ -126,7 +126,7 @@ fun SpeechLanguagePickerSheet(
                             }
                             if (selected) {
                                 Icon(
-                                    imageVector = Icons.Default.Check,
+                                    imageVector = Icons.Outlined.Check,
                                     contentDescription = stringResource(R.string.speech_lang_picker_selected),
                                     tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(20.dp),

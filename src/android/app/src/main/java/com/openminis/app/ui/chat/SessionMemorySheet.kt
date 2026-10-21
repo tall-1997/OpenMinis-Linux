@@ -278,7 +278,7 @@ private fun DetailToolbar(
         if (showEdit) {
             IconButton(onClick = onEdit) {
                 Icon(
-                    Icons.Default.Edit,
+                    Icons.Outlined.Edit,
                     contentDescription = stringResource(R.string.memory_action_edit),
                 )
             }

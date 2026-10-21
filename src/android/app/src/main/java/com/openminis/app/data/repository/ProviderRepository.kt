@@ -108,10 +108,8 @@ class ProviderRepository(private val context: Context) {
             ProviderType.gemini -> listOf(ProviderCredential.apiKey)
             ProviderType.antigravity, ProviderType.unsupported -> listOf(ProviderCredential.apiKey)
         }
-
         internal fun supportsCredential(type: ProviderType, credential: ProviderCredential): Boolean =
             credential in supportedCredentials(type)
-
         /**
          * [T-android-provider-voice] Normalize a base URL for shadow-voice
          * cross-instance de-dup: lowercased, trailing "/" and "/v1" stripped.
@@ -125,18 +123,15 @@ class ProviderRepository(private val context: Context) {
             return s
         }
     }
-
     /** Record the time of a successful model fetch for [instanceId]. */
     private fun markInstanceFetched(instanceId: String) {
         prefs.edit().putLong(lastFetchKey(instanceId), System.currentTimeMillis()).apply()
     }
-
     /** Whether the cached model list for [instanceId] is older than the TTL. */
     private fun isInstanceStale(instanceId: String): Boolean {
         val last = prefs.getLong(lastFetchKey(instanceId), 0L)
         return last == 0L || (System.currentTimeMillis() - last) > MODEL_CACHE_TTL_MS
     }
-
     /**
      * Clear the stored `lastFetchAt` for [instanceId] so the next
      * [triggerBackgroundRefreshIfStale] / [refreshAllModelsIfNeeded] call
@@ -154,7 +149,6 @@ class ProviderRepository(private val context: Context) {
         // 无关实例、反复重建整组 OkHttpClient。
         com.openminis.app.provider.ProviderFactory.invalidateInstance(instanceId)
     }
-
     private val encryptedPrefs: SharedPreferences by lazy {
         // T-android-keystore-aead-fail: route through the self-healing
         // factory so a corrupted master key on Samsung One UI / Android
@@ -175,7 +169,6 @@ class ProviderRepository(private val context: Context) {
         }
         prefs
     }
-
     // [T-android-startup-config-stall] #753: loadConfig() does a synchronous
     // SharedPreferences read (~3s first-touch as the XML is parsed) + a
     // Json.decodeFromString<ProviderConfig> (~8s on a large config). It used to
@@ -188,7 +181,6 @@ class ProviderRepository(private val context: Context) {
     // before load just has no model entry, exactly like a fresh install).
     internal val _config = MutableStateFlow(ProviderConfig())
     val config: StateFlow<ProviderConfig> = _config.asStateFlow()
-
     /**
      * [T-android-startup-config-stall] False until the persisted config has
      * been read off-thread and emitted. First-screen code that branches on
@@ -204,7 +196,6 @@ class ProviderRepository(private val context: Context) {
     private val loadScope = kotlinx.coroutines.CoroutineScope(
         kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO,
     )
-
     /**
      * Completes once the initial off-thread load has emitted (or determined
      * there's nothing persisted). Lets startup consumers that genuinely need
@@ -212,9 +203,7 @@ class ProviderRepository(private val context: Context) {
      * empty placeholder.
      */
     private val configLoadComplete = kotlinx.coroutines.CompletableDeferred<Unit>()
-
     suspend fun awaitConfigLoaded() = configLoadComplete.await()
-
     init {
         loadScope.launch {
             // [T-android-provider-empty-load-wipe] loadConfig() THROWS when the
@@ -270,7 +259,6 @@ class ProviderRepository(private val context: Context) {
             }
         }
     }
-
     /**
      * Lock guarding all mutate-and-save sequences against concurrent writers
      * (notably the `for instance in enabled { scope.launch { autoRefreshModels(...) } }`
@@ -285,7 +273,6 @@ class ProviderRepository(private val context: Context) {
      * Pixel 6 / 4a.
      */
     internal val configLock = Any()
-
     // ── [T-android-save-off-main-thread] Single-threaded persistence pipeline ──
     //
     // `saveConfig` used to run the whole serialize → 5-table clear+bulk-upsert →
@@ -311,13 +298,11 @@ class ProviderRepository(private val context: Context) {
     /** Monotonic id of the queued snapshot the worker is publishing. */
     internal val saveGeneration = java.util.concurrent.atomic.AtomicLong(0L)
     private val persistWorkerStarted = java.util.concurrent.atomic.AtomicBoolean(false)
-
     /** Starts the persistence worker on the first save. Idempotent. */
     internal fun ensurePersistWorker() {
         if (!persistWorkerStarted.compareAndSet(false, true)) return
         writeScope.launch { drainPersistQueue() }
     }
-
     /**
      * Suspends until every save queued before this call has reached the store.
      * Backup/restore and any other "durability before returning" path should
@@ -2339,8 +2324,6 @@ class ProviderRepository(private val context: Context) {
     fun hasFoldedShadowDuplicates(): Boolean {
         return shadowVoiceSnapshot().hasFoldedDuplicates
     }
-
-
     suspend fun refreshModels(
         instance: ProviderInstance,
         forceRefresh: Boolean = false,
@@ -2368,6 +2351,7 @@ class ProviderRepository(private val context: Context) {
             val clearedIds = clearFetchedModelEntries(instance.id)
             if (clearedIds.isNotEmpty()) scrubExternalEntryRefs(clearedIds)
         }
+        var lastFetchError: ModelRefreshResult? = null
         // [T-android-refresh-models-empty-key] usableApiKey, NOT loadApiKey.
         //
         // A self-hosted OpenAI/Anthropic-compatible endpoint (ollama, LM
@@ -2514,6 +2498,21 @@ class ProviderRepository(private val context: Context) {
                 }
             } catch (e: Exception) {
                 android.util.Log.e("ProviderRepo", "refreshModels fetch error: ${e.message}", e)
+                // 细分错误原因，存到可变变量里，供后面的空列表分支返回。
+                lastFetchError = when {
+                    e is java.net.ConnectException || e is java.net.SocketTimeoutException ||
+                        e is java.net.UnknownHostException || e is javax.net.ssl.SSLException ||
+                        e.message?.contains("Unable to resolve host") == true ||
+                        e.message?.contains("Connection refused") == true ||
+                        e.message?.contains("connect timed out") == true ||
+                        e.message?.contains("timeout") == true ||
+                        e.message?.contains("Network is unreachable") == true ->
+                        ModelRefreshResult.CONNECTION_FAILED
+                    e is java.io.FileNotFoundException || e.message?.contains("404") == true ||
+                        e.message?.contains("Not Found") == true ->
+                        ModelRefreshResult.NOT_FOUND
+                    else -> ModelRefreshResult.FAILURE
+                }
                 emptyList()
             }
             android.util.Log.i("ProviderRepo", "refreshModels: got ${models.size} models")
@@ -2531,7 +2530,8 @@ class ProviderRepository(private val context: Context) {
         // catalog is a per-credential refresh. Same API address used to make
         // every sibling provider look freshly synced.
         if (liveForce) {
-            return if (apiKey == null) ModelRefreshResult.NO_KEY else ModelRefreshResult.FAILURE
+            return if (apiKey == null) ModelRefreshResult.NO_KEY
+            else lastFetchError ?: ModelRefreshResult.FAILURE
         }
 
         // Step 3: Fallback to models.dev by base URL.
@@ -2754,10 +2754,10 @@ class ProviderRepository(private val context: Context) {
         backupCoordinator.importInstanceJSON(jsonStr)
 }
 enum class ModelRefreshResult {
-    SUCCESS_API,
-    NO_KEY,
-    PRESERVED,
-    FAILURE,
+    SUCCESS_API, NO_KEY, PRESERVED, FAILURE,
+    /** 404 from /v1/models */ NOT_FOUND,
+    /** DNS / TLS / timeout */ CONNECTION_FAILED,
+    /** 2xx body not valid JSON */ INVALID_RESPONSE,
 }
 /**
  * Id of the OpenCode Zen provider this app used to seed.

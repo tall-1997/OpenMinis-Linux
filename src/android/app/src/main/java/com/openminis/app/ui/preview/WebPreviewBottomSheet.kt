@@ -31,7 +31,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DesktopWindows
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Fullscreen
-import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Refresh
@@ -307,7 +307,7 @@ internal fun WebPreviewToolbar(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         ToolbarIcon(
-            icon = Icons.Default.Close,
+            icon = Icons.Outlined.Close,
             description = stringResource(R.string.webpreview_close),
             onClick = onClose,
         )
@@ -343,7 +343,7 @@ internal fun WebPreviewToolbar(
         }
         Box {
             ToolbarIcon(
-                icon = Icons.Default.MoreVert,
+                icon = Icons.Outlined.MoreHoriz,
                 description = stringResource(R.string.webpreview_more),
                 onClick = { menuOpen = true },
             )
@@ -364,7 +364,7 @@ internal fun WebPreviewToolbar(
                 androidx.compose.material3.DropdownMenuItem(
                     text = { Text(stringResource(R.string.webpreview_reload)) },
                     leadingIcon = {
-                        Icon(Icons.Default.Refresh, contentDescription = null)
+                        Icon(Icons.Outlined.Refresh, contentDescription = null)
                     },
                     onClick = {
                         menuOpen = false
@@ -380,7 +380,7 @@ internal fun WebPreviewToolbar(
                     },
                     leadingIcon = {
                         Icon(
-                            if (desktopMode) Icons.Default.PhoneAndroid
+                            if (desktopMode) Icons.Outlined.PhoneAndroid
                             else Icons.Default.DesktopWindows,
                             contentDescription = null,
                         )
@@ -394,7 +394,7 @@ internal fun WebPreviewToolbar(
                     androidx.compose.material3.DropdownMenuItem(
                         text = { Text(stringResource(R.string.webpreview_open_fullscreen)) },
                         leadingIcon = {
-                            Icon(Icons.Default.Fullscreen, contentDescription = null)
+                            Icon(Icons.Outlined.Fullscreen, contentDescription = null)
                         },
                         onClick = {
                             menuOpen = false
@@ -406,7 +406,7 @@ internal fun WebPreviewToolbar(
                     androidx.compose.material3.DropdownMenuItem(
                         text = { Text(stringResource(R.string.webpreview_pin_to_home)) },
                         leadingIcon = {
-                            Icon(Icons.Default.AddToHomeScreen, contentDescription = null)
+                            Icon(Icons.Outlined.AddToHomeScreen, contentDescription = null)
                         },
                         onClick = {
                             menuOpen = false

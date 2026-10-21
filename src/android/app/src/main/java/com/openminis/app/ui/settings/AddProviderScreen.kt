@@ -203,7 +203,7 @@ private fun providerIcon(type: ProviderType): Pair<ImageVector, Color> = when (t
     // icon helper is also used to render an already-restored instance.
     ProviderType.openAIResponses -> Icons.Default.Hub to Color(0xFF4CAF50)
     ProviderType.antigravity,
-    ProviderType.unsupported -> Icons.Default.Cloud to Color(0xFF9E9E9E)
+    ProviderType.unsupported -> Icons.Outlined.Cloud to Color(0xFF9E9E9E)
 }
 
 /** Returns available credential types per provider. */
@@ -352,7 +352,7 @@ private fun ChooseCredentialScreen(
                     ProviderCredential.oauth -> Triple(
                         "OAuth",
                         oauthDescription(providerType),
-                        Icons.Default.Person,
+                        Icons.Outlined.Person,
                     )
                 }
                 SettingsRow(
@@ -535,7 +535,7 @@ private fun ColumnScope.ApiKeyConfigSection(
                 trailingIcon = {
                     IconButton(onClick = { showApiKeyPlaintext = !showApiKeyPlaintext }) {
                         Icon(
-                            if (showApiKeyPlaintext) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                            if (showApiKeyPlaintext) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
                             contentDescription = if (showApiKeyPlaintext) "Hide" else "Show",
                         )
                     }
@@ -724,7 +724,7 @@ private fun ColumnScope.OAuthConfigSection(
             SettingsCardBlock {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        Icons.Default.CheckCircle,
+                        Icons.Outlined.CheckCircle,
                         contentDescription = null,
                         tint = Color(0xFF34C759),
                         modifier = Modifier.size(20.dp),

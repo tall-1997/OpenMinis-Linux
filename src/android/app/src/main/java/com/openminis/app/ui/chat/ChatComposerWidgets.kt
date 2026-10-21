@@ -166,7 +166,7 @@ internal fun AttachmentChip(
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                Icons.Default.Close,
+                Icons.Outlined.Close,
                 contentDescription = "移除附件",
                 tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                 modifier = Modifier.size(13.dp),
@@ -330,11 +330,11 @@ internal fun ToolActivityPill(
             )
         } else {
             val (icon, tint) = when (block.toolStatus) {
-                ToolBlockStatus.SUCCESS -> Icons.Default.CheckCircle to ToolCheckColor
+                ToolBlockStatus.SUCCESS -> Icons.Outlined.CheckCircle to ToolCheckColor
                 ToolBlockStatus.FAILED, ToolBlockStatus.TIMEOUT ->
                     Icons.Default.Error to ToolErrorColor
-                ToolBlockStatus.CANCELLED -> Icons.Default.Close to ToolCancelColor
-                else -> Icons.Default.Build to MaterialTheme.colorScheme.onSurfaceVariant
+                ToolBlockStatus.CANCELLED -> Icons.Outlined.Close to ToolCancelColor
+                else -> toolIconFor(block.toolName) to MaterialTheme.colorScheme.onSurfaceVariant
             }
             Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(15.dp))
         }
@@ -455,7 +455,7 @@ internal fun ThinkingLevelPicker(
                 )
                 if (isClampedHighlight) {
                     Icon(
-                        imageVector = Icons.Default.KeyboardArrowUp,
+                        imageVector = Icons.Outlined.KeyboardArrowUp,
                         contentDescription = null,
                         tint = fg,
                         modifier = Modifier.size(12.dp),

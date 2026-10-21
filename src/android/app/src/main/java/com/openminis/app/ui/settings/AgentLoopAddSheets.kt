@@ -282,7 +282,7 @@ fun AddAgentLoopGroupsScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Icon(
-                                    if (isSelected) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+                                    if (isSelected) Icons.Outlined.CheckCircle else Icons.Default.RadioButtonUnchecked,
                                     contentDescription = null,
                                     tint = if (isSelected) Color(0xFF007AFF)
                                     else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),

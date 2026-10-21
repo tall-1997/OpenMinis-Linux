@@ -577,7 +577,7 @@ fun ProviderDetailScreen(
                 showChevron = false,
                 trailing = {
                     Icon(
-                        Icons.Default.Refresh,
+                        Icons.Outlined.Refresh,
                         contentDescription = stringResource(R.string.provider_detail_refresh_models),
                         tint = MaterialTheme.colorScheme.primary,
                     )
@@ -990,7 +990,7 @@ private fun ApiKeyCredentialBlock(
             trailingIcon = {
                 IconButton(onClick = onToggleVisibility) {
                     Icon(
-                        if (keyVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                        if (keyVisible) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
                         contentDescription = if (keyVisible) "Hide" else "Show",
                     )
                 }
@@ -1032,7 +1032,7 @@ private fun ApiKeyCredentialBlock(
             )
             IconButton(onClick = onToggleVisibility) {
                 Icon(
-                    if (keyVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                    if (keyVisible) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
                     contentDescription = if (keyVisible) "Hide" else "Show",
                 )
             }
@@ -1227,7 +1227,7 @@ private fun ModalityIconsRow(
         if ("audio" in inputModalities) Icon(Icons.Default.Mic, contentDescription = stringResource(R.string.modeldetail_audio_input), tint = inputTint, modifier = size)
         if ("video" in inputModalities) Icon(Icons.Default.Videocam, contentDescription = stringResource(R.string.modeldetail_video_input), tint = inputTint, modifier = size)
         // Output badges (tinted, generate-style glyphs).
-        if ("image" in outputModalities) Icon(Icons.Default.AddPhotoAlternate, contentDescription = stringResource(R.string.modeldetail_image_output), tint = outputTint, modifier = size)
+        if ("image" in outputModalities) Icon(Icons.Outlined.AddPhotoAlternate, contentDescription = stringResource(R.string.modeldetail_image_output), tint = outputTint, modifier = size)
         if ("audio" in outputModalities) Icon(Icons.Default.VolumeUp, contentDescription = stringResource(R.string.modeldetail_audio_output), tint = outputTint, modifier = size)
         if ("video" in outputModalities) Icon(Icons.Default.MovieCreation, contentDescription = stringResource(R.string.modeldetail_video_output), tint = outputTint, modifier = size)
     }

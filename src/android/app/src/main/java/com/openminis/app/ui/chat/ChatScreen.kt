@@ -136,7 +136,7 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.StopCircle
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.filled.RadioButtonChecked
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Refresh
@@ -2252,7 +2252,7 @@ fun ChatScreen(
                                             style = noFontPad,
                                         )
                                         Icon(
-                                            Icons.Default.KeyboardArrowDown,
+                                            Icons.Outlined.KeyboardArrowDown,
                                             contentDescription = null,
                                             tint = ChatColors.tertiaryText,
                                             modifier = Modifier.size(14.dp),
@@ -2449,13 +2449,13 @@ fun ChatScreen(
                             Icon(Icons.Default.Language, contentDescription = stringResource(R.string.chat_menu_open_browser))
                         }
                         IconButton(onClick = onBrowseChatFiles) {
-                            Icon(Icons.Default.Description, contentDescription = stringResource(R.string.chat_menu_browse_chat_files))
+                            Icon(Icons.Outlined.Description, contentDescription = stringResource(R.string.chat_menu_browse_chat_files))
                         }
                     }
                     // iOS: "..." circle button → dropdown menu
                     Box {
                         IconButton(onClick = { showChatMenu = true }) {
-                            Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.cd_more))
+                            Icon(Icons.Outlined.MoreHoriz, contentDescription = stringResource(R.string.cd_more))
                         }
                         MinisMenu(
                             expanded = showChatMenu,
@@ -2502,7 +2502,7 @@ fun ChatScreen(
                                         onBrowseChatFiles()
                                     },
                                     leadingIcon = {
-                                        Icon(Icons.Default.Description, contentDescription = null)
+                                        Icon(Icons.Outlined.Description, contentDescription = null)
                                     },
                                 )
                             }
@@ -2591,7 +2591,7 @@ fun ChatScreen(
                                         showSkillsSheet = true
                                     },
                                     leadingIcon = {
-                                        Icon(Icons.Default.Build, contentDescription = null)
+                                        Icon(Icons.Outlined.Build, contentDescription = null)
                                     },
                                 )
                             }
@@ -4847,7 +4847,7 @@ fun ChatScreen(
                         ),
                     ) {
                         Icon(
-                            imageVector = Icons.Default.KeyboardArrowDown,
+                            imageVector = Icons.Outlined.KeyboardArrowDown,
                             contentDescription = stringResource(R.string.cd_scroll_bottom),
                             modifier = Modifier.size(20.dp),
                         )
@@ -5125,7 +5125,7 @@ fun ChatScreen(
                                     }
                                     if (cmd.id == "memory") {
                                         Icon(
-                                            imageVector = if (memoryOnState) Icons.Default.CheckCircle else Icons.Default.Block,
+                                            imageVector = if (memoryOnState) Icons.Outlined.CheckCircle else Icons.Default.Block,
                                             contentDescription = null,
                                             tint = if (memoryOnState) ChatColors.sendButton else ChatColors.secondaryText,
                                             modifier = Modifier.size(18.dp),
@@ -5419,7 +5419,7 @@ fun ChatScreen(
                                             // we keep it uniform here so the row stays
                                             // visually consistent at small sizes on Pixel 4a.
                                             Icon(
-                                                imageVector = Icons.Default.Description,
+                                                imageVector = Icons.Outlined.Description,
                                                 contentDescription = null,
                                                 tint = ChatColors.secondaryText,
                                                 modifier = Modifier.size(16.dp),
@@ -6434,7 +6434,7 @@ fun ChatScreen(
                                 onClick = { showAttachMenu = true },
                             ) {
                                 Icon(
-                                    Icons.Default.Add,
+                                    Icons.Outlined.Add,
                                     contentDescription = stringResource(R.string.cd_attach),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(20.dp),
@@ -6475,7 +6475,7 @@ fun ChatScreen(
                                 )
                                 DropdownMenuItem(
                                     text = { Text(stringResource(R.string.chat_attach_add_file)) },
-                                    leadingIcon = { Icon(Icons.Default.Description, contentDescription = null) },
+                                    leadingIcon = { Icon(Icons.Outlined.Description, contentDescription = null) },
                                     onClick = {
                                         showAttachMenu = false
                                         // OpenMultipleDocuments takes a mime-

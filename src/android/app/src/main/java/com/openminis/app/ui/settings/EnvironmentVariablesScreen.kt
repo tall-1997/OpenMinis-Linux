@@ -111,7 +111,7 @@ fun EnvironmentVariablesScreen(
         // kept here for visual continuity.
         actions = {
             IconButton(onClick = { showAddSheet = true }) {
-                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.env_var_add))
+                Icon(Icons.Outlined.Add, contentDescription = stringResource(R.string.env_var_add))
             }
         },
     ) {
@@ -207,7 +207,7 @@ fun EnvironmentVariablesScreen(
                                         visibleKeys.value + entry.key
                                 }) {
                                     Icon(
-                                        if (isVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                        if (isVisible) Icons.Outlined.Visibility else Icons.Outlined.VisibilityOff,
                                         contentDescription = stringResource(R.string.env_var_toggle_visibility),
                                         modifier = Modifier.size(20.dp),
                                     )
@@ -217,14 +217,14 @@ fun EnvironmentVariablesScreen(
                                     clipboardManager.setText(AnnotatedString("${entry.key}=$v"))
                                 }) {
                                     Icon(
-                                        Icons.Default.ContentCopy,
+                                        Icons.Outlined.ContentCopy,
                                         contentDescription = stringResource(R.string.common_copy),
                                         modifier = Modifier.size(20.dp),
                                     )
                                 }
                                 IconButton(onClick = { deleteEntryId = entry.id }) {
                                     Icon(
-                                        Icons.Default.Delete,
+                                        Icons.Outlined.Delete,
                                         contentDescription = stringResource(R.string.common_delete),
                                         modifier = Modifier.size(20.dp),
                                         tint = MaterialTheme.colorScheme.error,

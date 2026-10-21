@@ -291,7 +291,7 @@ internal fun UserMessageBubble(
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.chat_longpress_copy)) },
                     onClick = { showMenu = false; onCopy() },
-                    leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                    leadingIcon = { Icon(Icons.Outlined.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp)) },
                 )
                 // T119: while the model is generating, hide every action that
                 // would mutate the in-flight turn. Retry truncates history and
@@ -301,7 +301,7 @@ internal fun UserMessageBubble(
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.chat_longpress_retry)) },
                         onClick = { showMenu = false; onRetry() },
-                        leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                        leadingIcon = { Icon(Icons.Outlined.Refresh, contentDescription = null, modifier = Modifier.size(18.dp)) },
                     )
                 }
                 // T187: Edit replaces the original turn with edited text. Same
@@ -310,7 +310,7 @@ internal fun UserMessageBubble(
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.chat_longpress_edit)) },
                         onClick = { showMenu = false; onEdit() },
-                        leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                        leadingIcon = { Icon(Icons.Outlined.Edit, contentDescription = null, modifier = Modifier.size(18.dp)) },
                     )
                 }
                 // [T-android-delete-from-here] Removes this message and every
@@ -330,7 +330,7 @@ internal fun UserMessageBubble(
                         onClick = { showMenu = false; onDeleteFromHere() },
                         leadingIcon = {
                             Icon(
-                                Icons.Default.Delete,
+                                Icons.Outlined.Delete,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.error,
                                 modifier = Modifier.size(18.dp),
@@ -471,7 +471,7 @@ private fun fileIconFor(fileName: String): androidx.compose.ui.graphics.vector.I
         "txt", "log", "csv", "md", "markdown" -> Icons.AutoMirrored.Filled.Article
         "mp4", "mov", "avi", "mkv" -> Icons.Default.VideoFile
         "mp3", "wav", "m4a", "aac" -> Icons.Default.AudioFile
-        "zip", "tar", "gz", "7z" -> Icons.Default.FolderZip
+        "zip", "tar", "gz", "7z" -> Icons.Outlined.FolderZip
         else -> Icons.AutoMirrored.Filled.InsertDriveFile
     }
 }
@@ -523,7 +523,7 @@ private fun ImageGalleryDialog(
                     .padding(8.dp),
             ) {
                 Icon(
-                    androidx.compose.material.icons.Icons.Default.Close,
+                    androidx.compose.material.icons.Icons.Outlined.Close,
                     contentDescription = "Close",
                     tint = Color.White,
                 )

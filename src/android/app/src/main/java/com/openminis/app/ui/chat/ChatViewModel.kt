@@ -2978,7 +2978,7 @@ class ChatViewModel(
     internal val availableSlashCommands: List<SlashCommand> = listOf(
         SlashCommand(
             id = "clear",
-            icon = Icons.Default.Delete,
+            icon = Icons.Outlined.Delete,
             title = "Clear",
             subtitle = "",
         ),
@@ -2996,7 +2996,7 @@ class ChatViewModel(
         ),
         SlashCommand(
             id = "thinking",
-            icon = Icons.Default.Lightbulb,
+            icon = Icons.Outlined.Lightbulb,
             title = "Thinking",
             subtitle = "",
         ),

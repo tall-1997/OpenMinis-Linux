@@ -163,7 +163,7 @@ fun ModelGroupsScreen(
                 title = { Text(stringResource(R.string.model_groups_model_groups)) },
                 actions = {
                     IconButton(onClick = { showNewGroupDialog = true }) {
-                        Icon(Icons.Default.Add, contentDescription = stringResource(R.string.model_groups_new_group))
+                        Icon(Icons.Outlined.Add, contentDescription = stringResource(R.string.model_groups_new_group))
                     }
                 },
             )
@@ -678,7 +678,7 @@ private fun LazyListScope.agentLoopModelsSectionItems(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
             ) {
                 Icon(
-                    Icons.Default.Add,
+                    Icons.Outlined.Add,
                     contentDescription = null,
                     modifier = Modifier.size(18.dp),
                 )
@@ -692,7 +692,7 @@ private fun LazyListScope.agentLoopModelsSectionItems(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
             ) {
                 Icon(
-                    Icons.Default.Add,
+                    Icons.Outlined.Add,
                     contentDescription = null,
                     modifier = Modifier.size(18.dp),
                 )
@@ -771,7 +771,7 @@ private fun AgentLoopRow(
             modifier = Modifier.size(36.dp),
         ) {
             Icon(
-                imageVector = Icons.Default.Close,
+                imageVector = Icons.Outlined.Close,
                 contentDescription = stringResource(R.string.agent_loop_section_remove),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(18.dp),
@@ -893,7 +893,7 @@ private fun GroupModalityIcon(marker: GroupModalityMarker) {
     val size = Modifier.size(14.dp)
     val (vector, labelRes, tint) = when {
         marker.isOutput && marker.kind == "video" -> Triple(Icons.Default.MovieCreation, R.string.modeldetail_video_output, outputTint)
-        marker.isOutput && marker.kind == "image" -> Triple(Icons.Default.AddPhotoAlternate, R.string.modeldetail_image_output, outputTint)
+        marker.isOutput && marker.kind == "image" -> Triple(Icons.Outlined.AddPhotoAlternate, R.string.modeldetail_image_output, outputTint)
         marker.isOutput && marker.kind == "audio" -> Triple(Icons.Default.VolumeUp, R.string.modelgroup_speech_output, outputTint)
         marker.isOutput && marker.kind == "text" -> Triple(Icons.AutoMirrored.Filled.Article, R.string.modelgroup_text_generation, outputTint)
         marker.kind == "audio" -> Triple(Icons.Default.Mic, R.string.modelgroup_speech_transcription, inputTint)

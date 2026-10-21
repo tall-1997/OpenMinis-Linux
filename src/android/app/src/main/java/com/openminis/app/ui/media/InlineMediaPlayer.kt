@@ -167,7 +167,7 @@ fun InlineAudioPlayer(
                             .background(MaterialTheme.colorScheme.primary),
                     ) {
                         Icon(
-                            if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            if (isPlaying) Icons.Default.Pause else Icons.Outlined.PlayArrow,
                             contentDescription = if (isPlaying) "Pause" else "Play",
                             tint = MaterialTheme.colorScheme.onPrimary,
                             modifier = Modifier.size(20.dp),
@@ -493,7 +493,7 @@ private fun FullscreenVideoContent(file: File, onDismiss: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 CircleControlButton(
-                    icon = Icons.Default.Close,
+                    icon = Icons.Outlined.Close,
                     contentDescription = "Close",
                     onClick = {
                         try { videoView?.pause() } catch (_: Throwable) {}
@@ -509,7 +509,7 @@ private fun FullscreenVideoContent(file: File, onDismiss: () -> Unit) {
                     modifier = Modifier.weight(1f),
                 )
                 CircleControlButton(
-                    icon = Icons.Default.Share,
+                    icon = Icons.Outlined.Share,
                     contentDescription = "Share",
                     onClick = { shareMediaFile(context, file, "video/*") },
                 )
@@ -549,7 +549,7 @@ private fun FullscreenVideoContent(file: File, onDismiss: () -> Unit) {
                     modifier = Modifier.size(40.dp),
                 ) {
                     Icon(
-                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Outlined.PlayArrow,
                         contentDescription = if (isPlaying) "Pause" else "Play",
                         tint = Color.White,
                     )

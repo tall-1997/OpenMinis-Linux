@@ -236,7 +236,7 @@ fun UnifiedModelPickerSheet(
                         label = null,
                         leadingIcon = {
                             Icon(
-                                Icons.Default.Search,
+                                Icons.Outlined.Search,
                                 contentDescription = null,
                                 modifier = Modifier.size(18.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -246,7 +246,7 @@ fun UnifiedModelPickerSheet(
                             if (searchText.isNotEmpty()) {
                                 IconButton(onClick = { searchText = "" }) {
                                     Icon(
-                                        Icons.Default.Close,
+                                        Icons.Outlined.Close,
                                         contentDescription = stringResource(R.string.model_picker_search_clear),
                                         modifier = Modifier.size(18.dp),
                                     )
@@ -327,7 +327,7 @@ fun UnifiedModelPickerSheet(
                                     selectedId == null ||
                                         boundGroup.memberEntryIds.contains(selectedId)
                                 Icon(
-                                    if (groupSelected) Icons.Default.CheckCircle
+                                    if (groupSelected) Icons.Outlined.CheckCircle
                                     else Icons.Default.RadioButtonUnchecked,
                                     contentDescription = null,
                                     tint = if (groupSelected) Color(0xFF34C759)
@@ -403,8 +403,8 @@ fun UnifiedModelPickerSheet(
                                     contentAlignment = Alignment.Center,
                                 ) {
                                     Icon(
-                                        if (groupExpanded) Icons.Default.KeyboardArrowUp
-                                        else Icons.Default.KeyboardArrowDown,
+                                        if (groupExpanded) Icons.Outlined.KeyboardArrowUp
+                                        else Icons.Outlined.KeyboardArrowDown,
                                         contentDescription = null,
                                         modifier = Modifier.size(16.dp),
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -700,8 +700,8 @@ fun UnifiedModelPickerSheet(
                                     contentAlignment = Alignment.Center,
                                 ) {
                                     Icon(
-                                        if (collapsed) Icons.Default.KeyboardArrowDown
-                                        else Icons.Default.KeyboardArrowUp,
+                                        if (collapsed) Icons.Outlined.KeyboardArrowDown
+                                        else Icons.Outlined.KeyboardArrowUp,
                                         contentDescription = null,
                                         modifier = Modifier.size(16.dp),
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -829,7 +829,7 @@ private fun PickerSectionHeader(
 @Composable
 private fun SelectionMark(selected: Boolean) {
     Icon(
-        if (selected) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+        if (selected) Icons.Outlined.CheckCircle else Icons.Default.RadioButtonUnchecked,
         contentDescription = null,
         tint = if (selected) Color(0xFF007AFF)
         else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),

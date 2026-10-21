@@ -173,7 +173,7 @@ internal fun MicCircleButton(
         when {
             isRecording -> InlineMiniWaveform(levels = levels)
             isTranscribing -> Icon(
-                Icons.Default.Close,
+                Icons.Outlined.Close,
                 contentDescription = stringResource(R.string.voice_panel_cancel_transcription),
                 tint = Color.Black,
                 modifier = Modifier.size(22.dp),
@@ -420,7 +420,7 @@ internal fun VoiceEngineUnavailableNotice(
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {
             CircleIconButton(
-                icon = if (expanded) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowUp,
+                icon = if (expanded) Icons.Outlined.KeyboardArrowDown else Icons.Outlined.KeyboardArrowUp,
                 contentDescription = stringResource(
                     if (expanded) R.string.voice_panel_collapse else R.string.voice_panel_expand,
                 ),

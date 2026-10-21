@@ -498,7 +498,7 @@ fun SettingsChoiceRow(
             )
             if (selected) {
                 Icon(
-                    Icons.Default.Check,
+                    Icons.Outlined.Check,
                     contentDescription = stringResource(R.string.cd_selected),
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(20.dp),

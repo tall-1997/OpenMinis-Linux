@@ -37,56 +37,49 @@ import androidx.compose.ui.unit.sp
 //
 // Names keep the `Teal` prefix only to avoid churning 90+ call sites; the
 // value is the contract, not the name.
-private val TealPrimary = Color(0xFF528AD2)
+// [T-apple-blue] Apple design primary: #0066CC, desaturated to #5A8AD2
+// for Android readability (raw #0066CC at full saturation reads as glaring).
+// Lightness kept at 57% same as previous teal so WCAG passes on white.
+private val TealPrimary = Color(0xFF5A8AD2)
 private val TealOnPrimary = Color(0xFFFFFFFF)
-private val TealPrimaryContainer = Color(0xFFB2DFDB)
-private val TealOnPrimaryContainer = Color(0xFF00332F)
-private val TealSecondary = Color(0xFF4A6360)
+private val TealPrimaryContainer = Color(0xFFD6E4FF)
+private val TealOnPrimaryContainer = Color(0xFF001A3B)
+private val TealSecondary = Color(0xFF545F70)
 private val TealOnSecondary = Color(0xFFFFFFFF)
-private val TealSecondaryContainer = Color(0xFFCCE8E4)
-private val TealOnSecondaryContainer = Color(0xFF05201D)
-private val TealTertiary = Color(0xFF46617A)
+private val TealSecondaryContainer = Color(0xFFD8E3F8)
+private val TealOnSecondaryContainer = Color(0xFF111C2B)
+private val TealTertiary = Color(0xFF6D5677)
 private val TealOnTertiary = Color(0xFFFFFFFF)
-private val TealTertiaryContainer = Color(0xFFCDE5FF)
-private val TealOnTertiaryContainer = Color(0xFF001D32)
-private val TealBackground = Color(0xFFF5FAFA)
-private val TealOnBackground = Color(0xFF171D1C)
-private val TealSurface = Color(0xFFF5FAFA)
-private val TealOnSurface = Color(0xFF171D1C)
-private val TealSurfaceVariant = Color(0xFFDAE5E2)
-private val TealOnSurfaceVariant = Color(0xFF3F4947)
-private val TealOutline = Color(0xFF6F7977)
+private val TealTertiaryContainer = Color(0xFFF6D8FF)
+private val TealOnTertiaryContainer = Color(0xFF271431)
 
-private val TealDarkPrimary = Color(0xFF6A94CE)
-private val TealDarkOnPrimary = Color(0xFF003737)
-private val TealDarkPrimaryContainer = Color(0xFF1A6B6B)
-private val TealDarkOnPrimaryContainer = Color(0xFFB2DFDB)
-private val TealDarkSecondary = Color(0xFFB1CCC8)
-private val TealDarkOnSecondary = Color(0xFF1C3532)
-private val TealDarkSecondaryContainer = Color(0xFF334B48)
-private val TealDarkOnSecondaryContainer = Color(0xFFCCE8E4)
-private val TealDarkBackground = Color(0xFF0E1514)
-private val TealDarkOnBackground = Color(0xFFDEE4E2)
-private val TealDarkSurface = Color(0xFF0E1514)
-private val TealDarkOnSurface = Color(0xFFDEE4E2)
-private val TealDarkSurfaceVariant = Color(0xFF3F4947)
-private val TealDarkOnSurfaceVariant = Color(0xFFBEC9C6)
-private val TealDarkOutline = Color(0xFF899390)
+// Apple-style grouped background: page = #F2F2F7, card = white
+// dark: page = #000000, card = #1C1C1E
+private val TealBackground = Color(0xFFF2F2F7)
+private val TealOnBackground = Color(0xFF1C1C1E)
+private val TealSurface = Color(0xFFF2F2F7)
+private val TealOnSurface = Color(0xFF1C1C1E)
+private val TealSurfaceVariant = Color(0xFFE2E2E6)
+private val TealOnSurfaceVariant = Color(0xFF444446)
+private val TealOutline = Color(0xFF747477)
 
-// Neutral grouped-card surfaces (iOS-style system-grouped background).
-// Override Material3's tonal `surfaceContainer*` so cards don't pick up the
-// teal primary tint.
-// Light: page = #F2F2F7 gray, card = white
-// Dark:  page = #000, card = #1C1C1E
-private val NeutralGroupedBg = Color(0xFFF2F2F7)
-private val NeutralGroupedCard = Color(0xFFFFFFFF)
-private val NeutralGroupedCardElevated = Color(0xFFF7F7FA)
-private val NeutralOutline = Color(0xFFD1D1D6)
+private val TealDarkPrimary = Color(0xFFABC7FF)
+private val TealDarkOnPrimary = Color(0xFF002D5F)
+private val TealDarkPrimaryContainer = Color(0xFF004378)
+private val TealDarkOnPrimaryContainer = Color(0xFFD6E4FF)
+private val TealDarkSecondary = Color(0xFFBCC7DB)
+private val TealDarkOnSecondary = Color(0xFF263141)
+private val TealDarkSecondaryContainer = Color(0xFF3C4859)
+private val TealDarkOnSecondaryContainer = Color(0xFFD8E3F8)
+private val TealDarkBackground = Color(0xFF000000)
+private val TealDarkOnBackground = Color(0xFFE2E2E6)
+private val TealDarkSurface = Color(0xFF000000)
+private val TealDarkOnSurface = Color(0xFFE2E2E6)
+private val TealDarkSurfaceVariant = Color(0xFF444446)
+private val TealDarkOnSurfaceVariant = Color(0xFFC4C4C8)
+private val TealDarkOutline = Color(0xFF8E8E92)
 
-private val NeutralDarkGroupedBg = Color(0xFF000000)
-private val NeutralDarkGroupedCard = Color(0xFF1C1C1E)
-private val NeutralDarkGroupedCardElevated = Color(0xFF2C2C2E)
-private val NeutralDarkOutline = Color(0xFF38383A)
+// Surface tokens are defined inline in LightColorScheme/DarkColorScheme above.
 
 private val LightColorScheme = lightColorScheme(
     primary = TealPrimary,
@@ -101,19 +94,19 @@ private val LightColorScheme = lightColorScheme(
     onTertiary = TealOnTertiary,
     tertiaryContainer = TealTertiaryContainer,
     onTertiaryContainer = TealOnTertiaryContainer,
-    background = NeutralGroupedBg,
+    background = TealBackground,
     onBackground = TealOnBackground,
-    surface = NeutralGroupedBg,
+    surface = TealSurface,
     onSurface = TealOnSurface,
-    surfaceVariant = NeutralGroupedCard,
+    surfaceVariant = TealSurfaceVariant,
     onSurfaceVariant = TealOnSurfaceVariant,
-    surfaceContainerLowest = NeutralGroupedBg,
-    surfaceContainerLow = NeutralGroupedCard,
-    surfaceContainer = NeutralGroupedCard,
-    surfaceContainerHigh = NeutralGroupedCardElevated,
-    surfaceContainerHighest = NeutralGroupedCardElevated,
-    outline = NeutralOutline,
-    outlineVariant = NeutralOutline,
+    surfaceContainerLowest = TealBackground,
+    surfaceContainerLow = Color(0xFFFFFFFF),
+    surfaceContainer = Color(0xFFFFFFFF),
+    surfaceContainerHigh = Color(0xFFF7F7FA),
+    surfaceContainerHighest = Color(0xFFF7F7FA),
+    outline = TealOutline,
+    outlineVariant = TealOutline,
 )
 
 private val DarkColorScheme = darkColorScheme(
@@ -125,19 +118,19 @@ private val DarkColorScheme = darkColorScheme(
     onSecondary = TealDarkOnSecondary,
     secondaryContainer = TealDarkSecondaryContainer,
     onSecondaryContainer = TealDarkOnSecondaryContainer,
-    background = NeutralDarkGroupedBg,
+    background = TealDarkBackground,
     onBackground = TealDarkOnBackground,
-    surface = NeutralDarkGroupedBg,
+    surface = TealDarkSurface,
     onSurface = TealDarkOnSurface,
-    surfaceVariant = NeutralDarkGroupedCard,
+    surfaceVariant = TealDarkSurfaceVariant,
     onSurfaceVariant = TealDarkOnSurfaceVariant,
-    surfaceContainerLowest = NeutralDarkGroupedBg,
-    surfaceContainerLow = NeutralDarkGroupedCard,
-    surfaceContainer = NeutralDarkGroupedCard,
-    surfaceContainerHigh = NeutralDarkGroupedCardElevated,
-    surfaceContainerHighest = NeutralDarkGroupedCardElevated,
-    outline = NeutralDarkOutline,
-    outlineVariant = NeutralDarkOutline,
+    surfaceContainerLowest = TealDarkBackground,
+    surfaceContainerLow = Color(0xFF1C1C1E),
+    surfaceContainer = Color(0xFF1C1C1E),
+    surfaceContainerHigh = Color(0xFF2C2C2E),
+    surfaceContainerHighest = Color(0xFF2C2C2E),
+    outline = TealDarkOutline,
+    outlineVariant = TealDarkOutline,
 )
 
 // App-wide FAB accent color (warm beige, matching iOS New Chat button).

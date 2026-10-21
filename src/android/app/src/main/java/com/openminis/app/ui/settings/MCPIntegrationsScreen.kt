@@ -115,7 +115,7 @@ fun MCPIntegrationsScreen(
         onBack = null,
         actions = {
             IconButton(onClick = { showAddSheet = true }) {
-                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.mcp_add))
+                Icon(Icons.Outlined.Add, contentDescription = stringResource(R.string.mcp_add))
             }
         },
     ) {
@@ -625,8 +625,8 @@ private fun MCPFormTab(
                     Spacer(Modifier.width(8.dp))
                 }
                 Icon(
-                    imageVector = if (oauthExpanded) Icons.Default.KeyboardArrowUp
-                    else Icons.Default.KeyboardArrowDown,
+                    imageVector = if (oauthExpanded) Icons.Outlined.KeyboardArrowUp
+                    else Icons.Outlined.KeyboardArrowDown,
                     contentDescription = null,
                 )
             }

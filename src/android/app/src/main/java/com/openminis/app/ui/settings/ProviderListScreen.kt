@@ -297,7 +297,7 @@ fun ProviderListScreen(
                 }
             }
             IconButton(onClick = { showMenu = true }) {
-                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.provider_list_add_provider))
+                Icon(Icons.Outlined.Add, contentDescription = stringResource(R.string.provider_list_add_provider))
             }
         },
     ) {
@@ -518,7 +518,7 @@ fun ProviderListScreen(
                         .padding(horizontal = 20.dp, vertical = 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(22.dp))
+                    Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(22.dp))
                     Spacer(Modifier.width(16.dp))
                     Text(stringResource(R.string.provider_list_add_provider), style = MaterialTheme.typography.bodyLarge)
                 }

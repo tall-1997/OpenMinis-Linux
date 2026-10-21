@@ -340,7 +340,7 @@ private fun TerminalTopBar(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         CircularIconButton(
-            icon = Icons.Default.Close,
+            icon = Icons.Outlined.Close,
             contentDescription = stringResource(R.string.common_close),
             tint = TerminalFg,
             onClick = onClose,
@@ -421,8 +421,8 @@ private fun KeyboardAccessoryBar(
             // the modifier applied by Termux's input pipeline.
             QuickCommandButton("Ctrl", iconText = "^", isActive = ctrlDown, onClick = onCtrlToggle)
             QuickCommandButton("Alt", iconText = "⌥", isActive = altDown, onClick = onAltToggle)
-            QuickCommandButton("\u2191", icon = Icons.Default.KeyboardArrowUp) { onSendRaw(byteArrayOf(0x1B, 0x5B, 0x41)) }
-            QuickCommandButton("\u2193", icon = Icons.Default.KeyboardArrowDown) { onSendRaw(byteArrayOf(0x1B, 0x5B, 0x42)) }
+            QuickCommandButton("\u2191", icon = Icons.Outlined.KeyboardArrowUp) { onSendRaw(byteArrayOf(0x1B, 0x5B, 0x41)) }
+            QuickCommandButton("\u2193", icon = Icons.Outlined.KeyboardArrowDown) { onSendRaw(byteArrayOf(0x1B, 0x5B, 0x42)) }
             QuickCommandButton("\u2190", icon = Icons.AutoMirrored.Filled.KeyboardArrowLeft) { onSendRaw(byteArrayOf(0x1B, 0x5B, 0x44)) }
             QuickCommandButton("\u2192", icon = Icons.AutoMirrored.Filled.KeyboardArrowRight) { onSendRaw(byteArrayOf(0x1B, 0x5B, 0x43)) }
             QuickCommandButton("C-c", icon = Icons.Outlined.Cancel) { onSendRaw(byteArrayOf(0x03)) }

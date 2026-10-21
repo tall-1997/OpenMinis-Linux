@@ -736,7 +736,7 @@ fun LogDetailScreen(
                         val file = File(File(context.filesDir, "logs"), fileName)
                         if (file.exists()) shareLogFile(context, file)
                     }) {
-                        Icon(Icons.Default.Share, contentDescription = stringResource(R.string.common_share))
+                        Icon(Icons.Outlined.Share, contentDescription = stringResource(R.string.common_share))
                     }
                 },
             )

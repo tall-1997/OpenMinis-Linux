@@ -359,10 +359,10 @@ internal fun FallbackInfoBlock(block: AssistantBlock, onRevert: (() -> Unit)? = 
         // Compress squeeze. Other system rows (legacy compact notices that
         // pre-date the dedicated compactor) keep the squeeze for backward
         // visual continuity if any old sessions still hold them.
-        "compact" -> Icons.Default.CloseFullscreen
+        "compact" -> Icons.Outlined.CloseFullscreen
         "memory" -> Icons.Default.Psychology
-        "thinking" -> Icons.Default.Lightbulb
-        else -> Icons.Default.Info
+        "thinking" -> Icons.Outlined.Lightbulb
+        else -> Icons.Outlined.Info
     }
     // Mirrors iOS systemDividerRow: HStack { Divider, label, Divider }.
     // Implemented via SubcomposeLayout so the centered label can be measured
@@ -418,7 +418,7 @@ internal fun FallbackInfoBlock(block: AssistantBlock, onRevert: (() -> Unit)? = 
                 )
                 if (hasDetail) {
                     Icon(
-                        imageVector = Icons.Default.Info,
+                        imageVector = Icons.Outlined.Info,
                         contentDescription = "Show full summary",
                         tint = fg,
                         modifier = Modifier
@@ -497,7 +497,7 @@ private fun CompactSummarySheet(
                 }
             }) {
                 Icon(
-                    imageVector = if (copied) Icons.Default.Check else Icons.Default.ContentCopy,
+                    imageVector = if (copied) Icons.Outlined.Check else Icons.Outlined.ContentCopy,
                     contentDescription = "Copy",
                     tint = if (copied) Color(0xFF34C759) else ChatColors.secondaryText,
                 )
@@ -525,7 +525,7 @@ private fun CompactSummarySheet(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Refresh,
+                        imageVector = Icons.Outlined.Refresh,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.error,
                         modifier = Modifier.size(18.dp),
@@ -748,7 +748,7 @@ internal fun ResumeBanner(onResume: () -> Unit) {
             modifier = Modifier.weight(1f),
         ) {
             Icon(
-                imageVector = Icons.Default.PlayArrow,
+                imageVector = Icons.Outlined.PlayArrow,
                 contentDescription = null,
                 tint = orange,
                 modifier = Modifier.size(12.dp),
@@ -773,7 +773,7 @@ internal fun ResumeBanner(onResume: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
-                imageVector = Icons.Default.PlayArrow,
+                imageVector = Icons.Outlined.PlayArrow,
                 contentDescription = null,
                 tint = Color.White,
                 modifier = Modifier.size(10.dp),

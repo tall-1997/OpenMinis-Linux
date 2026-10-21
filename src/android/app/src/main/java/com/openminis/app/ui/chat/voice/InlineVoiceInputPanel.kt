@@ -479,7 +479,7 @@ fun InlineVoiceInputPanel(
         Box(modifier = Modifier.fillMaxWidth()) {
             // Top-left: expand/collapse chevron.
             CircleIconButton(
-                icon = if (expanded) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowUp,
+                icon = if (expanded) Icons.Outlined.KeyboardArrowDown else Icons.Outlined.KeyboardArrowUp,
                 contentDescription = stringResource(
                     if (expanded) R.string.voice_panel_collapse else R.string.voice_panel_expand,
                 ),

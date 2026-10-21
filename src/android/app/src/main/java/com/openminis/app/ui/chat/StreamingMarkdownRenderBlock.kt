@@ -163,7 +163,7 @@ internal fun RenderBlock(block: MdBlock) {
                             )
                         } else {
                             Icon(
-                                imageVector = Icons.Default.PlayArrow,
+                                imageVector = Icons.Outlined.PlayArrow,
                                 contentDescription = "运行 ${block.language.ifEmpty { "code" }} 代码",
                                 tint = Color(0xFF34C759),
                                 modifier = Modifier
@@ -173,7 +173,7 @@ internal fun RenderBlock(block: MdBlock) {
                         }
                     }
                     Icon(
-                        imageVector = if (copied) Icons.Default.Check else Icons.Default.ContentCopy,
+                        imageVector = if (copied) Icons.Outlined.Check else Icons.Outlined.ContentCopy,
                         contentDescription = if (copied) "已复制" else "复制代码",
                         tint = if (copied) Color(0xFF34C759) else Color.White.copy(alpha = 0.4f),
                         modifier = Modifier

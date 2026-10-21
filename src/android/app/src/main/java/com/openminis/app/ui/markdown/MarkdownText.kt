@@ -295,7 +295,7 @@ private fun CodeBlockView(
                 modifier = Modifier.height(28.dp),
             ) {
                 Icon(
-                    Icons.Default.ContentCopy,
+                    Icons.Outlined.ContentCopy,
                     contentDescription = "Copy code",
                     modifier = Modifier.height(16.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -375,7 +375,7 @@ private fun BulletListView(
                 if (item.checked != null) {
                     // Task list item
                     Icon(
-                        imageVector = if (item.checked) Icons.Default.CheckBox else Icons.Default.CheckBoxOutlineBlank,
+                        imageVector = if (item.checked) Icons.Outlined.CheckBox else Icons.Outlined.CheckBoxOutlineBlank,
                         contentDescription = null,
                         tint = color.copy(alpha = 0.6f),
                         modifier = Modifier

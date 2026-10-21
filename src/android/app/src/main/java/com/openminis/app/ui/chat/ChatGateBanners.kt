@@ -122,7 +122,7 @@ fun ChatGateBanners(
                     }
                     IconButton(onClick = { onDismissIntercept(event.id) }) {
                         Icon(
-                            Icons.Default.Close,
+                            Icons.Outlined.Close,
                             contentDescription = stringResource(R.string.gate_intercept_dismiss),
                             tint = MaterialTheme.colorScheme.onErrorContainer,
                         )

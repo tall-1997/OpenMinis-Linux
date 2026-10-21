@@ -329,7 +329,7 @@ internal fun InlineErrorBanner(error: String, onRetry: (() -> Unit)? = null) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
-                    imageVector = Icons.Default.Refresh,
+                    imageVector = Icons.Outlined.Refresh,
                     contentDescription = null,
                     tint = Color(0xFFFF3B30),
                     modifier = Modifier.size(10.dp),
@@ -652,14 +652,14 @@ internal fun ToolCallPill(
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.tool_longpress_rerun_from_here)) },
                     onClick = { showToolMenu = false; onRerunFromHere() },
-                    leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                    leadingIcon = { Icon(Icons.Outlined.Refresh, contentDescription = null, modifier = Modifier.size(18.dp)) },
                 )
             }
             if (onCopyDetails != null) {
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.tool_longpress_copy_details)) },
                     onClick = { showToolMenu = false; onCopyDetails() },
-                    leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                    leadingIcon = { Icon(Icons.Outlined.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp)) },
                 )
             }
         }
@@ -810,7 +810,7 @@ internal fun ThinkingBlock(block: AssistantBlock, isStreaming: Boolean, isLast: 
                 )
             } else {
                 Icon(
-                    imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                    imageVector = if (expanded) Icons.Outlined.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown,
                     contentDescription = if (expanded) "Collapse" else "Expand",
                     tint = thinkingBlue.copy(alpha = 0.5f),
                     modifier = Modifier.size(14.dp),
@@ -960,7 +960,7 @@ internal fun ProcessSummaryBar(
                 )
             } else {
                 Icon(
-                    imageVector = if (hasFailure) Icons.Default.Error else Icons.Default.CheckCircle,
+                    imageVector = if (hasFailure) Icons.Default.Error else Icons.Outlined.CheckCircle,
                     contentDescription = null,
                     tint = iconTint,
                     modifier = Modifier.size(14.dp),
@@ -977,7 +977,7 @@ internal fun ProcessSummaryBar(
                 overflow = TextOverflow.Ellipsis,
             )
             Icon(
-                imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                imageVector = if (expanded) Icons.Outlined.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown,
                 contentDescription = if (expanded) "Collapse" else "Expand",
                 tint = thinkingBlue.copy(alpha = 0.5f),
                 modifier = Modifier.size(14.dp),
@@ -1114,7 +1114,7 @@ private fun ProcessStepRow(step: ProcessStepRef, onOpen: () -> Unit) {
             }
             Icon(
                 imageVector = if (isThinking) {
-                    if (stepExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown
+                    if (stepExpanded) Icons.Outlined.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown
                 } else {
                     Icons.AutoMirrored.Filled.KeyboardArrowRight
                 },

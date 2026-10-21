@@ -160,7 +160,7 @@ fun GroupPickerSheet(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
-                        Icons.Default.Warning,
+                        Icons.Outlined.Warning,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.tertiary,
                         modifier = Modifier.size(20.dp),
@@ -283,7 +283,7 @@ fun GroupPickerSheet(
                             GroupRow(
                                 title = label,
                                 subtitle = hint,
-                                icon = Icons.Default.FolderOff,
+                                icon = Icons.Outlined.FolderOff,
                                 onClick = { onChoose(GroupChoice.RemoveFromGroup) },
                                 // Merge the two lines for screen readers;
                                 // announced separately they read as unrelated
@@ -304,7 +304,7 @@ fun GroupPickerSheet(
                             subtitle = folder.description?.takeIf { it.isNotBlank() }
                                 ?: if (count > 0) stringResource(R.string.group_n_chats, count)
                                 else stringResource(R.string.group_empty),
-                            icon = Icons.Default.Folder,
+                            icon = Icons.Outlined.Folder,
                             onClick = { onChoose(GroupChoice.Existing(folder.id)) },
                         )
                     }

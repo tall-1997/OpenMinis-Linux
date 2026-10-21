@@ -429,7 +429,7 @@ fun BrowserSettingsSheet(
                                 modifier = Modifier.size(32.dp),
                             ) {
                                 Icon(
-                                    Icons.Default.Delete,
+                                    Icons.Outlined.Delete,
                                     contentDescription = stringResource(R.string.browser_settings_clear_cookies_for, domain),
                                     tint = MaterialTheme.colorScheme.error,
                                     modifier = Modifier.size(16.dp),

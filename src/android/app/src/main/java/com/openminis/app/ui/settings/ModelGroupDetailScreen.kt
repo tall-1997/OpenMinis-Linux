@@ -18,7 +18,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Memory
-import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
@@ -332,7 +332,7 @@ fun ModelGroupDetailScreen(
                                 },
                                 leadingContent = {
                                     Icon(
-                                        imageVector = Icons.Default.Warning,
+                                        imageVector = Icons.Outlined.Warning,
                                         contentDescription = stringResource(R.string.model_group_detail_unavailable),
                                         tint = MaterialTheme.colorScheme.error,
                                     )
@@ -344,7 +344,7 @@ fun ModelGroupDetailScreen(
                                         providerRepository.updateGroup(group.copy(memberEntryIds = newIds.toMutableList()))
                                     }) {
                                         Icon(
-                                            imageVector = Icons.Default.Delete,
+                                            imageVector = Icons.Outlined.Delete,
                                             contentDescription = stringResource(R.string.common_remove),
                                             tint = MaterialTheme.colorScheme.error,
                                         )
@@ -405,7 +405,7 @@ fun ModelGroupDetailScreen(
                                 trailingContent = {
                                     Box {
                                         IconButton(onClick = { showMenu = true }) {
-                                            Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.model_group_detail_more_options))
+                                            Icon(Icons.Outlined.MoreHoriz, contentDescription = stringResource(R.string.model_group_detail_more_options))
                                         }
                                         com.openminis.app.ui.components.MinisMenu(
                                             expanded = showMenu,

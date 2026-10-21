@@ -535,7 +535,7 @@ private fun ExpandedCapsule(
         Spacer(Modifier.width(10.dp))
         // Close — read-replies fully off (capsule hides).
         Icon(
-            Icons.Default.Close,
+            Icons.Outlined.Close,
             contentDescription = stringResource(R.string.standard_sheet_close),
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(20.dp).clickable(onClick = onClose),

@@ -42,17 +42,17 @@ internal fun toolAccentColor(toolName: String): Color = when (toolName) {
 // Helper: tool icon (iOS: distinct SF Symbols per tool type)
 internal fun toolIconFor(toolName: String) = when (toolName) {
     "shell_execute" -> Icons.Default.Terminal
-    "file_read" -> Icons.Default.Description         // iOS: doc.text
+    "file_read" -> Icons.Outlined.Description         // iOS: doc.text
     "file_write" -> Icons.AutoMirrored.Filled.NoteAdd   // iOS: doc.text.fill (filled variant)
-    "file_edit" -> Icons.Default.EditNote             // iOS: square.and.pencil
+    "file_edit" -> Icons.Outlined.EditNote             // iOS: square.and.pencil
     "browser_use" -> Icons.Default.Language            // iOS: globe
     "read_image" -> Icons.Default.Image                // iOS: photo
     "memory_write", "memory_get" -> Icons.Default.Psychology // iOS: brain.head.profile
-    "web_search" -> Icons.Default.Search               // iOS: magnifyingglass
-    "search_sessions", "read_session" -> Icons.Default.Search
+    "web_search" -> Icons.Outlined.Search               // iOS: magnifyingglass
+    "search_sessions", "read_session" -> Icons.Outlined.Search
     "spawn_agent", "run_subagent" -> Icons.Default.Groups
     "cronjob" -> Icons.Default.Alarm
-    else -> if (toolName.startsWith("online_")) Icons.Default.Language else Icons.Default.Build
+    else -> if (toolName.startsWith("online_")) Icons.Default.Language else Icons.Outlined.Build
 }
 
 // Helper: tool display name for "Minis is using X"

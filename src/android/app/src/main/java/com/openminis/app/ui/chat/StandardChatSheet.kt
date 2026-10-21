@@ -259,7 +259,7 @@ fun StandardChatSheetHeader(
 private fun SheetCloseButton(onDismiss: () -> Unit) {
     IconButton(onClick = onDismiss) {
         Icon(
-            imageVector = Icons.Default.Close,
+            imageVector = Icons.Outlined.Close,
             contentDescription = stringResource(R.string.standard_sheet_close),
             tint = ChatColors.secondaryText,
         )

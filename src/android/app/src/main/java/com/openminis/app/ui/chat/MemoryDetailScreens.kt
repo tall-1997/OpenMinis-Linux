@@ -207,7 +207,7 @@ fun MemoryGetDetailBody(record: MemoryToolRecord) {
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 Icon(
-                    imageVector = Icons.Default.Search,
+                    imageVector = Icons.Outlined.Search,
                     contentDescription = null,
                     tint = ChatColors.secondaryText,
                     modifier = Modifier.size(14.dp),

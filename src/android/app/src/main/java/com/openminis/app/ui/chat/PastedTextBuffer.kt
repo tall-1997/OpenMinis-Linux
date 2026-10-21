@@ -431,7 +431,7 @@ fun PastedTextChip(
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                Icons.Default.Close,
+                Icons.Outlined.Close,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                 modifier = Modifier.size(13.dp),

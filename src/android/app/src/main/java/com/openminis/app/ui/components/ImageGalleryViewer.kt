@@ -220,7 +220,7 @@ fun ImageGalleryViewer(
                         .padding(8.dp),
                 ) {
                     Icon(
-                        Icons.Default.Close,
+                        Icons.Outlined.Close,
                         contentDescription = "Close",
                         tint = Color.White,
                         modifier = Modifier.size(28.dp),

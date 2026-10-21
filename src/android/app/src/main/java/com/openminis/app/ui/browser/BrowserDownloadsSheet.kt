@@ -131,9 +131,9 @@ private fun DownloadRow(
     ) {
         val (icon, tint) = when (entry.state) {
             BrowserTabPool.DownloadState.DOWNLOADING ->
-                Icons.Default.Download to MaterialTheme.colorScheme.primary
+                Icons.Outlined.Download to MaterialTheme.colorScheme.primary
             BrowserTabPool.DownloadState.COMPLETED ->
-                Icons.Default.CheckCircle to androidx.compose.ui.graphics.Color(0xFF34C759)
+                Icons.Outlined.CheckCircle to androidx.compose.ui.graphics.Color(0xFF34C759)
             BrowserTabPool.DownloadState.FAILED ->
                 Icons.Default.ErrorOutline to MaterialTheme.colorScheme.error
         }
@@ -204,7 +204,7 @@ private fun DownloadRow(
             BrowserTabPool.DownloadState.DOWNLOADING -> {
                 IconButton(onClick = onCancel) {
                     Icon(
-                        Icons.Default.Cancel,
+                        Icons.Outlined.Cancel,
                         contentDescription = stringResource(R.string.browser_downloads_cancel),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -213,7 +213,7 @@ private fun DownloadRow(
             BrowserTabPool.DownloadState.COMPLETED -> {
                 IconButton(onClick = onOpen) {
                     Icon(
-                        Icons.Default.OpenInNew,
+                        Icons.Outlined.OpenInNew,
                         contentDescription = stringResource(R.string.browser_downloads_open),
                         tint = MaterialTheme.colorScheme.primary,
                     )

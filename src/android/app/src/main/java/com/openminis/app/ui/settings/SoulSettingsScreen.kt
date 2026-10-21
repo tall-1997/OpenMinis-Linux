@@ -1023,7 +1023,7 @@ private fun SoulPromptDropdown(
                                         },
                                     ) {
                                         Icon(
-                                            Icons.Default.Delete,
+                                            Icons.Outlined.Delete,
                                             contentDescription = stringResource(R.string.soul_prompt_delete),
                                         )
                                     }
