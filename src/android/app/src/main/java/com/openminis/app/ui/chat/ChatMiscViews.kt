@@ -359,7 +359,7 @@ internal fun FallbackInfoBlock(block: AssistantBlock, onRevert: (() -> Unit)? = 
         // Compress squeeze. Other system rows (legacy compact notices that
         // pre-date the dedicated compactor) keep the squeeze for backward
         // visual continuity if any old sessions still hold them.
-        "compact" -> Icons.Outlined.CloseFullscreen
+        "compact" -> Icons.Filled.CloseFullscreen
         "memory" -> Icons.Default.Psychology
         "thinking" -> Icons.Outlined.Lightbulb
         else -> Icons.Outlined.Info
