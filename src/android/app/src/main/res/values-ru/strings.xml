@@ -2071,4 +2071,9 @@
     <string name="about_built_format">Built %1$s</string>
 
     <string name="onboarding_retry">Retry</string>
+    <string name="provider_refresh_failed_http">Не удалось обновить · HTTP %1$d</string>
+    <string name="provider_refresh_failed_transport">Не удалось обновить · адрес недоступен</string>
+    <string name="provider_refresh_failed_payload">Не удалось обновить · ответ не является списком моделей</string>
+    <string name="provider_models_stale_suffix">последняя синхронизация %1$s</string>
+    <string name="provider_models_never_synced">ни разу не синхронизировано</string>
 </resources>

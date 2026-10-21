@@ -2069,4 +2069,9 @@
     <string name="about_built_format">Built %1$s</string>
 
     <string name="onboarding_retry">Retry</string>
+    <string name="provider_refresh_failed_http">Odświeżanie nie powiodło się · HTTP %1$d</string>
+    <string name="provider_refresh_failed_transport">Odświeżanie nie powiodło się · nie można połączyć się z tym adresem</string>
+    <string name="provider_refresh_failed_payload">Odświeżanie nie powiodło się · odpowiedź nie jest listą modeli</string>
+    <string name="provider_models_stale_suffix">ostatnia synchronizacja %1$s</string>
+    <string name="provider_models_never_synced">nigdy nie zsynchronizowano</string>
 </resources>

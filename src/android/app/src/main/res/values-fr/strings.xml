@@ -2063,4 +2063,9 @@
     <string name="about_built_format">Built %1$s</string>
 
     <string name="onboarding_retry">Retry</string>
+    <string name="provider_refresh_failed_http">Échec de l\'actualisation · HTTP %1$d</string>
+    <string name="provider_refresh_failed_transport">Échec de l\'actualisation · adresse injoignable</string>
+    <string name="provider_refresh_failed_payload">Échec de l\'actualisation · la réponse n\'est pas une liste de modèles</string>
+    <string name="provider_models_stale_suffix">dernière sync %1$s</string>
+    <string name="provider_models_never_synced">jamais synchronisé</string>
 </resources>

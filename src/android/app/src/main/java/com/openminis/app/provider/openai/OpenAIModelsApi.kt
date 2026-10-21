@@ -6,6 +6,7 @@ import com.openminis.app.provider.ProviderKeyGate
 import android.content.Context
 import com.openminis.app.data.model.LLMModel
 import com.openminis.app.data.model.normalizeModalities
+import com.openminis.app.data.repository.ModelRefreshDiagnostics
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.provider.ModelsDevApi
 import com.openminis.app.provider.ProviderModelsCache
@@ -136,18 +137,29 @@ object OpenAIModelsApi {
             // model's upstream channel instead of on the key.
             credentialKey = ProviderKeyGate.credentialKey(baseURL.orEmpty(), apiKey),
         )
-        val body = response.body?.string() ?: return@withContext fallback
-
+        // [T-models-refresh-failure-reason] Status BEFORE body. A non-2xx with
+        // an empty body used to return at the `?:` and drop the code entirely —
+        // precisely the "wrong port answers 404" case that left the user with
+        // an unexplained "Refresh failed" and a stale catalogue underneath.
         if (!response.isSuccessful) {
+            ModelRefreshDiagnostics.recordHttp(cacheScope, response.code)
             if (context != null && (response.code == 401 || response.code == 403)) {
                 cache.invalidate(context, cacheKey)
             }
             return@withContext fallback
         }
+        val body = response.body?.string()
+        if (body.isNullOrBlank()) {
+            ModelRefreshDiagnostics.recordPayload(cacheScope)
+            return@withContext fallback
+        }
 
         val models = try {
             val json = JSONObject(body)
-            val data = json.optJSONArray("data") ?: return@withContext fallback
+            val data = json.optJSONArray("data") ?: run {
+                ModelRefreshDiagnostics.recordPayload(cacheScope)
+                return@withContext fallback
+            }
             val parsed = mutableListOf<LLMModel>()
             // [T-android-custom-endpoint-context] Caps the endpoint itself
             // declared, kept aside so they survive models.dev enrichment below.
@@ -229,7 +241,13 @@ object OpenAIModelsApi {
                     )
                 )
             }
-            if (parsed.isEmpty()) return@withContext fallback
+            if (parsed.isEmpty()) {
+                // Official OpenAI keeps the compiled-in list as `fallback`, so an
+                // empty parse is NOT a failure there — only a custom endpoint
+                // has nothing to show.
+                if (isCustomBase) ModelRefreshDiagnostics.recordPayload(cacheScope)
+                return@withContext fallback
+            }
             val enriched = ModelsDevApi.enrichModels(parsed)
             if (!isCustomBase) {
                 enriched
@@ -252,9 +270,11 @@ object OpenAIModelsApi {
                 }
             }
         } catch (_: Exception) {
+            ModelRefreshDiagnostics.recordPayload(cacheScope)
             return@withContext fallback
         }
 
+        ModelRefreshDiagnostics.clear(cacheScope)
         if (context != null) cache.save(context, cacheKey, models)
         models
     }

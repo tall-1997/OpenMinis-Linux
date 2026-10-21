@@ -2065,4 +2065,9 @@
     <string name="about_built_format">Built %1$s</string>
 
     <string name="onboarding_retry">Retry</string>
+    <string name="provider_refresh_failed_http">Reîmprospătare eșuată · HTTP %1$d</string>
+    <string name="provider_refresh_failed_transport">Reîmprospătare eșuată · adresa nu poate fi contactată</string>
+    <string name="provider_refresh_failed_payload">Reîmprospătare eșuată · răspunsul nu este o listă de modele</string>
+    <string name="provider_models_stale_suffix">ultima sincronizare %1$s</string>
+    <string name="provider_models_never_synced">niciodată sincronizat cu succes</string>
 </resources>

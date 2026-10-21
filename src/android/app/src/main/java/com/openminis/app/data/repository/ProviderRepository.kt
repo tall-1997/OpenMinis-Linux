@@ -70,7 +70,7 @@ class ProviderRepository(private val context: Context) {
         coerceInputValues = true
     }
 
-    internal val prefs: SharedPreferences = context.getSharedPreferences("provider_config", Context.MODE_PRIVATE)
+    internal val prefs: SharedPreferences = context.getSharedPreferences(PROVIDER_CONFIG_PREFS, Context.MODE_PRIVATE)
 
     // [T-android-provider-room-store] Per-row provider config DB. Lives in
     // its own provider.db file so a downgrade to a build that doesn't know
@@ -91,9 +91,6 @@ class ProviderRepository(private val context: Context) {
          * stale-while-revalidate refresh should fire.
          */
         private const val MODEL_CACHE_TTL_MS = 24 * 60 * 60 * 1000L
-
-        /** Per-instance `lastFetchAt` pref key. */
-        private fun lastFetchKey(instanceId: String) = "modelsLastFetchAt_$instanceId"
 
         /** [T-newchat-default-model-fallback-android] Global last-used model entry id. */
         internal const val KEY_LAST_USED_ENTRY = "lastUsedModelEntryId"
@@ -128,12 +125,12 @@ class ProviderRepository(private val context: Context) {
 
     /** Record the time of a successful model fetch for [instanceId]. */
     private fun markInstanceFetched(instanceId: String) {
-        prefs.edit().putLong(lastFetchKey(instanceId), System.currentTimeMillis()).apply()
+        prefs.edit().putLong(ProviderRefreshMarks.lastFetchKey(instanceId), System.currentTimeMillis()).apply()
     }
 
     /** Whether the cached model list for [instanceId] is older than the TTL. */
     private fun isInstanceStale(instanceId: String): Boolean {
-        val last = prefs.getLong(lastFetchKey(instanceId), 0L)
+        val last = prefs.getLong(ProviderRefreshMarks.lastFetchKey(instanceId), 0L)
         return last == 0L || (System.currentTimeMillis() - last) > MODEL_CACHE_TTL_MS
     }
 
@@ -146,7 +143,7 @@ class ProviderRepository(private val context: Context) {
      * `updateInstance` / `removeInstance`.
      */
     fun invalidateModelCache(instanceId: String) {
-        prefs.edit().remove(lastFetchKey(instanceId)).apply()
+        prefs.edit().remove(ProviderRefreshMarks.lastFetchKey(instanceId)).apply()
         // [T-key-cache-invalidate] 模型刷新后旧 ProviderFactory 的 memo
         // 缓存必须作废 —— 否则已构造的 provider 带着旧 key/旧配置继续
         // 存活，表现为“刷新了模型但发送用的还是旧 key”。
@@ -2301,25 +2298,28 @@ class ProviderRepository(private val context: Context) {
     ): ModelRefreshResult {
         val liveForce = forceRefresh || clearFirst
         // [T-refresh-no-destructive-clear] `clearFirst` used to wipe this
-        // instance's model entries BEFORE the network call. A hard refresh does
-        // have to clear first — that is what stops `replaceEntries` from
-        // carrying forward uuid / overrides / isHidden, so the catalog comes
-        // back pristine — but doing it up front means any failed fetch leaves
-        // the picker empty. And because `clearFirst` implies `liveForce`, the
-        // models.dev fallback below is skipped as well, so pressing Refresh
-        // against a flaky or strict gateway *destroyed* the list it was meant to
-        // reload, with no way back short of re-adding the provider.
+        // instance's entries BEFORE the network call — any failed fetch left the
+        // picker empty, and because `clearFirst` implies `liveForce` the models.dev
+        // fallback below was skipped too: Refresh *destroyed* the list it was
+        // meant to reload, with no way back short of re-adding the provider.
         //
-        // Deferred to the moment a replacement is actually in hand, and run at
-        // most once. On success the observable result is byte-identical to the
-        // old order: entries are gone before `replaceEntries` runs, so nothing
-        // is carried forward and `pruned` is empty exactly as before.
+        // Deferred to the moment a replacement is actually in hand, run at most
+        // once; on success the result is byte-identical to the old order (entries
+        // gone before `replaceEntries`, so nothing is carried forward).
         var hardCleared = false
         suspend fun hardClearIfNeeded() {
             if (!clearFirst || hardCleared) return
             hardCleared = true
             val clearedIds = clearFetchedModelEntries(instance.id)
             if (clearedIds.isNotEmpty()) scrubExternalEntryRefs(clearedIds)
+        }
+        // [T-models-refresh-failure-reason] Every SUCCESS_API exit means the same
+        // two things: the list on screen is current (stamp it — the header needs
+        // this) and whatever failed last is no longer true (a 401 whose fallback
+        // still produced a list used to leave its reason parked in memory).
+        fun synced(): ModelRefreshResult {
+            markInstanceFetched(instance.id); ModelRefreshDiagnostics.clear(instance.id)
+            return ModelRefreshResult.SUCCESS_API
         }
         // [T-android-refresh-models-empty-key] usableApiKey, NOT loadApiKey.
         //
@@ -2331,12 +2331,10 @@ class ProviderRepository(private val context: Context) {
         // nothing about a private host — leaving the user with a failure whose
         // message described the fallback, not the server they were pointing at.
         //
-        // `usableApiKey` substitutes "" exactly where an empty key is a valid
-        // configuration (`ProviderInstance.allowsEmptyAPIKey`: apiKey mode +
-        // custom base URL + OpenAI/Anthropic family). It still returns null for
-        // an official endpoint with no key, and for an OAuth instance with no
-        // token — both of which must keep short-circuiting — so the "provider
-        // types that genuinely require a key" case is unchanged.
+        // `usableApiKey` substitutes "" exactly where an empty key is valid
+        // (`allowsEmptyAPIKey`: apiKey mode + custom base URL + OpenAI/Anthropic).
+        // It still returns null for an official endpoint with no key and for an
+        // OAuth instance with no token — both must keep short-circuiting.
         //
         // This also makes refresh agree with the send path: ChatViewModel and
         // VisionGroupResolver already resolve credentials through
@@ -2393,7 +2391,7 @@ class ProviderRepository(private val context: Context) {
             if (models.isNotEmpty()) {
                 hardClearIfNeeded()
                 replaceEntries(instance.id, models)
-                return ModelRefreshResult.SUCCESS_API
+                return synced()
             }
         }
 
@@ -2410,6 +2408,7 @@ class ProviderRepository(private val context: Context) {
                 fetchProviderModelsForRefresh(context, instance, apiKey, baseURL, liveForce)
             } catch (e: Exception) {
                 android.util.Log.e("ProviderRepo", "refreshModels fetch error: ${e.message}", e)
+                ModelRefreshDiagnostics.recordTransport(instance.id)
                 emptyList()
             }
             android.util.Log.i("ProviderRepo", "refreshModels: got ${models.size} models")
@@ -2419,7 +2418,7 @@ class ProviderRepository(private val context: Context) {
                 hardClearIfNeeded()
                 val pruned = replaceEntries(instance.id, models, dropStaleRefs = clearFirst)
                 if (pruned.isNotEmpty()) scrubExternalEntryRefs(pruned)
-                return ModelRefreshResult.SUCCESS_API
+                return synced()
             }
         }
 
@@ -2427,6 +2426,7 @@ class ProviderRepository(private val context: Context) {
         // catalog is a per-credential refresh. Same API address used to make
         // every sibling provider look freshly synced.
         if (liveForce) {
+            ProviderRefreshMarks.captureFailure(context, instance.id)
             return if (apiKey == null) ModelRefreshResult.NO_KEY else ModelRefreshResult.FAILURE
         }
 
@@ -2441,7 +2441,7 @@ class ProviderRepository(private val context: Context) {
         if (curatedFallback.isNotEmpty()) {
             android.util.Log.i("ProviderRepo", "models.dev fallback returned ${curatedFallback.size} models for ${instance.label}")
             replaceEntries(instance.id, curatedFallback)
-            return ModelRefreshResult.SUCCESS_API
+            return synced()
         } else if (isThirdParty) {
             android.util.Log.i("ProviderRepo", "Third-party endpoint, no models.dev match — preserving existing models for ${instance.label}")
             return ModelRefreshResult.PRESERVED

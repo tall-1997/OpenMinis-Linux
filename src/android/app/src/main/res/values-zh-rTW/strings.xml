@@ -2152,4 +2152,9 @@
     <string name="about_built_format">构建于 %1$s</string>
 
     <string name="onboarding_retry">Retry</string>
+    <string name="provider_refresh_failed_http">重新整理失敗 · HTTP %1$d</string>
+    <string name="provider_refresh_failed_transport">重新整理失敗 · 連不上這個位址</string>
+    <string name="provider_refresh_failed_payload">重新整理失敗 · 回傳內容不是模型清單</string>
+    <string name="provider_models_stale_suffix">上次同步於 %1$s</string>
+    <string name="provider_models_never_synced">從未成功同步過</string>
 </resources>

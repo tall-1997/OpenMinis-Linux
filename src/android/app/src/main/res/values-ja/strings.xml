@@ -2060,4 +2060,9 @@
     <string name="about_built_format">Built %1$s</string>
 
     <string name="onboarding_retry">Retry</string>
+    <string name="provider_refresh_failed_http">更新に失敗 · HTTP %1$d</string>
+    <string name="provider_refresh_failed_transport">更新に失敗 · このアドレスに接続できません</string>
+    <string name="provider_refresh_failed_payload">更新に失敗 · 応答がモデル一覧ではありません</string>
+    <string name="provider_models_stale_suffix">最終同期 %1$s</string>
+    <string name="provider_models_never_synced">一度も同期に成功していません</string>
 </resources>

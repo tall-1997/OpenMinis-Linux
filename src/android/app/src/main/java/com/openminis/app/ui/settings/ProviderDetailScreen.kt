@@ -65,7 +65,6 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import com.openminis.app.data.model.ProviderType
-import com.openminis.app.data.repository.ModelRefreshResult
 import com.openminis.app.data.repository.ProviderRefreshMarks
 import com.openminis.app.data.repository.ProviderRepository
 import com.openminis.app.logging.AppLogger
@@ -547,20 +546,13 @@ fun ProviderDetailScreen(
 
         // ─── Models ─────────────────────────────────────────────────
         SettingsSection(
-            header = stringResource(R.string.provider_detail_models_count_header, entries.size),
+            header = providerModelsHeader(exportContext, instance.id, entries.size, refreshNote),
         ) {
             // Refresh action sits as the first row, mirroring the iOS
             // tap-to-refresh affordance in the section header area.
             SettingsRow(
                 title = stringResource(if (isRefreshing) R.string.provider_detail_refreshing else R.string.provider_detail_refresh_models),
-                subtitle = refreshError ?: refreshNote?.let { note ->
-                    stringResource(when (note) {
-                        ModelRefreshResult.NO_KEY -> R.string.provider_sync_mark_nokey
-                        ModelRefreshResult.PRESERVED -> R.string.provider_sync_mark_unchanged
-                        ModelRefreshResult.FAILURE -> R.string.provider_sync_mark_failed
-                        ModelRefreshResult.SUCCESS_API -> R.string.provider_sync_mark_unchanged
-                    })
-                },
+                subtitle = refreshError ?: providerRefreshSubtitle(exportContext, instance.id, refreshNote),
                 onClick = if (isRefreshing) {
                     null
                 } else {

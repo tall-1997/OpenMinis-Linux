@@ -2061,4 +2061,9 @@
     <string name="about_built_format">Built %1$s</string>
 
     <string name="onboarding_retry">Retry</string>
+    <string name="provider_refresh_failed_http">Gagal menyegarkan · HTTP %1$d</string>
+    <string name="provider_refresh_failed_transport">Gagal menyegarkan · alamat ini tidak dapat dihubungi</string>
+    <string name="provider_refresh_failed_payload">Gagal menyegarkan · respons bukan senarai model</string>
+    <string name="provider_models_stale_suffix">terakhir disegerakkan %1$s</string>
+    <string name="provider_models_never_synced">belum pernah berjaya disegerakkan</string>
 </resources>
