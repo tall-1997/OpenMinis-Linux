@@ -521,7 +521,6 @@ class ProviderRepository(private val context: Context) {
         // triggerBackgroundRefreshIfStale call) will fetch it.
         invalidateModelCache(instance.id)
     }
-
     /**
      * [T-android-provider-voice] Reconcile voice-template seed entries on every
      * launch: add template models a previous build didn't know, remove RETIRED
@@ -547,7 +546,6 @@ class ProviderRepository(private val context: Context) {
             val templateById = tpl.mockModels.associateBy { it.id }
             val instanceEntries = config.modelEntries.filter { it.providerInstanceId == instance.id }
             val existingIds = instanceEntries.map { it.baseModel.id }.toSet()
-
             // Remove stale template seeds (exact seed shape only) not in the
             // current template version.
             val staleSeedIds = instanceEntries
@@ -561,7 +559,6 @@ class ProviderRepository(private val context: Context) {
                 changed = true
                 android.util.Log.i("ProviderRepo", "[VoiceTemplateMigrate] ${instance.label}: removed stale voice entries: ${staleSeedIds.sorted()}")
             }
-
             // Add template models missing from this instance.
             val toAdd = templateById.keys - existingIds
             if (toAdd.isNotEmpty()) {
@@ -572,7 +569,6 @@ class ProviderRepository(private val context: Context) {
                 changed = true
                 android.util.Log.i("ProviderRepo", "[VoiceTemplateMigrate] ${instance.label}: added ${newEntries.size} new entries: ${toAdd.sorted()}")
             }
-
             // Heal corrupted modality on surviving template entries.
             for (i in config.modelEntries.indices) {
                 val e = config.modelEntries[i]
@@ -588,7 +584,6 @@ class ProviderRepository(private val context: Context) {
         }
         if (changed) saveConfig(config)
     }
-
     /**
      * Retires the OpenCode Zen free lane this app used to seed.
      *
@@ -618,7 +613,6 @@ class ProviderRepository(private val context: Context) {
             "[BuiltIn] retired the Zen free lane: removed ${legacy.size} built-in instance(s)",
         )
     }
-
     /**
      * Whether [instance] points at a third-party OpenAI-compatible host
      * (xAI Grok, vLLM, Ollama, LiteLLM, DeepSeek via OpenAI shim, etc.).
@@ -632,7 +626,6 @@ class ProviderRepository(private val context: Context) {
         val officialHosts = listOf("api.openai.com", "chatgpt.com")
         return officialHosts.none { custom.contains(it) }
     }
-
     fun updateInstance(instance: ProviderInstance): Unit = synchronized(configLock) {
         ensureConfigLoaded()
         val config = workingCopy()
@@ -665,7 +658,6 @@ class ProviderRepository(private val context: Context) {
             }
         }
     }
-
     fun setInstancePinned(id: String, pinned: Boolean): Unit = synchronized(configLock) {
         ensureConfigLoaded()
         val config = workingCopy()
@@ -673,7 +665,6 @@ class ProviderRepository(private val context: Context) {
         inst.pinned = pinned
         saveConfig(config)
     }
-
     fun removeInstance(instanceId: String): Unit = synchronized(configLock) {
         ensureConfigLoaded()
         invalidateModelCache(instanceId)
@@ -685,7 +676,6 @@ class ProviderRepository(private val context: Context) {
             .toSet()
         config.instances.removeAll { it.id == instanceId }
         config.modelEntries.removeAll { it.providerInstanceId == instanceId }
-
         if (removedEntryIds.isNotEmpty()) {
             for (group in config.modelGroups) {
                 group.memberEntryIds.removeAll { it in removedEntryIds }
@@ -698,7 +688,6 @@ class ProviderRepository(private val context: Context) {
             if (config.defaultPrimaryGroupId in emptyGroupIds) config.defaultPrimaryGroupId = null
             if (config.defaultSubGroupId in emptyGroupIds) config.defaultSubGroupId = null
         }
-
         saveConfig(config)
         deleteApiKey(instanceId)
         // [T-remove-instance-cleanup] deleteApiKey only removes apikey_<id>.
@@ -741,7 +730,6 @@ class ProviderRepository(private val context: Context) {
                 }
         })
     }
-
     /**
      * [T-android-image-endpoint-mode] Persist the endpoint that last worked for
      * `auto`-mode image generation on [instanceId]. Called by
@@ -2340,7 +2328,6 @@ class ProviderRepository(private val context: Context) {
         return shadowVoiceSnapshot().hasFoldedDuplicates
     }
 
-
     suspend fun refreshModels(
         instance: ProviderInstance,
         forceRefresh: Boolean = false,
@@ -2734,7 +2721,6 @@ class ProviderRepository(private val context: Context) {
     private val backupCoordinator by lazy {
         ProviderBackupCoordinator(context, ProviderBackupHost())
     }
-
     private inner class ProviderBackupHost : ProviderBackupCoordinator.Host {
         override val configValue get() = _config.value
         override fun saveConfig(config: ProviderConfig) = this@ProviderRepository.saveConfig(config)
@@ -2752,16 +2738,12 @@ class ProviderRepository(private val context: Context) {
         override fun loadAllThinkingRulesIntoCache() =
             this@ProviderRepository.loadAllThinkingRulesIntoCache()
     }
-
     fun exportInstanceJSON(instanceId: String): String? =
         backupCoordinator.exportInstanceJSON(instanceId)
-
     fun collectBackupProviderSecret(instance: ProviderInstance): BackupSecrets.ProviderSecret? =
         backupCoordinator.collectBackupProviderSecret(instance)
-
     fun restoreBackupProviderSecret(secret: BackupSecrets.ProviderSecret): Boolean =
         backupCoordinator.restoreBackupProviderSecret(secret)
-
     fun mergeBackupProviderConfig(remote: ProviderConfig): Pair<Int, Int> =
         backupCoordinator.mergeBackupProviderConfig(remote)
     fun restoreBackupThinkingRules(
