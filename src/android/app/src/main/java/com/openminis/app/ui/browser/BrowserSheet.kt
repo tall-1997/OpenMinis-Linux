@@ -465,7 +465,7 @@ fun BrowserSheet(
                 }
                 ToolbarIcon(
                     icon = when (userAgentProfile) {
-                        UserAgentProfile.MOBILE_CHROME -> Icons.Outlined.PhoneAndroid
+                        UserAgentProfile.MOBILE_CHROME -> Icons.Filled.PhoneAndroid
                         UserAgentProfile.DESKTOP_CHROME -> Icons.Default.Computer
                         UserAgentProfile.CUSTOM -> Icons.Outlined.Edit
                     },
