@@ -149,7 +149,6 @@ internal fun looksLikeSse(prefix: String): Boolean {
         head.startsWith(":")
 }
 
-
 internal fun OpenAIProvider.rawStreamMessage(
         messages: List<LLMMessage>,
         systemPrompt: String?,
@@ -702,13 +701,10 @@ internal fun OpenAIProvider.rawStreamMessage(
                                 android.util.Log.d("ToolChain[Provider]", "→ ToolCallComplete (Responses) id=$combined name=${acc.name} args=${args.toString().take(300)}")
                                 send(LLMStreamChunk.ToolCallComplete(combined, acc.name, args))
                             } else {
-                                // 模型发了其他类型的 item（message / reasoning / 自定义）
-                                // 不再拒收——内容已在各 delta 分支流过了，这里只认可它完成。
+                                // 未知类型不拒收——内容已在 delta 分支流过了。
                                 val id = item.optString("id", "")
                                 val content = item.optString("content", "")
-                                if (content.isNotEmpty()) {
-                                    send(LLMStreamChunk.Text(content))
-                                }
+                                if (content.isNotEmpty()) send(LLMStreamChunk.Text(content))
                                 android.util.Log.d("ToolChain[Provider]", "output_item.done type=$itemType id=$id — not a tool call, acknowledged")
                             }
                         }

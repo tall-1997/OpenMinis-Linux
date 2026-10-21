@@ -13,6 +13,8 @@ object FileReadTool {
     const val NAME = "file_read"
     const val MAX_LENGTH_HARD_CAP = 80_000
     const val DEFAULT_MAX_LENGTH = 15_000
+    /** 超过此大小的文件不逐行流式读取，只返回 magic-byte + 头部截断预览。 */
+    const val MAX_STREAM_FILE_SIZE = 50 * 1024 * 1024L // 50 MB
 
     fun resolveMaxLength(requested: Int, userCap: Int): Int {
         val cap = userCap.coerceIn(2_000, MAX_LENGTH_HARD_CAP)
@@ -181,6 +183,15 @@ object FileReadTool {
             "More bytes: shell_execute with xxd / file / strings."
     }
 
+    /** 超 50MB 的纯文本文件，返回头部截断预览而不是逐行流式读取。 */
+    internal fun largeTextPreview(path: String, size: Long, head: ByteArray): String {
+        val textHead = String(head, 0, minOf(head.size, 1024), Charsets.UTF_8)
+            .replace(Regex("[^\\x20-\\x7E\\n\\r\\t]"), "·")
+        return "[$path | $size bytes | text, too large to stream]\n" +
+            "First 1024 bytes (control chars replaced with ·):\n$textHead\n" +
+            "File exceeds 50 MB. To read it, use shell_execute with head/tail/split."
+    }
+
 
     fun definition(): AgentToolDefinition = AgentToolDefinition(
         name = NAME,
@@ -254,9 +265,15 @@ object FileReadTool {
             val textCharset = utf16CharsetOrNull(head)
             val isBinary = textCharset == null && head.any { it == 0.toByte() }
 
-            if (isBinary) {
+            // 超大文件一律按二进制处理，走 magic-byte 预览。即使文件没有零字节
+            // (纯文本大文件)，按行逐字符流式读取本身也会卡很久——CJK/emoji
+            // 单字符多字节的行拆分在线性扫描后还得做二次 trim，毫无交互反馈。
+            val tooBig = size > MAX_STREAM_FILE_SIZE
+
+            if (isBinary || tooBig) {
                 return ToolExecutionResult(
-                    binaryPreview(path, size, head),
+                    if (tooBig && !isBinary) largeTextPreview(path, size, head)
+                    else binaryPreview(path, size, head),
                     true, toolTitle = toolTitle
                 )
             }
