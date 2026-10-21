@@ -554,6 +554,9 @@ fun ProviderDetailScreen(
                         ModelRefreshResult.NO_KEY -> R.string.provider_sync_mark_nokey
                         ModelRefreshResult.PRESERVED -> R.string.provider_sync_mark_unchanged
                         ModelRefreshResult.FAILURE -> R.string.provider_sync_mark_failed
+                        ModelRefreshResult.NOT_FOUND -> R.string.provider_sync_mark_not_found
+                        ModelRefreshResult.CONNECTION_FAILED -> R.string.provider_sync_mark_connection
+                        ModelRefreshResult.INVALID_RESPONSE -> R.string.provider_sync_mark_invalid
                         ModelRefreshResult.SUCCESS_API -> R.string.provider_sync_mark_unchanged
                     })
                 },
