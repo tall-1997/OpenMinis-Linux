@@ -2061,4 +2061,9 @@
     <string name="about_built_format">Built %1$s</string>
 
     <string name="onboarding_retry">Retry</string>
+    <string name="provider_refresh_failed_http">Yenileme başarısız · HTTP %1$d</string>
+    <string name="provider_refresh_failed_transport">Yenileme başarısız · bu adrese ulaşılamıyor</string>
+    <string name="provider_refresh_failed_payload">Yenileme başarısız · yanıt bir model listesi değil</string>
+    <string name="provider_models_stale_suffix">son eşitleme %1$s</string>
+    <string name="provider_models_never_synced">hiç başarıyla eşitlenmedi</string>
 </resources>

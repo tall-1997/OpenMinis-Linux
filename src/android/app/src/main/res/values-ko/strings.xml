@@ -2060,4 +2060,9 @@
     <string name="about_built_format">Built %1$s</string>
 
     <string name="onboarding_retry">Retry</string>
+    <string name="provider_refresh_failed_http">새로고침 실패 · HTTP %1$d</string>
+    <string name="provider_refresh_failed_transport">새로고침 실패 · 이 주소에 연결할 수 없습니다</string>
+    <string name="provider_refresh_failed_payload">새로고침 실패 · 응답이 모델 목록이 아닙니다</string>
+    <string name="provider_models_stale_suffix">마지막 동기화 %1$s</string>
+    <string name="provider_models_never_synced">한 번도 동기화되지 않음</string>
 </resources>

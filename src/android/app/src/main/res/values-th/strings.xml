@@ -2061,4 +2061,9 @@
     <string name="about_built_format">Built %1$s</string>
 
     <string name="onboarding_retry">Retry</string>
+    <string name="provider_refresh_failed_http">รีเฟรชไม่สำเร็จ · HTTP %1$d</string>
+    <string name="provider_refresh_failed_transport">รีเฟรชไม่สำเร็จ · เชื่อมต่อที่อยู่นี้ไม่ได้</string>
+    <string name="provider_refresh_failed_payload">รีเฟรชไม่สำเร็จ · ข้อมูลที่ได้ไม่ใช่รายการโมเดล</string>
+    <string name="provider_models_stale_suffix">ซิงค์ล่าสุด %1$s</string>
+    <string name="provider_models_never_synced">ยังไม่เคยซิงค์สำเร็จ</string>
 </resources>
