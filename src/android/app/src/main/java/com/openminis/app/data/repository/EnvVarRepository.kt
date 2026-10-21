@@ -38,6 +38,8 @@ class EnvVarRepository(private val context: Context) {
          */
         val note: String = "",
         val createdAt: Long = System.currentTimeMillis(),
+        /** 停用后不注入沙箱，值与原备注全部保留，随时可重新启用。 */
+        val isDisabled: Boolean = false,
     )
 
     private val _entries = MutableStateFlow<List<EnvVarEntry>>(emptyList())
@@ -164,6 +166,15 @@ class EnvVarRepository(private val context: Context) {
         Log.i(TAG, "Deleted env var: ${entry.key}")
     }
 
+    fun setDisabled(id: String, disabled: Boolean) {
+        ensureLoaded()
+        _entries.update { list ->
+            list.map { if (it.id == id) it.copy(isDisabled = disabled) else it }
+        }
+        saveMetadata()
+        Log.i(TAG, "Env var $id isDisabled=$disabled")
+    }
+
     fun getValue(key: String): String? {
         ensureLoaded()
         return encryptedPrefs.getString(key, null)
@@ -182,6 +193,7 @@ class EnvVarRepository(private val context: Context) {
         ensureLoaded()
         val result = mutableMapOf<String, String>()
         for (entry in _entries.value) {
+            if (entry.isDisabled) continue
             val value = encryptedPrefs.getString(entry.key, null)
             if (value != null) {
                 result[entry.key] = value
@@ -220,6 +232,7 @@ class EnvVarRepository(private val context: Context) {
                 obj.put("key", entry.key)
                 if (entry.note.isNotEmpty()) obj.put("note", entry.note)
                 obj.put("createdAt", entry.createdAt)
+                if (entry.isDisabled) obj.put("disabled", true)
                 array.put(obj)
             }
             // Atomic: a process death mid-write used to tear the file, and the
@@ -247,6 +260,7 @@ class EnvVarRepository(private val context: Context) {
                     key = obj.optString("key", ""),
                     note = obj.optString("note", ""),
                     createdAt = obj.optLong("createdAt", 0),
+                    isDisabled = obj.optBoolean("disabled", false),
                 ))
             }
             _entries.value = entries
