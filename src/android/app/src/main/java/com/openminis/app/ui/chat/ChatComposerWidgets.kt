@@ -334,7 +334,7 @@ internal fun ToolActivityPill(
                 ToolBlockStatus.FAILED, ToolBlockStatus.TIMEOUT ->
                     Icons.Default.Error to ToolErrorColor
                 ToolBlockStatus.CANCELLED -> Icons.Default.Close to ToolCancelColor
-                else -> Icons.Default.Build to MaterialTheme.colorScheme.onSurfaceVariant
+                else -> toolIconFor(block.toolName) to MaterialTheme.colorScheme.onSurfaceVariant
             }
             Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(15.dp))
         }

@@ -2771,16 +2771,10 @@ class ProviderRepository(private val context: Context) {
         backupCoordinator.importInstanceJSON(jsonStr)
 }
 enum class ModelRefreshResult {
-    SUCCESS_API,
-    NO_KEY,
-    PRESERVED,
-    FAILURE,
-    /** HTTP 404 from the provider's /v1/models endpoint. */
-    NOT_FOUND,
-    /** Network error: DNS, TLS, timeout, or refused. */
-    CONNECTION_FAILED,
-    /** 2xx body that is not valid JSON or has no "data" array. */
-    INVALID_RESPONSE,
+    SUCCESS_API, NO_KEY, PRESERVED, FAILURE,
+    /** 404 from /v1/models */ NOT_FOUND,
+    /** DNS / TLS / timeout */ CONNECTION_FAILED,
+    /** 2xx body not valid JSON */ INVALID_RESPONSE,
 }
 /**
  * Id of the OpenCode Zen provider this app used to seed.
