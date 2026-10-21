@@ -339,7 +339,7 @@ fun BackgroundSettingsScreen(onBack: () -> Unit) {
                 Spacer(Modifier.size(16.dp))
                 BgSectionTitle(stringResource(R.string.rom_autostart_section_title))
                 BgRow(
-                    icon = Icons.Outlined.PhoneAndroid,
+                    icon = Icons.Filled.PhoneAndroid,
                     iconColor = Color(0xFFFF9500),
                     title = stringResource(R.string.rom_autostart_row_title),
                     subtitle = stringResource(
