@@ -28,6 +28,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -116,7 +118,7 @@ internal fun CompactProgressIndicator(
                 .size(18.dp)
                 .scale(scale)
                 .alpha(alpha),
-            imageVector = Icons.Outlined.HourglassEmpty,
+            imageVector = Icons.Default.HourglassEmpty,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
         )
