@@ -362,6 +362,7 @@ fun MarkdownDocument(
     modifier: Modifier = Modifier,
     contentPadding: androidx.compose.foundation.layout.PaddingValues =
         androidx.compose.foundation.layout.PaddingValues(0.dp),
+    onLinkClick: ((String) -> Unit)? = null,
 ) {
     // [T-android-inline-parse-offmain] Theme snapshot for off-main prewarm —
     // the doc viewer benefits the same way: per-block inline scans become
@@ -387,7 +388,9 @@ fun MarkdownDocument(
         // while raw still helps item reuse when the list is rebuilt with
         // the same content at the same position.
         itemsIndexed(blocks, key = { idx, b -> "$idx:${b.raw}" }) { _, block ->
-            RenderBlock(block)
+            if (onLinkClick != null) {
+                androidx.compose.runtime.CompositionLocalProvider(LocalMarkdownUrlClickHandler provides onLinkClick) { RenderBlock(block) }
+            } else { RenderBlock(block) }
         }
     }
 }
@@ -1430,7 +1433,6 @@ internal fun findInlineMathClose(text: String, from: Int): Int {
     }
     return -1
 }
-
 /**
  * Crude heuristic to skip plain currency like `$5`, `$1,000` and avoid
  * turning prose dollar signs into KaTeX renders. Real LaTeX math nearly
@@ -1457,7 +1459,6 @@ internal fun looksLikeMath(latex: String): Boolean {
     if (latex.length <= 30 && latex.all { it.isLetterOrDigit() }) return true
     return latex.length > 2
 }
-
 /**
  * [T-latex-inline] True when a candidate inline-math span is really a markdown
  * table-cell artifact (a `$` that paired across `|` column separators) rather
@@ -1480,4 +1481,3 @@ internal fun isTablePipeArtifact(content: String): Boolean {
     }
     return bareCount % 2 == 1
 }
-

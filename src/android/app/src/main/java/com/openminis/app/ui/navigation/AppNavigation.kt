@@ -1325,31 +1325,9 @@ fun AppNavigation(
                 decorFitsSystemWindows = false,
             ),
             arguments = listOf(
-                navArgument("path") {
-                    type = NavType.StringType
-                    defaultValue = ""
-                },
+                navArgument("path") { type = NavType.StringType; defaultValue = "" },
             ),
-        ) { entry ->
-            // [T-android-filepreview-holder-lifetime] Same release rule as
-            // FILE_BROWSER: the FileItem is a process-static hand-off, so it is
-            // dropped when the preview leaves — otherwise the last previewed
-            // file (and everything it references) is pinned for the process.
-            DisposableEffect(entry) {
-                onDispose { FilePreviewHolder.currentItem = null }
-            }
-            // [T-android-filepreview-nav-args] Rehydration lives in
-            // FilePreviewRoute.rememberFilePreviewItem: Holder first (hot
-            // path), nav-arg second (process-death restore), pop if neither
-            // resolves.
-            val item = rememberFilePreviewItem(navController, entry)
-            if (item != null) {
-                FilePreviewScreen(
-                    item = item,
-                    onBack = { navController.safePopBackStack() },
-                )
-            }
-        }
+        ) { entry -> FilePreviewDestination(entry, navController) }
 
         composable(Routes.ENV_VARS) {
             if (envVarRepository != null) {
@@ -1652,11 +1630,16 @@ fun AppNavigation(
                 onBack = { navController.safePopBackStack() },
             )
         }
-        composable(Routes.HOME_BROWSER) {
-            com.openminis.app.ui.browser.HomeBrowserRoute(
-                settings = false,
-                onBack = { navController.safePopBackStack() },
-            )
+        composable(
+            // url 可选：设置页直接导航到 HOME_BROWSER，不带参数。
+            "${Routes.HOME_BROWSER}?url={url}",
+            arguments = listOf(navArgument("url") {
+                type = NavType.StringType
+                nullable = true
+                defaultValue = null
+            }),
+        ) { entry ->
+            HomeBrowserDestination(entry, navController)
         }
         composable(Routes.HOME_BROWSER_SETTINGS) {
             com.openminis.app.ui.browser.HomeBrowserRoute(
@@ -1754,5 +1737,17 @@ fun AppNavigation(
             tabPool = pool,
             onDismiss = { htmlBrowserUrl = null },
         )
+    }
+}
+
+/** 文件预览页里的 Markdown 链接：文件用文件预览路由，网页用浏览器路由。 */
+internal fun previewLink(navController: NavHostController, target: com.openminis.app.ui.markdown.MarkdownLinkResolver.Target) {
+    when (target) {
+        is com.openminis.app.ui.markdown.MarkdownLinkResolver.Target.File ->
+            navController.safeNavigate(Routes.filePreview(target.absolutePath))
+        is com.openminis.app.ui.markdown.MarkdownLinkResolver.Target.Web -> {
+            val encoded = java.net.URLEncoder.encode(target.url, "UTF-8")
+            navController.safeNavigate("${Routes.HOME_BROWSER}?url=$encoded")
+        }
     }
 }

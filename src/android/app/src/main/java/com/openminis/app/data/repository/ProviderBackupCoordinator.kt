@@ -257,9 +257,8 @@ internal class ProviderBackupCoordinator(
      * `providersRestored` vs `providersSkippedExisting` (the counts that drive
      * the restore-complete credentials message, iOS parity).
      *
-     * Keep-existing policy mirrors iOS: an API key already on this device is
-     * NOT overwritten, so restoring a backup onto its origin device reports
-     * "kept" rather than "restored".
+     * 以备份为准：备份里带的凭据覆盖本机已有的值。返回值表示是否写入，
+     * 内容与本机完全相同的不重复写、不计改动。
      */
     fun restoreBackupProviderSecret(secret: BackupSecrets.ProviderSecret): Boolean {
         fun deb64(s: String?): String? = s?.let {
@@ -269,14 +268,14 @@ internal class ProviderBackupCoordinator(
         var wrote = false
 
         deb64(secret.apiKey)?.let { key ->
-            if (host.loadApiKey(instance.id) == null) {
+            if (host.loadApiKey(instance.id) != key) {
                 host.saveApiKey(instance.id, key)
                 wrote = true
             }
         }
         deb64(secret.manualOAuthToken)?.let { tok ->
             val mgr = com.openminis.app.auth.OAuthManager.forInstance(context, instance)
-            if (mgr != null && mgr.loadManualBearerToken().isNullOrEmpty()) {
+            if (mgr != null && mgr.loadManualBearerToken() != tok) {
                 mgr.saveManualBearerToken(tok)
                 wrote = true
             }
@@ -284,19 +283,19 @@ internal class ProviderBackupCoordinator(
         val mgr = oauthManagerFor(instance)
         if (mgr != null) {
             deb64(secret.oauthToken)?.let { json ->
-                if (mgr.exportStoredTokensJson().isNullOrEmpty()) {
+                if (mgr.exportStoredTokensJson() != json) {
                     mgr.importStoredTokensJson(json)
                     wrote = true
                 }
             }
             if (instance.providerType == ProviderType.gemini) {
                 deb64(secret.oauthEmail)?.let {
-                    if (mgr.exportOAuthString("email").isNullOrEmpty()) {
+                    if (mgr.exportOAuthString("email") != it) {
                         mgr.importOAuthString("email", it); wrote = true
                     }
                 }
                 deb64(secret.oauthGcpProject)?.let {
-                    if (mgr.exportOAuthString("gcp_project").isNullOrEmpty()) {
+                    if (mgr.exportOAuthString("gcp_project") != it) {
                         mgr.importOAuthString("gcp_project", it); wrote = true
                     }
                 }
@@ -334,59 +333,25 @@ internal class ProviderBackupCoordinator(
         host.ensureConfigLoaded()
         return synchronized(host.configLock) {
             val local = host.configValue
-            val before = local.instances.size
-
-            val orderedInstances = mutableListOf<ProviderInstance>()
-            val placedInstances = mutableSetOf<String>()
-            for (ri in remote.instances) {
-                val existing = local.instances.firstOrNull { it.id == ri.id }
-                orderedInstances.add(existing ?: ri)
-                placedInstances.add(ri.id)
-            }
-            for (li in local.instances) {
-                if (li.id !in placedInstances) orderedInstances.add(li)
-            }
-
-            val mergedEntries = local.modelEntries.toMutableList()
-            val entryIds = mergedEntries.map { it.id }.toMutableSet()
-            for (entry in remote.modelEntries) {
-                if (entry.id !in entryIds) {
-                    mergedEntries.add(entry)
-                    entryIds.add(entry.id)
-                }
-            }
-
-            val orderedGroups = mutableListOf<ModelGroup>()
-            val placedGroups = mutableSetOf<String>()
-            for (rg in remote.modelGroups) {
-                val existing = local.modelGroups.firstOrNull { it.id == rg.id }
-                orderedGroups.add(existing ?: rg)
-                placedGroups.add(rg.id)
-            }
-            for (lg in local.modelGroups) {
-                if (lg.id !in placedGroups) orderedGroups.add(lg)
-            }
-
+            // 备份优先：同 id 替换、同名分组合并、本机独有内容保留。
+            // 返回的第一个数是实际改动数量，调用方直接显示它。
+            val result = com.openminis.app.backup.BackupMerge.merge(local, remote)
             val mergedAgentEntries =
                 (local.agentLoopModelEntryIds + remote.agentLoopModelEntryIds).distinct()
             val mergedAgentGroups =
                 (local.agentLoopGroupIds + remote.agentLoopGroupIds).distinct()
-
-            val merged = local.copy(
-                instances = orderedInstances,
-                modelEntries = mergedEntries,
-                modelGroups = orderedGroups,
+            val merged = result.config.copy(
                 agentLoopModelEntryIds = mergedAgentEntries.toMutableList(),
                 agentLoopGroupIds = mergedAgentGroups.toMutableList(),
             )
             host.saveConfig(merged)
-            val after = orderedInstances.size
             android.util.Log.i(
                 "ProviderRepo",
-                "[Restore] provider merge: instances $before→$after " +
-                    "entries=${mergedEntries.size} groups=${orderedGroups.size}",
+                "[Restore] provider merge: changed=${result.changedCount} " +
+                    "instances=${merged.instances.size} entries=${merged.modelEntries.size} " +
+                    "groups=${merged.modelGroups.size}",
             )
-            before to after
+            result.changedCount to result.changedCount
         }
     }
 

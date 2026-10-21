@@ -411,23 +411,8 @@ object ModelsDevApi {
 
     // MARK: - Apply models.dev data
 
-    private fun applyDevData(model: LLMModel, devModel: ModelDevEntry): LLMModel {
-        return model.copy(
-            contextWindow = devModel.contextWindow ?: model.contextWindow,
-            maxOutputTokens = devModel.maxOutputTokens ?: model.maxOutputTokens,
-            supportsReasoning = devModel.reasoning ?: model.supportsReasoning,
-            interleavedReasoningField = devModel.interleavedField ?: model.interleavedReasoningField,
-            inputModalities = devModel.inputModalities ?: model.inputModalities,
-            outputModalities = devModel.outputModalities ?: model.outputModalities,
-            reasoningEffortValues = devModel.reasoningEffortValues ?: model.reasoningEffortValues,
-            // [OpenMinis#163] Only carry the AFFIRMATIVE answer forward, so
-            // enriching against an entry the catalog is silent about cannot
-            // overwrite a prior real answer with a meaningless `false`.
-            declaresNoEffortTiers = if (devModel.declaresNoEffortTiers) true else model.declaresNoEffortTiers,
-            budgetTokensMin = devModel.budgetTokensMin ?: model.budgetTokensMin,
-            budgetTokensMax = devModel.budgetTokensMax ?: model.budgetTokensMax,
-        )
-    }
+    private fun applyDevData(model: LLMModel, devModel: ModelDevEntry): LLMModel =
+        enrichWithDevData(model, devModel)
 
     // MARK: - Build models from provider entry
 

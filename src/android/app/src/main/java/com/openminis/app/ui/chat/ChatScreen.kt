@@ -1661,21 +1661,17 @@ fun ChatScreen(
             .sample(120L)
             .collect {
                 if (!viewModel.isStreaming.value) return@collect
-                // [T-android-scroll-policy] Reading owns the viewport: content
-                // growth during a stream is the newest end growing at index 0,
-                // and LazyListState's key anchoring holds the reader's row.
-                if (!scrollPolicy.isPinned) return@collect
-                if (listState.isScrollInProgress) return@collect
+                // 视口必须确实锚在最新一条的底部才跟随。停在上一条回复里
+                // （index 离开 0）或停在最新一条中部（偏移不为 0）都不跳，
+                // 否则新一轮回复开始时正在阅读的位置会被拽到底部。
                 val sinceInterrupt = System.currentTimeMillis() - lastInterruptMs
-                if (sinceInterrupt < USER_SCROLL_INTERRUPT_MS) return@collect
-                // Keep the stream follower one-way and atomic. The previous
-                // frame-driven loop estimated item heights while the streaming
-                // row was being remeasured; stale estimates could alternate
-                // with fresh ones and visibly move the whole window up/down.
-                // Stable-key anchoring handles normal growth; this is only the
-                // bounded recovery when the viewport actually fell behind.
-                if (listState.firstVisibleItemIndex != 0 ||
-                    listState.firstVisibleItemScrollOffset != 0
+                if (ScrollAnchor.shouldFollow(
+                        isPinned = scrollPolicy.isPinned,
+                        firstVisibleIndex = listState.firstVisibleItemIndex,
+                        firstVisibleOffset = listState.firstVisibleItemScrollOffset,
+                        isScrolling = listState.isScrollInProgress,
+                        withinInterruptWindow = sinceInterrupt < USER_SCROLL_INTERRUPT_MS,
+                    )
                 ) {
                     tracedScrollToItem("LE(streaming-content)/tail", 0, 0)
                 }
