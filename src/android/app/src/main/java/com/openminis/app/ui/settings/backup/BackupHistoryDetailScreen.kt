@@ -83,7 +83,7 @@ fun BackupHistoryDetailScreen(
         actions = {
             IconButton(onClick = { confirmRemove = true }) {
                 Icon(
-                    m3Icon(Icons.Icons.Outlined.Delete)
+                    m3Icon(Icons.Outlined.Delete),
                     contentDescription = stringResource(R.string.backup_history_remove),
                     tint = MaterialTheme.colorScheme.error,
                 )
@@ -281,7 +281,7 @@ private fun DetailRow(
             if (onClick != null) {
                 Spacer(Modifier.width(4.dp))
                 Icon(
-                    m3Icon(Icons.Icons.AutoMirrored.Filled.KeyboardArrowRight)
+                    m3Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight),
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp),
@@ -364,7 +364,7 @@ private fun DestinationOutcomeRow(
             }
             if (onClick != null) {
                 Icon(
-                    m3Icon(Icons.Icons.AutoMirrored.Filled.KeyboardArrowRight)
+                    m3Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight),
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp),
