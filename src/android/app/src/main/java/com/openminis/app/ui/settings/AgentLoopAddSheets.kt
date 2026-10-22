@@ -98,7 +98,7 @@ fun AddAgentLoopModelsScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
-                            m3Icon(Icons.Icons.AutoMirrored.Filled.ArrowBack)
+                            m3Icon(Icons.AutoMirrored.Filled.ArrowBack),
                             contentDescription = stringResource(R.string.model_group_detail_back),
                         )
                     }
@@ -187,7 +187,7 @@ fun AddAgentLoopGroupsScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
-                            m3Icon(Icons.Icons.AutoMirrored.Filled.ArrowBack)
+                            m3Icon(Icons.AutoMirrored.Filled.ArrowBack),
                             contentDescription = stringResource(R.string.model_group_detail_back),
                         )
                     }
