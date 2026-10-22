@@ -143,12 +143,7 @@ internal fun AssistantHeader(speakerName: String? = null, speakerVendor: String?
             )
         } else {
         // [T-soul-avatar-model-icon] 「模型图标」模式需要当前模型身份。
-        SoulChatAvatar(
-            soulIcon = soulMeta.icon,
-            speakerVendor = speakerVendor,
-            namedSpeaker = namedSpeaker,
-            sparkleGradient = sparkleGradient,
-        )
+        SoulChatAvatar(soulMeta.icon, speakerVendor, namedSpeaker, sparkleGradient)
         }
         Spacer(modifier = Modifier.width(6.dp))
         Text(
@@ -1167,10 +1162,12 @@ private fun ProcessStepRow(step: ProcessStepRef, onOpen: () -> Unit) {
     }
 }
 
+/**
  * [T-thinking-render-perf-android] Full-screen viewer for thinking content
  * that exceeds the inline hard cap. Wraps a native Android [android.widget.TextView]
  * (inside a scroller) — it lays out very large strings far more cheaply than
  * Compose `Text`, and stays selectable.
+ */
 @Composable
 private fun ThinkingFullContentDialog(content: String, onDismiss: () -> Unit) {
     val textColor = MaterialTheme.colorScheme.onSurface
