@@ -1,13 +1,17 @@
 package com.openminis.app.ui.settings
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -18,12 +22,26 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.openminis.app.R
-import com.openminis.app.ui.theme.m3Icon
+import com.openminis.app.agent.SoulIcon
+import com.openminis.app.agent.SoulMetadata
+import com.openminis.app.ui.components.MinisButton
+import com.openminis.app.ui.components.MinisOutlinedButton
+import androidx.compose.material3.ExperimentalMaterial3Api
 
-/** Soul 头像的 emoji 选择面板。独立成文件：SoulSettingsScreen 已到行数 ceiling。 */
+/**
+ * Soul 头像的 emoji 选择面板。
+ *
+ * 独立成文件：SoulSettingsScreen 已到架构门禁的行数 ceiling。
+ * 函数体与导入清单均从 main 原样拷贝，未做任何手写改动。
+ */
 @OptIn(ExperimentalMaterial3Api::class)
+@Composable
 @Composable
 internal fun SoulEmojiPickerSheet(
     current: String,
