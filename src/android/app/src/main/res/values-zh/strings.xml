@@ -2320,6 +2320,9 @@
     <string name="provider_sync_mark_failed">刷新失败</string>
     <string name="provider_sync_mark_nokey">无密钥</string>
     <string name="provider_sync_mark_unchanged">未更新</string>
+    <string name="provider_sync_mark_not_found">404 not found</string>
+    <string name="provider_sync_mark_connection">Connection failed</string>
+    <string name="provider_sync_mark_invalid">Invalid response</string>
     <string name="sessionlist_untitled">新对话</string>
     <string name="sessionlist_no_messages">暂无消息</string>
 
