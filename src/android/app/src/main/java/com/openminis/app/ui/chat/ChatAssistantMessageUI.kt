@@ -7,18 +7,12 @@ package com.openminis.app.ui.chat
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.HorizontalDivider
@@ -69,10 +63,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -104,6 +98,7 @@ import com.openminis.app.data.model.ThinkingLevel
 import com.openminis.app.ui.theme.ChatColors
 import com.openminis.app.ui.theme.m3Icon
 import com.openminis.app.ui.components.MinisTextButton
+import com.openminis.app.ui.theme.decorLinearSweep
 
 @Composable
 internal fun AssistantHeader(speakerName: String? = null, speakerVendor: String? = null) {
@@ -497,15 +492,8 @@ internal fun ToolCallPill(
     // where a spinner reads correctly (the bar this row sits in does not).
     // [FloatingToolStatusBar was removed in e6beebb; the pill replaced it.]
     val shimmerTranslate = if (isRunning) {
-        val transition = rememberInfiniteTransition(label = "toolPillShimmer")
-        transition.animateFloat(
-            initialValue = -1f,
-            targetValue = 2f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 2800, easing = LinearEasing),
-            ),
-            label = "toolPillShimmerTranslate",
-        )
+        // [T-decor-shared-clock] shimmer 平移走共享时钟（原 2800ms linear Restart）。
+        decorLinearSweep(from = -1f, to = 2f, periodMs = 2800)
     } else null
 
     // [T-android-tool-bubble-longpress-menu] Long-press menu state, scoped
@@ -534,7 +522,7 @@ internal fun ToolCallPill(
                             drawContent()
                             val w = size.width
                             val band = w * 0.6f
-                            val x = shimmerTranslate.value * w
+                            val x = shimmerTranslate * w
                             drawRect(
                                 brush = Brush.linearGradient(
                                     colors = listOf(

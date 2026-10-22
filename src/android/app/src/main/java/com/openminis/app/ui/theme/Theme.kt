@@ -240,10 +240,10 @@ fun MinisTheme(
             LocalMonetDynamic provides dynamicActive,
             LocalUseRoundedIcons provides dynamicActive,
         ) {
-            // [T-decor-shared-clock] 所有装饰动画共用一个 30fps 相位来源，
-            // 取代此前散落的 15 个各自独立的 infinite transition。放在主题
-            // 里而不是 MainActivity：任何 MinisTheme 消费者都自动获得，
-            // 调用方零改动。
+            // [T-decor-shared-clock] 所有装饰动画共用一个 30fps 相位来源。
+            // 消费者必须显式读 LocalDecorPhase / decor* 派生器才真正共享时钟
+            // ——PR #126 只挂了 Provider 没接消费者，共享时钟空转、独立
+            // transition 照跑，是假修复；本提交把 8 处动画全部迁到派生器上。
             DecorClockProvider(content)
         }
     }

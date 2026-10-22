@@ -356,7 +356,12 @@ object SpeechRecognitionManager {
         val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
         fun onMain(block: () -> Unit) {
             if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) block()
-            else mainHandler.post { runCatching(block) }
+            else mainHandler.post {
+                // 回调异常不能静默吞掉——否则 UI 侧的崩溃变成无日志黑洞。
+                runCatching(block).onFailure {
+                    Log.w("SpeechRecognition", "main-thread dispatch failed", it)
+                }
+            }
         }
         val listener = object : SpeechRecognitionEngine.Listener {
             override fun onReadyForSpeech() = onMain {

@@ -2,12 +2,6 @@ package com.openminis.app.ui.chat.voice
 import com.openminis.app.ui.theme.m3Icon
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -45,11 +39,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -69,6 +63,7 @@ import com.openminis.app.MinisApp
 import com.openminis.app.R
 import com.openminis.app.speech.VoiceOutputState
 import kotlinx.coroutines.delay
+import com.openminis.app.ui.theme.decorRotationAngle
 
 /**
  * [T-android-tts-capsule] Floating speech-player control for "Read replies"
@@ -556,13 +551,8 @@ private fun SpeakerGlyph(muted: Boolean, synthesizing: Boolean, ring: androidx.c
             modifier = Modifier.size(18.dp),
         )
         if (synthesizing && !muted) {
-            val transition = rememberInfiniteTransition(label = "synthArc")
-            val angle by transition.animateFloat(
-                initialValue = 0f,
-                targetValue = 360f,
-                animationSpec = infiniteRepeatable(tween(900, easing = LinearEasing), RepeatMode.Restart),
-                label = "synthAngle",
-            )
+            // [T-decor-shared-clock] 合成弧旋转角走共享时钟（原 900ms linear Restart）。
+            val angle = decorRotationAngle(900)
             val arcColor = MaterialTheme.colorScheme.primary
             Canvas(Modifier.size(ring)) {
                 drawArc(
