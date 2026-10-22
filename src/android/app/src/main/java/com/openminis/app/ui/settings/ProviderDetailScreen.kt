@@ -147,7 +147,7 @@ fun ProviderDetailScreen(
                 AppLogger.info(TAG, "Export instance ${instance.id} (${instance.label})")
                 exportProviderInstance(exportContext, providerRepository, instance)
             }) {
-                Icon(Icons.Default.IosShare, contentDescription = stringResource(R.string.provider_detail_export))
+                Icon(m3Icon(Icons.Default.IosShare), contentDescription = stringResource(R.string.provider_detail_export))
             }
         },
     ) {
@@ -715,7 +715,7 @@ fun ProviderDetailScreen(
                                 },
                                 leadingIcon = {
                                     Icon(
-                                        Icons.Filled.Delete,
+                                        m3Icon(Icons.Icons.Filled.Delete)
                                         contentDescription = null,
                                         tint = MaterialTheme.colorScheme.error,
                                     )
@@ -990,7 +990,7 @@ private fun ApiKeyCredentialBlock(
             trailingIcon = {
                 IconButton(onClick = onToggleVisibility) {
                     Icon(
-                        if (keyVisible) m3Icon(Icons.Default.VisibilityOff) else m3Icon(Icons.Default.Visibility),
+                        if (keyVisible) m3Icon(m3Icon(Icons.Default.VisibilityOff)) else m3Icon(m3Icon(Icons.Default.Visibility)),
                         contentDescription = if (keyVisible) "Hide" else "Show",
                     )
                 }
@@ -1032,7 +1032,7 @@ private fun ApiKeyCredentialBlock(
             )
             IconButton(onClick = onToggleVisibility) {
                 Icon(
-                    if (keyVisible) m3Icon(Icons.Default.VisibilityOff) else m3Icon(Icons.Default.Visibility),
+                    if (keyVisible) m3Icon(m3Icon(Icons.Default.VisibilityOff)) else m3Icon(m3Icon(Icons.Default.Visibility)),
                     contentDescription = if (keyVisible) "Hide" else "Show",
                 )
             }
@@ -1221,13 +1221,13 @@ private fun ModalityIconsRow(
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         // Input badges (muted).
-        if ("image" in inputModalities) Icon(Icons.Default.Image, contentDescription = stringResource(R.string.modeldetail_image_input), tint = inputTint, modifier = size)
-        if ("pdf" in inputModalities) Icon(Icons.AutoMirrored.Filled.InsertDriveFile, contentDescription = stringResource(R.string.modeldetail_pdf_input), tint = inputTint, modifier = size)
-        if ("audio" in inputModalities) Icon(Icons.Default.Mic, contentDescription = stringResource(R.string.modeldetail_audio_input), tint = inputTint, modifier = size)
-        if ("video" in inputModalities) Icon(Icons.Default.Videocam, contentDescription = stringResource(R.string.modeldetail_video_input), tint = inputTint, modifier = size)
+        if ("image" in inputModalities) Icon(m3Icon(Icons.Default.Image), contentDescription = stringResource(R.string.modeldetail_image_input), tint = inputTint, modifier = size)
+        if ("pdf" in inputModalities) Icon(m3Icon(Icons.AutoMirrored.Filled.InsertDriveFile), contentDescription = stringResource(R.string.modeldetail_pdf_input), tint = inputTint, modifier = size)
+        if ("audio" in inputModalities) Icon(m3Icon(Icons.Default.Mic), contentDescription = stringResource(R.string.modeldetail_audio_input), tint = inputTint, modifier = size)
+        if ("video" in inputModalities) Icon(m3Icon(Icons.Default.Videocam), contentDescription = stringResource(R.string.modeldetail_video_input), tint = inputTint, modifier = size)
         // Output badges (tinted, generate-style glyphs).
-        if ("image" in outputModalities) Icon(Icons.Default.AddPhotoAlternate, contentDescription = stringResource(R.string.modeldetail_image_output), tint = outputTint, modifier = size)
-        if ("audio" in outputModalities) Icon(Icons.Default.VolumeUp, contentDescription = stringResource(R.string.modeldetail_audio_output), tint = outputTint, modifier = size)
-        if ("video" in outputModalities) Icon(Icons.Default.MovieCreation, contentDescription = stringResource(R.string.modeldetail_video_output), tint = outputTint, modifier = size)
+        if ("image" in outputModalities) Icon(m3Icon(Icons.Default.AddPhotoAlternate), contentDescription = stringResource(R.string.modeldetail_image_output), tint = outputTint, modifier = size)
+        if ("audio" in outputModalities) Icon(m3Icon(Icons.Default.VolumeUp), contentDescription = stringResource(R.string.modeldetail_audio_output), tint = outputTint, modifier = size)
+        if ("video" in outputModalities) Icon(m3Icon(Icons.Default.MovieCreation), contentDescription = stringResource(R.string.modeldetail_video_output), tint = outputTint, modifier = size)
     }
 }
