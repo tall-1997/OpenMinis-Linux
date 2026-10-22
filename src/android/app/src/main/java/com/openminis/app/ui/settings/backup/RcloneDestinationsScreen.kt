@@ -537,7 +537,7 @@ internal fun FolderBrowser(vm: RcloneDestinationsViewModel, onSaved: (String) ->
             )
             IconButton(onClick = { showNewFolder = true }, enabled = !busy) {
                 Icon(
-                    m3Icon(Icons.Icons.Outlined.CreateNewFolder)
+                    m3Icon(Icons.Outlined.CreateNewFolder),
                     contentDescription = stringResource(R.string.backup_dest_new_folder),
                     tint = MaterialTheme.colorScheme.primary,
                 )
