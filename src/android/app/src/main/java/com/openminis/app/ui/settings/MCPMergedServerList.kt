@@ -137,7 +137,7 @@ private fun ServerTrailing(
             modifier = Modifier.size(32.dp),
         ) {
             Icon(
-                m3Icon(Icons.Icons.Outlined.Construction)
+                m3Icon(Icons.Outlined.Construction),
                 contentDescription = stringResource(R.string.mcp_tools_title, server.id),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(16.dp),
