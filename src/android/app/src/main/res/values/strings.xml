@@ -568,6 +568,8 @@
     <string name="soul_icon_choose_image">Choose Image</string>
     <string name="soul_icon_image_hint">Cropped to a square and rounded</string>
     <string name="soul_icon_use_default">Use Default</string>
+    <string name="soul_icon_use_model">Use Model Icon</string>
+    <string name="soul_icon_use_model_hint">Follow the vendor icon of the running model</string>
     <string name="soul_icon_emoji_title">Identity icon</string>
     <string name="soul_icon_emoji_field">Or type an emoji</string>
     <string name="soul_icon_set">Set</string>

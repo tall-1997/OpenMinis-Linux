@@ -142,12 +142,8 @@ internal fun AssistantHeader(speakerName: String? = null, speakerVendor: String?
                 fallbackName = namedSpeaker,
             )
         } else {
-        com.openminis.app.ui.settings.SoulIconGlyph(
-            icon = soulMeta.icon,
-            sizeDp = 18.dp,
-            emojiSp = 15.sp,
-            sparkleTint = sparkleGradient,
-        )
+        // [T-soul-avatar-model-icon] 「模型图标」模式需要当前模型身份。
+        SoulChatAvatar(soulMeta.icon, speakerVendor, namedSpeaker, sparkleGradient)
         }
         Spacer(modifier = Modifier.width(6.dp))
         Text(

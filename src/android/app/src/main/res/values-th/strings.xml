@@ -288,6 +288,8 @@
     <string name="soul_icon_choose_image">เลือกรูปภาพ</string>
     <string name="soul_icon_image_hint">ครอบตัดเป็นสี่เหลี่ยมจัตุรัสและลบมุม</string>
     <string name="soul_icon_use_default">ใช้ค่าเริ่มต้น</string>
+    <string name="soul_icon_use_model">Use Model Icon</string>
+    <string name="soul_icon_use_model_hint">Follow the vendor icon of the running model</string>
     <string name="soul_icon_emoji_title">ไอคอนตัวตน</string>
     <string name="soul_icon_emoji_field">หรือพิมพ์อีโมจิ</string>
     <string name="soul_icon_set">ตั้งค่า</string>

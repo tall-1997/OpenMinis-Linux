@@ -239,8 +239,13 @@ fun MinisTheme(
             LocalChatPalette provides chatPalette,
             LocalMonetDynamic provides dynamicActive,
             LocalUseRoundedIcons provides dynamicActive,
-            content = content,
-        )
+        ) {
+            // [T-decor-shared-clock] 所有装饰动画共用一个 30fps 相位来源，
+            // 取代此前散落的 15 个各自独立的 infinite transition。放在主题
+            // 里而不是 MainActivity：任何 MinisTheme 消费者都自动获得，
+            // 调用方零改动。
+            DecorClockProvider(content)
+        }
     }
 }
 

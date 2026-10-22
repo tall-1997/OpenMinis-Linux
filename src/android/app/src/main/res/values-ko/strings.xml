@@ -288,6 +288,8 @@
     <string name="soul_icon_choose_image">이미지 선택</string>
     <string name="soul_icon_image_hint">정사각형으로 잘리고 모서리가 둥글게 처리됩니다</string>
     <string name="soul_icon_use_default">기본값 사용</string>
+    <string name="soul_icon_use_model">Use Model Icon</string>
+    <string name="soul_icon_use_model_hint">Follow the vendor icon of the running model</string>
     <string name="soul_icon_emoji_title">정체성 아이콘</string>
     <string name="soul_icon_emoji_field">또는 이모지를 입력하세요</string>
     <string name="soul_icon_set">설정</string>

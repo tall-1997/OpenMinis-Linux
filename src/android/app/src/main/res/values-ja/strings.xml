@@ -288,6 +288,8 @@
     <string name="soul_icon_choose_image">画像を選択</string>
     <string name="soul_icon_image_hint">正方形に切り抜かれ、角が丸められます</string>
     <string name="soul_icon_use_default">デフォルトを使用</string>
+    <string name="soul_icon_use_model">Use Model Icon</string>
+    <string name="soul_icon_use_model_hint">Follow the vendor icon of the running model</string>
     <string name="soul_icon_emoji_title">アイデンティティのアイコン</string>
     <string name="soul_icon_emoji_field">または絵文字を入力</string>
     <string name="soul_icon_set">設定</string>

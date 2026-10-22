@@ -82,9 +82,20 @@ internal suspend fun ChatViewModel.truncateBeforeEdit(messageId: String): Boolea
         )
     }
     val remaining = awaitBoundedHistoryRebuild(sid)
+    // [T-edit-digest-leak] Same leak deleteFromMessage fixes: llmDigestLines
+    // holds summaries of rows trimAgentHistory evicted from the model window.
+    // The user just deleted everything from the edited turn onward, so those
+    // summaries now describe content that no longer exists — but
+    // effectiveAgentHistory() injects the digest on EVERY turn, so the model
+    // kept seeing the pre-edit content long after the DB row was gone. That is
+    // exactly the "编辑后旧内容残留在模型上下文中" symptom.
+    // The user-initiated compact summary (_compactSummary) is a different store
+    // and stays: it condenses turns that still exist.
+    llmDigestLines.clear()
+    llmDigestOmitted = 0
     AppLogger.info(
         ChatViewModel.TAG_STREAM,
-        "✏️ truncateBeforeEdit cutoffSortOrder=$cutoffSortOrder remaining=${remaining.size}"
+        "✏️ truncateBeforeEdit cutoffSortOrder=$cutoffSortOrder remaining=${remaining.size} (digest cleared)"
     )
     return true
 }

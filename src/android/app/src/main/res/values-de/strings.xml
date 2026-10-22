@@ -288,6 +288,8 @@
     <string name="soul_icon_choose_image">Bild wählen</string>
     <string name="soul_icon_image_hint">Wird quadratisch zugeschnitten und abgerundet</string>
     <string name="soul_icon_use_default">Standard verwenden</string>
+    <string name="soul_icon_use_model">Use Model Icon</string>
+    <string name="soul_icon_use_model_hint">Follow the vendor icon of the running model</string>
     <string name="soul_icon_emoji_title">Identitätssymbol</string>
     <string name="soul_icon_emoji_field">Oder ein Emoji eingeben</string>
     <string name="soul_icon_set">Festlegen</string>

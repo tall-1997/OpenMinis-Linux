@@ -856,11 +856,7 @@ class AgentForegroundService : Service() {
             promoted -> NotificationSurface.PROMOTED
             else -> NotificationSurface.PLAIN
         }
-        val subtitle = when {
-            active == 0 -> getString(R.string.notif_in_session)
-            active == 1 -> getString(R.string.notif_one_task_running)
-            else -> getString(R.string.notif_n_tasks_running, active)
-        }
+        val subtitle = ForegroundNotificationCopy.runningSubtitle(this, active)
         return ForegroundNotificationState(
             activeCount = active,
             toolName = SessionActivityTracker.currentToolName.value,
@@ -1079,15 +1075,8 @@ class AgentForegroundService : Service() {
         val seconds = elapsedSeconds % 60
         val timeString = String.format("%d:%02d", minutes, seconds)
 
-        val mainIntent = Intent(this, Class.forName("com.openminis.app.MainActivity")).apply {
-            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        }
-        val pendingIntent = PendingIntent.getActivity(
-            this,
-            0,
-            mainIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+        // [T-notif-tap-wrong-session] 点击回到发通知的那个会话（见 NotificationTapIntent）。
+        val pendingIntent = NotificationTapIntent.build(this)
 
         val stopIntent = Intent(this, AgentForegroundService::class.java).apply {
             action = ACTION_STOP
@@ -1121,6 +1110,7 @@ class AgentForegroundService : Service() {
                 timeString = timeString,
                 contentIntent = pendingIntent,
                 stopIntent = stopPendingIntent,
+                activeCount = state.activeCount,
             )
         }
 
@@ -1475,6 +1465,7 @@ class AgentForegroundService : Service() {
         timeString: String,
         contentIntent: PendingIntent,
         stopIntent: PendingIntent,
+        activeCount: Int,
     ): Notification {
         val title = if (isCompleted) {
             getString(R.string.bg_service_notification_title_completed)
@@ -1484,10 +1475,12 @@ class AgentForegroundService : Service() {
         // [T-android-hyperos-island] Fix: the completed row used the TITLE
         // string ("Task completed") as its body text — a copy-paste slip
         // from the title branch above. Use the real completed body.
+        // 运行中的行必须报真实会话数：之前硬编码 "1 task running"，
+        // 多会话并行时通知栏/灵动岛一直在撒谎。
         val text = if (isCompleted) {
             getString(R.string.bg_service_notification_text_completed, sessionLabel, timeString)
         } else {
-            getString(R.string.notif_one_task_running)
+            ForegroundNotificationCopy.runningSubtitle(this, activeCount)
         }
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(statusIconRes(isCompleted))

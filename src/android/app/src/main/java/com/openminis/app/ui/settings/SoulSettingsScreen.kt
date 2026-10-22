@@ -46,6 +46,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -396,6 +397,10 @@ fun SoulSettingsScreen(
                             )
                         },
                         onUseDefault = { showIconMenu = false; icon = "" },
+                        onUseModelIcon = {
+                            showIconMenu = false
+                            icon = com.openminis.app.agent.SoulIcon.MODEL_ICON_SENTINEL
+                        },
                     )
                 }
                 Column(modifier = Modifier.padding(start = 4.dp)) {
@@ -722,141 +727,16 @@ internal fun SoulIconGlyph(
                     drawRect(brush = sparkleTint, blendMode = BlendMode.SrcIn)
                 },
         )
+        // [T-soul-avatar-model-icon] 模型图标模式（实现在 SoulModelIcon.kt）。
+        SoulIcon.isModelIcon(icon) -> SoulModelIconAvatar(sizeDp = sizeDp, emojiSp = emojiSp)
         else -> Text(text = SoulMetadata.DISPLAY_EMOJI, fontSize = emojiSp)
     }
 }
 
-@Composable
-private fun SoulIconMenu(
-    expanded: Boolean,
-    hasIcon: Boolean,
-    onDismiss: () -> Unit,
-    onChooseEmoji: () -> Unit,
-    onChooseImage: () -> Unit,
-    onUseDefault: () -> Unit,
-) {
-    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
-        DropdownMenuItem(
-            text = { Text(stringResource(R.string.soul_icon_choose_emoji)) },
-            onClick = onChooseEmoji,
-        )
-        DropdownMenuItem(
-            text = {
-                Column {
-                    Text(stringResource(R.string.soul_icon_choose_image))
-                    // Stated up front so the square crop isn't a surprise after
-                    // picking. (There is no alpha requirement: opaque images are
-                    // accepted and the rounded clip is what makes them look right.)
-                    Text(
-                        text = stringResource(R.string.soul_icon_image_hint),
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            },
-            onClick = onChooseImage,
-        )
-        // Only offered when there is something to clear.
-        if (hasIcon) {
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.soul_icon_use_default)) },
-                onClick = onUseDefault,
-            )
-        }
-    }
-}
 
-/**
- * Two rows of suggestions, tap-to-fill, a live preview at render size, and a
- * free-form field that normalizes per keystroke.
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun SoulEmojiPickerSheet(
-    current: String,
-    onDismiss: () -> Unit,
-    onPick: (String) -> Unit,
-) {
-    var draft by remember { mutableStateOf(current) }
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 28.dp),
-        ) {
-            Text(
-                text = stringResource(R.string.soul_icon_emoji_title),
-                fontSize = 17.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Spacer(Modifier.height(16.dp))
+// SoulIconMenu 已移到 SoulIconMenu.kt（架构门禁行数）
 
-            // Preview at the size the icon is actually drawn on the card.
-            Box(
-                modifier = Modifier
-                    .align(Alignment.CenterHorizontally)
-                    .size(56.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = draft.ifEmpty { SoulMetadata.DISPLAY_EMOJI },
-                    fontSize = 30.sp,
-                )
-            }
-            Spacer(Modifier.height(20.dp))
 
-            SoulIcon.SUGGESTED_EMOJI.chunked(8).forEach { row ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                ) {
-                    row.forEach { e ->
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    if (e == draft) MaterialTheme.colorScheme.primaryContainer
-                                    else Color.Transparent,
-                                )
-                                .clickable { draft = e },
-                            contentAlignment = Alignment.Center,
-                        ) { Text(text = e, fontSize = 22.sp) }
-                    }
-                }
-                Spacer(Modifier.height(8.dp))
-            }
-
-            Spacer(Modifier.height(12.dp))
-            OutlinedTextField(
-                value = draft,
-                // Normalized PER KEYSTROKE rather than validated on submit:
-                // a second emoji replaces the first, and non-emoji input is
-                // dropped silently instead of being accepted then rejected.
-                onValueChange = { draft = SoulIcon.normalizeEmojiInput(it) },
-                label = { Text(stringResource(R.string.soul_icon_emoji_field)) },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            Spacer(Modifier.height(20.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                MinisOutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) {
-                    Text(stringResource(R.string.soul_cancel))
-                }
-                MinisButton(
-                    onClick = { onPick(draft) },
-                    enabled = draft.isNotEmpty(),
-                    modifier = Modifier.weight(1f),
-                ) { Text(stringResource(R.string.soul_icon_set)) }
-            }
-        }
-    }
-}
 
 /// Render the within-budget counter — picks the CJK character unit vs "words" depending on
 /// the same CJK ratio rule that decides which cap applies. Standalone

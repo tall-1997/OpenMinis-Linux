@@ -340,7 +340,9 @@ fun SettingsRow(
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
-                        imageVector = icon,
+                        // [T-two-styles] 设置行图标走 m3Icon：动态取色时切 Outlined
+                        // (Material Symbols)，非动态保持 Filled (SF Symbols)。
+                        imageVector = m3Icon(icon),
                         contentDescription = null,
                         tint = chipFg,
                         modifier = Modifier.size(18.dp),

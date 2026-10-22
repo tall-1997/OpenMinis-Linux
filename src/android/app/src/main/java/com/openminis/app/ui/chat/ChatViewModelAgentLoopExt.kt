@@ -1312,8 +1312,8 @@ internal suspend fun ChatViewModel.runAgentLoop(
                     }
                     // Compaction failed — fall through to fallback / throw.
                 }
-                val maxRetries = effectiveMaxRetries()
-                // 429 with another group member: switch endpoints instead of
+                if (abandonIfModelSwitched(loopModelEpoch)) { loopExitedNormally = true; break }
+                val maxRetries = effectiveMaxRetries()                // 429 with another group member: switch endpoints instead of
                 // hammering the same key through 1/2/4/8/16s (inside a typical
                 // 60s relay window). Same-provider retries remain for network
                 // / 5xx, and for 429 when this is the last candidate — at most once.

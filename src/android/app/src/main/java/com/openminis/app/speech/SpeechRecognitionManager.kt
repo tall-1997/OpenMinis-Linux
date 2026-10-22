@@ -345,17 +345,30 @@ object SpeechRecognitionManager {
         resetLevels()
         activeCallbacks = onPartialOrFinal to onError
 
+        // [T-voice-crash-thread] 引擎回调统一派发到主线程。
+        //
+        // SystemSpeechRecognitionEngine 用 mainHandler 回调，但
+        // ProviderSpeechRecognitionEngine（网络引擎）的 listener.* 直接在
+        // 协程上下文里执行。而 InlineVoiceInputPanel 的回调直接写 Compose
+        // state（captureBase），跨线程写 snapshot 会抛
+        // IllegalStateException 崩掉整个语音面板。在 Manager 这一层统一
+        // post 到主线程，一处覆盖全部引擎和全部入口。
+        val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+        fun onMain(block: () -> Unit) {
+            if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) block()
+            else mainHandler.post { runCatching(block) }
+        }
         val listener = object : SpeechRecognitionEngine.Listener {
-            override fun onReadyForSpeech() {
+            override fun onReadyForSpeech() = onMain {
                 setState(RecognitionState.RECORDING)
             }
 
-            override fun onPartial(text: String) {
+            override fun onPartial(text: String) = onMain {
                 _recognizedText.value = text
                 onPartialOrFinal(text, false)
             }
 
-            override fun onFinal(text: String) {
+            override fun onFinal(text: String) = onMain {
                 if (text.isNotEmpty()) _recognizedText.value = text
                 onPartialOrFinal(text, true)
                 setState(RecognitionState.IDLE)
@@ -363,7 +376,7 @@ object SpeechRecognitionManager {
                 refreshAvailability()
             }
 
-            override fun onError(error: RecognitionError, message: String?) {
+            override fun onError(error: RecognitionError, message: String?) = onMain {
                 _lastError.value = error
                 setState(RecognitionState.IDLE)
                 resetLevels()
@@ -371,7 +384,7 @@ object SpeechRecognitionManager {
                 refreshAvailability()
             }
 
-            override fun onRmsDb(rms: Float) { pushLevel(rms) }
+            override fun onRmsDb(rms: Float) = onMain { pushLevel(rms) }
         }
 
         try {

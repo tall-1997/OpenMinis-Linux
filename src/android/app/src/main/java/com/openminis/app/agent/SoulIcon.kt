@@ -19,6 +19,19 @@ object SoulIcon {
     /** The stored prefix. PNG specifically: it is the format we re-encode to. */
     const val DATA_URI_PREFIX = "data:image/png;base64,"
 
+    /**
+     * [T-soul-avatar-model-icon] 头像用「当前会话运行模型」的厂商图标。
+     *
+     * 与 emoji / 图片并列的第三种模式，用固定哨兵值表示 —— 不存具体模型 id，
+     * 因为用户要的是"跟着当前模型走"而不是钉死某个图标：换了模型，头像自动
+     * 变成新模型的厂商图标。
+     *
+     * 用户手动设置的 emoji / 图片永远优先，这个值只在用户显式选择时才写入。
+     */
+    const val MODEL_ICON_SENTINEL = "model:"
+
+    fun isModelIcon(value: String): Boolean = value == MODEL_ICON_SENTINEL
+
     /** Longest edge of the stored bitmap, in pixels. ~1-4 KB as a data URI. */
     const val STORED_PIXELS = 96
 

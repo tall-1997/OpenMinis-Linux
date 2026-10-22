@@ -525,6 +525,8 @@
     <string name="soul_icon_choose_image">选择图片</string>
     <string name="soul_icon_image_hint">会裁剪为方形并做圆角</string>
     <string name="soul_icon_use_default">恢复默认</string>
+    <string name="soul_icon_use_model">使用模型图标</string>
+    <string name="soul_icon_use_model_hint">跟随当前会话运行模型的厂商图标</string>
     <string name="soul_icon_emoji_title">身份图标</string>
     <string name="soul_icon_emoji_field">或输入一个表情</string>
     <string name="soul_icon_set">设置</string>

@@ -290,6 +290,8 @@
     <string name="soul_icon_choose_image">Выбрать изображение</string>
     <string name="soul_icon_image_hint">Обрезается до квадрата и скругляется</string>
     <string name="soul_icon_use_default">Использовать по умолчанию</string>
+    <string name="soul_icon_use_model">Use Model Icon</string>
+    <string name="soul_icon_use_model_hint">Follow the vendor icon of the running model</string>
     <string name="soul_icon_emoji_title">Значок личности</string>
     <string name="soul_icon_emoji_field">Или введите эмодзи</string>
     <string name="soul_icon_set">Задать</string>

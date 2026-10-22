@@ -293,6 +293,8 @@
     <string name="soul_icon_choose_image">Pilih Gambar</string>
     <string name="soul_icon_image_hint">Dipotong menjadi persegi dan dibulatkan</string>
     <string name="soul_icon_use_default">Gunakan Bawaan</string>
+    <string name="soul_icon_use_model">Use Model Icon</string>
+    <string name="soul_icon_use_model_hint">Follow the vendor icon of the running model</string>
     <string name="soul_icon_emoji_title">Ikon identitas</string>
     <string name="soul_icon_emoji_field">Atau ketik emoji</string>
     <string name="soul_icon_set">Terapkan</string>

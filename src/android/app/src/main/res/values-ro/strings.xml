@@ -289,6 +289,8 @@
     <string name="soul_icon_choose_image">Alege o imagine</string>
     <string name="soul_icon_image_hint">Decupată pătrat și cu colțuri rotunjite</string>
     <string name="soul_icon_use_default">Folosește imaginea implicită</string>
+    <string name="soul_icon_use_model">Use Model Icon</string>
+    <string name="soul_icon_use_model_hint">Follow the vendor icon of the running model</string>
     <string name="soul_icon_emoji_title">Pictograma identității</string>
     <string name="soul_icon_emoji_field">Sau scrie un emoji</string>
     <string name="soul_icon_set">Setează</string>

@@ -387,7 +387,7 @@ class BrowserUseManager(
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupWebViewClient() {
-        webView.webViewClient = object : WebViewClient() {
+        webView.webViewClient = object : CrashSafeWebViewClient() {
             override fun shouldOverrideUrlLoading(
                 view: WebView,
                 request: WebResourceRequest,
