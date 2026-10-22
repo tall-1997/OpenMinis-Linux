@@ -124,7 +124,7 @@ fun KimiDeviceLoginDialog(
                         .padding(vertical = 8.dp),
                 ) {
                     Icon(
-                        m3Icon(Icons.Icons.Default.OpenInBrowser)
+                        m3Icon(Icons.Default.OpenInBrowser),
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(20.dp),
