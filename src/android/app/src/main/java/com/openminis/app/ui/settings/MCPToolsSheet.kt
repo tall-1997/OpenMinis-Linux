@@ -43,6 +43,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import com.openminis.app.ui.theme.m3Icon
 
 private data class McpToolRow(val name: String, val description: String)
 
@@ -207,7 +208,7 @@ fun MCPToolsScreen(
                     )
                 } else {
                     Icon(
-                        Icons.Outlined.Refresh,
+                        m3Icon(Icons.Icons.Outlined.Refresh)
                         contentDescription = stringResource(R.string.mcp_tools_refresh),
                     )
                 }
