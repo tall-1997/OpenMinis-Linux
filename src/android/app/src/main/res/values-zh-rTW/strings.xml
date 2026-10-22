@@ -250,6 +250,9 @@
     <string name="voice_service_shared_credential_note">此語音服務共用其供應商的 API 金鑰與端點。若要修改，請編輯該供應商。</string>
     <string name="voice_service_hidden_badge">已隱藏</string>
     <string name="add_provider_voice_chat_providers">語音對話供應商</string>
+    <string name="provider_sync_mark_not_found">404 not found</string>
+    <string name="provider_sync_mark_connection">Connection failed</string>
+    <string name="provider_sync_mark_invalid">Invalid response</string>
     <string name="add_provider_voice_templates_footer">語音轉文字與文字轉語音的服務商。供應商類型與基礎網址已預先填好——只要補上您的 API 金鑰即可。</string>
     <string name="add_provider_voice_capability_tts">語音合成（TTS）</string>
     <string name="add_provider_voice_capability_asr">語音辨識（ASR）</string>
