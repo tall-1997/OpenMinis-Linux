@@ -20,6 +20,27 @@ import kotlinx.coroutines.withContext
  * 目标。这里让它在重试决策点直接放弃本轮：用户已经明确不想再用旧模型，继续
  * 重试没有意义，把控制权交回，下一次发送自然使用新模型。
  */
+
+/**
+ * 用户在本轮运行中切换了模型吗？
+ *
+ * epoch 在用户主动选模型时递增，loop 启动时快照一次。两者不等 = 用户中途换过。
+ */
+internal fun ChatViewModel.shouldAbandonForModelSwitch(snapshottedEpoch: Long): Boolean =
+    !ModelSwitchGate.mayWriteBack(snapshottedEpoch, snapshotModelSelectionEpoch())
+
+/**
+ * 若用户中途切换了模型，收拾状态并返回 true（调用方应结束本轮）。
+ */
+internal suspend fun ChatViewModel.abandonIfModelSwitched(snapshottedEpoch: Long): Boolean {
+    if (!shouldAbandonForModelSwitch(snapshottedEpoch)) return false
+    abandonTurnForModelSwitch(snapshottedEpoch)
+    return true
+}
+
+/**
+ * 结束本轮并把状态收拾干净：清掉重试倒计时，提示用户重新发送。
+ */
 internal suspend fun ChatViewModel.abandonTurnForModelSwitch(snapshottedEpoch: Long) {
     val current = snapshotModelSelectionEpoch()
     Log.i(
