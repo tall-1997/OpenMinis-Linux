@@ -202,6 +202,9 @@
     <string name="voice_service_shared_credential_note">이 음성 서비스는 해당 제공자의 API 키와 엔드포인트를 함께 사용합니다. 변경하려면 그 제공자를 편집하세요.</string>
     <string name="voice_service_hidden_badge">숨김</string>
     <string name="add_provider_voice_chat_providers">음성 대화 제공자</string>
+    <string name="provider_sync_mark_not_found">404 not found</string>
+    <string name="provider_sync_mark_connection">Connection failed</string>
+    <string name="provider_sync_mark_invalid">Invalid response</string>
     <string name="add_provider_voice_templates_footer">음성 인식과 음성 합성 제공자입니다. 제공자 유형과 기본 URL은 이미 입력되어 있으니 API 키만 추가하면 됩니다.</string>
     <string name="add_provider_voice_capability_tts">음성 합성(TTS)</string>
     <string name="add_provider_voice_capability_asr">음성 인식(ASR)</string>
