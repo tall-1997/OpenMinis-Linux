@@ -29,6 +29,9 @@ object ResourceLimits {
      * No guest address-space cap. RLIMIT_AS is the host's decision: the
      * memory-pressure policies clamp the hard limit and it survives an app
      * restart, so setting it here was either redundant or a brick.
+     *
+     * [T-compile-oom-dynamic] The fixed NODE_OLD_SPACE_MB=192 moved to
+     * GuestLimits as a per-device formula (RAM/12, clamped 192..768) —
+     * fixed caps starved big devices and never protected small ones.
      */
-    const val NODE_OLD_SPACE_MB = 192
 }

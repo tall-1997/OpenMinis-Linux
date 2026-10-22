@@ -201,7 +201,7 @@ object PRootKernel {
         customEnvironment["GIT_SSL_CAINFO"] = "/etc/ssl/certs/ca-certificates.crt"
         customEnvironment["PIP_CERT"] = "/etc/ssl/certs/ca-certificates.crt"
         customEnvironment["NODE_EXTRA_CA_CERTS"] = "/etc/ssl/certs/ca-certificates.crt"
-        customEnvironment["NODE_OPTIONS"] = GuestLimits.nodeOptions(customEnvironment["NODE_OPTIONS"])
+        GuestLimits.applyRuntimeMemoryBudgets(customEnvironment, context)
         customEnvironment["BASH_ENV"] = "/etc/profile.d/minis-limits.sh"
 
         // Inject device timezone so Alpine userspace sees local time.
