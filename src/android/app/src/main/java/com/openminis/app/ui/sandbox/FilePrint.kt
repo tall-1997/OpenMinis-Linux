@@ -5,6 +5,8 @@ import android.print.PrintAttributes
 import android.print.PrintManager
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Toast
+import com.openminis.app.logging.AppLogger
 
 /**
  * 打印预览。独立成文件：FilePreviewScreen 已到架构门禁的行数 ceiling。
@@ -17,6 +19,8 @@ private fun escapeHtml(s: String): String =
     s.replace("&", "&amp;")
         .replace("<", "&lt;")
         .replace(">", "&gt;")
+
+/**
  * Print a previewable file via the Android print framework. HTML loads
  * directly; text-based files (markdown / plain text / json / csv) are wrapped
  * in an HTML `<pre>` block so a single `WebView.createPrintDocumentAdapter`
