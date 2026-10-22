@@ -32,6 +32,7 @@ import com.openminis.app.plugins.DevComponent
 import com.openminis.app.plugins.DevSuiteCatalog
 import com.openminis.app.plugins.DevSuiteInstaller
 import com.openminis.app.plugins.DevSuiteStore
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * [T-dev-suite] "开发环境套件" section of the plugin market.
@@ -398,7 +399,7 @@ private fun DevSuiteOfflineHint() {
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Icon(
-            imageVector = Icons.Outlined.CloudOff,
+            imageVector = m3Icon(Icons.Outlined.CloudOff),
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
