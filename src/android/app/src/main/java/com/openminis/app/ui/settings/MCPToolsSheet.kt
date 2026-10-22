@@ -208,7 +208,7 @@ fun MCPToolsScreen(
                     )
                 } else {
                     Icon(
-                        m3Icon(Icons.Icons.Outlined.Refresh)
+                        m3Icon(Icons.Outlined.Refresh),
                         contentDescription = stringResource(R.string.mcp_tools_refresh),
                     )
                 }
