@@ -31,6 +31,7 @@ import androidx.compose.ui.res.stringResource
 import com.openminis.app.R
 import com.openminis.app.data.model.ProviderInstance
 import com.openminis.app.data.repository.ModelRefreshResult
+import com.openminis.app.ui.theme.m3Icon
 
 @Composable
 internal fun ProviderInstanceRow(
@@ -133,7 +134,7 @@ internal fun ProviderInstanceRow(
                 else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
             )
         }
-        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null,
+        Icon(m3Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight), contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
             modifier = Modifier.size(20.dp))
     }
