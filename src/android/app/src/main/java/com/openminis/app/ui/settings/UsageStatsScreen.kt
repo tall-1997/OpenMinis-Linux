@@ -49,6 +49,7 @@ import org.json.JSONObject
 import com.openminis.app.util.IsoTime
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * [T-token-attribution-snapshot] How trustworthy a row's model attribution is.
@@ -641,7 +642,7 @@ private fun ExpandableModelRow(model: ModelStats, shareOfTotal: Float, showDivid
                 fontFamily = FontFamily.Default,
             )
             Icon(
-                if (expanded) Icons.Default.ExpandMore else Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                if (expanded) m3Icon(Icons.Default.ExpandMore) else m3Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight),
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
             )
