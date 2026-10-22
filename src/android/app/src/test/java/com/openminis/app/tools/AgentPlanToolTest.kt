@@ -97,6 +97,49 @@ class AgentPlanToolTest {
         assertEquals(0, AgentPlanStore.list(sidA, null).size)
     }
 
+    // ── migrate (draft→real key drift, T-plan-mode-draft-drift) ──
+
+    @Test
+    fun migrateCarriesBoardToNewKeyAndClearsOld() {
+        AgentPlanStore.clear(sidA, null)
+        AgentPlanStore.clear(sidB, null)
+        val p1 = AgentPlanStore.add(sidA, null, "task-1", "d1", "active")
+        val p2 = AgentPlanStore.add(sidA, null, "task-2", "d2", "pending")
+        AgentPlanStore.migrate(sidA, sidB, null)
+        val moved = AgentPlanStore.list(sidB, null)
+        assertEquals(2, moved.size)
+        // id and order survive the move
+        assertEquals(listOf(p1.id, p2.id), moved.map { it.id })
+        assertEquals("active", moved[0].status)
+        assertEquals(0, AgentPlanStore.list(sidA, null).size)
+    }
+
+    @Test
+    fun migrateIsNoOpForEmptyOldBoardAndSameKeys() {
+        AgentPlanStore.clear(sidA, null)
+        AgentPlanStore.clear(sidB, null)
+        AgentPlanStore.migrate(sidA, sidB, null)
+        assertEquals(0, AgentPlanStore.list(sidB, null).size)
+        AgentPlanStore.add(sidA, null, "task-1")
+        AgentPlanStore.migrate(sidA, sidA, null)
+        assertEquals(1, AgentPlanStore.list(sidA, null).size)
+        AgentPlanStore.clear(sidA, null)
+    }
+
+    @Test
+    fun planModeFlagMigratesAndOldKeyCannotResurrect() {
+        PlanModeStore.setEnabled(sidA, null, true)
+        PlanModeStore.migrate(sidA, sidB, null)
+        assertTrue(PlanModeStore.isEnabled(sidB, null))
+        assertFalse("old draft key must not keep the flag", PlanModeStore.isEnabled(sidA, null))
+        PlanModeStore.setEnabled(sidB, null, false)
+        // disabled flag migrates as "nothing to write", old key stays clean
+        PlanModeStore.setEnabled(sidA, null, false)
+        PlanModeStore.migrate(sidA, sidB, null)
+        assertFalse(PlanModeStore.isEnabled(sidB, null))
+        assertFalse(PlanModeStore.isEnabled(sidA, null))
+    }
+
     // ── render ──
 
     @Test

@@ -12,6 +12,7 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -33,6 +34,12 @@ object AgentPlanStore {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     private val locks = ConcurrentHashMap<String, ReentrantLock>()
     private val memory = ConcurrentHashMap<String, MutableList<Plan>>()
+
+    /**
+     * Bumped on every mutation (memory-only boards included) so UI
+     * projections can reload without the writers knowing a UI exists.
+     */
+    val version = MutableStateFlow(0L)
 
     @Serializable
     data class Plan(
@@ -93,6 +100,7 @@ object AgentPlanStore {
         if (f == null) {
             // No context (unit tests / headless callers): memory-only board.
             memory[k] = trimmed
+            version.value = version.value + 1
             return
         }
         // [T-plan-store-silent-loss] A failed persist used to be swallowed —
@@ -105,6 +113,7 @@ object AgentPlanStore {
             throw IOException("failed to persist plan board; previous file kept, change is in-memory only")
         }
         memory[k] = trimmed
+        version.value = version.value + 1
     }
 
     internal fun decodePlans(text: String): MutableList<Plan> =
@@ -151,6 +160,22 @@ object AgentPlanStore {
 
     fun clear(sessionId: String, context: Context?) = lock(sessionId).withLock {
         saveLocked(sessionId, context, emptyList())
+    }
+
+    /**
+     * Draft→real key migration, same drift class as
+     * [PlanModeStore.migrate]: a board seeded under the route's draft key
+     * must follow the session to its persisted id. Re-adds items through
+     * [add] (id preserved, position = insertion order) rather than moving
+     * the file, so the memory map, the persisted file, and the version
+     * signal all stay coherent. No-op for an empty old board.
+     */
+    fun migrate(oldSid: String, newSid: String, context: Context?) {
+        if (oldSid == newSid || newSid.isBlank()) return
+        val plans = list(oldSid, context)
+        if (plans.isEmpty()) return
+        clear(oldSid, context)
+        plans.forEach { add(newSid, context, it.title, it.description, it.status, it.id) }
     }
 
     fun render(sessionId: String, context: Context?): String {

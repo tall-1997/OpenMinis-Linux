@@ -76,4 +76,48 @@ class SystemPromptDynamicTailTest {
         assertTrue(tz < lang)
         assertTrue(lang < count)
     }
+
+    /**
+     * [T-plan-mode-prompt-wiring] The plan fragment (mode flag + live board)
+     * sits after the task anchor and before the runtime context: it is
+     * per-turn session state, so it must live in the dynamic tail, but it is
+     * more byte-stable than the date line below it.
+     */
+    @Test
+    fun planFragmentSitsBetweenTaskAnchorAndRuntimeContext() {
+        val tail =
+            assembleDynamicTail(
+                worldBookFragment = "",
+                learnedPrefsFragment = null,
+                recalledMemoryFragment = null,
+                runtimeContext = renderRuntimeContext("d", "t", "l", 1),
+                personalityReminder = null,
+                taskAnchor = "ANCHOR",
+                planFragment = "<plan_mode>PLAN</plan_mode>",
+            )
+        val anchor = tail.indexOf("ANCHOR")
+        val plan = tail.indexOf("<plan_mode>")
+        val runtime = tail.indexOf("Runtime context:")
+        assertTrue("anchor before plan fragment", anchor in 0 until plan)
+        assertTrue("plan fragment before runtime context", plan < runtime)
+    }
+
+    @Test
+    fun nullPlanFragmentLeavesNoSeparatorBehind() {
+        val tail =
+            assembleDynamicTail(
+                worldBookFragment = "",
+                learnedPrefsFragment = null,
+                recalledMemoryFragment = null,
+                runtimeContext = renderRuntimeContext("d", "t", "l", 1),
+                personalityReminder = null,
+                taskAnchor = "ANCHOR",
+                planFragment = null,
+            )
+        assertFalse(tail.contains("\n\n\n"))
+        assertEquals(
+            "\n\nANCHOR\n\nRuntime context:\n- Current date: d (t)\n- Device language: l\n- minis-model-use models available: 1",
+            tail,
+        )
+    }
 }
