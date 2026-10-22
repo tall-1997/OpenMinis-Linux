@@ -5,32 +5,40 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * [T-model-switch-midrun-stall] 用户在 agent loop 运行中切换了模型。
+ * [T-model-switch-midrun-stall] The user switched models while the agent loop
+ * was mid-run.
  *
- * 单独成文件：ChatViewModelAgentLoopExt 已到架构门禁的行数 ceiling。
+ * Extracted to its own file: ChatViewModelAgentLoopExt is at the
+ * architecture-policy line ceiling.
  *
- * 现象：任务跑到一半用户从模型 A 切到 B，接着卡住不动；之后一直在重试 A。
+ * Symptom: mid-task the user switches from model A to B, then the session
+ * appears stuck; retries keep hammering A.
  *
- * 根因：loop 在启动时把 [ChatViewModel.currentProvider] 快照进局部变量
- * （`var currentProvider = provider`），失败重试与组内回退都读这个局部变量。
- * `selectEntry()` 改的是 VM 上的字段，跑着的 loop 看不见。于是旧模型——往往
- * 正是失败的那个——被反复重试到预算耗尽，用户以为"切了没反应"。
+ * Root cause: the loop snapshots [ChatViewModel.currentProvider] into a local
+ * (`var currentProvider = provider`) at start; failure retries and group
+ * fallback both read that local. `selectEntry()` writes the VM field, which
+ * the running loop never sees. So the old model — usually the one that was
+ * failing — gets retried until the budget runs out, and the user thinks the
+ * switch "didn't take".
  *
- * `ModelSwitchGate` 的 epoch 本来只保护"回退结果不回写用户选择"，不改变重试
- * 目标。这里让它在重试决策点直接放弃本轮：用户已经明确不想再用旧模型，继续
- * 重试没有意义，把控制权交回，下一次发送自然使用新模型。
+ * `ModelSwitchGate`'s epoch only guarded the fallback writeback, not the retry
+ * target. Here the retry decision point abandons the turn outright: the user
+ * has clearly said they no longer want the old model, so retrying it is
+ * pointless. Control returns, and the next send uses the new model.
  */
 
 /**
- * 用户在本轮运行中切换了模型吗？
+ * Did the user switch models during this run?
  *
- * epoch 在用户主动选模型时递增，loop 启动时快照一次。两者不等 = 用户中途换过。
+ * The epoch bumps on every user-driven model selection; the loop snapshots it
+ * once at start. Unequal = the user switched mid-run.
  */
 internal fun ChatViewModel.shouldAbandonForModelSwitch(snapshottedEpoch: Long): Boolean =
     !ModelSwitchGate.mayWriteBack(snapshottedEpoch, snapshotModelSelectionEpoch())
 
 /**
- * 若用户中途切换了模型，收拾状态并返回 true（调用方应结束本轮）。
+ * If the user switched models mid-run, tidy up and return true (the caller
+ * should end the turn).
  */
 internal suspend fun ChatViewModel.abandonIfModelSwitched(snapshottedEpoch: Long): Boolean {
     if (!shouldAbandonForModelSwitch(snapshottedEpoch)) return false
@@ -39,18 +47,19 @@ internal suspend fun ChatViewModel.abandonIfModelSwitched(snapshottedEpoch: Long
 }
 
 /**
- * 结束本轮并把状态收拾干净：清掉重试倒计时，提示用户重新发送。
+ * End the current turn and clean up state: clear the retry countdown and
+ * prompt the user to re-send.
  */
 internal suspend fun ChatViewModel.abandonTurnForModelSwitch(snapshottedEpoch: Long) {
     val current = snapshotModelSelectionEpoch()
     Log.i(
         ChatViewModel.TAG,
-        "[ModelSwitch] 用户中途切换模型（epoch $snapshottedEpoch -> $current），" +
-            "放弃旧模型重试，结束本轮",
+        "[ModelSwitch] user switched model mid-run (epoch $snapshottedEpoch -> $current), " +
+            "abandoning old-model retries, ending turn",
     )
     withContext(Dispatchers.Main) {
         _autoRetryAttempt.value = 0
         _autoRetryCountdown.value = 0
-        setTransientInlineError("已切换模型 — 请重新发送以使用新模型")
+        setTransientInlineError("Model switched — send again to use the new model")
     }
 }
