@@ -54,6 +54,7 @@ import com.openminis.app.ui.components.MinisOutlinedButton
 import com.openminis.app.ui.components.MinisTextButton
 import com.openminis.app.ui.settings.SettingsScaffold
 import com.openminis.app.ui.settings.SettingsSection
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * [T-android-restore-browse] Walk a destination's folders and pick a backup.
@@ -224,7 +225,7 @@ private fun BreadcrumbBar(
             Crumb(rootLabel, enabled = segments.isNotEmpty()) { onNavigate(0) }
             segments.forEachIndexed { i, seg ->
                 Icon(
-                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    m3Icon(Icons.Icons.AutoMirrored.Filled.KeyboardArrowRight)
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(16.dp),
@@ -276,7 +277,7 @@ private fun EntryRow(
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    if (entry.isDirectory) Icons.Outlined.Folder else Icons.Outlined.Inventory2,
+                    if (entry.isDirectory) m3Icon(Icons.Outlined.Folder) else m3Icon(Icons.Outlined.Inventory2),
                     contentDescription = null,
                     tint = Color.White,
                     modifier = Modifier.size(17.dp),
@@ -303,7 +304,7 @@ private fun EntryRow(
             }
             if (entry.isDirectory) {
                 Icon(
-                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    m3Icon(Icons.Icons.AutoMirrored.Filled.KeyboardArrowRight)
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp),
