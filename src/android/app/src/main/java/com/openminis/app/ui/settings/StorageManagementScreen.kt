@@ -50,6 +50,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import com.openminis.app.ui.theme.m3Icon
 
 private data class SessionStorageInfo(
     val id: String,
@@ -361,7 +362,7 @@ private fun StorageOverviewRow(
             if (onClick != null) {
                 Spacer(Modifier.width(4.dp))
                 Icon(
-                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    m3Icon(Icons.Icons.AutoMirrored.Filled.KeyboardArrowRight)
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                     modifier = Modifier.size(20.dp),
