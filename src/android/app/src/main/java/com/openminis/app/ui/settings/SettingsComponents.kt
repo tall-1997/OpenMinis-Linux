@@ -112,7 +112,7 @@ fun SettingsScaffold(
                 when {
                     navigation != null -> navigation()
                     onBack != null -> IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back))
+                        Icon(m3Icon(Icons.AutoMirrored.Filled.ArrowBack), contentDescription = stringResource(R.string.cd_back))
                     }
                 }
             }
@@ -385,7 +385,7 @@ fun SettingsRow(
             if (showChevron) {
                 Spacer(Modifier.width(4.dp))
                 Icon(
-                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    imageVector = m3Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight),
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                     modifier = Modifier.size(20.dp),
@@ -565,7 +565,7 @@ fun PlusMinusStepper(
                 enabled = enabled && value > min,
                 modifier = Modifier.size(36.dp),
             ) {
-                Icon(Icons.Outlined.Remove, contentDescription = decreaseContentDescription)
+                Icon(m3Icon(Icons.Outlined.Remove), contentDescription = decreaseContentDescription)
             }
             EditableStepperValue(
                 value = value,
@@ -579,7 +579,7 @@ fun PlusMinusStepper(
                 enabled = enabled && value < max,
                 modifier = Modifier.size(36.dp),
             ) {
-                Icon(Icons.Outlined.Add, contentDescription = increaseContentDescription)
+                Icon(m3Icon(Icons.Outlined.Add), contentDescription = increaseContentDescription)
             }
         }
     }
