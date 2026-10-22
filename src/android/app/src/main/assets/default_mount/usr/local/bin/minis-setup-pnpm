@@ -7,6 +7,19 @@
 # checks, so the registry (npmmirror first, npmjs after) is the attesting
 # source. Keep it that way — anything added later that curls a file straight
 # onto PATH needs a digest gate (see /usr/local/lib/minis/offline.sh).
+#
+# [T-npm-exit-handler-prroot] npm 9.2.0 under PRoot/arm64 has a known crash:
+# it completes the whole install (payload extracted, integrity verified) and
+# then dies with "Exit handler never called!" + exit 1 BEFORE creating the
+# bin symlinks and setting exec bits. The exit code is therefore not proof
+# of anything — this script never trusts it. After npm returns (either way)
+# it verifies the payload on disk and finishes the wiring itself:
+#   1. $PREFIX/bin/<cmd> symlinks (npm's job, may be missing after the crash)
+#   2. exec bits on the bin targets (chmod never ran)
+#   3. /usr/local/bin/<cmd> links — non-login shells (agent tool calls, the
+#      suite probe) do not source profile.d, and the framework's PATH
+#      refresh does not include $PREFIX/bin. Same convention as
+#      minis-setup-rust / minis-setup-flutter, and what purgeLinks expects.
 set -eu
 export TMPDIR=/tmp TMP=/tmp TEMP=/tmp
 
@@ -20,26 +33,71 @@ PREFIX=/opt/node-global
 mkdir -p "$PREFIX"
 export PATH="$PREFIX/bin:$PATH"
 
+# Verify the payload landed and (re)build every bin link. Exits 0 only when
+# the package manifest AND all its bin targets exist on disk — a real
+# network failure leaves neither, so this cannot mask a broken install.
+finish_bin_links() {
+  node -e '
+    const fs = require("fs"), path = require("path");
+    const prefix = process.argv[1], name = process.argv[2];
+    const pkgDir = path.join(prefix, "lib", "node_modules", name);
+    const manifest = path.join(pkgDir, "package.json");
+    if (!fs.existsSync(manifest)) { console.error(name + ": payload missing"); process.exit(1); }
+    const pkg = JSON.parse(fs.readFileSync(manifest, "utf8"));
+    let bin = pkg.bin || {};
+    if (typeof bin === "string") bin = { [name]: bin };
+    const entries = Object.entries(bin);
+    if (entries.length === 0) { console.error(name + ": no bin entries"); process.exit(1); }
+    const binDir = path.join(prefix, "bin");
+    fs.mkdirSync(binDir, { recursive: true });
+    for (const [link, target] of entries) {
+      const abs = path.join(pkgDir, target);
+      if (!fs.existsSync(abs)) { console.error(name + ": bin target missing: " + target); process.exit(1); }
+      const linkPath = path.join(binDir, link);
+      fs.rmSync(linkPath, { force: true });
+      fs.symlinkSync(path.relative(binDir, abs), linkPath);
+      fs.chmodSync(abs, 0o755);
+      const global = path.join("/usr/local/bin", link);
+      fs.rmSync(global, { recursive: true, force: true });
+      fs.symlinkSync(linkPath, global);
+    }
+    console.log(name + " " + (pkg.version || "?") + " — bin links wired");
+  ' "$PREFIX" "$1"
+}
+
 install_global() {
   package="$1"
   echo "installing $package into $PREFIX"
+  # npm renames the existing package dir to ".<pkg>-<hash>" before replacing
+  # it. A crashed install leaves that temp dir behind, and every later
+  # reinstall then dies with ENOTEMPTY (rename target already exists — npm
+  # reuses the same name). Sweep npm's hidden temp dirs before installing.
+  find "$PREFIX/lib/node_modules" -maxdepth 1 -name '.*-*' -exec rm -rf {} + 2>/dev/null || true
   if npm --prefix "$PREFIX" install --global --no-audit --no-fund \
       --fetch-retries=3 --fetch-retry-mintimeout=2000 \
       --fetch-retry-maxtimeout=15000 "$package" \
       --registry=https://registry.npmmirror.com; then
+    :
+  else
+    echo "$package mirror failed; retrying npmjs with the same prefix" >&2
+    npm --prefix "$PREFIX" install --global --no-audit --no-fund \
+      --fetch-retries=3 --fetch-retry-mintimeout=2000 \
+      --fetch-retry-maxtimeout=15000 "$package" \
+      --registry=https://registry.npmjs.org || true
+  fi
+  # npm's exit code is unreliable under PRoot — the payload may be complete
+  # either way. Disk state is the only truth; finish the wiring ourselves.
+  if finish_bin_links "$package"; then
     return 0
   fi
-  echo "$package mirror failed; retrying npmjs with the same prefix" >&2
-  npm --prefix "$PREFIX" install --global --no-audit --no-fund \
-    --fetch-retries=3 --fetch-retry-mintimeout=2000 \
-    --fetch-retry-maxtimeout=15000 "$package" \
-    --registry=https://registry.npmjs.org
+  echo "$package did not land in $PREFIX — real install failure" >&2
+  return 1
 }
 
-if ! command -v pnpm >/dev/null 2>&1; then
+if ! command -v pnpm >/dev/null 2>&1 || [ ! -x "$PREFIX/bin/pnpm" ]; then
   install_global pnpm
 fi
-if ! command -v yarn >/dev/null 2>&1; then
+if ! command -v yarn >/dev/null 2>&1 || [ ! -x "$PREFIX/bin/yarn" ]; then
   install_global yarn
 fi
 
