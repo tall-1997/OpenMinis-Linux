@@ -225,7 +225,7 @@ private fun BreadcrumbBar(
             Crumb(rootLabel, enabled = segments.isNotEmpty()) { onNavigate(0) }
             segments.forEachIndexed { i, seg ->
                 Icon(
-                    m3Icon(Icons.Icons.AutoMirrored.Filled.KeyboardArrowRight)
+                    m3Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight),
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(16.dp),
@@ -304,7 +304,7 @@ private fun EntryRow(
             }
             if (entry.isDirectory) {
                 Icon(
-                    m3Icon(Icons.Icons.AutoMirrored.Filled.KeyboardArrowRight)
+                    m3Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight),
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp),
