@@ -281,7 +281,7 @@ private fun MemoryFileRow(
         if (onDelete != null) {
             IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
                 Icon(
-                    m3Icon(Icons.Icons.Outlined.Delete)
+                    m3Icon(Icons.Outlined.Delete),
                     contentDescription = stringResource(R.string.common_delete),
                     tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
                     modifier = Modifier.size(20.dp),
@@ -289,7 +289,7 @@ private fun MemoryFileRow(
             }
         }
         Icon(
-            m3Icon(Icons.Icons.AutoMirrored.Filled.KeyboardArrowRight)
+            m3Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight),
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
             modifier = Modifier.size(20.dp),
