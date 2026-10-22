@@ -202,6 +202,9 @@
     <string name="voice_service_shared_credential_note">Ce service vocal partage la clé API et le point de terminaison de son fournisseur. Pour les modifier, modifiez ce fournisseur.</string>
     <string name="voice_service_hidden_badge">Masqué</string>
     <string name="add_provider_voice_chat_providers">Fournisseurs de chat vocal</string>
+    <string name="provider_sync_mark_not_found">404 not found</string>
+    <string name="provider_sync_mark_connection">Connection failed</string>
+    <string name="provider_sync_mark_invalid">Invalid response</string>
     <string name="add_provider_voice_templates_footer">Fournisseurs de reconnaissance et de synthèse vocale. Le type de fournisseur et l\'URL de base sont préremplis — il ne reste qu\'à ajouter votre clé API.</string>
     <string name="add_provider_voice_capability_tts">Synthèse vocale (TTS)</string>
     <string name="add_provider_voice_capability_asr">Reconnaissance vocale (ASR)</string>
