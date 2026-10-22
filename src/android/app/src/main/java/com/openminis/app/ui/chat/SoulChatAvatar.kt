@@ -12,7 +12,7 @@ import com.openminis.app.ui.settings.SoulModelIdentity
 /**
  * [T-soul-avatar-model-icon] 聊天气泡头的 Soul 头像。
  *
- * 单独成文件：ChatAssistantMessageUI 已到架构门禁的行数 ceiling。
+ * 单独成文件：ChatAssistantMessageUI 已到架构门禁的行数 ceiling，一行都加不了。
  *
  * 「模型图标」模式需要知道当前会话运行的是哪个模型 —— 用
  * [LocalSoulModelIdentity] 注入，渲染器本身只管画。
