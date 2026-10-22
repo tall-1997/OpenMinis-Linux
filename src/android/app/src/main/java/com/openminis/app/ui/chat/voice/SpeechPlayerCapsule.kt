@@ -1,4 +1,5 @@
 package com.openminis.app.ui.chat.voice
+import com.openminis.app.ui.theme.m3Icon
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.LinearEasing
@@ -535,7 +536,7 @@ private fun ExpandedCapsule(
         Spacer(Modifier.width(10.dp))
         // Close — read-replies fully off (capsule hides).
         Icon(
-            Icons.Default.Close,
+            m3Icon(Icons.Default.Close),
             contentDescription = stringResource(R.string.standard_sheet_close),
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(20.dp).clickable(onClick = onClose),

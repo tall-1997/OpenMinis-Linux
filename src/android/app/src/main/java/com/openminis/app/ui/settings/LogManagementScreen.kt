@@ -1,4 +1,5 @@
 package com.openminis.app.ui.settings
+import com.openminis.app.ui.theme.m3Icon
 
 import com.openminis.app.R
 import com.openminis.app.text.BoundedText
@@ -59,7 +60,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.RandomAccessFile
-
 /**
  * Log management screen — adopts the SettingsSection/SettingsRow toolkit
  * shared with the rest of Settings (T81). Sections:
@@ -736,7 +736,7 @@ fun LogDetailScreen(
                         val file = File(File(context.filesDir, "logs"), fileName)
                         if (file.exists()) shareLogFile(context, file)
                     }) {
-                        Icon(Icons.Default.Share, contentDescription = stringResource(R.string.common_share))
+                        Icon(m3Icon(Icons.Default.Share), contentDescription = stringResource(R.string.common_share))
                     }
                 },
             )

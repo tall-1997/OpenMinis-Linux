@@ -71,6 +71,7 @@ import com.openminis.app.ui.DisplayBitmapLimits.limitDisplaySize
 import com.openminis.app.data.model.ThinkingLevel
 import com.openminis.app.R
 import com.openminis.app.ui.theme.ChatColors
+import com.openminis.app.ui.theme.m3Icon
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -166,7 +167,7 @@ internal fun AttachmentChip(
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                Icons.Default.Close,
+                m3Icon(Icons.Default.Close),
                 contentDescription = "移除附件",
                 tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                 modifier = Modifier.size(13.dp),
@@ -330,11 +331,11 @@ internal fun ToolActivityPill(
             )
         } else {
             val (icon, tint) = when (block.toolStatus) {
-                ToolBlockStatus.SUCCESS -> Icons.Default.CheckCircle to ToolCheckColor
+                ToolBlockStatus.SUCCESS -> m3Icon(Icons.Default.CheckCircle) to ToolCheckColor
                 ToolBlockStatus.FAILED, ToolBlockStatus.TIMEOUT ->
-                    Icons.Default.Error to ToolErrorColor
-                ToolBlockStatus.CANCELLED -> Icons.Default.Close to ToolCancelColor
-                else -> toolIconFor(block.toolName) to MaterialTheme.colorScheme.onSurfaceVariant
+                    m3Icon(Icons.Default.Error) to ToolErrorColor
+                ToolBlockStatus.CANCELLED -> m3Icon(Icons.Default.Close) to ToolCancelColor
+                else -> m3Icon(toolIconFor(block.toolName)) to MaterialTheme.colorScheme.onSurfaceVariant
             }
             Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(15.dp))
         }
@@ -455,7 +456,7 @@ internal fun ThinkingLevelPicker(
                 )
                 if (isClampedHighlight) {
                     Icon(
-                        imageVector = Icons.Default.KeyboardArrowUp,
+                        imageVector = m3Icon(Icons.Default.KeyboardArrowUp),
                         contentDescription = null,
                         tint = fg,
                         modifier = Modifier.size(12.dp),

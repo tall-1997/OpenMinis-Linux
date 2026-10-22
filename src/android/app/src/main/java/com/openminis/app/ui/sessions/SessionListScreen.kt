@@ -181,6 +181,7 @@ import com.openminis.app.data.db.FolderEntity
 import com.openminis.app.ui.theme.ChatColors
 import com.openminis.app.ui.theme.minisFabColor
 import com.openminis.app.ui.theme.minisFabContentColor
+import com.openminis.app.ui.theme.m3Icon
 import com.openminis.app.data.repository.ChatRepository
 import com.openminis.app.data.repository.ProviderRepository
 import kotlin.math.roundToInt
@@ -791,7 +792,7 @@ fun SessionListScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onSettingsClick) {
-                        Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.sessionlist_settings))
+                        Icon(m3Icon(Icons.Default.Settings), contentDescription = stringResource(R.string.sessionlist_settings))
                     }
                 },
                 actions = {
@@ -1176,7 +1177,7 @@ fun SessionListScreen(
                                     },
                             ) {
                                 Icon(
-                                    Icons.Default.KeyboardArrowUp,
+                                    m3Icon(Icons.Default.KeyboardArrowUp),
                                     contentDescription = stringResource(R.string.group_collapse),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(20.dp),
@@ -1622,7 +1623,7 @@ private fun DualFabRow(
                         )
                     } else {
                         IconButton(onClick = onSearchDismiss) {
-                            Icon(Icons.Default.Close, contentDescription = stringResource(R.string.sessionlist_dismiss), modifier = Modifier.size(18.dp))
+                            Icon(m3Icon(Icons.Default.Close), contentDescription = stringResource(R.string.sessionlist_dismiss), modifier = Modifier.size(18.dp))
                         }
                     }
                 },
@@ -1684,7 +1685,7 @@ private fun SectionHeader(title: String) {
     ) {
         if (isPinned) {
             Icon(
-                imageVector = Icons.Default.PushPin,
+                imageVector = m3Icon(Icons.Default.PushPin),
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
@@ -1830,7 +1831,7 @@ private fun SessionItemContent(
                 },
                 leadingIcon = {
                     Icon(
-                        if (isPinned) Icons.Default.Close else Icons.Default.PushPin,
+                        if (isPinned) m3Icon(Icons.Default.Close) else m3Icon(Icons.Default.PushPin),
                         contentDescription = null,
                     )
                 },
@@ -1846,7 +1847,7 @@ private fun SessionItemContent(
                 },
                 onClick = { showExportSub = !showExportSub },
                 leadingIcon = {
-                    Icon(Icons.Default.Share, contentDescription = null)
+                    Icon(m3Icon(Icons.Default.Share), contentDescription = null)
                 },
             )
             if (showExportSub) {
@@ -1873,7 +1874,7 @@ private fun SessionItemContent(
                     onEditRequest(session)
                 },
                 leadingIcon = {
-                    Icon(Icons.Default.Edit, contentDescription = null)
+                    Icon(m3Icon(Icons.Default.Edit), contentDescription = null)
                 },
             )
             // Regenerate Title
@@ -1884,7 +1885,7 @@ private fun SessionItemContent(
                     onRegenerateTitle(session.id)
                 },
                 leadingIcon = {
-                    Icon(Icons.Default.Refresh, contentDescription = null)
+                    Icon(m3Icon(Icons.Default.Refresh), contentDescription = null)
                 },
             )
             // Duplicate
@@ -1895,7 +1896,7 @@ private fun SessionItemContent(
                     onDuplicate(session.id)
                 },
                 leadingIcon = {
-                    Icon(Icons.Default.ContentCopy, contentDescription = null)
+                    Icon(m3Icon(Icons.Default.ContentCopy), contentDescription = null)
                 },
             )
             // Move to / Change Group
@@ -1923,7 +1924,7 @@ private fun SessionItemContent(
                 leadingIcon = {
                     Icon(
                         if (isFiled) Icons.Default.DriveFileMove
-                        else Icons.Default.Folder,
+                        else m3Icon(Icons.Default.Folder),
                         contentDescription = null,
                     )
                 },
@@ -1938,7 +1939,7 @@ private fun SessionItemContent(
                 },
                 leadingIcon = {
                     Icon(
-                        Icons.Default.Delete,
+                        m3Icon(Icons.Default.Delete),
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.error,
                     )
@@ -2301,14 +2302,14 @@ private fun FolderCard(
                 ) {
                     if (block.folder.isPinned) {
                         Icon(
-                            Icons.Default.PushPin,
+                            m3Icon(Icons.Default.PushPin),
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.outline,
                             modifier = Modifier.size(12.dp),
                         )
                     }
                     Icon(
-                        Icons.Default.KeyboardArrowDown,
+                        m3Icon(Icons.Default.KeyboardArrowDown),
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.outline,
                         modifier = Modifier
@@ -2990,7 +2991,7 @@ private fun SetupStepCard(
         ) {
             if (isDone) {
                 Icon(
-                    imageVector = Icons.Default.Check,
+                    imageVector = m3Icon(Icons.Default.Check),
                     contentDescription = null,
                     tint = Color.White,
                     modifier = Modifier.size(16.dp),
@@ -3184,7 +3185,7 @@ internal fun SessionEditSheet(
                     Text(stringResource(R.string.sessionlist_regenerating_title))
                 } else {
                     Icon(
-                        Icons.Default.Refresh,
+                        m3Icon(Icons.Default.Refresh),
                         contentDescription = null,
                         modifier = Modifier.size(18.dp),
                     )
@@ -3252,7 +3253,6 @@ private fun shareZip(context: Context, uri: android.net.Uri, subject: String) {
     ).apply { addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION) }
     context.startActivity(chooser)
 }
-
 
 /**
  * Name + optional description for a new workspace folder.

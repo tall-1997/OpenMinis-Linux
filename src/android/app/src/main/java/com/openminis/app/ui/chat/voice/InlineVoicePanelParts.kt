@@ -68,6 +68,7 @@ import com.openminis.app.data.repository.ProviderRepository
 import com.openminis.app.speech.RecognitionState
 import com.openminis.app.speech.SpeechRecognitionManager
 import com.openminis.app.ui.theme.ChatColors
+import com.openminis.app.ui.theme.m3Icon
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -173,7 +174,7 @@ internal fun MicCircleButton(
         when {
             isRecording -> InlineMiniWaveform(levels = levels)
             isTranscribing -> Icon(
-                Icons.Default.Close,
+                m3Icon(Icons.Default.Close),
                 contentDescription = stringResource(R.string.voice_panel_cancel_transcription),
                 tint = Color.Black,
                 modifier = Modifier.size(22.dp),
@@ -420,7 +421,7 @@ internal fun VoiceEngineUnavailableNotice(
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {
             CircleIconButton(
-                icon = if (expanded) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowUp,
+                icon = if (expanded) m3Icon(Icons.Default.KeyboardArrowDown) else m3Icon(Icons.Default.KeyboardArrowUp),
                 contentDescription = stringResource(
                     if (expanded) R.string.voice_panel_collapse else R.string.voice_panel_expand,
                 ),

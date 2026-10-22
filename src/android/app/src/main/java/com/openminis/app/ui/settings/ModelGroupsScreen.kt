@@ -1,4 +1,5 @@
 package com.openminis.app.ui.settings
+import com.openminis.app.ui.theme.m3Icon
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -83,7 +84,6 @@ import com.openminis.app.ui.components.SectionDesign
 import com.openminis.app.ui.components.SectionDivider
 import com.openminis.app.ui.components.SectionFooter
 import com.openminis.app.ui.components.SectionHeader
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ModelGroupsScreen(
@@ -163,7 +163,7 @@ fun ModelGroupsScreen(
                 title = { Text(stringResource(R.string.model_groups_model_groups)) },
                 actions = {
                     IconButton(onClick = { showNewGroupDialog = true }) {
-                        Icon(Icons.Default.Add, contentDescription = stringResource(R.string.model_groups_new_group))
+                        Icon(m3Icon(Icons.Default.Add), contentDescription = stringResource(R.string.model_groups_new_group))
                     }
                 },
             )
@@ -678,7 +678,7 @@ private fun LazyListScope.agentLoopModelsSectionItems(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
             ) {
                 Icon(
-                    Icons.Default.Add,
+                    m3Icon(Icons.Default.Add),
                     contentDescription = null,
                     modifier = Modifier.size(18.dp),
                 )
@@ -692,7 +692,7 @@ private fun LazyListScope.agentLoopModelsSectionItems(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
             ) {
                 Icon(
-                    Icons.Default.Add,
+                    m3Icon(Icons.Default.Add),
                     contentDescription = null,
                     modifier = Modifier.size(18.dp),
                 )
@@ -771,7 +771,7 @@ private fun AgentLoopRow(
             modifier = Modifier.size(36.dp),
         ) {
             Icon(
-                imageVector = Icons.Default.Close,
+                imageVector = m3Icon(Icons.Default.Close),
                 contentDescription = stringResource(R.string.agent_loop_section_remove),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(18.dp),

@@ -99,8 +99,8 @@ import com.mikepenz.markdown.m3.Markdown
 import org.intellij.markdown.ast.ASTNode
 import org.intellij.markdown.ast.getTextInNode
 import com.openminis.app.ui.theme.ChatColors
+import com.openminis.app.ui.theme.m3Icon
 import com.openminis.app.ui.components.MinisTextButton
-
 // ─── Bordered Markdown Table (iOS style: bordered cells with grid lines) ─────
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
@@ -360,9 +360,9 @@ internal fun FallbackInfoBlock(block: AssistantBlock, onRevert: (() -> Unit)? = 
         // pre-date the dedicated compactor) keep the squeeze for backward
         // visual continuity if any old sessions still hold them.
         "compact" -> Icons.Default.CloseFullscreen
-        "memory" -> Icons.Default.Psychology
-        "thinking" -> Icons.Default.Lightbulb
-        else -> Icons.Default.Info
+        "memory" -> m3Icon(Icons.Default.Psychology)
+        "thinking" -> m3Icon(Icons.Default.Lightbulb)
+        else -> m3Icon(Icons.Default.Info)
     }
     // Mirrors iOS systemDividerRow: HStack { Divider, label, Divider }.
     // Implemented via SubcomposeLayout so the centered label can be measured
@@ -418,7 +418,7 @@ internal fun FallbackInfoBlock(block: AssistantBlock, onRevert: (() -> Unit)? = 
                 )
                 if (hasDetail) {
                     Icon(
-                        imageVector = Icons.Default.Info,
+                        imageVector = m3Icon(Icons.Default.Info),
                         contentDescription = "Show full summary",
                         tint = fg,
                         modifier = Modifier
@@ -497,7 +497,7 @@ private fun CompactSummarySheet(
                 }
             }) {
                 Icon(
-                    imageVector = if (copied) Icons.Default.Check else Icons.Default.ContentCopy,
+                    imageVector = if (copied) m3Icon(Icons.Default.Check) else m3Icon(Icons.Default.ContentCopy),
                     contentDescription = "Copy",
                     tint = if (copied) Color(0xFF34C759) else ChatColors.secondaryText,
                 )
@@ -525,7 +525,7 @@ private fun CompactSummarySheet(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Refresh,
+                        imageVector = m3Icon(Icons.Default.Refresh),
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.error,
                         modifier = Modifier.size(18.dp),
@@ -748,7 +748,7 @@ internal fun ResumeBanner(onResume: () -> Unit) {
             modifier = Modifier.weight(1f),
         ) {
             Icon(
-                imageVector = Icons.Default.PlayArrow,
+                imageVector = m3Icon(Icons.Default.PlayArrow),
                 contentDescription = null,
                 tint = orange,
                 modifier = Modifier.size(12.dp),
@@ -773,7 +773,7 @@ internal fun ResumeBanner(onResume: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
-                imageVector = Icons.Default.PlayArrow,
+                imageVector = m3Icon(Icons.Default.PlayArrow),
                 contentDescription = null,
                 tint = Color.White,
                 modifier = Modifier.size(10.dp),

@@ -1,4 +1,5 @@
 package com.openminis.app.ui.settings
+import com.openminis.app.ui.theme.m3Icon
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import com.openminis.app.ui.chat.ModelBrandIcon
@@ -80,7 +81,6 @@ import com.openminis.app.ui.components.MinisSmallOutlinedButton
 import com.openminis.app.ui.components.MinisSmallTextButton
 import com.openminis.app.ui.components.MinisTextButton
 import com.openminis.app.ui.components.SectionTextField
-
 private const val TAG = "ProviderDetail"
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -577,7 +577,7 @@ fun ProviderDetailScreen(
                 showChevron = false,
                 trailing = {
                     Icon(
-                        Icons.Default.Refresh,
+                        m3Icon(Icons.Default.Refresh),
                         contentDescription = stringResource(R.string.provider_detail_refresh_models),
                         tint = MaterialTheme.colorScheme.primary,
                     )
@@ -990,7 +990,7 @@ private fun ApiKeyCredentialBlock(
             trailingIcon = {
                 IconButton(onClick = onToggleVisibility) {
                     Icon(
-                        if (keyVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                        if (keyVisible) m3Icon(Icons.Default.VisibilityOff) else m3Icon(Icons.Default.Visibility),
                         contentDescription = if (keyVisible) "Hide" else "Show",
                     )
                 }
@@ -1032,7 +1032,7 @@ private fun ApiKeyCredentialBlock(
             )
             IconButton(onClick = onToggleVisibility) {
                 Icon(
-                    if (keyVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                    if (keyVisible) m3Icon(Icons.Default.VisibilityOff) else m3Icon(Icons.Default.Visibility),
                     contentDescription = if (keyVisible) "Hide" else "Show",
                 )
             }

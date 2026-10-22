@@ -298,8 +298,8 @@ import com.openminis.app.data.repository.MemoryRepository
 import com.openminis.app.data.repository.ProviderRepository
 import com.openminis.app.ui.browser.BrowserSheet
 import com.openminis.app.ui.theme.ChatColors
+import com.openminis.app.ui.theme.m3Icon
 import com.openminis.app.ui.components.MinisTextButton
-
 // iOS ChatColors equivalent
 internal val ToolCheckColor = Color(0xFF34C759) // iOS .green
 internal val ToolErrorColor = Color(0xFFFF3B30) // iOS .red
@@ -2252,7 +2252,7 @@ fun ChatScreen(
                                             style = noFontPad,
                                         )
                                         Icon(
-                                            Icons.Default.KeyboardArrowDown,
+                                            m3Icon(Icons.Default.KeyboardArrowDown),
                                             contentDescription = null,
                                             tint = ChatColors.tertiaryText,
                                             modifier = Modifier.size(14.dp),
@@ -2443,13 +2443,13 @@ fun ChatScreen(
                     // handlers as the menu items — one funnel per action.
                     if (shouldShowTopBarQuickActions()) {
                         IconButton(onClick = onOpenTerminal) {
-                            Icon(Icons.Default.Terminal, contentDescription = stringResource(R.string.chat_menu_open_terminal))
+                            Icon(m3Icon(Icons.Default.Terminal), contentDescription = stringResource(R.string.chat_menu_open_terminal))
                         }
                         IconButton(onClick = { viewModel.toggleBrowserSheet() }) {
-                            Icon(Icons.Default.Language, contentDescription = stringResource(R.string.chat_menu_open_browser))
+                            Icon(m3Icon(Icons.Default.Language), contentDescription = stringResource(R.string.chat_menu_open_browser))
                         }
                         IconButton(onClick = onBrowseChatFiles) {
-                            Icon(Icons.Default.Description, contentDescription = stringResource(R.string.chat_menu_browse_chat_files))
+                            Icon(m3Icon(Icons.Default.Description), contentDescription = stringResource(R.string.chat_menu_browse_chat_files))
                         }
                     }
                     // iOS: "..." circle button → dropdown menu
@@ -2482,7 +2482,7 @@ fun ChatScreen(
                                         onOpenTerminal()
                                     },
                                     leadingIcon = {
-                                        Icon(Icons.Default.Terminal, contentDescription = null)
+                                        Icon(m3Icon(Icons.Default.Terminal), contentDescription = null)
                                     },
                                 )
                                 DropdownMenuItem(
@@ -2492,7 +2492,7 @@ fun ChatScreen(
                                         viewModel.toggleBrowserSheet()
                                     },
                                     leadingIcon = {
-                                        Icon(Icons.Default.Language, contentDescription = null)
+                                        Icon(m3Icon(Icons.Default.Language), contentDescription = null)
                                     },
                                 )
                                 DropdownMenuItem(
@@ -2502,7 +2502,7 @@ fun ChatScreen(
                                         onBrowseChatFiles()
                                     },
                                     leadingIcon = {
-                                        Icon(Icons.Default.Description, contentDescription = null)
+                                        Icon(m3Icon(Icons.Default.Description), contentDescription = null)
                                     },
                                 )
                             }
@@ -2591,7 +2591,7 @@ fun ChatScreen(
                                         showSkillsSheet = true
                                     },
                                     leadingIcon = {
-                                        Icon(Icons.Default.Build, contentDescription = null)
+                                        Icon(m3Icon(Icons.Default.Build), contentDescription = null)
                                     },
                                 )
                             }
@@ -2617,7 +2617,7 @@ fun ChatScreen(
                                         viewModel.toggleMemorySheet()
                                     },
                                     leadingIcon = {
-                                        Icon(Icons.Default.Psychology, contentDescription = null)
+                                        Icon(m3Icon(Icons.Default.Psychology), contentDescription = null)
                                     },
                                 )
                             }
@@ -4847,7 +4847,7 @@ fun ChatScreen(
                         ),
                     ) {
                         Icon(
-                            imageVector = Icons.Default.KeyboardArrowDown,
+                            imageVector = m3Icon(Icons.Default.KeyboardArrowDown),
                             contentDescription = stringResource(R.string.cd_scroll_bottom),
                             modifier = Modifier.size(20.dp),
                         )
@@ -5094,7 +5094,7 @@ fun ChatScreen(
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Icon(
-                                        imageVector = cmd.icon,
+                                        imageVector = m3Icon(cmd.icon),
                                         contentDescription = null,
                                         tint = iconTint,
                                         modifier = Modifier.size(18.dp),
@@ -5125,7 +5125,7 @@ fun ChatScreen(
                                     }
                                     if (cmd.id == "memory") {
                                         Icon(
-                                            imageVector = if (memoryOnState) Icons.Default.CheckCircle else Icons.Default.Block,
+                                            imageVector = if (memoryOnState) m3Icon(Icons.Default.CheckCircle) else Icons.Default.Block,
                                             contentDescription = null,
                                             tint = if (memoryOnState) ChatColors.sendButton else ChatColors.secondaryText,
                                             modifier = Modifier.size(18.dp),
@@ -5419,7 +5419,7 @@ fun ChatScreen(
                                             // we keep it uniform here so the row stays
                                             // visually consistent at small sizes on Pixel 4a.
                                             Icon(
-                                                imageVector = Icons.Default.Description,
+                                                imageVector = m3Icon(Icons.Default.Description),
                                                 contentDescription = null,
                                                 tint = ChatColors.secondaryText,
                                                 modifier = Modifier.size(16.dp),
@@ -6434,7 +6434,7 @@ fun ChatScreen(
                                 onClick = { showAttachMenu = true },
                             ) {
                                 Icon(
-                                    Icons.Default.Add,
+                                    m3Icon(Icons.Default.Add),
                                     contentDescription = stringResource(R.string.cd_attach),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(20.dp),
@@ -6475,7 +6475,7 @@ fun ChatScreen(
                                 )
                                 DropdownMenuItem(
                                     text = { Text(stringResource(R.string.chat_attach_add_file)) },
-                                    leadingIcon = { Icon(Icons.Default.Description, contentDescription = null) },
+                                    leadingIcon = { Icon(m3Icon(Icons.Default.Description), contentDescription = null) },
                                     onClick = {
                                         showAttachMenu = false
                                         // OpenMultipleDocuments takes a mime-

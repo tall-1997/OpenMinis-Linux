@@ -1,4 +1,5 @@
 package com.openminis.app.ui.sessions
+import com.openminis.app.ui.theme.m3Icon
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -160,7 +161,7 @@ fun GroupPickerSheet(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
-                        Icons.Default.Warning,
+                        m3Icon(Icons.Default.Warning),
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.tertiary,
                         modifier = Modifier.size(20.dp),
@@ -304,7 +305,7 @@ fun GroupPickerSheet(
                             subtitle = folder.description?.takeIf { it.isNotBlank() }
                                 ?: if (count > 0) stringResource(R.string.group_n_chats, count)
                                 else stringResource(R.string.group_empty),
-                            icon = Icons.Default.Folder,
+                            icon = m3Icon(Icons.Default.Folder),
                             onClick = { onChoose(GroupChoice.Existing(folder.id)) },
                         )
                     }

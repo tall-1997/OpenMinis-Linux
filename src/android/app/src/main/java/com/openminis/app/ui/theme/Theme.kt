@@ -17,6 +17,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -142,6 +143,10 @@ fun minisFabColor(): Color = LocalChatPalette.current.fabAccent
 @Composable
 fun minisFabContentColor(): Color = LocalChatPalette.current.fabOnAccent
 
+// [T-two-styles] 动态取色模式下 Icon 走 Rounded 风格（M3 Material Symbols）。
+// 非动态模式继续用 Default/Filled（Apple SF Symbols 风格）。默认为 false。
+val LocalUseRoundedIcons = compositionLocalOf { false }
+
 // True only while the wallpaper scheme is actually in effect (dynamic color ON
 // and Android 12+). Consumers use it to swap hand-tuned iOS-parity accents for
 // scheme roles without re-deriving the gate themselves.
@@ -169,14 +174,24 @@ fun monetIconTint(static: Color): Color =
         static
     }
 
-// App-wide shape system — larger corners for a modern, friendly feel
-// DropdownMenu uses extraSmall, Dialog uses extraLarge, BottomSheet uses extraLarge
-private val MinisShapes = Shapes(
-    extraSmall = RoundedCornerShape(12.dp),   // DropdownMenu, Tooltip, OutlinedTextField default
-    small = RoundedCornerShape(12.dp),        // Chip, TextField
-    medium = RoundedCornerShape(20.dp),       // Card, Snackbar
-    large = RoundedCornerShape(24.dp),        // NavigationDrawer
-    extraLarge = RoundedCornerShape(28.dp),   // Dialog, BottomSheet
+// Apple-style shape system — rounded, friendly, iOS-like
+// M3 Expressive 在动态取色时替换（见 MinisShapesM3）
+private val AppleShapes = Shapes(
+    extraSmall = RoundedCornerShape(12.dp),
+    small = RoundedCornerShape(12.dp),
+    medium = RoundedCornerShape(20.dp),
+    large = RoundedCornerShape(24.dp),
+    extraLarge = RoundedCornerShape(28.dp),
+)
+
+// M3 Expressive shape tokens — dynamic mode 用这套。
+// Token 对应: extraSmall=4dp, small=8dp, medium=12dp, large=16dp, extraLarge=28dp
+private val M3ExpressiveShapes = Shapes(
+    extraSmall = RoundedCornerShape(4.dp),
+    small = RoundedCornerShape(8.dp),
+    medium = RoundedCornerShape(12.dp),
+    large = RoundedCornerShape(16.dp),
+    extraLarge = RoundedCornerShape(28.dp),
 )
 
 @Composable
@@ -198,7 +213,15 @@ fun MinisTheme(
     val colorScheme = if (dynamicActive) {
         if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
     } else if (darkTheme) DarkColorScheme else LightColorScheme
-    val typography = scaledTypography(fontScale)
+    // 两套独立的视觉系统：
+    //   非动态 → Apple 风格（圆角大、Roboto 字重偏轻、自有 ChatPalette）
+    //   动态   → M3 Expressive（官方 Shape tokens、Material You 全套色板+文字）
+    val shapes = if (dynamicActive) M3ExpressiveShapes else AppleShapes
+    val typography = if (dynamicActive) {
+        M3Typography  // M3 官方 Type Scale（Display/Headline/Title/Body/Label）
+    } else {
+        scaledTypography(fontScale)
+    }
     val fallbackChatPalette = if (darkTheme) DarkChatPalette else LightChatPalette
     val chatPalette =
         if (dynamicActive) {
@@ -209,12 +232,13 @@ fun MinisTheme(
 
     MaterialTheme(
         colorScheme = colorScheme,
-        shapes = MinisShapes,
+        shapes = shapes,
         typography = typography,
     ) {
         CompositionLocalProvider(
             LocalChatPalette provides chatPalette,
             LocalMonetDynamic provides dynamicActive,
+            LocalUseRoundedIcons provides dynamicActive,
             content = content,
         )
     }
@@ -289,6 +313,26 @@ internal fun dynamicChatPalette(scheme: ColorScheme, fallback: ChatPalette): Cha
 
 private fun TextStyle.scale(factor: Float): TextStyle =
     if (factor == 1f) this else copy(fontSize = fontSize * factor)
+
+// ─── M3 Typography (Material You 模式用) ───────────────────────────────────
+
+private val M3Typography = Typography(
+    displayLarge = TextStyle(fontSize = 57.sp, fontWeight = FontWeight.Normal, lineHeight = 64.sp),
+    displayMedium = TextStyle(fontSize = 45.sp, fontWeight = FontWeight.Normal, lineHeight = 52.sp),
+    displaySmall = TextStyle(fontSize = 36.sp, fontWeight = FontWeight.Normal, lineHeight = 44.sp),
+    headlineLarge = TextStyle(fontSize = 32.sp, fontWeight = FontWeight.Normal, lineHeight = 40.sp),
+    headlineMedium = TextStyle(fontSize = 28.sp, fontWeight = FontWeight.Normal, lineHeight = 36.sp),
+    headlineSmall = TextStyle(fontSize = 24.sp, fontWeight = FontWeight.Normal, lineHeight = 32.sp),
+    titleLarge = TextStyle(fontSize = 22.sp, fontWeight = FontWeight.Medium, lineHeight = 28.sp),
+    titleMedium = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Medium, lineHeight = 24.sp),
+    titleSmall = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Medium, lineHeight = 20.sp),
+    bodyLarge = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Normal, lineHeight = 24.sp),
+    bodyMedium = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Normal, lineHeight = 20.sp),
+    bodySmall = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Normal, lineHeight = 16.sp),
+    labelLarge = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Medium, lineHeight = 20.sp),
+    labelMedium = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Medium, lineHeight = 16.sp),
+    labelSmall = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Medium, lineHeight = 16.sp),
+)
 
 private fun scaledTypography(factor: Float): Typography {
     val base = Typography()

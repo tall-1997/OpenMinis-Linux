@@ -1,4 +1,5 @@
 package com.openminis.app.ui.components
+import com.openminis.app.ui.theme.m3Icon
 
 import android.view.WindowManager
 import android.widget.Toast
@@ -220,7 +221,7 @@ fun ImageGalleryViewer(
                         .padding(8.dp),
                 ) {
                     Icon(
-                        Icons.Default.Close,
+                        m3Icon(Icons.Default.Close),
                         contentDescription = "Close",
                         tint = Color.White,
                         modifier = Modifier.size(28.dp),

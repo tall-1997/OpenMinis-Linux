@@ -1,4 +1,5 @@
 package com.openminis.app.ui.settings
+import com.openminis.app.ui.theme.m3Icon
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -282,7 +283,7 @@ fun AddAgentLoopGroupsScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Icon(
-                                    if (isSelected) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+                                    if (isSelected) m3Icon(Icons.Default.CheckCircle) else Icons.Default.RadioButtonUnchecked,
                                     contentDescription = null,
                                     tint = if (isSelected) Color(0xFF007AFF)
                                     else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),

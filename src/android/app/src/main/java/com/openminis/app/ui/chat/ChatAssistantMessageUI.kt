@@ -102,6 +102,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.sp
 import com.openminis.app.data.model.ThinkingLevel
 import com.openminis.app.ui.theme.ChatColors
+import com.openminis.app.ui.theme.m3Icon
 import com.openminis.app.ui.components.MinisTextButton
 
 @Composable
@@ -302,7 +303,7 @@ internal fun InlineErrorBanner(error: String, onRetry: (() -> Unit)? = null) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
-            imageVector = Icons.Default.Error,
+            imageVector = m3Icon(Icons.Default.Error),
             contentDescription = null,
             tint = Color(0xFFFF3B30),
             modifier = Modifier.size(14.dp),
@@ -329,7 +330,7 @@ internal fun InlineErrorBanner(error: String, onRetry: (() -> Unit)? = null) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
-                    imageVector = Icons.Default.Refresh,
+                    imageVector = m3Icon(Icons.Default.Refresh),
                     contentDescription = null,
                     tint = Color(0xFFFF3B30),
                     modifier = Modifier.size(10.dp),
@@ -471,7 +472,7 @@ internal fun ToolCallPill(
     val isCancelled = block.toolStatus == ToolBlockStatus.CANCELLED
 
     val toolAccent = toolAccentColor(block.toolName)
-    val toolIcon = toolIconFor(block.toolName)
+    val toolIcon = m3Icon(toolIconFor(block.toolName))
 
     // Icon color: tool color when running/done, error/cancel colors on failure
     val iconTint = when {
@@ -652,14 +653,14 @@ internal fun ToolCallPill(
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.tool_longpress_rerun_from_here)) },
                     onClick = { showToolMenu = false; onRerunFromHere() },
-                    leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                    leadingIcon = { Icon(m3Icon(Icons.Default.Refresh), contentDescription = null, modifier = Modifier.size(18.dp)) },
                 )
             }
             if (onCopyDetails != null) {
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.tool_longpress_copy_details)) },
                     onClick = { showToolMenu = false; onCopyDetails() },
-                    leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                    leadingIcon = { Icon(m3Icon(Icons.Default.ContentCopy), contentDescription = null, modifier = Modifier.size(18.dp)) },
                 )
             }
         }
@@ -760,7 +761,7 @@ internal fun ThinkingBlock(block: AssistantBlock, isStreaming: Boolean, isLast: 
                 Spacer(modifier = Modifier.width(6.dp))
             } else {
                 Icon(
-                    imageVector = Icons.Default.Psychology,
+                    imageVector = m3Icon(Icons.Default.Psychology),
                     contentDescription = null,
                     tint = thinkingBlue,
                     modifier = Modifier.size(14.dp),
@@ -810,7 +811,7 @@ internal fun ThinkingBlock(block: AssistantBlock, isStreaming: Boolean, isLast: 
                 )
             } else {
                 Icon(
-                    imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                    imageVector = if (expanded) m3Icon(Icons.Default.KeyboardArrowUp) else m3Icon(Icons.Default.KeyboardArrowDown),
                     contentDescription = if (expanded) "Collapse" else "Expand",
                     tint = thinkingBlue.copy(alpha = 0.5f),
                     modifier = Modifier.size(14.dp),
@@ -960,7 +961,7 @@ internal fun ProcessSummaryBar(
                 )
             } else {
                 Icon(
-                    imageVector = if (hasFailure) Icons.Default.Error else Icons.Default.CheckCircle,
+                    imageVector = if (hasFailure) m3Icon(Icons.Default.Error) else m3Icon(Icons.Default.CheckCircle),
                     contentDescription = null,
                     tint = iconTint,
                     modifier = Modifier.size(14.dp),
@@ -977,7 +978,7 @@ internal fun ProcessSummaryBar(
                 overflow = TextOverflow.Ellipsis,
             )
             Icon(
-                imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                imageVector = if (expanded) m3Icon(Icons.Default.KeyboardArrowUp) else m3Icon(Icons.Default.KeyboardArrowDown),
                 contentDescription = if (expanded) "Collapse" else "Expand",
                 tint = thinkingBlue.copy(alpha = 0.5f),
                 modifier = Modifier.size(14.dp),
@@ -1059,14 +1060,14 @@ private fun ProcessStepRow(step: ProcessStepRef, onOpen: () -> Unit) {
         ) {
             if (isThinking) {
                 Icon(
-                    imageVector = Icons.Default.Psychology,
+                    imageVector = m3Icon(Icons.Default.Psychology),
                     contentDescription = null,
                     tint = thinkingBlue,
                     modifier = Modifier.size(14.dp),
                 )
             } else {
                 Icon(
-                    imageVector = toolIconFor(block.toolName),
+                    imageVector = m3Icon(toolIconFor(block.toolName)),
                     contentDescription = null,
                     tint = if (isFailed) ToolErrorColor else toolAccentColor(block.toolName),
                     modifier = Modifier.size(14.dp),
@@ -1114,7 +1115,7 @@ private fun ProcessStepRow(step: ProcessStepRef, onOpen: () -> Unit) {
             }
             Icon(
                 imageVector = if (isThinking) {
-                    if (stepExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown
+                    if (stepExpanded) m3Icon(Icons.Default.KeyboardArrowUp) else m3Icon(Icons.Default.KeyboardArrowDown)
                 } else {
                     Icons.AutoMirrored.Filled.KeyboardArrowRight
                 },
@@ -1164,7 +1165,6 @@ private fun ProcessStepRow(step: ProcessStepRef, onOpen: () -> Unit) {
         }
     }
 }
-
 
 /**
  * [T-thinking-render-perf-android] Full-screen viewer for thinking content

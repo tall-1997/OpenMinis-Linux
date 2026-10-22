@@ -1,4 +1,5 @@
 package com.openminis.app.ui.settings
+import com.openminis.app.ui.theme.m3Icon
 
 import com.openminis.app.R
 import com.openminis.app.ui.components.DialogTextField
@@ -111,7 +112,7 @@ fun EnvironmentVariablesScreen(
         // kept here for visual continuity.
         actions = {
             IconButton(onClick = { showAddSheet = true }) {
-                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.env_var_add))
+                Icon(m3Icon(Icons.Default.Add), contentDescription = stringResource(R.string.env_var_add))
             }
         },
     ) {
@@ -207,7 +208,7 @@ fun EnvironmentVariablesScreen(
                                         visibleKeys.value + entry.key
                                 }) {
                                     Icon(
-                                        if (isVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                        if (isVisible) m3Icon(Icons.Default.Visibility) else m3Icon(Icons.Default.VisibilityOff),
                                         contentDescription = stringResource(R.string.env_var_toggle_visibility),
                                         modifier = Modifier.size(20.dp),
                                     )
@@ -217,14 +218,14 @@ fun EnvironmentVariablesScreen(
                                     clipboardManager.setText(AnnotatedString("${entry.key}=$v"))
                                 }) {
                                     Icon(
-                                        Icons.Default.ContentCopy,
+                                        m3Icon(Icons.Default.ContentCopy),
                                         contentDescription = stringResource(R.string.common_copy),
                                         modifier = Modifier.size(20.dp),
                                     )
                                 }
                                 IconButton(onClick = { deleteEntryId = entry.id }) {
                                     Icon(
-                                        Icons.Default.Delete,
+                                        m3Icon(Icons.Default.Delete),
                                         contentDescription = stringResource(R.string.common_delete),
                                         modifier = Modifier.size(20.dp),
                                         tint = MaterialTheme.colorScheme.error,
