@@ -715,7 +715,7 @@ fun ProviderDetailScreen(
                                 },
                                 leadingIcon = {
                                     Icon(
-                                        m3Icon(Icons.Icons.Filled.Delete)
+                                        m3Icon(Icons.Filled.Delete),
                                         contentDescription = null,
                                         tint = MaterialTheme.colorScheme.error,
                                     )
