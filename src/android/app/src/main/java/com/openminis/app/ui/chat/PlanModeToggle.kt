@@ -29,6 +29,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openminis.app.tools.PlanModeStore
+import com.openminis.app.ui.theme.ChatColors
 import com.openminis.app.ui.theme.m3Icon
 
 /**
