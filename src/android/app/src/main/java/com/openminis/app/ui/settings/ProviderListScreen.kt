@@ -292,7 +292,7 @@ fun ProviderListScreen(
                     )
                 } else {
                     Icon(
-                        m3Icon(Icons.Icons.Filled.Sync)
+                        m3Icon(Icons.Filled.Sync),
                         contentDescription = stringResource(R.string.provider_list_sync_all),
                     )
                 }
