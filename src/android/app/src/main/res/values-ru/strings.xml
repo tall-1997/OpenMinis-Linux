@@ -204,6 +204,9 @@
     <string name="voice_service_shared_credential_note">Этот голосовой сервис использует ключ API и эндпоинт своего провайдера. Чтобы изменить их, отредактируйте этого провайдера.</string>
     <string name="voice_service_hidden_badge">Скрыт</string>
     <string name="add_provider_voice_chat_providers">Провайдеры голосового чата</string>
+    <string name="provider_sync_mark_not_found">404 not found</string>
+    <string name="provider_sync_mark_connection">Connection failed</string>
+    <string name="provider_sync_mark_invalid">Invalid response</string>
     <string name="add_provider_voice_templates_footer">Сервисы распознавания и синтеза речи. Тип провайдера и базовый URL уже заполнены — остаётся добавить ваш ключ API.</string>
     <string name="add_provider_voice_capability_tts">Синтез речи (TTS)</string>
     <string name="add_provider_voice_capability_asr">Распознавание речи (ASR)</string>
