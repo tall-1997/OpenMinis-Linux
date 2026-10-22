@@ -168,7 +168,7 @@ fun ModelGroupDetailScreen(
                 title = { Text(group.name, fontWeight = FontWeight.SemiBold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.model_group_detail_back))
+                        Icon(m3Icon(Icons.AutoMirrored.Filled.ArrowBack), contentDescription = stringResource(R.string.model_group_detail_back))
                     }
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
@@ -400,13 +400,13 @@ fun ModelGroupDetailScreen(
                                         modifier = Modifier.draggableHandle(),
                                         onClick = {},
                                     ) {
-                                        Icon(Icons.Default.DragHandle, contentDescription = stringResource(R.string.model_group_detail_drag_to_reorder))
+                                        Icon(m3Icon(Icons.Default.DragHandle), contentDescription = stringResource(R.string.model_group_detail_drag_to_reorder))
                                     }
                                 },
                                 trailingContent = {
                                     Box {
                                         IconButton(onClick = { showMenu = true }) {
-                                            Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.model_group_detail_more_options))
+                                            Icon(m3Icon(Icons.Default.MoreVert), contentDescription = stringResource(R.string.model_group_detail_more_options))
                                         }
                                         com.openminis.app.ui.components.MinisMenu(
                                             expanded = showMenu,
