@@ -40,6 +40,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.openminis.app.R
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * Detail screen for a single shared folder. Mirrors the iOS Folder Details
@@ -69,7 +70,7 @@ fun SharedFolderDetailScreen(
                 title = { Text(stringResource(R.string.shared_folder_detail_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                        Icon(m3Icon(Icons.AutoMirrored.Filled.ArrowBack), contentDescription = null)
                     }
                 },
             )
@@ -99,7 +100,7 @@ fun SharedFolderDetailScreen(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     Icon(
-                        imageVector = Icons.Outlined.Folder,
+                        imageVector = m3Icon(Icons.Outlined.Folder),
                         contentDescription = null,
                         tint = Color(0xFF007AFF),
                     )

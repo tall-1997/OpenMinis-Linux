@@ -292,7 +292,7 @@ fun ProviderListScreen(
                     )
                 } else {
                     Icon(
-                        Icons.Filled.Sync,
+                        m3Icon(Icons.Filled.Sync),
                         contentDescription = stringResource(R.string.provider_list_sync_all),
                     )
                 }
@@ -315,7 +315,7 @@ fun ProviderListScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Icon(
-                    imageVector = Icons.Outlined.VpnKey,
+                    imageVector = m3Icon(Icons.Outlined.VpnKey),
                     contentDescription = null,
                     modifier = Modifier.size(36.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
@@ -540,7 +540,7 @@ fun ProviderListScreen(
                         .padding(horizontal = 20.dp, vertical = 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(Icons.Default.FileDownload, contentDescription = null, modifier = Modifier.size(22.dp))
+                    Icon(m3Icon(Icons.Default.FileDownload), contentDescription = null, modifier = Modifier.size(22.dp))
                     Spacer(Modifier.width(16.dp))
                     Text(stringResource(R.string.provider_list_import_provider), style = MaterialTheme.typography.bodyLarge)
                 }
@@ -636,7 +636,7 @@ private fun ShadowVoiceRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
-            imageVector = Icons.Outlined.GraphicEq,
+            imageVector = m3Icon(Icons.Outlined.GraphicEq),
             contentDescription = null,
             modifier = Modifier.size(20.dp),
             tint = MaterialTheme.colorScheme.primary,
@@ -669,7 +669,7 @@ private fun ShadowVoiceRow(
             }
         }
         Icon(
-            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            imageVector = m3Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight),
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
             modifier = Modifier.size(20.dp),

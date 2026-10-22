@@ -98,7 +98,7 @@ fun AddAgentLoopModelsScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
+                            m3Icon(Icons.AutoMirrored.Filled.ArrowBack),
                             contentDescription = stringResource(R.string.model_group_detail_back),
                         )
                     }
@@ -187,7 +187,7 @@ fun AddAgentLoopGroupsScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
+                            m3Icon(Icons.AutoMirrored.Filled.ArrowBack),
                             contentDescription = stringResource(R.string.model_group_detail_back),
                         )
                     }
@@ -283,7 +283,7 @@ fun AddAgentLoopGroupsScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Icon(
-                                    if (isSelected) m3Icon(Icons.Default.CheckCircle) else Icons.Default.RadioButtonUnchecked,
+                                    if (isSelected) m3Icon(m3Icon(Icons.Default.CheckCircle)) else m3Icon(Icons.Default.RadioButtonUnchecked),
                                     contentDescription = null,
                                     tint = if (isSelected) Color(0xFF007AFF)
                                     else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),

@@ -50,6 +50,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * Logs → Config Changes tab. Lists every config write attempt
@@ -110,7 +111,7 @@ fun ConfigAuditScreen(modifier: Modifier = Modifier) {
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(
-                        imageVector = Icons.Filled.History,
+                        imageVector = m3Icon(Icons.Filled.History),
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(bottom = 8.dp),
@@ -249,7 +250,7 @@ private fun AuditRow(entry: ConfigAuditEntry, onRevert: () -> Unit) {
             )
             Spacer(Modifier.width(6.dp))
             Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                imageVector = m3Icon(Icons.AutoMirrored.Filled.ArrowForward),
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.outline,
                 modifier = Modifier.padding(top = 2.dp),

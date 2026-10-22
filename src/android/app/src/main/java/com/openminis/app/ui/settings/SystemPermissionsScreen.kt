@@ -49,6 +49,7 @@ import com.openminis.app.offload.ShizukuManager
 import com.openminis.app.power.PowerOptimizationManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * T323: surfaces OS-level permission states (Accessibility service,
@@ -114,7 +115,7 @@ fun SystemPermissionsScreen(onBack: () -> Unit) {
                 title = { Text(stringResource(R.string.system_permissions_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
+                        Icon(m3Icon(Icons.AutoMirrored.Filled.ArrowBack), contentDescription = stringResource(R.string.back))
                     }
                 },
             )

@@ -371,7 +371,7 @@ fun SoulSettingsScreen(
                         // overhanging badge was clipped to a sliver by the
                         // enclosing button label.
                         Icon(
-                            imageVector = Icons.Filled.Edit,
+                            imageVector = m3Icon(Icons.Filled.Edit),
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onPrimary,
                             modifier = Modifier
@@ -716,7 +716,7 @@ internal fun SoulIconGlyph(
         // Unset: byte-for-byte the previous sparkle, so a user who never
         // touches this sees no visual change at all.
         sparkleTint != null -> Icon(
-            imageVector = Icons.Filled.AutoAwesome,
+            imageVector = m3Icon(Icons.Filled.AutoAwesome),
             contentDescription = null,
             tint = Color.White,
             modifier = Modifier

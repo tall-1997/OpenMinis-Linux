@@ -85,6 +85,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import com.openminis.app.evolution.EvolutionPrefs
 import com.openminis.app.ui.components.openExternalUrl
 import com.openminis.app.i18n.uppercaseForDisplay
+import com.openminis.app.ui.theme.m3Icon
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -676,7 +677,7 @@ private fun SettingsItem(
 
             // Chevron
             Icon(
-                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                imageVector = m3Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight),
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                 modifier = Modifier.size(20.dp),

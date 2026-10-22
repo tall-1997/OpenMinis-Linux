@@ -57,6 +57,7 @@ import com.openminis.app.ui.settings.SettingsSection
 import com.openminis.app.ui.settings.SettingsSwitchRow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * [T-android-rclone-ui] Backup destinations — the Android peer of iOS
@@ -536,7 +537,7 @@ internal fun FolderBrowser(vm: RcloneDestinationsViewModel, onSaved: (String) ->
             )
             IconButton(onClick = { showNewFolder = true }, enabled = !busy) {
                 Icon(
-                    Icons.Outlined.CreateNewFolder,
+                    m3Icon(Icons.Outlined.CreateNewFolder),
                     contentDescription = stringResource(R.string.backup_dest_new_folder),
                     tint = MaterialTheme.colorScheme.primary,
                 )

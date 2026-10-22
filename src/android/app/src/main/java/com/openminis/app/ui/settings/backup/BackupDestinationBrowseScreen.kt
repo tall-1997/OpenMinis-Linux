@@ -37,6 +37,7 @@ import com.openminis.app.backup.remote.RcloneRemoteStore
 import com.openminis.app.ui.components.MinisTextButton
 import com.openminis.app.ui.settings.SettingsScaffold
 import com.openminis.app.ui.settings.SettingsSection
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * [T-backup-destination-browse] What is actually stored on one destination.
@@ -179,7 +180,7 @@ private fun PackageRow(
             }
             IconButton(onClick = onDelete) {
                 Icon(
-                    Icons.Outlined.Delete,
+                    m3Icon(Icons.Outlined.Delete),
                     contentDescription = stringResource(R.string.backup_dest_delete_confirm),
                     tint = MaterialTheme.colorScheme.error,
                     modifier = Modifier.size(20.dp),

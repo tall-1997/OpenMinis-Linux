@@ -76,7 +76,7 @@
     "src/android/app/src/main/java/com/openminis/app/ui/settings/MCPIntegrationsScreen.kt": 1153,
     "src/android/app/src/main/java/com/openminis/app/ui/settings/ModelGroupsScreen.kt": 1039,
     "src/android/app/src/main/java/com/openminis/app/ui/settings/ProviderDetailScreen.kt": 1233,
-    "src/android/app/src/main/java/com/openminis/app/ui/settings/SkillsManagementScreen.kt": 1271,
+    "src/android/app/src/main/java/com/openminis/app/ui/settings/SkillsManagementScreen.kt": 1237,
     "src/android/app/src/main/java/com/openminis/app/ui/settings/SoulSettingsScreen.kt": 929,
     "src/android/app/src/main/java/com/openminis/app/ui/settings/backup/BackupAndRestoreScreen.kt": 1802,
     "src/android/app/src/main/java/com/openminis/app/ui/settings/backup/BackupViewModel.kt": 1066

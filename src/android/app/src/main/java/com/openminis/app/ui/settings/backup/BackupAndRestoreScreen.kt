@@ -637,7 +637,7 @@ private fun BackupHistoryRow(
             // status readout, and the detail screen behind it goes unfound.
             Spacer(Modifier.width(4.dp))
             Icon(
-                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                com.openminis.app.ui.theme.m3Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight),
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(20.dp),
@@ -779,7 +779,7 @@ private fun MaxFileSizeRow(
                     )
                     Spacer(Modifier.width(4.dp))
                     Icon(
-                        Icons.Outlined.UnfoldMore,
+                        com.openminis.app.ui.theme.m3Icon(Icons.Outlined.UnfoldMore),
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(18.dp),
@@ -795,7 +795,7 @@ private fun MaxFileSizeRow(
                         DropdownMenuItem(
                             text = { Text(text) },
                             trailingIcon = if (value == current) {
-                                { Icon(Icons.Outlined.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                                { Icon(com.openminis.app.ui.theme.m3Icon(Icons.Outlined.Check), contentDescription = null, modifier = Modifier.size(18.dp)) }
                             } else null,
                             onClick = { onSelect(value); expanded = false },
                         )
@@ -1273,7 +1273,7 @@ private fun DestinationsSection(
                         modifier = Modifier.size(30.dp).background(Color(0xFF007AFF), CircleShape),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Icon(Icons.Outlined.Folder, contentDescription = null, tint = Color.White, modifier = Modifier.size(17.dp))
+                        Icon(com.openminis.app.ui.theme.m3Icon(Icons.Outlined.Folder), contentDescription = null, tint = Color.White, modifier = Modifier.size(17.dp))
                     }
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
@@ -1436,7 +1436,7 @@ private fun ResultDestinationRow(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
-                if (outcome.succeeded) Icons.Outlined.CheckCircle else Icons.Outlined.Warning,
+                if (outcome.succeeded) com.openminis.app.ui.theme.m3Icon(Icons.Outlined.CheckCircle) else com.openminis.app.ui.theme.m3Icon(Icons.Outlined.Warning),
                 contentDescription = null,
                 tint = if (outcome.succeeded) Color(0xFF34C759) else Color(0xFFFF9500),
                 modifier = Modifier.size(20.dp),

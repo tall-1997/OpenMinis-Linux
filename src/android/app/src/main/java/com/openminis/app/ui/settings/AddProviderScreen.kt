@@ -347,12 +347,12 @@ private fun ChooseCredentialScreen(
                     ProviderCredential.apiKey -> Triple(
                         stringResource(R.string.provider_list_api_key),
                         apiKeyDescription(providerType),
-                        Icons.Default.Key,
+                        m3Icon(Icons.Default.Key),
                     )
                     ProviderCredential.oauth -> Triple(
                         "OAuth",
                         oauthDescription(providerType),
-                        Icons.Default.Person,
+                        m3Icon(Icons.Default.Person),
                     )
                 }
                 SettingsRow(
@@ -535,7 +535,7 @@ private fun ColumnScope.ApiKeyConfigSection(
                 trailingIcon = {
                     IconButton(onClick = { showApiKeyPlaintext = !showApiKeyPlaintext }) {
                         Icon(
-                            if (showApiKeyPlaintext) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                            if (showApiKeyPlaintext) m3Icon(Icons.Default.VisibilityOff) else m3Icon(Icons.Default.Visibility),
                             contentDescription = if (showApiKeyPlaintext) "Hide" else "Show",
                         )
                     }
@@ -724,7 +724,7 @@ private fun ColumnScope.OAuthConfigSection(
             SettingsCardBlock {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        Icons.Default.CheckCircle,
+                        m3Icon(Icons.Default.CheckCircle),
                         contentDescription = null,
                         tint = Color(0xFF34C759),
                         modifier = Modifier.size(20.dp),

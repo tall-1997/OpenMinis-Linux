@@ -44,6 +44,7 @@ import com.openminis.app.config.confirm.ConfigConfirmationGate
 import com.openminis.app.config.confirm.PendingConfigChange
 import com.openminis.app.config.confirm.PendingConfigChangeItem
 import com.openminis.app.ui.components.MinisTextButton
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * Root-level confirmation dialog for every minis-config write.
@@ -171,7 +172,7 @@ private fun ConfirmRow(item: PendingConfigChangeItem, onToggle: (Boolean) -> Uni
                 )
                 Spacer(Modifier.width(6.dp))
                 Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                    imageVector = m3Icon(Icons.AutoMirrored.Filled.ArrowForward),
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.outline,
                     modifier = Modifier.padding(top = 2.dp),
@@ -231,7 +232,7 @@ private fun VerbBadge(verb: String) {
 private fun RiskHint(text: String, color: Color) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(
-            imageVector = Icons.Filled.Warning,
+            imageVector = m3Icon(Icons.Filled.Warning),
             contentDescription = null,
             tint = color,
             modifier = Modifier.height(14.dp),

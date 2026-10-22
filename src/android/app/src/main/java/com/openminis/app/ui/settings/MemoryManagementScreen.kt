@@ -53,6 +53,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import com.openminis.app.data.repository.MemoryRepository
 import com.openminis.app.ui.components.DialogTextField
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * Settings-level memory file management.
@@ -280,7 +281,7 @@ private fun MemoryFileRow(
         if (onDelete != null) {
             IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
                 Icon(
-                    Icons.Outlined.Delete,
+                    m3Icon(Icons.Outlined.Delete),
                     contentDescription = stringResource(R.string.common_delete),
                     tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
                     modifier = Modifier.size(20.dp),
@@ -288,7 +289,7 @@ private fun MemoryFileRow(
             }
         }
         Icon(
-            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            m3Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight),
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
             modifier = Modifier.size(20.dp),
@@ -338,7 +339,7 @@ fun MemoryFileEditScreen(
                 title = { Text(fileName) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_back))
+                        Icon(m3Icon(Icons.AutoMirrored.Filled.ArrowBack), contentDescription = stringResource(R.string.common_back))
                     }
                 },
                 actions = {

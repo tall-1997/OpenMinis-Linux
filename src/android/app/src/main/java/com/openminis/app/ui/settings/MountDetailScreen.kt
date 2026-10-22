@@ -53,6 +53,7 @@ import com.openminis.app.data.MountedFoldersStore
 import com.openminis.app.ui.components.SectionTextField
 import kotlinx.coroutines.launch
 import com.openminis.app.ui.components.MinisTextButton
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * Detail/edit screen for a single mounted folder. Mirrors iOS
@@ -98,7 +99,7 @@ fun MountDetailScreen(
                 title = { Text(stringResource(R.string.mount_detail_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                        Icon(m3Icon(Icons.AutoMirrored.Filled.ArrowBack), contentDescription = null)
                     }
                 },
                 actions = {
@@ -256,7 +257,7 @@ private fun HeaderCard(entry: MountedFoldersStore.Entry) {
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    imageVector = Icons.Outlined.FolderShared,
+                    imageVector = m3Icon(Icons.Outlined.FolderShared),
                     contentDescription = null,
                     tint = Color.White,
                     modifier = Modifier.size(20.dp),

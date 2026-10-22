@@ -19,6 +19,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.openminis.app.R
 import com.openminis.app.data.repository.MCPRepository
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * [T-android-mcp-merged-server-list] ONE list for presets and saved servers.
@@ -136,7 +137,7 @@ private fun ServerTrailing(
             modifier = Modifier.size(32.dp),
         ) {
             Icon(
-                Icons.Outlined.Construction,
+                m3Icon(Icons.Outlined.Construction),
                 contentDescription = stringResource(R.string.mcp_tools_title, server.id),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(16.dp),
@@ -144,7 +145,7 @@ private fun ServerTrailing(
         }
         Spacer(Modifier.width(4.dp))
         Icon(
-            if (server.isStdio) Icons.Outlined.Terminal else Icons.Outlined.Language,
+            if (server.isStdio) m3Icon(Icons.Outlined.Terminal) else m3Icon(Icons.Outlined.Language),
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(14.dp),

@@ -74,6 +74,7 @@ import com.openminis.app.data.SafMountHelper
 import com.openminis.app.ui.components.DialogTextField
 import kotlinx.coroutines.launch
 import com.openminis.app.i18n.uppercaseForDisplay
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * Settings → Mount External Folders. Mirrors iOS MountedFoldersSettingsView.
@@ -186,7 +187,7 @@ fun MountedFoldersScreen(
                         },
                         enabled = !isAtCapacity,
                     ) {
-                        Icon(Icons.Filled.Add, contentDescription = null)
+                        Icon(m3Icon(Icons.Filled.Add), contentDescription = null)
                     }
                 },
             )
@@ -465,7 +466,7 @@ private fun EmptyState() {
         verticalArrangement = Arrangement.Center,
     ) {
         Icon(
-            imageVector = Icons.Outlined.FolderShared,
+            imageVector = m3Icon(Icons.Outlined.FolderShared),
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(48.dp),
@@ -521,7 +522,7 @@ private fun MountRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
-            imageVector = Icons.Outlined.Folder,
+            imageVector = m3Icon(Icons.Outlined.Folder),
             contentDescription = null,
             tint = Color(0xFF007AFF),
             modifier = Modifier.size(28.dp),

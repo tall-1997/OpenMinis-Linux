@@ -208,7 +208,7 @@ fun EnvironmentVariablesScreen(
                                         visibleKeys.value + entry.key
                                 }) {
                                     Icon(
-                                        if (isVisible) m3Icon(Icons.Default.Visibility) else m3Icon(Icons.Default.VisibilityOff),
+                                        if (isVisible) m3Icon(m3Icon(Icons.Default.Visibility)) else m3Icon(m3Icon(Icons.Default.VisibilityOff)),
                                         contentDescription = stringResource(R.string.env_var_toggle_visibility),
                                         modifier = Modifier.size(20.dp),
                                     )

@@ -160,7 +160,7 @@ fun ThinkingRulesSection(
             showChevron = false,
             trailing = {
                 Icon(
-                    if (defaultsExpanded) m3Icon(Icons.Default.KeyboardArrowUp) else Icons.Default.ArrowDropDown,
+                    if (defaultsExpanded) m3Icon(m3Icon(Icons.Default.KeyboardArrowUp)) else m3Icon(Icons.Default.ArrowDropDown),
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
