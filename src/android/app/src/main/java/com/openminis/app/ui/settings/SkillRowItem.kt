@@ -103,7 +103,7 @@ fun SkillRowItem(
             if (onClick != null) {
                 Spacer(modifier = Modifier.width(4.dp))
                 Icon(
-                    m3Icon(Icons.Icons.AutoMirrored.Filled.KeyboardArrowRight)
+                    m3Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight),
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                     modifier = Modifier.size(20.dp),
