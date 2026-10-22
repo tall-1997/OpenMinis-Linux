@@ -203,6 +203,9 @@
     <string name="voice_service_shared_credential_note">Acest serviciu vocal folosește cheia API și punctul final ale furnizorului său. Pentru a le schimba, editează furnizorul respectiv.</string>
     <string name="voice_service_hidden_badge">Ascuns</string>
     <string name="add_provider_voice_chat_providers">Furnizori de conversație vocală</string>
+    <string name="provider_sync_mark_not_found">404 not found</string>
+    <string name="provider_sync_mark_connection">Connection failed</string>
+    <string name="provider_sync_mark_invalid">Invalid response</string>
     <string name="add_provider_voice_templates_footer">Furnizori de transcriere și de sinteză vocală. Tipul furnizorului și adresa de bază sunt deja completate — mai trebuie doar cheia ta API.</string>
     <string name="add_provider_voice_capability_tts">Sinteză vocală (TTS)</string>
     <string name="add_provider_voice_capability_asr">Recunoaștere vocală (ASR)</string>
