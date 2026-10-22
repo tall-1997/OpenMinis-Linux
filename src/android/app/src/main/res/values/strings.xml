@@ -2509,6 +2509,9 @@
     <string name="provider_sync_mark_failed">Refresh failed</string>
     <string name="provider_sync_mark_nokey">No key</string>
     <string name="provider_sync_mark_unchanged">Not updated</string>
+    <string name="provider_sync_mark_not_found">404 — not found</string>
+    <string name="provider_sync_mark_connection">Connection failed</string>
+    <string name="provider_sync_mark_invalid">Invalid response</string>
     <string name="sessionlist_untitled">New Chat</string>
     <string name="sessionlist_no_messages">No messages yet</string>
 

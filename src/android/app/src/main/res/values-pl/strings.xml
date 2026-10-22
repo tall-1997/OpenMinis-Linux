@@ -204,6 +204,9 @@
     <string name="voice_service_shared_credential_note">Ta usługa głosowa korzysta z klucza API i punktu końcowego swojego dostawcy. Aby je zmienić, edytuj tego dostawcę.</string>
     <string name="voice_service_hidden_badge">Ukryte</string>
     <string name="add_provider_voice_chat_providers">Dostawcy czatu głosowego</string>
+    <string name="provider_sync_mark_not_found">404 not found</string>
+    <string name="provider_sync_mark_connection">Connection failed</string>
+    <string name="provider_sync_mark_invalid">Invalid response</string>
     <string name="add_provider_voice_templates_footer">Dostawcy zamiany mowy na tekst i tekstu na mowę. Typ dostawcy i bazowy adres URL są już uzupełnione — wystarczy dodać klucz API.</string>
     <string name="add_provider_voice_capability_tts">Synteza mowy (TTS)</string>
     <string name="add_provider_voice_capability_asr">Rozpoznawanie mowy (ASR)</string>

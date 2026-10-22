@@ -521,7 +521,6 @@ class ProviderRepository(private val context: Context) {
         // triggerBackgroundRefreshIfStale call) will fetch it.
         invalidateModelCache(instance.id)
     }
-
     /**
      * [T-android-provider-voice] Reconcile voice-template seed entries on every
      * launch: add template models a previous build didn't know, remove RETIRED
@@ -547,7 +546,6 @@ class ProviderRepository(private val context: Context) {
             val templateById = tpl.mockModels.associateBy { it.id }
             val instanceEntries = config.modelEntries.filter { it.providerInstanceId == instance.id }
             val existingIds = instanceEntries.map { it.baseModel.id }.toSet()
-
             // Remove stale template seeds (exact seed shape only) not in the
             // current template version.
             val staleSeedIds = instanceEntries
@@ -561,7 +559,6 @@ class ProviderRepository(private val context: Context) {
                 changed = true
                 android.util.Log.i("ProviderRepo", "[VoiceTemplateMigrate] ${instance.label}: removed stale voice entries: ${staleSeedIds.sorted()}")
             }
-
             // Add template models missing from this instance.
             val toAdd = templateById.keys - existingIds
             if (toAdd.isNotEmpty()) {
@@ -572,7 +569,6 @@ class ProviderRepository(private val context: Context) {
                 changed = true
                 android.util.Log.i("ProviderRepo", "[VoiceTemplateMigrate] ${instance.label}: added ${newEntries.size} new entries: ${toAdd.sorted()}")
             }
-
             // Heal corrupted modality on surviving template entries.
             for (i in config.modelEntries.indices) {
                 val e = config.modelEntries[i]
@@ -588,7 +584,6 @@ class ProviderRepository(private val context: Context) {
         }
         if (changed) saveConfig(config)
     }
-
     /**
      * Retires the OpenCode Zen free lane this app used to seed.
      *
@@ -618,7 +613,6 @@ class ProviderRepository(private val context: Context) {
             "[BuiltIn] retired the Zen free lane: removed ${legacy.size} built-in instance(s)",
         )
     }
-
     /**
      * Whether [instance] points at a third-party OpenAI-compatible host
      * (xAI Grok, vLLM, Ollama, LiteLLM, DeepSeek via OpenAI shim, etc.).
@@ -632,7 +626,6 @@ class ProviderRepository(private val context: Context) {
         val officialHosts = listOf("api.openai.com", "chatgpt.com")
         return officialHosts.none { custom.contains(it) }
     }
-
     fun updateInstance(instance: ProviderInstance): Unit = synchronized(configLock) {
         ensureConfigLoaded()
         val config = workingCopy()
@@ -665,7 +658,6 @@ class ProviderRepository(private val context: Context) {
             }
         }
     }
-
     fun setInstancePinned(id: String, pinned: Boolean): Unit = synchronized(configLock) {
         ensureConfigLoaded()
         val config = workingCopy()
@@ -673,7 +665,6 @@ class ProviderRepository(private val context: Context) {
         inst.pinned = pinned
         saveConfig(config)
     }
-
     fun removeInstance(instanceId: String): Unit = synchronized(configLock) {
         ensureConfigLoaded()
         invalidateModelCache(instanceId)
@@ -685,7 +676,6 @@ class ProviderRepository(private val context: Context) {
             .toSet()
         config.instances.removeAll { it.id == instanceId }
         config.modelEntries.removeAll { it.providerInstanceId == instanceId }
-
         if (removedEntryIds.isNotEmpty()) {
             for (group in config.modelGroups) {
                 group.memberEntryIds.removeAll { it in removedEntryIds }
@@ -698,7 +688,6 @@ class ProviderRepository(private val context: Context) {
             if (config.defaultPrimaryGroupId in emptyGroupIds) config.defaultPrimaryGroupId = null
             if (config.defaultSubGroupId in emptyGroupIds) config.defaultSubGroupId = null
         }
-
         saveConfig(config)
         deleteApiKey(instanceId)
         // [T-remove-instance-cleanup] deleteApiKey only removes apikey_<id>.
@@ -741,7 +730,6 @@ class ProviderRepository(private val context: Context) {
                 }
         })
     }
-
     /**
      * [T-android-image-endpoint-mode] Persist the endpoint that last worked for
      * `auto`-mode image generation on [instanceId]. Called by
@@ -2340,7 +2328,6 @@ class ProviderRepository(private val context: Context) {
         return shadowVoiceSnapshot().hasFoldedDuplicates
     }
 
-
     suspend fun refreshModels(
         instance: ProviderInstance,
         forceRefresh: Boolean = false,
@@ -2368,6 +2355,7 @@ class ProviderRepository(private val context: Context) {
             val clearedIds = clearFetchedModelEntries(instance.id)
             if (clearedIds.isNotEmpty()) scrubExternalEntryRefs(clearedIds)
         }
+        var lastFetchError: ModelRefreshResult? = null
         // [T-android-refresh-models-empty-key] usableApiKey, NOT loadApiKey.
         //
         // A self-hosted OpenAI/Anthropic-compatible endpoint (ollama, LM
@@ -2514,6 +2502,21 @@ class ProviderRepository(private val context: Context) {
                 }
             } catch (e: Exception) {
                 android.util.Log.e("ProviderRepo", "refreshModels fetch error: ${e.message}", e)
+                // 细分错误原因，存到可变变量里，供后面的空列表分支返回。
+                lastFetchError = when {
+                    e is java.net.ConnectException || e is java.net.SocketTimeoutException ||
+                        e is java.net.UnknownHostException || e is javax.net.ssl.SSLException ||
+                        e.message?.contains("Unable to resolve host") == true ||
+                        e.message?.contains("Connection refused") == true ||
+                        e.message?.contains("connect timed out") == true ||
+                        e.message?.contains("timeout") == true ||
+                        e.message?.contains("Network is unreachable") == true ->
+                        ModelRefreshResult.CONNECTION_FAILED
+                    e is java.io.FileNotFoundException || e.message?.contains("404") == true ||
+                        e.message?.contains("Not Found") == true ->
+                        ModelRefreshResult.NOT_FOUND
+                    else -> ModelRefreshResult.FAILURE
+                }
                 emptyList()
             }
             android.util.Log.i("ProviderRepo", "refreshModels: got ${models.size} models")
@@ -2531,7 +2534,8 @@ class ProviderRepository(private val context: Context) {
         // catalog is a per-credential refresh. Same API address used to make
         // every sibling provider look freshly synced.
         if (liveForce) {
-            return if (apiKey == null) ModelRefreshResult.NO_KEY else ModelRefreshResult.FAILURE
+            return if (apiKey == null) ModelRefreshResult.NO_KEY
+            else lastFetchError ?: ModelRefreshResult.FAILURE
         }
 
         // Step 3: Fallback to models.dev by base URL.
@@ -2717,7 +2721,6 @@ class ProviderRepository(private val context: Context) {
     private val backupCoordinator by lazy {
         ProviderBackupCoordinator(context, ProviderBackupHost())
     }
-
     private inner class ProviderBackupHost : ProviderBackupCoordinator.Host {
         override val configValue get() = _config.value
         override fun saveConfig(config: ProviderConfig) = this@ProviderRepository.saveConfig(config)
@@ -2735,16 +2738,12 @@ class ProviderRepository(private val context: Context) {
         override fun loadAllThinkingRulesIntoCache() =
             this@ProviderRepository.loadAllThinkingRulesIntoCache()
     }
-
     fun exportInstanceJSON(instanceId: String): String? =
         backupCoordinator.exportInstanceJSON(instanceId)
-
     fun collectBackupProviderSecret(instance: ProviderInstance): BackupSecrets.ProviderSecret? =
         backupCoordinator.collectBackupProviderSecret(instance)
-
     fun restoreBackupProviderSecret(secret: BackupSecrets.ProviderSecret): Boolean =
         backupCoordinator.restoreBackupProviderSecret(secret)
-
     fun mergeBackupProviderConfig(remote: ProviderConfig): Pair<Int, Int> =
         backupCoordinator.mergeBackupProviderConfig(remote)
     fun restoreBackupThinkingRules(
@@ -2754,10 +2753,10 @@ class ProviderRepository(private val context: Context) {
         backupCoordinator.importInstanceJSON(jsonStr)
 }
 enum class ModelRefreshResult {
-    SUCCESS_API,
-    NO_KEY,
-    PRESERVED,
-    FAILURE,
+    SUCCESS_API, NO_KEY, PRESERVED, FAILURE,
+    /** 404 from /v1/models */ NOT_FOUND,
+    /** DNS / TLS / timeout */ CONNECTION_FAILED,
+    /** 2xx body not valid JSON */ INVALID_RESPONSE,
 }
 /**
  * Id of the OpenCode Zen provider this app used to seed.

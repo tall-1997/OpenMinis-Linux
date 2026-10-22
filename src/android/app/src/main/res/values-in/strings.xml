@@ -207,6 +207,9 @@
     <string name="voice_service_shared_credential_note">Layanan suara ini berbagi kunci API dan endpoint dengan penyedianya. Untuk mengubahnya, edit penyedia tersebut.</string>
     <string name="voice_service_hidden_badge">Disembunyikan</string>
     <string name="add_provider_voice_chat_providers">Penyedia Obrolan Suara</string>
+    <string name="provider_sync_mark_not_found">404 not found</string>
+    <string name="provider_sync_mark_connection">Connection failed</string>
+    <string name="provider_sync_mark_invalid">Invalid response</string>
     <string name="add_provider_voice_templates_footer">Vendor ucapan ke teks dan teks ke ucapan. Jenis penyedia dan URL dasar sudah terisi — Anda tinggal menambahkan kunci API.</string>
     <string name="add_provider_voice_capability_tts">Sintesis suara (TTS)</string>
     <string name="add_provider_voice_capability_asr">Pengenalan suara (ASR)</string>

@@ -202,6 +202,9 @@
     <string name="voice_service_shared_credential_note">Ginagamit ng voice service na ito ang API key at endpoint ng provider nito. Para baguhin ang mga ito, i-edit ang provider na iyon.</string>
     <string name="voice_service_hidden_badge">Nakatago</string>
     <string name="add_provider_voice_chat_providers">Mga Voice Chat Provider</string>
+    <string name="provider_sync_mark_not_found">404 not found</string>
+    <string name="provider_sync_mark_connection">Connection failed</string>
+    <string name="provider_sync_mark_invalid">Invalid response</string>
     <string name="add_provider_voice_templates_footer">Mga vendor ng speech-to-text at text-to-speech. Nakalagay na ang uri ng provider at ang base URL — kailangan mo na lang idagdag ang API key mo.</string>
     <string name="add_provider_voice_capability_tts">Speech synthesis (TTS)</string>
     <string name="add_provider_voice_capability_asr">Speech recognition (ASR)</string>

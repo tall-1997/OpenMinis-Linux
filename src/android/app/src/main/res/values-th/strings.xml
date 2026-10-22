@@ -202,6 +202,9 @@
     <string name="voice_service_shared_credential_note">บริการเสียงนี้ใช้ API key และ endpoint ร่วมกับผู้ให้บริการของมัน หากต้องการเปลี่ยน ให้แก้ไขที่ผู้ให้บริการนั้น</string>
     <string name="voice_service_hidden_badge">ซ่อนอยู่</string>
     <string name="add_provider_voice_chat_providers">ผู้ให้บริการแชทด้วยเสียง</string>
+    <string name="provider_sync_mark_not_found">404 not found</string>
+    <string name="provider_sync_mark_connection">Connection failed</string>
+    <string name="provider_sync_mark_invalid">Invalid response</string>
     <string name="add_provider_voice_templates_footer">ผู้ให้บริการแปลงเสียงเป็นข้อความและข้อความเป็นเสียง ประเภทผู้ให้บริการและ base URL ถูกกรอกไว้แล้ว เพียงเพิ่ม API key ของคุณ</string>
     <string name="add_provider_voice_capability_tts">การสังเคราะห์เสียง (TTS)</string>
     <string name="add_provider_voice_capability_asr">การรู้จำเสียง (ASR)</string>

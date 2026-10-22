@@ -109,10 +109,8 @@ fun ProviderDetailScreen(
     var menuEntryId by remember { mutableStateOf<String?>(null) }
     var deleted by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-
     if (instance == null && !deleted) { onBack(); return }
     if (instance == null) return
-
     var label by remember { mutableStateOf(instance.label) }
     val labelChanged = label != instance.label
 
@@ -422,7 +420,6 @@ fun ProviderDetailScreen(
             }
         }
 
-
         // ─── Image Generation Endpoint ──────────────────────────────
         // [T-android-image-endpoint-mode] OpenAI-compatible providers only.
         // Picks how minis-model-use routes image-output models:
@@ -554,6 +551,9 @@ fun ProviderDetailScreen(
                         ModelRefreshResult.NO_KEY -> R.string.provider_sync_mark_nokey
                         ModelRefreshResult.PRESERVED -> R.string.provider_sync_mark_unchanged
                         ModelRefreshResult.FAILURE -> R.string.provider_sync_mark_failed
+                        ModelRefreshResult.NOT_FOUND -> R.string.provider_sync_mark_not_found
+                        ModelRefreshResult.CONNECTION_FAILED -> R.string.provider_sync_mark_connection
+                        ModelRefreshResult.INVALID_RESPONSE -> R.string.provider_sync_mark_invalid
                         ModelRefreshResult.SUCCESS_API -> R.string.provider_sync_mark_unchanged
                     })
                 },
@@ -1199,7 +1199,6 @@ private fun ManualBearerTokenSection(
 
 /** Input modalities that get a (muted) capability badge in the model list. */
 private val modalityIconKeys = setOf("image", "pdf", "audio", "video")
-
 /** Output modalities that get a (tinted, generate-style) badge in the model list. */
 private val modalityOutputIconKeys = setOf("image", "audio", "video")
 /**

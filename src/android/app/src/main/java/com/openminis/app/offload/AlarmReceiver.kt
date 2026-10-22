@@ -22,14 +22,8 @@ class AlarmReceiver : BroadcastReceiver() {
         // BOOT_COMPLETED arrives with no extras; it just keeps the receiver
         // resident so the AlarmManager re-fires the persisted alarms after
         // a reboot. Nothing to clean up in that branch.
-        if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
-            AppLogger.info(TAG, "BOOT_COMPLETED — alarm receiver resident")
-            // [T-android-scheduled-tasks-design] Re-register every enabled
-            // ScheduledTask with AlarmManager. The OS drops all pending
-            // alarms on reboot, so persisted tasks would silently stop
-            // firing without this. The legacy AlarmOffloadManager entries
-            // are repeating alarms and DO survive reboot via the OS, so
-            // we don't have to re-register them here.
+        if (intent.action == Intent.ACTION_BOOT_COMPLETED || intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
+            AppLogger.info(TAG, "${intent.action} — rescheduling persisted alarms")
             try {
                 com.openminis.app.scheduled.ScheduledTaskManager(context).rescheduleAll()
             } catch (t: Throwable) {
