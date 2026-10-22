@@ -180,7 +180,7 @@ private fun PackageRow(
             }
             IconButton(onClick = onDelete) {
                 Icon(
-                    m3Icon(Icons.Icons.Outlined.Delete)
+                    m3Icon(Icons.Outlined.Delete),
                     contentDescription = stringResource(R.string.backup_dest_delete_confirm),
                     tint = MaterialTheme.colorScheme.error,
                     modifier = Modifier.size(20.dp),
