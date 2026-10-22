@@ -3,9 +3,13 @@ package com.openminis.app.ui.settings
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import com.openminis.app.agent.SoulMetadata
+import com.openminis.app.ui.chat.ChatViewModelStore
+import com.openminis.app.ui.chat.ModelBrandResolver
 
 /**
  * [T-soul-avatar-model-icon] Soul 头像的「模型图标」模式。
@@ -31,15 +35,31 @@ internal data class SoulModelIdentity(
 internal val LocalSoulModelIdentity = compositionLocalOf<SoulModelIdentity?> { null }
 
 /**
- * 渲染模型厂商图标。拿不到当前模型时退回默认 sparkle —— 不留空框。
+ * 渲染模型厂商图标。
+ *
+ * 身份来源两级：先取 [LocalSoulModelIdentity]（群聊具名发言者的厂商），
+ * 没有再从 [ChatViewModelStore.foregroundViewModel] 推导前台会话当前运行
+ * 的模型 —— 主助手消息不带 speakerVendor，PR #126 只接了第一级，导致
+ * 主头像永远拿不到身份、退回默认 emoji。两级都拿不到时才退回默认
+ * sparkle，不留空框。
  */
 @Composable
 internal fun SoulModelIconAvatar(sizeDp: Dp, emojiSp: TextUnit) {
-    val model = LocalSoulModelIdentity.current
+    val model = LocalSoulModelIdentity.current ?: foregroundSessionModelIdentity()
     val slug = model?.brandSlug
     if (slug != null) {
         com.openminis.app.ui.chat.ModelBrandIcon(slug = slug, sizeDp = sizeDp)
     } else {
         Text(text = SoulMetadata.DISPLAY_EMOJI, fontSize = emojiSp)
     }
+}
+
+/** 前台会话当前运行模型的身份（modelName 经品牌解析器推导）。 */
+@Composable
+private fun foregroundSessionModelIdentity(): SoulModelIdentity? {
+    val vm = ChatViewModelStore.foregroundViewModel() ?: return null
+    val name by vm.modelName.collectAsState()
+    if (name.isBlank()) return null
+    val slug = remember(name) { ModelBrandResolver.resolve(name) } ?: return null
+    return SoulModelIdentity(brandSlug = slug, displayName = name)
 }

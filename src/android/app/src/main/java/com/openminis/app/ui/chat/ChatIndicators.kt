@@ -1,11 +1,5 @@
 package com.openminis.app.ui.chat
 
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.offset
@@ -37,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openminis.app.R
 import com.openminis.app.ui.theme.ChatColors
+import com.openminis.app.ui.theme.decorPulse
 
 // [T-android-split-chat] Self-contained "thinking / streaming" dot indicators
 // extracted verbatim from ChatScreen.kt. `internal` so the chat package can
@@ -48,17 +43,15 @@ import com.openminis.app.ui.theme.ChatColors
 // iOS-style streaming "..." after tool title — 3 dots bouncing inline with text
 @Composable
 internal fun StreamingDotsText() {
-    val infiniteTransition = rememberInfiniteTransition(label = "streamDots")
     Row {
         repeat(3) { i ->
-            val offset by infiniteTransition.animateFloat(
-                initialValue = 0f,
-                targetValue = -3f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(350, delayMillis = i * 120, easing = FastOutSlowInEasing),
-                    repeatMode = RepeatMode.Reverse,
-                ),
-                label = "sdot_$i",
+            // [T-decor-shared-clock] 余弦弹跳 0→-3dp，700ms 全周期，
+            // 错峰 i×120ms（原 tween(350, delayMillis = i*120, Reverse)）。
+            val offset = decorPulse(
+                min = 0f,
+                max = -3f,
+                periodMs = 700,
+                staggerFraction = i * (120f / 700f),
             )
             Text(
                 text = ".",
@@ -97,17 +90,10 @@ internal fun CompactProgressIndicator(
     }
 
     // 呼吸动画：缩放+透明度脉冲，避免用户以为压缩过程卡住。
-    val breath = rememberInfiniteTransition(label = "compact")
-    val scale by breath.animateFloat(
-        initialValue = 0.85f, targetValue = 1.05f,
-        animationSpec = infiniteRepeatable(tween(900, easing = LinearEasing), RepeatMode.Reverse),
-        label = "breath_scale",
-    )
-    val alpha by breath.animateFloat(
-        initialValue = 0.4f, targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(tween(900, easing = LinearEasing), RepeatMode.Reverse),
-        label = "breath_alpha",
-    )
+    // [T-decor-shared-clock] 共享时钟余弦脉冲（原 900ms Linear Reverse 三角波，
+    // 换成平滑包络；量化后实际周期 2000ms）。
+    val scale = decorPulse(min = 0.85f, max = 1.05f, periodMs = 1800)
+    val alpha = decorPulse(min = 0.4f, max = 1.0f, periodMs = 1800)
 
     Row(
         modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -167,7 +153,8 @@ internal fun CompactProgressIndicator(
 
 @Composable
 internal fun TypingIndicator() {
-    val infiniteTransition = rememberInfiniteTransition(label = "typing")
+    // [T-decor-shared-clock] 弹跳点走共享时钟（原 400ms Linear Reverse 三角波，
+    // 换成平滑余弦包络，错峰 index×150ms）。
     // Live Soul name → "<custom name> is thinking…" when the user renamed
     // the assistant in Soul settings. SoulStore.cachedMetadata is a StateFlow
     // that's updated on save (SoulSettingsScreen) and at app start
@@ -188,14 +175,11 @@ internal fun TypingIndicator() {
         // Animated bouncing dots
         val dots = listOf(".", ".", ".")
         dots.forEachIndexed { index, dot ->
-            val offsetY by infiniteTransition.animateFloat(
-                initialValue = 0f,
-                targetValue = -6f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(400, delayMillis = index * 150, easing = LinearEasing),
-                    repeatMode = RepeatMode.Reverse,
-                ),
-                label = "dot_bounce_$index",
+            val offsetY = decorPulse(
+                min = 0f,
+                max = -6f,
+                periodMs = 800,
+                staggerFraction = index * (150f / 800f),
             )
             Text(
                 text = dot,

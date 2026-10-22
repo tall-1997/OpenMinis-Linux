@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
+import kotlin.math.roundToInt
 
 /**
  * [T-decor-shared-clock] 装饰动画共用一个节流时钟。
@@ -78,4 +79,56 @@ fun decorPhaseFor(cyclesPerClockPeriod: Float): Float {
     val p = LocalDecorPhase.current
     val v = (p * cyclesPerClockPeriod) % 1f
     return if (v < 0f) v + 1f else v
+}
+
+// ─── 波形派生器 ───────────────────────────────────────────────────────────────
+// [T-decor-shared-clock] PR #126 只建了时钟没接消费者——LocalDecorPhase 零读取、
+// 7 个文件仍各自 rememberInfiniteTransition，共享时钟成了纯开销。以下派生器
+// 是迁移的统一入口；全部把周期量化成整数轮，保证时钟相位回绕（1→0）时波形
+// 连续不跳变。量化后的实际周期与请求值最多差半轮，装饰动画无感。
+
+/** 时钟周期的毫秒形式（量化基准）。 */
+private const val DECOR_PERIOD_MS = (DecorClock.PERIOD_SECONDS * 1000).toInt()
+
+/** 量化成整数轮：一个时钟周期内跑几轮。 */
+private fun quantizedCycles(periodMs: Int): Int =
+    (DECOR_PERIOD_MS.toFloat() / periodMs).roundToInt().coerceAtLeast(1)
+
+/**
+ * 连续旋转角（度），转圈/扫描弧用。等价 `infiniteRepeatable(tween(periodMs,
+ * LinearEasing), Restart)` 的 0→360。
+ */
+@Composable
+internal fun decorRotationAngle(periodMs: Int): Float {
+    val phase = LocalDecorPhase.current
+    return (phase * quantizedCycles(periodMs) * 360f) % 360f
+}
+
+/**
+ * 线性扫描（[from] → [to] 后回绕），shimmer 平移用。等价
+ * `infiniteRepeatable(tween(periodMs, LinearEasing))` 的 Restart 锯齿波。
+ */
+@Composable
+internal fun decorLinearSweep(from: Float, to: Float, periodMs: Int): Float {
+    val phase = LocalDecorPhase.current
+    val t = (phase * quantizedCycles(periodMs)) % 1f
+    return from + (to - from) * t
+}
+
+/**
+ * 余弦脉冲（[min] → [max] → [min]），呼吸灯/打字点用。等价
+ * `infiniteRepeatable(tween(periodMs / 2, FastOutSlowIn), Reverse)` 的
+ * 往返包络。[staggerFraction] 是多元素错峰的相位偏移（如打字点 i×120/700）。
+ */
+@Composable
+internal fun decorPulse(
+    min: Float,
+    max: Float,
+    periodMs: Int,
+    staggerFraction: Float = 0f,
+): Float {
+    val phase = LocalDecorPhase.current
+    val t = (phase * quantizedCycles(periodMs) + staggerFraction) % 1f
+    val envelope = 0.5f - 0.5f * kotlin.math.cos(2f * Math.PI.toFloat() * t)
+    return min + (max - min) * envelope
 }

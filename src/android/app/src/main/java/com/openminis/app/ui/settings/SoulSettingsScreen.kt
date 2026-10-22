@@ -676,7 +676,7 @@ fun SoulSettingsScreen(
 
     if (showEmojiSheet) {
         SoulEmojiPickerSheet(
-            current = if (SoulIcon.isDataUri(icon)) "" else icon,
+            current = if (SoulIcon.isDataUri(icon) || SoulIcon.isModelIcon(icon)) "" else icon,
             onDismiss = { showEmojiSheet = false },
             onPick = { chosen -> icon = chosen; showEmojiSheet = false },
         )
@@ -712,6 +712,8 @@ internal fun SoulIconGlyph(
                 .size(sizeDp)
                 .clip(RoundedCornerShape(sizeDp * SoulIcon.CORNER_RADIUS_FRACTION)),
         )
+        // [T-soul-avatar-model-icon] 哨兵判断必须在 isNotEmpty() 之前，否则被当文字渲染。
+        SoulIcon.isModelIcon(icon) -> SoulModelIconAvatar(sizeDp = sizeDp, emojiSp = emojiSp)
         icon.isNotEmpty() -> Text(text = icon, fontSize = emojiSp)
         // Unset: byte-for-byte the previous sparkle, so a user who never
         // touches this sees no visual change at all.
@@ -727,8 +729,6 @@ internal fun SoulIconGlyph(
                     drawRect(brush = sparkleTint, blendMode = BlendMode.SrcIn)
                 },
         )
-        // [T-soul-avatar-model-icon] 模型图标模式（实现在 SoulModelIcon.kt）。
-        SoulIcon.isModelIcon(icon) -> SoulModelIconAvatar(sizeDp = sizeDp, emojiSp = emojiSp)
         else -> Text(text = SoulMetadata.DISPLAY_EMOJI, fontSize = emojiSp)
     }
 }

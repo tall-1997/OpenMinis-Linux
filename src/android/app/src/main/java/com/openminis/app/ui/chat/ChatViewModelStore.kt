@@ -42,6 +42,17 @@ object ChatViewModelStore {
         scheduleTrim()
     }
 
+    /**
+     * [T-soul-avatar-model-icon] The foreground chat ViewModel, if any — the
+     * most recently accessed session that is still on screen. Powers the Soul
+     * avatar's model-icon mode: the avatar follows the model the visible
+     * session is actually running, without threading the ViewModel through
+     * the (ceiling-pinned) render chain.
+     */
+    @Synchronized
+    internal fun foregroundViewModel(): ChatViewModel? =
+        mounted.filterValues { it > 0 }.keys.maxByOrNull { lastAccess[it] ?: 0L }?.let { models[it] }
+
     fun scheduleTrim() {
         mainHandler.removeCallbacks(trimRunnable)
         mainHandler.postDelayed(trimRunnable, 30_000)

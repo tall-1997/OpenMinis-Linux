@@ -10,12 +10,6 @@ import android.webkit.ValueCallback
 import com.openminis.app.R
 import androidx.compose.ui.res.stringResource
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -62,11 +56,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
@@ -89,6 +83,8 @@ import com.openminis.app.browser.BrowserTabPool
 import com.openminis.app.browser.UserAgentProfile
 import com.openminis.app.ui.chat.StandardChatSheet
 import kotlinx.coroutines.launch
+import com.openminis.app.ui.theme.decorPulse
+import com.openminis.app.ui.theme.decorRotationAngle
 
 /**
  * Bottom sheet presenting the browser tab pool with tab bar, URL bar,
@@ -593,12 +589,8 @@ private fun ToolbarIcon(
 /** Globe icon with a spinning arc border when loading. */
 @Composable
 private fun BrowserAddressBarIcon(isLoading: Boolean, accent: Color) {
-    val transition = rememberInfiniteTransition(label = "addrIcon")
-    val angle by transition.animateFloat(
-        initialValue = 0f, targetValue = 360f,
-        animationSpec = infiniteRepeatable(tween(1000, easing = LinearEasing)),
-        label = "angle",
-    )
+    // [T-decor-shared-clock] 读共享相位派生旋转角；未加载时不订阅、零重组。
+    val angle = if (isLoading) decorRotationAngle(1000) else 0f
     Box(
         modifier = Modifier.size(24.dp),
         contentAlignment = Alignment.Center,
@@ -624,12 +616,8 @@ private fun BrowserAddressBarIcon(isLoading: Boolean, accent: Color) {
 /** Breathing-light overlay shown when the agent is controlling the browser. */
 @Composable
 private fun AgentBrowsingOverlay(accent: Color, onTakeover: () -> Unit) {
-    val transition = rememberInfiniteTransition(label = "breathing")
-    val breathingAlpha by transition.animateFloat(
-        initialValue = 0.3f, targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(1500), RepeatMode.Reverse),
-        label = "breathingAlpha",
-    )
+    // [T-decor-shared-clock] 呼吸脉冲：0.3→1→0.3，3000ms 全周期。
+    val breathingAlpha = decorPulse(min = 0.3f, max = 1f, periodMs = 3000)
 
     Box(
         modifier = Modifier
