@@ -1906,4 +1906,13 @@
     <string name="usage_detail_window_share">Pondere în această perioadă</string>
     <string name="usage_label_input_short">Intrare</string>
     <string name="usage_label_output_short">Ieșire</string>
+    <string name="plan_mode_on">Plan activ</string>
+    <string name="plan_mode_off">Plan</string>
+    <string name="plan_review_title">Plan pentru aprobare</string>
+    <string name="plan_review_approve">Aprobă</string>
+    <string name="plan_review_revise">Cere modificări</string>
+    <string name="plan_review_revise_confirm">Trimite feedback</string>
+    <string name="plan_review_reject">Respinge</string>
+    <string name="plan_review_cancel">Anulează</string>
+    <string name="plan_review_feedback_hint">Ce ar trebui schimbat în plan?</string>
 </resources>

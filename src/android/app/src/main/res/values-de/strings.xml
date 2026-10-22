@@ -1904,4 +1904,13 @@
     <string name="usage_detail_window_share">Anteil an diesem Zeitraum</string>
     <string name="usage_label_input_short">Eingabe</string>
     <string name="usage_label_output_short">Ausgabe</string>
+    <string name="plan_mode_on">Plan aktiv</string>
+    <string name="plan_mode_off">Plan</string>
+    <string name="plan_review_title">Plan zur Genehmigung</string>
+    <string name="plan_review_approve">Genehmigen</string>
+    <string name="plan_review_revise">Änderungen anfordern</string>
+    <string name="plan_review_revise_confirm">Feedback senden</string>
+    <string name="plan_review_reject">Ablehnen</string>
+    <string name="plan_review_cancel">Abbrechen</string>
+    <string name="plan_review_feedback_hint">Was soll am Plan geändert werden?</string>
 </resources>

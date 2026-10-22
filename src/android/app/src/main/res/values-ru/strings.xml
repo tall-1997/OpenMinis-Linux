@@ -1912,4 +1912,13 @@
     <string name="usage_detail_window_share">Доля за период</string>
     <string name="usage_label_input_short">Ввод</string>
     <string name="usage_label_output_short">Вывод</string>
+    <string name="plan_mode_on">План включён</string>
+    <string name="plan_mode_off">План</string>
+    <string name="plan_review_title">План ожидает утверждения</string>
+    <string name="plan_review_approve">Утвердить</string>
+    <string name="plan_review_revise">Запросить изменения</string>
+    <string name="plan_review_revise_confirm">Отправить отзыв</string>
+    <string name="plan_review_reject">Отклонить</string>
+    <string name="plan_review_cancel">Отмена</string>
+    <string name="plan_review_feedback_hint">Что нужно изменить в плане?</string>
 </resources>
