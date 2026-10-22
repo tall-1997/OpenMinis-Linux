@@ -622,6 +622,12 @@ class BrowserUseManager(
                 _pageTitle.value = title ?: ""
             }
 
+            // [T-webview-render-crash] 渲染进程死亡不再连坐杀应用（见 Guard）。
+            override fun onRenderProcessGone(
+                view: WebView,
+                detail: android.webkit.RenderProcessGoneDetail?,
+            ): Boolean = WebViewRenderCrashGuard.handle(view, detail)
+
             override fun onCreateWindow(
                 view: WebView, isDialog: Boolean, isUserGesture: Boolean, resultMsg: Message
             ): Boolean {
@@ -1720,13 +1726,11 @@ class BrowserUseManager(
 
     // -- Set Cookies --
 
-    /**
      * Write cookies into the WebView cookie store via [CookieManager.setCookie],
      * which accepts a Set-Cookie-style string and (unlike `document.cookie`) can
      * set HttpOnly cookies. Symmetric with [getCookies]. Each entry needs
      * `name` + `value`; `domain` defaults to the current page host, `path` to
      * "/". Mirrors iOS `setCookies`.
-     */
     private fun setCookies(cookies: List<Map<String, Any?>>?): BrowserActionResult {
         val url = _currentURL.value.takeIf { it.isNotEmpty() }
             ?: return BrowserActionResult.error("set_cookies: no page is loaded (navigate first)")
@@ -1784,11 +1788,9 @@ class BrowserUseManager(
 
     // -- Wait for DOM Stable --
 
-    /**
      * Poll the DOM for stability: repeatedly measures `document.body.innerHTML.length`
      * at ~200ms intervals and returns when two successive readings match, or the
      * timeout elapses. Matches iOS `wait_for_dom_stable`.
-     */
     private suspend fun waitForDomStable(timeoutMs: Int?): BrowserActionResult {
         val budget = (timeoutMs ?: DEFAULT_DOM_STABLE_TIMEOUT_MS).coerceIn(
             MIN_DOM_STABLE_TIMEOUT_MS, MAX_DOM_STABLE_TIMEOUT_MS,
@@ -1852,11 +1854,9 @@ class BrowserUseManager(
 
     // -- Scroll and Collect --
 
-    /**
      * Scroll the page [scrollCount] times, collecting text of every element
      * matching [itemSelector]. Optional [keywords] filter the collected text
      * (case-insensitive substring match). Mirrors iOS `scroll_and_collect`.
-     */
     private suspend fun scrollAndCollect(
         scrollCount: Int?,
         itemSelector: String?,

@@ -46,6 +46,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -396,6 +397,10 @@ fun SoulSettingsScreen(
                             )
                         },
                         onUseDefault = { showIconMenu = false; icon = "" },
+                        onUseModelIcon = {
+                            showIconMenu = false
+                            icon = com.openminis.app.agent.SoulIcon.MODEL_ICON_SENTINEL
+                        },
                     )
                 }
                 Column(modifier = Modifier.padding(start = 4.dp)) {
@@ -722,55 +727,15 @@ internal fun SoulIconGlyph(
                     drawRect(brush = sparkleTint, blendMode = BlendMode.SrcIn)
                 },
         )
+        // [T-soul-avatar-model-icon] 模型图标模式（实现在 SoulModelIcon.kt）。
+        SoulIcon.isModelIcon(icon) -> SoulModelIconAvatar(sizeDp = sizeDp, emojiSp = emojiSp)
         else -> Text(text = SoulMetadata.DISPLAY_EMOJI, fontSize = emojiSp)
     }
 }
 
-@Composable
-private fun SoulIconMenu(
-    expanded: Boolean,
-    hasIcon: Boolean,
-    onDismiss: () -> Unit,
-    onChooseEmoji: () -> Unit,
-    onChooseImage: () -> Unit,
-    onUseDefault: () -> Unit,
-) {
-    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
-        DropdownMenuItem(
-            text = { Text(stringResource(R.string.soul_icon_choose_emoji)) },
-            onClick = onChooseEmoji,
-        )
-        DropdownMenuItem(
-            text = {
-                Column {
-                    Text(stringResource(R.string.soul_icon_choose_image))
-                    // Stated up front so the square crop isn't a surprise after
-                    // picking. (There is no alpha requirement: opaque images are
-                    // accepted and the rounded clip is what makes them look right.)
-                    Text(
-                        text = stringResource(R.string.soul_icon_image_hint),
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            },
-            onClick = onChooseImage,
-        )
-        // Only offered when there is something to clear.
-        if (hasIcon) {
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.soul_icon_use_default)) },
-                onClick = onUseDefault,
-            )
-        }
-    }
-}
 
-/**
- * Two rows of suggestions, tap-to-fill, a live preview at render size, and a
- * free-form field that normalizes per keystroke.
- */
-@OptIn(ExperimentalMaterial3Api::class)
+// SoulIconMenu 已移到 SoulIconMenu.kt（架构门禁行数）
+
 @Composable
 private fun SoulEmojiPickerSheet(
     current: String,

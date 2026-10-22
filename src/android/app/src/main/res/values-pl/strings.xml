@@ -290,6 +290,8 @@
     <string name="soul_icon_choose_image">Wybierz obraz</string>
     <string name="soul_icon_image_hint">Przycinane do kwadratu i zaokrąglane</string>
     <string name="soul_icon_use_default">Użyj domyślnej</string>
+    <string name="soul_icon_use_model">Use Model Icon</string>
+    <string name="soul_icon_use_model_hint">Follow the vendor icon of the running model</string>
     <string name="soul_icon_emoji_title">Ikona tożsamości</string>
     <string name="soul_icon_emoji_field">Lub wpisz emoji</string>
     <string name="soul_icon_set">Ustaw</string>

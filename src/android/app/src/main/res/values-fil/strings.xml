@@ -288,6 +288,8 @@
     <string name="soul_icon_choose_image">Pumili ng Larawan</string>
     <string name="soul_icon_image_hint">Ginagawang parisukat at binibilugan ang gilid</string>
     <string name="soul_icon_use_default">Gamitin ang Default</string>
+    <string name="soul_icon_use_model">Use Model Icon</string>
+    <string name="soul_icon_use_model_hint">Follow the vendor icon of the running model</string>
     <string name="soul_icon_emoji_title">Icon ng pagkakakilanlan</string>
     <string name="soul_icon_emoji_field">O mag-type ng emoji</string>
     <string name="soul_icon_set">Itakda</string>

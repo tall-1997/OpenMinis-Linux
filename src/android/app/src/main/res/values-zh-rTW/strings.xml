@@ -338,6 +338,8 @@
     <string name="soul_icon_choose_image">選擇圖片</string>
     <string name="soul_icon_image_hint">會裁切成正方形並加上圓角</string>
     <string name="soul_icon_use_default">使用預設值</string>
+    <string name="soul_icon_use_model">使用模型圖示</string>
+    <string name="soul_icon_use_model_hint">跟隨目前工作階段執行模型的廠商圖示</string>
     <string name="soul_icon_emoji_title">身分圖示</string>
     <string name="soul_icon_emoji_field">或輸入一個表情符號</string>
     <string name="soul_icon_set">設定</string>

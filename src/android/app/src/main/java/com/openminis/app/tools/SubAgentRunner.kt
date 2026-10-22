@@ -49,6 +49,22 @@ object SubAgentRunner {
      *  content policy — the coordinator asked for full reports. */
     private const val MAX_REPORT_CHARS = 64_000
 
+    /**
+     * [T-subagent-memory-cap] timeline 的硬上限。
+     *
+     * `report` 早就有 64KB 上限（[truncate]），但 `timeline` 一直无界：每轮
+     * 每条工具调用都会 append 一行。多个子代理并行跑长任务时，N 份无界
+     * StringBuilder 是 OOM 的直接来源 —— 每个 agent 各自持有完整工具轨迹，
+     * 而轨迹只用于最终报告里的一段摘要。
+     *
+     * 保留最近的 [TIMELINE_MAX_CHARS] 字符：最新的工具调用序列才是有用的
+     * （用户和模型关心"刚才做了什么"），早期步骤在报告正文里已经有结论。
+     */
+    private const val TIMELINE_MAX_CHARS = 16_000
+
+    /** 超出上限时按比例裁到这么多，避免每轮都裁剪一次（摊销）。 */
+    private const val TIMELINE_TRIM_TO = 12_000
+
     suspend fun run(
         provider: LLMProvider,
         modelDisplayName: String,
@@ -392,6 +408,13 @@ object SubAgentRunner {
         preview: String,
         result: ToolExecutionResult,
     ) {
+        // [T-subagent-memory-cap] 摊销式裁剪：只在超过硬上限时裁一次到 trim 值，
+        // 避免每轮都重建字符串，也避免无界增长。
+        if (timeline.length > TIMELINE_MAX_CHARS) {
+            val kept = timeline.takeLast(TIMELINE_TRIM_TO)
+            timeline.setLength(0)
+            timeline.append("…[earlier steps elided]…\n").append(kept)
+        }
         timeline.append("- turn ").append(turn).append(": ").append(name)
         if (preview.isNotBlank()) {
             timeline.append(" `").append(preview.replace('`', '\'')).append("`")

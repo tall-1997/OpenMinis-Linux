@@ -1313,6 +1313,12 @@ internal suspend fun ChatViewModel.runAgentLoop(
                     // Compaction failed — fall through to fallback / throw.
                 }
                 val maxRetries = effectiveMaxRetries()
+                // [T-model-switch-midrun-stall] 用户中途换了模型就放弃旧模型重试。
+                if (!ModelSwitchGate.mayWriteBack(loopModelEpoch, snapshotModelSelectionEpoch())) {
+                    abandonTurnForModelSwitch(loopModelEpoch)
+                    loopExitedNormally = true
+                    break
+                }
                 // 429 with another group member: switch endpoints instead of
                 // hammering the same key through 1/2/4/8/16s (inside a typical
                 // 60s relay window). Same-provider retries remain for network
@@ -1732,7 +1738,6 @@ internal suspend fun ChatViewModel.runAgentLoop(
             // reason. A null therefore means the stream closed WITHOUT one —
             // the connection dropped mid-flight (a mid-flight throw would
             // have gone down the fallback/retry path instead, not here).
-            //
             // Previously null was folded into `finishedCleanly`, so a
             // PARTIAL reply — bytes arrived, then the socket died — was
             // persisted silently as if complete. The reply just stopped with
@@ -1751,7 +1756,6 @@ internal suspend fun ChatViewModel.runAgentLoop(
                 // silences, upstream caps after big tool-call turns) — the
                 // "一瞬间出现4个 Execute Shell 然后中断" pattern is exactly a
                 // cut right after the tool-call flush.
-                //
                 // The partial assistant turn is ALREADY appended to
                 // agentHistory (turn boundary above) and ALREADY persisted
                 // (persistAssistantTurnForRun just ran), so continuing is
@@ -1823,7 +1827,6 @@ internal suspend fun ChatViewModel.runAgentLoop(
                 // can never loop; the SECOND empty falls through to the error
                 // hint below. Mirrors iOS AIChatViewModel.swift empty-after-
                 // tool-result path.
-                //
                 // The empty assistant turn was just appended (above) — drop it
                 // so the tool result is the last message and the model gets a
                 // clean "continue from here" prompt on the retry.
@@ -2393,7 +2396,6 @@ internal suspend fun ChatViewModel.runAgentLoop(
     //       updateAssistantMessage(...false...) already cleared streaming state.
     //   (b) `for (turn in 0 until maxTurns)` exhausted → flag stays false,
     //       which means the model kept asking for tool calls past the ceiling.
-    //
     // (b) is the only case that needs the inline-error/Resume hand-holding;
     // (a) must NOT be touched or every normal completion gets a fake "hit
     // 200 turns" sticker (the bug user hit at v1.4.0-dev tip).
@@ -2423,14 +2425,12 @@ internal suspend fun ChatViewModel.runAgentLoop(
             .onScene(context, com.openminis.app.speech.AnnouncementScene.IDLE_AGENT_DONE)
     }
 }
-/**
  * [T-android-model-switch-next-request] Persist a group-fallback model
  * switch onto the VM so the next sendMessage() starts from it. Extracted
  * from the fallback branch of runAgentLoop so the loop can gate the
  * call on the model-selection epoch — when the user picks a model
  * mid-run, this writeback is skipped and their selection wins (see
  * [ModelSwitchGate]).
- */
 internal fun ChatViewModel.persistFallbackModelSelection(
     next: LLMProvider,
     entryId: String?,

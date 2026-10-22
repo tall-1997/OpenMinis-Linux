@@ -288,6 +288,8 @@
     <string name="soul_icon_choose_image">Pilih Imej</string>
     <string name="soul_icon_image_hint">Dipangkas menjadi segi empat sama dan dibulatkan</string>
     <string name="soul_icon_use_default">Guna Lalai</string>
+    <string name="soul_icon_use_model">Use Model Icon</string>
+    <string name="soul_icon_use_model_hint">Follow the vendor icon of the running model</string>
     <string name="soul_icon_emoji_title">Ikon identiti</string>
     <string name="soul_icon_emoji_field">Atau taip emoji</string>
     <string name="soul_icon_set">Tetapkan</string>
