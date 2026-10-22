@@ -187,7 +187,7 @@ fun SkillsManagementScreen(
                 var sortMenuExpanded by remember { mutableStateOf(false) }
                 IconButton(onClick = { sortMenuExpanded = true }) {
                     Icon(
-                        m3Icon(Icons.Icons.AutoMirrored.Filled.Sort)
+                        m3Icon(Icons.AutoMirrored.Filled.Sort),
                         contentDescription = stringResource(R.string.filebrowser_sort_by),
                     )
                 }
@@ -278,7 +278,7 @@ fun SkillsManagementScreen(
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     Icon(
-                        m3Icon(Icons.Icons.Outlined.Description)
+                        m3Icon(Icons.Outlined.Description),
                         contentDescription = null,
                         modifier = Modifier.size(36.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
@@ -737,7 +737,7 @@ fun SkillDetailScreen(
                         },
                     ) {
                         Icon(
-                            m3Icon(Icons.Icons.Default.IosShare)
+                            m3Icon(Icons.Default.IosShare),
                             contentDescription = stringResource(R.string.skill_export_share),
                         )
                     }
@@ -915,7 +915,7 @@ fun SkillDetailScreen(
                             modifier = Modifier.weight(1f),
                         )
                         Icon(
-                            m3Icon(Icons.Icons.AutoMirrored.Filled.KeyboardArrowRight)
+                            m3Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight),
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                             modifier = Modifier.size(20.dp),
