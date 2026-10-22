@@ -35,6 +35,13 @@ internal suspend fun ChatViewModel.executeTool(
         context, canonical, argsJson, activeSessionId,
     )
     if (gated != null) return gated
+    // Plan-mode gate (default-deny): while the session flag is on, every
+    // non-read-only tool call is refused so the model investigates and
+    // submits exit_plan_mode instead of mutating state mid-plan.
+    val planGated = com.openminis.app.tools.PlanModeGuard.intercept(
+        canonical, argsJson, activeSessionId, context,
+    )
+    if (planGated != null) return planGated
     val toolTitle = try { JSONObject(argsJson).optString("tool_title", canonical) } catch (_: Exception) { canonical }
 
     // [T-find-tools] On-demand tool discovery: resolve the query against the
@@ -140,6 +147,9 @@ internal suspend fun ChatViewModel.executeTool(
             activeSessionId,
             context,
         )
+        // Plan-mode exit gate: parks the loop on a deferred until the user
+        // answers the review card (same shape as ask_user_question).
+        com.openminis.app.tools.ExitPlanModeTool.NAME -> executeExitPlanMode(argsJson)
         // [T-subagent-background] Inspect / wait for / collect detached waves.
         // Suspends only for op=await, which polls the registry under a bounded
         // timeout; every other op returns immediately.

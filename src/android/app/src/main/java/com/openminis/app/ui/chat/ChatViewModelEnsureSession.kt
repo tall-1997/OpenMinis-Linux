@@ -20,7 +20,14 @@ internal suspend fun ChatViewModel.ensureSession(): String {
     // approval requests) over to the persisted id BEFORE the first tool call
     // runs — otherwise a "全部允许" tapped on the draft stops matching, and
     // an approval request filed pre-persist becomes unreachable.
-    com.openminis.app.service.ApprovalGate.migrateSession(oldSid = sessionId, newSid = session.id)
+        com.openminis.app.service.ApprovalGate.migrateSession(oldSid = sessionId, newSid = session.id)
+        // [T-plan-mode-draft-drift] Same drift class as the approval gate
+        // above: the plan-mode pill writes the flag under the route's draft
+        // key while the guard and system prompt read activeSessionId —
+        // carry the flag (and any board seeded pre-persist) over on
+        // promotion, or a toggle on a brand-new chat evaporates on send.
+        com.openminis.app.tools.PlanModeStore.migrate(sessionId, session.id, context)
+        com.openminis.app.tools.AgentPlanStore.migrate(sessionId, session.id, context)
     migrateGroupChatPrefs(fromId = sessionId, toId = session.id)
     // "New Chat in Group": file the just-promoted draft into its folder.
     // Unconditional (vs iOS setFolderIfUnfiled) — the session is seconds

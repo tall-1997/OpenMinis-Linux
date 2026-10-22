@@ -1901,4 +1901,13 @@
     <string name="usage_detail_window_share">この期間の割合</string>
     <string name="usage_label_input_short">入力</string>
     <string name="usage_label_output_short">出力</string>
+    <string name="plan_mode_on">計画オン</string>
+    <string name="plan_mode_off">計画</string>
+    <string name="plan_review_title">承認用プラン</string>
+    <string name="plan_review_approve">承認</string>
+    <string name="plan_review_revise">修正を依頼</string>
+    <string name="plan_review_revise_confirm">フィードバックを送信</string>
+    <string name="plan_review_reject">却下</string>
+    <string name="plan_review_cancel">キャンセル</string>
+    <string name="plan_review_feedback_hint">プランのどこを変更すべきですか？</string>
 </resources>

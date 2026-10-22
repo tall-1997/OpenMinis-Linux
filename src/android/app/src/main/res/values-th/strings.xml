@@ -1902,4 +1902,13 @@
     <string name="usage_detail_window_share">สัดส่วนในช่วงนี้</string>
     <string name="usage_label_input_short">อินพุต</string>
     <string name="usage_label_output_short">เอาต์พุต</string>
+    <string name="plan_mode_on">โหมดแผนเปิด</string>
+    <string name="plan_mode_off">แผน</string>
+    <string name="plan_review_title">แผนรอการอนุมัติ</string>
+    <string name="plan_review_approve">อนุมัติ</string>
+    <string name="plan_review_revise">ขอแก้ไข</string>
+    <string name="plan_review_revise_confirm">ส่งความคิดเห็น</string>
+    <string name="plan_review_reject">ปฏิเสธ</string>
+    <string name="plan_review_cancel">ยกเลิก</string>
+    <string name="plan_review_feedback_hint">ควรแก้ไขอะไรในแผน?</string>
 </resources>

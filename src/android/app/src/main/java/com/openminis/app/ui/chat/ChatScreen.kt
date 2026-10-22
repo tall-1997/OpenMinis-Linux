@@ -4893,18 +4893,11 @@ fun ChatScreen(
                     .wrapContentWidth(Alignment.CenterHorizontally)
                     .widthIn(max = CHAT_MAX_CONTENT_WIDTH)
                     // [T-android-slash-popup-width] Publish the composer's real
-                    // laid-out width so the slash / mention popups can match it.
-                    // A Popup is a separate window: `fillMaxWidth` inside one
-                    // fills the WINDOW, not the anchor, so without this the menu
-                    // spans the whole tablet — starting under the session list
-                    // and running past the composer's right edge.
-                    //
-                    // MUST come AFTER widthIn/wrapContentWidth. A modifier
-                    // measures the node as constrained by the modifiers BEFORE
-                    // it, so placed above the cap this reported the full pane
-                    // width and the popup faithfully matched the wrong number —
-                    // which is exactly how the first attempt at this fix still
-                    // looked broken.
+                    // laid-out width so the slash / mention popups can match it
+                    // (a Popup is its own window; fillMaxWidth there fills the
+                    // window, not this anchor). MUST come AFTER widthIn/
+                    // wrapContentWidth — modifiers measure against constraints
+                    // imposed by the modifiers before them.
                     .onGloballyPositioned { composerWidthPx = it.size.width }
                     .navigationBarsPadding()
                     .padding(horizontal = 12.dp)
@@ -4918,6 +4911,9 @@ fun ChatScreen(
                         onSkip = { viewModel.skipUserQuestions() },
                     )
                 }
+
+                // Plan-approval card while a plan is parked for THIS session.
+                PendingPlanReviewCard(sessionId) { viewModel.resolvePlanReview(it) }
 
                 // T13 banner moved INSIDE the LazyColumn so it renders at the
                 // visual end of the message list (mirrors iOS — see the
@@ -6523,6 +6519,10 @@ fun ChatScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+                        // Plan-mode pill (read-only agent until approved).
+                        PlanModeToggle(sessionId = sessionId)
 
                         // T187: Exit Edit Mode pill, only while editingMessageId
                         // is non-null. Tap clears the edit flag + composer text

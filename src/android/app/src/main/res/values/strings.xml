@@ -1953,6 +1953,15 @@
     <string name="ask_user_other">Other (optional)</string>
     <string name="ask_user_submit">Submit answers</string>
     <string name="ask_user_skip">Skip</string>
+    <string name="plan_mode_on">Plan On</string>
+    <string name="plan_mode_off">Plan</string>
+    <string name="plan_review_title">Plan for your approval</string>
+    <string name="plan_review_approve">Approve</string>
+    <string name="plan_review_revise">Request changes</string>
+    <string name="plan_review_revise_confirm">Send feedback</string>
+    <string name="plan_review_reject">Reject</string>
+    <string name="plan_review_cancel">Cancel</string>
+    <string name="plan_review_feedback_hint">What should change in the plan?</string>
     <string name="backup_dest_remove">Remove %1$s</string>
     <string name="backup_dest_server_type">Server type</string>
     <string name="backup_dest_display_name">Display name</string>

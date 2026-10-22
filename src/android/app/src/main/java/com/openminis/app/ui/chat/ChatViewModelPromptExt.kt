@@ -334,6 +334,7 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
                     null
                 },
                 taskAnchor = taskAnchorFragment(),
+                planFragment = planFragment(),
             ),
         )
     }
@@ -420,6 +421,27 @@ internal fun ChatViewModel.taskAnchorFragment(): String? = TaskAnchor.fragment(
         .firstOrNull { it.role == "user" && it.content.isNotBlank() }?.content,
 )
 
+/**
+ * [T-plan-mode-prompt-wiring] Plan-mode state and the live board, injected
+ * every turn in the dynamic tail. Keyed by the SAME [ChatViewModel.activeSessionId]
+ * the PlanModeGuard enforces with — prompt and gate must never disagree on
+ * which session's flag they read. The board snapshot rides along even after
+ * approval flips the mode OFF, so the model keeps seeing what to advance with
+ * agent_plan. AgentPlanStore.list throws on a corrupt board (by design, so
+ * the tool surfaces it); the prompt path degrades to no fragment instead of
+ * bricking the request.
+ */
+internal fun ChatViewModel.planFragment(): String? = runCatching {
+    val modeOn = com.openminis.app.tools.PlanModeStore.isEnabled(activeSessionId, context)
+    val board = com.openminis.app.tools.PlanModeStore.boardSnapshotPrompt(
+        com.openminis.app.tools.AgentPlanStore.list(activeSessionId, context),
+    )
+    listOfNotNull(
+        if (modeOn) com.openminis.app.tools.PlanModeStore.planModePrompt() else null,
+        board,
+    ).joinToString("\n\n").ifEmpty { null }
+}.getOrNull()
+
 internal fun assembleDynamicTail(
     worldBookFragment: String,
     learnedPrefsFragment: String?,
@@ -427,6 +449,7 @@ internal fun assembleDynamicTail(
     runtimeContext: String,
     personalityReminder: String?,
     taskAnchor: String? = null,
+    planFragment: String? = null,
 ): String = buildString {
     if (worldBookFragment.isNotEmpty()) append(worldBookFragment)
     if (learnedPrefsFragment != null) {
@@ -444,6 +467,14 @@ internal fun assembleDynamicTail(
     if (taskAnchor != null && taskAnchor.isNotBlank()) {
         append("\n\n")
         append(taskAnchor)
+    }
+    // [T-plan-mode-prompt-wiring] After the anchor, ahead of the runtime
+    // context: the plan fragment is per-turn state (the mode flag can flip
+    // mid-session via the review card), so it can't live in the stable
+    // prefix — but it is more stable than the date line below it.
+    if (planFragment != null && planFragment.isNotBlank()) {
+        append("\n\n")
+        append(planFragment)
     }
     append(runtimeContext)
     if (personalityReminder != null) {
