@@ -71,6 +71,7 @@ import com.openminis.app.data.repository.ProviderRepository
 import com.openminis.app.speech.RecognitionState
 import com.openminis.app.speech.SpeechRecognitionManager
 import com.openminis.app.ui.theme.ChatColors
+import com.openminis.app.ui.theme.m3Icon
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -166,7 +167,6 @@ object VoiceModePrefs {
             .getBoolean(KEY_EXPANDED, true)
     }
 }
-
 
 @Composable
 fun InlineVoiceInputPanel(
@@ -479,7 +479,7 @@ fun InlineVoiceInputPanel(
         Box(modifier = Modifier.fillMaxWidth()) {
             // Top-left: expand/collapse chevron.
             CircleIconButton(
-                icon = if (expanded) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowUp,
+                icon = if (expanded) m3Icon(Icons.Default.KeyboardArrowDown) else m3Icon(Icons.Default.KeyboardArrowUp),
                 contentDescription = stringResource(
                     if (expanded) R.string.voice_panel_collapse else R.string.voice_panel_expand,
                 ),
@@ -563,7 +563,7 @@ fun InlineVoiceInputPanel(
             } else if (!isEditing) {
                 Box(modifier = Modifier.align(Alignment.TopEnd)) {
                     CircleIconButton(
-                        icon = Icons.Default.Language,
+                        icon = m3Icon(Icons.Default.Language),
                         contentDescription = stringResource(R.string.voice_panel_language),
                     ) { showLanguageMenu = true }
                     DropdownMenu(

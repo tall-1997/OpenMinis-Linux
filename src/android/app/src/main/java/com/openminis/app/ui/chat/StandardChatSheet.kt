@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openminis.app.R
 import com.openminis.app.ui.theme.ChatColors
+import com.openminis.app.ui.theme.m3Icon
 import kotlinx.coroutines.launch
 
 /**
@@ -259,7 +260,7 @@ fun StandardChatSheetHeader(
 private fun SheetCloseButton(onDismiss: () -> Unit) {
     IconButton(onClick = onDismiss) {
         Icon(
-            imageVector = Icons.Default.Close,
+            imageVector = m3Icon(Icons.Default.Close),
             contentDescription = stringResource(R.string.standard_sheet_close),
             tint = ChatColors.secondaryText,
         )

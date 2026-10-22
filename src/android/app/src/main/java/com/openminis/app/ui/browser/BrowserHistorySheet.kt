@@ -1,4 +1,5 @@
 package com.openminis.app.ui.browser
+import com.openminis.app.ui.theme.m3Icon
 
 import com.openminis.app.R
 import androidx.compose.ui.res.stringResource
@@ -154,7 +155,7 @@ fun BrowserHistorySheet(
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                             ) {
                                 Icon(
-                                    Icons.Default.Language,
+                                    m3Icon(Icons.Default.Language),
                                     contentDescription = null,
                                     modifier = Modifier.size(18.dp),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),

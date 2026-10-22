@@ -1,4 +1,5 @@
 package com.openminis.app.ui.settings
+import com.openminis.app.ui.theme.m3Icon
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -332,7 +333,7 @@ fun ModelGroupDetailScreen(
                                 },
                                 leadingContent = {
                                     Icon(
-                                        imageVector = Icons.Default.Warning,
+                                        imageVector = m3Icon(Icons.Default.Warning),
                                         contentDescription = stringResource(R.string.model_group_detail_unavailable),
                                         tint = MaterialTheme.colorScheme.error,
                                     )
@@ -344,7 +345,7 @@ fun ModelGroupDetailScreen(
                                         providerRepository.updateGroup(group.copy(memberEntryIds = newIds.toMutableList()))
                                     }) {
                                         Icon(
-                                            imageVector = Icons.Default.Delete,
+                                            imageVector = m3Icon(Icons.Default.Delete),
                                             contentDescription = stringResource(R.string.common_remove),
                                             tint = MaterialTheme.colorScheme.error,
                                         )
@@ -475,7 +476,7 @@ fun ModelGroupDetailScreen(
                                 group.copy(defaultThinkingLevel = newLevel)
                             )
                         },
-                        icon = Icons.Default.Psychology,
+                        icon = m3Icon(Icons.Default.Psychology),
                         iconColor = Color(0xFFAF52DE),
                         showDivider = reasoningEnabled,
                     )

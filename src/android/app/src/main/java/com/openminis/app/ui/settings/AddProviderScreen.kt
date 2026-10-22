@@ -81,7 +81,7 @@ import java.util.UUID
 import com.openminis.app.ui.components.MinisButton
 import com.openminis.app.ui.components.RowLabel
 import com.openminis.app.ui.components.SectionTextField
-
+import com.openminis.app.ui.theme.m3Icon
 private enum class AddProviderStep {
     CHOOSE_TYPE,
     CHOOSE_CREDENTIAL,
@@ -278,7 +278,7 @@ private fun ChooseProviderScreen(
                     ProviderType.antigravity,
                     ProviderType.unsupported -> R.string.add_provider_subtitle_openai
                 }
-                val (icon, iconColor) = providerIcon(type)
+                val (icon, iconColor) = providerIcon(type).let { (i, c) -> m3Icon(i) to c }
                 SettingsRow(
                     title = displayTitle,
                     subtitle = stringResource(subtitleRes),

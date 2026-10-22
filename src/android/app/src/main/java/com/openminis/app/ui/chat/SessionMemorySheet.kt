@@ -1,4 +1,5 @@
 package com.openminis.app.ui.chat
+import com.openminis.app.ui.theme.m3Icon
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -48,7 +49,6 @@ import com.openminis.app.ui.settings.SettingsSection
 import com.openminis.app.ui.settings.SettingsValueRow
 import com.openminis.app.util.IsoTime
 import com.openminis.app.ui.components.MinisTextButton
-
 /**
  * Session memory sheet: auto-injected files + op-log, with AutoFile/Write/Get
  * detail modes under [StandardChatSheet]. The back-arrow leaves a detail mode;
@@ -278,7 +278,7 @@ private fun DetailToolbar(
         if (showEdit) {
             IconButton(onClick = onEdit) {
                 Icon(
-                    Icons.Default.Edit,
+                    m3Icon(Icons.Default.Edit),
                     contentDescription = stringResource(R.string.memory_action_edit),
                 )
             }

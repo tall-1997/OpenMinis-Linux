@@ -65,6 +65,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.ui.theme.ChatColors
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * Immersive 90%-tall bottom sheet that hosts a [WebViewHolder] for a
@@ -307,7 +308,7 @@ internal fun WebPreviewToolbar(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         ToolbarIcon(
-            icon = Icons.Default.Close,
+            icon = m3Icon(Icons.Default.Close),
             description = stringResource(R.string.webpreview_close),
             onClick = onClose,
         )
@@ -364,7 +365,7 @@ internal fun WebPreviewToolbar(
                 androidx.compose.material3.DropdownMenuItem(
                     text = { Text(stringResource(R.string.webpreview_reload)) },
                     leadingIcon = {
-                        Icon(Icons.Default.Refresh, contentDescription = null)
+                        Icon(m3Icon(Icons.Default.Refresh), contentDescription = null)
                     },
                     onClick = {
                         menuOpen = false

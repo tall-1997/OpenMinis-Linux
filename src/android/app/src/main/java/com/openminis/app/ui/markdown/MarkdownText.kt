@@ -1,4 +1,5 @@
 package com.openminis.app.ui.markdown
+import com.openminis.app.ui.theme.m3Icon
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -87,7 +88,6 @@ import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-
 /**
  * Renders markdown text with full formatting support.
  * Supports: headings, bold, italic, strikethrough, inline code, code blocks (with copy),
@@ -295,7 +295,7 @@ private fun CodeBlockView(
                 modifier = Modifier.height(28.dp),
             ) {
                 Icon(
-                    Icons.Default.ContentCopy,
+                    m3Icon(Icons.Default.ContentCopy),
                     contentDescription = "Copy code",
                     modifier = Modifier.height(16.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,

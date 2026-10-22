@@ -96,7 +96,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.sp
 import com.openminis.app.ui.theme.ChatColors
-
+import com.openminis.app.ui.theme.m3Icon
 /**
  * The page URL a `browser_use` block points at: [block]'s live `browserURL` →
  * its own `url` argument ([argsUrl]) → the nearest PRECEDING `browser_use`
@@ -189,7 +189,7 @@ internal fun ToolDetailSheet(
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
-                        Icons.Default.Close,
+                        m3Icon(Icons.Default.Close),
                         contentDescription = "Close",
                         tint = ChatColors.primaryText,
                         modifier = Modifier.size(16.dp),
@@ -256,7 +256,7 @@ internal fun ToolDetailSheet(
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(
-                            Icons.Default.Description,
+                            m3Icon(Icons.Default.Description),
                             contentDescription = "Open full output",
                             tint = ChatColors.primaryText,
                             modifier = Modifier.size(16.dp),
@@ -304,10 +304,10 @@ internal fun ToolDetailSheet(
                 ) {
                     Icon(
                         when {
-                            copyDone -> Icons.Default.Check
-                            isShellTool -> Icons.Default.Terminal
+                            copyDone -> m3Icon(Icons.Default.Check)
+                            isShellTool -> m3Icon(Icons.Default.Terminal)
                             isBrowserTool -> Icons.Outlined.Public
-                            else -> Icons.Default.ContentCopy
+                            else -> m3Icon(Icons.Default.ContentCopy)
                         },
                         contentDescription = when {
                             isShellTool -> "Open in terminal"
@@ -676,7 +676,7 @@ internal fun ToolDetailSheet(
                         }
                         EditorCard(
                             title = fileName.ifEmpty { "file" },
-                            icon = if (block.toolName == "file_read") Icons.Default.Description
+                            icon = if (block.toolName == "file_read") m3Icon(Icons.Default.Description)
                                    else Icons.AutoMirrored.Filled.NoteAdd,
                             iconTint = ChatColors.secondaryText,
                             titleColor = ChatColors.primaryText,
@@ -846,7 +846,7 @@ internal fun ToolDetailSheet(
                                         verticalAlignment = Alignment.CenterVertically,
                                     ) {
                                         Icon(
-                                            Icons.Default.Language,
+                                            m3Icon(Icons.Default.Language),
                                             contentDescription = null,
                                             tint = ChatColors.tertiaryText,
                                             modifier = Modifier.size(12.dp),
@@ -890,7 +890,7 @@ internal fun ToolDetailSheet(
                             "Keywords: $keywords\n\n" else ""
                         EditorCard(
                             title = block.toolName,
-                            icon = Icons.Default.Psychology,
+                            icon = m3Icon(Icons.Default.Psychology),
                             iconTint = ToolMemoryAccent.copy(alpha = 0.6f),
                             titleColor = ToolMemoryAccent,
                             sizeColor = ToolMemoryAccent.copy(alpha = 0.5f),
@@ -991,7 +991,7 @@ internal fun ToolDetailSheet(
                             ) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Icon(
-                                        toolIconFor(block.toolName),
+                                        m3Icon(toolIconFor(block.toolName)),
                                         contentDescription = null,
                                         tint = toolAccent.copy(alpha = 0.3f),
                                         modifier = Modifier.size(40.dp),
@@ -1035,11 +1035,11 @@ internal fun ToolDetailSheet(
                         )
                     } else {
                         val (icon, tint) = when (block.toolStatus) {
-                            ToolBlockStatus.SUCCESS -> Icons.Default.CheckCircle to ToolCheckColor
-                            ToolBlockStatus.FAILED -> Icons.Default.Error to ToolErrorColor
-                            ToolBlockStatus.CANCELLED -> Icons.Default.Cancel to ToolCancelColor
+                            ToolBlockStatus.SUCCESS -> m3Icon(Icons.Default.CheckCircle) to ToolCheckColor
+                            ToolBlockStatus.FAILED -> m3Icon(Icons.Default.Error) to ToolErrorColor
+                            ToolBlockStatus.CANCELLED -> m3Icon(Icons.Default.Cancel) to ToolCancelColor
                             ToolBlockStatus.TIMEOUT -> Icons.Default.Schedule to ToolErrorColor
-                            else -> Icons.Default.CheckCircle to ToolCheckColor
+                            else -> m3Icon(Icons.Default.CheckCircle) to ToolCheckColor
                         }
                         Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(18.dp))
                     }

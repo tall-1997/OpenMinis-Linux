@@ -1,4 +1,5 @@
 package com.openminis.app.ui.components
+import com.openminis.app.ui.theme.m3Icon
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -181,7 +182,7 @@ fun LazyListScope.modelEntryPickerItems(
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             leadingIcon = {
                 Icon(
-                    Icons.Default.Search,
+                    m3Icon(Icons.Default.Search),
                     contentDescription = null,
                     modifier = Modifier.size(18.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -191,7 +192,7 @@ fun LazyListScope.modelEntryPickerItems(
                 if (searchQuery.value.isNotEmpty()) {
                     IconButton(onClick = { searchQuery.value = "" }) {
                         Icon(
-                            Icons.Default.Close,
+                            m3Icon(Icons.Default.Close),
                             contentDescription = stringResource(clearContentDescriptionRes),
                             modifier = Modifier.size(18.dp),
                         )
@@ -244,7 +245,7 @@ fun LazyListScope.modelEntryPickerItems(
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
-                        if (isCollapsed) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowUp,
+                        if (isCollapsed) m3Icon(Icons.Default.KeyboardArrowDown) else m3Icon(Icons.Default.KeyboardArrowUp),
                         contentDescription = null,
                         modifier = Modifier.size(16.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -415,7 +416,7 @@ fun LazyListScope.modelEntryPickerItems(
 @Composable
 private fun SelectionDot(isSelected: Boolean) {
     Icon(
-        if (isSelected) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+        if (isSelected) m3Icon(Icons.Default.CheckCircle) else Icons.Default.RadioButtonUnchecked,
         contentDescription = null,
         tint = if (isSelected) Color(0xFF007AFF)
         else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),

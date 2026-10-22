@@ -1,4 +1,5 @@
 package com.openminis.app.ui.browser
+import com.openminis.app.ui.theme.m3Icon
 
 import android.content.Context
 import android.content.Intent
@@ -131,9 +132,9 @@ private fun DownloadRow(
     ) {
         val (icon, tint) = when (entry.state) {
             BrowserTabPool.DownloadState.DOWNLOADING ->
-                Icons.Default.Download to MaterialTheme.colorScheme.primary
+                m3Icon(Icons.Default.Download) to MaterialTheme.colorScheme.primary
             BrowserTabPool.DownloadState.COMPLETED ->
-                Icons.Default.CheckCircle to androidx.compose.ui.graphics.Color(0xFF34C759)
+                m3Icon(Icons.Default.CheckCircle) to androidx.compose.ui.graphics.Color(0xFF34C759)
             BrowserTabPool.DownloadState.FAILED ->
                 Icons.Default.ErrorOutline to MaterialTheme.colorScheme.error
         }
@@ -204,7 +205,7 @@ private fun DownloadRow(
             BrowserTabPool.DownloadState.DOWNLOADING -> {
                 IconButton(onClick = onCancel) {
                     Icon(
-                        Icons.Default.Cancel,
+                        m3Icon(Icons.Default.Cancel),
                         contentDescription = stringResource(R.string.browser_downloads_cancel),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

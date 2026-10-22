@@ -1,4 +1,5 @@
 package com.openminis.app.ui.media
+import com.openminis.app.ui.theme.m3Icon
 
 import android.content.Intent
 import android.media.MediaPlayer
@@ -167,7 +168,7 @@ fun InlineAudioPlayer(
                             .background(MaterialTheme.colorScheme.primary),
                     ) {
                         Icon(
-                            if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            if (isPlaying) Icons.Default.Pause else m3Icon(Icons.Default.PlayArrow),
                             contentDescription = if (isPlaying) "Pause" else "Play",
                             tint = MaterialTheme.colorScheme.onPrimary,
                             modifier = Modifier.size(20.dp),
@@ -493,7 +494,7 @@ private fun FullscreenVideoContent(file: File, onDismiss: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 CircleControlButton(
-                    icon = Icons.Default.Close,
+                    icon = m3Icon(Icons.Default.Close),
                     contentDescription = "Close",
                     onClick = {
                         try { videoView?.pause() } catch (_: Throwable) {}
@@ -509,7 +510,7 @@ private fun FullscreenVideoContent(file: File, onDismiss: () -> Unit) {
                     modifier = Modifier.weight(1f),
                 )
                 CircleControlButton(
-                    icon = Icons.Default.Share,
+                    icon = m3Icon(Icons.Default.Share),
                     contentDescription = "Share",
                     onClick = { shareMediaFile(context, file, "video/*") },
                 )
@@ -549,7 +550,7 @@ private fun FullscreenVideoContent(file: File, onDismiss: () -> Unit) {
                     modifier = Modifier.size(40.dp),
                 ) {
                     Icon(
-                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        imageVector = if (isPlaying) Icons.Default.Pause else m3Icon(Icons.Default.PlayArrow),
                         contentDescription = if (isPlaying) "Pause" else "Play",
                         tint = Color.White,
                     )

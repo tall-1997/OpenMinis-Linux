@@ -1,4 +1,5 @@
 package com.openminis.app.ui.settings
+import com.openminis.app.ui.theme.m3Icon
 
 import android.net.Uri
 import android.widget.Toast
@@ -297,7 +298,7 @@ fun ProviderListScreen(
                 }
             }
             IconButton(onClick = { showMenu = true }) {
-                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.provider_list_add_provider))
+                Icon(m3Icon(Icons.Default.Add), contentDescription = stringResource(R.string.provider_list_add_provider))
             }
         },
     ) {
@@ -518,7 +519,7 @@ fun ProviderListScreen(
                         .padding(horizontal = 20.dp, vertical = 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(22.dp))
+                    Icon(m3Icon(Icons.Default.Add), contentDescription = null, modifier = Modifier.size(22.dp))
                     Spacer(Modifier.width(16.dp))
                     Text(stringResource(R.string.provider_list_add_provider), style = MaterialTheme.typography.bodyLarge)
                 }

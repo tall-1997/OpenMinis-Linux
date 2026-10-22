@@ -1,4 +1,5 @@
 package com.openminis.app.ui.chat
+import com.openminis.app.ui.theme.m3Icon
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -122,7 +123,7 @@ fun ChatGateBanners(
                     }
                     IconButton(onClick = { onDismissIntercept(event.id) }) {
                         Icon(
-                            Icons.Default.Close,
+                            m3Icon(Icons.Default.Close),
                             contentDescription = stringResource(R.string.gate_intercept_dismiss),
                             tint = MaterialTheme.colorScheme.onErrorContainer,
                         )

@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openminis.app.R
 import com.openminis.app.ui.theme.ChatColors
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * [T-android-thinking-badge-navbar] Compact thinking-level pill shown on the
@@ -38,7 +39,7 @@ import com.openminis.app.ui.theme.ChatColors
  *
  * Deliberately smaller than the 11sp model-name text next to it — a 9dp
  * lightbulb + 9sp level label — so it reads as secondary auxiliary info and
- * never crowds out the model name. Uses [Icons.Default.Lightbulb], the same
+ * never crowds out the model name. Uses [m3Icon(Icons.Default.Lightbulb)], the same
  * glyph the `/thinking` slash command uses.
  *
  * Colors mirror iOS AIChatView.thinkingLevelBadge exactly — a NEUTRAL look, not
@@ -82,7 +83,7 @@ internal fun ThinkingLevelBadge(
             .padding(horizontal = 5.dp, vertical = 1.dp),
     ) {
         Icon(
-            imageVector = Icons.Default.Lightbulb,
+            imageVector = m3Icon(Icons.Default.Lightbulb),
             contentDescription = null,
             // Dimmed in the Off state (sheet Off-row convention) so "Off" reads
             // as "thinking disabled" at a glance.
@@ -148,7 +149,7 @@ internal fun ThinkingLevelSheet(
                         .padding(horizontal = 20.dp, vertical = 14.dp),
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Lightbulb,
+                        imageVector = m3Icon(Icons.Default.Lightbulb),
                         contentDescription = null,
                         tint = ChatColors.thinking.copy(
                             alpha = if (level == com.openminis.app.data.model.ThinkingLevel.OFF) 0.4f else 1f,
@@ -164,7 +165,7 @@ internal fun ThinkingLevelSheet(
                     )
                     if (isSelected) {
                         Icon(
-                            imageVector = Icons.Default.Check,
+                            imageVector = m3Icon(Icons.Default.Check),
                             contentDescription = null,
                             tint = ChatColors.thinking,
                             modifier = Modifier.size(18.dp),

@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.sp
 import com.openminis.app.R
 import com.openminis.app.speech.SpeechRecognitionManager
 import com.openminis.app.ui.theme.ChatColors
+import com.openminis.app.ui.theme.m3Icon
 import java.util.Locale
 
 /**
@@ -126,7 +127,7 @@ fun SpeechLanguagePickerSheet(
                             }
                             if (selected) {
                                 Icon(
-                                    imageVector = Icons.Default.Check,
+                                    imageVector = m3Icon(Icons.Default.Check),
                                     contentDescription = stringResource(R.string.speech_lang_picker_selected),
                                     tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(20.dp),

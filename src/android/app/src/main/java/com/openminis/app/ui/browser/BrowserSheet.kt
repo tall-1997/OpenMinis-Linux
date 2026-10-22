@@ -1,4 +1,5 @@
 package com.openminis.app.ui.browser
+import com.openminis.app.ui.theme.m3Icon
 
 import android.content.Intent
 import android.net.Uri
@@ -204,7 +205,7 @@ fun BrowserSheet(
                     enabled = tabs.size < 3 && !isAgentBusy,
                     modifier = Modifier.size(36.dp),
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = stringResource(R.string.browser_new_tab), modifier = Modifier.size(20.dp))
+                    Icon(m3Icon(Icons.Default.Add), contentDescription = stringResource(R.string.browser_new_tab), modifier = Modifier.size(20.dp))
                 }
                 LazyRow(
                     modifier = Modifier
@@ -246,7 +247,7 @@ fun BrowserSheet(
                     enabled = !isAgentBusy,
                     modifier = Modifier.size(36.dp),
                 ) {
-                    Icon(Icons.Default.History, contentDescription = stringResource(R.string.browser_history_action), modifier = Modifier.size(20.dp))
+                    Icon(m3Icon(Icons.Default.History), contentDescription = stringResource(R.string.browser_history_action), modifier = Modifier.size(20.dp))
                 }
             }
 
@@ -311,7 +312,7 @@ fun BrowserSheet(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Icon(
-                        Icons.Default.Download,
+                        m3Icon(Icons.Default.Download),
                         contentDescription = null,
                         modifier = Modifier.size(16.dp),
                         tint = accent,
@@ -400,7 +401,7 @@ fun BrowserSheet(
                             modifier = Modifier.size(28.dp),
                         ) {
                             Icon(
-                                Icons.Default.Close,
+                                m3Icon(Icons.Default.Close),
                                 contentDescription = stringResource(R.string.browser_stop),
                                 modifier = Modifier.size(14.dp),
                             )
@@ -439,7 +440,7 @@ fun BrowserSheet(
                     },
                 ) {
                     ToolbarIcon(
-                        icon = Icons.Default.Download,
+                        icon = m3Icon(Icons.Default.Download),
                         contentDesc = stringResource(R.string.browser_downloads_title),
                         enabled = true,
                         tint = if (downloadEntries.isNotEmpty()) accent else null,
@@ -448,7 +449,7 @@ fun BrowserSheet(
                 }
                 if (isLoading) {
                     ToolbarIcon(
-                        icon = Icons.Default.Close,
+                        icon = m3Icon(Icons.Default.Close),
                         contentDesc = stringResource(R.string.browser_stop),
                         enabled = !isAgentBusy,
                         tint = accent,
@@ -456,7 +457,7 @@ fun BrowserSheet(
                     )
                 } else {
                     ToolbarIcon(
-                        icon = Icons.Default.Refresh,
+                        icon = m3Icon(Icons.Default.Refresh),
                         contentDesc = stringResource(R.string.browser_reload),
                         enabled = !isAgentBusy,
                         tint = accent,
@@ -467,7 +468,7 @@ fun BrowserSheet(
                     icon = when (userAgentProfile) {
                         UserAgentProfile.MOBILE_CHROME -> Icons.Default.PhoneAndroid
                         UserAgentProfile.DESKTOP_CHROME -> Icons.Default.Computer
-                        UserAgentProfile.CUSTOM -> Icons.Default.Edit
+                        UserAgentProfile.CUSTOM -> m3Icon(Icons.Default.Edit)
                     },
                     contentDesc = stringResource(R.string.browser_settings_title),
                     enabled = true,
@@ -560,7 +561,7 @@ private fun TabChip(
                 modifier = Modifier.size(16.dp),
             ) {
                 Icon(
-                    Icons.Default.Close,
+                    m3Icon(Icons.Default.Close),
                     contentDescription = stringResource(R.string.browser_close_tab),
                     modifier = Modifier.size(10.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -603,7 +604,7 @@ private fun BrowserAddressBarIcon(isLoading: Boolean, accent: Color) {
         contentAlignment = Alignment.Center,
     ) {
         Icon(
-            Icons.Default.Language,
+            m3Icon(Icons.Default.Language),
             contentDescription = null,
             modifier = Modifier.size(14.dp),
             tint = if (isLoading) accent else MaterialTheme.colorScheme.onSurfaceVariant,

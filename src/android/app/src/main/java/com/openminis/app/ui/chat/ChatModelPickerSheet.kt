@@ -82,8 +82,8 @@ import com.openminis.app.data.model.ProviderType
 import com.openminis.app.data.model.RoutingStrategy
 import com.openminis.app.data.repository.ProviderRepository
 import com.openminis.app.ui.theme.ChatColors
+import com.openminis.app.ui.theme.m3Icon
 import com.openminis.app.ui.components.MinisTextButton
-
 /**
  * Fuzzy match: substring first, then all query chars appear in order.
  * Matches iOS SessionModelPicker.fuzzyMatch.
@@ -287,7 +287,7 @@ internal fun ModelPickerSheet(
                         label = null,
                         leadingIcon = {
                             Icon(
-                                Icons.Default.Search,
+                                m3Icon(Icons.Default.Search),
                                 contentDescription = null,
                                 modifier = Modifier.size(18.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -297,7 +297,7 @@ internal fun ModelPickerSheet(
                             if (searchText.isNotEmpty()) {
                                 IconButton(onClick = { searchText = "" }) {
                                     Icon(
-                                        Icons.Default.Close,
+                                        m3Icon(Icons.Default.Close),
                                         contentDescription = stringResource(R.string.model_picker_search_clear),
                                         modifier = Modifier.size(18.dp),
                                     )
@@ -423,7 +423,7 @@ internal fun ModelPickerSheet(
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Icon(
-                                        if (isSelected) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+                                        if (isSelected) m3Icon(Icons.Default.CheckCircle) else Icons.Default.RadioButtonUnchecked,
                                         contentDescription = null,
                                         tint = if (isSelected) Color(0xFF34C759)
                                         else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
@@ -570,7 +570,7 @@ internal fun ModelPickerSheet(
                                         contentAlignment = Alignment.Center,
                                     ) {
                                         Icon(
-                                            if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                            if (isExpanded) m3Icon(Icons.Default.KeyboardArrowUp) else m3Icon(Icons.Default.KeyboardArrowDown),
                                             contentDescription = null,
                                             modifier = Modifier.size(16.dp),
                                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -630,7 +630,7 @@ internal fun ModelPickerSheet(
                                                 verticalAlignment = Alignment.CenterVertically,
                                             ) {
                                                 Icon(
-                                                    if (isActive) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+                                                    if (isActive) m3Icon(Icons.Default.CheckCircle) else Icons.Default.RadioButtonUnchecked,
                                                     contentDescription = null,
                                                     tint = if (isActive) Color(0xFF007AFF)
                                                     else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f),
@@ -782,7 +782,7 @@ internal fun ModelPickerSheet(
                                         contentAlignment = Alignment.Center,
                                     ) {
                                         Icon(
-                                            if (isCollapsed) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowUp,
+                                            if (isCollapsed) m3Icon(Icons.Default.KeyboardArrowDown) else m3Icon(Icons.Default.KeyboardArrowUp),
                                             contentDescription = null,
                                             modifier = Modifier.size(16.dp),
                                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -820,7 +820,7 @@ internal fun ModelPickerSheet(
                                             verticalAlignment = Alignment.CenterVertically,
                                         ) {
                                             Icon(
-                                                if (selectedEntry != null) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+                                                if (selectedEntry != null) m3Icon(Icons.Default.CheckCircle) else Icons.Default.RadioButtonUnchecked,
                                                 contentDescription = null,
                                                 tint = if (selectedEntry != null) Color(0xFF007AFF)
                                                 else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
@@ -907,7 +907,7 @@ internal fun ModelPickerSheet(
                                             // floating under the model names above
                                             // rather than aligned with the card.
                                             Icon(
-                                                Icons.Default.KeyboardArrowDown,
+                                                m3Icon(Icons.Default.KeyboardArrowDown),
                                                 contentDescription = null,
                                                 modifier = Modifier.size(16.dp),
                                                 tint = Color(0xFF007AFF),
@@ -948,7 +948,7 @@ internal fun ModelPickerSheet(
                                             verticalAlignment = Alignment.CenterVertically,
                                         ) {
                                             Icon(
-                                                if (isSelected) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+                                                if (isSelected) m3Icon(Icons.Default.CheckCircle) else Icons.Default.RadioButtonUnchecked,
                                                 contentDescription = null,
                                                 tint = if (isSelected) Color(0xFF007AFF)
                                                 else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
@@ -1029,7 +1029,7 @@ internal fun ModelPickerSheet(
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
                             Icon(
-                                if (searchText.isNotEmpty()) Icons.Default.Search else Icons.Default.Memory,
+                                if (searchText.isNotEmpty()) m3Icon(Icons.Default.Search) else Icons.Default.Memory,
                                 contentDescription = null,
                                 modifier = Modifier.size(28.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),

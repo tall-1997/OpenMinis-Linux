@@ -1,4 +1,5 @@
 package com.openminis.app.ui.settings
+import com.openminis.app.ui.theme.m3Icon
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Column
@@ -256,7 +257,7 @@ private fun EngineNavRow(
         trailing = {
             if (selected) {
                 Icon(
-                    Icons.Default.Check,
+                    m3Icon(Icons.Default.Check),
                     contentDescription = stringResource(R.string.web_search_in_use),
                     tint = MaterialTheme.colorScheme.primary,
                 )

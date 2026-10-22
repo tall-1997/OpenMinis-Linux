@@ -66,7 +66,7 @@ import com.openminis.app.data.model.SystemVoiceIds
 import com.openminis.app.data.repository.ProviderRepository
 import com.openminis.app.speech.VoiceOutputState
 import com.openminis.app.ui.theme.ChatColors
-
+import com.openminis.app.ui.theme.m3Icon
 /**
  * [T-android-unified-model-picker] Android counterpart of iOS
  * UnifiedModelPicker: ONE single-select model picker sheet, parameterized the
@@ -236,7 +236,7 @@ fun UnifiedModelPickerSheet(
                         label = null,
                         leadingIcon = {
                             Icon(
-                                Icons.Default.Search,
+                                m3Icon(Icons.Default.Search),
                                 contentDescription = null,
                                 modifier = Modifier.size(18.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -246,7 +246,7 @@ fun UnifiedModelPickerSheet(
                             if (searchText.isNotEmpty()) {
                                 IconButton(onClick = { searchText = "" }) {
                                     Icon(
-                                        Icons.Default.Close,
+                                        m3Icon(Icons.Default.Close),
                                         contentDescription = stringResource(R.string.model_picker_search_clear),
                                         modifier = Modifier.size(18.dp),
                                     )
@@ -327,7 +327,7 @@ fun UnifiedModelPickerSheet(
                                     selectedId == null ||
                                         boundGroup.memberEntryIds.contains(selectedId)
                                 Icon(
-                                    if (groupSelected) Icons.Default.CheckCircle
+                                    if (groupSelected) m3Icon(Icons.Default.CheckCircle)
                                     else Icons.Default.RadioButtonUnchecked,
                                     contentDescription = null,
                                     tint = if (groupSelected) Color(0xFF34C759)
@@ -403,8 +403,8 @@ fun UnifiedModelPickerSheet(
                                     contentAlignment = Alignment.Center,
                                 ) {
                                     Icon(
-                                        if (groupExpanded) Icons.Default.KeyboardArrowUp
-                                        else Icons.Default.KeyboardArrowDown,
+                                        if (groupExpanded) m3Icon(Icons.Default.KeyboardArrowUp)
+                                        else m3Icon(Icons.Default.KeyboardArrowDown),
                                         contentDescription = null,
                                         modifier = Modifier.size(16.dp),
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -700,8 +700,8 @@ fun UnifiedModelPickerSheet(
                                     contentAlignment = Alignment.Center,
                                 ) {
                                     Icon(
-                                        if (collapsed) Icons.Default.KeyboardArrowDown
-                                        else Icons.Default.KeyboardArrowUp,
+                                        if (collapsed) m3Icon(Icons.Default.KeyboardArrowDown)
+                                        else m3Icon(Icons.Default.KeyboardArrowUp),
                                         contentDescription = null,
                                         modifier = Modifier.size(16.dp),
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -829,7 +829,7 @@ private fun PickerSectionHeader(
 @Composable
 private fun SelectionMark(selected: Boolean) {
     Icon(
-        if (selected) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+        if (selected) m3Icon(Icons.Default.CheckCircle) else Icons.Default.RadioButtonUnchecked,
         contentDescription = null,
         tint = if (selected) Color(0xFF007AFF)
         else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),

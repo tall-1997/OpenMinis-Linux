@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import com.openminis.app.R
 import com.openminis.app.offload.ShizukuBackend
 import com.openminis.app.offload.ShizukuManager
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * T322 / [T-android-privileged-backend]: state-driven Shizuku-protocol
@@ -192,7 +193,7 @@ fun ShizukuPermissionScreen(onBack: () -> Unit) {
                         // only the human description is.
                         title = cap.name,
                         subtitle = stringResource(cap.descriptionRes),
-                        icon = cap.icon,
+                        icon = m3Icon(cap.icon),
                         // No divider after the last capability row.
                         showDivider = index != ShizukuCapabilities.lastIndex,
                         minHeight = 72.dp,

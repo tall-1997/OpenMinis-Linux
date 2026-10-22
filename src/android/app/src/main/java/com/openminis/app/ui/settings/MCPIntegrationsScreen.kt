@@ -1,4 +1,5 @@
 package com.openminis.app.ui.settings
+import com.openminis.app.ui.theme.m3Icon
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -61,7 +62,6 @@ import com.openminis.app.mcp.server.McpServerConfigStore
 import com.openminis.app.mcp.server.McpServerManager
 import com.openminis.app.ui.components.DialogTextField
 import com.openminis.app.ui.components.MinisTextButton
-
 /**
  * MCP Integrations management screen. Mirrors [SkillsManagementScreen]:
  * a section of server rows (toggle + name + transport summary + transport
@@ -115,7 +115,7 @@ fun MCPIntegrationsScreen(
         onBack = null,
         actions = {
             IconButton(onClick = { showAddSheet = true }) {
-                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.mcp_add))
+                Icon(m3Icon(Icons.Default.Add), contentDescription = stringResource(R.string.mcp_add))
             }
         },
     ) {
@@ -625,8 +625,8 @@ private fun MCPFormTab(
                     Spacer(Modifier.width(8.dp))
                 }
                 Icon(
-                    imageVector = if (oauthExpanded) Icons.Default.KeyboardArrowUp
-                    else Icons.Default.KeyboardArrowDown,
+                    imageVector = if (oauthExpanded) m3Icon(Icons.Default.KeyboardArrowUp)
+                    else m3Icon(Icons.Default.KeyboardArrowDown),
                     contentDescription = null,
                 )
             }

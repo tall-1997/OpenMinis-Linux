@@ -1,4 +1,5 @@
 package com.openminis.app.ui.sandbox
+import com.openminis.app.ui.theme.m3Icon
 
 import com.openminis.app.R
 import androidx.compose.ui.res.stringResource
@@ -90,7 +91,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import com.openminis.app.ui.components.MinisTextButton
-
 private const val MAX_TEXT_PREVIEW_BYTES = 512_000 // 500 KB; markdown compose splits at BoundedText.MAX_COMPOSE_BLOCK_CHARS
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -185,7 +185,7 @@ fun FilePreviewScreen(
                     // T142: Share works for any file — FileProvider URI +
                     // ACTION_SEND + FLAG_GRANT_READ_URI_PERMISSION. iOS parity.
                     IconButton(onClick = { shareFile(context, item) }) {
-                        Icon(Icons.Default.Share, contentDescription = stringResource(R.string.filepreview_share))
+                        Icon(m3Icon(Icons.Default.Share), contentDescription = stringResource(R.string.filepreview_share))
                     }
                     // Print: HTML renders via WebView; markdown / plain text /
                     // json / csv print their raw text wrapped in a WebView so we
@@ -211,12 +211,12 @@ fun FilePreviewScreen(
                                 ).show()
                             }
                         }) {
-                            Icon(Icons.Default.Download, contentDescription = stringResource(R.string.filepreview_save_to_gallery))
+                            Icon(m3Icon(Icons.Default.Download), contentDescription = stringResource(R.string.filepreview_save_to_gallery))
                         }
                     } else {
                         // T144 non-image → SAF Save-As (user picks location).
                         IconButton(onClick = { saveAsLauncher.launch(item.name) }) {
-                            Icon(Icons.Default.Download, contentDescription = stringResource(R.string.filepreview_save_as))
+                            Icon(m3Icon(Icons.Default.Download), contentDescription = stringResource(R.string.filepreview_save_as))
                         }
                     }
                 },

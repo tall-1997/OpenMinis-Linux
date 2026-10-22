@@ -1,4 +1,5 @@
 package com.openminis.app.ui.settings
+import com.openminis.app.ui.theme.m3Icon
 
 import android.graphics.BitmapFactory
 import androidx.activity.compose.BackHandler
@@ -88,7 +89,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.withContext
-
 /**
  * [T-soul-md] Settings page for editing SOUL.md. Mirrors iOS
  * `SoulSettingsView` (commit 6370d5a):
@@ -1023,7 +1023,7 @@ private fun SoulPromptDropdown(
                                         },
                                     ) {
                                         Icon(
-                                            Icons.Default.Delete,
+                                            m3Icon(Icons.Default.Delete),
                                             contentDescription = stringResource(R.string.soul_prompt_delete),
                                         )
                                     }

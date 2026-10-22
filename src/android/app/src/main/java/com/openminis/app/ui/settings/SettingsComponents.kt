@@ -65,6 +65,7 @@ import androidx.compose.ui.zIndex
 import com.openminis.app.R
 import com.openminis.app.ui.theme.LocalMonetDynamic
 import com.openminis.app.ui.theme.monetAccentTiles
+import com.openminis.app.ui.theme.m3Icon
 import com.openminis.app.i18n.uppercaseForDisplay
 
 /**
@@ -498,7 +499,7 @@ fun SettingsChoiceRow(
             )
             if (selected) {
                 Icon(
-                    Icons.Default.Check,
+                    m3Icon(Icons.Default.Check),
                     contentDescription = stringResource(R.string.cd_selected),
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(20.dp),
