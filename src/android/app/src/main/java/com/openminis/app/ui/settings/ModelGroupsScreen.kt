@@ -190,7 +190,7 @@ fun ModelGroupsScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         Icon(
-                            Icons.Default.Layers,
+                            m3Icon(Icons.Icons.Default.Layers)
                             contentDescription = null,
                             modifier = Modifier.size(48.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -739,7 +739,7 @@ private fun AgentLoopRow(
             modifier = dragHandleModifier.size(36.dp),
         ) {
             Icon(
-                imageVector = Icons.Default.DragHandle,
+                imageVector = m3Icon(Icons.Default.DragHandle),
                 contentDescription = stringResource(R.string.model_group_detail_drag_to_reorder),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                 modifier = Modifier.size(20.dp),
@@ -968,7 +968,7 @@ private fun GroupRow(
                 modifier = dragHandleModifier.size(36.dp),
             ) {
                 Icon(
-                    imageVector = Icons.Default.DragHandle,
+                    imageVector = m3Icon(Icons.Default.DragHandle),
                     contentDescription = stringResource(R.string.model_group_detail_drag_to_reorder),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                     modifier = Modifier.size(20.dp),
@@ -1031,7 +1031,7 @@ private fun GroupRow(
             }
         }
         Icon(
-            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            m3Icon(Icons.Icons.AutoMirrored.Filled.KeyboardArrowRight)
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
