@@ -202,6 +202,9 @@
     <string name="voice_service_shared_credential_note">Bu ses hizmeti, sağlayıcısının API anahtarını ve uç noktasını paylaşır. Bunları değiştirmek için ilgili sağlayıcıyı düzenleyin.</string>
     <string name="voice_service_hidden_badge">Gizli</string>
     <string name="add_provider_voice_chat_providers">Sesli Sohbet Sağlayıcıları</string>
+    <string name="provider_sync_mark_not_found">404 not found</string>
+    <string name="provider_sync_mark_connection">Connection failed</string>
+    <string name="provider_sync_mark_invalid">Invalid response</string>
     <string name="add_provider_voice_templates_footer">Konuşmadan metne ve metinden konuşmaya sağlayıcıları. Sağlayıcı türü ve temel URL önceden doldurulmuştur — yalnızca API anahtarınızı eklemeniz yeterli.</string>
     <string name="add_provider_voice_capability_tts">Konuşma sentezi (TTS)</string>
     <string name="add_provider_voice_capability_asr">Konuşma tanıma (ASR)</string>
