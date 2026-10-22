@@ -31,6 +31,7 @@ import com.openminis.app.R
 import com.openminis.app.data.repository.ProviderRepository
 import com.openminis.app.i18n.TranslationPrefs
 import com.openminis.app.ui.components.DialogTextField
+import com.openminis.app.ui.theme.m3Icon
 
 @Composable
 fun TranslationSettingsScreen(
@@ -129,7 +130,7 @@ fun TranslationSettingsScreen(
                                 )
                             }
                             if (selected) {
-                                Icon(Icons.Filled.Check, contentDescription = stringResource(R.string.cd_selected))
+                                Icon(m3Icon(Icons.Filled.Check), contentDescription = stringResource(R.string.cd_selected))
                             }
                         }
                     }
