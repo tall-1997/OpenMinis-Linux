@@ -98,7 +98,7 @@ fun KimiDeviceLoginDialog(
                         )
                         Spacer(Modifier.width(10.dp))
                         Icon(
-                            if (copied) m3Icon(Icons.Default.CheckCircle) else m3Icon(Icons.Default.ContentCopy),
+                            if (copied) m3Icon(m3Icon(Icons.Default.CheckCircle)) else m3Icon(m3Icon(Icons.Default.ContentCopy)),
                             contentDescription = stringResource(R.string.kimi_login_copy_code),
                             tint = if (copied) {
                                 androidx.compose.ui.graphics.Color(0xFF34C759)
@@ -124,7 +124,7 @@ fun KimiDeviceLoginDialog(
                         .padding(vertical = 8.dp),
                 ) {
                     Icon(
-                        Icons.Default.OpenInBrowser,
+                        m3Icon(Icons.Icons.Default.OpenInBrowser)
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(20.dp),
