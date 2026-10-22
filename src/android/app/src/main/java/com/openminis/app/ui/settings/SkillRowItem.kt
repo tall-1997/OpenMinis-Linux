@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.openminis.app.data.repository.SkillRepository
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * Shared list row for a single skill — used by both [SkillsManagementScreen]
@@ -102,7 +103,7 @@ fun SkillRowItem(
             if (onClick != null) {
                 Spacer(modifier = Modifier.width(4.dp))
                 Icon(
-                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    m3Icon(Icons.Icons.AutoMirrored.Filled.KeyboardArrowRight)
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                     modifier = Modifier.size(20.dp),
