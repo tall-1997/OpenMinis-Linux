@@ -637,7 +637,7 @@ private fun BackupHistoryRow(
             // status readout, and the detail screen behind it goes unfound.
             Spacer(Modifier.width(4.dp))
             Icon(
-                com.openminis.app.ui.theme.m3Icon(Icons.Icons.AutoMirrored.Filled.KeyboardArrowRight)
+                com.openminis.app.ui.theme.m3Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight),
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(20.dp),
@@ -779,7 +779,7 @@ private fun MaxFileSizeRow(
                     )
                     Spacer(Modifier.width(4.dp))
                     Icon(
-                        com.openminis.app.ui.theme.m3Icon(Icons.Icons.Outlined.UnfoldMore)
+                        com.openminis.app.ui.theme.m3Icon(Icons.Outlined.UnfoldMore),
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(18.dp),
