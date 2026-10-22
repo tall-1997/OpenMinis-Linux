@@ -30,7 +30,21 @@ minis_clear_stale_dpkg_locks() {
 
 minis_acquire_apt_lock() {
     _timeout="${1:-180}"
-    mkdir -p /var/lock /tmp /var/tmp 2>/dev/null || true
+    # [T-rootfs-man-dirs] The slim rootfs ships without /usr/share/man. Any
+    # package whose postinst registers update-alternatives with a man-page
+    # slave (openjdk, groovy, gradle...) then dies with
+    #   update-alternatives: error creating symbolic link
+    #   '/usr/share/man/man1/X.1.gz.dpkg-tmp': No such file or directory
+    # the package sticks at half-configured, and EVERY later apt transaction
+    # fails with "Sub-process /usr/bin/dpkg returned an error code (1)" —
+    # even when the newly requested package itself installs fine. Pre-create
+    # the man sections before any apt/dpkg work; the `dpkg --configure -a`
+    # in minis_clear_stale_dpkg_locks then actually heals pending packages
+    # instead of silently failing on them (|| true was masking this).
+    mkdir -p /var/lock /tmp /var/tmp \
+        /usr/share/man/man1 /usr/share/man/man2 /usr/share/man/man3 \
+        /usr/share/man/man4 /usr/share/man/man5 /usr/share/man/man6 \
+        /usr/share/man/man7 /usr/share/man/man8 2>/dev/null || true
     _waited=0
     while ! mkdir "$MINIS_APT_LOCKDIR" 2>/dev/null; do
         sleep 1

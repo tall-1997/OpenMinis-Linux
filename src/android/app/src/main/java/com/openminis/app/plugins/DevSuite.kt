@@ -192,7 +192,11 @@ object DevSuiteCatalog {
                     checkCommand = "command -v pnpm",
                     estimatedBytes = 80_000_000L,
                     dependsOn = listOf("nodejs-core"),
-                    purgeLinks = listOf("pnpm", "yarn"),
+                    // Every bin entry the packages' manifests expose — the
+                    // installer links all of them into /usr/local/bin, so
+                    // purge must remove all of them (a stale subset leaves
+                    // dangling links after /opt/node-global is deleted).
+                    purgeLinks = listOf("pnpm", "pn", "pnpx", "pnx", "yarn", "yarnpkg"),
                 ),
             ),
         ),
