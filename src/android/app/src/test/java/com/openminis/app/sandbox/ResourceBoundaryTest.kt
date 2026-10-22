@@ -1,6 +1,5 @@
 package com.openminis.app.sandbox
 
-import com.openminis.app.data.body.ResourceLimits
 import com.openminis.app.network.NetworkFlapPolicy
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -9,15 +8,64 @@ import org.junit.Test
 import java.io.File
 
 class ResourceBoundaryTest {
+    /**
+     * [T-compile-oom-dynamic] Runtime memory budgets scale with the device's
+     * RAM instead of fixed constants. The old fixed 192 MB node cap starved
+     * big devices, and the JVM had NO cap at all — its default ~25%-of-RAM
+     * heap, doubled by gradle's two daemons, is what got sandbox compiles
+     * LMK-killed on the phone.
+     */
     @Test
-    fun guest_limits_are_absolute_not_a_device_fraction() {
-        assertEquals("--max-old-space-size=192", GuestLimits.nodeOptions(null))
-        assertEquals(
-            "--max-old-space-size=192",
-            GuestLimits.nodeOptions("--max-old-space-size=4096"),
-        )
+    fun runtime_memory_budgets_scale_with_device_ram() {
+        val gb = 1024L * 1024 * 1024
+        // 16 GB device: node 768 (ceiling), jvm 2048 (ceiling), 4 workers, 5 jobs
+        val big = 16L * gb
+        assertEquals("--max-old-space-size=768", GuestLimits.nodeOptions(null, big))
+        assertEquals("-Xmx2048m -XX:MaxMetaspaceSize=512m", GuestLimits.javaOptions(null, big))
+        assertEquals("-Dorg.gradle.workers.max=4", GuestLimits.gradleOpts(null, big))
+        assertEquals(5, GuestLimits.nativeJobs(big))
+        // 4 GB device: node 341, jvm floor 768, worker/job floors
+        val small = 4L * gb
+        assertEquals("--max-old-space-size=341", GuestLimits.nodeOptions(null, small))
+        assertEquals("-Xmx768m -XX:MaxMetaspaceSize=512m", GuestLimits.javaOptions(null, small))
+        assertEquals("-Dorg.gradle.workers.max=2", GuestLimits.gradleOpts(null, small))
+        assertEquals(2, GuestLimits.nativeJobs(small))
+        // 8 GB default: node 682, jvm 1024, 2 workers, 2 jobs
+        assertEquals("--max-old-space-size=682", GuestLimits.nodeOptions())
+        assertEquals("-Xmx1024m -XX:MaxMetaspaceSize=512m", GuestLimits.javaOptions())
         assertFalse(GuestLimits.nodeOptions().contains("%"))
-        assertEquals(192, ResourceLimits.NODE_OLD_SPACE_MB)
+    }
+
+    /** User-set flags survive; our derived flag replaces any stale same-kind flag. */
+    @Test
+    fun runtime_memory_budgets_merge_with_user_flags() {
+        val gb = 1024L * 1024 * 1024
+        assertEquals(
+            "--enable-source-maps --max-old-space-size=768",
+            GuestLimits.nodeOptions("--max-old-space-size=4096 --enable-source-maps", 16L * gb),
+        )
+        assertEquals(
+            "-Xss2m -Xmx2048m -XX:MaxMetaspaceSize=512m",
+            GuestLimits.javaOptions("-Xmx8g -Xss2m", 16L * gb),
+        )
+        assertEquals(
+            "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4",
+            GuestLimits.gradleOpts("-Dorg.gradle.workers.max=32 -Dorg.gradle.daemon=false", 16L * gb),
+        )
+    }
+
+    /** The env bundle sets every runtime and leaves user-set parallelism alone. */
+    @Test
+    fun apply_runtime_memory_budgets_sets_all_runtimes() {
+        val env = mutableMapOf<String, String>(
+            "MAKEFLAGS" to "-j1", // user override must survive
+        )
+        GuestLimits.applyForRam(env, 16L * 1024 * 1024 * 1024)
+        assertTrue(env.getValue("NODE_OPTIONS").contains("--max-old-space-size=768"))
+        assertTrue(env.getValue("_JAVA_OPTIONS").contains("-Xmx2048m"))
+        assertTrue(env.getValue("GRADLE_OPTS").contains("-Dorg.gradle.workers.max=4"))
+        assertEquals("-j1", env.getValue("MAKEFLAGS")) // putIfAbsent semantics
+        assertEquals("5", env.getValue("CMAKE_BUILD_PARALLEL_LEVEL"))
     }
 
     /**

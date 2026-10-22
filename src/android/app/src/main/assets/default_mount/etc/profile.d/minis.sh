@@ -50,9 +50,35 @@ export REQUESTS_CA_BUNDLE="${REQUESTS_CA_BUNDLE:-$SSL_CERT_FILE}"
 export GIT_SSL_CAINFO="${GIT_SSL_CAINFO:-$SSL_CERT_FILE}"
 export PIP_CERT="${PIP_CERT:-$SSL_CERT_FILE}"
 export NODE_EXTRA_CA_CERTS="${NODE_EXTRA_CA_CERTS:-$SSL_CERT_FILE}"
-# No address-space limit here: RLIMIT_AS belongs to the host and this is not
-# fatal if it is already clamped. See profile.d/minis-limits.sh.
-export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--max-old-space-size=192"
+# [T-compile-oom-dynamic] Per-device runtime memory budgets — the login-shell
+# mirror of GuestLimits.applyRuntimeMemoryBudgets (Kotlin side reads
+# ActivityManager.totalMem; here /proc/meminfo is the same kernel number).
+# Same formulas, keep in sync: node=RAM/12 (192..768), jvm=RAM/8 (768..2048),
+# gradle workers=RAM per 4GB (2..6), native jobs=RAM per 3GB (2..6).
+# Each guard only adds our flag when the inherited env does not already carry
+# it — PRootKernel sets these for every process, so normally they are present
+# and these lines are the stripped-env fallback (su, env -i).
+_ram_mb=$(( $(awk '/^MemTotal:/{print $2; exit}' /proc/meminfo 2>/dev/null || echo 0) / 1024 ))
+_node_mb=$(( _ram_mb / 12 ))
+if [ "$_node_mb" -lt 192 ]; then _node_mb=192; fi
+if [ "$_node_mb" -gt 768 ]; then _node_mb=768; fi
+_jvm_mb=$(( _ram_mb / 8 ))
+if [ "$_jvm_mb" -lt 768 ]; then _jvm_mb=768; fi
+if [ "$_jvm_mb" -gt 2048 ]; then _jvm_mb=2048; fi
+_workers=$(( _ram_mb / 4096 ))
+if [ "$_workers" -lt 2 ]; then _workers=2; fi
+if [ "$_workers" -gt 6 ]; then _workers=6; fi
+_jobs=$(( _ram_mb / 3072 ))
+if [ "$_jobs" -lt 2 ]; then _jobs=2; fi
+if [ "$_jobs" -gt 6 ]; then _jobs=6; fi
+case "${NODE_OPTIONS:-}" in *--max-old-space-size*) ;; *)
+    export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--max-old-space-size=$_node_mb" ;; esac
+case "${_JAVA_OPTIONS:-}" in *-Xmx*) ;; *)
+    export _JAVA_OPTIONS="${_JAVA_OPTIONS:+$_JAVA_OPTIONS }-Xmx${_jvm_mb}m -XX:MaxMetaspaceSize=512m" ;; esac
+case "${GRADLE_OPTS:-}" in *workers.max*) ;; *)
+    export GRADLE_OPTS="${GRADLE_OPTS:+$GRADLE_OPTS }-Dorg.gradle.workers.max=$_workers" ;; esac
+[ -n "${MAKEFLAGS:-}" ] || export MAKEFLAGS="-j$_jobs"
+[ -n "${CMAKE_BUILD_PARALLEL_LEVEL:-}" ] || export CMAKE_BUILD_PARALLEL_LEVEL="$_jobs"
 
 # Toolchain paths (populated by minis-dev-setup / minis-android-sdk-setup).
 export ANDROID_HOME="${ANDROID_HOME:-/opt/android-sdk}"
