@@ -202,6 +202,9 @@
     <string name="voice_service_shared_credential_note">Dieser Sprachdienst nutzt API Key und Endpunkt seines Anbieters gemeinsam. Um sie zu ändern, bearbeiten Sie diesen Anbieter.</string>
     <string name="voice_service_hidden_badge">Ausgeblendet</string>
     <string name="add_provider_voice_chat_providers">Anbieter für Sprach-Chat</string>
+    <string name="provider_sync_mark_not_found">404 not found</string>
+    <string name="provider_sync_mark_connection">Connection failed</string>
+    <string name="provider_sync_mark_invalid">Invalid response</string>
     <string name="add_provider_voice_templates_footer">Anbieter für Sprache-zu-Text und Text-zu-Sprache. Anbietertyp und Basis-URL sind bereits ausgefüllt — ergänzen Sie nur Ihren API Key.</string>
     <string name="add_provider_voice_capability_tts">Sprachsynthese (TTS)</string>
     <string name="add_provider_voice_capability_asr">Spracherkennung (ASR)</string>
