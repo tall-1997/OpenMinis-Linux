@@ -190,7 +190,7 @@ fun ModelGroupsScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         Icon(
-                            m3Icon(Icons.Icons.Default.Layers)
+                            m3Icon(Icons.Default.Layers),
                             contentDescription = null,
                             modifier = Modifier.size(48.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1031,7 +1031,7 @@ private fun GroupRow(
             }
         }
         Icon(
-            m3Icon(Icons.Icons.AutoMirrored.Filled.KeyboardArrowRight)
+            m3Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight),
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
