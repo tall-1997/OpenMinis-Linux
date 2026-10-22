@@ -11,6 +11,11 @@ jobs:
   build-sandbox-assets:
     runs-on: ubuntu-22.04
     timeout-minutes: 60
+    permissions:
+      # [T-sandbox-asset-eviction] write for the release-asset store below.
+      # The only caller (android-apk.yml) grants contents: write at workflow
+      # level, and a reusable workflow cannot exceed the caller's grant.
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -26,12 +31,70 @@ jobs:
             src/android/app/src/main/assets/ubuntu-base.tar.gz
           key: sandbox-assets-${{ runner.os }}-${{ hashFiles('scripts/prepare_android_sandbox.sh') }}
 
-      - name: Prepare embedded sandbox assets
+      # [T-sandbox-asset-eviction] The 10 GB Actions cache quota is under
+      # constant pressure (SDK + gradle + go caches measured at 9.3 GB on
+      # 2026-10-22), and this ~54 MB entry is the smallest and least
+      # recently used — every merge marathon LRU-evicts it, so the next
+      # rolling build pays a 30-45 min qemu-emulated apt rebuild of the
+      # rootfs. Release assets have no such quota: keep the last-built
+      # tarball on the `sandbox-assets` release, named by the prepare
+      # script's hash so a script change can never serve a stale rootfs.
+      # A cache miss now costs one ~54 MB download instead of a rebuild;
+      # only a changed script (or the very first build) still rebuilds.
+      - name: Fetch prebuilt rootfs from the asset store
+        id: asset-store
         if: steps.cache-sandbox.outputs.cache-hit != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ASSET_NAME: ubuntu-base-${{ hashFiles('scripts/prepare_android_sandbox.sh') }}.tar.gz
+        run: |
+          set -euo pipefail
+          mkdir -p src/android/app/src/main/assets
+          if gh release download sandbox-assets --repo "$GITHUB_REPOSITORY" \
+              --pattern "$ASSET_NAME" \
+              --output src/android/app/src/main/assets/ubuntu-base.tar.gz 2>/dev/null \
+              && gzip -t src/android/app/src/main/assets/ubuntu-base.tar.gz; then
+            echo "asset store hit: $ASSET_NAME"
+            echo "restored=true" >> "$GITHUB_OUTPUT"
+          else
+            rm -f src/android/app/src/main/assets/ubuntu-base.tar.gz
+            echo "asset store miss: $ASSET_NAME"
+            echo "restored=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Prepare embedded sandbox assets
+        if: >
+          steps.cache-sandbox.outputs.cache-hit != 'true' &&
+          steps.asset-store.outputs.restored != 'true'
         run: |
           chmod +x scripts/prepare_android_sandbox.sh
           bash scripts/prepare_android_sandbox.sh
           test -s "src/android/app/src/main/assets/ubuntu-base.tar.gz"
+
+      # Publish the freshly built tarball to the asset store (no quota) and
+      # prune other script-version assets so exactly one survives. Skipped
+      # on cache/asset-store hits — the store already holds this exact file.
+      - name: Publish rootfs to the asset store
+        if: >
+          steps.cache-sandbox.outputs.cache-hit != 'true' &&
+          steps.asset-store.outputs.restored != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ASSET_NAME: ubuntu-base-${{ hashFiles('scripts/prepare_android_sandbox.sh') }}.tar.gz
+        run: |
+          set -euo pipefail
+          test -s src/android/app/src/main/assets/ubuntu-base.tar.gz
+          gzip -t src/android/app/src/main/assets/ubuntu-base.tar.gz
+          gh release view sandbox-assets >/dev/null 2>&1 || \
+            gh release create sandbox-assets --title "Sandbox asset store" \
+              --notes "CI asset store for the prebuilt rootfs. Replaces Actions-cache entries evicted by the 10 GB repo quota; named by prepare_android_sandbox.sh hash."
+          gh release upload sandbox-assets \
+            "src/android/app/src/main/assets/ubuntu-base.tar.gz#$ASSET_NAME" --clobber
+          for f in $(gh release view sandbox-assets --json assets --jq '.assets[].name' \
+              | grep '^ubuntu-base-.*\.tar\.gz$' | grep -v "^${ASSET_NAME}$" || true); do
+            echo "pruning stale asset: $f"
+            gh release delete-asset sandbox-assets "$f" --yes || true
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: sandbox-assets-${{ github.sha }}
