@@ -202,6 +202,9 @@
     <string name="voice_service_shared_credential_note">Este serviço de voz compartilha a chave de API e o endpoint do provedor dele. Para alterá-los, edite esse provedor.</string>
     <string name="voice_service_hidden_badge">Oculto</string>
     <string name="add_provider_voice_chat_providers">Provedores de conversa por voz</string>
+    <string name="provider_sync_mark_not_found">404 not found</string>
+    <string name="provider_sync_mark_connection">Connection failed</string>
+    <string name="provider_sync_mark_invalid">Invalid response</string>
     <string name="add_provider_voice_templates_footer">Provedores de fala para texto e de texto para fala. O tipo de provedor e a URL base já vêm preenchidos — basta adicionar sua chave de API.</string>
     <string name="add_provider_voice_capability_tts">Síntese de voz (TTS)</string>
     <string name="add_provider_voice_capability_asr">Reconhecimento de fala (ASR)</string>
