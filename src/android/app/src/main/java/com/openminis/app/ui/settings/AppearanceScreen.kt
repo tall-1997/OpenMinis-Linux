@@ -431,13 +431,13 @@ fun AppearanceScreen(
                     leading = {
                         if (idx == 0) {
                             androidx.compose.material3.Icon(
-                                m3Icon(Icons.Icons.AutoMirrored.Outlined.KeyboardReturn)
+                                m3Icon(Icons.AutoMirrored.Outlined.KeyboardReturn),
                                 contentDescription = null,
                                 tint = tilePurple,
                             )
                         } else {
                             androidx.compose.material3.Icon(
-                                m3Icon(Icons.Icons.AutoMirrored.Outlined.Send)
+                                m3Icon(Icons.AutoMirrored.Outlined.Send),
                                 contentDescription = null,
                                 tint = tileGreen,
                             )
@@ -837,7 +837,7 @@ fun AppearanceScreen(
                                     contentAlignment = Alignment.Center,
                                 ) {
                                     Icon(
-                                        m3Icon(Icons.Icons.Filled.CheckCircle)
+                                        m3Icon(Icons.Filled.CheckCircle),
                                         contentDescription = null,
                                         tint = MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.size(22.dp),
