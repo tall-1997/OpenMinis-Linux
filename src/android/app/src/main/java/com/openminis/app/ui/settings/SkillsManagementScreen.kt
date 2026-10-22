@@ -187,7 +187,7 @@ fun SkillsManagementScreen(
                 var sortMenuExpanded by remember { mutableStateOf(false) }
                 IconButton(onClick = { sortMenuExpanded = true }) {
                     Icon(
-                        Icons.AutoMirrored.Filled.Sort,
+                        m3Icon(Icons.Icons.AutoMirrored.Filled.Sort)
                         contentDescription = stringResource(R.string.filebrowser_sort_by),
                     )
                 }
@@ -198,7 +198,7 @@ fun SkillsManagementScreen(
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.filebrowser_sort_name)) },
                         leadingIcon = {
-                            if (!sortByModified) Icon(Icons.Filled.Check, contentDescription = null)
+                            if (!sortByModified) Icon(m3Icon(Icons.Filled.Check), contentDescription = null)
                             else Spacer(modifier = Modifier.size(24.dp))
                         },
                         onClick = {
@@ -210,7 +210,7 @@ fun SkillsManagementScreen(
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.filebrowser_sort_modified)) },
                         leadingIcon = {
-                            if (sortByModified) Icon(Icons.Filled.Check, contentDescription = null)
+                            if (sortByModified) Icon(m3Icon(Icons.Filled.Check), contentDescription = null)
                             else Spacer(modifier = Modifier.size(24.dp))
                         },
                         onClick = {
@@ -229,7 +229,7 @@ fun SkillsManagementScreen(
                         },
                         leadingIcon = {
                             Icon(
-                                if (sortAscending) Icons.Filled.ArrowUpward else Icons.Filled.ArrowDownward,
+                                if (sortAscending) m3Icon(Icons.Filled.ArrowUpward) else m3Icon(Icons.Filled.ArrowDownward),
                                 contentDescription = null,
                             )
                         },
@@ -278,7 +278,7 @@ fun SkillsManagementScreen(
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     Icon(
-                        Icons.Outlined.Description,
+                        m3Icon(Icons.Icons.Outlined.Description)
                         contentDescription = null,
                         modifier = Modifier.size(36.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
@@ -352,7 +352,7 @@ fun SkillsManagementScreen(
                         .padding(horizontal = 20.dp, vertical = 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(Icons.Outlined.Description, contentDescription = null, modifier = Modifier.size(22.dp))
+                    Icon(m3Icon(Icons.Outlined.Description), contentDescription = null, modifier = Modifier.size(22.dp))
                     Spacer(Modifier.width(16.dp))
                     Text(stringResource(R.string.skill_import_modal_title), style = MaterialTheme.typography.bodyLarge)
                 }
@@ -367,7 +367,7 @@ fun SkillsManagementScreen(
                         .padding(horizontal = 20.dp, vertical = 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(Icons.Outlined.Language, contentDescription = null, modifier = Modifier.size(22.dp))
+                    Icon(m3Icon(Icons.Outlined.Language), contentDescription = null, modifier = Modifier.size(22.dp))
                     Spacer(Modifier.width(16.dp))
                     Text(stringResource(R.string.skill_minis_skills_modal), style = MaterialTheme.typography.bodyLarge)
                 }
@@ -382,7 +382,7 @@ fun SkillsManagementScreen(
                         .padding(horizontal = 20.dp, vertical = 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(Icons.Outlined.FiberManualRecord, contentDescription = null, modifier = Modifier.size(22.dp))
+                    Icon(m3Icon(Icons.Outlined.FiberManualRecord), contentDescription = null, modifier = Modifier.size(22.dp))
                     Spacer(Modifier.width(16.dp))
                     Text(stringResource(R.string.a11y_record_title), style = MaterialTheme.typography.bodyLarge)
                 }
@@ -707,7 +707,7 @@ fun SkillDetailScreen(
                 title = { Text(skill.name) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_back))
+                        Icon(m3Icon(Icons.AutoMirrored.Filled.ArrowBack), contentDescription = stringResource(R.string.common_back))
                     }
                 },
                 actions = {
@@ -737,7 +737,7 @@ fun SkillDetailScreen(
                         },
                     ) {
                         Icon(
-                            Icons.Default.IosShare,
+                            m3Icon(Icons.Icons.Default.IosShare)
                             contentDescription = stringResource(R.string.skill_export_share),
                         )
                     }
@@ -907,7 +907,7 @@ fun SkillDetailScreen(
                 skillFiles.forEachIndexed { index, relativePath ->
                     if (index > 0) DetailDivider()
                     DetailRow(clickable = true, onClick = { onFileClick(skill.id, relativePath) }) {
-                        Icon(Icons.Outlined.Description, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+                        Icon(m3Icon(Icons.Outlined.Description), contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(10.dp))
                         Text(
                             relativePath,
@@ -915,7 +915,7 @@ fun SkillDetailScreen(
                             modifier = Modifier.weight(1f),
                         )
                         Icon(
-                            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            m3Icon(Icons.Icons.AutoMirrored.Filled.KeyboardArrowRight)
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                             modifier = Modifier.size(20.dp),
@@ -1095,40 +1095,6 @@ private val SettingsIconBlue = Color(0xFF007AFF)
 private val SettingsIconGreen = Color(0xFF34C759)
 
 /**
- * [T-android-skill-icon-circular] A colored circular badge with a white glyph
- * centered inside, for the skill detail ACTION rows (Update from URL / Update
- * from file / Rescan).
- *
- * Spec is copied VERBATIM from the main Settings page rows
- * (SettingsScreen's row icon: a 30dp circle filled with `iconColor`, holding a
- * 16dp white glyph, followed by a 14dp gap) — keep the two surfaces identical;
- * don't retune one without the other. Mirrors iOS `SettingsActionIcon`
- * (d431cfc7), which copied its own Settings spec the same way.
- *
- * Before this, the action rows used a bare 18dp tinted glyph with no container,
- * so they read as a different visual language from every other settings surface.
- */
-@Composable
-private fun SettingsActionIcon(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    iconColor: Color,
-) {
-    Box(
-        modifier = Modifier
-            .size(30.dp)
-            .background(color = iconColor, shape = CircleShape),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = Color.White,
-            modifier = Modifier.size(16.dp),
-        )
-    }
-}
-
-/**
  * Strip Markdown syntax for display in compact UI surfaces (subtitle rows
  * etc.) where a single-line plain-text preview is wanted. Handles fenced
  * code blocks, inline code, links, headings, blockquotes, bold, italic,
@@ -1214,7 +1180,7 @@ fun SkillFileViewerScreen(
                 title = { Text(fileName) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_back))
+                        Icon(m3Icon(Icons.AutoMirrored.Filled.ArrowBack), contentDescription = stringResource(R.string.common_back))
                     }
                 },
                 actions = {
