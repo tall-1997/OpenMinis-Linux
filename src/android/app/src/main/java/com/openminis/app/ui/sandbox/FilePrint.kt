@@ -6,6 +6,7 @@ import android.print.PrintManager
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
+import com.openminis.app.R
 import com.openminis.app.logging.AppLogger
 
 /**
