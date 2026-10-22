@@ -1,7 +1,7 @@
 package com.openminis.app.ui.settings
 
 import com.openminis.app.R
-import com.openminis.app.ui.theme.monetIconTint
+import com.openminis.app.ui.theme.*
 import com.openminis.app.data.repository.AppIconRepository
 import com.openminis.app.ui.components.MinisTextButton
 
@@ -431,13 +431,13 @@ fun AppearanceScreen(
                     leading = {
                         if (idx == 0) {
                             androidx.compose.material3.Icon(
-                                Icons.AutoMirrored.Outlined.KeyboardReturn,
+                                m3Icon(Icons.Icons.AutoMirrored.Outlined.KeyboardReturn)
                                 contentDescription = null,
                                 tint = tilePurple,
                             )
                         } else {
                             androidx.compose.material3.Icon(
-                                Icons.AutoMirrored.Outlined.Send,
+                                m3Icon(Icons.Icons.AutoMirrored.Outlined.Send)
                                 contentDescription = null,
                                 tint = tileGreen,
                             )
@@ -837,7 +837,7 @@ fun AppearanceScreen(
                                     contentAlignment = Alignment.Center,
                                 ) {
                                     Icon(
-                                        Icons.Filled.CheckCircle,
+                                        m3Icon(Icons.Icons.Filled.CheckCircle)
                                         contentDescription = null,
                                         tint = MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.size(22.dp),
