@@ -45,6 +45,7 @@ import com.openminis.app.backup.BackupHistory
 import com.openminis.app.ui.components.MinisTextButton
 import com.openminis.app.ui.settings.SettingsScaffold
 import com.openminis.app.ui.settings.SettingsSection
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * [T-android-backup-history-detail] One backup run, on its own screen.
@@ -82,7 +83,7 @@ fun BackupHistoryDetailScreen(
         actions = {
             IconButton(onClick = { confirmRemove = true }) {
                 Icon(
-                    Icons.Outlined.Delete,
+                    m3Icon(Icons.Icons.Outlined.Delete)
                     contentDescription = stringResource(R.string.backup_history_remove),
                     tint = MaterialTheme.colorScheme.error,
                 )
@@ -280,7 +281,7 @@ private fun DetailRow(
             if (onClick != null) {
                 Spacer(Modifier.width(4.dp))
                 Icon(
-                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    m3Icon(Icons.Icons.AutoMirrored.Filled.KeyboardArrowRight)
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp),
@@ -332,7 +333,7 @@ private fun DestinationOutcomeRow(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
-                if (outcome.succeeded) Icons.Outlined.CheckCircle else Icons.Outlined.ErrorOutline,
+                if (outcome.succeeded) m3Icon(Icons.Outlined.CheckCircle) else m3Icon(Icons.Outlined.ErrorOutline),
                 contentDescription = null,
                 tint = if (outcome.succeeded) Color(0xFF34C759) else Color(0xFFFF3B30),
                 modifier = Modifier.size(22.dp),
@@ -363,7 +364,7 @@ private fun DestinationOutcomeRow(
             }
             if (onClick != null) {
                 Icon(
-                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    m3Icon(Icons.Icons.AutoMirrored.Filled.KeyboardArrowRight)
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp),
