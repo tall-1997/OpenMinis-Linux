@@ -1,10 +1,12 @@
 package com.openminis.app.tools
 
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 
 /**
@@ -15,6 +17,21 @@ class AgentPlanToolTest {
 
     private val sidA = "chat-aaa"
     private val sidB = "chat-bbb"
+
+    /**
+     * The store retires a fully-done board after a wall-clock linger, and this
+     * class leaves all-done boards behind on purpose. Freeze the clock so the
+     * mechanics under test here stay independent of suite timing.
+     */
+    @Before
+    fun freezeRetirementClock() {
+        AgentPlanStore.nowMs = { FIXED_NOW }
+    }
+
+    @After
+    fun restoreRetirementClock() {
+        AgentPlanStore.nowMs = { System.currentTimeMillis() }
+    }
 
     // ── add ──
 
@@ -131,7 +148,12 @@ class AgentPlanToolTest {
     @Test
     fun renderEmptyList() {
         AgentPlanStore.clear(sidA, null)
-        assertEquals("(no plan items)", AgentPlanStore.render(sidA, null))
+        val text = AgentPlanStore.render(sidA, null)
+        // Not the old neutral "(no plan items)": that read as "board is fine,
+        // nothing to do" and hid the fact that no board had ever been created.
+        assertTrue(text, text.startsWith("(no plan items"))
+        assertTrue(text, text.contains("no board yet"))
+        assertTrue(text, text.contains("op=add"))
     }
 
     @Test
@@ -253,5 +275,9 @@ class AgentPlanToolTest {
         val plans = (1..150).map { AgentPlanStore.Plan(title = "t$it") }
         val decoded = AgentPlanStore.decodePlans(AgentPlanStore.encodePlans(plans))
         assertEquals(100, decoded.size)
+    }
+
+    private companion object {
+        const val FIXED_NOW = 1_700_000_000_000L
     }
 }
