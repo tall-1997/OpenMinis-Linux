@@ -1902,13 +1902,6 @@
     <string name="usage_detail_window_share">Participação neste período</string>
     <string name="usage_label_input_short">Entrada</string>
     <string name="usage_label_output_short">Saída</string>
-    <string name="plan_mode_on">Plano ativo</string>
-    <string name="plan_mode_off">Plano</string>
-    <string name="plan_review_title">Plano aguardando aprovação</string>
-    <string name="plan_review_approve">Aprovar</string>
-    <string name="plan_review_revise">Solicitar alterações</string>
-    <string name="plan_review_revise_confirm">Enviar comentários</string>
-    <string name="plan_review_reject">Rejeitar</string>
-    <string name="plan_review_cancel">Cancelar</string>
-    <string name="plan_review_feedback_hint">O que deve mudar no plano?</string>
+    <string name="plan_board_all_done">Todas as etapas concluídas</string>
+    <string name="cd_plan_board_toggle">Expandir ou recolher o quadro do plano</string>
 </resources>

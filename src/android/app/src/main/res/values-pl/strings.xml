@@ -1910,13 +1910,6 @@
     <string name="usage_detail_window_share">Udział w tym okresie</string>
     <string name="usage_label_input_short">Wejście</string>
     <string name="usage_label_output_short">Wyjście</string>
-    <string name="plan_mode_on">Plan aktywny</string>
-    <string name="plan_mode_off">Plan</string>
-    <string name="plan_review_title">Plan do zatwierdzenia</string>
-    <string name="plan_review_approve">Zatwierdź</string>
-    <string name="plan_review_revise">Poproś o zmiany</string>
-    <string name="plan_review_revise_confirm">Wyślij opinię</string>
-    <string name="plan_review_reject">Odrzuć</string>
-    <string name="plan_review_cancel">Anuluj</string>
-    <string name="plan_review_feedback_hint">Co należy zmienić w planie?</string>
+    <string name="plan_board_all_done">Wszystkie kroki ukończone</string>
+    <string name="cd_plan_board_toggle">Rozwiń lub zwiń tablicę planu</string>
 </resources>

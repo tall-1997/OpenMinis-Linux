@@ -1902,13 +1902,6 @@
     <string name="usage_detail_window_share">Bu dönemdeki pay</string>
     <string name="usage_label_input_short">Girdi</string>
     <string name="usage_label_output_short">Çıktı</string>
-    <string name="plan_mode_on">Plan açık</string>
-    <string name="plan_mode_off">Plan</string>
-    <string name="plan_review_title">Onay için plan</string>
-    <string name="plan_review_approve">Onayla</string>
-    <string name="plan_review_revise">Değişiklik iste</string>
-    <string name="plan_review_revise_confirm">Geri bildirim gönder</string>
-    <string name="plan_review_reject">Reddet</string>
-    <string name="plan_review_cancel">İptal</string>
-    <string name="plan_review_feedback_hint">Planda ne değişmeli?</string>
+    <string name="plan_board_all_done">Tüm adımlar tamamlandı</string>
+    <string name="cd_plan_board_toggle">Plan panosunu genişlet veya daralt</string>
 </resources>

@@ -74,7 +74,6 @@ object AgentTools {
         add(DispatchAgentsTool.definition())
         add(WolfpackTool.definition())
         add(AgentPlanTool.definition())
-        add(ExitPlanModeTool.definition())
         if (mcpNativeEnabled) {
             add(McpNativeTool.definition())
         }

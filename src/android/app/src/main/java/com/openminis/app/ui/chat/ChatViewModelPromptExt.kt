@@ -422,24 +422,18 @@ internal fun ChatViewModel.taskAnchorFragment(): String? = TaskAnchor.fragment(
 )
 
 /**
- * [T-plan-mode-prompt-wiring] Plan-mode state and the live board, injected
- * every turn in the dynamic tail. Keyed by the SAME [ChatViewModel.activeSessionId]
- * the PlanModeGuard enforces with — prompt and gate must never disagree on
- * which session's flag they read. The board snapshot rides along even after
- * approval flips the mode OFF, so the model keeps seeing what to advance with
- * agent_plan. AgentPlanStore.list throws on a corrupt board (by design, so
- * the tool surfaces it); the prompt path degrades to no fragment instead of
- * bricking the request.
+ * [T-plan-board-prompt] The live todo board, injected every turn in the
+ * dynamic tail so the model sees current progress without a tool round-trip
+ * and keeps advancing items with agent_plan. Keyed by the SAME
+ * [ChatViewModel.activeSessionId] the tool path uses — prompt and store must
+ * never disagree on which session's board they read. AgentPlanStore.list
+ * throws on a corrupt board (by design, so the tool surfaces it); the prompt
+ * path degrades to no fragment instead of bricking the request.
  */
 internal fun ChatViewModel.planFragment(): String? = runCatching {
-    val modeOn = com.openminis.app.tools.PlanModeStore.isEnabled(activeSessionId, context)
-    val board = com.openminis.app.tools.PlanModeStore.boardSnapshotPrompt(
+    com.openminis.app.tools.AgentPlanStore.boardSnapshotPrompt(
         com.openminis.app.tools.AgentPlanStore.list(activeSessionId, context),
     )
-    listOfNotNull(
-        if (modeOn) com.openminis.app.tools.PlanModeStore.planModePrompt() else null,
-        board,
-    ).joinToString("\n\n").ifEmpty { null }
 }.getOrNull()
 
 internal fun assembleDynamicTail(
@@ -468,10 +462,10 @@ internal fun assembleDynamicTail(
         append("\n\n")
         append(taskAnchor)
     }
-    // [T-plan-mode-prompt-wiring] After the anchor, ahead of the runtime
-    // context: the plan fragment is per-turn state (the mode flag can flip
-    // mid-session via the review card), so it can't live in the stable
-    // prefix — but it is more stable than the date line below it.
+    // [T-plan-board-prompt] After the anchor, ahead of the runtime
+    // context: the plan fragment is per-turn state (the board mutates with
+    // every agent_plan call), so it can't live in the stable prefix — but it
+    // is more stable than the date line below it.
     if (planFragment != null && planFragment.isNotBlank()) {
         append("\n\n")
         append(planFragment)

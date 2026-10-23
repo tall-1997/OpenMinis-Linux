@@ -4912,8 +4912,8 @@ fun ChatScreen(
                     )
                 }
 
-                // Plan-approval card while a plan is parked for THIS session.
-                PendingPlanReviewCard(sessionId) { viewModel.resolvePlanReview(it) }
+                // Live plan-board bar (agent_plan todo list) while items exist.
+                StickyPlanBar(sessionId)
 
                 // T13 banner moved INSIDE the LazyColumn so it renders at the
                 // visual end of the message list (mirrors iOS — see the
@@ -6519,10 +6519,6 @@ fun ChatScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-
-                        Spacer(modifier = Modifier.width(8.dp))
-                        // Plan-mode pill (read-only agent until approved).
-                        PlanModeToggle(sessionId = sessionId)
 
                         // T187: Exit Edit Mode pill, only while editingMessageId
                         // is non-null. Tap clears the edit flag + composer text

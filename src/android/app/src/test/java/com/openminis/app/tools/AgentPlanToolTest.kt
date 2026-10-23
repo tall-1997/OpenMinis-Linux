@@ -126,20 +126,6 @@ class AgentPlanToolTest {
         AgentPlanStore.clear(sidA, null)
     }
 
-    @Test
-    fun planModeFlagMigratesAndOldKeyCannotResurrect() {
-        PlanModeStore.setEnabled(sidA, null, true)
-        PlanModeStore.migrate(sidA, sidB, null)
-        assertTrue(PlanModeStore.isEnabled(sidB, null))
-        assertFalse("old draft key must not keep the flag", PlanModeStore.isEnabled(sidA, null))
-        PlanModeStore.setEnabled(sidB, null, false)
-        // disabled flag migrates as "nothing to write", old key stays clean
-        PlanModeStore.setEnabled(sidA, null, false)
-        PlanModeStore.migrate(sidA, sidB, null)
-        assertFalse(PlanModeStore.isEnabled(sidB, null))
-        assertFalse(PlanModeStore.isEnabled(sidA, null))
-    }
-
     // ── render ──
 
     @Test
