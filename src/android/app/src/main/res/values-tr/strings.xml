@@ -202,6 +202,13 @@
     <string name="voice_service_shared_credential_note">Bu ses hizmeti, sağlayıcısının API anahtarını ve uç noktasını paylaşır. Bunları değiştirmek için ilgili sağlayıcıyı düzenleyin.</string>
     <string name="voice_service_hidden_badge">Gizli</string>
     <string name="add_provider_voice_chat_providers">Sesli Sohbet Sağlayıcıları</string>
+    <string name="zen_restore_section">Kurtarma</string>
+    <string name="zen_restore_title">OpenCode Zen\'i (Ücretsiz) geri yükle</string>
+    <string name="zen_restore_subtitle">Yerleşik ücretsiz sağlayıcıyı geri getirir ve modellerini yeniden çeker</string>
+    <string name="zen_preset_title">OpenCode Zen (Ücretsiz)</string>
+    <string name="zen_preset_subtitle">Yerleşik ücretsiz kanal — API anahtarı gerekmez</string>
+    <string name="zen_deleted_models_title">Silinen ücretsiz modelleri geri yükle (%1$d)</string>
+    <string name="zen_deleted_models_subtitle">Bu sağlayıcıda kayıtlı silmeleri geri alır</string>
     <string name="provider_sync_mark_not_found">404 not found</string>
     <string name="provider_sync_mark_connection">Connection failed</string>
     <string name="provider_sync_mark_invalid">Invalid response</string>

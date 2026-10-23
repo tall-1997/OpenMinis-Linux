@@ -2,6 +2,20 @@ package com.openminis.app.data.repository
 
 import android.content.Context
 
+/**
+ * Outcome of one model-list fetch, per provider instance.
+ *
+ * Lives beside [ProviderRefreshMarks] because that store is the only thing that
+ * persists these: a success clears the mark, every other case stays visible
+ * until the next success.
+ */
+enum class ModelRefreshResult {
+    SUCCESS_API, NO_KEY, PRESERVED, FAILURE,
+    /** 404 from /v1/models */ NOT_FOUND,
+    /** DNS / TLS / timeout */ CONNECTION_FAILED,
+    /** 2xx body not valid JSON */ INVALID_RESPONSE,
+}
+
 /** Persisted model-refresh marks. Success clears the mark; failures stay until the next success. */
 object ProviderRefreshMarks {
     private const val PREFS = "provider_refresh_marks"

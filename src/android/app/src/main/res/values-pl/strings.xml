@@ -204,6 +204,13 @@
     <string name="voice_service_shared_credential_note">Ta usługa głosowa korzysta z klucza API i punktu końcowego swojego dostawcy. Aby je zmienić, edytuj tego dostawcę.</string>
     <string name="voice_service_hidden_badge">Ukryte</string>
     <string name="add_provider_voice_chat_providers">Dostawcy czatu głosowego</string>
+    <string name="zen_restore_section">Odzyskiwanie</string>
+    <string name="zen_restore_title">Przywróć OpenCode Zen (za darmo)</string>
+    <string name="zen_restore_subtitle">Przywróć wbudowanego darmowego dostawcę i pobierz ponownie jego modele</string>
+    <string name="zen_preset_title">OpenCode Zen (za darmo)</string>
+    <string name="zen_preset_subtitle">Wbudowana darmowa pula — bez klucza API</string>
+    <string name="zen_deleted_models_title">Przywróć usunięte darmowe modele (%1$d)</string>
+    <string name="zen_deleted_models_subtitle">Cofnij usunięcia zapisane dla tego dostawcy</string>
     <string name="provider_sync_mark_not_found">404 not found</string>
     <string name="provider_sync_mark_connection">Connection failed</string>
     <string name="provider_sync_mark_invalid">Invalid response</string>

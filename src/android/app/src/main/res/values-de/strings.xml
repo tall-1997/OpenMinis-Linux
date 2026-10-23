@@ -202,6 +202,13 @@
     <string name="voice_service_shared_credential_note">Dieser Sprachdienst nutzt API Key und Endpunkt seines Anbieters gemeinsam. Um sie zu ändern, bearbeiten Sie diesen Anbieter.</string>
     <string name="voice_service_hidden_badge">Ausgeblendet</string>
     <string name="add_provider_voice_chat_providers">Anbieter für Sprach-Chat</string>
+    <string name="zen_restore_section">Wiederherstellung</string>
+    <string name="zen_restore_title">OpenCode Zen (Free) wiederherstellen</string>
+    <string name="zen_restore_subtitle">Integrierten kostenlosen Anbieter zurückholen und Modelle neu laden</string>
+    <string name="zen_preset_title">OpenCode Zen (Free)</string>
+    <string name="zen_preset_subtitle">Integrierte Gratisstufe — kein API-Schlüssel nötig</string>
+    <string name="zen_deleted_models_title">Gelöschte Gratismodelle wiederherstellen (%1$d)</string>
+    <string name="zen_deleted_models_subtitle">Löschungen für diesen Anbieter rückgängig machen</string>
     <string name="provider_sync_mark_not_found">404 not found</string>
     <string name="provider_sync_mark_connection">Connection failed</string>
     <string name="provider_sync_mark_invalid">Invalid response</string>

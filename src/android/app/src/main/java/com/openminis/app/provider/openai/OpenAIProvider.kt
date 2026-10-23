@@ -46,7 +46,6 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
-import okhttp3.OkHttpClient
 import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -59,7 +58,6 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
-import java.util.concurrent.TimeUnit
 import com.openminis.app.provider.failOnSilentEmptyCompletion
 
 class OpenAIProvider private constructor(
@@ -414,56 +412,10 @@ class OpenAIProvider private constructor(
         return apiKey ?: throw LLMError.InvalidApiKey()
     }
 
-    // T-android-openai-codex-timeout: bump readTimeout 180s → 600s to
-    // match iOS. T171 had cut it to 180s on the theory that GPT-5.x
-    // thinking warm-up tops out around 60-90s, but the Codex Responses
-    // OAuth path on gpt-5.5 with a real-world agent body (440KB, 20
-    // messages, 8 tools) routinely sits silent on the SSE stream for
-    // 2:50-3:10 between the reasoning `response.output_item.added`
-    // event and the burst of text deltas after the reasoning step
-    // completes — server-side it's still working, no keep-alive bytes
-    // arrive in between, and OkHttp's idle-data-read counter trips.
-    // The 180s cap turned that normal reasoning silence into a hard
-    // SocketTimeoutException (observed in 0.10-preview, log file
-    // minis-2026-05-27.log around 13:28 — 3:00 of silence then trip).
-    // Going back to 600s leaves room for the longest realistic
-    // reasoning bursts; the cancel-race concern T171 hedged against
-    // (OkHttp call.cancel() racing a thread inside execute()) is
-    // covered by the outer coroutine cancellation chain — Job.cancel
-    // propagates down through the agent loop and the socket gets
-    // closed via Call.cancel() from the coroutine's invokeOnCancellation,
-    // so a stuck OAuth read never lingers past the agent turn.
-    //
-    // T-android-openai-codex-timeout: also attach an OkHttp EventListener
-    // so future timeout reports show WHICH leg of the network path
-    // stalled — DNS, proxy connect, TLS handshake, idle-after-headers,
-    // or mid-stream silence. Previous OAuth-streaming logs only printed
-    // request/response envelopes; when a SocketTimeoutException fired
-    // we had no way to tell whether the upstream proxy went away
-    // (idle-close after 3min, common with clash/v2ray), TLS renegotiated,
-    // or the server itself stopped emitting bytes. Each milestone goes
-    // through AppLogger.info at the OkHttpEvents tag with the call's
-    // identity hash so concurrent streams can be disambiguated.
-    internal val client = OkHttpClient.Builder()
-        // [T-doh-resolver-fallback] Custom/OpenRouter endpoints are arbitrary
-        // hostnames, so this is the path most exposed to a resolver that
-        // cannot name them. Must stay above the connection pool comment below.
-        .dns(com.openminis.app.network.DohDns)
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(600, TimeUnit.SECONDS)
-        .writeTimeout(30, TimeUnit.SECONDS)
-        // [T-android-stale-conn-retry-hang] Shared pool so NetworkMonitor's
-        // network-transition eviction reaches THIS client's connections —
-        // a per-client pool was never evicted, and a dead h2 tunnel through
-        // a local proxy got reused on every retry (silent infinite hang).
-        // The eviction is NetworkMonitor.evictSharedPoolOnReconnect(), which
-        // calls evictAll() on the SHARED pool when a callback actually flips
-        // the merged status to CONNECTED; the per-call watchdog in
-        // OpenAIRawStream only ever closes its own socket, so this pool-level
-        // pass is what clears tunnels that died with the previous interface.
-        .connectionPool(com.openminis.app.network.NetworkMonitor.sharedLLMConnectionPool)
-        .eventListenerFactory { OkHttpNetTraceListener() }
-        .build()
+    // Client construction — DoH resolver, timeouts, the shared connection
+    // pool, event tracing and the keyless Zen lane gate — lives in
+    // OpenAILlmHttpClient; this class only consumes the result.
+    internal val client = OpenAILlmHttpClient.build()
 
     /** Detect OpenRouter base URL. */
     private val isOpenRouter: Boolean = basePath.contains("openrouter.ai")

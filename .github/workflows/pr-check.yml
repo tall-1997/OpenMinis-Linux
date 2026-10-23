@@ -115,6 +115,15 @@ jobs:
             "${{ github.event.pull_request.base.sha }}" \
             "${{ github.sha }}"
 
+      # [T-string-refs] The gate above checks locale coverage for keys that
+      # exist in values/strings.xml; it is blind to the other direction — a key
+      # a Kotlin file references that nobody ever defined. That mismatch only
+      # surfaces in the Kotlin compile step, which is the slowest gate in this
+      # job and runs before every cheap one, so a renamed key costs a whole
+      # compile round to discover. Runs on every event (tree state, not diff).
+      - name: String resource references resolve
+        run: python3 scripts/ci/check_string_refs.py
+
       # [T-ui-cjk-ratchet] The l10n gate only sees strings.xml. Freeze the
       # existing hardcoded Chinese literals in ui/ and reject any new/growing
       # file (25 files / 100 literals at adoption).
