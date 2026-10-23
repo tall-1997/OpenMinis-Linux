@@ -38,6 +38,12 @@ class EnvVarRepository(private val context: Context) {
          */
         val note: String = "",
         val createdAt: Long = System.currentTimeMillis(),
+        /**
+         * [T-env-disable] Off switch: the value and note stay stored, but the
+         * variable is excluded from every runtime consumer (sandbox env,
+         * MCP `$$VAR`, provider `$$ENV_VAR`) until re-enabled.
+         */
+        val isDisabled: Boolean = false,
     )
 
     private val _entries = MutableStateFlow<List<EnvVarEntry>>(emptyList())
@@ -164,9 +170,55 @@ class EnvVarRepository(private val context: Context) {
         Log.i(TAG, "Deleted env var: ${entry.key}")
     }
 
+    /** [T-env-disable] Flip the off switch; value and note are untouched. */
+    fun setDisabled(id: String, disabled: Boolean) {
+        ensureLoaded()
+        _entries.update { list ->
+            list.map { if (it.id == id) it.copy(isDisabled = disabled) else it }
+        }
+        saveMetadata()
+        Log.i(TAG, "Env var $id isDisabled=$disabled")
+    }
+
     fun getValue(key: String): String? {
         ensureLoaded()
         return encryptedPrefs.getString(key, null)
+    }
+
+    /**
+     * [T-env-disable] Runtime resolution: null when the entry is disabled, so
+     * flipping a variable off stops feeding EVERY consumer (sandbox env, MCP
+     * `$$VAR`, provider `$$ENV_VAR` credentials) instead of only the shell.
+     *
+     * [getValue] deliberately stays raw: the config writer round-trips the
+     * secret through it to update a note, and hiding the value there would
+     * write back an empty string and destroy it. Management paths read
+     * [getValue]; consumption paths read this.
+     */
+    fun getActiveValue(key: String): String? {
+        ensureLoaded()
+        // Case-insensitive on purpose: keys are stored uppercased (add/update
+        // normalise), while `$$var` references in configs are whatever the user
+        // typed. isDuplicateKey already treats key identity that way.
+        if (_entries.value.any { it.key.equals(key, ignoreCase = true) && it.isDisabled }) return null
+        return encryptedPrefs.getString(key, null)
+    }
+
+    /** [T-env-disable] True when the key exists but is switched off. */
+    fun isDisabled(key: String): Boolean {
+        ensureLoaded()
+        return _entries.value.any { it.key.equals(key, ignoreCase = true) && it.isDisabled }
+    }
+
+    /**
+     * [T-env-disable] Every stored secret, disabled ones included — for
+     * [com.openminis.app.data.EnvVarRedactor] ONLY. Scrubbing is about secrecy,
+     * not injection: a variable switched off must still be masked if its value
+     * shows up in tool output, so redaction may not share the injection filter.
+     */
+    fun allStoredValues(): List<String> {
+        ensureLoaded()
+        return _entries.value.mapNotNull { encryptedPrefs.getString(it.key, null) }
     }
 
     /**
@@ -182,6 +234,7 @@ class EnvVarRepository(private val context: Context) {
         ensureLoaded()
         val result = mutableMapOf<String, String>()
         for (entry in _entries.value) {
+            if (entry.isDisabled) continue
             val value = encryptedPrefs.getString(entry.key, null)
             if (value != null) {
                 result[entry.key] = value
@@ -220,6 +273,7 @@ class EnvVarRepository(private val context: Context) {
                 obj.put("key", entry.key)
                 if (entry.note.isNotEmpty()) obj.put("note", entry.note)
                 obj.put("createdAt", entry.createdAt)
+                if (entry.isDisabled) obj.put("disabled", true)
                 array.put(obj)
             }
             // Atomic: a process death mid-write used to tear the file, and the
@@ -247,6 +301,7 @@ class EnvVarRepository(private val context: Context) {
                     key = obj.optString("key", ""),
                     note = obj.optString("note", ""),
                     createdAt = obj.optLong("createdAt", 0),
+                    isDisabled = obj.optBoolean("disabled", false),
                 ))
             }
             _entries.value = entries

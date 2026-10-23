@@ -13,6 +13,15 @@ object FileReadTool {
     const val NAME = "file_read"
     const val MAX_LENGTH_HARD_CAP = 80_000
     const val DEFAULT_MAX_LENGTH = 15_000
+    /**
+     * [T-large-file-guard] Above this size the line-window pass is refused: it
+     * scans to EOF to keep "of N lines" truthful, so a multi-hundred-MB log
+     * means a full sequential read with no feedback in between.
+     */
+    const val MAX_STREAM_FILE_SIZE = 50 * 1024 * 1024L // 50 MB
+
+    /** [T-large-file-guard] Bytes shown from the requested end of a too-large text file. */
+    const val LARGE_TEXT_PREVIEW_BYTES = 1024
 
     fun resolveMaxLength(requested: Int, userCap: Int): Int {
         val cap = userCap.coerceIn(2_000, MAX_LENGTH_HARD_CAP)
@@ -181,6 +190,43 @@ object FileReadTool {
             "More bytes: shell_execute with xxd / file / strings."
     }
 
+    /**
+     * [T-large-file-guard] Preview for a TEXT file above [MAX_STREAM_FILE_SIZE].
+     * Honours the requested end via [fromTail] — answering a `direction=tail`
+     * read with the head of the file would be actively misleading — and
+     * sanitises control bytes so a misdetected binary cannot leak into the
+     * transcript. The size wording is derived from the constant, never
+     * hardcoded, so the message cannot drift away from the real threshold.
+     */
+    internal fun largeTextPreview(path: String, size: Long, bytes: ByteArray, fromTail: Boolean): String {
+        val text = String(bytes, 0, minOf(bytes.size, LARGE_TEXT_PREVIEW_BYTES), Charsets.UTF_8)
+            .replace(Regex("[^\\x20-\\x7E\\n\\r\\t]"), "·")
+        val end = if (fromTail) "Last" else "First"
+        val other = if (fromTail) "direction=head for the beginning" else "direction=tail for the end"
+        return "[$path | $size bytes | text, too large to stream]\n" +
+            "$end $LARGE_TEXT_PREVIEW_BYTES bytes (control chars replaced with ·):\n$text\n" +
+            "File exceeds ${MAX_STREAM_FILE_SIZE / (1024 * 1024)} MB, so line-window reads are refused. " +
+            "Re-run with $other, or use shell_execute with head/tail/split for more."
+    }
+
+    /** [T-large-file-guard] Last [limit] bytes via one seek — no full-file scan. */
+    internal fun readTail(file: File, limit: Int): ByteArray {
+        if (limit <= 0) return ByteArray(0)
+        return java.io.RandomAccessFile(file, "r").use { raf ->
+            val len = raf.length()
+            val start = maxOf(0L, len - limit)
+            raf.seek(start)
+            val buf = ByteArray((len - start).toInt())
+            var read = 0
+            while (read < buf.size) {
+                val n = raf.read(buf, read, buf.size - read)
+                if (n < 0) break
+                read += n
+            }
+            buf.copyOf(read)
+        }
+    }
+
 
     fun definition(): AgentToolDefinition = AgentToolDefinition(
         name = NAME,
@@ -254,11 +300,20 @@ object FileReadTool {
             val textCharset = utf16CharsetOrNull(head)
             val isBinary = textCharset == null && head.any { it == 0.toByte() }
 
-            if (isBinary) {
-                return ToolExecutionResult(
-                    binaryPreview(path, size, head),
-                    true, toolTitle = toolTitle
-                )
+            // [T-large-file-guard] Refuse the line-window pass above the cap, but
+            // still answer from the requested end: a 300 MB log read with
+            // `direction=tail` gets its real tail via one seek, not its head.
+            val tooBig = size > MAX_STREAM_FILE_SIZE
+
+            if (isBinary || tooBig) {
+                val preview = when {
+                    tooBig && !isBinary && direction == "tail" ->
+                        largeTextPreview(path, size, readTail(file, LARGE_TEXT_PREVIEW_BYTES), true)
+                    tooBig && !isBinary ->
+                        largeTextPreview(path, size, head, false)
+                    else -> binaryPreview(path, size, head)
+                }
+                return ToolExecutionResult(preview, true, toolTitle = toolTitle)
             }
 
             val requestedLines = resolveLineLimit(

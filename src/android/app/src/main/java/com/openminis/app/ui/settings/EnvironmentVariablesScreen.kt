@@ -188,14 +188,24 @@ fun EnvironmentVariablesScreen(
                     // value on one line and the optional note on a second.
                     // SettingsRow only has one subtitle slot, so concatenate
                     // with a newline; both render in the same secondary style.
-                    val subtitleText = if (entry.note.isNotEmpty()) {
-                        "$displayValue\n${entry.note}"
-                    } else {
-                        displayValue
+                    // [T-env-disable] A disabled variable keeps its row (the value is
+                    // still stored) but reads as switched off: dimmed title + explicit
+                    // badge, so the list never lies about which variables are live.
+                    val disabledBadge = stringResource(R.string.env_var_disabled_badge)
+                    val subtitleText = when {
+                        entry.isDisabled && entry.note.isNotEmpty() -> "$displayValue\n$disabledBadge · ${entry.note}"
+                        entry.isDisabled -> "$displayValue\n$disabledBadge"
+                        entry.note.isNotEmpty() -> "$displayValue\n${entry.note}"
+                        else -> displayValue
                     }
                     SettingsRow(
                         title = entry.key,
                         subtitle = subtitleText,
+                        titleColor = if (entry.isDisabled) {
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        },
                         showChevron = false,
                         showDivider = index < otherEntries.size - 1,
                         onClick = { editEntryId = entry.id },
@@ -298,6 +308,8 @@ private fun EnvVarFormSheet(
         mutableStateOf(editEntry?.let { envVarRepository.getValue(it.key) } ?: prefillValue)
     }
     var noteText by remember { mutableStateOf(editEntry?.note ?: prefillNote) }
+    // [T-env-disable] Off switch state; a brand-new variable starts enabled.
+    var enabledFlag by remember { mutableStateOf(editEntry?.isDisabled != true) }
 
     val isEditing = editEntry != null
     val normalizedKey = keyText.trim().uppercase()
@@ -379,6 +391,19 @@ private fun EnvVarFormSheet(
                 singleLine = true,
             )
 
+            // [T-env-disable] Edit-only: toggling needs the persisted id, and
+            // creation always yields an enabled variable.
+            if (isEditing) {
+                Spacer(Modifier.height(16.dp))
+                SettingsSwitchRow(
+                    title = stringResource(R.string.env_var_enabled),
+                    subtitle = stringResource(R.string.env_var_enabled_hint),
+                    checked = enabledFlag,
+                    onCheckedChange = { enabledFlag = it },
+                    showDivider = false,
+                )
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
@@ -392,6 +417,9 @@ private fun EnvVarFormSheet(
                             envVarRepository.update(editEntry!!.id, keyText, valueText, noteText)
                         } else {
                             envVarRepository.add(keyText, valueText, noteText)
+                        }
+                        if (success && isEditing) {
+                            envVarRepository.setDisabled(editEntry!!.id, !enabledFlag)
                         }
                         if (success) onDismiss()
                     },

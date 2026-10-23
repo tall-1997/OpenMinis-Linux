@@ -2026,4 +2026,7 @@
     <string name="goal_error_objective_empty">請先填寫目標</string>
     <string name="goal_error_budget_invalid">預算必須是正數</string>
     <string name="goal_error_exists">此聊天已存在目標</string>
+    <string name="env_var_disabled_badge">已停用</string>
+    <string name="env_var_enabled">啟用</string>
+    <string name="env_var_enabled_hint">關閉後不會注入沙箱、MCP 伺服器和提供者憑證，已儲存的值會保留。</string>
 </resources>

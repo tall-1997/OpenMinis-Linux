@@ -1935,4 +1935,7 @@
     <string name="goal_error_objective_empty">Maglagay muna ng layunin</string>
     <string name="goal_error_budget_invalid">Dapat positibong numero ang budget</string>
     <string name="goal_error_exists">May layunin na para sa chat na ito</string>
+    <string name="env_var_disabled_badge">Naka-disable</string>
+    <string name="env_var_enabled">Naka-enable</string>
+    <string name="env_var_enabled_hint">Kapag naka-disable, hindi ilalagay ang variable sa sandbox, mga MCP server o provider credential. Mananatili ang nakaimbak na value.</string>
 </resources>

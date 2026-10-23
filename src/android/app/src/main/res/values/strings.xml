@@ -2766,4 +2766,7 @@
     <string name="goal_error_objective_empty">Enter an objective first</string>
     <string name="goal_error_budget_invalid">Budget must be a positive number</string>
     <string name="goal_error_exists">A Goal already exists for this chat</string>
+    <string name="env_var_disabled_badge">Disabled</string>
+    <string name="env_var_enabled">Enabled</string>
+    <string name="env_var_enabled_hint">When off, the variable is not injected into the sandbox, MCP servers or provider credentials. The stored value is kept.</string>
 </resources>

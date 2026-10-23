@@ -1937,4 +1937,7 @@
     <string name="goal_error_objective_empty">Saisis d\'abord un objectif</string>
     <string name="goal_error_budget_invalid">Le budget doit être un nombre positif</string>
     <string name="goal_error_exists">Un objectif existe déjà pour cette conversation</string>
+    <string name="env_var_disabled_badge">Désactivée</string>
+    <string name="env_var_enabled">Activée</string>
+    <string name="env_var_enabled_hint">Lorsqu\'elle est désactivée, la variable n\'est pas injectée dans le sandbox, les serveurs MCP ni les identifiants du fournisseur. La valeur enregistrée est conservée.</string>
 </resources>

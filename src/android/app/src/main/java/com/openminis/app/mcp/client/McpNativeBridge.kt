@@ -92,7 +92,9 @@ object McpNativeBridge {
         }
 
     private fun envResolver(context: Context): (String) -> String? = { key ->
-        envRepo(context).getValue(key)
+        // [T-env-disable] getActiveValue, not getValue: a disabled variable must
+        // stop resolving for MCP env/headers too, not only inside the sandbox.
+        envRepo(context).getActiveValue(key)
     }
 
     // -- public surface --------------------------------------------------------

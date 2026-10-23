@@ -112,7 +112,9 @@ object SshTool {
                 argsJson = argsJson,
                 backend = backend,
                 pathResolver = { guestPath -> PRootKernel.resolveSessionHostPath(sessionId, guestPath, context) },
-                envResolver = { name -> env.getValue(name) },
+                // [T-env-disable] getActiveValue: a disabled variable must not
+                // reach a remote host either.
+                envResolver = { name -> env.getActiveValue(name) },
             )
         }
 

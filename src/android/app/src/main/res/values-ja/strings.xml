@@ -1934,4 +1934,7 @@
     <string name="goal_error_objective_empty">先に目標を入力してください</string>
     <string name="goal_error_budget_invalid">予算は正の数である必要があります</string>
     <string name="goal_error_exists">このチャットにはすでに目標があります</string>
+    <string name="env_var_disabled_badge">無効</string>
+    <string name="env_var_enabled">有効</string>
+    <string name="env_var_enabled_hint">オフの場合、この変数はサンドボックス、MCP サーバー、プロバイダーの認証情報に渡されません。保存済みの値は保持されます。</string>
 </resources>
