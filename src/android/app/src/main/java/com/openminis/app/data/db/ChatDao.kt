@@ -29,14 +29,7 @@ body_bytes, body_ref, body_sha, preview
 FROM messages
 """
 
-/**
- * Row projection for `ChatRepository.querySessionsMeta` (T188 — backing
- * the `minis-sessions-cli list` offload command). The SELECT shape is
- * dynamic (built from optional keyword/date/IN-list conditions), so we
- * use [RawQuery] + this POJO instead of a static `@Query`. Column names
- * here must exactly match the aliases the dynamic SQL emits — Room
- * binds by column name, not by ordinal.
- */
+/** Retries for the UNIQUE (session_id, sort_order) race in [appendMessage]. */
 private const val MAX_SORT_RETRIES = 4
 
 data class MessageBodyMeta(
@@ -45,6 +38,13 @@ data class MessageBodyMeta(
     @ColumnInfo(name = "body_ref") val bodyRef: String?,
 )
 
+/**
+ * Row projection for `ChatRepository.querySessionsMeta` (T188). The SELECT
+ * shape is dynamic, so this is a [RawQuery] POJO: every column name here must
+ * match what the SQL emits — Room binds by name, and a column it cannot find
+ * is silently null. The two computed columns (`first_user_msg`, `msg_count`)
+ * therefore need an `AS` alias; see [RawQuerySql.SESSIONS_META_SELECT].
+ */
 data class SessionMetaRow(
     val id: String,
     val title: String?,
@@ -97,10 +97,10 @@ data class MessageUsageRow(
 )
 
 /**
- * Row projection for `ChatRepository.searchMessages` (T188 — backing
- * the `minis-sessions-cli search` offload command). Same RawQuery
- * pattern as [SessionMetaRow] — keyword count varies per call, so the
- * WHERE clause is built dynamically and bound with positional args.
+ * Row projection for `ChatRepository.searchMessages` (T188). Same RawQuery
+ * pattern as [SessionMetaRow]: the keyword count varies per call, so the SQL
+ * is built dynamically. Its `substr(COALESCE(preview, parts_json), …)` column
+ * must be aliased `AS parts_json` or every hit throws — see [RawQuerySql].
  */
 data class MessageSearchRow(
     @ColumnInfo(name = "session_id") val sessionId: String,
@@ -733,16 +733,16 @@ interface ChatDao {
      * Run a fully-built sessions meta query. The caller (ChatRepository.
      * querySessionsMeta) composes the WHERE/IN/keyword fragments because
      * @Query templates can't express variable-length IN lists or N-keyword
-     * ANDs over `parts_json LIKE`. SELECT shape must produce columns matching
-     * [SessionMetaRow].
+     * ANDs. The SELECT head comes from [RawQuerySql] — Room maps @RawQuery
+     * results by column name, so an unaliased expression column binds null.
      */
     @RawQuery
     suspend fun runSessionsMetaQuery(query: SupportSQLiteQuery): List<SessionMetaRow>
 
     /**
      * Same dynamic-SQL pattern as [runSessionsMetaQuery] but for the messages
-     * table. Backs `minis-sessions-cli search`. SELECT must produce columns
-     * matching [MessageSearchRow].
+     * table. Backs `minis-sessions-cli search` and the `search_sessions` tool.
+     * Keyword matching splits by `body_ref`; see [RawQuerySql] for why.
      */
     @RawQuery
     suspend fun runMessageSearchQuery(query: SupportSQLiteQuery): List<MessageSearchRow>

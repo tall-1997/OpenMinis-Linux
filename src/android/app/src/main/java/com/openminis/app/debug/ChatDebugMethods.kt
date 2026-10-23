@@ -3,6 +3,7 @@ package com.openminis.app.debug
 import android.content.Context
 import com.openminis.app.MinisApp
 import com.openminis.app.data.db.MessageEntity
+import com.openminis.app.data.db.RawQuerySql
 import com.openminis.app.data.repository.ChatRepository
 import com.openminis.app.data.repository.ProviderRepository
 import com.openminis.app.service.SessionActivityTracker
@@ -114,20 +115,18 @@ internal object ChatDebugMethods {
         } ?: ""
         val args = mutableListOf<Any>(sessionId)
         if (rolesFilter != null) args.addAll(rolesFilter)
-        val countSql = "SELECT COUNT(*) AS count FROM messages WHERE session_id = ?$roleClause"
+        val countSql = RawQuerySql.MESSAGE_COUNT_SELECT + " WHERE session_id = ?$roleClause"
         val totalCount = repo.dao.runMessageCountQuery(
             androidx.sqlite.db.SimpleSQLiteQuery(countSql, args.toTypedArray())
         ).count
         val pageArgs = args.toMutableList()
         pageArgs += limit
         pageArgs += offset
-        val pageSql = "SELECT id, session_id, role, " +
-            "CASE WHEN body_ref IS NOT NULL THEN parts_json " +
-            "WHEN body_bytes <= 2048 THEN parts_json " +
-            "ELSE COALESCE(preview, '[{\"type\":\"text\",\"value\":\"[body kept on disk]\"}]') END AS parts_json, " +
-            "created_at, token_usage, sort_order, reasoning_content, stream_interrupt_count, updated_at, error_info, " +
-            "model_id, model_display_name, provider_type, provider_instance_id, body_bytes, body_ref, body_sha, preview " +
-            "FROM messages WHERE session_id = ?$roleClause " +
+        // SELECT head lives in RawQuerySql so the column-name contract test
+        // covers it: an explicit column list that drops or mis-aliases one of
+        // MessageEntity's columns maps to a silent null under @RawQuery.
+        val pageSql = RawQuerySql.MESSAGE_PAGE_SELECT +
+            " WHERE session_id = ?$roleClause " +
             "ORDER BY sort_order ASC, created_at ASC LIMIT ? OFFSET ?"
         val sliced = repo.dao.runMessagesQuery(
             androidx.sqlite.db.SimpleSQLiteQuery(pageSql, pageArgs.toTypedArray())
