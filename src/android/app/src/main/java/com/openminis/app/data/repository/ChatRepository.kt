@@ -17,6 +17,7 @@ import com.openminis.app.data.db.MessageEntity
 import com.openminis.app.data.db.MessageVersionDao
 import com.openminis.app.data.db.MessageVersionEntity
 import com.openminis.app.data.db.PersistedMessageStatus
+import com.openminis.app.data.db.RawQuerySql
 import com.openminis.app.data.model.ModelAttributionSnapshot
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.sandbox.ExecutionCoordinator
@@ -1259,7 +1260,10 @@ class ChatRepository(
                 if (keywordsMatchBody) {
                     conditions +=
                         "(s.title LIKE ? OR EXISTS (SELECT 1 FROM messages m " +
-                        "WHERE m.session_id = s.id AND m.parts_json LIKE ?))"
+                        "WHERE m.session_id = s.id AND " +
+                        "((m.body_ref IS NULL AND m.parts_json LIKE ?) OR " +
+                        "m.preview LIKE ?)))"
+                    args += pat
                     args += pat
                     args += pat
                 } else {
@@ -1269,18 +1273,8 @@ class ChatRepository(
             }
         }
         val where = if (conditions.isEmpty()) "" else "WHERE " + conditions.joinToString(" AND ")
-        val sql = """
-            SELECT s.id, s.title,
-                   (SELECT m2.parts_json FROM messages m2
-                    WHERE m2.session_id = s.id AND m2.role = 'user'
-                    ORDER BY m2.sort_order ASC LIMIT 1) AS first_user_msg,
-                   s.source, s.created_at, s.updated_at,
-                   (SELECT COUNT(*) FROM messages m3 WHERE m3.session_id = s.id) AS msg_count
-            FROM sessions s
-            $where
-            ORDER BY s.updated_at DESC
-            LIMIT ?
-        """.trimIndent()
+        val sql = RawQuerySql.SESSIONS_META_SELECT +
+            " $where ORDER BY s.updated_at DESC LIMIT ?"
         args += limit
 
         val rows = dao.runSessionsMetaQuery(
@@ -1304,12 +1298,15 @@ class ChatRepository(
 
     /**
      * Backs `minis-sessions-cli search`. Over-fetches `limit * 3` rows
-     * because parts_json LIKE matches can hit tool-call JSON metadata
+     * because the LIKE matches can hit tool-call JSON metadata
      * (e.g. a tool name that happens to contain the keyword) rather than
      * actual user-visible text. We parse each row's parts_json on the
      * Kotlin side, drop rows whose extracted text is blank or whose
      * keyword didn't survive the parse, and trim to [limit] on the way
      * out. Mirrors iOS ChatStore.searchMessages.
+     *
+     * Searchable text is what the row kept in the database — see
+     * [RawQuerySql.MESSAGE_SEARCH_SELECT].
      */
     suspend fun searchMessages(
         sessionIds: List<String>?,
@@ -1326,7 +1323,9 @@ class ChatRepository(
         val args = mutableListOf<Any>()
 
         for (kw in keywords) {
-            conditions += "m.parts_json LIKE ?"
+            conditions += "((m.body_ref IS NULL AND m.parts_json LIKE ?) OR " +
+                "m.preview LIKE ?)"
+            args += "%$kw%"
             args += "%$kw%"
         }
         if (!sessionIds.isNullOrEmpty()) {
@@ -1342,14 +1341,9 @@ class ChatRepository(
             args += endMs
         }
         val where = conditions.joinToString(" AND ")
-        val sql = """
-            SELECT m.session_id, m.id, m.role, m.created_at,
-                   substr(COALESCE(m.preview, m.parts_json), 1, ${ResourceLimits.SQL_CELL_BYTES})
-            FROM messages m
-            WHERE $where
-            ORDER BY m.created_at DESC
-            LIMIT ?
-        """.trimIndent()
+        // SELECT head + the alias/preview contract live in RawQuerySql.
+        val sql = RawQuerySql.MESSAGE_SEARCH_SELECT +
+            " WHERE $where ORDER BY m.created_at DESC LIMIT ?"
         args += (limit * 3)
 
         val rows = dao.runMessageSearchQuery(
