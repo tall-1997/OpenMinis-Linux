@@ -23,6 +23,16 @@ internal enum class ZenFailureEvidence {
     /** HTTP 401 ModelError naming the model as unsupported. */
     MODEL_NOT_SUPPORTED,
 
+    /**
+     * HTTP 401 ModelError that does *not* name the model as unsupported. This
+     * says nothing about the model: the same status is what our own gate or
+     * routing regression looks like. It must not reach the code-based
+     * fallthrough that reads 401 as "needs a credential", because
+     * [ZenLearnedFree.withPaid] then drops the id out of the free set — hiding
+     * a model on evidence that is not permanent.
+     */
+    MODEL_ERROR_UNSPECIFIED,
+
     /** Region refusal. Reachable through the user's own proxy, so not evidence. */
     REGION,
 
@@ -46,7 +56,8 @@ internal enum class ZenFailureEvidence {
     val marksDead: Boolean
         get() = when (this) {
             GONE, MODEL_UNAVAILABLE, MODEL_NOT_SUPPORTED -> true
-            REGION, PROTOCOL_UNSUPPORTED, FREE_TIER, RATE_LIMITED, SERVER, NETWORK -> false
+            MODEL_ERROR_UNSPECIFIED, REGION, PROTOCOL_UNSUPPORTED, FREE_TIER,
+            RATE_LIMITED, SERVER, NETWORK -> false
         }
 }
 

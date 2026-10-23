@@ -184,6 +184,9 @@ internal object ZenFreeLaneDirectory {
      * the bug. `RegionError` is UNKNOWN for the same reason in reverse: the lane
      * is reachable from a locked region through the user's own proxy, so a
      * region refusal must not remove a model that works for everyone else.
+     * A `ModelError` that never says "not supported" belongs to the same class:
+     * an upstream complaint with the model's name on it but no verdict attached,
+     * so the lane keeps the model and only logs the failure.
      */
     internal fun classify(id: String, code: Int, body: String): Verdict {
         val errorType = zenErrorType(body)
@@ -201,6 +204,15 @@ internal object ZenFreeLaneDirectory {
                     ZenFreeLaneHealth.recordFailure(id, ZenFailureEvidence.MODEL_NOT_SUPPORTED)
                     return Verdict.DEAD
                 }
+                // A ModelError that does not name the model as unsupported is
+                // not a statement about the model, so it must not fall through
+                // to the code-based map below: that map reads a 401 as "needs a
+                // credential", and Verdict.PAID feeds withPaid, which removes
+                // the id from the free set. Hiding a working model because our
+                // own gate regressed is precisely how this lane got retired
+                // once already.
+                ZenFreeLaneHealth.recordFailure(id, ZenFailureEvidence.MODEL_ERROR_UNSPECIFIED)
+                return Verdict.UNKNOWN
             }
         }
         return when {

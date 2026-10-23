@@ -1,5 +1,6 @@
 package com.openminis.app.provider
 
+import com.openminis.app.data.model.LLMModel
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -77,6 +78,18 @@ class ZenFreeLaneDirectoryTest {
             ZenFreeLaneDirectory.classify(id, 401, zenError("ModelError", "something transient")),
         )
         assertFalse(ZenFreeLaneHealth.isDead(id))
+        // The user-visible half of the same mistake. UNKNOWN has to leave the id
+        // out of the paid set too, because Verdict.PAID feeds withPaid and
+        // filterFree drops every paid id — a model hidden without ever being
+        // marked dead, which is exactly what a gate regression used to do to the
+        // whole lane.
+        assertTrue(
+            "a generic ModelError must not drop the model out of the free lane",
+            ZenFreeLaneCatalog.filterFree(
+                listOf(LLMModel(id = id, displayName = id, provider = "zen")),
+                ZenLearnedFree(free = setOf(id)),
+            ).isNotEmpty(),
+        )
     }
 
     @Test
