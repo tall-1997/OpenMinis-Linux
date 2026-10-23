@@ -163,8 +163,7 @@ object AgentPlanStore {
     }
 
     /**
-     * Draft→real key migration, same drift class as
-     * [PlanModeStore.migrate]: a board seeded under the route's draft key
+     * Draft→real key migration: a board seeded under the route's draft key
      * must follow the session to its persisted id. Re-adds items through
      * [add] (id preserved, position = insertion order) rather than moving
      * the file, so the memory map, the persisted file, and the version
@@ -189,6 +188,26 @@ object AgentPlanStore {
                 if (p.description.isNotBlank()) append(" — ${p.description}")
                 append("\n")
             }
+        }
+    }
+
+    /**
+     * Live board snapshot for the system prompt so the model sees the current
+     * progress every request without a tool round-trip. Empty board renders
+     * nothing (no section at all) to keep the prompt lean. Moved here from
+     * the deleted PlanModeStore: it renders the board, not any mode.
+     */
+    fun boardSnapshotPrompt(plans: List<Plan>): String? {
+        if (plans.isEmpty()) return null
+        return buildString {
+            append("<plan_board>\n")
+            append("Current plan board (advance items with agent_plan; the user sees it live):\n")
+            plans.forEachIndexed { i, p ->
+                append("${i + 1}. [${p.status}] ${p.title}")
+                if (p.description.isNotBlank()) append(" — ${p.description}")
+                append("\n")
+            }
+            append("</plan_board>")
         }
     }
 

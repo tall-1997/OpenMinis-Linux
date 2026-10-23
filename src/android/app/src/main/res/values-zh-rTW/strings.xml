@@ -1993,13 +1993,6 @@
     <string name="usage_detail_window_share">本期佔比</string>
     <string name="usage_label_input_short">輸入</string>
     <string name="usage_label_output_short">輸出</string>
-    <string name="plan_mode_on">計畫已開啟</string>
-    <string name="plan_mode_off">計畫</string>
-    <string name="plan_review_title">計畫等待你的批准</string>
-    <string name="plan_review_approve">核准</string>
-    <string name="plan_review_revise">要求修改</string>
-    <string name="plan_review_revise_confirm">傳送意見回饋</string>
-    <string name="plan_review_reject">拒絕</string>
-    <string name="plan_review_cancel">取消</string>
-    <string name="plan_review_feedback_hint">計畫哪裡需要修改？</string>
+    <string name="plan_board_all_done">所有步驟已完成</string>
+    <string name="cd_plan_board_toggle">展開或收起計畫看板</string>
 </resources>

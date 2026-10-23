@@ -1901,13 +1901,6 @@
     <string name="usage_detail_window_share">이 기간 비중</string>
     <string name="usage_label_input_short">입력</string>
     <string name="usage_label_output_short">출력</string>
-    <string name="plan_mode_on">계획 켬</string>
-    <string name="plan_mode_off">계획</string>
-    <string name="plan_review_title">승인 대기 중인 계획</string>
-    <string name="plan_review_approve">승인</string>
-    <string name="plan_review_revise">수정 요청</string>
-    <string name="plan_review_revise_confirm">피드백 보내기</string>
-    <string name="plan_review_reject">거부</string>
-    <string name="plan_review_cancel">취소</string>
-    <string name="plan_review_feedback_hint">계획에서 무엇을 바꿔야 할까요?</string>
+    <string name="plan_board_all_done">모든 단계 완료</string>
+    <string name="cd_plan_board_toggle">계획 보드 펼치기/접기</string>
 </resources>

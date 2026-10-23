@@ -1904,13 +1904,6 @@
     <string name="usage_detail_window_share">Cuota de este período</string>
     <string name="usage_label_input_short">Entrada</string>
     <string name="usage_label_output_short">Salida</string>
-    <string name="plan_mode_on">Plan activado</string>
-    <string name="plan_mode_off">Plan</string>
-    <string name="plan_review_title">Plan para tu aprobación</string>
-    <string name="plan_review_approve">Aprobar</string>
-    <string name="plan_review_revise">Solicitar cambios</string>
-    <string name="plan_review_revise_confirm">Enviar comentarios</string>
-    <string name="plan_review_reject">Rechazar</string>
-    <string name="plan_review_cancel">Cancelar</string>
-    <string name="plan_review_feedback_hint">¿Qué debería cambiar en el plan?</string>
+    <string name="plan_board_all_done">Todos los pasos completados</string>
+    <string name="cd_plan_board_toggle">Expandir o contraer el panel del plan</string>
 </resources>

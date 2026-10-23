@@ -1902,13 +1902,6 @@
     <string name="usage_detail_window_share">Bahagi ng panahong ito</string>
     <string name="usage_label_input_short">Input</string>
     <string name="usage_label_output_short">Output</string>
-    <string name="plan_mode_on">Aktibo ang plan</string>
-    <string name="plan_mode_off">Plan</string>
-    <string name="plan_review_title">Plan para sa iyong pag-apruba</string>
-    <string name="plan_review_approve">Aprubahan</string>
-    <string name="plan_review_revise">Humingi ng pagbabago</string>
-    <string name="plan_review_revise_confirm">Ipadala ang puna</string>
-    <string name="plan_review_reject">Tanggihan</string>
-    <string name="plan_review_cancel">Kanselahin</string>
-    <string name="plan_review_feedback_hint">Ano ang dapat baguhin sa plano?</string>
+    <string name="plan_board_all_done">Lahat ng hakbang ay nakumpleto</string>
+    <string name="cd_plan_board_toggle">Palakihin o paliitin ang plan board</string>
 </resources>
