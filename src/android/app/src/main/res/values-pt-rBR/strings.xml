@@ -202,6 +202,7 @@
     <string name="voice_service_shared_credential_note">Este serviço de voz compartilha a chave de API e o endpoint do provedor dele. Para alterá-los, edite esse provedor.</string>
     <string name="voice_service_hidden_badge">Oculto</string>
     <string name="add_provider_voice_chat_providers">Provedores de conversa por voz</string>
+    <string name="zen_restore_section">Recuperação</string>
     <string name="zen_restore_title">Restaurar OpenCode Zen (grátis)</string>
     <string name="zen_restore_subtitle">Recupera o provedor gratuito integrado e busca os modelos novamente</string>
     <string name="zen_preset_title">OpenCode Zen (grátis)</string>

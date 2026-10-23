@@ -404,6 +404,7 @@
     <string name="voice_service_shared_credential_note">This voice service shares the API key and endpoint of its provider. To change them, edit that provider.</string>
     <string name="voice_service_hidden_badge">Hidden</string>
     <string name="add_provider_voice_chat_providers">Voice Chat Providers</string>
+    <string name="zen_restore_section">Recovery</string>
     <string name="zen_restore_title">Restore OpenCode Zen (Free)</string>
     <string name="zen_restore_subtitle">Put back the built-in free provider and refetch its models</string>
     <string name="zen_preset_title">OpenCode Zen (Free)</string>

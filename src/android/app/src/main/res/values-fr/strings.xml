@@ -202,6 +202,7 @@
     <string name="voice_service_shared_credential_note">Ce service vocal partage la clé API et le point de terminaison de son fournisseur. Pour les modifier, modifiez ce fournisseur.</string>
     <string name="voice_service_hidden_badge">Masqué</string>
     <string name="add_provider_voice_chat_providers">Fournisseurs de chat vocal</string>
+    <string name="zen_restore_section">Récupération</string>
     <string name="zen_restore_title">Restaurer OpenCode Zen (gratuit)</string>
     <string name="zen_restore_subtitle">Remettre le fournisseur gratuit intégré et recharger ses modèles</string>
     <string name="zen_preset_title">OpenCode Zen (gratuit)</string>

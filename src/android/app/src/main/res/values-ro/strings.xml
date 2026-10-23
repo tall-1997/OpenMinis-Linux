@@ -203,6 +203,7 @@
     <string name="voice_service_shared_credential_note">Acest serviciu vocal folosește cheia API și punctul final ale furnizorului său. Pentru a le schimba, editează furnizorul respectiv.</string>
     <string name="voice_service_hidden_badge">Ascuns</string>
     <string name="add_provider_voice_chat_providers">Furnizori de conversație vocală</string>
+    <string name="zen_restore_section">Recuperare</string>
     <string name="zen_restore_title">Restaurează OpenCode Zen (gratuit)</string>
     <string name="zen_restore_subtitle">Adu înapoi furnizorul gratuit integrat și reîncarcă modelele</string>
     <string name="zen_preset_title">OpenCode Zen (gratuit)</string>

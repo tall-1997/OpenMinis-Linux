@@ -202,6 +202,7 @@
     <string name="voice_service_shared_credential_note">Ginagamit ng voice service na ito ang API key at endpoint ng provider nito. Para baguhin ang mga ito, i-edit ang provider na iyon.</string>
     <string name="voice_service_hidden_badge">Nakatago</string>
     <string name="add_provider_voice_chat_providers">Mga Voice Chat Provider</string>
+    <string name="zen_restore_section">Pagbabawi</string>
     <string name="zen_restore_title">Ibalik ang OpenCode Zen (Libre)</string>
     <string name="zen_restore_subtitle">Ibalik ang built-in na libreng provider at kunin muli ang mga modelo nito</string>
     <string name="zen_preset_title">OpenCode Zen (Libre)</string>

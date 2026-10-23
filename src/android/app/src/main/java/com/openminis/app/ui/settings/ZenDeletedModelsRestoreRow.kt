@@ -24,8 +24,8 @@ import com.openminis.app.ui.theme.m3Icon
 internal fun ZenDeletedModelsRestoreRow(count: Int, onRestore: () -> Unit) {
     if (count <= 0) return
     SettingsRow(
-        title = stringResource(R.string.zen_deleted_models_restore_title, count),
-        subtitle = stringResource(R.string.zen_deleted_models_restore_subtitle),
+        title = stringResource(R.string.zen_deleted_models_title, count),
+        subtitle = stringResource(R.string.zen_deleted_models_subtitle),
         icon = m3Icon(Icons.Filled.History),
         onClick = onRestore,
         showDivider = false,

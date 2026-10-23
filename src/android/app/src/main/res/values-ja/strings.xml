@@ -202,6 +202,7 @@
     <string name="voice_service_shared_credential_note">この音声サービスは、プロバイダーの API キーとエンドポイントを共用しています。変更するにはそのプロバイダーを編集してください。</string>
     <string name="voice_service_hidden_badge">非表示</string>
     <string name="add_provider_voice_chat_providers">音声チャットのプロバイダー</string>
+    <string name="zen_restore_section">復元</string>
     <string name="zen_restore_title">OpenCode Zen（無料）を復元</string>
     <string name="zen_restore_subtitle">組み込みの無料プロバイダーを戻し、モデルを再取得します</string>
     <string name="zen_preset_title">OpenCode Zen（無料）</string>

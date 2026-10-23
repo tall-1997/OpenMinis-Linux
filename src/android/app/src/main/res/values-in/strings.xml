@@ -207,6 +207,7 @@
     <string name="voice_service_shared_credential_note">Layanan suara ini berbagi kunci API dan endpoint dengan penyedianya. Untuk mengubahnya, edit penyedia tersebut.</string>
     <string name="voice_service_hidden_badge">Disembunyikan</string>
     <string name="add_provider_voice_chat_providers">Penyedia Obrolan Suara</string>
+    <string name="zen_restore_section">Pemulihan</string>
     <string name="zen_restore_title">Pulihkan OpenCode Zen (Gratis)</string>
     <string name="zen_restore_subtitle">Kembalikan penyedia gratis bawaan dan muat ulang modelnya</string>
     <string name="zen_preset_title">OpenCode Zen (Gratis)</string>

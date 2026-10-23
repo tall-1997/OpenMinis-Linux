@@ -250,6 +250,7 @@
     <string name="voice_service_shared_credential_note">此語音服務共用其供應商的 API 金鑰與端點。若要修改，請編輯該供應商。</string>
     <string name="voice_service_hidden_badge">已隱藏</string>
     <string name="add_provider_voice_chat_providers">語音對話供應商</string>
+    <string name="zen_restore_section">還原</string>
     <string name="zen_restore_title">恢復 OpenCode Zen（免費）</string>
     <string name="zen_restore_subtitle">找回內建的免費服務商並重新取得模型</string>
     <string name="zen_preset_title">OpenCode Zen（免費）</string>
