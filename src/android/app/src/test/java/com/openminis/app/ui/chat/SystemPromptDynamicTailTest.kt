@@ -93,10 +93,10 @@ class SystemPromptDynamicTailTest {
                 runtimeContext = renderRuntimeContext("d", "t", "l", 1),
                 personalityReminder = null,
                 taskAnchor = "ANCHOR",
-                planFragment = "<plan_mode>PLAN</plan_mode>",
+                planFragment = "<plan_board>BOARD</plan_board>",
             )
         val anchor = tail.indexOf("ANCHOR")
-        val plan = tail.indexOf("<plan_mode>")
+        val plan = tail.indexOf("<plan_board>")
         val runtime = tail.indexOf("Runtime context:")
         assertTrue("anchor before plan fragment", anchor in 0 until plan)
         assertTrue("plan fragment before runtime context", plan < runtime)
