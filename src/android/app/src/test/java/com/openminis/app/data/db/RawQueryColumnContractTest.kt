@@ -59,7 +59,7 @@ class RawQueryColumnContractTest {
 
     /** Column names the cursor really produces for a SELECT head. */
     private fun columnsOf(selectHead: String): List<String> {
-        db.openHelper.readableDatabase.rawQuery("$selectHead LIMIT 0", emptyArray<String>())
+        db.openHelper.readableDatabase.query("$selectHead LIMIT 0")
             .use { cursor ->
                 return (0 until cursor.columnCount).map { cursor.getColumnName(it) }
             }
@@ -67,7 +67,7 @@ class RawQueryColumnContractTest {
 
     /** Column names the live schema declares for a table. */
     private fun schemaColumnsOf(table: String): List<String> {
-        db.openHelper.readableDatabase.rawQuery("PRAGMA table_info($table)", emptyArray<String>())
+        db.openHelper.readableDatabase.query("PRAGMA table_info($table)")
             .use { cursor ->
                 val nameIdx = cursor.getColumnIndexOrThrow("name")
                 val out = mutableListOf<String>()
