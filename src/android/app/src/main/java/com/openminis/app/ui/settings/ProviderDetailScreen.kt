@@ -69,6 +69,8 @@ import com.openminis.app.data.model.ProviderType
 import com.openminis.app.data.repository.ModelRefreshResult
 import com.openminis.app.data.repository.ProviderRefreshMarks
 import com.openminis.app.data.repository.ProviderRepository
+import com.openminis.app.data.repository.ZenFreeLaneBootstrap
+import com.openminis.app.data.repository.restoreBuiltInZenProviderAndRefresh
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.ui.components.MinisAlertDialog
 import com.openminis.app.ui.util.bringIntoViewOnFocus
@@ -729,6 +731,18 @@ fun ProviderDetailScreen(
                     }
                 }
             }
+            // Zen free lane: put back the model rows deleted on THIS instance.
+            // The count is read from the same tombstone the restore clears, so
+            // the row states exactly what it will do and disappears once there
+            // is nothing left to undo. Scoped to the built-in free instance on
+            // purpose — a global "restore every deleted model" would undo
+            // deliberate deletions on other providers.
+            if (ZenFreeLaneBootstrap.isBuiltinFreeInstanceId(instance.id)) {
+                ZenDeletedModelsRestoreRow(
+                    count = config.deletedModelIds[instance.id]?.size ?: 0,
+                    onRestore = { providerRepository.restoreBuiltInZenProviderAndRefresh() },
+                )
+            }
         }
 
         // Pure-action rows render as standalone buttons — no Section/Card wrap.
@@ -1197,37 +1211,3 @@ private fun ManualBearerTokenSection(
     }
 }
 
-/** Input modalities that get a (muted) capability badge in the model list. */
-private val modalityIconKeys = setOf("image", "pdf", "audio", "video")
-/** Output modalities that get a (tinted, generate-style) badge in the model list. */
-private val modalityOutputIconKeys = setOf("image", "audio", "video")
-/**
- * [T-android-model-capability-output-tags] Capability badges for one model row.
- * Input modalities render in the muted onSurfaceVariant tint; output modalities
- * render in the primary tint with "generate"-style glyphs so a generator (e.g.
- * gpt-image-2 image_output) is visibly distinct from a model that merely accepts
- * that modality as input. Mirrors iOS ProviderInstanceDetailView.modalityIcons.
- */
-@Composable
-private fun ModalityIconsRow(
-    inputModalities: List<String>,
-    outputModalities: List<String>,
-) {
-    val inputTint = MaterialTheme.colorScheme.onSurfaceVariant
-    val outputTint = MaterialTheme.colorScheme.primary
-    val size = Modifier.size(14.dp)
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        // Input badges (muted).
-        if ("image" in inputModalities) Icon(m3Icon(Icons.Default.Image), contentDescription = stringResource(R.string.modeldetail_image_input), tint = inputTint, modifier = size)
-        if ("pdf" in inputModalities) Icon(m3Icon(Icons.AutoMirrored.Filled.InsertDriveFile), contentDescription = stringResource(R.string.modeldetail_pdf_input), tint = inputTint, modifier = size)
-        if ("audio" in inputModalities) Icon(m3Icon(Icons.Default.Mic), contentDescription = stringResource(R.string.modeldetail_audio_input), tint = inputTint, modifier = size)
-        if ("video" in inputModalities) Icon(m3Icon(Icons.Default.Videocam), contentDescription = stringResource(R.string.modeldetail_video_input), tint = inputTint, modifier = size)
-        // Output badges (tinted, generate-style glyphs).
-        if ("image" in outputModalities) Icon(m3Icon(Icons.Default.AddPhotoAlternate), contentDescription = stringResource(R.string.modeldetail_image_output), tint = outputTint, modifier = size)
-        if ("audio" in outputModalities) Icon(m3Icon(Icons.Default.VolumeUp), contentDescription = stringResource(R.string.modeldetail_audio_output), tint = outputTint, modifier = size)
-        if ("video" in outputModalities) Icon(m3Icon(Icons.Default.MovieCreation), contentDescription = stringResource(R.string.modeldetail_video_output), tint = outputTint, modifier = size)
-    }
-}

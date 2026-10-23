@@ -75,6 +75,8 @@ import com.openminis.app.data.model.ProviderCredential
 import com.openminis.app.data.model.ProviderInstance
 import com.openminis.app.data.model.ProviderType
 import com.openminis.app.data.repository.ProviderRepository
+import com.openminis.app.data.repository.ZenFreeLaneBootstrap
+import com.openminis.app.data.repository.restoreBuiltInZenProviderAndRefresh
 import com.openminis.app.R
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -94,6 +96,9 @@ fun AddProviderScreen(
     onBack: () -> Unit,
     onSaved: () -> Unit,
 ) {
+    // Read for one purpose: whether the built-in Zen free lane is missing,
+    // which is the only case where the add-provider list offers to put it back.
+    val config by providerRepository.config.collectAsState()
     var step by remember { mutableStateOf(AddProviderStep.CHOOSE_TYPE) }
     var selectedType by remember { mutableStateOf<ProviderType?>(null) }
     var selectedCredential by remember { mutableStateOf<ProviderCredential?>(null) }
@@ -159,6 +164,13 @@ fun AddProviderScreen(
                 selectedCredential = ProviderCredential.apiKey
                 step = AddProviderStep.CONFIGURE
             },
+            zenFreeLaneMissing = config.instances.none {
+                ZenFreeLaneBootstrap.isBuiltinFreeInstanceId(it.id)
+            },
+            onPickZenFreeLane = {
+                providerRepository.restoreBuiltInZenProviderAndRefresh()
+                onSaved()
+            },
         )
         AddProviderStep.CHOOSE_CREDENTIAL -> ChooseCredentialScreen(
             providerType = selectedType!!,
@@ -177,33 +189,6 @@ fun AddProviderScreen(
             onSaved = onSaved,
         )
     }
-}
-
-/** Display order matching iOS. */
-private val providerDisplayOrder = listOf(
-    ProviderType.openAI,
-    ProviderType.anthropic,
-    ProviderType.gemini,
-    ProviderType.xAI,
-    ProviderType.kimiCode,
-    ProviderType.openRouter,
-)
-
-/** Icon and color per provider type, matching iOS SF Symbols. */
-private fun providerIcon(type: ProviderType): Pair<ImageVector, Color> = when (type) {
-    ProviderType.openAI -> Icons.Default.Hub to Color(0xFF4CAF50)           // green
-    ProviderType.anthropic -> Icons.Default.AutoAwesome to Color(0xFFAB47BC) // purple
-    ProviderType.gemini -> Icons.Default.Diamond to Color(0xFF42A5F5)        // blue
-    ProviderType.openRouter -> Icons.Default.AltRoute to Color(0xFF00BCD4)    // cyan
-    ProviderType.xAI -> Icons.Default.FlashOn to Color(0xFFFF7043)           // orange — Grok visual cue
-    // [T-kimi-oauth] Indigo — matches iOS's Kimi accent.
-    ProviderType.kimiCode -> Icons.Default.Terminal to Color(0xFF5C6BC0)
-    // [T-android-provider-type-parity] Types that arrive only from an iOS
-    // package / newer build; never offered in addableProviderTypes, but the
-    // icon helper is also used to render an already-restored instance.
-    ProviderType.openAIResponses -> Icons.Default.Hub to Color(0xFF4CAF50)
-    ProviderType.antigravity,
-    ProviderType.unsupported -> Icons.Default.Cloud to Color(0xFF9E9E9E)
 }
 
 /** Returns available credential types per provider. */
@@ -239,6 +224,10 @@ private fun ChooseProviderScreen(
     onBack: () -> Unit,
     onSelect: (ProviderType) -> Unit,
     onSelectVoiceTemplate: (com.openminis.app.data.model.VoiceProviderTemplate) -> Unit = {},
+    // Built-in Zen free lane: offered only while this device has no such
+    // instance, so a user-built Zen provider holding a real key never shows it.
+    zenFreeLaneMissing: Boolean = false,
+    onPickZenFreeLane: () -> Unit = {},
 ) {
     SettingsScaffold(
         title = stringResource(R.string.provider_list_add_provider),
@@ -285,9 +274,12 @@ private fun ChooseProviderScreen(
                     icon = icon,
                     iconColor = iconColor,
                     onClick = { onSelect(type) },
-                    showDivider = index < providerDisplayOrder.size - 1,
+                    // No longer the section's last row: the Zen free-lane row
+                    // follows when the device is missing that instance.
+                    showDivider = true,
                 )
             }
+            ZenFreeLanePresetRow(visible = zenFreeLaneMissing, onPick = onPickZenFreeLane)
         }
 
         // [T-android-provider-voice] Voice Chat Providers — one row per voice

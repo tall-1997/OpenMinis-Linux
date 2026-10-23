@@ -367,6 +367,12 @@
     <string name="voice_service_shared_credential_note">该语音服务与其提供商共用 API 密钥和端点。要修改，请编辑对应的提供商。</string>
     <string name="voice_service_hidden_badge">已隐藏</string>
     <string name="add_provider_voice_chat_providers">语音对话提供商</string>
+    <string name="zen_restore_title">恢复 OpenCode Zen（免费）</string>
+    <string name="zen_restore_subtitle">找回内置的免费服务商并重新拉取模型</string>
+    <string name="zen_preset_title">OpenCode Zen（免费）</string>
+    <string name="zen_preset_subtitle">内置免费通道 — 无需 API 密钥</string>
+    <string name="zen_deleted_models_title">恢复已删除的免费模型（%1$d）</string>
+    <string name="zen_deleted_models_subtitle">撤销在此服务商上记录的删除</string>
     <string name="add_provider_voice_templates_footer">语音转文字与文字转语音的提供商。提供商类型和基础 URL 已预先填好，只需补上你的 API 密钥。</string>
     <string name="add_provider_voice_capability_tts">语音合成（TTS）</string>
     <string name="add_provider_voice_capability_asr">语音识别（ASR）</string>

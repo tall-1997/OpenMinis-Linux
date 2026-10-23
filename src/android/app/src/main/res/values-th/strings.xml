@@ -202,6 +202,12 @@
     <string name="voice_service_shared_credential_note">บริการเสียงนี้ใช้ API key และ endpoint ร่วมกับผู้ให้บริการของมัน หากต้องการเปลี่ยน ให้แก้ไขที่ผู้ให้บริการนั้น</string>
     <string name="voice_service_hidden_badge">ซ่อนอยู่</string>
     <string name="add_provider_voice_chat_providers">ผู้ให้บริการแชทด้วยเสียง</string>
+    <string name="zen_restore_title">กู้คืน OpenCode Zen (ฟรี)</string>
+    <string name="zen_restore_subtitle">นำผู้ให้บริการฟรีในตัวกลับมาและดึงโมเดลใหม่อีกครั้ง</string>
+    <string name="zen_preset_title">OpenCode Zen (ฟรี)</string>
+    <string name="zen_preset_subtitle">ช่องทางฟรีในตัว — ไม่ต้องใช้คีย์ API</string>
+    <string name="zen_deleted_models_title">กู้คืนโมเดลฟรีที่ลบไป (%1$d)</string>
+    <string name="zen_deleted_models_subtitle">เลิกทำการลบที่บันทึกไว้กับผู้ให้บริการนี้</string>
     <string name="provider_sync_mark_not_found">404 not found</string>
     <string name="provider_sync_mark_connection">Connection failed</string>
     <string name="provider_sync_mark_invalid">Invalid response</string>
