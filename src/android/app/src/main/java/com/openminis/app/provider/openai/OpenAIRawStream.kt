@@ -700,13 +700,7 @@ internal fun OpenAIProvider.rawStreamMessage(
                                 val combined = combineResponsesAPIIds(acc.callId, itemId)
                                 android.util.Log.d("ToolChain[Provider]", "→ ToolCallComplete (Responses) id=$combined name=${acc.name} args=${args.toString().take(300)}")
                                 send(LLMStreamChunk.ToolCallComplete(combined, acc.name, args))
-                            } else {
-                                // 未知类型不拒收——内容已在 delta 分支流过了。
-                                val id = item.optString("id", "")
-                                val content = item.optString("content", "")
-                                if (content.isNotEmpty()) send(LLMStreamChunk.Text(content))
-                                android.util.Log.d("ToolChain[Provider]", "output_item.done type=$itemType id=$id — not a tool call, acknowledged")
-                            }
+                            } else android.util.Log.d("ToolChain[Provider]", "output_item.done type=$itemType id=${item.optString("id", "")} — acknowledged") // [T-responses-unknown-item] Acknowledge only, NEVER re-send item.content: for message/reasoning items `content` is a JSON ARRAY, so optString would dump raw JSON into the visible stream, and the text already streamed via response.output_text.delta.
                         }
                         type == "response.failed" -> {
                             // [T-responses-terminal-events] Explicit terminal

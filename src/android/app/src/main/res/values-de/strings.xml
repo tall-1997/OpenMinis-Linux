@@ -1937,4 +1937,7 @@
     <string name="goal_error_objective_empty">Gib zuerst ein Ziel ein</string>
     <string name="goal_error_budget_invalid">Das Budget muss eine positive Zahl sein</string>
     <string name="goal_error_exists">Für diesen Chat existiert bereits ein Ziel</string>
+    <string name="env_var_disabled_badge">Deaktiviert</string>
+    <string name="env_var_enabled">Aktiviert</string>
+    <string name="env_var_enabled_hint">Wenn aus, wird die Variable nicht in die Sandbox, MCP-Server oder Anbieter-Zugangsdaten injiziert. Der gespeicherte Wert bleibt erhalten.</string>
 </resources>

@@ -38,7 +38,11 @@ class EnvVarRepository(private val context: Context) {
          */
         val note: String = "",
         val createdAt: Long = System.currentTimeMillis(),
-        /** 停用后不注入沙箱，值与原备注全部保留，随时可重新启用。 */
+        /**
+         * [T-env-disable] Off switch: the value and note stay stored, but the
+         * variable is excluded from every runtime consumer (sandbox env,
+         * MCP `$$VAR`, provider `$$ENV_VAR`) until re-enabled.
+         */
         val isDisabled: Boolean = false,
     )
 
@@ -166,6 +170,7 @@ class EnvVarRepository(private val context: Context) {
         Log.i(TAG, "Deleted env var: ${entry.key}")
     }
 
+    /** [T-env-disable] Flip the off switch; value and note are untouched. */
     fun setDisabled(id: String, disabled: Boolean) {
         ensureLoaded()
         _entries.update { list ->
@@ -178,6 +183,28 @@ class EnvVarRepository(private val context: Context) {
     fun getValue(key: String): String? {
         ensureLoaded()
         return encryptedPrefs.getString(key, null)
+    }
+
+    /**
+     * [T-env-disable] Runtime resolution: null when the entry is disabled, so
+     * flipping a variable off stops feeding EVERY consumer (sandbox env, MCP
+     * `$$VAR`, provider `$$ENV_VAR` credentials) instead of only the shell.
+     *
+     * [getValue] deliberately stays raw: the config writer round-trips the
+     * secret through it to update a note, and hiding the value there would
+     * write back an empty string and destroy it. Management paths read
+     * [getValue]; consumption paths read this.
+     */
+    fun getActiveValue(key: String): String? {
+        ensureLoaded()
+        if (_entries.value.any { it.key == key && it.isDisabled }) return null
+        return encryptedPrefs.getString(key, null)
+    }
+
+    /** [T-env-disable] True when the key exists but is switched off. */
+    fun isDisabled(key: String): Boolean {
+        ensureLoaded()
+        return _entries.value.any { it.key == key && it.isDisabled }
     }
 
     /**

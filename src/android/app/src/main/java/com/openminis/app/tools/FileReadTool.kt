@@ -13,8 +13,15 @@ object FileReadTool {
     const val NAME = "file_read"
     const val MAX_LENGTH_HARD_CAP = 80_000
     const val DEFAULT_MAX_LENGTH = 15_000
-    /** 超过此大小的文件不逐行流式读取，只返回 magic-byte + 头部截断预览。 */
+    /**
+     * [T-large-file-guard] Above this size the line-window pass is refused: it
+     * scans to EOF to keep "of N lines" truthful, so a multi-hundred-MB log
+     * means a full sequential read with no feedback in between.
+     */
     const val MAX_STREAM_FILE_SIZE = 50 * 1024 * 1024L // 50 MB
+
+    /** [T-large-file-guard] Bytes shown from the requested end of a too-large text file. */
+    const val LARGE_TEXT_PREVIEW_BYTES = 1024
 
     fun resolveMaxLength(requested: Int, userCap: Int): Int {
         val cap = userCap.coerceIn(2_000, MAX_LENGTH_HARD_CAP)
@@ -183,13 +190,41 @@ object FileReadTool {
             "More bytes: shell_execute with xxd / file / strings."
     }
 
-    /** 超 50MB 的纯文本文件，返回头部截断预览而不是逐行流式读取。 */
-    internal fun largeTextPreview(path: String, size: Long, head: ByteArray): String {
-        val textHead = String(head, 0, minOf(head.size, 1024), Charsets.UTF_8)
+    /**
+     * [T-large-file-guard] Preview for a TEXT file above [MAX_STREAM_FILE_SIZE].
+     * Honours the requested end via [fromTail] — answering a `direction=tail`
+     * read with the head of the file would be actively misleading — and
+     * sanitises control bytes so a misdetected binary cannot leak into the
+     * transcript. The size wording is derived from the constant, never
+     * hardcoded, so the message cannot drift away from the real threshold.
+     */
+    internal fun largeTextPreview(path: String, size: Long, bytes: ByteArray, fromTail: Boolean): String {
+        val text = String(bytes, 0, minOf(bytes.size, LARGE_TEXT_PREVIEW_BYTES), Charsets.UTF_8)
             .replace(Regex("[^\\x20-\\x7E\\n\\r\\t]"), "·")
+        val end = if (fromTail) "Last" else "First"
+        val other = if (fromTail) "direction=head for the beginning" else "direction=tail for the end"
         return "[$path | $size bytes | text, too large to stream]\n" +
-            "First 1024 bytes (control chars replaced with ·):\n$textHead\n" +
-            "File exceeds 50 MB. To read it, use shell_execute with head/tail/split."
+            "$end $LARGE_TEXT_PREVIEW_BYTES bytes (control chars replaced with ·):\n$text\n" +
+            "File exceeds ${MAX_STREAM_FILE_SIZE / (1024 * 1024)} MB, so line-window reads are refused. " +
+            "Re-run with $other, or use shell_execute with head/tail/split for more."
+    }
+
+    /** [T-large-file-guard] Last [limit] bytes via one seek — no full-file scan. */
+    internal fun readTail(file: File, limit: Int): ByteArray {
+        if (limit <= 0) return ByteArray(0)
+        return java.io.RandomAccessFile(file, "r").use { raf ->
+            val len = raf.length()
+            val start = maxOf(0L, len - limit)
+            raf.seek(start)
+            val buf = ByteArray((len - start).toInt())
+            var read = 0
+            while (read < buf.size) {
+                val n = raf.read(buf, read, buf.size - read)
+                if (n < 0) break
+                read += n
+            }
+            buf.copyOf(read)
+        }
     }
 
 
@@ -265,17 +300,20 @@ object FileReadTool {
             val textCharset = utf16CharsetOrNull(head)
             val isBinary = textCharset == null && head.any { it == 0.toByte() }
 
-            // 超大文件一律按二进制处理，走 magic-byte 预览。即使文件没有零字节
-            // (纯文本大文件)，按行逐字符流式读取本身也会卡很久——CJK/emoji
-            // 单字符多字节的行拆分在线性扫描后还得做二次 trim，毫无交互反馈。
+            // [T-large-file-guard] Refuse the line-window pass above the cap, but
+            // still answer from the requested end: a 300 MB log read with
+            // `direction=tail` gets its real tail via one seek, not its head.
             val tooBig = size > MAX_STREAM_FILE_SIZE
 
             if (isBinary || tooBig) {
-                return ToolExecutionResult(
-                    if (tooBig && !isBinary) largeTextPreview(path, size, head)
-                    else binaryPreview(path, size, head),
-                    true, toolTitle = toolTitle
-                )
+                val preview = when {
+                    tooBig && !isBinary && direction == "tail" ->
+                        largeTextPreview(path, size, readTail(file, LARGE_TEXT_PREVIEW_BYTES), true)
+                    tooBig && !isBinary ->
+                        largeTextPreview(path, size, head, false)
+                    else -> binaryPreview(path, size, head)
+                }
+                return ToolExecutionResult(preview, true, toolTitle = toolTitle)
             }
 
             val requestedLines = resolveLineLimit(

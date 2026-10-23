@@ -1940,4 +1940,7 @@
     <string name="goal_error_objective_empty">Masukkan tujuan dulu</string>
     <string name="goal_error_budget_invalid">Budget harus berupa angka positif</string>
     <string name="goal_error_exists">Tujuan sudah ada untuk obrolan ini</string>
+    <string name="env_var_disabled_badge">Dinonaktifkan</string>
+    <string name="env_var_enabled">Diaktifkan</string>
+    <string name="env_var_enabled_hint">Jika nonaktif, variabel tidak disuntikkan ke sandbox, server MCP, atau kredensial penyedia. Nilai yang tersimpan tetap ada.</string>
 </resources>

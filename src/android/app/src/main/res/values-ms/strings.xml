@@ -1935,4 +1935,7 @@
     <string name="goal_error_objective_empty">Masukkan matlamat dahulu</string>
     <string name="goal_error_budget_invalid">Bajet mesti nombor positif</string>
     <string name="goal_error_exists">Matlamat sudah wujud untuk sembang ini</string>
+    <string name="env_var_disabled_badge">Dilumpuhkan</string>
+    <string name="env_var_enabled">Didayakan</string>
+    <string name="env_var_enabled_hint">Apabila dimatikan, pemboleh ubah tidak disuntik ke dalam sandbox, pelayan MCP atau kelayakan penyedia. Nilai yang disimpan kekal.</string>
 </resources>

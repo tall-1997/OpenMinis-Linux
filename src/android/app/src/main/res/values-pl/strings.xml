@@ -1943,4 +1943,7 @@
     <string name="goal_error_objective_empty">Najpierw wpisz cel</string>
     <string name="goal_error_budget_invalid">Budżet musi być liczbą dodatnią</string>
     <string name="goal_error_exists">Cel już istnieje dla tego czatu</string>
+    <string name="env_var_disabled_badge">Wyłączona</string>
+    <string name="env_var_enabled">Włączona</string>
+    <string name="env_var_enabled_hint">Gdy jest wyłączona, zmienna nie jest wstrzykiwana do piaskownicy, serwerów MCP ani poświadczeń dostawcy. Zapisana wartość zostaje zachowana.</string>
 </resources>

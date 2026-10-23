@@ -160,10 +160,18 @@ class ProvidersCollection(
     private fun resolveCredential(raw: String, fieldName: String): String {
         val m = envRefRegex.matchEntire(raw) ?: return raw
         val key = m.groupValues[1]
-        val resolved = envVars.getValue(key)
+        val resolved = envVars.getActiveValue(key)
             ?: throw ConfigError.InvalidValue(
-                "$fieldName references env var \$\$$key, but no such env var exists. " +
-                    "Create it first via [Set $key](minis://settings/environments?create_key=$key&create_value=)."
+                // [T-env-disable] A disabled variable resolves to null just like
+                // a missing one — say which it is, or the user is told to create
+                // a variable that is already there.
+                if (envVars.isDisabled(key)) {
+                    "$fieldName references env var \$\$$key, but that variable is disabled. " +
+                        "Re-enable it in [Settings → Environment Variables](minis://settings/environments)."
+                } else {
+                    "$fieldName references env var \$\$$key, but no such env var exists. " +
+                        "Create it first via [Set $key](minis://settings/environments?create_key=$key&create_value=)."
+                }
             )
         if (resolved.isEmpty()) {
             throw ConfigError.InvalidValue("$fieldName references env var \$\$$key but its value is empty.")

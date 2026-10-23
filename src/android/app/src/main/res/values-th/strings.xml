@@ -1935,4 +1935,7 @@
     <string name="goal_error_objective_empty">กรอกเป้าหมายก่อน</string>
     <string name="goal_error_budget_invalid">งบต้องเป็นตัวเลขบวก</string>
     <string name="goal_error_exists">แชทนี้มีเป้าหมายอยู่แล้ว</string>
+    <string name="env_var_disabled_badge">ปิดใช้</string>
+    <string name="env_var_enabled">เปิดใช้</string>
+    <string name="env_var_enabled_hint">เมื่อปิด ตัวแปรจะไม่ถูกฉีดเข้าแซนด์บ็อกซ์ เซิร์ฟเวอร์ MCP หรือข้อมูลรับรองของผู้ให้บริการ ค่าที่บันทึกไว้จะยังคงอยู่</string>
 </resources>
