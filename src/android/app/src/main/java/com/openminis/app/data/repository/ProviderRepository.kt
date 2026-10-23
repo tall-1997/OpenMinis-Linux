@@ -264,7 +264,7 @@ class ProviderRepository(private val context: Context) {
             // heal corrupted modality). Mirrors iOS ProviderConfigStore.init.
             try {
                 ensureVoiceTemplateModels()
-                retireBuiltInZenProvider()
+                seedBuiltInZenProvider()
             } catch (e: Exception) {
                 android.util.Log.w("ProviderRepo", "[BuiltIn] provider reconciliation failed: ${e.message}")
             }
@@ -585,33 +585,36 @@ class ProviderRepository(private val context: Context) {
         if (changed) saveConfig(config)
     }
     /**
-     * Retires the OpenCode Zen free lane this app used to seed.
+     * Seeds the built-in OpenCode Zen free lane on launch.
      *
-     * The bundled instance authenticated with the literal `"public"`
-     * credential. Upstream no longer accepts it: measured 2026-10-17, every
-     * third-party client is refused with `403 FreeTierError` on every model,
-     * while the official 2.0.32 CLI passes on a credential it never stores
-     * anywhere on disk (see [com.openminis.app.provider.ZenEndpoint] for the
-     * full measurement). Seeding that instance would hand every fresh install
-     * a provider that cannot answer one request, so the seed is gone and an
-     * instance left over from an earlier install is removed here instead.
-     *
-     * Only the id this app created is touched. A user-created Zen instance —
-     * same host, real key — keeps its id, label, credentials and model rows.
+     * The credential lives outside the config, so it is written here rather than
+     * by the bootstrap. An instance the user deleted on purpose carries an
+     * instance tombstone and stays gone; the explicit recovery channel is
+     * [restoreBuiltInZenProvider]. A user-built Zen provider holding a real key
+     * is not the free lane and is never touched.
      */
-    private fun retireBuiltInZenProvider() = synchronized(configLock) {
+    private fun seedBuiltInZenProvider() = synchronized(configLock) {
         if (!_configLoaded.value) return@synchronized
-        val legacy = _config.value.instances.filter { it.id == LEGACY_ZEN_BUILTIN_ID }
-        if (legacy.isEmpty()) return@synchronized
         val config = workingCopy()
-        config.instances.removeAll { it.id == LEGACY_ZEN_BUILTIN_ID }
-        config.modelEntries.removeAll { it.providerInstanceId == LEGACY_ZEN_BUILTIN_ID }
+        if (!ZenFreeLaneBootstrap.ensureSeeded(config) { loadApiKey(it) }) return@synchronized
         saveConfig(config)
-        legacy.forEach { deleteApiKey(it.id) }
-        android.util.Log.i(
-            "ProviderRepo",
-            "[BuiltIn] retired the Zen free lane: removed ${legacy.size} built-in instance(s)",
-        )
+        saveApiKey(ZenFreeLaneBootstrap.INSTANCE_ID, ZenFreeLaneBootstrap.API_KEY)
+        android.util.Log.i("ProviderRepo", "[BuiltIn] seeded the Zen free lane")
+    }
+
+    /**
+     * Recovery channel for the built-in free lane: clears the user's deletion
+     * tombstone, re-seeds the instance under its original id, and drops the
+     * model-level tombstones recorded against it. Returns true when the config
+     * changed, which is the caller's cue to refresh the catalogue.
+     */
+    fun restoreBuiltInZenProvider(): Boolean = synchronized(configLock) {
+        ensureConfigLoaded()
+        val config = workingCopy()
+        if (!ZenFreeLaneBootstrap.restore(config) { loadApiKey(it) }) return@synchronized false
+        saveConfig(config)
+        saveApiKey(ZenFreeLaneBootstrap.INSTANCE_ID, ZenFreeLaneBootstrap.API_KEY)
+        true
     }
     /**
      * Whether [instance] points at a third-party OpenAI-compatible host
@@ -688,6 +691,9 @@ class ProviderRepository(private val context: Context) {
             if (config.defaultPrimaryGroupId in emptyGroupIds) config.defaultPrimaryGroupId = null
             if (config.defaultSubGroupId in emptyGroupIds) config.defaultSubGroupId = null
         }
+        // Clears this id's model tombstones and records the instance-level one,
+        // so a deliberate removal is not undone by the next launch's seed pass.
+        ZenFreeLaneBootstrap.forgetInstance(config, instanceId)
         saveConfig(config)
         deleteApiKey(instanceId)
         // [T-remove-instance-cleanup] deleteApiKey only removes apikey_<id>.
@@ -990,7 +996,14 @@ class ProviderRepository(private val context: Context) {
         return instance.isEnabled
     }
 
+    /**
+     * Rebuilds this instance's non-custom rows from a fetched catalogue. The body
+     * is removeAll + addAll, so an empty [models] means ABSENT information, never
+     * "delete every row" — a blocked or offline /models response looks exactly
+     * like that from here. Clearing rows is hardClear's job, not this function's.
+     */
     fun replaceEntries(instanceId: String, models: List<LLMModel>, dropStaleRefs: Boolean = false): Set<String> = synchronized(configLock) {
+        if (models.isEmpty()) return@synchronized emptySet()
         ensureConfigLoaded()
         // Hot path for concurrent autoRefreshModels coroutines (one per
         // enabled instance) — without this lock, two replaceEntries() calls
@@ -2752,16 +2765,3 @@ class ProviderRepository(private val context: Context) {
     fun importInstanceJSON(jsonStr: String): String? =
         backupCoordinator.importInstanceJSON(jsonStr)
 }
-enum class ModelRefreshResult {
-    SUCCESS_API, NO_KEY, PRESERVED, FAILURE,
-    /** 404 from /v1/models */ NOT_FOUND,
-    /** DNS / TLS / timeout */ CONNECTION_FAILED,
-    /** 2xx body not valid JSON */ INVALID_RESPONSE,
-}
-/**
- * Id of the OpenCode Zen provider this app used to seed.
- *
- * Only this exact id is retired on launch (see [retireBuiltInZenProvider]).
- * A user-created Zen instance — its own id, its own key — is never touched.
- */
-private const val LEGACY_ZEN_BUILTIN_ID = "builtin-opencode-zen"

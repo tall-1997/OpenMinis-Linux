@@ -455,6 +455,12 @@ data class ProviderConfig(
     // 会在下次刷新时复活。自定义条目不进这里（它们不走重建路径）。
     // 旧数据没有该键，反序列化为空 map，行为与之前一致。
     val deletedModelIds: MutableMap<String, List<String>> = mutableMapOf(),
+    // 用户主动删除的 provider 实例 id。与 deletedModelIds（模型级墓碑）并列不混用：
+    // 内置实例每次启动按需播种，而「实例不见了」既可能是用户删的、也可能是某次升级
+    // 替用户删的，两者字节相同。没有这份记录就无法区分，只能在「删了又回来」和
+    // 「再也不回来」之间二选一。升级替用户做的删除不写这里 —— 那不是用户意愿。
+    // 旧数据没有该键，反序列化为空列表，行为与之前一致。
+    val removedInstanceIds: MutableList<String> = mutableListOf(),
     // Models and groups exposed to the agent loop (minis-model-use terminal
     // command) — mirrors iOS agentLoopModelEntryIds / agentLoopGroupIds.
     val agentLoopModelEntryIds: MutableList<String> = mutableListOf(),
