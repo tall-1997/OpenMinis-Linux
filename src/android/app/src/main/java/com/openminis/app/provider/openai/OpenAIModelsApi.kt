@@ -9,6 +9,8 @@ import com.openminis.app.data.model.normalizeModalities
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.provider.ModelsDevApi
 import com.openminis.app.provider.ProviderModelsCache
+import com.openminis.app.provider.ZenEndpoint
+import com.openminis.app.provider.ZenFreeLaneDirectory
 import com.openminis.app.provider.applyUserAgentOverride
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -138,6 +140,11 @@ object OpenAIModelsApi {
             val json = JSONObject(body)
             val data = json.optJSONArray("data") ?: return@withContext fallback
             val parsed = mutableListOf<LLMModel>()
+            // Free-lane instance: the keyless Zen endpoint, recognised by host
+            // and by the placeholder credential. A user-built Zen instance with
+            // a real API key is not the free lane and keeps the full catalogue.
+            val zenFreeLane = ZenFreeLaneDirectory.isKeylessLane(apiKey) &&
+                ZenEndpoint.isZenHost(baseURL)
             for (i in 0 until data.length()) {
                 val obj = data.getJSONObject(i)
                 val id = obj.getString("id")
@@ -192,8 +199,20 @@ object OpenAIModelsApi {
                     )
                 )
             }
-            if (parsed.isEmpty()) return@withContext fallback
-            ModelsDevApi.enrichModels(parsed)
+            if (parsed.isEmpty() && !zenFreeLane) return@withContext fallback
+            // The keyless Zen lane owns the empty case: resolve() rebuilds the
+            // last known ids rather than letting a dropped network empty the
+            // picker, so it has to run even when this fetch produced nothing.
+            val enriched = if (parsed.isEmpty()) {
+                emptyList()
+            } else {
+                ModelsDevApi.enrichModels(parsed)
+            }
+            if (zenFreeLane) {
+                ZenFreeLaneDirectory.resolve(context, baseURL, enriched)
+            } else {
+                enriched
+            }
         } catch (_: Exception) {
             return@withContext fallback
         }
