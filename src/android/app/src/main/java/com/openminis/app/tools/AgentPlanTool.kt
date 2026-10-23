@@ -184,7 +184,10 @@ object AgentPlanStore {
             append("plans: ${plans.size}\n")
             plans.forEachIndexed { i, p ->
                 val mark = when (p.status) { "done" -> "x"; "active" -> ">"; "failed" -> "!"; else -> " " }
-                append("[$mark] ${i + 1}. ${p.title} {${p.id.take(8)}} [${p.status}]")
+                // [T-plan-render-id-truncation] The id shown must be the id
+                // that round-trips: update/remove match it exactly, so a
+                // truncated id either misses or silently hits the wrong row.
+                append("[$mark] ${i + 1}. ${p.title} {${p.id}} [${p.status}]")
                 if (p.description.isNotBlank()) append(" — ${p.description}")
                 append("\n")
             }
