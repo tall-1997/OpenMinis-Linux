@@ -429,11 +429,14 @@ internal fun ChatViewModel.taskAnchorFragment(): String? = TaskAnchor.fragment(
  * never disagree on which session's board they read. AgentPlanStore.list
  * throws on a corrupt board (by design, so the tool surfaces it); the prompt
  * path degrades to no fragment instead of bricking the request.
+ *
+ * An EMPTY board falls back to [com.openminis.app.tools.PlanBoardGuidance]:
+ * announcing nothing is exactly how a board never gets created.
  */
 internal fun ChatViewModel.planFragment(): String? = runCatching {
-    com.openminis.app.tools.AgentPlanStore.boardSnapshotPrompt(
-        com.openminis.app.tools.AgentPlanStore.list(activeSessionId, context),
-    )
+    val plans = com.openminis.app.tools.AgentPlanStore.list(activeSessionId, context)
+    com.openminis.app.tools.AgentPlanStore.boardSnapshotPrompt(plans)
+        ?: com.openminis.app.tools.PlanBoardGuidance.fragment(plans.isEmpty())
 }.getOrNull()
 
 internal fun assembleDynamicTail(

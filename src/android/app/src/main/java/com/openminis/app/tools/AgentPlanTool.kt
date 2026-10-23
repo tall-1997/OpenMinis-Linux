@@ -36,6 +36,23 @@ object AgentPlanStore {
     private val memory = ConcurrentHashMap<String, MutableList<Plan>>()
 
     /**
+     * How long a fully-done board holds its finished state before retiring.
+     * Single source of truth: PlanGoalCard animates exactly this window and
+     * [retireFinished] enforces it, so the card and the store cannot drift.
+     */
+    const val DONE_LINGER_MS = 4_000L
+
+    /**
+     * When each board became fully done, keyed like [memory]. Not persisted:
+     * after a process restart the board is re-stamped on first access, so a
+     * cold start costs one extra linger instead of a file-format change.
+     */
+    private val finishedAt = ConcurrentHashMap<String, Long>()
+
+    /** Test seam: the linger window is wall-clock, tests need it frozen. */
+    internal var nowMs: () -> Long = { System.currentTimeMillis() }
+
+    /**
      * Bumped on every mutation (memory-only boards included) so UI
      * projections can reload without the writers knowing a UI exists.
      */
@@ -52,7 +69,16 @@ object AgentPlanStore {
         val updatedAt: Long = System.currentTimeMillis(),
     )
 
-    private fun key(sessionId: String): String = sessionId.ifBlank { "__default__" }
+    /**
+     * One board per OWNER session on every layer. [file] already resolved lane
+     * ids (`subagent:<owner>:<token>`) to their owner while the lock and the
+     * in-memory cache keyed on the raw id, so a lane and its owner held two
+     * divergent RAM copies over one file and the last writer silently dropped
+     * the other's items. Normalizing here makes lock, cache, file and [version]
+     * agree by construction. Idempotent: an owner id maps to itself.
+     */
+    private fun key(sessionId: String): String =
+        ExecutionCoordinator.ownerSessionId(sessionId.ifBlank { "__default__" })
     private fun lock(sessionId: String): ReentrantLock = locks.getOrPut(key(sessionId)) { ReentrantLock() }
 
     /**
@@ -69,7 +95,7 @@ object AgentPlanStore {
 
     private fun loadLocked(sessionId: String, context: Context?): MutableList<Plan> {
         val k = key(sessionId)
-        memory[k]?.let { return it }
+        memory[k]?.let { return retireFinished(sessionId, k, context, it) }
         val f = file(context, k)
         val loaded: MutableList<Plan> = if (f == null || !f.isFile) {
             mutableListOf()
@@ -90,12 +116,43 @@ object AgentPlanStore {
             }
         }
         memory[k] = loaded
-        return loaded
+        return retireFinished(sessionId, k, context, loaded)
+    }
+
+    /**
+     * [T-plan-board-retirement] A finished board retires on ACCESS, not on a
+     * Composable's lifecycle. The card used to own this transition, so any run
+     * that finished with no chat screen mounted - app backgrounded, screen off,
+     * a scheduled task, another chat in front - left its done items on disk
+     * forever, and every later request kept injecting the finished board into
+     * the prompt. The card still animates the same window; the store now
+     * guarantees the outcome whether or not anyone is watching.
+     */
+    private fun retireFinished(
+        sessionId: String,
+        k: String,
+        context: Context?,
+        plans: MutableList<Plan>,
+    ): MutableList<Plan> {
+        if (plans.isEmpty() || !plans.all { it.status == "done" }) {
+            finishedAt.remove(k)
+            return plans
+        }
+        val stamped = finishedAt[k]
+        if (stamped == null) {
+            finishedAt[k] = nowMs()
+            return plans
+        }
+        if (nowMs() - stamped < DONE_LINGER_MS) return plans
+        finishedAt.remove(k)
+        saveLocked(sessionId, context, emptyList())
+        return mutableListOf()
     }
 
     private fun saveLocked(sessionId: String, context: Context?, plans: List<Plan>) {
         val k = key(sessionId)
         val trimmed = plans.take(MAX_PLANS).toMutableList()
+        noteFinished(k, trimmed)
         val f = file(context, k)
         if (f == null) {
             // No context (unit tests / headless callers): memory-only board.
@@ -114,6 +171,15 @@ object AgentPlanStore {
         }
         memory[k] = trimmed
         version.value = version.value + 1
+    }
+
+    /** Stamp the moment a board finishes; drop the stamp when work reopens. */
+    private fun noteFinished(k: String, plans: List<Plan>) {
+        if (plans.isNotEmpty() && plans.all { it.status == "done" }) {
+            finishedAt.putIfAbsent(k, nowMs())
+        } else {
+            finishedAt.remove(k)
+        }
     }
 
     internal fun decodePlans(text: String): MutableList<Plan> =
@@ -179,7 +245,14 @@ object AgentPlanStore {
 
     fun render(sessionId: String, context: Context?): String {
         val plans = list(sessionId, context)
-        if (plans.isEmpty()) return "(no plan items)"
+        // [T-plan-board-announcement] Neutral text here read as "board is fine,
+        // nothing to do": the model could not tell an empty board from a
+        // feature it had never used. Name the gap instead.
+        if (plans.isEmpty()) {
+            return "(no plan items: this chat has no board yet - when the work spans " +
+                "multiple steps or several tool rounds, create one with op=add so the " +
+                "user sees progress live)"
+        }
         return buildString {
             append("plans: ${plans.size}\n")
             plans.forEachIndexed { i, p ->
@@ -202,6 +275,11 @@ object AgentPlanStore {
      */
     fun boardSnapshotPrompt(plans: List<Plan>): String? {
         if (plans.isEmpty()) return null
+        // A finished board has nothing to advance: announcing it would tell the
+        // model to keep pushing items that already landed, and the card is on
+        // its way out. PlanBoardGuidance stays quiet here too - "create one"
+        // would be wrong while the finished board is still on screen.
+        if (plans.all { it.status == "done" }) return null
         return buildString {
             append("<plan_board>\n")
             append("Current plan board (advance items with agent_plan; the user sees it live):\n")

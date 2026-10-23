@@ -65,8 +65,12 @@ import com.openminis.app.tools.AgentPlanStore
 import com.openminis.app.ui.theme.m3Icon
 import kotlinx.coroutines.delay
 
-/** Green all-done state holds this long before the bar dismisses itself. */
-private const val DONE_LINGER_MS = 4_000L
+/**
+ * Green all-done state holds this long before the bar dismisses itself. The
+ * store retires a finished board after the same window (its own constant, not
+ * a copy), so a run that finishes with no card mounted still cleans up.
+ */
+private val DONE_LINGER_MS = AgentPlanStore.DONE_LINGER_MS
 
 /** An emptied board holds this long so the exit reads as intentional. */
 private const val EMPTY_LINGER_MS = 600L

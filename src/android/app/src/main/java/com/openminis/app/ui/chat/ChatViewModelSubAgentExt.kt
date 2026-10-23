@@ -1006,7 +1006,7 @@ private suspend fun ChatViewModel.runOneSubAgentInner(
                         }) {
                             ToolExecutionResult("Error: type $role cannot use $name.", false)
                         } else if (name == com.openminis.app.tools.GrepSourceTool.NAME) {
-                            com.openminis.app.tools.GrepSourceTool.execute(json, sessionId, context)
+                            com.openminis.app.tools.GrepSourceTool.execute(json, activeSessionId, context)
                         } else {
                             executeTool(name, json, "", mutableListOf(), "", "")
                         }
