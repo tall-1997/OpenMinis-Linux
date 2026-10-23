@@ -197,14 +197,28 @@ class EnvVarRepository(private val context: Context) {
      */
     fun getActiveValue(key: String): String? {
         ensureLoaded()
-        if (_entries.value.any { it.key == key && it.isDisabled }) return null
+        // Case-insensitive on purpose: keys are stored uppercased (add/update
+        // normalise), while `$$var` references in configs are whatever the user
+        // typed. isDuplicateKey already treats key identity that way.
+        if (_entries.value.any { it.key.equals(key, ignoreCase = true) && it.isDisabled }) return null
         return encryptedPrefs.getString(key, null)
     }
 
     /** [T-env-disable] True when the key exists but is switched off. */
     fun isDisabled(key: String): Boolean {
         ensureLoaded()
-        return _entries.value.any { it.key == key && it.isDisabled }
+        return _entries.value.any { it.key.equals(key, ignoreCase = true) && it.isDisabled }
+    }
+
+    /**
+     * [T-env-disable] Every stored secret, disabled ones included — for
+     * [com.openminis.app.data.EnvVarRedactor] ONLY. Scrubbing is about secrecy,
+     * not injection: a variable switched off must still be masked if its value
+     * shows up in tool output, so redaction may not share the injection filter.
+     */
+    fun allStoredValues(): List<String> {
+        ensureLoaded()
+        return _entries.value.mapNotNull { encryptedPrefs.getString(it.key, null) }
     }
 
     /**
