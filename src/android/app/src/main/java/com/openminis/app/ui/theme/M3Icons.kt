@@ -106,6 +106,7 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.PlayArrow
@@ -229,6 +230,7 @@ import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.OpenInBrowser
 import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.PlayArrow
@@ -382,6 +384,7 @@ private val iconPairs: List<Pair<ImageVector, ImageVector>> = listOf(
     Icons.Filled.NotificationsActive to Icons.Outlined.NotificationsActive,
     Icons.Filled.OpenInBrowser to Icons.Outlined.OpenInBrowser,
     Icons.Filled.Palette to Icons.Outlined.Palette,
+    Icons.Filled.Pause to Icons.Outlined.Pause,
     Icons.Filled.Person to Icons.Outlined.Person,
     Icons.Filled.PhoneAndroid to Icons.Outlined.PhoneAndroid,
     Icons.Filled.PlayArrow to Icons.Outlined.PlayArrow,

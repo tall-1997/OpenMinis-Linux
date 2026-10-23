@@ -3,7 +3,6 @@ package com.openminis.app.ui.chat
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
-import android.provider.OpenableColumns
 import java.io.File
 import androidx.core.content.ContextCompat
 import androidx.compose.foundation.Image
@@ -4912,8 +4911,9 @@ fun ChatScreen(
                     )
                 }
 
-                // Live plan-board bar (agent_plan todo list) while items exist.
-                StickyPlanBar(sessionId)
+                // Live plan-board + goal card above the composer.
+                PlanGoalCard(viewModel)
+                GoalSheet(viewModel)
 
                 // T13 banner moved INSIDE the LazyColumn so it renders at the
                 // visual end of the message list (mirrors iOS — see the

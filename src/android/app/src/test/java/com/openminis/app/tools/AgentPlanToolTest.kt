@@ -148,6 +148,49 @@ class AgentPlanToolTest {
         assertTrue(r, r.contains("[ ]"))
     }
 
+    // ── [T-plan-render-id-truncation] render must show the FULL id ──
+    //
+    // render() used to print `{${p.id.take(8)}}`. The model reads that id back
+    // for update/remove, but update/remove match the id EXACTLY — so a
+    // truncated id either missed ("plan item not found") or, with ids sharing
+    // an 8-char prefix, silently hit the wrong row. The id shown must be the
+    // id that round-trips, verbatim.
+
+    @Test
+    fun renderShowsFullIdNotTruncated() {
+        AgentPlanStore.clear(sidA, null)
+        val p = AgentPlanStore.add(sidA, null, "round trip")
+        val r = AgentPlanStore.render(sidA, null)
+        // ${p.id} needs braces: "$p.id" would render p.toString() + ".id".
+        assertTrue(r, r.contains("{${p.id}}"))
+        assertFalse(r, r.contains("{${p.id.take(8)}}}"))
+    }
+
+    @Test
+    fun idFromRenderRoundTripsThroughUpdateAndRemove() {
+        AgentPlanStore.clear(sidA, null)
+        AgentPlanStore.add(sidA, null, "first")
+        AgentPlanStore.add(sidA, null, "second")
+        // Extract the id exactly the way the model does: from the render text.
+        val id = Regex("\\{([^}]+)}").findAll(AgentPlanStore.render(sidA, null)).first().groupValues[1]
+        val u = AgentPlanStore.update(sidA, null, id, status = "done")
+        assertNotNull(u)
+        assertEquals(id, u!!.id)
+        assertTrue(AgentPlanStore.remove(sidA, null, id))
+        assertEquals(1, AgentPlanStore.list(sidA, null).size)
+    }
+
+    @Test
+    fun executeUpdateWithIdFromToolOutputSucceeds() {
+        AgentPlanStore.clear(sidA, null)
+        val added = AgentPlanTool.execute("""{"op":"add","title":"via tool"}""", sidA, null)
+        assertTrue(added.success)
+        val id = Regex("\\{([^}]+)}").findAll(added.output).first().groupValues[1]
+        val u = AgentPlanTool.execute("""{"op":"update","id":"$id","status":"done"}""", sidA, null)
+        assertTrue(u.output, u.success)
+        assertEquals("done", AgentPlanStore.list(sidA, null).single().status)
+    }
+
     // ── tool definition & execute ──
 
     @Test

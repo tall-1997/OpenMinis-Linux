@@ -1,5 +1,6 @@
 package com.openminis.app.ui.chat
 
+import com.openminis.app.goal.GoalSheetSignal
 import com.openminis.app.logging.AppLogger
 
 /**
@@ -51,7 +52,7 @@ fun ChatViewModel.executeSlashCommand(cmd: SlashCommand, currentInput: String = 
         "compact" -> compactAll()
         "memory" -> toggleMemoryEnabled()
         "thinking" -> toggleThinking()
-        "goal" -> appendSystemInfo("Use /goal create <objective> [--budget tokens], /goal pause, /goal resume, or /goal show.", "info")
+        "goal" -> GoalSheetSignal.open()
         "clear" -> _clearChatConfirmRequested.value = true
         else -> AppLogger.info(ChatViewModel.TAG, "[Slash] unrecognized id=${cmd.id} — no dispatch")
     }
