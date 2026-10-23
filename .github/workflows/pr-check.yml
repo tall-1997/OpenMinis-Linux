@@ -7,6 +7,8 @@ name: PR Checks
 #     disabled via androidComponents, see app/build.gradle.kts)
 #   * check_new_untranslated.py — rejects PRs that add a user-visible
 #     string without translating it into every shipped locale.
+#   * check_announced_tools.py — a tool NAMED by a prompt fragment must be in
+#     the core schema (alwaysOn), never behind find_tools.
 # The heavy assemble/NDK/sandbox-assets path stays in android-apk.yml; this
 # workflow deliberately avoids it so PR feedback stays under ~20 minutes.
 
@@ -124,3 +126,14 @@ jobs:
       # lines. Runs on every event (tree state, not diff state).
       - name: Architecture policy ratchet
         run: python3 scripts/ci/check_architecture_policy.py
+
+      # [T-announced-tools-core] The plan board fragment told the model to
+      # "advance items with agent_plan" while agent_plan was long-tail, so the
+      # board the user watched could never move (and could never be created:
+      # only sub-agent dispatch filed entries). Same class of drift: cronjob /
+      # evolution / search_sessions / read_session announced by prompt
+      # fragments but absent from alwaysOn. A fragment that names a tool is an
+      # instruction — find_tools only helps a model that already suspects the
+      # tool exists. Runs on every event (tree state, not diff state).
+      - name: Announced tools are in the core schema
+        run: python3 scripts/ci/check_announced_tools.py

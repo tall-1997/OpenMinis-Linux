@@ -127,6 +127,24 @@ object AgentTools {
                     "ui_read", "ui_action", "read_image", "ask_user_question", "update_goal",
                 ),
             )
+            // [T-announced-tools-core] A prompt fragment that NAMES a tool is an
+            // instruction to call it, and find_tools only helps a model that
+            // already suspects the tool exists — so an announced-but-hidden tool
+            // is a dead instruction. Enforced by
+            // scripts/ci/check_announced_tools.py. agent_plan: the board fragment
+            // says "advance items with agent_plan" and the board is user-visible,
+            // so long-tail meant the user watched a frozen board (and no board
+            // could be started at all — only sub-agent dispatch filed entries).
+            // cronjob / search_sessions / read_session: named by the tool list
+            // and the "Scheduled tasks" fragment. evolution: named by the memory
+            // fragment AND the learned-rules fragment, and the latter is not
+            // gated by memoryOn — hence unconditional, not under the memory flag.
+            addAll(
+                listOf(
+                    AgentPlanTool.NAME, CronJobTool.NAME, EvolutionTool.NAME,
+                    SessionLookupTool.SEARCH, SessionLookupTool.READ,
+                ),
+            )
             if (memoryEnabled) {
                 add(memoryWriteDefinition().name)
                 add(memoryGetDefinition().name)
