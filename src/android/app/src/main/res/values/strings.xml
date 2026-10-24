@@ -405,10 +405,9 @@
     <string name="voice_service_hidden_badge">Hidden</string>
     <string name="add_provider_voice_chat_providers">Voice Chat Providers</string>
     <string name="zen_restore_section">Recovery</string>
-    <string name="zen_restore_title">Restore OpenCode Zen (Free)</string>
+    <string name="free_lane_restore_title">Restore %1$s</string>
     <string name="zen_restore_subtitle">Put back the built-in free provider and refetch its models</string>
-    <string name="zen_preset_title">OpenCode Zen (Free)</string>
-    <string name="zen_preset_subtitle">Built-in free lane — no API key needed</string>
+    <string name="free_lane_preset_subtitle">Built-in free lane — no API key needed</string>
     <string name="zen_deleted_models_title">Restore deleted free models (%1$d)</string>
     <string name="zen_deleted_models_subtitle">Undo the deletions recorded on this provider</string>
     <string name="add_provider_voice_templates_footer">Speech-to-text and text-to-speech vendors. The provider type and base URL are prefilled — just add your API key.</string>

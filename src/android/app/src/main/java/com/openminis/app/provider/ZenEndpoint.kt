@@ -36,6 +36,15 @@ package com.openminis.app.provider
  * `inference.opencode.ai/v1` or `gateway.opencode.ai/v1` all get it.
  */
 internal object ZenEndpoint {
+    /**
+     * The endpoint this build seeds, and the one an older build seeded. Stable by
+     * contract rather than by taste: seeded rows, the recovery channel and slot
+     * refs pointing at them are all matched on it, and it is also the cache key,
+     * so changing it would strand every existing user's configuration and force
+     * their catalogue to be re-fetched.
+     */
+    const val ZEN_BUNDLED_ENDPOINT = "https://opencode.ai/zen/v1"
+
     fun isZenHost(baseURL: String?): Boolean =
         baseURL != null && (
             baseURL.contains("opencode.ai/zen", ignoreCase = true) ||

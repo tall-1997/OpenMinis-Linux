@@ -9,8 +9,9 @@ import com.openminis.app.data.model.normalizeModalities
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.provider.ModelsDevApi
 import com.openminis.app.provider.ProviderModelsCache
-import com.openminis.app.provider.ZenEndpoint
-import com.openminis.app.provider.ZenFreeLaneDirectory
+import com.openminis.app.provider.EndpointReasoning
+import com.openminis.app.provider.FreeLaneDirectory
+import com.openminis.app.provider.FreeLanes
 import com.openminis.app.provider.applyUserAgentOverride
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -109,7 +110,12 @@ object OpenAIModelsApi {
         val url = buildURL(baseURL)
         val request = Request.Builder()
             .url(url)
-            .header("Authorization", "Bearer $apiKey")
+            // A keyless lane must be called with NO credential. An empty token
+            // is not a harmless no-op either way: "Bearer " is a token upstream
+            // cannot validate, and Kilo answers INVALID_TOKEN to any token it
+            // cannot validate — which would come back as a 401 for the whole
+            // catalogue and read as "this endpoint is broken".
+            .apply { if (apiKey.isNotBlank()) header("Authorization", "Bearer $apiKey") }
             // [T-provider-custom-user-agent] models-list UA override.
             .applyUserAgentOverride(customUserAgent)
             .let { ModelListFetchIsolation.run { it.noStoreIf(forceRefresh) } }
@@ -140,14 +146,17 @@ object OpenAIModelsApi {
             val json = JSONObject(body)
             val data = json.optJSONArray("data") ?: return@withContext fallback
             val parsed = mutableListOf<LLMModel>()
-            // Free-lane instance: the keyless Zen endpoint, recognised by host
-            // and by the placeholder credential. A user-built Zen instance with
-            // a real API key is not the free lane and keeps the full catalogue.
-            val zenFreeLane = ZenFreeLaneDirectory.isKeylessLane(apiKey) &&
-                ZenEndpoint.isZenHost(baseURL)
+            // Built-in keyless lane, recognised per lane by host AND by the
+            // credential shape it expects. A user-built instance with a real API
+            // key is never a free lane and keeps the full catalogue.
+            val lane = FreeLanes.forEndpoint(baseURL, apiKey)
+            // The listing's own free declaration per id. Empty for a lane whose
+            // listing makes none, which is what forces that lane onto its rule.
+            val serverSaysFree = mutableMapOf<String, Boolean>()
             for (i in 0 until data.length()) {
                 val obj = data.getJSONObject(i)
                 val id = obj.getString("id")
+                if (obj.has("isFree")) serverSaysFree[id] = obj.optBoolean("isFree")
 
                 // Only filter by chat prefixes for official OpenAI endpoints;
                 // custom endpoints (vLLM, Ollama) may serve any model ID.
@@ -173,18 +182,11 @@ object OpenAIModelsApi {
                 val inputModalities = arch?.optJSONArray("input_modalities")?.toStringList().normalizeModalities()
                 val outputModalities = arch?.optJSONArray("output_modalities")?.toStringList().normalizeModalities()
 
-                // T119: known reasoning families (GPT-5.x, o-series, Codex
-                // Mini) get supportsReasoning pre-set to true so the
-                // Thinking pill enables before models.dev enrichment lands
-                // — for brand-new ids (e.g. gpt-5.5) the catalog rarely has
-                // the `reasoning` flag yet, and without this the pill
-                // stays disabled.
-                val idLower = id.lowercase()
-                val knownReasoning = idLower.startsWith("gpt-5") ||
-                    idLower.startsWith("o1") ||
-                    idLower.startsWith("o3") ||
-                    idLower.startsWith("o4") ||
-                    idLower.contains("codex")
+                // T119 kept, and no longer the whole story: the endpoint's own
+                // `supported_parameters` / `opencode.variants` declaration wins,
+                // and the known-family prefixes survive inside EndpointReasoning
+                // as the fallback for listings that declare nothing.
+                val reasoning = EndpointReasoning.read(obj, id)
 
                 parsed.add(
                     LLMModel(
@@ -195,21 +197,23 @@ object OpenAIModelsApi {
                         maxOutputTokens = maxOutputTokens,
                         inputModalities = inputModalities,
                         outputModalities = outputModalities,
-                        supportsReasoning = if (knownReasoning) true else null,
+                        supportsReasoning = reasoning.supportsReasoning,
+                        reasoningEffortValues = reasoning.reasoningEffortValues,
+                        declaresNoEffortTiers = reasoning.declaresNoEffortTiers,
                     )
                 )
             }
-            if (parsed.isEmpty() && !zenFreeLane) return@withContext fallback
-            // The keyless Zen lane owns the empty case: resolve() rebuilds the
-            // last known ids rather than letting a dropped network empty the
-            // picker, so it has to run even when this fetch produced nothing.
+            if (parsed.isEmpty() && lane == null) return@withContext fallback
+            // A free lane owns the empty case: resolve() rebuilds the last known
+            // ids rather than letting a dropped network empty the picker, so it
+            // has to run even when this fetch produced nothing.
             val enriched = if (parsed.isEmpty()) {
                 emptyList()
             } else {
                 ModelsDevApi.enrichModels(parsed)
             }
-            if (zenFreeLane) {
-                ZenFreeLaneDirectory.resolve(context, baseURL, enriched)
+            if (lane != null) {
+                FreeLaneDirectory.resolve(context, lane, baseURL, enriched, serverSaysFree)
             } else {
                 enriched
             }

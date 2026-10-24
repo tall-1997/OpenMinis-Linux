@@ -15,34 +15,36 @@ import java.io.File
  * is hardcoded anywhere except the offline first-install seed. That guard is
  * the point of this file: without it the list creeps back in.
  */
-class ZenFreeLaneCatalogTest {
+class FreeLaneMembershipTest {
 
     private fun model(id: String) = LLMModel(id = id, displayName = id, provider = "zen")
 
-    private val learnedNothing = ZenLearnedFree()
+    private val learnedNothing = FreeLaneLearned()
 
     @Test
     fun anyFreeSuffixCountsRegardlessOfCase() {
-        assertTrue(ZenFreeLaneCatalog.isFreeLaneModelId("deepseek-v4.1-flash-free"))
-        assertTrue(ZenFreeLaneCatalog.isFreeLaneModelId("Some-New-Model-FREE"))
-        assertTrue(ZenFreeLaneCatalog.isFreeLaneModelId("a-Free"))
+        assertTrue(ZenFreeLaneRule.isFreeLaneModelId("deepseek-v4.1-flash-free"))
+        assertTrue(ZenFreeLaneRule.isFreeLaneModelId("Some-New-Model-FREE"))
+        assertTrue(ZenFreeLaneRule.isFreeLaneModelId("a-Free"))
     }
 
     @Test
     fun bigPickleIsTheOnlyKnownSuffixFreeException() {
-        assertTrue(ZenFreeLaneCatalog.isFreeLaneModelId("big-pickle"))
-        assertTrue(ZenFreeLaneCatalog.isFreeLaneModelId("Big-Pickle"))
-        assertFalse(ZenFreeLaneCatalog.isFreeLaneModelId("gpt-5.5"))
-        assertFalse(ZenFreeLaneCatalog.isFreeLaneModelId("free"))
-        assertFalse(ZenFreeLaneCatalog.isFreeLaneModelId("freebird"))
-        assertFalse(ZenFreeLaneCatalog.isFreeLaneModelId(""))
+        assertTrue(ZenFreeLaneRule.isFreeLaneModelId("big-pickle"))
+        assertTrue(ZenFreeLaneRule.isFreeLaneModelId("Big-Pickle"))
+        assertFalse(ZenFreeLaneRule.isFreeLaneModelId("gpt-5.5"))
+        assertFalse(ZenFreeLaneRule.isFreeLaneModelId("free"))
+        assertFalse(ZenFreeLaneRule.isFreeLaneModelId("freebird"))
+        assertFalse(ZenFreeLaneRule.isFreeLaneModelId(""))
     }
 
     @Test
     fun aNewlyLearnedFreeIdSurvivesTheFilter() {
-        val learned = ZenLearnedFree(free = setOf("mystery-model"))
-        val kept = ZenFreeLaneCatalog.filterFree(
+        val learned = FreeLaneLearned(free = setOf("mystery-model"))
+        val kept = FreeLaneDirectory.visible(
+            ZenFreeLane,
             listOf(model("mystery-model"), model("gpt-5.5")),
+            emptyMap(),
             learned,
         )
         assertEquals(listOf("mystery-model"), kept.map { it.id })
@@ -50,12 +52,14 @@ class ZenFreeLaneCatalogTest {
 
     @Test
     fun paidIdsNeverAppearEvenWhenTheCatalogueListsThem() {
-        val learned = ZenLearnedFree(
+        val learned = FreeLaneLearned(
             free = setOf("mystery-model"),
             paid = setOf("mystery-model", "another-one"),
         )
-        val kept = ZenFreeLaneCatalog.filterFree(
+        val kept = FreeLaneDirectory.visible(
+            ZenFreeLane,
             listOf(model("mystery-model"), model("another-one"), model("x-free")),
+            emptyMap(),
             learned,
         )
         assertEquals(listOf("x-free"), kept.map { it.id })
@@ -63,20 +67,23 @@ class ZenFreeLaneCatalogTest {
 
     @Test
     fun deadIdsAreFilteredOutEvenWhenTheyLookFree() {
-        ZenFreeLaneHealth.resetForTest()
-        ZenFreeLaneHealth.recordFailure("retired-free", ZenFailureEvidence.GONE)
-        val kept = ZenFreeLaneCatalog.filterFree(
+        FreeLaneHealth.resetForTest()
+        FreeLaneHealth.recordFailure(FreeLanes.ZEN_ID, "retired-free", FreeLaneEvidence.GONE)
+        val kept = FreeLaneDirectory.visible(
+            ZenFreeLane,
             listOf(model("retired-free"), model("alive-free")),
+            emptyMap(),
             learnedNothing,
         )
         assertEquals(listOf("alive-free"), kept.map { it.id })
-        ZenFreeLaneHealth.resetForTest()
+        FreeLaneHealth.resetForTest()
     }
 
     @Test
     fun needsProbeReturnsOnlyIdsThatAreNewAndSuffixFree() {
-        val learned = ZenLearnedFree(free = setOf("known-free-model"), paid = setOf("known-paid"))
-        val probe = ZenFreeLaneCatalog.needsProbe(
+        val learned = FreeLaneLearned(free = setOf("known-free-model"), paid = setOf("known-paid"))
+        val probe = FreeLaneDirectory.needsProbe(
+            ZenFreeLane,
             listOf(
                 model("known-free-model"),
                 model("known-paid"),
@@ -84,16 +91,19 @@ class ZenFreeLaneCatalogTest {
                 model("big-pickle"),
                 model("brand-new-name"),
             ),
+            emptyMap(),
             learned,
+            emptyMap(),
         )
         assertEquals(listOf("brand-new-name"), probe)
     }
 
     @Test
     fun needsProbeIsEmptyWhenEverythingIsAlreadyKnown() {
-        val learned = ZenLearnedFree(free = setOf("a-model"), paid = setOf("b-model"))
+        val learned = FreeLaneLearned(free = setOf("a-model"), paid = setOf("b-model"))
         assertTrue(
-            ZenFreeLaneCatalog.needsProbe(listOf(model("a-model"), model("b-model")), learned).isEmpty(),
+            FreeLaneDirectory.needsProbe(ZenFreeLane, listOf(model("a-model"), model("b-model")),
+                emptyMap(), learned, emptyMap()).isEmpty(),
         )
     }
 

@@ -203,10 +203,9 @@
     <string name="voice_service_hidden_badge">非表示</string>
     <string name="add_provider_voice_chat_providers">音声チャットのプロバイダー</string>
     <string name="zen_restore_section">復元</string>
-    <string name="zen_restore_title">OpenCode Zen（無料）を復元</string>
+    <string name="free_lane_restore_title">%1$sを復元</string>
     <string name="zen_restore_subtitle">組み込みの無料プロバイダーを戻し、モデルを再取得します</string>
-    <string name="zen_preset_title">OpenCode Zen（無料）</string>
-    <string name="zen_preset_subtitle">組み込みの無料枠 — API キー不要</string>
+    <string name="free_lane_preset_subtitle">組み込みの無料枠 — API キー不要</string>
     <string name="zen_deleted_models_title">削除した無料モデルを復元（%1$d）</string>
     <string name="zen_deleted_models_subtitle">このプロバイダーで記録された削除を取り消します</string>
     <string name="provider_sync_mark_not_found">404 not found</string>

@@ -251,10 +251,9 @@
     <string name="voice_service_hidden_badge">已隱藏</string>
     <string name="add_provider_voice_chat_providers">語音對話供應商</string>
     <string name="zen_restore_section">還原</string>
-    <string name="zen_restore_title">恢復 OpenCode Zen（免費）</string>
+    <string name="free_lane_restore_title">恢復 %1$s</string>
     <string name="zen_restore_subtitle">找回內建的免費服務商並重新取得模型</string>
-    <string name="zen_preset_title">OpenCode Zen（免費）</string>
-    <string name="zen_preset_subtitle">內建免費通道 — 無需 API 金鑰</string>
+    <string name="free_lane_preset_subtitle">內建免費通道 — 無需 API 金鑰</string>
     <string name="zen_deleted_models_title">恢復已刪除的免費模型（%1$d）</string>
     <string name="zen_deleted_models_subtitle">復原在此服務商上記錄的刪除</string>
     <string name="provider_sync_mark_not_found">404 not found</string>
