@@ -11,7 +11,7 @@ package com.openminis.app.data.model
  * 有了实例级墓碑，主动删除会留痕，升级替用户做的删除**不**留痕 —— 后者是我们的
  * 决定，不是用户意愿，所以下次启动可以无感恢复，旧会话与槽位引用一并复活。
  *
- * 恢复渠道（[ZenFreeLaneBootstrap.restore]）负责清掉这里的记录。
+ * 恢复渠道（[FreeLaneBootstrap.restore]）负责清掉这里的记录。
  */
 object InstanceRemoval {
 

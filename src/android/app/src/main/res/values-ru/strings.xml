@@ -205,10 +205,9 @@
     <string name="voice_service_hidden_badge">Скрыт</string>
     <string name="add_provider_voice_chat_providers">Провайдеры голосового чата</string>
     <string name="zen_restore_section">Восстановление</string>
-    <string name="zen_restore_title">Восстановить OpenCode Zen (бесплатно)</string>
+    <string name="free_lane_restore_title">Восстановить %1$s</string>
     <string name="zen_restore_subtitle">Вернуть встроенного бесплатного провайдера и заново получить его модели</string>
-    <string name="zen_preset_title">OpenCode Zen (бесплатно)</string>
-    <string name="zen_preset_subtitle">Встроенный бесплатный канал — API-ключ не нужен</string>
+    <string name="free_lane_preset_subtitle">Встроенный бесплатный канал — API-ключ не нужен</string>
     <string name="zen_deleted_models_title">Восстановить удалённые бесплатные модели (%1$d)</string>
     <string name="zen_deleted_models_subtitle">Отменить удаления, записанные для этого провайдера</string>
     <string name="provider_sync_mark_not_found">404 not found</string>

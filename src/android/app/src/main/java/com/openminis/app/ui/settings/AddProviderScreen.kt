@@ -75,8 +75,9 @@ import com.openminis.app.data.model.ProviderCredential
 import com.openminis.app.data.model.ProviderInstance
 import com.openminis.app.data.model.ProviderType
 import com.openminis.app.data.repository.ProviderRepository
-import com.openminis.app.data.repository.ZenFreeLaneBootstrap
-import com.openminis.app.data.repository.restoreBuiltInZenProviderAndRefresh
+import com.openminis.app.provider.BuiltinFreeLane
+import com.openminis.app.provider.BuiltinFreeLanes
+import com.openminis.app.data.repository.restoreBuiltInFreeLaneAndRefresh
 import com.openminis.app.R
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -164,11 +165,10 @@ fun AddProviderScreen(
                 selectedCredential = ProviderCredential.apiKey
                 step = AddProviderStep.CONFIGURE
             },
-            zenFreeLaneMissing = config.instances.none {
-                ZenFreeLaneBootstrap.isBuiltinFreeInstanceId(it.id)
-            },
-            onPickZenFreeLane = {
-                providerRepository.restoreBuiltInZenProviderAndRefresh()
+            missingFreeLane = BuiltinFreeLanes.ALL.firstOrNull { builtin ->
+                config.instances.none { it.id == builtin.instanceId } },
+            onPickFreeLane = {
+                providerRepository.restoreBuiltInFreeLaneAndRefresh(it)
                 onSaved()
             },
         )
@@ -226,8 +226,8 @@ private fun ChooseProviderScreen(
     onSelectVoiceTemplate: (com.openminis.app.data.model.VoiceProviderTemplate) -> Unit = {},
     // Built-in Zen free lane: offered only while this device has no such
     // instance, so a user-built Zen provider holding a real key never shows it.
-    zenFreeLaneMissing: Boolean = false,
-    onPickZenFreeLane: () -> Unit = {},
+    missingFreeLane: BuiltinFreeLane? = null,
+    onPickFreeLane: (BuiltinFreeLane) -> Unit = {},
 ) {
     SettingsScaffold(
         title = stringResource(R.string.provider_list_add_provider),
@@ -279,7 +279,7 @@ private fun ChooseProviderScreen(
                     showDivider = true,
                 )
             }
-            ZenFreeLanePresetRow(visible = zenFreeLaneMissing, onPick = onPickZenFreeLane)
+            FreeLanePresetRow(builtin = missingFreeLane, onPick = onPickFreeLane)
         }
 
         // [T-android-provider-voice] Voice Chat Providers — one row per voice

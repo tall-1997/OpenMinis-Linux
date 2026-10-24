@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import com.openminis.app.R
 import com.openminis.app.data.model.ProviderType
+import com.openminis.app.provider.BuiltinFreeLane
 import com.openminis.app.ui.theme.m3Icon
 
 /** Display order matching iOS. */
@@ -41,13 +42,15 @@ internal val providerDisplayOrder = listOf(
  * registered Filled/Outlined pair so it tracks the dynamic-colour icon mode.
  */
 @Composable
-internal fun ZenFreeLanePresetRow(visible: Boolean, onPick: () -> Unit) {
-    if (!visible) return
+internal fun FreeLanePresetRow(builtin: BuiltinFreeLane?, onPick: (BuiltinFreeLane) -> Unit) {
+    if (builtin == null) return
     SettingsRow(
-        title = stringResource(R.string.zen_preset_title),
-        subtitle = stringResource(R.string.zen_preset_subtitle),
+        // Brand copy, not UI copy: the lane label is a proper noun, so it comes
+        // from the descriptor rather than a per-lane string resource.
+        title = builtin.label,
+        subtitle = stringResource(R.string.free_lane_preset_subtitle),
         icon = m3Icon(Icons.Filled.CloudDownload),
-        onClick = onPick,
+        onClick = { onPick(builtin) },
         showDivider = false,
     )
 }

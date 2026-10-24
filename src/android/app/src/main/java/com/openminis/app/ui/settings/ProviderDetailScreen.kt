@@ -69,8 +69,8 @@ import com.openminis.app.data.model.ProviderType
 import com.openminis.app.data.repository.ModelRefreshResult
 import com.openminis.app.data.repository.ProviderRefreshMarks
 import com.openminis.app.data.repository.ProviderRepository
-import com.openminis.app.data.repository.ZenFreeLaneBootstrap
-import com.openminis.app.data.repository.restoreBuiltInZenProviderAndRefresh
+import com.openminis.app.provider.BuiltinFreeLanes
+import com.openminis.app.data.repository.restoreBuiltInFreeLaneAndRefresh
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.ui.components.MinisAlertDialog
 import com.openminis.app.ui.util.bringIntoViewOnFocus
@@ -731,16 +731,16 @@ fun ProviderDetailScreen(
                     }
                 }
             }
-            // Zen free lane: put back the model rows deleted on THIS instance.
+            // Free lane: put back the model rows deleted on THIS instance.
             // The count is read from the same tombstone the restore clears, so
             // the row states exactly what it will do and disappears once there
             // is nothing left to undo. Scoped to the built-in free instance on
             // purpose — a global "restore every deleted model" would undo
             // deliberate deletions on other providers.
-            if (ZenFreeLaneBootstrap.isBuiltinFreeInstanceId(instance.id)) {
-                ZenDeletedModelsRestoreRow(
+            BuiltinFreeLanes.byInstanceId(instance.id)?.let { lane ->
+                FreeLaneDeletedModelsRestoreRow(
                     count = config.deletedModelIds[instance.id]?.size ?: 0,
-                    onRestore = { providerRepository.restoreBuiltInZenProviderAndRefresh() },
+                    onRestore = { providerRepository.restoreBuiltInFreeLaneAndRefresh(lane) },
                 )
             }
         }

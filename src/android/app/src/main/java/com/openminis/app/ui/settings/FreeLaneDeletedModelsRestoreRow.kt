@@ -16,12 +16,12 @@ import com.openminis.app.ui.theme.m3Icon
  * in the title is the same number the tombstone holds, so the row states exactly
  * what it will do and vanishes when there is nothing left to undo.
  *
- * Same primitive inheritance as [ZenFreeLaneRestoreRow]: [SettingsRow] supplies
+ * Same primitive inheritance as [FreeLaneRestoreRow]: [SettingsRow] supplies
  * the 56dp rhythm, hairline and padding; [m3Icon] keeps the icon in step with
  * the dynamic-colour icon mode.
  */
 @Composable
-internal fun ZenDeletedModelsRestoreRow(count: Int, onRestore: () -> Unit) {
+internal fun FreeLaneDeletedModelsRestoreRow(count: Int, onRestore: () -> Unit) {
     if (count <= 0) return
     SettingsRow(
         title = stringResource(R.string.zen_deleted_models_title, count),

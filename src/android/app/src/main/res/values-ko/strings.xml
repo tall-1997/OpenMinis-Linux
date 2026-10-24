@@ -203,10 +203,9 @@
     <string name="voice_service_hidden_badge">숨김</string>
     <string name="add_provider_voice_chat_providers">음성 대화 제공자</string>
     <string name="zen_restore_section">복구</string>
-    <string name="zen_restore_title">OpenCode Zen(무료) 복원</string>
+    <string name="free_lane_restore_title">%1$s 복원</string>
     <string name="zen_restore_subtitle">내장 무료 공급자를 되돌리고 모델을 다시 가져옵니다</string>
-    <string name="zen_preset_title">OpenCode Zen(무료)</string>
-    <string name="zen_preset_subtitle">내장 무료 채널 — API 키 불필요</string>
+    <string name="free_lane_preset_subtitle">내장 무료 채널 — API 키 불필요</string>
     <string name="zen_deleted_models_title">삭제한 무료 모델 복원(%1$d)</string>
     <string name="zen_deleted_models_subtitle">이 공급자에 기록된 삭제를 되돌립니다</string>
     <string name="provider_sync_mark_not_found">404 not found</string>

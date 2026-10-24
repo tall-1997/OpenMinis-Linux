@@ -24,6 +24,7 @@ import com.openminis.app.data.model.ModelGroup
 import com.openminis.app.data.model.ProviderConfig
 import com.openminis.app.data.model.ProviderCredential
 import com.openminis.app.data.model.ProviderInstance
+import com.openminis.app.provider.BuiltinFreeLane
 import com.openminis.app.data.model.ProviderType
 import com.openminis.app.data.model.RoutingStrategy
 import com.openminis.app.data.model.SystemVoiceIds
@@ -264,7 +265,7 @@ class ProviderRepository(private val context: Context) {
             // heal corrupted modality). Mirrors iOS ProviderConfigStore.init.
             try {
                 ensureVoiceTemplateModels()
-                seedBuiltInZenProvider()
+                seedBuiltInFreeLanes()
             } catch (e: Exception) {
                 android.util.Log.w("ProviderRepo", "[BuiltIn] provider reconciliation failed: ${e.message}")
             }
@@ -585,21 +586,20 @@ class ProviderRepository(private val context: Context) {
         if (changed) saveConfig(config)
     }
     /**
-     * Seeds the built-in OpenCode Zen free lane on launch.
+     * Seeds every built-in keyless free lane on launch.
      *
-     * The credential lives outside the config, so it is written here rather than
-     * by the bootstrap. An instance the user deleted on purpose carries an
-     * instance tombstone and stays gone; the explicit recovery channel is
-     * [restoreBuiltInZenProvider]. A user-built Zen provider holding a real key
-     * is not the free lane and is never touched.
+     * Credentials live outside the config, so each seeded lane's key is written
+     * here, not by the bootstrap. A lane the user deleted on purpose carries a
+     * tombstone and stays gone - [restoreBuiltInFreeLane] is the way back. A
+     * user-built provider at the same host with a real key is never touched.
      */
-    private fun seedBuiltInZenProvider() = synchronized(configLock) {
+    private fun seedBuiltInFreeLanes() = synchronized(configLock) {
         if (!_configLoaded.value) return@synchronized
         val config = workingCopy()
-        if (!ZenFreeLaneBootstrap.ensureSeeded(config) { loadApiKey(it) }) return@synchronized
+        val seeded = FreeLaneBootstrap.ensureSeeded(config) { loadApiKey(it) }
+        if (seeded.isEmpty()) return@synchronized
         saveConfig(config)
-        saveApiKey(ZenFreeLaneBootstrap.INSTANCE_ID, ZenFreeLaneBootstrap.API_KEY)
-        android.util.Log.i("ProviderRepo", "[BuiltIn] seeded the Zen free lane")
+        seeded.forEach { if (it.apiKey.isNotEmpty()) saveApiKey(it.instanceId, it.apiKey) }
     }
 
     /**
@@ -608,12 +608,12 @@ class ProviderRepository(private val context: Context) {
      * model-level tombstones recorded against it. Returns true when the config
      * changed, which is the caller's cue to refresh the catalogue.
      */
-    fun restoreBuiltInZenProvider(): Boolean = synchronized(configLock) {
+    internal fun restoreBuiltInFreeLane(builtin: BuiltinFreeLane): Boolean = synchronized(configLock) {
         ensureConfigLoaded()
         val config = workingCopy()
-        if (!ZenFreeLaneBootstrap.restore(config) { loadApiKey(it) }) return@synchronized false
+        val done = FreeLaneBootstrap.restore(config, builtin) { loadApiKey(it) } ?: return@synchronized false
         saveConfig(config)
-        saveApiKey(ZenFreeLaneBootstrap.INSTANCE_ID, ZenFreeLaneBootstrap.API_KEY)
+        if (done.apiKey.isNotEmpty()) saveApiKey(done.instanceId, done.apiKey)
         true
     }
     /**
@@ -693,7 +693,7 @@ class ProviderRepository(private val context: Context) {
         }
         // Clears this id's model tombstones and records the instance-level one,
         // so a deliberate removal is not undone by the next launch's seed pass.
-        ZenFreeLaneBootstrap.forgetInstance(config, instanceId)
+        FreeLaneBootstrap.forgetInstance(config, instanceId)
         saveConfig(config)
         deleteApiKey(instanceId)
         // [T-remove-instance-cleanup] deleteApiKey only removes apikey_<id>.

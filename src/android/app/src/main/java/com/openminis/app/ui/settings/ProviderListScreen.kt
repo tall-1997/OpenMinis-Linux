@@ -61,8 +61,8 @@ import sh.calvin.reorderable.ReorderableColumn
 import com.openminis.app.data.model.ProviderInstance
 import com.openminis.app.data.repository.ProviderRefreshMarks
 import com.openminis.app.data.repository.ProviderRepository
-import com.openminis.app.data.repository.ZenFreeLaneBootstrap
-import com.openminis.app.data.repository.restoreBuiltInZenProviderAndRefresh
+import com.openminis.app.data.repository.missingBuiltInFreeLanes
+import com.openminis.app.data.repository.restoreBuiltInFreeLaneAndRefresh
 import com.openminis.app.data.repository.ModelRefreshResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -502,11 +502,11 @@ fun ProviderListScreen(
                 }
             }
         }
-        // Built-in Zen free lane recovery: offered while this device has no
-        // such instance, whether an upgrade removed it or the user deleted it.
-        ZenFreeLaneRestoreRow(
-            visible = instances.none { ZenFreeLaneBootstrap.isBuiltinFreeInstanceId(it.id) },
-            onRestore = { providerRepository.restoreBuiltInZenProviderAndRefresh() },
+        // Built-in free lane recovery: one row per lane this device has no
+        // instance for, whether an upgrade removed it or the user deleted it.
+        FreeLaneRestoreRow(
+            missing = providerRepository.missingBuiltInFreeLanes(),
+            onRestore = { providerRepository.restoreBuiltInFreeLaneAndRefresh(it) },
         )
         Spacer(Modifier.height(80.dp))
     }
