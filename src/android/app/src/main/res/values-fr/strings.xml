@@ -1585,13 +1585,7 @@
     <string name="logs_config_time_min_ago">il y a %1$d min</string>
     <string name="logs_config_time_hr_ago">il y a %1$d h</string>
     <string name="logs_config_time_yesterday">Hier</string>
-    <string name="system_permissions_title">Autorisations système</string>
     <string name="system_permissions_subtitle">Autorisations au niveau du système accordées depuis les Réglages</string>
-    <string name="system_permissions_section_a11y">Accessibilité</string>
-    <string name="system_permissions_a11y_row">Service d\'accessibilité Minis Ultra</string>
-    <string name="system_permissions_a11y_enabled">Activé — android-a11y-cli est prêt</string>
-    <string name="system_permissions_a11y_disabled">Désactivé — touchez pour l\'activer dans les Réglages système</string>
-    <string name="system_permissions_a11y_footer">Requis par android-a11y-cli pour lire l\'arborescence de l\'interface, injecter des gestes et surveiller les événements. Sans cela, les Agents ne peuvent pas piloter d\'autres applis. Activez l\'interrupteur sous Minis Ultra sur l\'écran suivant.</string>
     <string name="system_permissions_a11y_oem_header">Le service est sans cesse arrêté ?</string>
     <string name="system_permissions_a11y_oem_footer">%1$s peut afficher « ce service a échoué » et arrêter le service d\'accessibilité en arrière-plan. Ajoutez l\'appli à la liste blanche de démarrage automatique et supprimez la restriction de batterie pour qu\'il reste connecté.</string>
     <string name="system_permissions_a11y_oem_autostart">Ajouter à la liste blanche de démarrage automatique</string>

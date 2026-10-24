@@ -1585,13 +1585,7 @@
     <string name="logs_config_time_min_ago">%1$d นาทีที่แล้ว</string>
     <string name="logs_config_time_hr_ago">%1$d ชั่วโมงที่แล้ว</string>
     <string name="logs_config_time_yesterday">เมื่อวาน</string>
-    <string name="system_permissions_title">สิทธิ์ของระบบ</string>
     <string name="system_permissions_subtitle">สิทธิ์ระดับระบบปฏิบัติการที่ให้ไว้จากการตั้งค่าของระบบ</string>
-    <string name="system_permissions_section_a11y">การช่วยเหลือพิเศษ</string>
-    <string name="system_permissions_a11y_row">บริการการช่วยเหลือพิเศษของ Minis Ultra</string>
-    <string name="system_permissions_a11y_enabled">เปิดใช้แล้ว — android-a11y-cli พร้อมใช้งาน</string>
-    <string name="system_permissions_a11y_disabled">ปิดอยู่ — แตะเพื่อเปิดใช้ในการตั้งค่าของระบบ</string>
-    <string name="system_permissions_a11y_footer">android-a11y-cli ต้องใช้สิทธิ์นี้เพื่ออ่านโครงสร้างหน้าจอ ส่งท่าทาง และเฝ้าดูเหตุการณ์ หากไม่มีสิทธิ์นี้ Agent จะควบคุมแอปอื่นไม่ได้ ให้เปิดสวิตช์ใต้ Minis Ultra ในหน้าจอถัดไป</string>
     <string name="system_permissions_a11y_oem_header">บริการถูกปิดบ่อยใช่ไหม</string>
     <string name="system_permissions_a11y_oem_footer">%1$s อาจแสดงข้อความว่า \"บริการนี้ล้มเหลว\" แล้วหยุดบริการการช่วยเหลือพิเศษในเบื้องหลัง ให้เพิ่ม Minis Ultra เข้าในรายการอนุญาตของการเริ่มอัตโนมัติ และยกเลิกข้อจำกัดด้านแบตเตอรี่ เพื่อให้บริการเชื่อมต่ออยู่ต่อไป</string>
     <string name="system_permissions_a11y_oem_autostart">เพิ่มเข้ารายการอนุญาตของการเริ่มอัตโนมัติ</string>

@@ -1660,13 +1660,7 @@
     <string name="logs_config_time_min_ago">%1$d 分鐘前</string>
     <string name="logs_config_time_hr_ago">%1$d 小時前</string>
     <string name="logs_config_time_yesterday">昨天</string>
-    <string name="system_permissions_title">系統權限</string>
     <string name="system_permissions_subtitle">在系統設定中授予的作業系統層級權限</string>
-    <string name="system_permissions_section_a11y">無障礙</string>
-    <string name="system_permissions_a11y_row">Minis Ultra 無障礙服務</string>
-    <string name="system_permissions_a11y_enabled">已啟用——android-a11y-cli 已就緒</string>
-    <string name="system_permissions_a11y_disabled">已停用——點擊以在系統設定中啟用</string>
-    <string name="system_permissions_a11y_footer">android-a11y-cli 需要此權限才能讀取 UI 樹、注入手勢並監看事件。若未啟用，Agent 就無法操作其他應用程式。請在下一個畫面中開啟 Minis Ultra 底下的開關。</string>
     <string name="system_permissions_a11y_oem_header">服務總是被終止？</string>
     <string name="system_permissions_a11y_oem_footer">%1$s 可能會提示「此服務出現故障」並在背景停止無障礙服務。請將本應用加入自啟動白名單，並取消省電限制，使其保持連線。</string>
     <string name="system_permissions_a11y_oem_autostart">加入自啟動白名單</string>

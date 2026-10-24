@@ -30,6 +30,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.openminis.app.R
+import com.openminis.app.accessibility.AccessibilityRecoveryManager
 import com.openminis.app.accessibility.MinisAccessibilityService
 import com.openminis.app.accessibility.RestrictedSettingsManager
 import com.openminis.app.logging.AppLogger
@@ -69,6 +70,13 @@ fun OffloadPermissionScreen(
     privacyVersion
 
     var a11yEnabled by remember { mutableStateOf(isA11yServiceEnabled(context)) }
+    // [T-android-a11y-miui-service-failure] "Service failed" degraded state:
+    // the OEM ROM reports the service as enabled but killed the process.
+    // [T-android-a11y-force-stop-recovery] Opposite case: the grant itself is
+    // gone from Settings.Secure (force-stop stripped it), repairable by
+    // writing the setting back. Both feed SystemGrantSections below.
+    var a11yDegraded by remember { mutableStateOf(false) }
+    var a11yRevoked by remember { mutableStateOf(false) }
     // [T-android-restricted-settings] Android 13+ refuses to arm the
     // accessibility toggle for installs flagged as restricted; surfaced below
     // so the "Open accessibility settings" action doesn't dead-end.
@@ -80,7 +88,18 @@ fun OffloadPermissionScreen(
         // Re-poll once a second so coming back from system Accessibility
         // settings flips the row without a manual refresh.
         while (true) {
-            a11yEnabled = isA11yServiceEnabled(context) || MinisAccessibilityService.getInstance() != null
+            // Split the two signals so the OS-grant sections can tell "grant
+            // present but process killed" (degraded) from "grant gone after
+            // being held" (force-stop revoked) apart.
+            val inSettings = isA11yServiceEnabled(context)
+            val connected = MinisAccessibilityService.getInstance() != null
+            a11yEnabled = inSettings || connected
+            a11yDegraded = inSettings && !connected
+            // Only claim "revoked" once the user has actually granted it at
+            // least once — a first-run user who never enabled the service
+            // must not see a repair prompt for something never broken.
+            a11yRevoked = !inSettings && !connected &&
+                AccessibilityRecoveryManager.hasEverBeenGranted(context)
             // Re-probed each tick so the section disappears by itself once the
             // user allows restricted settings and returns.
             a11yRestricted = !a11yEnabled && RestrictedSettingsManager.isRestricted(context)
@@ -230,6 +249,15 @@ fun OffloadPermissionScreen(
                 )
             }
         }
+
+        // [T-settings-single-permissions-entry] OS-level grants (force-stop
+        // repair, OEM keep-alive guidance, voice-correction consent) live
+        // here instead of a separate screen — one entry, one page.
+        SystemGrantSections(
+            a11yDegraded = a11yDegraded,
+            a11yRevoked = a11yRevoked,
+            shizukuReady = shizukuSnap.state == ShizukuManager.State.READY,
+        )
 
         IntegrationSection(
             iconVector = Icons.Outlined.Security,
@@ -528,33 +556,6 @@ private fun levelColor(level: OffloadPermissionManager.PermissionLevel): Color =
     OffloadPermissionManager.PermissionLevel.BYPASS -> MaterialTheme.colorScheme.primary
     OffloadPermissionManager.PermissionLevel.ASK_ONCE -> MaterialTheme.colorScheme.tertiary
     OffloadPermissionManager.PermissionLevel.NOT_ALLOWED -> MaterialTheme.colorScheme.error
-}
-
-private fun isA11yServiceEnabled(context: Context): Boolean {
-    val expected = "${context.packageName}/${MinisAccessibilityService::class.java.name}"
-    val enabled = Settings.Secure.getString(
-        context.contentResolver,
-        Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
-    ) ?: return false
-    return enabled.split(':').any { it.equals(expected, ignoreCase = true) }
-}
-
-private fun openAccessibilitySettings(context: Context) {
-    try {
-        context.startActivity(
-            Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-        )
-    } catch (_: Throwable) {
-        try {
-            context.startActivity(
-                Intent(Settings.ACTION_SETTINGS).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-            )
-        } catch (_: Throwable) {}
-    }
 }
 
 /**

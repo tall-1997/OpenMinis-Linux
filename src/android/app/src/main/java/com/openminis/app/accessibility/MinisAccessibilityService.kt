@@ -82,7 +82,7 @@ class MinisAccessibilityService : AccessibilityService() {
         // surfacing "此服务出现故障"; a connect log lets us correlate a degraded
         // window in stall/diag logs with a kill/rebind. No self-restart logic —
         // remediation is the user whitelisting autostart + battery (see
-        // SystemPermissionsScreen OEM guidance).
+        // SystemGrantSections OEM guidance on the permissions page).
         AppLogger.info(TAG, "service connected (manufacturer=${android.os.Build.MANUFACTURER})")
         // [T-android-a11y-force-stop-recovery] Latch that the grant existed, so
         // a later absence can be recognized as a revocation rather than a

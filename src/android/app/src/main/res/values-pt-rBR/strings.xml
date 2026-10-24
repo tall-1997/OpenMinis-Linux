@@ -1585,13 +1585,7 @@
     <string name="logs_config_time_min_ago">há %1$d min</string>
     <string name="logs_config_time_hr_ago">há %1$d h</string>
     <string name="logs_config_time_yesterday">Ontem</string>
-    <string name="system_permissions_title">Permissões do sistema</string>
     <string name="system_permissions_subtitle">Permissões no nível do sistema, concedidas pelas Configurações do Android</string>
-    <string name="system_permissions_section_a11y">Acessibilidade</string>
-    <string name="system_permissions_a11y_row">Serviço de acessibilidade do Minis Ultra</string>
-    <string name="system_permissions_a11y_enabled">Ativado — o android-a11y-cli está pronto</string>
-    <string name="system_permissions_a11y_disabled">Desativado — toque para ativar nas Configurações do sistema</string>
-    <string name="system_permissions_a11y_footer">Necessário para o android-a11y-cli ler a árvore da interface, enviar gestos e acompanhar eventos. Sem isso, os Agentes não conseguem operar outros apps. Ative a chave sob o Minis Ultra na próxima tela.</string>
     <string name="system_permissions_a11y_oem_header">O serviço vive sendo encerrado?</string>
     <string name="system_permissions_a11y_oem_footer">O %1$s pode exibir “este serviço falhou” e parar o serviço de acessibilidade em segundo plano. Coloque o Minis Ultra na lista de permissões de inicialização automática e tire a restrição de bateria para ele continuar conectado.</string>
     <string name="system_permissions_a11y_oem_autostart">Adicionar à lista de inicialização automática</string>

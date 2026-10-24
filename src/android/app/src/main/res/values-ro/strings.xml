@@ -1589,13 +1589,7 @@
     <string name="logs_config_time_min_ago">acum %1$d min</string>
     <string name="logs_config_time_hr_ago">acum %1$d h</string>
     <string name="logs_config_time_yesterday">Ieri</string>
-    <string name="system_permissions_title">Permisiuni de sistem</string>
     <string name="system_permissions_subtitle">Permisiuni la nivel de sistem de operare, acordate din Setările sistemului</string>
-    <string name="system_permissions_section_a11y">Accesibilitate</string>
-    <string name="system_permissions_a11y_row">Serviciul de accesibilitate Minis Ultra</string>
-    <string name="system_permissions_a11y_enabled">Activat — android-a11y-cli este pregătit</string>
-    <string name="system_permissions_a11y_disabled">Dezactivat — atinge pentru a-l activa din Setările sistemului</string>
-    <string name="system_permissions_a11y_footer">Necesar pentru android-a11y-cli, ca să citească structura interfeței, să trimită gesturi și să urmărească evenimente. Fără el, Agenții nu pot controla alte aplicații. Pe ecranul următor, activează comutatorul de la Minis Ultra.</string>
     <string name="system_permissions_a11y_oem_header">Serviciul este oprit mereu?</string>
     <string name="system_permissions_a11y_oem_footer">%1$s poate afișa „acest serviciu a eșuat” și poate opri serviciul de accesibilitate din fundal. Adaugă Minis Ultra pe lista de pornire automată și elimină restricția de baterie, ca serviciul să rămână conectat.</string>
     <string name="system_permissions_a11y_oem_autostart">Adaugă pe lista de pornire automată</string>
