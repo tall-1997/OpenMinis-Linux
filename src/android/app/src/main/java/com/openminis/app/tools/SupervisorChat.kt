@@ -18,6 +18,13 @@ package com.openminis.app.tools
  */
 object SupervisorChat {
 
+    /**
+     * Default worker-turn cap. A fuse against runaway loops, not a budget:
+     * 50 leaves long tasks room while keeping a stuck session bounded.
+     * User-tunable range is 1..200 (see the design doc).
+     */
+    const val DEFAULT_MAX_WORKER_TURNS = 50
+
     /** Line-anchored termination marker, mirroring DiscussionGraph's VERDICT line protocol. */
     val DONE_LINE: Regex = Regex("""(?im)^DONE:\s*(.+)$""")
 

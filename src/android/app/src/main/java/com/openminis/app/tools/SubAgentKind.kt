@@ -56,6 +56,10 @@ object SubAgentKind {
     private val ALWAYS_DENY = setOf(
         RUN_SUBAGENT,
         SPAWN_AGENT,
+        // check_agent is the observation half of the same control plane: a
+        // nested seat can neither spawn lanes nor observe the outer session's
+        // lanes. Both halves belong to the outer session only.
+        CheckAgentTool.NAME,
         "ask_user_question",
         "AskUserQuestion",
         CronJobTool.NAME,
