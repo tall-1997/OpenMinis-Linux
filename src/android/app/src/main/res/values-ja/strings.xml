@@ -97,7 +97,8 @@
     <string name="a11y_repair_action_repair">今すぐ復元</string>
     <string name="a11y_repair_action_open_settings">設定を開く</string>
     <string name="a11y_repair_cancel">後で</string>
-    <string name="a11y_repair_section_header">対応が必要</string>
+    <string name="a11y_hide">非表示にする</string>
+    <string name="a11y_show">表示する</string>    <string name="a11y_repair_section_header">対応が必要</string>
     <string name="a11y_repair_row_shizuku">ユーザー補助権限を復元</string>
     <string name="a11y_repair_row_manual">ユーザー補助を再有効化</string>
     <string name="a11y_repair_row_sub">強制停止により権限が取り消された可能性があります</string>
@@ -1015,7 +1016,9 @@
     <string name="add_provider_your_key_is_stored_securely_in_encrypted">キーは暗号化ストレージに安全に保存され、デバイスから出ることはありません。</string>
     <string name="add_provider_endpoint">エンドポイント</string>
     <string name="add_provider_endpoint_anthropic_hint">Anthropic の公式エンドポイントはそのままお使いください。サードパーティの Anthropic 互換サービス（Mimo など）では、ベース URL に「/anthropic」のようなパスを付け足す必要がある場合があります。プロバイダーのドキュメントをご確認ください。URL はそのまま使われ、末尾に「/v1/messages」が追加されます。</string>
-    <string name="add_provider_custom_api_base_optional">カスタムAPIベース（オプション）</string>
+    <string name="add_provider_endpoint_gemini_hint">空のままにするとGoogleのデフォルトエンドポイントを使用します。バージョンパスを含む完全なベースURLを入力してください。</string>
+    <string name="add_provider_endpoint_default_v1_hint">空のままにするとデフォルトのエンドポイントを使用します。\"/v1\"は自動的に付加されます — ベースホストのみを入力してください。</string>
+    <string name="add_provider_endpoint_verbatim_hint">URLはそのまま使用されます。エンドポイントの手前まで（エンドポイントは含まず）の完全なパスを入力してください。</string>    <string name="add_provider_custom_api_base_optional">カスタムAPIベース（オプション）</string>
     <string name="add_provider_authentication">認証</string>
     <string name="add_provider_sign_in_succeeded_the_token_is_stored_in">サインインに成功しました。トークンは暗号化ストレージに保存されています。「保存」をタップしてプロバイダーを追加してください。</string>
     <string name="add_provider_authenticated">認証済み</string>

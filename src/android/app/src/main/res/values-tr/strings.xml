@@ -97,7 +97,8 @@
     <string name="a11y_repair_action_repair">Şimdi onar</string>
     <string name="a11y_repair_action_open_settings">Ayarları Aç</string>
     <string name="a11y_repair_cancel">Şimdi değil</string>
-    <string name="a11y_repair_section_header">Dikkat gerekiyor</string>
+    <string name="a11y_hide">Gizle</string>
+    <string name="a11y_show">Göster</string>    <string name="a11y_repair_section_header">Dikkat gerekiyor</string>
     <string name="a11y_repair_row_shizuku">Erişilebilirlik iznini onar</string>
     <string name="a11y_repair_row_manual">Erişilebilirliği yeniden etkinleştir</string>
     <string name="a11y_repair_row_sub">İzin geri alınmış, büyük olasılıkla zorla durdurma nedeniyle</string>
@@ -1015,7 +1016,9 @@
     <string name="add_provider_your_key_is_stored_securely_in_encrypted">Anahtarınız şifrelenmiş depolamada güvenle saklanır ve cihazdan hiç çıkmaz.</string>
     <string name="add_provider_endpoint">Uç Nokta</string>
     <string name="add_provider_endpoint_anthropic_hint">Resmi Anthropic uç noktasını olduğu gibi kullanın. Anthropic uyumlu üçüncü taraf hizmetlerde (örn. Mimo) temel URL, \"/anthropic\" gibi bir yol soneki gerektirebilir — sağlayıcınızın belgelerine bakın. URL olduğu gibi kullanılır ve sonuna \"/v1/messages\" eklenir.</string>
-    <string name="add_provider_custom_api_base_optional">Özel API Adresi (İsteğe bağlı)</string>
+    <string name="add_provider_endpoint_gemini_hint">Varsayılan Google uç noktasını kullanmak için boş bırakın. Sürüm yolunu içeren tam temel URL\'yi girin.</string>
+    <string name="add_provider_endpoint_default_v1_hint">Varsayılan uç noktayı kullanmak için boş bırakın. \"/v1\" otomatik olarak eklenir — yalnızca temel ana bilgisayarı girin.</string>
+    <string name="add_provider_endpoint_verbatim_hint">URL olduğu gibi kullanılır. Uç noktaya kadar (uç nokta hariç) tam yolu dahil edin.</string>    <string name="add_provider_custom_api_base_optional">Özel API Adresi (İsteğe bağlı)</string>
     <string name="add_provider_authentication">Kimlik Doğrulama</string>
     <string name="add_provider_sign_in_succeeded_the_token_is_stored_in">Oturum açma başarılı. Token şifrelenmiş depolamada saklanıyor. Sağlayıcıyı eklemek için Kaydet\'e dokunun.</string>
     <string name="add_provider_authenticated">Kimlik doğrulandı</string>

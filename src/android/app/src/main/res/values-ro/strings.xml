@@ -97,7 +97,8 @@
     <string name="a11y_repair_action_repair">Repară acum</string>
     <string name="a11y_repair_action_open_settings">Deschide setările</string>
     <string name="a11y_repair_cancel">Nu acum</string>
-    <string name="a11y_repair_section_header">Necesită atenție</string>
+    <string name="a11y_hide">Ascunde</string>
+    <string name="a11y_show">Afișează</string>    <string name="a11y_repair_section_header">Necesită atenție</string>
     <string name="a11y_repair_row_shizuku">Repară permisiunea de accesibilitate</string>
     <string name="a11y_repair_row_manual">Reactivează accesibilitatea</string>
     <string name="a11y_repair_row_sub">Permisiunea a fost revocată, probabil în urma unei opriri forțate</string>
@@ -1016,7 +1017,9 @@
     <string name="add_provider_your_key_is_stored_securely_in_encrypted">Cheia ta este păstrată în siguranță într-o stocare criptată și nu părăsește niciodată dispozitivul.</string>
     <string name="add_provider_endpoint">Punct final</string>
     <string name="add_provider_endpoint_anthropic_hint">Folosește punctul final oficial Anthropic ca atare. Pentru serviciile terțe compatibile cu Anthropic (ex. Mimo), adresa de bază poate avea nevoie de un sufix de cale precum „/anthropic” — verifică documentația furnizorului. URL-ul este folosit ca atare, cu „/v1/messages” adăugat la final.</string>
-    <string name="add_provider_custom_api_base_optional">Adresă API personalizată (opțional)</string>
+    <string name="add_provider_endpoint_gemini_hint">Lăsați gol pentru a utiliza endpoint-ul Google implicit. Introduceți URL-ul de bază complet, inclusiv calea versiunii.</string>
+    <string name="add_provider_endpoint_default_v1_hint">Lăsați gol pentru a utiliza endpoint-ul implicit. \"/v1\" este adăugat automat — introduceți doar gazda de bază.</string>
+    <string name="add_provider_endpoint_verbatim_hint">URL-ul este folosit exact așa cum este. Includeți calea completă până la (dar fără) endpoint.</string>    <string name="add_provider_custom_api_base_optional">Adresă API personalizată (opțional)</string>
     <string name="add_provider_authentication">Autentificare</string>
     <string name="add_provider_sign_in_succeeded_the_token_is_stored_in">Autentificare reușită. Tokenul este păstrat într-o stocare criptată. Atinge Salvează pentru a adăuga furnizorul.</string>
     <string name="add_provider_authenticated">Autentificat</string>

@@ -97,7 +97,8 @@
     <string name="a11y_repair_action_repair">Baiki sekarang</string>
     <string name="a11y_repair_action_open_settings">Buka Tetapan</string>
     <string name="a11y_repair_cancel">Bukan sekarang</string>
-    <string name="a11y_repair_section_header">Perlukan perhatian</string>
+    <string name="a11y_hide">Sembunyi</string>
+    <string name="a11y_show">Tunjuk</string>    <string name="a11y_repair_section_header">Perlukan perhatian</string>
     <string name="a11y_repair_row_shizuku">Baiki kebenaran kebolehaksesan</string>
     <string name="a11y_repair_row_manual">Dayakan semula kebolehaksesan</string>
     <string name="a11y_repair_row_sub">Kebenaran telah ditarik balik, berkemungkinan akibat hentian paksa</string>
@@ -1015,7 +1016,9 @@
     <string name="add_provider_your_key_is_stored_securely_in_encrypted">Kunci anda disimpan dengan selamat dalam storan tersulit dan tidak pernah meninggalkan peranti.</string>
     <string name="add_provider_endpoint">Endpoint</string>
     <string name="add_provider_endpoint_anthropic_hint">Gunakan endpoint rasmi Anthropic sebagaimana adanya. Bagi perkhidmatan pihak ketiga yang serasi dengan Anthropic (cth. Mimo), URL asasnya mungkin memerlukan akhiran laluan seperti \"/anthropic\" — semak dokumentasi pembekal anda. URL digunakan sebagaimana adanya dengan tambahan \"/v1/messages\".</string>
-    <string name="add_provider_custom_api_base_optional">API Base Tersuai (Pilihan)</string>
+    <string name="add_provider_endpoint_gemini_hint">Biarkan kosong untuk menggunakan endpoint Google lalai. Masukkan URL asas penuh termasuk laluan versi.</string>
+    <string name="add_provider_endpoint_default_v1_hint">Biarkan kosong untuk menggunakan endpoint lalai. \"/v1\" ditambah secara automatik — masukkan hos asas sahaja.</string>
+    <string name="add_provider_endpoint_verbatim_hint">URL digunakan seadanya. Sertakan laluan penuh sehingga (tetapi tidak termasuk) endpoint.</string>    <string name="add_provider_custom_api_base_optional">API Base Tersuai (Pilihan)</string>
     <string name="add_provider_authentication">Pengesahan</string>
     <string name="add_provider_sign_in_succeeded_the_token_is_stored_in">Log masuk berjaya. Token disimpan dalam storan tersulit. Ketik Simpan untuk menambah pembekal.</string>
     <string name="add_provider_authenticated">Disahkan</string>

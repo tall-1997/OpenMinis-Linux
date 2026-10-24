@@ -415,6 +415,14 @@ object HangDetector {
         builder.append(
             "===== HANG @ $ts (duration ~${durationMs}ms) sample=$label escalation=$escalation =====\n",
         )
+        // [T-android-crash-symbolization] Obfuscated frames are only
+        // decodable against the R8 mapping from the exact build that
+        // produced them; the workflow archives mapping.txt per run, and
+        // GIT_SHA names that run.
+        builder.append(
+            "git: ${com.openminis.app.BuildConfig.GIT_SHA}" +
+                (if (com.openminis.app.BuildConfig.GIT_DIRTY) " (dirty)" else "") + "\n",
+        )
         builder.append("thread: main\n")
         for (frame in mainStack.take(25)) builder.append("  at $frame\n")
         builder.append("\n")

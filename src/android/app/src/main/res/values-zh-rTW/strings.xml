@@ -121,7 +121,8 @@
     <string name="a11y_repair_action_repair">立即修復</string>
     <string name="a11y_repair_action_open_settings">開啟設定</string>
     <string name="a11y_repair_cancel">暫時不要</string>
-    <string name="a11y_repair_section_header">需要處理</string>
+    <string name="a11y_hide">隱藏</string>
+    <string name="a11y_show">顯示</string>    <string name="a11y_repair_section_header">需要處理</string>
     <string name="a11y_repair_row_shizuku">修復無障礙權限</string>
     <string name="a11y_repair_row_manual">重新啟用無障礙功能</string>
     <string name="a11y_repair_row_sub">此權限已被撤銷，可能是因為強制停止</string>
@@ -1079,7 +1080,9 @@
     <string name="add_provider_your_key_is_stored_securely_in_encrypted">你的金鑰儲存在加密儲存中,不會離開裝置。</string>
     <string name="add_provider_endpoint">端點</string>
     <string name="add_provider_endpoint_anthropic_hint">直接使用 Anthropic 官方端點即可。若是第三方的 Anthropic 相容服務（例如 Mimo），基礎網址可能需要加上「/anthropic」之類的路徑後綴——請查閱該供應商的文件。此網址會原樣使用，並在後面接上「/v1/messages」。</string>
-    <string name="add_provider_custom_api_base_optional">自定義 API 地址（可選）</string>
+    <string name="add_provider_endpoint_gemini_hint">留空使用 Google 預設端點。填寫完整的基礎 URL（含版本路徑）。</string>
+    <string name="add_provider_endpoint_default_v1_hint">留空使用預設端點。\"/v1\" 會自動附加——只需填寫主機位址。</string>
+    <string name="add_provider_endpoint_verbatim_hint">URL 按原樣使用。請填寫到端點為止（不含端點）的完整路徑。</string>    <string name="add_provider_custom_api_base_optional">自定義 API 地址（可選）</string>
     <string name="add_provider_authentication">認證</string>
     <string name="add_provider_sign_in_succeeded_the_token_is_stored_in">登入成功。token 已儲存在加密儲存中。點擊儲存以新增供應商。</string>
     <string name="add_provider_authenticated">已認證</string>

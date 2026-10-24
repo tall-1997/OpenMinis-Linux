@@ -70,17 +70,23 @@ internal fun ChatViewModel.sanitizeAgentHistory() {
     // Remove orphaned tool_results (result IDs not found in any tool_use)
     val allToolUseIds = agentHistory.flatMap { it.contentParts }
         .filterIsInstance<AgentContentPart.ToolUse>().map { it.id }.toSet()
-    val iter = agentHistory.listIterator()
-    while (iter.hasNext()) {
-        val msg = iter.next()
+    // [T-android-agenthistory-cme] agentHistory is a CopyOnWriteArrayList —
+    // its iterators are snapshot views and cannot remove/set. A reversed
+    // pass over a toList() snapshot visits each element exactly once and
+    // keeps removeAt/set index-stable (a removal only shifts indices we
+    // have already visited). The bounds guard is crash-armor for a
+    // concurrent clear(), not an expected path.
+    val snapshot = agentHistory.toList()
+    for (i in snapshot.indices.reversed()) {
+        val msg = snapshot[i]
         if (msg.role != LLMMessage.Role.USER) continue
         val cleaned = msg.contentParts.filter { part ->
             part !is AgentContentPart.ToolResult || part.id in allToolUseIds
         }
         if (cleaned.isEmpty() && msg.content.isBlank()) {
-            iter.remove()
+            if (i < agentHistory.size) agentHistory.removeAt(i)
         } else if (cleaned.size < msg.contentParts.size) {
-            iter.set(msg.copy(contentParts = cleaned))
+            if (i < agentHistory.size) agentHistory[i] = msg.copy(contentParts = cleaned)
         }
     }
 }

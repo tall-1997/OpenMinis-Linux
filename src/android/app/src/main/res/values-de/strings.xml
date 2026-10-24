@@ -97,7 +97,8 @@
     <string name="a11y_repair_action_repair">Jetzt reparieren</string>
     <string name="a11y_repair_action_open_settings">Einstellungen öffnen</string>
     <string name="a11y_repair_cancel">Später</string>
-    <string name="a11y_repair_section_header">Aktion erforderlich</string>
+    <string name="a11y_hide">Ausblenden</string>
+    <string name="a11y_show">Anzeigen</string>    <string name="a11y_repair_section_header">Aktion erforderlich</string>
     <string name="a11y_repair_row_shizuku">Berechtigung reparieren</string>
     <string name="a11y_repair_row_manual">Bedienungshilfe reaktivieren</string>
     <string name="a11y_repair_row_sub">Die Berechtigung wurde entzogen, wahrscheinlich durch Beenden erzwingen</string>
@@ -1015,7 +1016,9 @@
     <string name="add_provider_your_key_is_stored_securely_in_encrypted">Dein Schlüssel wird in einem verschlüsselten Speicher sicher abgelegt und verlässt das Gerät nicht.</string>
     <string name="add_provider_endpoint">Endpunkt</string>
     <string name="add_provider_endpoint_anthropic_hint">Verwenden Sie den offiziellen Anthropic-Endpunkt unverändert. Bei Anthropic-kompatiblen Diensten von Drittanbietern (z. B. Mimo) braucht die Basis-URL unter Umständen einen Pfadzusatz wie \"/anthropic\" — sehen Sie in der Dokumentation Ihres Anbieters nach. Die URL wird wortwörtlich verwendet, ergänzt um \"/v1/messages\".</string>
-    <string name="add_provider_custom_api_base_optional">Benutzerdefinierte API-Basis (optional)</string>
+    <string name="add_provider_endpoint_gemini_hint">Leer lassen, um den Standard-Google-Endpunkt zu verwenden. Gib die vollständige Basis-URL einschließlich Versionspfad ein.</string>
+    <string name="add_provider_endpoint_default_v1_hint">Leer lassen, um den Standard-Endpunkt zu verwenden. \"/v1\" wird automatisch angehängt — gib nur den Basis-Host ein.</string>
+    <string name="add_provider_endpoint_verbatim_hint">Die URL wird unverändert verwendet. Gib den vollständigen Pfad bis (aber ohne) den Endpunkt an.</string>    <string name="add_provider_custom_api_base_optional">Benutzerdefinierte API-Basis (optional)</string>
     <string name="add_provider_authentication">Authentifizierung</string>
     <string name="add_provider_sign_in_succeeded_the_token_is_stored_in">Anmeldung erfolgreich. Der Token wird im verschlüsselten Speicher abgelegt. Tippe auf „Speichern\", um den Anbieter hinzuzufügen.</string>
     <string name="add_provider_authenticated">Authentifiziert</string>

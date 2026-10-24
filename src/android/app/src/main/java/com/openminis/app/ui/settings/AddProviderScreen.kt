@@ -528,7 +528,7 @@ private fun ColumnScope.ApiKeyConfigSection(
                     IconButton(onClick = { showApiKeyPlaintext = !showApiKeyPlaintext }) {
                         Icon(
                             if (showApiKeyPlaintext) m3Icon(Icons.Default.VisibilityOff) else m3Icon(Icons.Default.Visibility),
-                            contentDescription = if (showApiKeyPlaintext) "Hide" else "Show",
+                            contentDescription = if (showApiKeyPlaintext) stringResource(R.string.a11y_hide) else stringResource(R.string.a11y_show),
                         )
                     }
                 },
@@ -554,13 +554,13 @@ private fun ColumnScope.ApiKeyConfigSection(
         // without scraping issue threads. Default Anthropic + other
         // provider types keep their original footer copy.
         val baseUrlFooter = if (providerType == ProviderType.gemini) {
-            "Leave empty to use the default Google endpoint. Enter the full base URL including version path."
+            stringResource(R.string.add_provider_endpoint_gemini_hint)
         } else if (providerType == ProviderType.anthropic) {
             stringResource(R.string.add_provider_endpoint_anthropic_hint)
         } else if (appendV1Suffix) {
-            "Leave empty to use the default endpoint. \"/v1\" is appended automatically — enter the base host only."
+            stringResource(R.string.add_provider_endpoint_default_v1_hint)
         } else {
-            "The URL is used verbatim. Include the full path up to (but not including) the endpoint."
+            stringResource(R.string.add_provider_endpoint_verbatim_hint)
         }
         SettingsSection(
             header = stringResource(R.string.add_provider_endpoint),

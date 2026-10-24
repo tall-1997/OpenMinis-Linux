@@ -97,7 +97,8 @@
     <string name="a11y_repair_action_repair">지금 복구</string>
     <string name="a11y_repair_action_open_settings">설정 열기</string>
     <string name="a11y_repair_cancel">나중에</string>
-    <string name="a11y_repair_section_header">조치 필요</string>
+    <string name="a11y_hide">숨기기</string>
+    <string name="a11y_show">표시</string>    <string name="a11y_repair_section_header">조치 필요</string>
     <string name="a11y_repair_row_shizuku">접근성 권한 복구</string>
     <string name="a11y_repair_row_manual">접근성 다시 켜기</string>
     <string name="a11y_repair_row_sub">강제 중지로 권한이 취소된 것 같습니다</string>
@@ -1015,7 +1016,9 @@
     <string name="add_provider_your_key_is_stored_securely_in_encrypted">키는 암호화된 저장소에 안전하게 보관되며 기기를 벗어나지 않습니다.</string>
     <string name="add_provider_endpoint">엔드포인트</string>
     <string name="add_provider_endpoint_anthropic_hint">Anthropic 공식 엔드포인트는 그대로 사용하세요. Mimo 같은 서드파티 Anthropic 호환 서비스에서는 기본 URL에 「/anthropic」 같은 경로를 덧붙여야 할 수 있습니다. 해당 제공자의 문서를 확인하세요. 이 URL은 그대로 사용되며 뒤에 「/v1/messages」가 붙습니다.</string>
-    <string name="add_provider_custom_api_base_optional">사용자 정의 API 베이스 (선택 사항)</string>
+    <string name="add_provider_endpoint_gemini_hint">비워 두면 기본 Google 엔드포인트를 사용합니다. 버전 경로를 포함한 전체 기본 URL을 입력하세요.</string>
+    <string name="add_provider_endpoint_default_v1_hint">비워 두면 기본 엔드포인트를 사용합니다. \"/v1\"는 자동으로 추가됩니다 — 기본 호스트만 입력하세요.</string>
+    <string name="add_provider_endpoint_verbatim_hint">URL은 그대로 사용됩니다. 엔드포인트 직전까지(엔드포인트 제외)의 전체 경로를 포함하세요.</string>    <string name="add_provider_custom_api_base_optional">사용자 정의 API 베이스 (선택 사항)</string>
     <string name="add_provider_authentication">인증</string>
     <string name="add_provider_sign_in_succeeded_the_token_is_stored_in">로그인에 성공했습니다. 토큰이 암호화된 저장소에 저장되었습니다. 저장을 눌러 제공업체를 추가하세요.</string>
     <string name="add_provider_authenticated">인증됨</string>

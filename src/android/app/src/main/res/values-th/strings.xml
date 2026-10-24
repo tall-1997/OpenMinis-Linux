@@ -97,7 +97,8 @@
     <string name="a11y_repair_action_repair">ซ่อมแซมตอนนี้</string>
     <string name="a11y_repair_action_open_settings">เปิดการตั้งค่า</string>
     <string name="a11y_repair_cancel">ไว้ทีหลัง</string>
-    <string name="a11y_repair_section_header">ต้องการความสนใจ</string>
+    <string name="a11y_hide">ซ่อน</string>
+    <string name="a11y_show">แสดง</string>    <string name="a11y_repair_section_header">ต้องการความสนใจ</string>
     <string name="a11y_repair_row_shizuku">ซ่อมแซมสิทธิ์การช่วยเหลือพิเศษ</string>
     <string name="a11y_repair_row_manual">เปิดใช้การช่วยเหลือพิเศษอีกครั้ง</string>
     <string name="a11y_repair_row_sub">สิทธิ์ถูกเพิกถอน น่าจะเกิดจากการบังคับหยุดแอป</string>
@@ -1015,7 +1016,9 @@
     <string name="add_provider_your_key_is_stored_securely_in_encrypted">คีย์ของคุณถูกจัดเก็บอย่างปลอดภัยในพื้นที่เข้ารหัส และไม่เคยออกจากอุปกรณ์</string>
     <string name="add_provider_endpoint">Endpoint</string>
     <string name="add_provider_endpoint_anthropic_hint">ใช้ endpoint ทางการของ Anthropic ตามที่กำหนด สำหรับบริการของบุคคลที่สามที่รองรับ Anthropic (เช่น Mimo) base URL อาจต้องมีส่วนต่อท้ายพาธ เช่น \"/anthropic\" — ตรวจสอบเอกสารของผู้ให้บริการ ระบบจะใช้ URL ตามที่กรอกแล้วต่อท้ายด้วย \"/v1/messages\"</string>
-    <string name="add_provider_custom_api_base_optional">API Base ที่กำหนดเอง (ไม่บังคับ)</string>
+    <string name="add_provider_endpoint_gemini_hint">เว้นว่างไว้เพื่อใช้ endpoint ของ Google ตามค่าเริ่มต้น ป้อน URL ฐานแบบเต็มรวมถึงเส้นทางเวอร์ชัน</string>
+    <string name="add_provider_endpoint_default_v1_hint">เว้นว่างไว้เพื่อใช้ endpoint ตามค่าเริ่มต้น \"/v1\" จะถูกเพิ่มโดยอัตโนมัติ — ป้อนเฉพาะโฮสต์ฐาน</string>
+    <string name="add_provider_endpoint_verbatim_hint">URL ถูกใช้ตามตัว รวมเส้นทางแบบเต็มจนถึง (แต่ไม่รวม) endpoint</string>    <string name="add_provider_custom_api_base_optional">API Base ที่กำหนดเอง (ไม่บังคับ)</string>
     <string name="add_provider_authentication">การยืนยันตัวตน</string>
     <string name="add_provider_sign_in_succeeded_the_token_is_stored_in">เข้าสู่ระบบสำเร็จ โทเค็นถูกจัดเก็บในพื้นที่เข้ารหัส แตะ บันทึก เพื่อเพิ่มผู้ให้บริการ</string>
     <string name="add_provider_authenticated">ยืนยันตัวตนแล้ว</string>
