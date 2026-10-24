@@ -44,6 +44,20 @@ object InterruptedTailDetector {
     const val CONTINUE_REMINDER_MARKER = "The user stopped the previous response"
 
     /**
+     * Every synthetic "continue from where you were cut off" marker.
+     *
+     * A deliberate stop and a relay that silently closed the stream are
+     * different events for the MODEL (the reminder text says so), but they
+     * leave the same recoverable tail shape, so classification accepts either.
+     * A new reminder text must be registered here or a session that ends on it
+     * is silently reclassified as an unanswered user turn.
+     */
+    val CONTINUE_REMINDER_MARKERS = setOf(
+        CONTINUE_REMINDER_MARKER,
+        StreamDropReminder.MARKER,
+    )
+
+    /**
      * Classify [lastEntry] — the final entry of `agentHistory`.
      *
      * Callers MUST additionally gate on "nothing is currently streaming"
@@ -59,9 +73,11 @@ object InterruptedTailDetector {
                 val parts = lastEntry.contentParts
                 val allToolResults = parts.isNotEmpty() &&
                     parts.all { it is AgentContentPart.ToolResult }
+                // Guard order matters: parts.first() throws on an empty tail, so
+                // the size check has to stay in front of it.
                 val isContinueReminder = parts.size == 1 &&
                     (parts.first() as? AgentContentPart.Text)?.text
-                        ?.contains(CONTINUE_REMINDER_MARKER) == true
+                        ?.let { t -> CONTINUE_REMINDER_MARKERS.any { t.contains(it) } } == true
                 when {
                     // Order matters: the first two describe a turn that was
                     // mid-flight; the third describes one that never started.

@@ -4425,7 +4425,7 @@ fun ChatScreen(
                                 error = item.error,
                                 onRetry = {
                                     coroutineScope.launch { tracedScrollToItem("INLINE-RETRY-LAST", 0, 0) }
-                                    safeMutate { viewModel.retryLast() }
+                                    safeMutate { if (canResume) viewModel.resume() else viewModel.retryLast() }
                                 },
                             )
                             is FlatChatItem.AssistantLegacyContent -> BoundsTrackedBlock(
