@@ -236,6 +236,40 @@ object SupervisorChat {
 
     private const val MAX_RUBBER_STAMP_STRIKES = 2
 
+    /**
+     * Inbox for user interjections in a supervisor-worker session.
+     *
+     * The user is the third speaker: their messages land here and are
+     * drained exactly once, in order, ahead of the next supervisor turn.
+     * The supervisor — never the user directly — decides how to fold
+     * them into the next instruction, keeping the chain of command
+     * single. Thread-safe: pushes can arrive from the UI thread while
+     * the session loop drains on its own coroutine.
+     */
+    class SupervisorInbox {
+
+        private val pending = mutableListOf<String>()
+
+        /** Current number of undelivered user messages. */
+        val size: Int
+            get() = synchronized(pending) { pending.size }
+
+        /** Queues one user message; blank messages are dropped. */
+        fun push(message: String) {
+            val trimmed = message.trim()
+            if (trimmed.isEmpty()) return
+            synchronized(pending) { pending.add(trimmed) }
+        }
+
+        /** Takes all pending messages in arrival order; a second call returns empty. */
+        fun drain(): List<String> = synchronized(pending) {
+            val out = pending.toList()
+            pending.clear()
+            out
+        }
+    }
+
+
 
     /** Returns the body between a section marker and the next marker, or null when absent. */
     private fun sectionBody(raw: String, marker: String): String? {
