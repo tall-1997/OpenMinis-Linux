@@ -1773,14 +1773,7 @@ internal suspend fun ChatViewModel.runAgentLoop(
                             "${ChatViewModel.MAX_STREAM_DROP_CONTINUATIONS} " +
                             "(turn=$turn, model=${provider.model.id}, provider=${provider.name})",
                     )
-                    val dropReminder = "<system-reminder>The connection dropped mid-reply: your previous assistant message was cut off in transit and ends abruptly in the transcript above. Continue the task from EXACTLY where that message stopped. Do not repeat or restate any text already present there. If a sentence was cut mid-way, complete it; if you were about to call a tool, issue that tool call now; if the work was already finished, give the final answer.</system-reminder>"
-                    appendBoundedHistory(
-                        LLMMessage(
-                            role = LLMMessage.Role.USER,
-                            content = dropReminder,
-                            contentParts = listOf(AgentContentPart.Text(dropReminder)),
-                        ),
-                    )
+                    commitStreamDropReminder()
                     continue
                 }
                 AppLogger.warning(
@@ -1788,6 +1781,13 @@ internal suspend fun ChatViewModel.runAgentLoop(
                     "stream closed without a finish reason after ${accumulatedText.length} chars — " +
                         "surfacing as an interrupted reply (turn=$turn)",
                 )
+                // The budget is exhausted but the turn is NOT over: commit the
+                // same reminder the automatic continuations used, so the
+                // persisted tail stays resumable. Without it the tail is a
+                // plain partial reply, which InterruptedTailDetector reads as a
+                // COMPLETED turn — after a reload there is nothing to resume and
+                // the banner's Retry can only regenerate and hit the same cut.
+                commitStreamDropReminder()
                 if (activeRun?.isStopped != true) {
                     withContext(Dispatchers.Main) {
                         setInlineError(

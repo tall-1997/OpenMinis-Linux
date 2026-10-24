@@ -130,4 +130,63 @@ class InterruptedTailDetectorTest {
         assertTrue(InterruptedTailDetector.isInterrupted(assistant(toolUse())))
         assertFalse(InterruptedTailDetector.isInterrupted(assistant(text("done"))))
     }
+
+    // MARK: - Stream-drop tails (a relay that silently closed the SSE stream)
+
+    /**
+     * The shape the agent loop persists when a stream drops: the partial
+     * assistant turn, then the drop reminder as a synthetic user turn.
+     *
+     * This is the ONLY thing that keeps a dropped turn recoverable across a
+     * reload. Without the reminder row the tail is a plain assistant reply,
+     * which classify() reads as a completed turn (see the last test here), the
+     * Resume affordance never appears, and the error banner's Retry can only
+     * regenerate — which a relay that cuts long turns will cut again.
+     */
+    @Test
+    fun `a stream drop reminder tail is resumable`() {
+        val tail = user(text(StreamDropReminder.TEXT))
+        assertEquals(InterruptedTailShape.CONTINUE_REMINDER, InterruptedTailDetector.classify(tail))
+        assertTrue(InterruptedTailDetector.isInterrupted(tail))
+    }
+
+    @Test
+    fun `the deliberate stop reminder tail is still resumable`() {
+        val tail = user(text(InterruptedTailDetector.CONTINUE_REMINDER_MARKER + " and continue"))
+        assertEquals(InterruptedTailShape.CONTINUE_REMINDER, InterruptedTailDetector.classify(tail))
+    }
+
+    /**
+     * Drift nail: a marker that is not actually inside its reminder text would
+     * classify the tail as UNANSWERED_USER_TURN instead, silently changing what
+     * resume() does with it. Both strings live in different files and only this
+     * test connects them.
+     */
+    @Test
+    fun `every registered marker matches the reminder text it stands for`() {
+        assertTrue(StreamDropReminder.TEXT.contains(StreamDropReminder.MARKER))
+        assertTrue(InterruptedTailDetector.CONTINUE_REMINDER_MARKERS.contains(StreamDropReminder.MARKER))
+        assertTrue(
+            InterruptedTailDetector.CONTINUE_REMINDER_MARKERS
+                .contains(InterruptedTailDetector.CONTINUE_REMINDER_MARKER)
+        )
+        assertTrue(StreamDropReminder.TEXT.startsWith("<system-reminder>"))
+        assertTrue(StreamDropReminder.TEXT.endsWith("</system-reminder>"))
+    }
+
+    @Test
+    fun `a reminder tail carrying extra parts is an unanswered turn`() {
+        // The parts.size == 1 gate stays load-bearing: a reminder the user
+        // edited or a turn that merged with real input is not synthetic.
+        val tail = user(text(StreamDropReminder.TEXT), text("also explain why"))
+        assertEquals(InterruptedTailShape.UNANSWERED_USER_TURN, InterruptedTailDetector.classify(tail))
+    }
+
+    /** Documents WHY the reminder must be persisted, not just kept in memory. */
+    @Test
+    fun `a partial assistant reply alone looks completed`() {
+        val tail = assistant(text("The build is done and the tests pa"))
+        assertEquals(InterruptedTailShape.NONE, InterruptedTailDetector.classify(tail))
+        assertFalse(InterruptedTailDetector.isInterrupted(tail))
+    }
 }
