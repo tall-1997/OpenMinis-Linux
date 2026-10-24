@@ -8,8 +8,8 @@ import org.json.JSONObject
 /**
  * Why a Zen request failed.
  *
- * Only three of these say something about the MODEL. The other six are about
- * us, our network, or our rate budget, and the retired build treated several of
+ * Only three of these say something about the MODEL. The rest are about us,
+ * our network, or our rate budget, and the retired build treated several of
  * them as death evidence — which is how a working free lane ends up looking
  * empty on a device that never did anything wrong.
  */
@@ -32,6 +32,16 @@ internal enum class ZenFailureEvidence {
      * a model on evidence that is not permanent.
      */
     MODEL_ERROR_UNSPECIFIED,
+
+    /**
+     * A structured Zen error whose `type` has no mapping here. Upstream invents
+     * these: `FreeUsageLimitError` showed up on a live request in 2026-10,
+     * riding a status the transport map would have read as "needs a
+     * credential". A type nobody has interpreted is not a statement about the
+     * model, so it must not be laundered into a catalogue verdict by whatever
+     * status it happened to travel with.
+     */
+    UNSPECIFIED_ERROR_TYPE,
 
     /** Region refusal. Reachable through the user's own proxy, so not evidence. */
     REGION,
@@ -56,7 +66,8 @@ internal enum class ZenFailureEvidence {
     val marksDead: Boolean
         get() = when (this) {
             GONE, MODEL_UNAVAILABLE, MODEL_NOT_SUPPORTED -> true
-            MODEL_ERROR_UNSPECIFIED, REGION, PROTOCOL_UNSUPPORTED, FREE_TIER,
+            MODEL_ERROR_UNSPECIFIED, UNSPECIFIED_ERROR_TYPE, REGION,
+            PROTOCOL_UNSUPPORTED, FREE_TIER,
             RATE_LIMITED, SERVER, NETWORK -> false
         }
 }
@@ -67,8 +78,11 @@ internal enum class ZenFailureEvidence {
  * Persistence keeps the old shape — SharedPreferences `zen_free_lane_health`,
  * key `dead_ids`, a 7-day TTL that self-heals — because that part was sound.
  * What changed is the evidence set: [ZenFailureEvidence.marksDead] is the single
- * place that decides, and [recordSuccess] clears an id immediately so a model
- * that comes back does not stay hidden for a week.
+ * place that decides, and [recordSuccess] is the other half of it — a probe that
+ * gets a clean answer cancels prior death evidence instead of waiting out the
+ * TTL. [recordSuccess] is wired to the probe verdict and nothing else: live
+ * traffic cannot tell a real answer from a 200-shaped refusal without consuming
+ * the stream, and clearing evidence on a refusal would be worse than the wait.
  *
  * Without [initialize] this runs purely in memory, which keeps it testable on
  * the JVM and means a process that never wired a context still behaves sanely.
@@ -114,6 +128,11 @@ internal object ZenFreeLaneHealth {
         AppLogger.warning(TAG, "$id hidden on $evidence evidence")
     }
 
+    /**
+     * Positive evidence: the id answered. Cancels a death verdict at once, so a
+     * model upstream switched back on does not stay hidden for the rest of its
+     * TTL. No-op for an id that was never marked.
+     */
     fun recordSuccess(id: String) {
         if (memory.remove(id) != null) {
             writeDisk()

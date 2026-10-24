@@ -177,76 +177,126 @@ internal object ZenFreeLaneDirectory {
     /**
      * Maps a probe response onto a verdict.
      *
-     * The distinction that matters: `FreeTierError` after the gate was
-     * satisfied is UNKNOWN, not PAID. It used to be read as "this model needs a
-     * credential", which is how the whole lane got retired — but it is equally
-     * what a gate regression looks like, and blaming the model for our bug hid
-     * the bug. `RegionError` is UNKNOWN for the same reason in reverse: the lane
-     * is reachable from a locked region through the user's own proxy, so a
-     * region refusal must not remove a model that works for everyone else.
-     * A `ModelError` that never says "not supported" belongs to the same class:
-     * an upstream complaint with the model's name on it but no verdict attached,
-     * so the lane keeps the model and only logs the failure.
+     * The invariant: when upstream speaks its structured error dialect, the
+     * TYPE decides the verdict and the transport code decides nothing. Only a
+     * body with no structured error at all may be read by status.
+     *
+     * The code map infers a model property — "needs a credential" — from a
+     * status, and [ZenLearnedFree.withPaid] persists that inference across
+     * restarts. So every error type that falls through to it turns a transient,
+     * account-scoped refusal into the permanent removal of a working model from
+     * the lane. That is how the 2026-10-17 retirement happened, and it will
+     * happen again for each new type upstream invents unless the fallthrough is
+     * closed by shape rather than by name: `FreeUsageLimitError` is the type
+     * that exposed this, and it is handled here by not being special.
+     *
+     * The distinctions that matter inside the dialect: `FreeTierError` after
+     * the gate was satisfied is UNKNOWN, not PAID — it used to be read as "this
+     * model needs a credential", but it is equally what a gate regression looks
+     * like, and blaming the model for our bug hid the bug. `RegionError` is
+     * UNKNOWN for the same reason in reverse: the lane is reachable from a
+     * locked region through the user's own proxy, so a region refusal must not
+     * remove a model that works for everyone else. A `ModelError` that never
+     * says "not supported" belongs to the same class — an upstream complaint
+     * with the model's name on it but no verdict attached.
      */
     internal fun classify(id: String, code: Int, body: String): Verdict {
-        val errorType = zenErrorType(body)
-        when (errorType) {
-            "RegionError" -> {
-                ZenFreeLaneHealth.recordFailure(id, ZenFailureEvidence.REGION)
-                return Verdict.UNKNOWN
-            }
-            "FreeTierError" -> {
-                ZenFreeLaneHealth.recordFailure(id, ZenFailureEvidence.FREE_TIER)
-                return Verdict.UNKNOWN
-            }
-            "ModelError" -> {
-                if (body.contains("not supported", ignoreCase = true)) {
-                    ZenFreeLaneHealth.recordFailure(id, ZenFailureEvidence.MODEL_NOT_SUPPORTED)
-                    return Verdict.DEAD
-                }
-                // A ModelError that does not name the model as unsupported is
-                // not a statement about the model, so it must not fall through
-                // to the code-based map below: that map reads a 401 as "needs a
-                // credential", and Verdict.PAID feeds withPaid, which removes
-                // the id from the free set. Hiding a working model because our
-                // own gate regressed is precisely how this lane got retired
-                // once already.
-                ZenFreeLaneHealth.recordFailure(id, ZenFailureEvidence.MODEL_ERROR_UNSPECIFIED)
-                return Verdict.UNKNOWN
-            }
-        }
-        return when {
-            code == 200 -> Verdict.FREE
-            code == 410 -> {
-                ZenFreeLaneHealth.recordFailure(id, ZenFailureEvidence.GONE)
-                Verdict.DEAD
-            }
-            code == 400 && body.contains("Model is unavailable", ignoreCase = true) -> {
-                ZenFreeLaneHealth.recordFailure(id, ZenFailureEvidence.MODEL_UNAVAILABLE)
-                Verdict.DEAD
-            }
-            code == 401 || code == 403 -> {
-                // Credentials genuinely required for this id.
-                ZenFreeLaneHealth.recordFailure(id, ZenFailureEvidence.FREE_TIER)
-                Verdict.PAID
-            }
-            code == 429 -> {
-                ZenFreeLaneHealth.recordFailure(id, ZenFailureEvidence.RATE_LIMITED)
-                Verdict.UNKNOWN
-            }
-            code in 500..599 -> {
-                ZenFreeLaneHealth.recordFailure(id, ZenFailureEvidence.SERVER)
-                Verdict.UNKNOWN
-            }
-            else -> Verdict.UNKNOWN
-        }
+        val errorType = zenErrorType(body) ?: return classifyByTransport(id, code, body)
+        return classifyByErrorType(id, code, errorType, body)
     }
 
-    /** `{"type":"error","error":{"type":"ModelError"|…}}`, or null when absent. */
+    /**
+     * Death is the only verdict a named type can carry, and it needs a sentence
+     * about the model. Everything else is UNKNOWN, which [launchProbe] writes
+     * nothing for, so the id is simply probed again on the next refresh.
+     */
+    private fun classifyByErrorType(id: String, code: Int, type: String, body: String): Verdict {
+        if (type == "ModelError" && body.contains("not supported", ignoreCase = true)) {
+            ZenFreeLaneHealth.recordFailure(id, ZenFailureEvidence.MODEL_NOT_SUPPORTED)
+            return Verdict.DEAD
+        }
+        val evidence = when (type) {
+            "RegionError" -> ZenFailureEvidence.REGION
+            "FreeTierError" -> ZenFailureEvidence.FREE_TIER
+            "ModelError" -> ZenFailureEvidence.MODEL_ERROR_UNSPECIFIED
+            else -> {
+                // Named, logged, unmapped: a new dialect word is an observation,
+                // never a verdict. Keep the status in the log so the next one of
+                // these can be identified from a device report alone.
+                AppLogger.info(TAG, "probe $id: unmapped zen error type '$type' (http $code)")
+                ZenFailureEvidence.UNSPECIFIED_ERROR_TYPE
+            }
+        }
+        ZenFreeLaneHealth.recordFailure(id, evidence)
+        return Verdict.UNKNOWN
+    }
+
+    /**
+     * No structured error in the body, so the status is the only thing upstream
+     * said. A bare 401 or 403 really does mean this id wants a credential; the
+     * string-shaped `{"error":"Model is unavailable."}` really is a switched-off
+     * model. Both shapes arrive without a nested error type, which is what keeps
+     * them distinguishable from the dialect above.
+     */
+    private fun classifyByTransport(id: String, code: Int, body: String): Verdict = when {
+        code == 200 -> {
+            // A clean 200 is the only positive evidence this layer ever sees, so
+            // it is also the only thing allowed to cancel a death verdict.
+            // Without this the evidence is one-sided: a probe can hide a model,
+            // and only the 7-day TTL can bring it back.
+            ZenFreeLaneHealth.recordSuccess(id)
+            Verdict.FREE
+        }
+        code == 410 -> {
+            ZenFreeLaneHealth.recordFailure(id, ZenFailureEvidence.GONE)
+            Verdict.DEAD
+        }
+        code == 400 && body.contains("Model is unavailable", ignoreCase = true) -> {
+            ZenFreeLaneHealth.recordFailure(id, ZenFailureEvidence.MODEL_UNAVAILABLE)
+            Verdict.DEAD
+        }
+        code == 401 || code == 403 -> {
+            // Credentials genuinely required for this id.
+            ZenFreeLaneHealth.recordFailure(id, ZenFailureEvidence.FREE_TIER)
+            Verdict.PAID
+        }
+        code == 429 -> {
+            ZenFreeLaneHealth.recordFailure(id, ZenFailureEvidence.RATE_LIMITED)
+            Verdict.UNKNOWN
+        }
+        code in 500..599 -> {
+            ZenFreeLaneHealth.recordFailure(id, ZenFailureEvidence.SERVER)
+            Verdict.UNKNOWN
+        }
+        else -> Verdict.UNKNOWN
+    }
+
+    /**
+     * `{"type":"error","error":{"type":"ModelError"|…}}`, or null when the body
+     * carries no structured error.
+     *
+     * Two spellings, and both have to be read: the bare JSON object, and the
+     * same object inside an SSE frame. Zen reports refusals as 200-shaped
+     * streams, and a 200 whose refusal we failed to parse is learned as
+     * [Verdict.FREE] — which is worse than learning nothing, because it puts an
+     * id in front of the user that then fails at runtime.
+     */
     private fun zenErrorType(body: String): String? {
         if (body.isEmpty() || !body.contains("error")) return null
-        return runCatching {
-            JSONObject(body).optJSONObject("error")?.optString("type")?.takeIf { it.isNotEmpty() }
-        }.getOrNull()
+        nestedErrorType(body)?.let { return it }
+        if (!body.contains("data:")) return null
+        return body.lineSequence()
+            .map { it.substringAfter("data:", "").trim() }
+            .filter { it.length > 1 && it != "[DONE]" && it.contains("error") }
+            .firstNotNullOfOrNull { nestedErrorType(it) }
     }
+
+    /**
+     * The nested `error.type`, or null. Deliberately strict: a string-shaped
+     * `{"error":"invalid api key"}` has no type and must stay null so the
+     * transport map can read it as a credential refusal.
+     */
+    private fun nestedErrorType(json: String): String? = runCatching {
+        JSONObject(json).optJSONObject("error")?.optString("type")?.takeIf { it.isNotEmpty() }
+    }.getOrNull()
 }
