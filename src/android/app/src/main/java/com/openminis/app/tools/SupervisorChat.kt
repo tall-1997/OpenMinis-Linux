@@ -130,6 +130,113 @@ object SupervisorChat {
 
     private const val WRITE_PATHS_PREFIX = "write_paths:"
 
+    /** Lifecycle phases of one supervisor-worker session. */
+    enum class Phase {
+        /** Waiting for the supervisor's first instruction. */
+        INSTRUCTING,
+
+        /** Worker seat is running the current instruction. */
+        EXECUTING,
+
+        /** Supervisor is reviewing the worker's streamed output. */
+        REVIEWING,
+
+        /** Supervisor emitted an evidence-backed DONE line. */
+        DONE,
+
+        /** Session failed: double rubber-stamp or worker-turn cap. */
+        FAILED,
+
+        /** The user pressed stop. */
+        USER_HALTED,
+    }
+
+    /**
+     * Fixed-order turn machine for one supervisor-worker session:
+     * supervisor message → worker turn → supervisor review, repeat.
+     *
+     * The caller drives transitions with the strings each seat produced.
+     * A review message carrying an evidence-backed DONE line ends the
+     * session; a rubber-stamped DONE earns one strike and a second one
+     * fails it. A non-DONE supervisor message at the worker-turn cap
+     * force-closes the session instead of starting another worker round.
+     * Terminal phases absorb further input.
+     */
+    class TurnMachine(val maxWorkerTurns: Int) {
+
+        /** Current phase; terminal phases never leave. */
+        var phase: Phase = Phase.INSTRUCTING
+            private set
+
+        /** Worker turns consumed so far. */
+        var workerTurns: Int = 0
+            private set
+
+        /** Rubber-stamp DONE rejections so far; two fails the session. */
+        var rubberStampStrikes: Int = 0
+            private set
+
+        private var capClosed = false
+
+        /** True when the session was force-closed by the worker-turn cap (not by rubber-stamp failure). */
+        fun forceClosed(): Boolean = capClosed
+
+        /**
+         * Feeds a supervisor message.
+         *
+         * A valid DONE verdict transitions to [Phase.DONE] from any live
+         * phase. A rubber-stamped DONE stays in review with a strike; the
+         * second one fails. Any other message starts a worker turn —
+         * unless the cap is exhausted, which force-closes the session.
+         */
+        fun onSupervisorMessage(text: String, acceptance: List<String>): Phase {
+            if (phase == Phase.DONE || phase == Phase.FAILED || phase == Phase.USER_HALTED) {
+                return phase
+            }
+            val verdict = parseDone(text, acceptance)
+            if (verdict != null) {
+                if (!isRubberStamp(verdict, acceptance)) {
+                    phase = Phase.DONE
+                    return phase
+                }
+                rubberStampStrikes += 1
+                if (rubberStampStrikes >= MAX_RUBBER_STAMP_STRIKES) {
+                    phase = Phase.FAILED
+                } else {
+                    phase = Phase.REVIEWING
+                }
+                return phase
+            }
+            if (workerTurns >= maxWorkerTurns) {
+                capClosed = true
+                phase = Phase.FAILED
+                return phase
+            }
+            workerTurns += 1
+            phase = Phase.EXECUTING
+            return phase
+        }
+
+        /** Feeds the worker's report; only an executing turn moves to review. */
+        fun onWorkerReport(): Phase {
+            if (phase == Phase.EXECUTING) {
+                phase = Phase.REVIEWING
+            }
+            return phase
+        }
+
+        /** User pressed stop; any live phase closes immediately. */
+        fun onUserHalt(): Phase {
+            if (phase != Phase.DONE && phase != Phase.FAILED) {
+                phase = Phase.USER_HALTED
+            }
+            return phase
+        }
+    }
+
+    private const val MAX_RUBBER_STAMP_STRIKES = 2
+
+
     /** Returns the body between a section marker and the next marker, or null when absent. */
     private fun sectionBody(raw: String, marker: String): String? {
         val lines = raw.lines()
