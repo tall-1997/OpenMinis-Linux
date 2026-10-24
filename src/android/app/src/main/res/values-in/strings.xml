@@ -1590,13 +1590,7 @@
     <string name="logs_config_time_min_ago">%1$d mnt lalu</string>
     <string name="logs_config_time_hr_ago">%1$d jam lalu</string>
     <string name="logs_config_time_yesterday">Kemarin</string>
-    <string name="system_permissions_title">Izin Sistem</string>
     <string name="system_permissions_subtitle">Izin tingkat sistem operasi yang diberikan dari Pengaturan sistem</string>
-    <string name="system_permissions_section_a11y">Aksesibilitas</string>
-    <string name="system_permissions_a11y_row">Layanan Aksesibilitas Minis Ultra</string>
-    <string name="system_permissions_a11y_enabled">Aktif — android-a11y-cli siap digunakan</string>
-    <string name="system_permissions_a11y_disabled">Nonaktif — ketuk untuk mengaktifkan di Pengaturan sistem</string>
-    <string name="system_permissions_a11y_footer">Diperlukan oleh android-a11y-cli untuk membaca struktur antarmuka, mengirim gestur, dan memantau peristiwa. Tanpa izin ini, Agen tidak dapat mengendalikan aplikasi lain. Aktifkan sakelar di bawah Minis Ultra pada layar berikutnya.</string>
     <string name="system_permissions_a11y_oem_header">Layanan sering dimatikan?</string>
     <string name="system_permissions_a11y_oem_footer">%1$s mungkin menampilkan \"layanan ini gagal\" dan menghentikan layanan aksesibilitas di latar belakang. Masukkan Minis Ultra ke daftar putih autostart dan hapus pembatasan baterainya agar layanan tetap terhubung.</string>
     <string name="system_permissions_a11y_oem_autostart">Tambahkan ke daftar putih autostart</string>

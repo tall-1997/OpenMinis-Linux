@@ -1585,13 +1585,7 @@
     <string name="logs_config_time_min_ago">hace %1$d min</string>
     <string name="logs_config_time_hr_ago">hace %1$d h</string>
     <string name="logs_config_time_yesterday">Ayer</string>
-    <string name="system_permissions_title">Permisos del sistema</string>
     <string name="system_permissions_subtitle">Permisos del sistema otorgados desde los ajustes del dispositivo</string>
-    <string name="system_permissions_section_a11y">Accesibilidad</string>
-    <string name="system_permissions_a11y_row">Servicio de accesibilidad de Minis Ultra</string>
-    <string name="system_permissions_a11y_enabled">Activado: android-a11y-cli está listo</string>
-    <string name="system_permissions_a11y_disabled">Desactivado — toca para activarlo en los Ajustes del sistema</string>
-    <string name="system_permissions_a11y_footer">Lo requiere android-a11y-cli para leer el árbol de UI, inyectar gestos y monitorear eventos. Sin esto, los Agent no pueden controlar otras apps. Activa el interruptor de Minis Ultra en la siguiente pantalla.</string>
     <string name="system_permissions_a11y_oem_header">¿El servicio se sigue cerrando?</string>
     <string name="system_permissions_a11y_oem_footer">%1$s puede mostrar \"este servicio ha fallado\" y detener el servicio de accesibilidad en segundo plano. Agrega la app a la lista blanca de inicio automático y quita la restricción de batería para que siga conectada.</string>
     <string name="system_permissions_a11y_oem_autostart">Agregar a la lista de inicio automático</string>

@@ -1582,13 +1582,7 @@
     <string name="logs_config_time_min_ago">%1$d 分前</string>
     <string name="logs_config_time_hr_ago">%1$d 時間前</string>
     <string name="logs_config_time_yesterday">昨日</string>
-    <string name="system_permissions_title">システムの権限</string>
     <string name="system_permissions_subtitle">システム設定から付与する OS レベルの権限</string>
-    <string name="system_permissions_section_a11y">ユーザー補助</string>
-    <string name="system_permissions_a11y_row">Minis Ultra ユーザー補助サービス</string>
-    <string name="system_permissions_a11y_enabled">有効 — android-a11y-cli を利用できます</string>
-    <string name="system_permissions_a11y_disabled">無効 — タップしてシステム設定で有効にしてください</string>
-    <string name="system_permissions_a11y_footer">android-a11y-cli が UI ツリーの読み取り、ジェスチャーの注入、イベントの監視を行うために必要です。これがないと、エージェントは他のアプリを操作できません。次の画面で Minis Ultra のスイッチをオンにしてください。</string>
     <string name="system_permissions_a11y_oem_header">サービスが繰り返し終了してしまう場合</string>
     <string name="system_permissions_a11y_oem_footer">%1$s では「このサービスは停止しました」と表示され、バックグラウンドでユーザー補助サービスが停止されることがあります。自動起動を許可し、バッテリーの制限を解除すると接続が維持されます。</string>
     <string name="system_permissions_a11y_oem_autostart">自動起動の許可リストに追加</string>

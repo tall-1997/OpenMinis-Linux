@@ -1582,13 +1582,7 @@
     <string name="logs_config_time_min_ago">%1$d분 전</string>
     <string name="logs_config_time_hr_ago">%1$d시간 전</string>
     <string name="logs_config_time_yesterday">어제</string>
-    <string name="system_permissions_title">시스템 권한</string>
     <string name="system_permissions_subtitle">시스템 설정에서 부여하는 OS 수준 권한</string>
-    <string name="system_permissions_section_a11y">접근성</string>
-    <string name="system_permissions_a11y_row">Minis Ultra 접근성 서비스</string>
-    <string name="system_permissions_a11y_enabled">사용 중 — android-a11y-cli를 쓸 수 있습니다</string>
-    <string name="system_permissions_a11y_disabled">사용 안 함 — 탭해서 시스템 설정에서 켜세요</string>
-    <string name="system_permissions_a11y_footer">android-a11y-cli가 UI 트리를 읽고, 제스처를 주입하고, 이벤트를 관찰하는 데 필요합니다. 이 권한이 없으면 Agent가 다른 앱을 조작할 수 없습니다. 다음 화면에서 Minis Ultra 아래의 스위치를 켜세요.</string>
     <string name="system_permissions_a11y_oem_header">서비스가 자꾸 종료되나요?</string>
     <string name="system_permissions_a11y_oem_footer">%1$s에서는 「이 서비스가 중지되었습니다」라고 표시되며 백그라운드에서 접근성 서비스가 종료될 수 있습니다. 자동 실행을 허용하고 배터리 제한을 해제하면 연결이 유지됩니다.</string>
     <string name="system_permissions_a11y_oem_autostart">자동 실행 허용 목록에 추가</string>

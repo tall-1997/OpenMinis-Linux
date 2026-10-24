@@ -1585,13 +1585,7 @@
     <string name="logs_config_time_min_ago">%1$d min ang nakalipas</string>
     <string name="logs_config_time_hr_ago">%1$d oras ang nakalipas</string>
     <string name="logs_config_time_yesterday">Kahapon</string>
-    <string name="system_permissions_title">Mga Pahintulot ng System</string>
     <string name="system_permissions_subtitle">Mga pahintulot sa antas ng OS na ibinigay mula sa Mga Setting ng system</string>
-    <string name="system_permissions_section_a11y">Accessibility</string>
-    <string name="system_permissions_a11y_row">Accessibility Service ng Minis Ultra</string>
-    <string name="system_permissions_a11y_enabled">Naka-enable — handa na ang android-a11y-cli</string>
-    <string name="system_permissions_a11y_disabled">Naka-disable — i-tap para i-enable sa Mga Setting ng system</string>
-    <string name="system_permissions_a11y_footer">Kailangan ito ng android-a11y-cli para mabasa ang UI tree, makapagpadala ng galaw, at mabantayan ang mga event. Kung wala ito, hindi makokontrol ng mga Agent ang ibang app. I-on ang switch sa ilalim ng Minis Ultra sa susunod na screen.</string>
     <string name="system_permissions_a11y_oem_header">Palaging napapatay ang service?</string>
     <string name="system_permissions_a11y_oem_footer">Maaaring magpakita ang %1$s ng \"nabigo ang service na ito\" at ihinto ang accessibility service sa background. Ilagay ang Minis Ultra sa whitelist ng autostart at alisin ang restriction sa baterya para manatili itong nakakonekta.</string>
     <string name="system_permissions_a11y_oem_autostart">Idagdag sa whitelist ng autostart</string>

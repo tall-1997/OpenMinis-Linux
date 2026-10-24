@@ -1585,13 +1585,7 @@
     <string name="logs_config_time_min_ago">vor %1$d Min</string>
     <string name="logs_config_time_hr_ago">vor %1$d Std</string>
     <string name="logs_config_time_yesterday">Gestern</string>
-    <string name="system_permissions_title">Systemberechtigungen</string>
     <string name="system_permissions_subtitle">Berechtigungen auf Betriebssystemebene, die in den Systemeinstellungen erteilt werden</string>
-    <string name="system_permissions_section_a11y">Bedienungshilfen</string>
-    <string name="system_permissions_a11y_row">Minis Ultra-Bedienungshilfendienst</string>
-    <string name="system_permissions_a11y_enabled">Aktiviert — android-a11y-cli ist bereit</string>
-    <string name="system_permissions_a11y_disabled">Deaktiviert — tippen, um es in den Systemeinstellungen zu aktivieren</string>
-    <string name="system_permissions_a11y_footer">Wird von android-a11y-cli benötigt, um den UI-Baum zu lesen, Gesten einzuspeisen und Ereignisse zu beobachten. Ohne diese Berechtigung können Agenten keine anderen Apps steuern. Aktivieren Sie den Schalter auf dem nächsten Bildschirm unter „Minis Ultra“.</string>
     <string name="system_permissions_a11y_oem_header">Der Dienst wird immer wieder beendet?</string>
     <string name="system_permissions_a11y_oem_footer">%1$s zeigt unter Umständen „Dieser Dienst ist fehlgeschlagen“ an und stoppt den Bedienungshilfendienst im Hintergrund. Nehmen Sie die App in die Autostart-Freigabeliste auf und heben Sie die Akku-Einschränkung auf, damit der Dienst verbunden bleibt.</string>
     <string name="system_permissions_a11y_oem_autostart">Zur Autostart-Freigabeliste hinzufügen</string>

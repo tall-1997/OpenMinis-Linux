@@ -1585,13 +1585,7 @@
     <string name="logs_config_time_min_ago">%1$d dk önce</string>
     <string name="logs_config_time_hr_ago">%1$d sa önce</string>
     <string name="logs_config_time_yesterday">Dün</string>
-    <string name="system_permissions_title">Sistem İzinleri</string>
     <string name="system_permissions_subtitle">Sistem Ayarları\'ndan verilen işletim sistemi düzeyindeki izinler</string>
-    <string name="system_permissions_section_a11y">Erişilebilirlik</string>
-    <string name="system_permissions_a11y_row">Minis Ultra Erişilebilirlik Hizmeti</string>
-    <string name="system_permissions_a11y_enabled">Etkin — android-a11y-cli hazır</string>
-    <string name="system_permissions_a11y_disabled">Devre dışı — sistem Ayarları\'ndan etkinleştirmek için dokunun</string>
-    <string name="system_permissions_a11y_footer">android-a11y-cli; arayüz ağacını okumak, hareket göndermek ve olayları izlemek için bu izne ihtiyaç duyar. Bu izin olmadan Agent\'lar başka uygulamaları kullanamaz. Sonraki ekranda Minis Ultra altındaki anahtarı açın.</string>
     <string name="system_permissions_a11y_oem_header">Hizmet sürekli kapanıyor mu?</string>
     <string name="system_permissions_a11y_oem_footer">%1$s \"bu hizmet başarısız oldu\" uyarısını gösterip erişilebilirlik hizmetini arka planda durdurabilir. Bağlı kalması için Minis Ultra\'i otomatik başlatma izin listesine ekleyin ve pil kısıtlamasını kaldırın.</string>
     <string name="system_permissions_a11y_oem_autostart">Otomatik başlatma izin listesine ekle</string>

@@ -1585,13 +1585,7 @@
     <string name="logs_config_time_min_ago">%1$d min lalu</string>
     <string name="logs_config_time_hr_ago">%1$d jam lalu</string>
     <string name="logs_config_time_yesterday">Semalam</string>
-    <string name="system_permissions_title">Kebenaran Sistem</string>
     <string name="system_permissions_subtitle">Kebenaran peringkat sistem pengendalian yang diberikan daripada Tetapan sistem</string>
-    <string name="system_permissions_section_a11y">Kebolehaksesan</string>
-    <string name="system_permissions_a11y_row">Perkhidmatan Kebolehaksesan Minis Ultra</string>
-    <string name="system_permissions_a11y_enabled">Didayakan — android-a11y-cli sedia digunakan</string>
-    <string name="system_permissions_a11y_disabled">Dilumpuhkan — ketik untuk mendayakannya dalam Tetapan sistem</string>
-    <string name="system_permissions_a11y_footer">Diperlukan oleh android-a11y-cli untuk membaca struktur antara muka, menghantar gerak isyarat, dan memantau peristiwa. Tanpa kebenaran ini, Ejen tidak dapat mengendalikan aplikasi lain. Hidupkan suis di bawah Minis Ultra pada skrin seterusnya.</string>
     <string name="system_permissions_a11y_oem_header">Perkhidmatan kerap dimatikan?</string>
     <string name="system_permissions_a11y_oem_footer">%1$s mungkin memaparkan \"perkhidmatan ini telah gagal\" dan menghentikan perkhidmatan kebolehaksesan di latar belakang. Masukkan Minis Ultra ke dalam senarai putih automula dan buang sekatan bateri supaya ia kekal bersambung.</string>
     <string name="system_permissions_a11y_oem_autostart">Tambah ke senarai putih automula</string>

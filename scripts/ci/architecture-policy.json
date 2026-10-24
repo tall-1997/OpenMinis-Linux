@@ -62,7 +62,7 @@
     "src/android/app/src/main/java/com/openminis/app/ui/components/UnifiedModelPickerSheet.kt": 847,
     "src/android/app/src/main/java/com/openminis/app/ui/markdown/MarkdownParser.kt": 888,
     "src/android/app/src/main/java/com/openminis/app/ui/markdown/MarkdownText.kt": 1068,
-    "src/android/app/src/main/java/com/openminis/app/ui/navigation/AppNavigation.kt": 1753,
+    "src/android/app/src/main/java/com/openminis/app/ui/navigation/AppNavigation.kt": 1741,
     "src/android/app/src/main/java/com/openminis/app/ui/navigation/ChatSplitScaffold.kt": 973,
     "src/android/app/src/main/java/com/openminis/app/ui/sandbox/FilePreviewScreen.kt": 1278,
     "src/android/app/src/main/java/com/openminis/app/ui/sandbox/MirrorSettingsScreen.kt": 868,

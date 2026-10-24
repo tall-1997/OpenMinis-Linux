@@ -1593,13 +1593,7 @@
     <string name="logs_config_time_min_ago">%1$d мин назад</string>
     <string name="logs_config_time_hr_ago">%1$d ч назад</string>
     <string name="logs_config_time_yesterday">Вчера</string>
-    <string name="system_permissions_title">Системные разрешения</string>
     <string name="system_permissions_subtitle">Разрешения уровня ОС, предоставленные в системных Настройках</string>
-    <string name="system_permissions_section_a11y">Спец. возможности</string>
-    <string name="system_permissions_a11y_row">Служба спец. возможностей Minis Ultra</string>
-    <string name="system_permissions_a11y_enabled">Включено — android-a11y-cli готов к работе</string>
-    <string name="system_permissions_a11y_disabled">Отключено — нажмите, чтобы включить в системных Настройках</string>
-    <string name="system_permissions_a11y_footer">Требуется для android-a11y-cli для чтения дерева UI, внедрения жестов и мониторинга событий. Без этого Minis Ultra Agent не смогут управлять другими приложениями. Включите переключатель под Minis Ultra на следующем экране.</string>
     <string name="system_permissions_a11y_oem_header">Служба постоянно завершается?</string>
     <string name="system_permissions_a11y_oem_footer">%1$s может показать «эта служба не работает» и остановить службу специальных возможностей в фоне. Добавьте приложение в список автозапуска и снимите ограничение батареи, чтобы служба оставалась подключённой.</string>
     <string name="system_permissions_a11y_oem_autostart">Добавить в список автозапуска</string>

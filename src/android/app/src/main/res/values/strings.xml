@@ -2154,13 +2154,7 @@
     <string name="logs_config_time_yesterday">Yesterday</string>
 
     <!-- T323: System Permissions screen + AccessibilityService -->
-    <string name="system_permissions_title">System Permissions</string>
     <string name="system_permissions_subtitle">OS-level permissions granted from system Settings</string>
-    <string name="system_permissions_section_a11y">Accessibility</string>
-    <string name="system_permissions_a11y_row">Minis Ultra Accessibility Service</string>
-    <string name="system_permissions_a11y_enabled">Enabled — android-a11y-cli is ready</string>
-    <string name="system_permissions_a11y_disabled">Disabled — tap to enable in system Settings</string>
-    <string name="system_permissions_a11y_footer">Required by android-a11y-cli for UI-tree reads, gesture injection, and event monitoring. Without this, Agents cannot drive other apps. Toggle the switch under Minis Ultra on the next screen.</string>
     <string name="system_permissions_a11y_oem_header">Service keeps getting killed?</string>
     <string name="system_permissions_a11y_oem_footer">%1$s may show \"this service has failed\" and stop the accessibility service in the background. Whitelist autostart and remove the battery restriction so it stays connected.</string>
     <string name="system_permissions_a11y_oem_autostart">Add to autostart whitelist</string>

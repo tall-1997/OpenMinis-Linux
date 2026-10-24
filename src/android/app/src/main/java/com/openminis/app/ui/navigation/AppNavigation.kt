@@ -59,7 +59,6 @@ import com.openminis.app.ui.sandbox.RootfsManagementScreen
 import com.openminis.app.ui.settings.EnvironmentVariablesScreen
 import com.openminis.app.ui.settings.AppearanceScreen
 import com.openminis.app.ui.settings.SettingsScreen
-import com.openminis.app.ui.settings.SystemPermissionsScreen
 import com.openminis.app.ui.settings.SessionStorageDetailScreen
 import com.openminis.app.ui.settings.SkillDetailScreen
 import com.openminis.app.ui.settings.StorageManagementScreen
@@ -194,8 +193,6 @@ object Routes {
      */
     const val SHIZUKU = "shizuku"
     const val HOST_SU = "host_su"
-    /** T323: System Permissions (Accessibility service status, etc.). */
-    const val SYSTEM_PERMISSIONS = "system_permissions"
     const val USAGE_STATS = "usage_stats"
     const val LOGS = "logs"
     const val LOG_DETAIL = "log_detail/{fileName}"
@@ -704,9 +701,6 @@ fun AppNavigation(
                 onSoulClick = { navController.safeNavigate(Routes.SOUL) },
                 onEvolutionClick = { navController.safeNavigate(Routes.EVOLUTION) },
                 onPermissionsClick = { navController.safeNavigate(Routes.PERMISSIONS) },
-                // [T-android-system-permissions-entry] The route was registered
-                // since T323 with nothing navigating to it.
-                onSystemPermissionsClick = { navController.safeNavigate(Routes.SYSTEM_PERMISSIONS) },
                 onUsageClick = { navController.safeNavigate(Routes.USAGE_STATS) },
                 onAppearanceClick = { navController.safeNavigate(Routes.APPEARANCE) },
                 onBackgroundClick = { navController.safeNavigate(Routes.BACKGROUND) },
@@ -1570,12 +1564,6 @@ fun AppNavigation(
 
         composable(Routes.SHIZUKU) {
             ShizukuPermissionScreen(
-                onBack = { navController.safePopBackStack() },
-            )
-        }
-
-        composable(Routes.SYSTEM_PERMISSIONS) {
-            SystemPermissionsScreen(
                 onBack = { navController.safePopBackStack() },
             )
         }

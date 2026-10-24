@@ -1991,13 +1991,7 @@
     <string name="logs_config_time_min_ago">%1$d 分钟前</string>
     <string name="logs_config_time_hr_ago">%1$d 小时前</string>
     <string name="logs_config_time_yesterday">昨天</string>
-    <string name="system_permissions_title">系统权限</string>
     <string name="system_permissions_subtitle">在系统设置中授予的操作系统级权限</string>
-    <string name="system_permissions_section_a11y">无障碍</string>
-    <string name="system_permissions_a11y_row">Minis Ultra 无障碍服务</string>
-    <string name="system_permissions_a11y_enabled">已启用 —— android-a11y-cli 可以使用了</string>
-    <string name="system_permissions_a11y_disabled">已停用 —— 点击以在系统设置中启用</string>
-    <string name="system_permissions_a11y_footer">android-a11y-cli 需要该权限来读取 UI 树、注入手势和监听事件。没有它，Agent 就无法操作其他应用。请在下一个界面中打开 Minis Ultra 下方的开关。</string>
     <string name="system_permissions_a11y_oem_header">服务总是被杀死？</string>
     <string name="system_permissions_a11y_oem_footer">%1$s 可能会提示「此服务出现故障」并在后台停止无障碍服务。请将本应用加入自启动白名单，并取消省电限制，使其保持连接。</string>
     <string name="system_permissions_a11y_oem_autostart">加入自启动白名单</string>

@@ -1593,13 +1593,7 @@
     <string name="logs_config_time_min_ago">%1$d min temu</string>
     <string name="logs_config_time_hr_ago">%1$d godz. temu</string>
     <string name="logs_config_time_yesterday">Wczoraj</string>
-    <string name="system_permissions_title">Uprawnienia systemowe</string>
     <string name="system_permissions_subtitle">Uprawnienia na poziomie systemu przyznane w Ustawieniach systemowych</string>
-    <string name="system_permissions_section_a11y">Ułatwienia dostępu</string>
-    <string name="system_permissions_a11y_row">Usługa ułatwień dostępu Minis Ultra</string>
-    <string name="system_permissions_a11y_enabled">Włączona — android-a11y-cli jest gotowe</string>
-    <string name="system_permissions_a11y_disabled">Wyłączona — dotknij, aby włączyć w Ustawieniach systemowych</string>
-    <string name="system_permissions_a11y_footer">Wymagane przez android-a11y-cli do odczytu drzewa interfejsu, wysyłania gestów i obserwowania zdarzeń. Bez tego Agenci nie mogą sterować innymi aplikacjami. Na następnym ekranie włącz przełącznik przy pozycji Minis Ultra.</string>
     <string name="system_permissions_a11y_oem_header">Usługa jest wciąż wyłączana?</string>
     <string name="system_permissions_a11y_oem_footer">%1$s może pokazać komunikat „ta usługa uległa awarii” i zatrzymać usługę ułatwień dostępu w tle. Dodaj Minis Ultra do listy dozwolonych autostartu i usuń ograniczenie baterii, aby usługa pozostała połączona.</string>
     <string name="system_permissions_a11y_oem_autostart">Dodaj do listy dozwolonych autostartu</string>
