@@ -47,6 +47,19 @@ class MultiAgentSettingsRepository(context: Context) {
     )
     val subagentMaxAttempts: StateFlow<Int> = _subagentMaxAttempts.asStateFlow()
 
+    // Worker seat of a Supervisor-Worker chat: "" = follow the session model.
+    private val _workerModelEntryId = MutableStateFlow(
+        prefs.getString(KEY_WORKER_MODEL_ID, null)?.trim().orEmpty(),
+    )
+    val workerModelEntryId: StateFlow<String> = _workerModelEntryId.asStateFlow()
+
+    private val _supervisorMaxWorkerTurns = MutableStateFlow(
+        MultiAgentSettings.clampSupervisorTurns(
+            prefs.getInt(KEY_SUPERVISOR_MAX_WORKER_TURNS, MultiAgentSettings.DEFAULT_SUPERVISOR_TURNS),
+        ),
+    )
+    val supervisorMaxWorkerTurns: StateFlow<Int> = _supervisorMaxWorkerTurns.asStateFlow()
+
     // Deliberately in-memory: slot thinking depth applies to the next dispatch
     // only and must not become a model/session preference.
     private val _selectedThinkingLevels = MutableStateFlow(
@@ -81,6 +94,18 @@ class MultiAgentSettingsRepository(context: Context) {
         val clamped = MultiAgentSettings.clampAttempts(value)
         prefs.edit().putInt(KEY_SUBAGENT_MAX_ATTEMPTS, clamped).apply()
         _subagentMaxAttempts.value = clamped
+    }
+
+    fun setWorkerModelEntryId(id: String) {
+        val trimmed = id.trim()
+        prefs.edit().putString(KEY_WORKER_MODEL_ID, trimmed).apply()
+        _workerModelEntryId.value = trimmed
+    }
+
+    fun setSupervisorMaxWorkerTurns(value: Int) {
+        val clamped = MultiAgentSettings.clampSupervisorTurns(value)
+        prefs.edit().putInt(KEY_SUPERVISOR_MAX_WORKER_TURNS, clamped).apply()
+        _supervisorMaxWorkerTurns.value = clamped
     }
 
     fun setSelectedModelEntryIds(ids: List<String>) {
@@ -131,6 +156,11 @@ class MultiAgentSettingsRepository(context: Context) {
             _maxConcurrent.value,
         )
         if (next != _selectedModelEntryIds.value) writeSelectedIds(next)
+        val worker = _workerModelEntryId.value
+        if (worker.isNotBlank() && worker !in liveIds) {
+            prefs.edit().putString(KEY_WORKER_MODEL_ID, "").apply()
+            _workerModelEntryId.value = ""
+        }
     }
 
     private fun readSelectedIds(): List<String> {
@@ -170,6 +200,8 @@ class MultiAgentSettingsRepository(context: Context) {
         private const val KEY_MODEL_IDS = "model_entry_ids"
         private const val KEY_SUBAGENT_MAX_TURNS = "subagent_max_turns"
         private const val KEY_SUBAGENT_MAX_ATTEMPTS = "subagent_max_attempts"
+        private const val KEY_WORKER_MODEL_ID = "worker_model_entry_id"
+        private const val KEY_SUPERVISOR_MAX_WORKER_TURNS = "supervisor_max_worker_turns"
         private const val DEFAULT_ENABLED = true
     }
 }
@@ -184,12 +216,28 @@ object MultiAgentSettings {
     const val MIN_SUBAGENT_ATTEMPTS = 1
     const val MAX_SUBAGENT_ATTEMPTS = 5
     const val DEFAULT_SUBAGENT_ATTEMPTS = 3
+    const val MIN_SUPERVISOR_TURNS = 1
+    const val MAX_SUPERVISOR_TURNS = 200
+    const val DEFAULT_SUPERVISOR_TURNS = 50
 
     fun clampConcurrent(n: Int): Int = n.coerceIn(MIN_CONCURRENT, MAX_CONCURRENT)
 
     fun clampTurns(n: Int): Int = n.coerceIn(MIN_SUBAGENT_TURNS, MAX_SUBAGENT_TURNS)
 
     fun clampAttempts(n: Int): Int = n.coerceIn(MIN_SUBAGENT_ATTEMPTS, MAX_SUBAGENT_ATTEMPTS)
+
+    fun clampSupervisorTurns(n: Int): Int = n.coerceIn(MIN_SUPERVISOR_TURNS, MAX_SUPERVISOR_TURNS)
+
+    /**
+     * Worker seat model for a Supervisor-Worker chat (spec §3.7): an explicit
+     * per-instruction request wins, then the configured worker slot, then the
+     * main session model. Blank slot = session model = pre-feature behavior.
+     */
+    fun resolveWorkerModelId(requested: String?, slotId: String, activeEntryId: String): String {
+        return requested?.trim()?.takeIf { it.isNotEmpty() }
+            ?: slotId.takeIf { it.isNotBlank() }
+            ?: activeEntryId
+    }
 
     /**
      * Pad or truncate [ids] to [max] slots. Empty strings are kept (unassigned

@@ -48,6 +48,22 @@ class MultiAgentSettingsTest {
     }
 
     @Test
+    fun clampSupervisorTurns_staysInRange() {
+        assertEquals(1, MultiAgentSettings.clampSupervisorTurns(0))
+        assertEquals(1, MultiAgentSettings.clampSupervisorTurns(-3))
+        assertEquals(50, MultiAgentSettings.clampSupervisorTurns(50))
+        assertEquals(200, MultiAgentSettings.clampSupervisorTurns(999))
+    }
+
+    @Test
+    fun resolveWorkerModelId_prefersRequestedThenSlotThenSession() {
+        assertEquals("req", MultiAgentSettings.resolveWorkerModelId("req", "slot", "active"))
+        assertEquals("slot", MultiAgentSettings.resolveWorkerModelId(null, "slot", "active"))
+        assertEquals("active", MultiAgentSettings.resolveWorkerModelId(null, "", "active"))
+        assertEquals("active", MultiAgentSettings.resolveWorkerModelId("  ", "", "active"))
+    }
+
+    @Test
     fun pickModelId_prefersRequestedWhenInPool() {
         val pool = listOf("m1", "m2", "m3")
         assertEquals("m2", MultiAgentSettings.pickModelId(pool, "m2", 0))
