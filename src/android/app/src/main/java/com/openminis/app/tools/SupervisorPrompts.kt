@@ -127,8 +127,25 @@ object SupervisorPrompts {
     fun contextDigest(messages: List<LLMMessage>, maxChars: Int): String {
         val lines = messages
             .filter { it.content.isNotBlank() }
-            .joinToString("\n") { m -> "${m.role.value}: ${m.content.trim()}" }
-        if (lines.length <= maxChars) return lines
-        return lines.takeLast(maxChars)
+            .map { m -> "${m.role.value}: ${m.content.trim()}" }
+        if (lines.isEmpty()) return ""
+        // Tail cap by whole lines: the newest turns survive intact and the
+        // oldest are dropped whole. A raw takeLast(maxChars) would leave a
+        // half-line fragment of the dropped turn — a digest that quotes a
+        // message it claims to have dropped.
+        val kept = ArrayDeque<String>()
+        var used = 0
+        for (line in lines.asReversed()) {
+            val cost = line.length + if (kept.isEmpty()) 0 else 1
+            if (used + cost > maxChars) break
+            kept.addFirst(line)
+            used += cost
+        }
+        if (kept.isEmpty()) {
+            // One line alone exceeds the budget: tail-truncate that line
+            // rather than return an empty digest.
+            return lines.last().takeLast(maxChars)
+        }
+        return kept.joinToString("\n")
     }
 }

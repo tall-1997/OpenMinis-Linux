@@ -481,7 +481,7 @@ private suspend fun ChatViewModel.speakVisible(
     return text
 }
 
-private suspend fun ChatViewModel.speakModel(
+internal suspend fun ChatViewModel.speakModel(
     provider: LLMProvider,
     system: String,
     user: String,
@@ -681,7 +681,7 @@ private fun ChatViewModel.closeRecord(): List<GroupChat.Line> {
     }
 }
 
-private suspend fun ChatViewModel.upsertGroupBubble(
+internal suspend fun ChatViewModel.upsertGroupBubble(
     id: String,
     speaker: String,
     text: String,
@@ -734,7 +734,7 @@ private suspend fun ChatViewModel.publishGroupNotice(text: String) {
     }
 }
 
-private suspend fun ChatViewModel.persistGroupUtterance(
+internal suspend fun ChatViewModel.persistGroupUtterance(
     speaker: String,
     text: String,
     snapshot: ModelAttributionSnapshot?,

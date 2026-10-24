@@ -22,6 +22,30 @@ class SupervisorSessionRunnerTest {
     private fun envelope(task: String, acceptance: String): String =
         "## Task\n- $task\n\n## Expected result\n- $acceptance"
 
+    @Test
+    fun workerSeat_receivesInstructionWritePaths() = runTest {
+        val sup = FakeSeat(
+            "## Task\n- do a\n- write_paths: /tmp/one.txt\n- write_paths: /tmp/two.txt\n\n## Expected result\n- tests pass",
+            "DONE: tests pass",
+        )
+        val worker = FakeSeat("report a")
+        val seenPaths = mutableListOf<List<String>>()
+        SupervisorSessionRunner.run(
+            objective = "obj",
+            contextDigest = "",
+            maxWorkerTurns = 10,
+            supervisorSystem = system,
+            supervisor = { u, _, _ -> sup.speak(system, u) },
+            worker = { u, _, writePaths ->
+                seenPaths += writePaths
+                worker.speak(system, u)
+            },
+            inbox = SupervisorChat.SupervisorInbox(),
+        )
+        assertEquals(1, seenPaths.size)
+        assertEquals(listOf("/tmp/one.txt", "/tmp/two.txt"), seenPaths[0])
+    }
+
     private val system = "sys"
 
     @Test
@@ -40,8 +64,8 @@ class SupervisorSessionRunnerTest {
             contextDigest = "ctx",
             maxWorkerTurns = 10,
             supervisorSystem = system,
-            supervisor = { u, _ -> sup.speak(system, u) },
-            worker = { u, _ -> worker.speak(system, u) },
+            supervisor = { u, _, _ -> sup.speak(system, u) },
+            worker = { u, _, _ -> worker.speak(system, u) },
             inbox = inbox,
             onRound = { n, _, report -> rounds += n to report },
         )
@@ -66,8 +90,8 @@ class SupervisorSessionRunnerTest {
             contextDigest = "",
             maxWorkerTurns = 10,
             supervisorSystem = system,
-            supervisor = { u, _ -> sup.speak(system, u) },
-            worker = { u, _ -> worker.speak(system, u) },
+            supervisor = { u, _, _ -> sup.speak(system, u) },
+            worker = { u, _, _ -> worker.speak(system, u) },
             inbox = SupervisorChat.SupervisorInbox(),
         )
         assertEquals(SupervisorSessionRunner.Outcome.DONE::class, outcome::class)
@@ -87,8 +111,8 @@ class SupervisorSessionRunnerTest {
             contextDigest = "",
             maxWorkerTurns = 10,
             supervisorSystem = system,
-            supervisor = { u, _ -> sup.speak(system, u) },
-            worker = { u, _ -> worker.speak(system, u) },
+            supervisor = { u, _, _ -> sup.speak(system, u) },
+            worker = { u, _, _ -> worker.speak(system, u) },
             inbox = SupervisorChat.SupervisorInbox(),
         )
         assertEquals(SupervisorSessionRunner.Outcome.FAILED::class, outcome::class)
@@ -110,8 +134,8 @@ class SupervisorSessionRunnerTest {
             contextDigest = "",
             maxWorkerTurns = 2,
             supervisorSystem = system,
-            supervisor = { u, _ -> sup.speak(system, u) },
-            worker = { u, _ -> worker.speak(system, u) },
+            supervisor = { u, _, _ -> sup.speak(system, u) },
+            worker = { u, _, _ -> worker.speak(system, u) },
             inbox = SupervisorChat.SupervisorInbox(),
         )
         assertEquals(SupervisorSessionRunner.Outcome.DONE::class, outcome::class)
@@ -133,12 +157,12 @@ class SupervisorSessionRunnerTest {
                 contextDigest = "",
                 maxWorkerTurns = 10,
                 supervisorSystem = system,
-                supervisor = { u, _ ->
+                supervisor = { u, _, _ ->
                     calls++
                     if (calls > 1) throw kotlinx.coroutines.CancellationException("halt")
                     sup.speak(system, u)
                 },
-                worker = { u, _ -> worker.speak(system, u) },
+                worker = { u, _, _ -> worker.speak(system, u) },
                 inbox = SupervisorChat.SupervisorInbox(),
                 onTerminal = { state, _ -> terminal = state },
             )
@@ -159,8 +183,8 @@ class SupervisorSessionRunnerTest {
             contextDigest = "",
             maxWorkerTurns = 10,
             supervisorSystem = system,
-            supervisor = { u, _ -> sup.speak(system, u) },
-            worker = { u, _ -> worker.speak(system, u) },
+            supervisor = { u, _, _ -> sup.speak(system, u) },
+            worker = { u, _, _ -> worker.speak(system, u) },
             inbox = SupervisorChat.SupervisorInbox(),
         )
         assertEquals(SupervisorSessionRunner.Outcome.FAILED::class, outcome::class)
@@ -181,8 +205,8 @@ class SupervisorSessionRunnerTest {
             contextDigest = "",
             maxWorkerTurns = 10,
             supervisorSystem = system,
-            supervisor = { u, _ -> sup.speak(system, u) },
-            worker = { u, _ -> worker.speak(system, u) },
+            supervisor = { u, _, _ -> sup.speak(system, u) },
+            worker = { u, _, _ -> worker.speak(system, u) },
             inbox = inbox,
         )
         // First turn carries the inbox message.
@@ -198,8 +222,8 @@ class SupervisorSessionRunnerTest {
             contextDigest = "",
             maxWorkerTurns = 10,
             supervisorSystem = system,
-            supervisor = { u, _ -> sup.speak(system, u) },
-            worker = { u, _ -> worker.speak(system, u) },
+            supervisor = { u, _, _ -> sup.speak(system, u) },
+            worker = { u, _, _ -> worker.speak(system, u) },
             inbox = SupervisorChat.SupervisorInbox(),
             recovery = "上次中断于第 7 轮",
         )

@@ -39,6 +39,9 @@ object SupervisorRunStore {
     private const val MAX_INSTRUCTION_DIGEST = 200
     private const val MAX_REPORT_DIGEST = 500
 
+    /** Objective cap — the record header, not the working prompt. */
+    private const val MAX_OBJECTIVE_CHARS = 500
+
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     private val locks = ConcurrentHashMap<String, ReentrantLock>()
     private val memory = ConcurrentHashMap<String, MutableList<RunRecord>>()
@@ -133,10 +136,19 @@ object SupervisorRunStore {
     }
 
     /** Begin a run: replaces any prior record for this session. */
-    fun start(sessionId: String, context: Context?): RunRecord {
+    fun start(sessionId: String, context: Context?, objective: String, maxWorkerTurns: Int): RunRecord {
         val k = key(sessionId)
         return lock(k).withLock {
-            val record = RunRecord(sessionId = k)
+            val record = RunRecord(
+                sessionId = k,
+                objective = objective.trim().take(MAX_OBJECTIVE_CHARS),
+                workerTurns = 0,
+                rounds = emptyList(),
+                state = STATE_RUNNING,
+                doneSummary = null,
+                createdAt = System.currentTimeMillis(),
+                updatedAt = System.currentTimeMillis(),
+            )
             saveLocked(k, context, listOf(record))
             record
         }
@@ -196,6 +208,19 @@ object SupervisorRunStore {
             runs[0] = flipped
             saveLocked(k, context, runs)
             flipped
+        }
+    }
+
+    /**
+     * The head record as stored — no reconciliation, no state filtering.
+     * [interrupted] answers "is there a dead run to recover"; this answers
+     * "what does the record say right now" (terminal summaries, live
+     * progress, test round-trips).
+     */
+    fun latest(sessionId: String, context: Context?): RunRecord? {
+        val k = key(sessionId)
+        return lock(k).withLock {
+            loadLocked(k, context).firstOrNull()
         }
     }
 

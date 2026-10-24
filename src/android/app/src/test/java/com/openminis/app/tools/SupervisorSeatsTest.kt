@@ -68,7 +68,13 @@ class SupervisorSeatsTest {
             listOf("zz_last", "aa_first", "file_read"),
             SupervisorSeats.workerTools(base).map { it.name },
         )
-        assertEquals(listOf("zz_last", "file_read"), SupervisorSeats.supervisorTools(base).map { it.name })
+        // Recon tools survive in base order (glob before grep proves no
+        // re-sort); unknown tools are not recon tools and are dropped.
+        val recon = listOf(tool("glob"), tool("file_read"), tool("grep"))
+        assertEquals(
+            listOf("glob", "file_read", "grep"),
+            SupervisorSeats.supervisorTools(recon).map { it.name },
+        )
     }
 
     @Test

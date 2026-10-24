@@ -16,13 +16,20 @@ import kotlinx.coroutines.CancellationException
  * DONE verdict, a rubber-stamp failure, the worker-turn cap, or a user
  * halt (cancellation). Envelope rejections bounce the supervisor
  * without consuming a worker turn. The user inbox is drained in order
- * ahead of every supervisor turn.
+ * ahead of every supervisor turn. The worker seat receives the
+ * instruction's write_paths so it can open the matching WritePathGuard
+ * scope; the supervisor seat always receives an empty list (review never
+ * writes).
  */
 object SupervisorSessionRunner {
 
-    /** One seat: speak a turn, return its full text. */
-    suspend fun interface Seat {
-        suspend fun speak(user: String, system: String): String
+    /**
+     * One seat: speak a turn, return its full text. [writePaths] carries the
+     * validated instruction's declared write scope — the worker seat opens
+     * its WritePathGuard with it; the supervisor seat ignores it (NO_WRITE).
+     */
+    fun interface Seat {
+        suspend fun speak(user: String, system: String, writePaths: List<String>): String
     }
 
     sealed class Outcome {
@@ -68,14 +75,14 @@ object SupervisorSessionRunner {
         suspend fun supervisorTurn(prompt: String): String {
             calls++
             if (calls > MAX_SUPERVISOR_CALLS) {
-                onTerminal(SupervisorRunStore.STATE_FAILED, "supervisor call budget exceeded")
+                onTerminal.onTerminal(SupervisorRunStore.STATE_FAILED, "supervisor call budget exceeded")
                 throw IllegalStateException("supervisor call budget exceeded")
             }
-            return supervisor.speak(prompt, supervisorSystem)
+            return supervisor.speak(prompt, supervisorSystem, emptyList())
         }
 
         suspend fun terminal(state: String, summary: String?): Outcome {
-            onTerminal(state, summary)
+            onTerminal.onTerminal(state, summary)
             return when (state) {
                 SupervisorRunStore.STATE_DONE -> Outcome.DONE(summary.orEmpty())
                 else -> Outcome.FAILED(summary ?: state)
@@ -110,7 +117,10 @@ object SupervisorSessionRunner {
                                     append("\n\n")
                                     append(text.trim())
                                 }
-                                val report = worker.speak(workerPrompt, supervisorSystem)
+                                val report = worker.speak(
+                                    workerPrompt, supervisorSystem,
+                                    check.instruction.writePaths,
+                                )
                                 machine.onWorkerReport()
                                 lastReport = report
                                 onRound.onRound(
@@ -159,10 +169,10 @@ object SupervisorSessionRunner {
                 }
             }
         } catch (e: CancellationException) {
-            onTerminal(SupervisorRunStore.STATE_USER_HALTED, null)
+            onTerminal.onTerminal(SupervisorRunStore.STATE_USER_HALTED, null)
             throw e
         } catch (e: Exception) {
-            onTerminal(SupervisorRunStore.STATE_FAILED, e.message ?: e.javaClass.simpleName)
+            onTerminal.onTerminal(SupervisorRunStore.STATE_FAILED, e.message ?: e.javaClass.simpleName)
             return Outcome.FAILED(e.message ?: e.javaClass.simpleName)
         }
     }
