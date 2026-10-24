@@ -97,7 +97,8 @@
     <string name="a11y_repair_action_repair">Ayusin ngayon</string>
     <string name="a11y_repair_action_open_settings">Buksan ang Mga Setting</string>
     <string name="a11y_repair_cancel">Hindi muna</string>
-    <string name="a11y_repair_section_header">Kailangan ng pansin</string>
+    <string name="a11y_hide">Itago</string>
+    <string name="a11y_show">Ipakita</string>    <string name="a11y_repair_section_header">Kailangan ng pansin</string>
     <string name="a11y_repair_row_shizuku">Ayusin ang pahintulot sa accessibility</string>
     <string name="a11y_repair_row_manual">I-enable muli ang accessibility</string>
     <string name="a11y_repair_row_sub">Nabawi ang pahintulot, malamang dahil sa puwersahang paghinto</string>
@@ -1015,7 +1016,9 @@
     <string name="add_provider_your_key_is_stored_securely_in_encrypted">Ligtas na naka-imbak ang key mo sa naka-encrypt na storage at hindi ito umaalis sa device.</string>
     <string name="add_provider_endpoint">Endpoint</string>
     <string name="add_provider_endpoint_anthropic_hint">Gamitin ang opisyal na Anthropic endpoint gaya ng nakasulat. Para sa mga third-party na serbisyong tugma sa Anthropic (hal. Mimo), maaaring kailanganin ng base URL ang path suffix tulad ng \"/anthropic\" — tingnan ang dokumentasyon ng provider mo. Ginagamit ang URL gaya ng nakasulat kasama ang \"/v1/messages\".</string>
-    <string name="add_provider_custom_api_base_optional">Custom na API Base (Opsyonal)</string>
+    <string name="add_provider_endpoint_gemini_hint">Iwanang blangko para gamitin ang default na Google endpoint. Ilagay ang buong base URL kabilang ang version path.</string>
+    <string name="add_provider_endpoint_default_v1_hint">Iwanang blangko para gamitin ang default na endpoint. Awtomatikong idadagdag ang \"/v1\" — ilagay lamang ang base host.</string>
+    <string name="add_provider_endpoint_verbatim_hint">Ang URL ay ginagamit nang tulad-tulad. Isama ang buong path hanggang sa (pero hindi kabilang ang) endpoint.</string>    <string name="add_provider_custom_api_base_optional">Custom na API Base (Opsyonal)</string>
     <string name="add_provider_authentication">Pagpapatunay</string>
     <string name="add_provider_sign_in_succeeded_the_token_is_stored_in">Matagumpay ang sign-in. Naka-imbak ang token sa naka-encrypt na storage. I-tap ang I-save para idagdag ang provider.</string>
     <string name="add_provider_authenticated">Napatunayan</string>

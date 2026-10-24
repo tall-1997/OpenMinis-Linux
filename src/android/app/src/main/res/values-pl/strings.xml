@@ -97,7 +97,8 @@
     <string name="a11y_repair_action_repair">Napraw teraz</string>
     <string name="a11y_repair_action_open_settings">Otwórz ustawienia</string>
     <string name="a11y_repair_cancel">Nie teraz</string>
-    <string name="a11y_repair_section_header">Wymaga uwagi</string>
+    <string name="a11y_hide">Ukryj</string>
+    <string name="a11y_show">Pokaż</string>    <string name="a11y_repair_section_header">Wymaga uwagi</string>
     <string name="a11y_repair_row_shizuku">Napraw uprawnienie do ułatwień dostępu</string>
     <string name="a11y_repair_row_manual">Włącz ponownie ułatwienia dostępu</string>
     <string name="a11y_repair_row_sub">Uprawnienie zostało cofnięte, prawdopodobnie przez wymuszone zatrzymanie</string>
@@ -1017,7 +1018,9 @@
     <string name="add_provider_your_key_is_stored_securely_in_encrypted">Twój klucz jest bezpiecznie przechowywany w zaszyfrowanej pamięci i nigdy nie opuszcza urządzenia.</string>
     <string name="add_provider_endpoint">Punkt końcowy</string>
     <string name="add_provider_endpoint_anthropic_hint">Użyj oficjalnego punktu końcowego Anthropic bez zmian. W przypadku zgodnych usług innych firm (np. Mimo) bazowy adres URL może wymagać przyrostka ścieżki, np. „/anthropic” — sprawdź dokumentację dostawcy. Adres jest używany dosłownie z dodanym „/v1/messages”.</string>
-    <string name="add_provider_custom_api_base_optional">Niestandardowy adres API (opcjonalnie)</string>
+    <string name="add_provider_endpoint_gemini_hint">Pozostaw puste, aby użyć domyślnego punktu końcowego Google. Wprowadź pełny podstawowy adres URL wraz ze ścieżką wersji.</string>
+    <string name="add_provider_endpoint_default_v1_hint">Pozostaw puste, aby użyć domyślnego punktu końcowego. \"/v1\" jest dodawane automatycznie — wprowadź tylko host bazowy.</string>
+    <string name="add_provider_endpoint_verbatim_hint">Adres URL jest używany dosłownie. Uwzględnij pełną ścieżkę do (ale bez) punktu końcowego.</string>    <string name="add_provider_custom_api_base_optional">Niestandardowy adres API (opcjonalnie)</string>
     <string name="add_provider_authentication">Uwierzytelnianie</string>
     <string name="add_provider_sign_in_succeeded_the_token_is_stored_in">Logowanie powiodło się. Token jest przechowywany w zaszyfrowanej pamięci. Dotknij Zapisz, aby dodać dostawcę.</string>
     <string name="add_provider_authenticated">Uwierzytelniono</string>

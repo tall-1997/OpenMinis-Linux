@@ -97,7 +97,8 @@
     <string name="a11y_repair_action_repair">Réparer maintenant</string>
     <string name="a11y_repair_action_open_settings">Ouvrir les Réglages</string>
     <string name="a11y_repair_cancel">Plus tard</string>
-    <string name="a11y_repair_section_header">Action requise</string>
+    <string name="a11y_hide">Masquer</string>
+    <string name="a11y_show">Afficher</string>    <string name="a11y_repair_section_header">Action requise</string>
     <string name="a11y_repair_row_shizuku">Réparer l’autorisation d’accessibilité</string>
     <string name="a11y_repair_row_manual">Réactiver l’accessibilité</string>
     <string name="a11y_repair_row_sub">L’autorisation a été révoquée, probablement par un arrêt forcé</string>
@@ -1015,7 +1016,9 @@
     <string name="add_provider_your_key_is_stored_securely_in_encrypted">Votre clé est stockée de manière sécurisée dans un coffre chiffré et ne quitte jamais l\'appareil.</string>
     <string name="add_provider_endpoint">Point de terminaison</string>
     <string name="add_provider_endpoint_anthropic_hint">Utilisez le point de terminaison officiel d\'Anthropic tel quel. Pour les services tiers compatibles Anthropic (par ex. Mimo), l\'URL de base peut nécessiter un suffixe de chemin comme « /anthropic » — consultez la documentation de votre fournisseur. L\'URL est utilisée telle quelle, suivie de « /v1/messages ».</string>
-    <string name="add_provider_custom_api_base_optional">Base API personnalisée (optionnel)</string>
+    <string name="add_provider_endpoint_gemini_hint">Laissez vide pour utiliser le point de terminaison Google par défaut. Saisissez l\'URL de base complète, chemin de version inclus.</string>
+    <string name="add_provider_endpoint_default_v1_hint">Laissez vide pour utiliser le point de terminaison par défaut. \"/v1\" est ajouté automatiquement — saisissez uniquement l\'hôte de base.</string>
+    <string name="add_provider_endpoint_verbatim_hint">L\'URL est utilisée telle quelle. Incluez le chemin complet jusqu\'au point de terminaison (exclu).</string>    <string name="add_provider_custom_api_base_optional">Base API personnalisée (optionnel)</string>
     <string name="add_provider_authentication">Authentification</string>
     <string name="add_provider_sign_in_succeeded_the_token_is_stored_in">Connexion réussie. Le jeton est stocké dans un coffre chiffré. Appuyez sur Enregistrer pour ajouter le fournisseur.</string>
     <string name="add_provider_authenticated">Authentifié</string>

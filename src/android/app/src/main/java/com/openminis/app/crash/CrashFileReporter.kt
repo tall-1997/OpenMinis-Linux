@@ -50,6 +50,14 @@ class CrashFileSender : ReportSender {
             "Version: ${errorContent.getString(ReportField.APP_VERSION_NAME)} " +
                 "(${errorContent.getString(ReportField.APP_VERSION_CODE)})",
         )
+        // [T-android-crash-symbolization] Release frames are R8-obfuscated;
+        // they are only decodable against the mapping.txt archived by the
+        // workflow run that built this APK. GIT_SHA names that run exactly
+        // (GIT_DIRTY flags a rolling build from a modified tree).
+        appendLine(
+            "Git: ${com.openminis.app.BuildConfig.GIT_SHA}" +
+                (if (com.openminis.app.BuildConfig.GIT_DIRTY) " (dirty)" else ""),
+        )
         appendLine(
             "Android: ${errorContent.getString(ReportField.ANDROID_VERSION)} " +
                 "(SDK ${errorContent.getString(ReportField.BUILD)})",

@@ -186,7 +186,8 @@
     <string name="a11y_repair_action_repair">Repair now</string>
     <string name="a11y_repair_action_open_settings">Open Settings</string>
     <string name="a11y_repair_cancel">Not now</string>
-    <string name="a11y_repair_section_header">Needs attention</string>
+    <string name="a11y_hide">Hide</string>
+    <string name="a11y_show">Show</string>    <string name="a11y_repair_section_header">Needs attention</string>
     <string name="a11y_repair_row_shizuku">Repair accessibility permission</string>
     <string name="a11y_repair_row_manual">Re-enable accessibility</string>
     <string name="a11y_repair_row_sub">The permission was revoked, likely by a force-stop</string>
@@ -1446,7 +1447,9 @@
     <string name="add_provider_your_key_is_stored_securely_in_encrypted">Your key is stored securely in encrypted storage and never leaves the device.</string>
     <string name="add_provider_endpoint">Endpoint</string>
     <string name="add_provider_endpoint_anthropic_hint">Use the official Anthropic endpoint as-is. For third-party Anthropic-compatible services (e.g. Mimo), the base URL may need a path suffix such as \"/anthropic\" — check your provider\'s docs. The URL is used verbatim with \"/v1/messages\" appended.</string>
-    <string name="add_provider_custom_api_base_optional">Custom API Base (Optional)</string>
+    <string name="add_provider_endpoint_gemini_hint">Leave empty to use the default Google endpoint. Enter the full base URL including version path.</string>
+    <string name="add_provider_endpoint_default_v1_hint">Leave empty to use the default endpoint. \"/v1\" is appended automatically — enter the base host only.</string>
+    <string name="add_provider_endpoint_verbatim_hint">The URL is used verbatim. Include the full path up to (but not including) the endpoint.</string>    <string name="add_provider_custom_api_base_optional">Custom API Base (Optional)</string>
     <string name="add_provider_authentication">Authentication</string>
     <string name="add_provider_sign_in_succeeded_the_token_is_stored_in">Sign-in succeeded. The token is stored in encrypted storage. Tap Save to add the provider.</string>
     <string name="add_provider_authenticated">Authenticated</string>

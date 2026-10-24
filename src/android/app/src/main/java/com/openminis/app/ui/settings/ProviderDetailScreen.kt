@@ -584,7 +584,7 @@ fun ProviderDetailScreen(
                         tint = MaterialTheme.colorScheme.primary,
                     )
                 },
-                showDivider = entries.isNotEmpty() || true,
+                showDivider = true, // [T-dead-condition] always shown — separates header from entries/empty state
             )
 
             entries.forEachIndexed { idx, entry ->
@@ -1005,7 +1005,7 @@ private fun ApiKeyCredentialBlock(
                 IconButton(onClick = onToggleVisibility) {
                     Icon(
                         if (keyVisible) m3Icon(m3Icon(Icons.Default.VisibilityOff)) else m3Icon(m3Icon(Icons.Default.Visibility)),
-                        contentDescription = if (keyVisible) "Hide" else "Show",
+                        contentDescription = if (keyVisible) stringResource(R.string.a11y_hide) else stringResource(R.string.a11y_show),
                     )
                 }
             },
@@ -1047,7 +1047,7 @@ private fun ApiKeyCredentialBlock(
             IconButton(onClick = onToggleVisibility) {
                 Icon(
                     if (keyVisible) m3Icon(m3Icon(Icons.Default.VisibilityOff)) else m3Icon(m3Icon(Icons.Default.Visibility)),
-                    contentDescription = if (keyVisible) "Hide" else "Show",
+                    contentDescription = if (keyVisible) stringResource(R.string.a11y_hide) else stringResource(R.string.a11y_show),
                 )
             }
             MinisSmallTextButton(onClick = onBeginEdit) {

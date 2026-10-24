@@ -2025,8 +2025,8 @@ class ChatViewModel(
         )
     }
 
-    /** Structured agent history for the agent loop (contentParts-based). */
-    internal val agentHistory = mutableListOf<LLMMessage>()
+    /** Structured agent history — threading contract in AgentHistoryAccess.kt. */
+    internal val agentHistory: MutableList<LLMMessage> = java.util.concurrent.CopyOnWriteArrayList()
 
     /**
      * All agent tool definitions, recomputed on each read so the memory
@@ -3463,7 +3463,7 @@ class ChatViewModel(
     internal fun detachedCompactHistory(summaryWrappedText: String): List<LLMMessage> =
         buildDetachedCompactHistory(
             summaryWrappedText = summaryWrappedText,
-            history = agentHistory,
+            history = agentHistorySnapshot(),
             tailSize = DETACHED_TAIL_MESSAGES,
         )
 
@@ -6089,14 +6089,14 @@ class ChatViewModel(
         val dropped = ArrayList<LLMMessage>()
         val byCount = ResidentWindow.countCut(agentHistory, MAX_AGENT_HISTORY_MESSAGES)
         if (byCount > 0) {
-            dropped.addAll(agentHistory.subList(0, byCount))
-            agentHistory.subList(0, byCount).clear()
+            dropped.addAll(agentHistoryHeadSnapshot(byCount))
+            removeAgentHistoryHead(byCount)
             llmHistoryStartOffset += byCount
         }
         val byBytes = ResidentWindow.byteCut(agentHistory)
         if (byBytes > 0) {
-            dropped.addAll(agentHistory.subList(0, byBytes))
-            agentHistory.subList(0, byBytes).clear()
+            dropped.addAll(agentHistoryHeadSnapshot(byBytes))
+            removeAgentHistoryHead(byBytes)
             llmHistoryStartOffset += byBytes
         }
         if (dropped.isNotEmpty()) {

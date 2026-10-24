@@ -97,7 +97,8 @@
     <string name="a11y_repair_action_repair">Reparar ahora</string>
     <string name="a11y_repair_action_open_settings">Abrir ajustes</string>
     <string name="a11y_repair_cancel">Ahora no</string>
-    <string name="a11y_repair_section_header">Requiere atención</string>
+    <string name="a11y_hide">Ocultar</string>
+    <string name="a11y_show">Mostrar</string>    <string name="a11y_repair_section_header">Requiere atención</string>
     <string name="a11y_repair_row_shizuku">Reparar permiso de accesibilidad</string>
     <string name="a11y_repair_row_manual">Volver a activar la accesibilidad</string>
     <string name="a11y_repair_row_sub">El permiso fue revocado, probablemente por un cierre forzado</string>
@@ -1015,7 +1016,9 @@
     <string name="add_provider_your_key_is_stored_securely_in_encrypted">Tu clave se guarda de forma segura en almacenamiento cifrado y nunca sale del dispositivo.</string>
     <string name="add_provider_endpoint">Endpoint</string>
     <string name="add_provider_endpoint_anthropic_hint">Usa el endpoint oficial de Anthropic tal cual. Para servicios de terceros compatibles con Anthropic (por ejemplo, Mimo), la URL base puede necesitar un sufijo de ruta como \"/anthropic\": revisa la documentación de tu proveedor. La URL se usa literalmente y se le agrega \"/v1/messages\".</string>
-    <string name="add_provider_custom_api_base_optional">API Base personalizada (opcional)</string>
+    <string name="add_provider_endpoint_gemini_hint">Déjalo vacío para usar el endpoint predeterminado de Google. Introduce la URL base completa, incluida la ruta de versión.</string>
+    <string name="add_provider_endpoint_default_v1_hint">Déjalo vacío para usar el endpoint predeterminado. \"/v1\" se añade automáticamente — introduce solo el host base.</string>
+    <string name="add_provider_endpoint_verbatim_hint">La URL se usa tal cual. Incluye la ruta completa hasta (pero sin incluir) el endpoint.</string>    <string name="add_provider_custom_api_base_optional">API Base personalizada (opcional)</string>
     <string name="add_provider_authentication">Autenticación</string>
     <string name="add_provider_sign_in_succeeded_the_token_is_stored_in">Inicio de sesión correcto. El token se guarda en almacenamiento cifrado. Toca Guardar para añadir el proveedor.</string>
     <string name="add_provider_authenticated">Autenticado</string>

@@ -97,7 +97,8 @@
     <string name="a11y_repair_action_repair">Восстановить</string>
     <string name="a11y_repair_action_open_settings">Открыть настройки</string>
     <string name="a11y_repair_cancel">Не сейчас</string>
-    <string name="a11y_repair_section_header">Требует внимания</string>
+    <string name="a11y_hide">Скрыть</string>
+    <string name="a11y_show">Показать</string>    <string name="a11y_repair_section_header">Требует внимания</string>
     <string name="a11y_repair_row_shizuku">Восстановить разрешение</string>
     <string name="a11y_repair_row_manual">Снова включить специальные возможности</string>
     <string name="a11y_repair_row_sub">Разрешение было отозвано, вероятно принудительной остановкой</string>
@@ -1017,7 +1018,9 @@
     <string name="add_provider_your_key_is_stored_securely_in_encrypted">Ваш ключ надёжно хранится в зашифрованном хранилище и никогда не покидает устройство.</string>
     <string name="add_provider_endpoint">Эндпоинт</string>
     <string name="add_provider_endpoint_anthropic_hint">Используйте официальный эндпоинт Anthropic как есть. Для сторонних сервисов, совместимых с Anthropic (например, Mimo), базовый URL может требовать суффикс пути, такой как \"/anthropic\" — сверьтесь с документацией провайдера. URL используется без изменений с добавлением \"/v1/messages\".</string>
-    <string name="add_provider_custom_api_base_optional">Свой базовый URL API (необязательно)</string>
+    <string name="add_provider_endpoint_gemini_hint">Оставьте пустым, чтобы использовать конечную точку Google по умолчанию. Введите полный базовый URL, включая путь версии.</string>
+    <string name="add_provider_endpoint_default_v1_hint">Оставьте пустым, чтобы использовать конечную точку по умолчанию. \"/v1\" добавляется автоматически — укажите только базовый хост.</string>
+    <string name="add_provider_endpoint_verbatim_hint">URL используется дословно. Укажите полный путь до конечной точки (не включая её).</string>    <string name="add_provider_custom_api_base_optional">Свой базовый URL API (необязательно)</string>
     <string name="add_provider_authentication">Аутентификация</string>
     <string name="add_provider_sign_in_succeeded_the_token_is_stored_in">Вход выполнен успешно. Токен сохранён в зашифрованном хранилище. Нажмите «Сохранить», чтобы добавить провайдера.</string>
     <string name="add_provider_authenticated">Аутентифицировано</string>

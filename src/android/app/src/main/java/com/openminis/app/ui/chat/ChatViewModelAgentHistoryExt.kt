@@ -115,9 +115,15 @@ internal fun ChatViewModel.effectiveAgentHistoryUncounted(): List<LLMMessage> {
         // Drop any tool_result > 1000 chars in the preAnchor slice and
         // strip the matching tool_use part (same id) from the assistant
         // message so the model never sees a dangling tool_use/result.
+        // [T-android-agenthistory-cme] subList views on a CopyOnWriteArrayList
+        // carry a comodification check — slice an immutable toList()
+        // snapshot instead so a concurrent append cannot throw CME mid-read.
         val preAnchorRaw: List<LLMMessage> =
-            if (priorIdx <= anchorIdx) agentHistory.subList(priorIdx, anchorIdx + 1).toList()
-            else emptyList()
+            if (priorIdx <= anchorIdx) {
+                val snap = agentHistory.toList()
+                if (anchorIdx < snap.size) snap.subList(priorIdx, anchorIdx + 1)
+                else emptyList()
+            } else emptyList()
 
         val droppedToolIds = mutableSetOf<String>()
         var droppedToolResultCount = 0
@@ -165,8 +171,12 @@ internal fun ChatViewModel.effectiveAgentHistoryUncounted(): List<LLMMessage> {
         val result = mutableListOf<LLMMessage>()
         result.addAll(preAnchorPruned)
 
-        val postAnchor = if (anchorIdx + 1 < agentHistory.size) {
-            agentHistory.subList(anchorIdx + 1, agentHistory.size)
+        // [T-android-agenthistory-cme] postAnchor is held across ~50 lines —
+        // it must be a view over an immutable snapshot, never over the live
+        // COWAL (whose subList views throw CME if the parent array swaps).
+        val postAnchorSnap = agentHistory.toList()
+        val postAnchor = if (anchorIdx + 1 < postAnchorSnap.size) {
+            postAnchorSnap.subList(anchorIdx + 1, postAnchorSnap.size)
         } else {
             emptyList()
         }
@@ -219,9 +229,12 @@ internal fun ChatViewModel.effectiveAgentHistoryUncounted(): List<LLMMessage> {
     if (firstKeptId != null) {
         val keepStart = agentHistory.indexOfFirst { it.dbMessageId == firstKeptId }
         if (keepStart >= 0) {
-            return buildList(agentHistory.size - keepStart + 1) {
+            val snap = agentHistory.toList()
+            return buildList(snap.size - keepStart + 1) {
                 add(summaryHead)
-                addAll(agentHistory.subList(keepStart, agentHistory.size))
+                if (keepStart < snap.size) {
+                    addAll(snap.subList(keepStart, snap.size))
+                }
             }
         }
         // Fall through to safety net.
@@ -233,8 +246,9 @@ internal fun ChatViewModel.effectiveAgentHistoryUncounted(): List<LLMMessage> {
         val postCompactStart = lcmIdx + 1
         return buildList(agentHistory.size - postCompactStart + 1) {
             add(summaryHead)
-            if (postCompactStart < agentHistory.size) {
-                addAll(agentHistory.subList(postCompactStart, agentHistory.size))
+            val snap = agentHistory.toList()
+            if (postCompactStart < snap.size) {
+                addAll(snap.subList(postCompactStart, snap.size))
             }
         }
     }

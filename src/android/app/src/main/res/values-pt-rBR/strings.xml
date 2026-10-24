@@ -97,7 +97,8 @@
     <string name="a11y_repair_action_repair">Reparar agora</string>
     <string name="a11y_repair_action_open_settings">Abrir configurações</string>
     <string name="a11y_repair_cancel">Agora não</string>
-    <string name="a11y_repair_section_header">Requer atenção</string>
+    <string name="a11y_hide">Ocultar</string>
+    <string name="a11y_show">Mostrar</string>    <string name="a11y_repair_section_header">Requer atenção</string>
     <string name="a11y_repair_row_shizuku">Reparar a permissão de acessibilidade</string>
     <string name="a11y_repair_row_manual">Reativar a acessibilidade</string>
     <string name="a11y_repair_row_sub">A permissão foi revogada, provavelmente por um encerramento forçado</string>
@@ -1015,7 +1016,9 @@
     <string name="add_provider_your_key_is_stored_securely_in_encrypted">Sua chave fica guardada com segurança em armazenamento criptografado e nunca sai do aparelho.</string>
     <string name="add_provider_endpoint">Endpoint</string>
     <string name="add_provider_endpoint_anthropic_hint">Use o endpoint oficial da Anthropic como está. Para serviços de terceiros compatíveis com a Anthropic (ex.: Mimo), a URL base pode precisar de um sufixo de caminho como “/anthropic” — consulte a documentação do provedor. A URL é usada literalmente, com “/v1/messages” acrescentado ao final.</string>
-    <string name="add_provider_custom_api_base_optional">URL base da API personalizada (opcional)</string>
+    <string name="add_provider_endpoint_gemini_hint">Deixe vazio para usar o endpoint padrão do Google. Insira a URL base completa, incluindo o caminho da versão.</string>
+    <string name="add_provider_endpoint_default_v1_hint">Deixe vazio para usar o endpoint padrão. \"/v1\" é adicionado automaticamente — insira apenas o host base.</string>
+    <string name="add_provider_endpoint_verbatim_hint">A URL é usada literalmente. Inclua o caminho completo até (mas não incluindo) o endpoint.</string>    <string name="add_provider_custom_api_base_optional">URL base da API personalizada (opcional)</string>
     <string name="add_provider_authentication">Autenticação</string>
     <string name="add_provider_sign_in_succeeded_the_token_is_stored_in">Login concluído. O token fica em armazenamento criptografado. Toque em Salvar para adicionar o provedor.</string>
     <string name="add_provider_authenticated">Autenticado</string>

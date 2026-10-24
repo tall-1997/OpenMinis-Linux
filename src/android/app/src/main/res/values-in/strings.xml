@@ -102,7 +102,8 @@
     <string name="a11y_repair_action_repair">Perbaiki sekarang</string>
     <string name="a11y_repair_action_open_settings">Buka Pengaturan</string>
     <string name="a11y_repair_cancel">Nanti saja</string>
-    <string name="a11y_repair_section_header">Perlu perhatian</string>
+    <string name="a11y_hide">Sembunyikan</string>
+    <string name="a11y_show">Tampilkan</string>    <string name="a11y_repair_section_header">Perlu perhatian</string>
     <string name="a11y_repair_row_shizuku">Perbaiki izin aksesibilitas</string>
     <string name="a11y_repair_row_manual">Aktifkan kembali aksesibilitas</string>
     <string name="a11y_repair_row_sub">Izin telah dicabut, kemungkinan akibat penghentian paksa</string>
@@ -1020,7 +1021,9 @@
     <string name="add_provider_your_key_is_stored_securely_in_encrypted">Kunci Anda disimpan dengan aman di penyimpanan terenkripsi dan tidak pernah meninggalkan perangkat.</string>
     <string name="add_provider_endpoint">Endpoint</string>
     <string name="add_provider_endpoint_anthropic_hint">Gunakan endpoint resmi Anthropic apa adanya. Untuk layanan pihak ketiga yang kompatibel dengan Anthropic (mis. Mimo), URL dasarnya mungkin memerlukan akhiran path seperti \"/anthropic\" — periksa dokumentasi penyedia Anda. URL digunakan apa adanya dengan tambahan \"/v1/messages\".</string>
-    <string name="add_provider_custom_api_base_optional">API Base Kustom (Opsional)</string>
+    <string name="add_provider_endpoint_gemini_hint">Biarkan kosong untuk menggunakan endpoint Google default. Masukkan base URL lengkap termasuk path versi.</string>
+    <string name="add_provider_endpoint_default_v1_hint">Biarkan kosong untuk menggunakan endpoint default. \"/v1\" ditambahkan otomatis — masukkan hanya host dasar.</string>
+    <string name="add_provider_endpoint_verbatim_hint">URL digunakan apa adanya. Sertakan path lengkap hingga (tetapi tidak termasuk) endpoint.</string>    <string name="add_provider_custom_api_base_optional">API Base Kustom (Opsional)</string>
     <string name="add_provider_authentication">Autentikasi</string>
     <string name="add_provider_sign_in_succeeded_the_token_is_stored_in">Berhasil masuk. Token disimpan di penyimpanan terenkripsi. Ketuk Simpan untuk menambahkan penyedia.</string>
     <string name="add_provider_authenticated">Terautentikasi</string>
