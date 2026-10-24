@@ -73,9 +73,11 @@ object InterruptedTailDetector {
                 val parts = lastEntry.contentParts
                 val allToolResults = parts.isNotEmpty() &&
                     parts.all { it is AgentContentPart.ToolResult }
-                val tailText = (parts.first() as? AgentContentPart.Text)?.text
-                val isContinueReminder = parts.size == 1 && tailText != null &&
-                    CONTINUE_REMINDER_MARKERS.any { tailText.contains(it) }
+                // Guard order matters: parts.first() throws on an empty tail, so
+                // the size check has to stay in front of it.
+                val isContinueReminder = parts.size == 1 &&
+                    (parts.first() as? AgentContentPart.Text)?.text
+                        ?.let { t -> CONTINUE_REMINDER_MARKERS.any { t.contains(it) } } == true
                 when {
                     // Order matters: the first two describe a turn that was
                     // mid-flight; the third describes one that never started.
