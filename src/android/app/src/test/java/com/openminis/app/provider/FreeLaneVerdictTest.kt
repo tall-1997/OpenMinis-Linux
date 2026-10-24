@@ -38,46 +38,46 @@ class FreeLaneVerdictTest {
     @Test
     fun aTwoHundredMeansTheLaneReallyAnswered() {
         assertEquals(
-            FreeLaneDirectory.FreeLaneVerdict.FREE,
+            FreeLaneVerdict.FREE,
             ZenFreeLane.classify(id, 200, "data: {\"choices\":[]}\n\n"),
         )
-        assertFalse(FreeLaneHealth.isDead(id))
+        assertFalse(FreeLaneHealth.isDead(ZenFreeLane.id, id))
     }
 
     @Test
     fun freeTierErrorIsOurBugNotTheModelsProperty() {
         assertEquals(
-            FreeLaneDirectory.FreeLaneVerdict.UNKNOWN,
+            FreeLaneVerdict.UNKNOWN,
             ZenFreeLane.classify(id, 403, zenError("FreeTierError")),
         )
-        assertFalse("a gate regression must not delete the model", FreeLaneHealth.isDead(id))
+        assertFalse("a gate regression must not delete the model", FreeLaneHealth.isDead(ZenFreeLane.id, id))
     }
 
     @Test
     fun regionErrorNeverRemovesTheModel() {
         assertEquals(
-            FreeLaneDirectory.FreeLaneVerdict.UNKNOWN,
+            FreeLaneVerdict.UNKNOWN,
             ZenFreeLane.classify(id, 403, zenError("RegionError", "not available in your region")),
         )
-        assertFalse("locked-region users still get to see the model", FreeLaneHealth.isDead(id))
+        assertFalse("locked-region users still get to see the model", FreeLaneHealth.isDead(ZenFreeLane.id, id))
     }
 
     @Test
     fun modelErrorNotSupportedIsRealDeath() {
         assertEquals(
-            FreeLaneDirectory.FreeLaneVerdict.DEAD,
+            FreeLaneVerdict.DEAD,
             ZenFreeLane.classify(id, 401, zenError("ModelError", "not supported")),
         )
-        assertTrue(FreeLaneHealth.isDead(id))
+        assertTrue(FreeLaneHealth.isDead(ZenFreeLane.id, id))
     }
 
     @Test
     fun aGenericModelErrorIsNotDeathEvidence() {
         assertEquals(
-            FreeLaneDirectory.FreeLaneVerdict.UNKNOWN,
+            FreeLaneVerdict.UNKNOWN,
             ZenFreeLane.classify(id, 401, zenError("ModelError", "something transient")),
         )
-        assertFalse(FreeLaneHealth.isDead(id))
+        assertFalse(FreeLaneHealth.isDead(ZenFreeLane.id, id))
         // The user-visible half of the same mistake. UNKNOWN has to leave the id
         // out of the paid set too, because FreeLaneVerdict.PAID feeds withPaid and
         // filterFree drops every paid id — a model hidden without ever being
@@ -96,43 +96,43 @@ class FreeLaneVerdictTest {
 
     @Test
     fun goneIsDeath() {
-        assertEquals(FreeLaneDirectory.FreeLaneVerdict.DEAD, ZenFreeLane.classify(id, 410, ""))
-        assertTrue(FreeLaneHealth.isDead(id))
+        assertEquals(FreeLaneVerdict.DEAD, ZenFreeLane.classify(id, 410, ""))
+        assertTrue(FreeLaneHealth.isDead(ZenFreeLane.id, id))
     }
 
     @Test
     fun modelUnavailableIsDeath() {
         assertEquals(
-            FreeLaneDirectory.FreeLaneVerdict.DEAD,
+            FreeLaneVerdict.DEAD,
             ZenFreeLane.classify(id, 400, "{\"error\":\"Model is unavailable.\"}"),
         )
-        assertTrue(FreeLaneHealth.isDead(id))
+        assertTrue(FreeLaneHealth.isDead(ZenFreeLane.id, id))
     }
 
     @Test
     fun aBare401MeansCredentialsRequired() {
         assertEquals(
-            FreeLaneDirectory.FreeLaneVerdict.PAID,
+            FreeLaneVerdict.PAID,
             ZenFreeLane.classify(id, 401, "{\"error\":\"invalid api key\"}"),
         )
-        assertFalse("paid is a catalogue decision, not a death", FreeLaneHealth.isDead(id))
+        assertFalse("paid is a catalogue decision, not a death", FreeLaneHealth.isDead(ZenFreeLane.id, id))
     }
 
     @Test
     fun rateLimitAndServerErrorsWriteNothing() {
-        assertEquals(FreeLaneDirectory.FreeLaneVerdict.UNKNOWN, ZenFreeLane.classify(id, 429, ""))
-        assertEquals(FreeLaneDirectory.FreeLaneVerdict.UNKNOWN, ZenFreeLane.classify(id, 503, ""))
-        assertFalse(FreeLaneHealth.isDead(id))
+        assertEquals(FreeLaneVerdict.UNKNOWN, ZenFreeLane.classify(id, 429, ""))
+        assertEquals(FreeLaneVerdict.UNKNOWN, ZenFreeLane.classify(id, 503, ""))
+        assertFalse(FreeLaneHealth.isDead(ZenFreeLane.id, id))
     }
 
     @Test
     fun unparseableBodiesDoNotThrow() {
         assertEquals(
-            FreeLaneDirectory.FreeLaneVerdict.UNKNOWN,
+            FreeLaneVerdict.UNKNOWN,
             ZenFreeLane.classify(id, 502, "<html>Bad Gateway</html>"),
         )
         assertEquals(
-            FreeLaneDirectory.FreeLaneVerdict.UNKNOWN,
+            FreeLaneVerdict.UNKNOWN,
             ZenFreeLane.classify(id, 418, ""),
         )
     }
@@ -169,8 +169,8 @@ class FreeLaneVerdictTest {
         val verdict = ZenFreeLane.classify(
             id, 403, zenError("FreeUsageLimitError", "Free usage limit reached."),
         )
-        assertEquals(FreeLaneDirectory.FreeLaneVerdict.UNKNOWN, verdict)
-        assertFalse("a quota is not a property of the model", FreeLaneHealth.isDead(id))
+        assertEquals(FreeLaneVerdict.UNKNOWN, verdict)
+        assertFalse("a quota is not a property of the model", FreeLaneHealth.isDead(ZenFreeLane.id, id))
         assertTrue("the model must survive its own quota", laneKeepsKnownFree(verdict).isNotEmpty())
     }
 
@@ -181,17 +181,17 @@ class FreeLaneVerdictTest {
             val verdict = ZenFreeLane.classify(
                 id, code, zenError("FreeUsageLimitError", "Free usage limit reached."),
             )
-            assertEquals("http $code", FreeLaneDirectory.FreeLaneVerdict.UNKNOWN, verdict)
+            assertEquals("http $code", FreeLaneVerdict.UNKNOWN, verdict)
             assertTrue("http $code emptied the lane", laneKeepsKnownFree(verdict).isNotEmpty())
         }
-        assertFalse(FreeLaneHealth.isDead(id))
+        assertFalse(FreeLaneHealth.isDead(ZenFreeLane.id, id))
     }
 
     @Test
     fun aTypeInventedTomorrowIsUnknownToday() {
         val verdict = ZenFreeLane.classify(id, 401, zenError("WhateverComesNextError"))
-        assertEquals(FreeLaneDirectory.FreeLaneVerdict.UNKNOWN, verdict)
-        assertFalse(FreeLaneHealth.isDead(id))
+        assertEquals(FreeLaneVerdict.UNKNOWN, verdict)
+        assertFalse(FreeLaneHealth.isDead(ZenFreeLane.id, id))
         assertTrue(laneKeepsKnownFree(verdict).isNotEmpty())
     }
 
@@ -204,7 +204,7 @@ class FreeLaneVerdictTest {
         )
         assertEquals(
             "a refusal we failed to parse gets learned as a working free model",
-            FreeLaneDirectory.FreeLaneVerdict.UNKNOWN,
+            FreeLaneVerdict.UNKNOWN,
             verdict,
         )
         assertTrue(laneForUnprovenId(verdict).isEmpty())
@@ -215,8 +215,8 @@ class FreeLaneVerdictTest {
         val verdict = ZenFreeLane.classify(
             id, 200, sse(zenError("ModelError", "not supported")),
         )
-        assertEquals(FreeLaneDirectory.FreeLaneVerdict.DEAD, verdict)
-        assertTrue(FreeLaneHealth.isDead(id))
+        assertEquals(FreeLaneVerdict.DEAD, verdict)
+        assertTrue(FreeLaneHealth.isDead(ZenFreeLane.id, id))
         assertTrue(laneForUnprovenId(verdict).isEmpty())
     }
 
@@ -227,7 +227,7 @@ class FreeLaneVerdictTest {
             200,
             sse("""{"choices":[{"delta":{"content":"pong"}}]}""", "[DONE]"),
         )
-        assertEquals(FreeLaneDirectory.FreeLaneVerdict.FREE, verdict)
+        assertEquals(FreeLaneVerdict.FREE, verdict)
         assertTrue(laneForUnprovenId(verdict).isNotEmpty())
     }
 
@@ -239,21 +239,21 @@ class FreeLaneVerdictTest {
             200,
             sse("""{"choices":[{"delta":{"content":"no error was found"}}]}""", "[DONE]"),
         )
-        assertEquals(FreeLaneDirectory.FreeLaneVerdict.FREE, verdict)
+        assertEquals(FreeLaneVerdict.FREE, verdict)
         assertTrue(laneForUnprovenId(verdict).isNotEmpty())
     }
 
     @Test
     fun aModelThatAnswersAgainIsRevivedByTheProbe() {
-        FreeLaneHealth.recordFailure(id, FreeLaneEvidence.MODEL_NOT_SUPPORTED)
-        assertTrue(FreeLaneHealth.isDead(id))
+        FreeLaneHealth.recordFailure(ZenFreeLane.id, id, FreeLaneEvidence.MODEL_NOT_SUPPORTED)
+        assertTrue(FreeLaneHealth.isDead(ZenFreeLane.id, id))
         val verdict = ZenFreeLane.classify(
             id, 200, sse("""{"choices":[{"delta":{"content":"pong"}}]}""", "[DONE]"),
         )
-        assertEquals(FreeLaneDirectory.FreeLaneVerdict.FREE, verdict)
+        assertEquals(FreeLaneVerdict.FREE, verdict)
         assertFalse(
             "one-sided evidence keeps a recovered model hidden until the ttl runs out",
-            FreeLaneHealth.isDead(id),
+            FreeLaneHealth.isDead(ZenFreeLane.id, id),
         )
         assertTrue(laneForUnprovenId(verdict).isNotEmpty())
     }
@@ -266,11 +266,11 @@ class FreeLaneVerdictTest {
      * nothing, so the id stays; PAID is the one verdict that removes a model
      * without ever marking it dead.
      */
-    private fun laneKeepsKnownFree(verdict: FreeLaneDirectory.Verdict): List<LLMModel> {
+    private fun laneKeepsKnownFree(verdict: FreeLaneVerdict): List<LLMModel> {
         val learned = FreeLaneLearned().withFree(id)
         return show(
             when (verdict) {
-                FreeLaneDirectory.FreeLaneVerdict.PAID -> learned.withPaid(id)
+                FreeLaneVerdict.PAID -> learned.withPaid(id)
                 else -> learned
             },
         )
@@ -281,10 +281,10 @@ class FreeLaneVerdictTest {
      * front of the user, which is why a refusal misread as a healthy stream is
      * worse than one misread as anything else.
      */
-    private fun laneForUnprovenId(verdict: FreeLaneDirectory.Verdict): List<LLMModel> =
+    private fun laneForUnprovenId(verdict: FreeLaneVerdict): List<LLMModel> =
         show(
             when (verdict) {
-                FreeLaneDirectory.FreeLaneVerdict.FREE -> FreeLaneLearned().withFree(id)
+                FreeLaneVerdict.FREE -> FreeLaneLearned().withFree(id)
                 else -> FreeLaneLearned()
             },
         )

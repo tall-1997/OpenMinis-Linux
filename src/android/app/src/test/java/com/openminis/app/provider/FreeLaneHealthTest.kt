@@ -19,6 +19,10 @@ import org.junit.Test
  */
 class FreeLaneHealthTest {
 
+    /** Health is namespaced per lane: the same id on two lanes is two facts. */
+    private val lane = ZenFreeLane.id
+
+
     private var now = 1_700_000_000_000L
 
     @Before
@@ -35,81 +39,81 @@ class FreeLaneHealthTest {
 
     @Test
     fun regionEvidenceNeverMarksAModelDead() {
-        FreeLaneHealth.recordFailure("beam-free", FreeLaneEvidence.REGION)
-        assertFalse(FreeLaneHealth.isDead("beam-free"))
+        FreeLaneHealth.recordFailure(lane, "beam-free", FreeLaneEvidence.REGION)
+        assertFalse(FreeLaneHealth.isDead(lane, "beam-free"))
     }
 
     @Test
     fun freeTierEvidenceNeverMarksAModelDead() {
         // A FreeTierError means our request shape was refused — our gate bug,
         // never a property of the model.
-        FreeLaneHealth.recordFailure("beam-free", FreeLaneEvidence.FREE_TIER)
-        assertFalse(FreeLaneHealth.isDead("beam-free"))
+        FreeLaneHealth.recordFailure(lane, "beam-free", FreeLaneEvidence.FREE_TIER)
+        assertFalse(FreeLaneHealth.isDead(lane, "beam-free"))
     }
 
     @Test
     fun protocolUnsupportedEvidenceNeverMarksAModelDead() {
-        FreeLaneHealth.recordFailure("beam-free", FreeLaneEvidence.PROTOCOL_UNSUPPORTED)
-        assertFalse(FreeLaneHealth.isDead("beam-free"))
+        FreeLaneHealth.recordFailure(lane, "beam-free", FreeLaneEvidence.PROTOCOL_UNSUPPORTED)
+        assertFalse(FreeLaneHealth.isDead(lane, "beam-free"))
     }
 
     @Test
     fun rateLimitedAndServerEvidenceNeverMarkAModelDead() {
-        FreeLaneHealth.recordFailure("a-free", FreeLaneEvidence.RATE_LIMITED)
-        FreeLaneHealth.recordFailure("b-free", FreeLaneEvidence.SERVER)
-        assertFalse(FreeLaneHealth.isDead("a-free"))
-        assertFalse(FreeLaneHealth.isDead("b-free"))
+        FreeLaneHealth.recordFailure(lane, "a-free", FreeLaneEvidence.RATE_LIMITED)
+        FreeLaneHealth.recordFailure(lane, "b-free", FreeLaneEvidence.SERVER)
+        assertFalse(FreeLaneHealth.isDead(lane, "a-free"))
+        assertFalse(FreeLaneHealth.isDead(lane, "b-free"))
     }
 
     @Test
     fun networkEvidenceNeverMarksAModelDead() {
-        FreeLaneHealth.recordFailure("a-free", FreeLaneEvidence.NETWORK)
-        assertFalse(FreeLaneHealth.isDead("a-free"))
+        FreeLaneHealth.recordFailure(lane, "a-free", FreeLaneEvidence.NETWORK)
+        assertFalse(FreeLaneHealth.isDead(lane, "a-free"))
     }
 
     @Test
     fun goneEvidenceMarksDead() {
-        FreeLaneHealth.recordFailure("retired-free", FreeLaneEvidence.GONE)
-        assertTrue(FreeLaneHealth.isDead("retired-free"))
+        FreeLaneHealth.recordFailure(lane, "retired-free", FreeLaneEvidence.GONE)
+        assertTrue(FreeLaneHealth.isDead(lane, "retired-free"))
     }
 
     @Test
     fun modelUnavailableEvidenceMarksDead() {
-        FreeLaneHealth.recordFailure("x-free", FreeLaneEvidence.MODEL_UNAVAILABLE)
-        assertTrue(FreeLaneHealth.isDead("x-free"))
+        FreeLaneHealth.recordFailure(lane, "x-free", FreeLaneEvidence.MODEL_UNAVAILABLE)
+        assertTrue(FreeLaneHealth.isDead(lane, "x-free"))
     }
 
     @Test
     fun modelNotSupportedEvidenceMarksDead() {
-        FreeLaneHealth.recordFailure("y-free", FreeLaneEvidence.MODEL_NOT_SUPPORTED)
-        assertTrue(FreeLaneHealth.isDead("y-free"))
+        FreeLaneHealth.recordFailure(lane, "y-free", FreeLaneEvidence.MODEL_NOT_SUPPORTED)
+        assertTrue(FreeLaneHealth.isDead(lane, "y-free"))
     }
 
     @Test
     fun deadEvidenceSelfHealsAfterTheTtl() {
-        FreeLaneHealth.recordFailure("retired-free", FreeLaneEvidence.GONE)
-        assertTrue(FreeLaneHealth.isDead("retired-free"))
+        FreeLaneHealth.recordFailure(lane, "retired-free", FreeLaneEvidence.GONE)
+        assertTrue(FreeLaneHealth.isDead(lane, "retired-free"))
 
         now += FreeLaneHealth.DEAD_TTL_MS - 1
-        assertTrue("must still be dead just before the ttl", FreeLaneHealth.isDead("retired-free"))
+        assertTrue("must still be dead just before the ttl", FreeLaneHealth.isDead(lane, "retired-free"))
 
         now += 2
-        assertFalse("must self-heal after the ttl", FreeLaneHealth.isDead("retired-free"))
+        assertFalse("must self-heal after the ttl", FreeLaneHealth.isDead(lane, "retired-free"))
     }
 
     @Test
     fun aSuccessClearsPriorDeathEvidence() {
-        FreeLaneHealth.recordFailure("flaky-free", FreeLaneEvidence.MODEL_UNAVAILABLE)
-        assertTrue(FreeLaneHealth.isDead("flaky-free"))
-        FreeLaneHealth.recordSuccess("flaky-free")
-        assertFalse(FreeLaneHealth.isDead("flaky-free"))
+        FreeLaneHealth.recordFailure(lane, "flaky-free", FreeLaneEvidence.MODEL_UNAVAILABLE)
+        assertTrue(FreeLaneHealth.isDead(lane, "flaky-free"))
+        FreeLaneHealth.recordSuccess(lane, "flaky-free")
+        assertFalse(FreeLaneHealth.isDead(lane, "flaky-free"))
     }
 
     @Test
     fun deathIsPerIdAndDoesNotLeakAcrossTheCatalogue() {
-        FreeLaneHealth.recordFailure("one-free", FreeLaneEvidence.GONE)
-        assertTrue(FreeLaneHealth.isDead("one-free"))
-        assertFalse(FreeLaneHealth.isDead("two-free"))
+        FreeLaneHealth.recordFailure(lane, "one-free", FreeLaneEvidence.GONE)
+        assertTrue(FreeLaneHealth.isDead(lane, "one-free"))
+        assertFalse(FreeLaneHealth.isDead(lane, "two-free"))
         assertEquals(setOf("one-free"), FreeLaneHealth.deadIdsForTest())
     }
 }

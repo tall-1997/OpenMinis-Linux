@@ -43,7 +43,7 @@ class FreeLaneCatalogCacheTest {
 
     @Test
     fun firstInstallWithNoNetworkFallsBackToTheOfflineSeed() {
-        val seeded = FreeLaneCatalogCache(null).loadOrSeed(key)
+        val seeded = FreeLaneCatalogCache(null).loadOrSeed(ZenFreeLane, key)
         assertTrue("first install has nothing better than the seed", seeded.isOfflineSeed)
         assertTrue(seeded.ids.isNotEmpty())
         seeded.ids.forEach { id ->
@@ -61,7 +61,7 @@ class FreeLaneCatalogCacheTest {
         val cache = FreeLaneCatalogCache(null)
         assertTrue(cache.save(key, snapshot("x-free", "y-free")))
 
-        val live = cache.loadOrSeed(key)
+        val live = cache.loadOrSeed(ZenFreeLane, key)
         assertFalse("a real fetch retires the seed", live.isOfflineSeed)
         assertEquals(listOf("x-free", "y-free"), live.ids)
     }
@@ -104,7 +104,7 @@ class FreeLaneCatalogCacheTest {
             fetchedAtMs = 1L,
         )
         assertTrue(cache.save(key, old))
-        val loaded = cache.loadOrSeed(key, nowMs = 1L + FreeLaneCatalogCache.TTL_MS + 1)
+        val loaded = cache.loadOrSeed(ZenFreeLane, key, nowMs = 1L + FreeLaneCatalogCache.TTL_MS + 1)
         assertFalse("a stale real catalogue still beats the hardcoded seed", loaded.isOfflineSeed)
         assertTrue("but the caller must be able to tell it is stale", loaded.isStale)
     }
