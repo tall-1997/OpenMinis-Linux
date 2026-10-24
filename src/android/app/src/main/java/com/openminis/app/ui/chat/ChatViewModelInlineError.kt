@@ -55,3 +55,34 @@ internal fun ChatViewModel.setInlineError(errorText: String) {
         _error.value = safeError
     }
 }
+
+/** [T-stale-sticker] Sweep EVERY inline error sticker — memory and persisted.
+ *
+ *  Generation start means the previous turn's terminal sticker is history.
+ *  [clearInlineError] and [ChatViewModel.clearPersistedLastAssistantError]
+ *  are tail-scoped: an error stranded on an EARLIER assistant row survives
+ *  both. Real device capture (2026-10-24 11:02): a partial reply kept its
+ *  red "interrupted" banner while the resumed run was already streaming
+ *  thinking cards below it — the banner sat between the two rows because
+ *  the sticker belonged to the older row, and no tail-scoped clear could
+ *  ever reach it again once the new placeholder became the tail.
+ *
+ *  Two independent layers now enforce "a sticker describes the CURRENT tail
+ *  state, nothing else":
+ *  - state: this sweep, called at every generation entry (runAgentLoop's
+ *    placeholder branch, resume, retryLast);
+ *  - render: buildFlatChatItems emits [FlatChatItem.AssistantError] for the
+ *    tail assistant row only, so even a race that re-strands an error
+ *    after the sweep (or a reload merge resurrecting a persisted one)
+ *    cannot draw beside live output.
+ *
+ *  The top-level [_error] fallback is cleared for the same reason: a fresh
+ *  generation supersedes the previous turn's failure notice. */
+internal fun ChatViewModel.sweepStaleInlineErrors() {
+    val msgs = _messages.value
+    if (msgs.any { it.error != null }) {
+        _messages.value = msgs.map { if (it.error != null) it.copy(error = null) else it }
+    }
+    if (_error.value != null) _error.value = null
+    clearPersistedLastAssistantError()
+}

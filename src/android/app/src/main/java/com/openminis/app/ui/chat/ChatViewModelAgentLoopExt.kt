@@ -230,14 +230,14 @@ internal suspend fun ChatViewModel.runAgentLoop(
     if (overrideAssistantId == null) {
         withContext(Dispatchers.Main) {
             // The model is producing again: the previous turn's
-            // retry/interrupt/error sticker is now stale. Clear it BEFORE the
-            // new placeholder is appended — clearInlineError() targets the
-            // last assistant row, and once the placeholder joins, that row is
-            // the new (error-free) message, so the old sticker would survive
-            // until the first stream delta's defensive clear. The user-facing
-            // rule is "the hint bubble disappears the moment the model starts
+            // retry/interrupt/error sticker is now stale. Sweep BEFORE the
+            // new placeholder is appended — clearInlineError() only targets
+            // the TAIL row, so a sticker stranded on an earlier one (a
+            // dropped run's wind-down racing this entry) would survive every
+            // tail-scoped clear and render beside live output. The rule is
+            // "the hint bubble disappears the moment the model starts
             // running", not "once the first token lands".
-            clearInlineError()
+            sweepStaleInlineErrors()
             _messages.value = trimLoadedWindow(_messages.value + ChatMessage(
                 id = assistantId, role = "assistant", content = "", isStreaming = true,
                 isAwaitingModelResponse = true,

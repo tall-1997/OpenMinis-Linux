@@ -1051,8 +1051,8 @@ internal fun buildFlatChatItems(
             )))
         }
 
-        // Inline error banner
-        message.error?.let {
+        // Inline error banner — [T-stale-sticker] tail assistant row only.
+        message.error?.takeIf { idx == messages.indexOfLast { m -> m.role == "assistant" } }?.let {
             out.add(dedupe(FlatChatItem.AssistantError(message.id, it)))
         }
     }

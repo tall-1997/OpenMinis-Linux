@@ -37,9 +37,9 @@ fun ChatViewModel.resume() {
     claimResumeEpoch()
     // [T-error-persist-android] resume() follows finalizeAtTurnLimit's
     // setInlineError (which persisted an error sticker on the last assistant
-    // row). Clear it now so a successful resume doesn't merge-resurrect the
-    // turn-limit banner on the next reload.
-    clearPersistedLastAssistantError()
+    // row) — and a dropped run's wind-down can strand one on an EARLIER row
+    // too. Sweep them all (memory + persisted) before the new turn starts.
+    sweepStaleInlineErrors()
     AppLogger.info(ChatViewModel.TAG, "▶️ resume: continuing partial assistant message (no new header emitted)")
     // [T-android-tool-autoscroll] Start-of-turn snap. The thinking
     // placeholder is the only visible delta until the model's first
