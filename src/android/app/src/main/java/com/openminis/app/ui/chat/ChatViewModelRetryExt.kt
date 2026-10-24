@@ -67,10 +67,10 @@ fun ChatViewModel.retryLast() {
     // assistant row when a trailing assistant was popped (Case A); in the
     // Case B path (tail = user(tool_result), next LLM call errored) the
     // stamped row is an EARLIER completed turn that is NOT deleted, so
-    // without this clear the new successful turn would merge-resurrect the
-    // old error banner on reload (msg.error ?: prev.error). Harmless in
-    // Case A too — the row is deleted moments later regardless.
-    clearPersistedLastAssistantError()
+    // without this sweep the new successful turn would merge-resurrect the
+    // old error banner on reload (msg.error ?: prev.error). Tail-scoped
+    // clears miss rows stranded further up — sweep memory + persisted.
+    sweepStaleInlineErrors()
 
     val initialProvider = currentProvider ?: return
     var provider: LLMProvider = initialProvider
