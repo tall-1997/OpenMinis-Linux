@@ -80,7 +80,7 @@ class FreeLaneMembershipTest {
     }
 
     @Test
-    fun needsProbeReturnsOnlyIdsThatAreNewAndSuffixFree() {
+    fun needsProbeCoversDiscoveryAndLivenessButNeverASettledId() {
         val learned = FreeLaneLearned(free = setOf("known-free-model"), paid = setOf("known-paid"))
         val probe = FreeLaneDirectory.needsProbe(
             ZenFreeLane,
@@ -95,7 +95,45 @@ class FreeLaneMembershipTest {
             learned,
             emptyMap(),
         )
-        assertEquals(listOf("brand-new-name"), probe)
+        // known-paid is decided, known-free-model is proven and settled. The
+        // other three each carry no verdict yet: the two Zen-shaped ids get a
+        // liveness probe (nothing has ever observed whether upstream still
+        // serves them) and the undeclared name gets a discovery probe.
+        assertEquals(listOf("obvious-free", "big-pickle", "brand-new-name"), probe)
+    }
+
+    @Test
+    fun aLaneThatDoesNotDiscoverOnlyProbesWhatItsOwnListingDeclared() {
+        // Kilo declares free-ness in its listing, so an undeclared id is not a
+        // mystery to resolve - it is simply not free, and probing it would only
+        // manufacture evidence about a model the lane never shows.
+        val probe = FreeLaneDirectory.needsProbe(
+            KiloFreeLane,
+            listOf(model("listed-free"), model("unlisted"), model("already-known")),
+            mapOf("listed-free" to true, "unlisted" to false),
+            FreeLaneLearned(free = setOf("already-known")),
+            emptyMap(),
+        )
+        assertEquals(listOf("listed-free"), probe)
+    }
+
+    @Test
+    fun aRecentlyProbedIdWaitsOutTheBackoffWindow() {
+        val now = 1_000L
+        val models = listOf(model("obvious-free"))
+        val justProbed = FreeLaneDirectory.needsProbe(
+            ZenFreeLane, models, emptyMap(), FreeLaneLearned(), mapOf("obvious-free" to now), now,
+        )
+        assertEquals(emptyList<String>(), justProbed)
+        val afterWindow = FreeLaneDirectory.needsProbe(
+            ZenFreeLane,
+            models,
+            emptyMap(),
+            FreeLaneLearned(),
+            mapOf("obvious-free" to now),
+            now + FreeLaneDirectory.PROBE_BACKOFF_MS,
+        )
+        assertEquals(listOf("obvious-free"), afterWindow)
     }
 
     @Test

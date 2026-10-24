@@ -114,6 +114,21 @@ class FreeLaneHealthTest {
         FreeLaneHealth.recordFailure(lane, "one-free", FreeLaneEvidence.GONE)
         assertTrue(FreeLaneHealth.isDead(lane, "one-free"))
         assertFalse(FreeLaneHealth.isDead(lane, "two-free"))
-        assertEquals(setOf("one-free"), FreeLaneHealth.deadIdsForTest())
+        assertEquals(setOf("zen:one-free"), FreeLaneHealth.deadIdsForTest())
+        assertEquals(setOf("zen:one-free"), FreeLaneHealth.deadIdsForTest(lane))
+    }
+
+    @Test
+    fun deathDoesNotLeakAcrossLanes() {
+        // Both lanes can list the same id; upstream is a different server, so
+        // "dead" on one says nothing about the other. The persisted key carries
+        // the lane for exactly this reason.
+        FreeLaneHealth.recordFailure(lane, "shared-free", FreeLaneEvidence.GONE)
+        assertTrue(FreeLaneHealth.isDead(lane, "shared-free"))
+        assertFalse(FreeLaneHealth.isDead(KiloFreeLane.id, "shared-free"))
+        assertEquals(emptySet<String>(), FreeLaneHealth.deadIdsForTest(KiloFreeLane.id))
+
+        FreeLaneHealth.recordSuccess(KiloFreeLane.id, "shared-free")
+        assertTrue("clearing one lane must not revive the other", FreeLaneHealth.isDead(lane, "shared-free"))
     }
 }
