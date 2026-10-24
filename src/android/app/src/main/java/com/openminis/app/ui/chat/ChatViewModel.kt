@@ -2026,7 +2026,7 @@ class ChatViewModel(
     }
 
     /** Structured agent history — threading contract in AgentHistoryAccess.kt. */
-    internal val agentHistory: MutableList<LLMMessage> = java.util.concurrent.CopyOnWriteArrayList()
+    internal val agentHistory: java.util.concurrent.CopyOnWriteArrayList<LLMMessage> = java.util.concurrent.CopyOnWriteArrayList()
 
     /**
      * All agent tool definitions, recomputed on each read so the memory
