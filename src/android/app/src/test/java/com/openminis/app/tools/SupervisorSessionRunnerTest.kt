@@ -101,8 +101,7 @@ class SupervisorSessionRunnerTest {
     fun workerTurnCap_forceClosesWithCapPrompt() = runTest {
         val sup = FakeSeat(
             envelope("do a", "tests pass"),
-            "not done yet",
-            "not done yet 2",
+            envelope("fix b", "tests pass"),
             "DONE: tests pass partially",
         )
         val worker = FakeSeat("r1", "r2")
@@ -127,6 +126,7 @@ class SupervisorSessionRunnerTest {
         val worker = FakeSeat("report a")
         var terminal: String? = null
         var rethrown = false
+        var calls = 0
         try {
             SupervisorSessionRunner.run(
                 objective = "obj",
@@ -134,7 +134,8 @@ class SupervisorSessionRunnerTest {
                 maxWorkerTurns = 10,
                 supervisorSystem = system,
                 supervisor = { u, _ ->
-                    if (u.contains("review")) throw kotlinx.coroutines.CancellationException("halt")
+                    calls++
+                    if (calls > 1) throw kotlinx.coroutines.CancellationException("halt")
                     sup.speak(system, u)
                 },
                 worker = { u, _ -> worker.speak(system, u) },
