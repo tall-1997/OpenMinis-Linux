@@ -171,3 +171,6 @@ src/android/mirrors.local.properties
 # Python bytecode (scripts/*.py)
 __pycache__/
 *.pyc
+
+# Mimosa security-scanner hook-state snapshots (per-session per-file baselines)
+.mimosa/
