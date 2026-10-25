@@ -3,7 +3,6 @@ package com.openminis.app.debug
 import android.content.Context
 import com.openminis.app.MinisApp
 import com.openminis.app.data.model.LLMModel
-import com.openminis.app.data.model.ProviderConfig
 import com.openminis.app.data.model.ProviderType
 import com.openminis.app.data.repository.ProviderRepository
 import org.json.JSONArray

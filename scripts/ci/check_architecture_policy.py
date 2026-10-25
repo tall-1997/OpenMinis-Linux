@@ -15,6 +15,16 @@ Rules (policy lives in scripts/ci/architecture-policy.json):
        - baseline entry with no file on disk   -> FAIL, delete the entry
   4. A baseline file that drops under `newFileMaxLines` graduates: remove its
      entry entirely (it is now an ordinary file governed by rule 1).
+  5. `forbiddenImports` pairs a `fromPath` regex (matched against the file's
+     POSIX path) with a `ban` substring that may not appear in a real `import`
+     statement of such a file. Comments and string literals are masked out
+     first, so the word `import` inside a prompt or comment never trips the
+     gate. `forbiddenImportsBaseline` freezes the existing debt per file as a
+     count ceiling — the same one-way ratchet as the line-count baseline:
+       - a file not on the baseline may not contain a forbidden import;
+       - an entry is a CEILING: imports may be removed but never added;
+       - `--update-baseline` only lowers entries or drops clean ones; it can
+         never register NEW debt.
 
 Exit code 0 = policy satisfied. Non-zero = violations listed on stdout.
 """
@@ -24,6 +34,7 @@ from __future__ import annotations
 import argparse
 import json
 import pathlib
+import re
 import sys
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -47,6 +58,123 @@ def watched_files(roots: list[str]) -> list[pathlib.Path]:
     return sorted(files)
 
 
+def check_forbidden_patterns(
+    files: list[pathlib.Path],
+    patterns: list[dict],
+) -> list[str]:
+    """Literal-substring ratchet: forbiddenPatterns from the policy must not
+    appear in any watched *.kt file (e.g. lifecycle-unaware collectAsState)."""
+    violations: list[str] = []
+    if not patterns:
+        return violations
+    for path in files:
+        rel = path.relative_to(REPO_ROOT).as_posix()
+        with path.open("r", encoding="utf-8", errors="replace") as fh:
+            for lineno, line in enumerate(fh, 1):
+                for rule in patterns:
+                    if rule["pattern"] in line:
+                        violations.append(
+                            f"{rel}:{lineno}: forbidden pattern "
+                            f"{rule['pattern']!r} — {rule['reason']}"
+                        )
+    return violations
+
+
+def _string_literal(text: str, start: int, quote: str) -> tuple[str, int]:
+    """Return (content, index after closing delimiter) for one Kotlin string."""
+    i = start + len(quote)
+    out: list[str] = []
+    while i < len(text):
+        if text.startswith(quote, i):
+            return "".join(out), i + len(quote)
+        c = text[i]
+        if c == "\\" and i + 1 < len(text):
+            out.append(text[i:i + 2])
+            i += 2
+            continue
+        out.append(c)
+        i += 1
+    return "".join(out), i
+
+
+def _blank_span(text: str, start: int, end: int) -> str:
+    """Same-length spaces, keeping newlines so line numbers stay aligned."""
+    return "".join(ch if ch == "\n" else " " for ch in text[start:end])
+
+
+def mask_comments_and_strings(text: str) -> str:
+    """Blank every comment and string literal (newlines preserved), so only
+    real code text survives. Handles //, /* */ and both string flavours plus
+    'c' char literals, mirroring the CJK gate's lexer."""
+    out: list[str] = []
+    i, n = 0, len(text)
+    while i < n:
+        c = text[i]
+        if c == "\n":
+            out.append("\n")
+            i += 1
+        elif text.startswith("//", i):
+            j = text.find("\n", i)
+            j = n if j < 0 else j
+            out.append(" " * (j - i))
+            i = j
+        elif text.startswith("/*", i):
+            end = text.find("*/", i + 2)
+            end = n if end < 0 else end + 2
+            out.append(_blank_span(text, i, end))
+            i = end
+        elif text.startswith('"""', i):
+            _, end = _string_literal(text, i, '"""')
+            out.append(_blank_span(text, i, end))
+            i = end
+        elif c == '"':
+            _, end = _string_literal(text, i, '"')
+            out.append(_blank_span(text, i, end))
+            i = end
+        elif c == "'":
+            _, end = _string_literal(text, i, "'")
+            out.append(_blank_span(text, i, end))
+            i = end
+        else:
+            out.append(c)
+            i += 1
+    return "".join(out)
+
+
+def scan_forbidden_imports(
+    files: list[pathlib.Path],
+    rules: list[dict],
+) -> dict[str, list[tuple[int, str, dict]]]:
+    """Real `import` statements must not match forbiddenImports rules.
+
+    A rule fires when the file's POSIX path matches `fromPath` (regex search)
+    and its `ban` substring occurs in the statement. Line-start `import`
+    keyword after masking = an actual statement; the word `import` inside a
+    comment or string literal is blanked away first. On a line matching
+    several rules only the first one counts, so layered rules (specific
+    package pair first, generic layering rule last) never double-report.
+    """
+    hits: dict[str, list[tuple[int, str, dict]]] = {}
+    if not rules:
+        return hits
+    compiled = [(re.compile(rule["fromPath"]), rule) for rule in rules]
+    for path in files:
+        rel = path.relative_to(REPO_ROOT).as_posix()
+        text = path.read_text(encoding="utf-8", errors="replace")
+        masked = mask_comments_and_strings(text)
+        for lineno, (code_line, _raw) in enumerate(
+            zip(masked.splitlines(), text.splitlines()), 1
+        ):
+            statement = code_line.strip()
+            if not statement.startswith("import "):
+                continue
+            for rx, rule in compiled:
+                if rx.search(rel) and rule["ban"] in statement:
+                    hits.setdefault(rel, []).append((lineno, statement, rule))
+                    break
+    return hits
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument(
@@ -61,6 +189,8 @@ def main() -> int:
     cap: int = policy["newFileMaxLines"]
     roots: list[str] = policy["watchedRoots"]
     baseline: dict[str, int] = policy["baseline"]
+    import_rules: list[dict] = policy.get("forbiddenImports", [])
+    import_baseline: dict[str, int] = policy.get("forbiddenImportsBaseline", {})
 
     files = watched_files(roots)
     # Policy paths are repository-style POSIX paths.  pathlib returns
@@ -69,6 +199,9 @@ def main() -> int:
     # the check was run locally.  Normalize once at the boundary so the same
     # policy has identical results on Windows and Linux CI.
     by_rel = {p.relative_to(REPO_ROOT).as_posix(): count_lines(p) for p in files}
+
+    import_hits = scan_forbidden_imports(files, import_rules)
+    import_counts = {rel: len(hits) for rel, hits in import_hits.items()}
 
     # Tighten FIRST so the check below validates the post-update state
     # (otherwise a just-lowered entry would still be reported as stale).
@@ -85,8 +218,19 @@ def main() -> int:
             elif lines < baseline[rel]:
                 baseline[rel] = lines  # tighten to the new count
                 changed = True
+        for rel in sorted(import_baseline):
+            cur = import_counts.get(rel, 0)
+            if cur == 0:
+                del import_baseline[rel]  # clean — drop the entry
+                changed = True
+            elif cur < import_baseline[rel]:
+                import_baseline[rel] = cur  # tighten to the new count
+                changed = True
+            # cur > baseline is never fixable by re-snapshotting: the check
+            # below fails and the imports must be removed in code instead.
         if changed:
             policy["baseline"] = dict(sorted(baseline.items()))
+            policy["forbiddenImportsBaseline"] = dict(sorted(import_baseline.items()))
             POLICY_PATH.write_text(
                 json.dumps(policy, indent=2, ensure_ascii=False) + "\n",
                 encoding="utf-8",
@@ -125,8 +269,43 @@ def main() -> int:
                 f"{rel}: {lines} lines > new-file cap {cap} — split it before merging"
             )
 
+    # Literal-substring ratchet (see forbiddenPatterns in the policy JSON):
+    # e.g. lifecycle-unaware collectAsState may not (re)appear.
+    violations.extend(check_forbidden_patterns(files, policy.get("forbiddenPatterns", [])))
+
+    # Layered-import ratchet (see forbiddenImports / forbiddenImportsBaseline
+    # in the policy JSON): a count ceiling per file, never rises.
+    n_import_details = 0
+    for rel, hits in sorted(import_hits.items()):
+        count = len(hits)
+        allowed = import_baseline.get(rel, 0)
+        if count <= allowed:
+            continue
+        if rel in import_baseline:
+            violations.append(
+                f"{rel}: {count} forbidden import(s) > baseline {allowed} — "
+                f"remove them (the ceiling never rises)"
+            )
+        else:
+            violations.append(
+                f"{rel}: {count} forbidden import(s), not on baseline — remove "
+                f"them (new debt is never registered by --update-baseline)"
+            )
+        for lineno, statement, rule in hits:
+            n_import_details += 1
+            violations.append(
+                f"    {rel}:{lineno}: {statement} — {rule['reason']}"
+            )
+    for rel, allowed in sorted(import_baseline.items()):
+        if import_counts.get(rel, 0) < allowed:
+            violations.append(
+                f"{rel}: {import_counts.get(rel, 0)} forbidden import(s) but "
+                f"baseline is {allowed} — run --update-baseline and commit the "
+                f"lowered entry"
+            )
+
     if violations:
-        print(f"architecture policy: {len(violations)} violation(s)")
+        print(f"architecture policy: {len(violations) - n_import_details} violation(s)")
         for v in violations:
             print(f"  - {v}")
         print(
@@ -140,7 +319,8 @@ def main() -> int:
     registered = sum(1 for rel in by_rel if rel in baseline)
     print(
         f"architecture policy: OK "
-        f"({len(by_rel)} files, cap {cap}, {registered} on baseline)"
+        f"({len(by_rel)} files, cap {cap}, {registered} on baseline, "
+        f"{len(import_baseline)} on forbidden-imports baseline)"
     )
     return 0
 

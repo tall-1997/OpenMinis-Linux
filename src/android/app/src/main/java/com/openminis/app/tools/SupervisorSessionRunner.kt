@@ -1,6 +1,8 @@
 package com.openminis.app.tools
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 
 /**
  * Orchestrates one supervisor-worker session
@@ -53,6 +55,9 @@ object SupervisorSessionRunner {
     /** Guard against a supervisor that never converges. */
     private const val MAX_SUPERVISOR_CALLS = 400
 
+    /** Consecutive envelope rejections tolerated before the loop gives up. */
+    private const val MAX_ENVELOPE_BOUNCES = 3
+
     suspend fun run(
         objective: String,
         contextDigest: String,
@@ -70,19 +75,24 @@ object SupervisorSessionRunner {
         var lastReport = ""
         var lastInstructionDigest = ""
         var bounceNote: String? = null
+        var bounces = 0
         var calls = 0
 
-        suspend fun supervisorTurn(prompt: String): String {
+        /** Null when the supervisor call budget is spent: the caller ends the session. */
+        suspend fun supervisorTurn(prompt: String): String? {
             calls++
-            if (calls > MAX_SUPERVISOR_CALLS) {
-                onTerminal.onTerminal(SupervisorRunStore.STATE_FAILED, "supervisor call budget exceeded")
-                throw IllegalStateException("supervisor call budget exceeded")
-            }
+            if (calls > MAX_SUPERVISOR_CALLS) return null
             return supervisor.speak(prompt, supervisorSystem, emptyList())
         }
 
+        // [T-supervisor-terminal-noncancellable] Once a terminal state is
+        // decided the observer must run to completion: the halt path fires it
+        // on an already-cancelled job, where plain suspend work dies before
+        // the tail note lands.
         suspend fun terminal(state: String, summary: String?): Outcome {
-            onTerminal.onTerminal(state, summary)
+            withContext(NonCancellable) {
+                onTerminal.onTerminal(state, summary)
+            }
             return when (state) {
                 SupervisorRunStore.STATE_DONE -> Outcome.DONE(summary.orEmpty())
                 else -> Outcome.FAILED(summary ?: state)
@@ -94,11 +104,21 @@ object SupervisorSessionRunner {
                 objective, contextDigest, inbox.drain(), recovery,
             )
             while (true) {
-                val text = supervisorTurn(prompt)
+                val text = supervisorTurn(prompt) ?: return terminal(
+                    SupervisorRunStore.STATE_FAILED,
+                    "supervisor call budget exceeded",
+                )
                 val verdict = SupervisorChat.parseDone(text, acceptance)
                 if (verdict == null) {
                     when (val check = SupervisorChat.validateInstruction(text)) {
                         is SupervisorChat.InstructionCheck.Rejected -> {
+                            bounces++
+                            if (bounces >= MAX_ENVELOPE_BOUNCES) {
+                                return terminal(
+                                    SupervisorRunStore.STATE_FAILED,
+                                    "supervisor envelope rejected $bounces times: ${check.reason}",
+                                )
+                            }
                             bounceNote = SupervisorPrompts.bounceEnvelope(check.reason)
                             prompt = SupervisorPrompts.reviewTurn(
                                 objective, lastReport, acceptance, inbox.drain(),
@@ -107,6 +127,7 @@ object SupervisorSessionRunner {
                             continue
                         }
                         is SupervisorChat.InstructionCheck.Valid -> {
+                            bounces = 0
                             acceptance = check.instruction.acceptance
                             lastInstructionDigest = check.instruction.task.joinToString("; ")
                             val phase = machine.onSupervisorMessage(text, acceptance)
@@ -169,11 +190,10 @@ object SupervisorSessionRunner {
                 }
             }
         } catch (e: CancellationException) {
-            onTerminal.onTerminal(SupervisorRunStore.STATE_USER_HALTED, null)
+            terminal(SupervisorRunStore.STATE_USER_HALTED, null)
             throw e
         } catch (e: Exception) {
-            onTerminal.onTerminal(SupervisorRunStore.STATE_FAILED, e.message ?: e.javaClass.simpleName)
-            return Outcome.FAILED(e.message ?: e.javaClass.simpleName)
+            return terminal(SupervisorRunStore.STATE_FAILED, e.message ?: e.javaClass.simpleName)
         }
     }
 }

@@ -4,7 +4,6 @@ import android.app.ActivityManager
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.File
 
 /** Event-scoped admission probe, not a permanent polling service. */
 internal object SandboxMemoryPressure {

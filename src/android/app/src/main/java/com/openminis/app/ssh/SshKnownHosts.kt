@@ -1,8 +1,7 @@
 package com.openminis.app.ssh
 
+import com.openminis.app.tools.AtomicFileWrite
 import java.io.File
-import java.nio.file.Files
-import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
 import java.util.Base64
 import java.util.concurrent.ConcurrentHashMap
@@ -69,13 +68,18 @@ class SshKnownHosts(private val file: File?) {
 
     private fun save() {
         val f = file ?: return
+        // Unified atomic write: same `.tmp` sibling + rename, now with the
+        // per-path lock, short-write detection and post-write verify of
+        // AtomicFileWrite. A null result throws inside the runCatching — the
+        // external never-throws contract is unchanged from the old
+        // Files.move(REPLACE_EXISTING) failure path, but the failure is now
+        // logged instead of invisible.
         runCatching {
             val obj = JSONObject()
             for ((k, v) in pins) obj.put(k, v)
-            f.parentFile?.mkdirs()
-            val tmp = File(f.parentFile, f.name + ".tmp")
-            tmp.writeText(obj.toString())
-            Files.move(tmp.toPath(), f.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            if (AtomicFileWrite.write(f, obj.toString(), temp = File(f.parentFile, f.name + ".tmp")) == null) {
+                error("known-hosts persist failed for ${f.name}")
+            }
         }
     }
 

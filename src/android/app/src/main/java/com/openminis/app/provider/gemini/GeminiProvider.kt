@@ -4,13 +4,12 @@ import android.util.Base64
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.model.LLMError
-import com.openminis.app.provider.CredentialAcceptance
 import com.openminis.app.provider.FullBodyJson
-import com.openminis.app.provider.HttpRetryAfter
 import com.openminis.app.provider.NonFiniteJson
 import com.openminis.app.provider.ProviderKeyGate
 import com.openminis.app.provider.ImageBudget
 import com.openminis.app.provider.applyUserAgentOverride
+import com.openminis.app.provider.mapHttpErrorShared
 import com.openminis.app.data.model.LLMMessage
 import com.openminis.app.data.model.LLMModel
 import com.openminis.app.data.model.LLMMediaAttachment
@@ -535,38 +534,20 @@ class GeminiProvider(
         )
     }
 
-    private fun mapHttpError(statusCode: Int, body: String, retryAfterHeader: String? = null): LLMError {
-        if (statusCode == 401 || statusCode == 403) {
-            // [T-llm-error-401-model-scope] See OpenAIProviderErrors: an
-            // upstream-pool gateway's 401 is often about the model, not the key.
-            if (CredentialAcceptance.isAccepted(credentialGateKey)) {
-                return LLMError.InvalidApiKey(
-                    "HTTP $statusCode — the same credential was accepted by this host recently, " +
-                        "so the refusal is about this model, not the key",
-                    credentialAccepted = true,
-                )
-            }
-            return LLMError.InvalidApiKey()
-        }
-        if (statusCode == 429) return HttpRetryAfter.map429(body, retryAfterHeader)
-        // [T-llm-error-secret-mask] `body` is upstream-controlled and reaches
-        // LLMError.message, which the chat UI renders. OpenAI's mapper masks here
-        // (OpenAIProviderErrors); Gemini was the drifting copy.
-        val message = "Gemini API error $statusCode: ${com.openminis.app.util.SecretMasking.mask(body.take(200))}"
-        // [T-llm-error-classification] 细分 Gemini 400 类错误。
-        val lower = message.lowercase()
-        when {
-            !lower.contains("max_tokens too large") && (
-                lower.contains("token limit") || lower.contains("token count") && lower.contains("exceed") ||
-                lower.contains("context length") || lower.contains("input is too long")
-            ) -> return LLMError.ContextLengthExceeded(message)
-            lower.contains("safety") || lower.contains("recitation") || lower.contains("blocked") ->
-                return LLMError.ContentFiltered(message)
-        }
-        val transientCodes = setOf(500, 502, 503, 504, 529)
-        if (statusCode in transientCodes) return LLMError.TransientError(message)
-        return LLMError.ProviderError(message)
-    }
+    internal fun mapHttpError(statusCode: Int, body: String, retryAfterHeader: String? = null): LLMError =
+        mapHttpErrorShared(
+            statusCode,
+            body,
+            retryAfterHeader,
+            credentialGateKey = credentialGateKey,
+            isContextLimit = ::geminiContextLimit,
+            isContentFiltered = ::geminiContentFiltered,
+            // [T-llm-error-secret-mask] `body` is upstream-controlled and reaches
+            // LLMError.message, which the chat UI renders. Kept verbatim: Gemini
+            // never parses the error envelope and truncates harder than the
+            // generic mapper.
+            envelope = { code, b -> "Gemini API error $code: ${com.openminis.app.util.SecretMasking.mask(b.take(200))}" },
+        )
 
     private fun mapError(error: Throwable): LLMError {
         if (error is LLMError) return error
@@ -574,3 +555,13 @@ class GeminiProvider(
         return LLMError.Unknown(error)
     }
 }
+
+// [T-llm-error-classification] 细分 Gemini 400 类错误。
+private fun geminiContextLimit(statusCode: Int, lower: String): Boolean =
+    !lower.contains("max_tokens too large") && (
+        lower.contains("token limit") || lower.contains("token count") && lower.contains("exceed") ||
+            lower.contains("context length") || lower.contains("input is too long")
+    )
+
+private fun geminiContentFiltered(statusCode: Int, lower: String): Boolean =
+    lower.contains("safety") || lower.contains("recitation") || lower.contains("blocked")

@@ -10,7 +10,6 @@ import com.openminis.app.config.confirm.PendingConfigChange
 import com.openminis.app.config.confirm.PendingConfigChangeItem
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.util.IsoTime
-import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID

@@ -17,7 +17,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -40,7 +40,7 @@ fun TranslationSettingsScreen(
     onOpenPad: () -> Unit,
 ) {
     val context = LocalContext.current
-    val config by providerRepository.config.collectAsState()
+    val config by providerRepository.config.collectAsStateWithLifecycle()
     var enabled by remember { mutableStateOf(TranslationPrefs.isEnabled(context)) }
     var lang by remember { mutableStateOf(TranslationPrefs.lang(context)) }
     var entryId by remember { mutableStateOf(TranslationPrefs.entryId(context)) }

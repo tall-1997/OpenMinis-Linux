@@ -5,40 +5,22 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import java.io.File
 import androidx.core.content.ContextCompat
-import androidx.compose.foundation.Image
-import androidx.compose.ui.graphics.asAndroidBitmap
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.layer.drawLayer
-import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.gestures.verticalDrag
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.animation.core.tween
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Compress
 import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.VerticalAlignTop
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.AudioFile
-import androidx.compose.material.icons.filled.FolderZip
 import androidx.compose.material.icons.filled.Shield
-import androidx.compose.material.icons.filled.PictureAsPdf
-import androidx.compose.material.icons.filled.VideoFile
-import androidx.compose.material.icons.automirrored.filled.Article
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -52,19 +34,11 @@ import kotlinx.coroutines.withContext
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.PressInteraction
-import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -74,12 +48,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -94,56 +66,34 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MergeType
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AppShortcut
-import androidx.compose.material.icons.filled.ArrowCircleUp
 import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Extension
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.ChevronLeft
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.PhotoLibrary
-import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.OpenInFull
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.CloseFullscreen
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.filled.StopCircle
 import androidx.compose.material.icons.filled.Terminal
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.outlined.MoreHoriz
-import androidx.compose.material.icons.filled.RadioButtonChecked
-import androidx.compose.material.icons.filled.RadioButtonUnchecked
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material3.ripple
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Switch
 import com.openminis.app.ui.settings.SettingsSwitch
 import com.openminis.app.BuildConfig
 import com.openminis.app.R
 import com.openminis.app.security.InterceptFeedback
 import com.openminis.app.security.PermissionMode
-import com.openminis.app.data.FileMentionIndex
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.text.BoundedText
 import com.openminis.app.ui.components.MinisAlertDialog
@@ -153,40 +103,31 @@ import com.openminis.app.ui.components.MinisMenuSectionHeader
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import com.openminis.app.ui.components.MinisCenterTopBar
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.openminis.app.ui.markdown.LocalCodeBlockRunState
 import com.openminis.app.ui.markdown.LocalMarkdownCodeRunner
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.SideEffect
-import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
@@ -195,11 +136,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onPlaced
-import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -210,14 +149,10 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
@@ -230,9 +165,6 @@ import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
-import androidx.compose.material.icons.filled.TextFields
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.LineHeightStyle
@@ -242,49 +174,17 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.layout.IntrinsicSize
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.filled.Cancel
-import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.outlined.Forum
-import androidx.compose.material.icons.outlined.Public
-import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.SkipPrevious
-import androidx.compose.material.icons.automirrored.filled.NoteAdd
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.EditNote
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Memory
-import androidx.compose.material.icons.filled.ArrowCircleDown
-import androidx.compose.material.icons.filled.AccountTree
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
 import com.openminis.app.offload.OffloadPermissionManager
-import com.mikepenz.markdown.compose.components.markdownComponents
-import com.mikepenz.markdown.m3.Markdown
-import com.mikepenz.markdown.m3.markdownColor
-import com.mikepenz.markdown.m3.markdownTypography
-import org.intellij.markdown.ast.ASTNode
-import org.intellij.markdown.ast.getTextInNode
 import com.openminis.app.data.model.LLMModel
 import com.openminis.app.data.model.ModelEntry
-import com.openminis.app.data.model.ModelGroup
-import com.openminis.app.data.model.ProviderConfig
-import com.openminis.app.data.model.ProviderType
-import com.openminis.app.data.model.RoutingStrategy
 import com.openminis.app.data.model.ThinkingLevel
 import com.openminis.app.data.repository.ChatRepository
 import com.openminis.app.data.repository.MemoryRepository
@@ -292,7 +192,6 @@ import com.openminis.app.data.repository.ProviderRepository
 import com.openminis.app.ui.browser.BrowserSheet
 import com.openminis.app.ui.theme.ChatColors
 import com.openminis.app.ui.theme.m3Icon
-import com.openminis.app.ui.components.MinisTextButton
 // iOS ChatColors equivalent
 internal val ToolCheckColor = Color(0xFF34C759) // iOS .green
 internal val ToolErrorColor = Color(0xFFFF3B30) // iOS .red
@@ -324,62 +223,7 @@ private const val ATTACHMENT_PICK_LIMIT = 50
 private const val USER_SCROLL_INTERRUPT_MS = 1_000L
 private const val SEND_FOLLOW_GRACE_MS = USER_SCROLL_INTERRUPT_MS
 
-/**
- * [T-slash-picker-fixed-height port from iOS 73f1b94a] Locked popup
- * height for the slash and mention pickers: up to 4 rows are visible,
- * any overflow scrolls. Computed as `rowHeight * visibleRows + 8dp`.
- * [T-android-slash-menu-density] Rows were tightened (vertical padding
- * 10→7dp) so rowHeight ≈ 42dp covers a 14sp title + 11sp subtitle + 7dp
- * vertical padding; 42*4 + 8 ≈ 176dp. Keeps 4 rows visible with no extra
- * blank space at the bottom.
- *
- * This is the height at the DEFAULT font scale only — see
- * [slashPickerHeight], which is what the pickers actually use.
- */
-private val SLASH_PICKER_FIXED_HEIGHT: Dp = 176.dp
 
-/**
- * Upper bound for [slashPickerHeight]. At the largest accessibility font
- * sizes an honestly-scaled 4-row band would grow past 300dp and the popup
- * would cover most of a small screen, pushing the composer out of reach.
- * Past this point the band stops growing and the rows scroll instead —
- * which is the same fallback overflow already uses.
- */
-private val SLASH_PICKER_MAX_HEIGHT: Dp = 280.dp
-
-/**
- * [T-android-slash-picker-fontscale] The picker band's height, scaled with
- * the system font size.
- *
- * Why this is not a constant any more: the row's text is sized in `sp`, so
- * at fontScale > 1 a 14sp title and 11sp subtitle render TALLER than the
- * 14dp+11dp the fixed 176dp band was budgeted against, while the band
- * itself — being `dp` — does not move, so the last visible row gets
- * clipped mid-glyph. Reported on a Xiaomi 23127PN0CC (Android 16) whose
- * display defaults to a font scale above 1.0.
- *
- * Measured on a Pixel 4a (density 2.75) while fixing this, and worth
- * recording because it contradicts the constant's own arithmetic: the
- * real row pitch is ~61.7dp, not the ~42dp the 176dp figure assumes. So
- * the band only ever showed ~2.8 rows, and the third row's subtitle was
- * already clipped at fontScale 1.0 — font scaling makes an existing bug
- * worse rather than causing it. The 4-row budget is therefore aspirational
- * at every scale; this function keeps the same intent (and the same
- * default-scale pixels) while letting the band grow with the text, and
- * deliberately does NOT re-lock the default-scale height to ~256dp, which
- * would fit 4 real rows but is a visual change nobody asked for.
- *
- * The scaling is applied to the TEXT portion only, because that is the
- * only part that scales: the 7dp vertical padding and the 18dp leading
- * icon are `dp` and stay put. Modelling the row as
- * `max(textHeight, iconHeight) + padding` mirrors the `Row`'s own
- * `CenterVertically` measurement, so the band tracks what is actually
- * drawn instead of a second, independent guess at it.
- *
- * At fontScale 1.0 this returns [SLASH_PICKER_FIXED_HEIGHT] verbatim, so
- * the default-font layout is byte-identical to before — the computed path
- * is only consulted when the user has actually scaled their font up.
- */
 /**
  * [T-android-chat-max-content-width] Reading-measure cap for the conversation
  * and the composer on a wide window.
@@ -395,30 +239,7 @@ private val SLASH_PICKER_MAX_HEIGHT: Dp = 280.dp
  */
 private val CHAT_MAX_CONTENT_WIDTH = 900.dp
 
-@Composable
-private fun slashPickerHeight(
-    titleSp: TextUnit = 14.sp,
-    subtitleSp: TextUnit = 11.sp,
-    verticalPadding: Dp = 7.dp,
-    iconSize: Dp = 18.dp,
-): Dp {
-    val fontScale = LocalDensity.current.fontScale
-    if (fontScale <= 1f) return SLASH_PICKER_FIXED_HEIGHT
 
-    val density = LocalDensity.current
-    return with(density) {
-        // Compose applies a ~1.2x line-height multiplier to a bare
-        // fontSize; the two Text rows are maxLines=1 so each contributes
-        // exactly one line.
-        val textHeight = (titleSp.toDp() + subtitleSp.toDp()) * 1.2f
-        val rowHeight = maxOf(textHeight, iconSize) + verticalPadding * 2
-        (rowHeight * SLASH_PICKER_VISIBLE_ROWS + 8.dp)
-            .coerceIn(SLASH_PICKER_FIXED_HEIGHT, SLASH_PICKER_MAX_HEIGHT)
-    }
-}
-
-/** Rows visible in the picker band before it starts scrolling. */
-private const val SLASH_PICKER_VISIBLE_ROWS = 4
 
 // [T-android-tool-autoscroll] Combined signal for the streaming auto-follow
 // LaunchedEffect. data class so distinctUntilChanged uses structural equality
@@ -532,17 +353,17 @@ fun ChatScreen(
             announcementTts.shutdown()
         }
     }
-    val messages by viewModel.uiMessages.collectAsState()
-    val hasOlderMessages by viewModel.hasOlderMessages.collectAsState()
-    val hasNewerMessages by viewModel.hasNewerMessages.collectAsState()
-    val isLoadingHistory by viewModel.isLoadingHistory.collectAsState()
-    val isStreaming by viewModel.isStreaming.collectAsState()
-    val sessionLoaded by viewModel.sessionLoaded.collectAsState()
-    val canResume by viewModel.canResume.collectAsState()
+    val messages by viewModel.uiMessages.collectAsStateWithLifecycle()
+    val hasOlderMessages by viewModel.hasOlderMessages.collectAsStateWithLifecycle()
+    val hasNewerMessages by viewModel.hasNewerMessages.collectAsStateWithLifecycle()
+    val isLoadingHistory by viewModel.isLoadingHistory.collectAsStateWithLifecycle()
+    val isStreaming by viewModel.isStreaming.collectAsStateWithLifecycle()
+    val sessionLoaded by viewModel.sessionLoaded.collectAsStateWithLifecycle()
+    val canResume by viewModel.canResume.collectAsStateWithLifecycle()
     // [T-android-compact-progress] null when no compaction is running.
-    val compactProgress by viewModel.compactProgress.collectAsState()
-    val pendingApprovals by viewModel.pendingApprovals.collectAsState()
-    val interceptEvents by InterceptFeedback.events.collectAsState()
+    val compactProgress by viewModel.compactProgress.collectAsStateWithLifecycle()
+    val pendingApprovals by viewModel.pendingApprovals.collectAsStateWithLifecycle()
+    val interceptEvents by InterceptFeedback.events.collectAsStateWithLifecycle()
     // Intercepts are transient notices. Approval requests remain visible
     // until the user decides; only completed denial/rejection notices expire.
     LaunchedEffect(interceptEvents.map { it.id }) {
@@ -554,21 +375,13 @@ fun ChatScreen(
             }
         }
     }
-    val error by viewModel.error.collectAsState()
-    val modelName by viewModel.modelName.collectAsState()
-    val sessionTitle by viewModel.sessionTitle.collectAsState()
-    val sessionCategory by viewModel.sessionCategory.collectAsState()
-    val attachments by viewModel.attachments.collectAsState()
+    val error by viewModel.error.collectAsStateWithLifecycle()
+    val sessionTitle by viewModel.sessionTitle.collectAsStateWithLifecycle()
+    val sessionCategory by viewModel.sessionCategory.collectAsStateWithLifecycle()
+    val attachments by viewModel.attachments.collectAsStateWithLifecycle()
     // [T-android-paste-placeholder] Folded pastes, rendered as chips above the
     // attachment row.
-    val pastedTexts by viewModel.pastedTexts.collectAsState()
-    val availableGroups by viewModel.availableGroups.collectAsState()
-    val selectedGroupId by viewModel.selectedGroupId.collectAsState()
-    val showBrowserSheet by viewModel.showBrowserSheet.collectAsState()
-    val showMemorySheet by viewModel.showMemorySheet.collectAsState()
-    val memoryToolRecords by viewModel.memoryToolRecords.collectAsState()
-    val selectedGroupName by viewModel.selectedGroupName.collectAsState()
-    val providerName by viewModel.providerName.collectAsState()
+    val pastedTexts by viewModel.pastedTexts.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
     // [T-generation-run] 崩溃恢复提示：上次进程死亡时本会话有中断的生成。
@@ -629,14 +442,14 @@ fun ChatScreen(
     // T325: draft persists on the VM so navigation (e.g. push EnvVars and
     // pop back) doesn't wipe what the user has typed. Mirrors iOS
     // `AIChatView` which binds the composer against `vm.inputText`.
-    val inputText by viewModel.inputText.collectAsState()
+    val inputText by viewModel.inputText.collectAsStateWithLifecycle()
 
     // ─── T51: Share Injection + Move-to capsule ───────────────────────
     // Drain any pending share buffered by ShareCoordinator (cold start =
     // bufferVersion already non-zero on first composition; warm start =
     // version increments while the user is mid-session). Runs on every
     // bufferVersion bump.
-    val shareBufferVersion by com.openminis.app.share.ShareCoordinator.bufferVersion.collectAsState()
+    val shareBufferVersion by com.openminis.app.share.ShareCoordinator.bufferVersion.collectAsStateWithLifecycle()
     androidx.compose.runtime.LaunchedEffect(shareBufferVersion) {
         if (shareBufferVersion == 0) return@LaunchedEffect
         // [XSessionDiag] sessionId is passed for LOGGING ONLY — consumeBuffer
@@ -765,11 +578,12 @@ fun ChatScreen(
     // [T-update-download-fgs] rememberSaveable: a process death during a
     // background update download used to wipe a half-typed message. The
     // TextFieldValue saver preserves text AND selection across recreation.
-    var inputFieldValue by androidx.compose.runtime.saveable.rememberSaveable(
+    val inputFieldValueState = androidx.compose.runtime.saveable.rememberSaveable(
         stateSaver = androidx.compose.ui.text.input.TextFieldValue.Saver,
     ) {
         mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(""))
     }
+    var inputFieldValue by inputFieldValueState
     var showExpandedEditor by remember { mutableStateOf(false) }
     // T217-2: suppress IME commits arriving briefly after send. clearFocus
     // triggers finishComposingText, which makes voice/Pinyin IMEs commit
@@ -841,7 +655,8 @@ fun ChatScreen(
 
     val coroutineScope = rememberCoroutineScope()
 
-    var showModelPicker by remember { mutableStateOf(false) }
+    val showModelPickerState = remember { mutableStateOf(false) }
+    var showModelPicker by showModelPickerState
     // [T-android-modelpicker-stuck-ripple] Interaction source for the navbar
     // model-picker row, owned here so the press can be drained when the picker
     // closes. See the clickable's comment for why the release never arrives on
@@ -876,47 +691,59 @@ fun ChatScreen(
     // [T-android-thinking-badge-navbar] Whether the thinking-level sheet
     // (opened by tapping the navbar thinking badge) is presented. Mirrors iOS
     // AIChatView.showThinkingLevelSheet.
-    var showThinkingLevelSheet by remember { mutableStateOf(false) }
+    val showThinkingLevelSheetState = remember { mutableStateOf(false) }
+    var showThinkingLevelSheet by showThinkingLevelSheetState
     var showAttachMenu by remember { mutableStateOf(false) }
-    var showChatMenu by remember { mutableStateOf(false) }
+    val showChatMenuState = remember { mutableStateOf(false) }
+    var showChatMenu by showChatMenuState
     // Archived rows whose live message is gone. 0 hides the restore action;
     // recounts whenever the menu opens so a truncation made this session
     // shows up without a reload. Declared before the LaunchedEffect below
     // that reads it.
-    var restorableCount by remember { mutableIntStateOf(0) }
-    var showRestoreDialog by remember { mutableStateOf(false) }
+    val restorableCountState = remember { mutableIntStateOf(0) }
+    var restorableCount by restorableCountState
+    val showRestoreDialogState = remember { mutableStateOf(false) }
+    var showRestoreDialog by showRestoreDialogState
     LaunchedEffect(showChatMenu) {
         if (showChatMenu) {
             restorableCount = viewModel.restorableArchivedMessageCount()
         }
     }
-    var showSkillsSheet by remember { mutableStateOf(false) }
+    val showSkillsSheetState = remember { mutableStateOf(false) }
+    var showSkillsSheet by showSkillsSheetState
     // [T-mcp-integration-android] MCPs-in-Session sheet visibility.
-    var showMcpsSheet by remember { mutableStateOf(false) }
-    var showTokenUsageSheet by remember { mutableStateOf(false) }
+    val showMcpsSheetState = remember { mutableStateOf(false) }
+    var showMcpsSheet by showMcpsSheetState
+    val showTokenUsageSheetState = remember { mutableStateOf(false) }
+    var showTokenUsageSheet by showTokenUsageSheetState
     // T185: Move-to-session sheet visibility. Hoisted to the top of
     // ChatScreen so the trigger (capsule inside the composer) and the
     // sheet body (rendered later in the layout tree) share the same
     // backing state without needing fragile scope wiring.
-    var showMoveSheet by remember { mutableStateOf(false) }
-    var showClearChatDialog by remember { mutableStateOf(false) }
+    val showMoveSheetState = remember { mutableStateOf(false) }
+    var showMoveSheet by showMoveSheetState
+    val showClearChatDialogState = remember { mutableStateOf(false) }
+    var showClearChatDialog by showClearChatDialogState
     // [T-android-delete-from-here] Id of the message a pending "Delete From
     // Here" would cut at, or null when no confirmation is open. Holding the
     // id (rather than a boolean plus a separate field) keeps the dialog and
     // its target impossible to desynchronize.
-    var deleteFromHereTargetId by remember { mutableStateOf<String?>(null) }
+    val deleteFromHereTargetIdState = remember { mutableStateOf<String?>(null) }
+    var deleteFromHereTargetId by deleteFromHereTargetIdState
     // [T-new-chat-menu-entry] Confirmation gate for "New Chat" while the
     // current session is still streaming — stopping the running task needs
     // an explicit confirm; idle sessions skip the dialog entirely.
-    var showNewChatStopDialog by remember { mutableStateOf(false) }
+    val showNewChatStopDialogState = remember { mutableStateOf(false) }
+    var showNewChatStopDialog by showNewChatStopDialogState
     // [T-android-enhanced-cache] First-enable confirmation dialog visibility.
-    var showEnhancedCacheDialog by remember { mutableStateOf(false) }
+    val showEnhancedCacheDialogState = remember { mutableStateOf(false) }
+    var showEnhancedCacheDialog by showEnhancedCacheDialogState
 
     // Bridge VM's slash-command "/clear" request into local Compose state so
     // the menu and slash-command entry points share a single confirmation
     // dialog instance. ack the VM flag immediately to avoid re-firing on
     // recomposition.
-    val clearChatRequested by viewModel.clearChatConfirmRequested.collectAsState()
+    val clearChatRequested by viewModel.clearChatConfirmRequested.collectAsStateWithLifecycle()
     LaunchedEffect(clearChatRequested) {
         if (clearChatRequested) {
             showClearChatDialog = true
@@ -1114,7 +941,7 @@ fun ChatScreen(
         }
         OffloadPermissionManager.respondToAndroidPermission(grantedNow)
     }
-    val pendingAndroidPermission by OffloadPermissionManager.pendingAndroidPermission.collectAsState()
+    val pendingAndroidPermission by OffloadPermissionManager.pendingAndroidPermission.collectAsStateWithLifecycle()
     LaunchedEffect(pendingAndroidPermission) {
         val req = pendingAndroidPermission ?: return@LaunchedEffect
         val perms = req.permissions.toTypedArray()
@@ -1346,7 +1173,7 @@ fun ChatScreen(
     // snapshots) contradicted each other — the root of the
     // "读历史时新消息到达导致跳屏" bug family.
     val scrollPolicy = remember { ChatScrollPolicy() }
-    val scrollMode by scrollPolicy.mode.collectAsState()
+    val scrollMode by scrollPolicy.mode.collectAsStateWithLifecycle()
     var pinRealLatest by remember(sessionId) { mutableStateOf(false) }
     var entryPinRequested by remember(sessionId) { mutableStateOf(false) }
 
@@ -1819,7 +1646,7 @@ fun ChatScreen(
     // Live roster of running sub-agents. The top bar renders these; the session
     // page hides a sub-agent transcript card only while its run is in this set,
     // so a finished run stays visible as a card instead of vanishing.
-    val subAgentMembers by com.openminis.app.service.SubAgentActivityTracker.members.collectAsState()
+    val subAgentMembers by com.openminis.app.service.SubAgentActivityTracker.members.collectAsStateWithLifecycle()
     val activeSubAgentToolIds = remember(subAgentMembers) {
         subAgentMembers.mapTo(mutableSetOf()) { it.parentToolId }
     }
@@ -1992,9 +1819,9 @@ fun ChatScreen(
     // http(s)/about → BrowserSheet, minis:// deep links → DeepLinkHandler,
     // minis://<host>/<path> → in-app file preview by extension.
     val pendingMinisOpenUrl by com.openminis.app.terminal.MinisOpenUrlBroker.pendingUrl
-        .collectAsState()
+        .collectAsStateWithLifecycle()
     val minisOpenTerminalVisible by com.openminis.app.terminal.MinisOpenUrlBroker.terminalVisible
-        .collectAsState()
+        .collectAsStateWithLifecycle()
     LaunchedEffect(pendingMinisOpenUrl, minisOpenTerminalVisible) {
         val url = pendingMinisOpenUrl ?: return@LaunchedEffect
         // The fullscreen TerminalScreen owns the broker while it's up —
@@ -2080,7 +1907,7 @@ fun ChatScreen(
         // 状态（运行中集合）经 LocalCodeBlockRunState 注入。一次 provide
         // 覆盖聊天流全部渲染路径，免去逐 StreamingMarkdownText 调用点穿参。
         LocalMarkdownCodeRunner provides viewModel::runCodeBlockInline,
-        LocalCodeBlockRunState provides viewModel.codeBlockRunState.collectAsState().value,
+        LocalCodeBlockRunState provides viewModel.codeBlockRunState.collectAsStateWithLifecycle().value,
     ) {
     Scaffold(
         containerColor = ChatColors.background,
@@ -2088,263 +1915,19 @@ fun ChatScreen(
         topBar = {
             MinisCenterTopBar(
                 title = {
-                    // iOS-style centered layout: "Minis Ultra" + group row + provider·model row
-                    Box(
-                        modifier = Modifier.fillMaxWidth(),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        val noFontPad = androidx.compose.ui.text.TextStyle(
-                            platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false),
-                        )
-                        // Fallback pulse animation (iOS: 3× red pulse on model switch)
-                        val fallbackTrigger by viewModel.fallbackTrigger.collectAsState()
-                        val fallbackPulseAlpha = remember { androidx.compose.animation.core.Animatable(0f) }
-                        LaunchedEffect(fallbackTrigger) {
-                            if (fallbackTrigger == 0) return@LaunchedEffect
-                            repeat(3) {
-                                fallbackPulseAlpha.animateTo(1f, animationSpec = androidx.compose.animation.core.tween(350))
-                                fallbackPulseAlpha.animateTo(0f, animationSpec = androidx.compose.animation.core.tween(350))
+                    ChatTopBarTitle(
+                        viewModel = viewModel,
+                        showChatTitlePill = showChatTitlePill,
+                        providerRepository = providerRepository,
+                        modelPickerInteraction = modelPickerInteraction,
+                        onShowModelPicker = { showModelPicker = true },
+                        onShowThinkingLevelSheet = { showThinkingLevelSheet = true },
+                        onEditTitle = {
+                            coroutineScope.launch {
+                                editingSession = viewModel.loadSessionEntity()
                             }
-                        }
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(Color.Red.copy(alpha = 0.35f * fallbackPulseAlpha.value))
-                                // [T-android-topbar-shrink] vertical 4dp→2dp.
-                                // Combined with the expandedHeight drop below,
-                                // closes the dead-space gap between the model
-                                // name row and the TopAppBar bottom edge that
-                                // T-topbar-model-row-clip's 76dp overshoot left
-                                // behind. Horizontal 32dp keeps the fallback
-                                // pulse highlight comfortably padded around
-                                // the longest title.
-                                .padding(horizontal = 32.dp, vertical = 2.dp),
-                        ) {
-                            // Nav title: current session title when one
-                            // exists and the toggle is on, else fall back to
-                            // the Soul name (matches the input placeholder
-                            // "Message <SoulName>"), then to app_name
-                            // ("Minis Ultra") as the terminal fallback.
-                            // Tap opens the same SessionEditSheet used from
-                            // the session list — drafts return null from
-                            // loadSessionEntity so the sheet stays closed.
-                            // SoulStore.cachedMetadata is the same source the
-                            // input placeholder uses (see ~line 3581), so
-                            // soul renames in Soul Settings reflect here live.
-                            val topBarSoul by com.openminis.app.agent.SoulStore
-                                .cachedMetadata.collectAsState()
-                            val displayTitle = when {
-                                showChatTitlePill
-                                    && sessionTitle.isNotBlank()
-                                    && sessionTitle != "New Chat" -> sessionTitle
-                                topBarSoul.name.isNotBlank() -> topBarSoul.name
-                                else -> stringResource(R.string.app_name)
-                            }
-                            Text(
-                                text = displayTitle,
-                                fontSize = 16.sp,
-                                lineHeight = 19.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = ChatColors.primaryText,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                style = noFontPad,
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .clickable {
-                                        coroutineScope.launch {
-                                            editingSession = viewModel.loadSessionEntity()
-                                        }
-                                    }
-                                    .padding(horizontal = 4.dp, vertical = 2.dp),
-                            )
-                            // Model picker subtitle: green dot + group +
-                            // provider/model. Tap opens the model picker —
-                            // separated from the title above so tapping the
-                            // title rows opens the rename sheet instead.
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    // [T-android-modelpicker-stuck-ripple] Own the
-                                    // interaction source so the press can be
-                                    // released explicitly. Opening the picker
-                                    // sheet puts a modal window over this row, so
-                                    // the pointer's UP never reaches the clickable:
-                                    // Compose emits PressInteraction.Press with no
-                                    // matching Release and the ripple stays lit
-                                    // behind the sheet — still there after the
-                                    // sheet closes, reading as a permanent grey
-                                    // highlight on the title bar.
-                                    .clickable(
-                                        interactionSource = modelPickerInteraction,
-                                        indication = ripple(),
-                                    ) { showModelPicker = true }
-                                    .padding(horizontal = 4.dp, vertical = 1.dp),
-                            ) {
-                                // Line 1: group name + dropdown arrow (iOS: "Default ⌄").
-                                // [T-usage-topbar-brand-icon] Old green status dot removed
-                                // (clashed with picker's provider-brand dots); row hides
-                                // entirely when no group is bound.
-                                //
-                                // T-android-topbar-group-name-fallback:
-                                    // _selectedGroupName is empty during the
-                                    // brief window before loadSession's group
-                                    // resolve runs, or whenever a binding
-                                    // resolve fails. Falling straight to the
-                                    // "Default" badge string masks the
-                                    // active group's real name (e.g. the
-                                    // onboarding-created "Default Models" or
-                                    // any user-renamed group). Insert a real
-                                    // fallback chain: collected VM value →
-                                    // active/default group name from the live
-                                    // config → terminal badge string. Mirrors
-                                    // the #476 TopBar title fallback pattern
-                                    // (commit b4c88775).
-                                    //
-                                    // [T-android-group-resolve-skip-uncredentialed]
-                                    // ...but only while a group is ACTUALLY
-                                    // bound. This chain used to run
-                                    // unconditionally, so a session that failed
-                                    // to resolve its group — and was therefore
-                                    // running on a model from the new-chat
-                                    // default chain, unrelated to any group —
-                                    // still displayed the default group's name.
-                                    // The header then contradicted the model
-                                    // line right below it and made a real
-                                    // routing failure read as normal operation,
-                                    // which is what made that bug hard to spot.
-                                    // Mirrors iOS, which keys the group glyph
-                                    // off the binding (`isGroupBound`) rather
-                                    // than off a name lookup.
-                                    val groupNameDisplay = selectedGroupName.ifEmpty {
-                                        if (selectedGroupId == null) {
-                                            ""
-                                        } else {
-                                            val defaultGroupId = providerRepository.defaultPrimaryGroupId
-                                            availableGroups.firstOrNull { it.id == defaultGroupId }?.name
-                                                ?: stringResource(R.string.model_picker_default_badge)
-                                        }
-                                    }
-                                    // Drop the whole affordance when no group is
-                                    // bound — an empty label would still leave
-                                    // a dangling chevron pointing at nothing.
-                                    if (groupNameDisplay.isNotEmpty()) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(3.dp),
-                                        ) {
-                                        Text(
-                                            text = groupNameDisplay,
-                                            fontSize = 12.sp,
-                                            lineHeight = 14.sp,
-                                            fontWeight = FontWeight.Medium,
-                                            color = ChatColors.secondaryText,
-                                            maxLines = 1,
-                                            style = noFontPad,
-                                        )
-                                        Icon(
-                                            m3Icon(Icons.Default.KeyboardArrowDown),
-                                            contentDescription = null,
-                                            tint = ChatColors.tertiaryText,
-                                            modifier = Modifier.size(14.dp),
-                                        )
-                                        }
-                                    }
-                                // Layer 3: logo + model + thinking badge, two separate
-                                // tappable siblings. [T-android-thinking-badge-navbar]
-                                // The badge owns its own clickable, so a tap on it opens
-                                // the thinking sheet and never bubbles to the column's
-                                // model-picker handler. model text is weight(1f, fill=false)
-                                // so it truncates before the badge gets clipped.
-                                // [T-topbar-three-tier] Layer 2: provider on its own
-                                // line — glued as "天翼云 · glm-5.3" a long provider ate
-                                // the width and truncated the model name.
-                                if (providerName.isNotEmpty()) {
-                                    Text(
-                                        text = providerName,
-                                        fontSize = 11.sp,
-                                        lineHeight = 13.sp,
-                                        color = ChatColors.tertiaryText,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        style = noFontPad,
-                                    )
-                                }
-                                if (providerName.isNotEmpty() || modelName.isNotEmpty()) {
-                                    val thinkingLevelBadgeState by viewModel.thinkingLevel.collectAsState()
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                    ) {
-                                        // [T-codex-fast-mode] ⚡ badge ahead of the
-                                        // resolved model name — small orange circle
-                                        // + white bolt, shown only while Fast Mode
-                                        // is enabled AND the active model is
-                                        // eligible (iOS 9e3c76ef row-3 placement,
-                                        // 09944220 9pt sizing).
-                                        val fastBadgeEligible by viewModel.showFastModeToggle.collectAsState()
-                                        val fastBadgeOn by viewModel.fastModeEnabled.collectAsState()
-                                        if (fastBadgeEligible && fastBadgeOn) {
-                                            Box(
-                                                contentAlignment = Alignment.Center,
-                                                modifier = Modifier
-                                                    .size(11.dp)
-                                                    .background(Color(0xFFFF9500), CircleShape),
-                                            ) {
-                                                Icon(
-                                                    Icons.Default.Bolt,
-                                                    contentDescription = null,
-                                                    tint = Color.White,
-                                                    modifier = Modifier.size(9.dp),
-                                                )
-                                            }
-                                        }
-                                // [T-usage-topbar-brand-icon] Vendor logo by model-name
-                                // keyword scoring (relay labels carry no brand).
-                                val brandSlug = remember(modelName) { ModelBrandResolver.resolve(modelName) }
-                                        ModelBrandIcon(slug = brandSlug, sizeDp = 13.dp)
-                                        Text(
-                                            text = modelName.ifEmpty { providerName },
-                                            fontSize = 11.sp,
-                                            lineHeight = 13.sp,
-                                            color = ChatColors.tertiaryText,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                            style = noFontPad,
-                                            // Yield first when space is tight; the
-                                            // badge to the right stays intrinsic.
-                                            modifier = Modifier.weight(1f, fill = false),
-                                        )
-                                        // Show the badge whenever thinking is on,
-                                        // and ALSO when it's Off but the active
-                                        // model supports deep thinking (iOS
-                                        // parity, e6bd75efc): the icon + "Off"
-                                        // pill is then a discoverable tap target
-                                        // for enabling thinking via the level
-                                        // sheet. The Off pill is gated on
-                                        // currentModelSupportsReasoning so
-                                        // non-reasoning models don't grow a dead
-                                        // toggle; an enabled level still shows
-                                        // unconditionally (user may have opted in
-                                        // on an unknown-capability model).
-                                        if (viewModel.availableThinkingLevels.isNotEmpty() &&
-                                            (
-                                                thinkingLevelBadgeState.isEnabled ||
-                                                    viewModel.currentModelSupportsReasoning
-                                            )
-                                        ) {
-                                            ThinkingLevelBadge(
-                                                level = thinkingLevelBadgeState,
-                                                onClick = { showThinkingLevelSheet = true },
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+                        },
+                    )
                 },
                 navigationIcon = {
                     // [T-android-tablet-split] See `isTwoPane`.
@@ -2429,327 +2012,22 @@ fun ChatScreen(
                     }
                 },
                 actions = {
-                    // [P0-6] High-frequency entries promoted out of the "..."
-                    // menu into direct icons when the bar has room (≥600dp —
-                    // below that the centered two-line title needs the width;
-                    // the menu's 快捷 section carries them on phones). Same
-                    // handlers as the menu items — one funnel per action.
-                    if (shouldShowTopBarQuickActions()) {
-                        IconButton(onClick = onOpenTerminal) {
-                            Icon(m3Icon(Icons.Default.Terminal), contentDescription = stringResource(R.string.chat_menu_open_terminal))
-                        }
-                        IconButton(onClick = { viewModel.toggleBrowserSheet() }) {
-                            Icon(m3Icon(Icons.Default.Language), contentDescription = stringResource(R.string.chat_menu_open_browser))
-                        }
-                        IconButton(onClick = onBrowseChatFiles) {
-                            Icon(m3Icon(Icons.Default.Description), contentDescription = stringResource(R.string.chat_menu_browse_chat_files))
-                        }
-                    }
-                    // iOS: "..." circle button → dropdown menu
-                    Box {
-                        IconButton(onClick = { showChatMenu = true }) {
-                            Icon(Icons.Outlined.MoreHoriz, contentDescription = stringResource(R.string.cd_more))
-                        }
-                        MinisMenu(
-                            expanded = showChatMenu,
-                            onDismissRequest = { showChatMenu = false },
-                        ) {
-                            // [T-android-memory-enabled-minisconfig] Gate the
-                            // "Memories in Session" item below on the session's
-                            // live memoryEnabled — when memory is off the entry
-                            // disappears, consistent with the per-session gating
-                            // of the memory_get / memory_write tools and the
-                            // system-prompt injection.
-                            val menuMemoryEnabled by viewModel.memoryEnabled.collectAsState()
-                            val sessionPerm by viewModel.permissionMode.collectAsState()
-                            val yoyoOn = sessionPerm.isYoyo()
-                            // [P0-6] 快捷：三个高频入口置顶。宽窗口（≥600dp）它们
-                            // 已是顶栏直接图标（shouldShowTopBarQuickActions），
-                            // 菜单里不再重复；窄屏由本节承载。
-                            if (!shouldShowTopBarQuickActions()) {
-                                MinisMenuSectionHeader(stringResource(R.string.chat_menu_section_quick))
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.chat_menu_open_terminal)) },
-                                    onClick = {
-                                        showChatMenu = false
-                                        onOpenTerminal()
-                                    },
-                                    leadingIcon = {
-                                        Icon(m3Icon(Icons.Default.Terminal), contentDescription = null)
-                                    },
-                                )
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.chat_menu_open_browser)) },
-                                    onClick = {
-                                        showChatMenu = false
-                                        viewModel.toggleBrowserSheet()
-                                    },
-                                    leadingIcon = {
-                                        Icon(m3Icon(Icons.Default.Language), contentDescription = null)
-                                    },
-                                )
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.chat_menu_browse_chat_files)) },
-                                    onClick = {
-                                        showChatMenu = false
-                                        onBrowseChatFiles()
-                                    },
-                                    leadingIcon = {
-                                        Icon(m3Icon(Icons.Default.Description), contentDescription = null)
-                                    },
-                                )
-                            }
-                            // [P0-6] 会话段：本会话的行为开关。
-                            MinisMenuSectionHeader(stringResource(R.string.chat_menu_section_session))
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        if (yoyoOn) stringResource(R.string.chat_menu_perm_yoyo)
-                                        else stringResource(R.string.chat_menu_perm_ask),
-                                    )
-                                },
-                                onClick = {
-                                    viewModel.setSessionPermissionMode(
-                                        if (yoyoOn) PermissionMode.ASK else PermissionMode.ALLOW_ALL,
-                                    )
-                                },
-                                leadingIcon = {
-                                    Icon(
-                                        if (yoyoOn) Icons.Filled.Bolt else Icons.Filled.Shield,
-                                        contentDescription = null,
-                                    )
-                                },
-                                trailingIcon = {
-                                    SettingsSwitch(
-                                        checked = yoyoOn,
-                                        onCheckedChange = { on ->
-                                            viewModel.setSessionPermissionMode(
-                                                if (on) PermissionMode.ALLOW_ALL else PermissionMode.ASK,
-                                            )
-                                        },
-                                    )
-                                },
-                            )
-                            val groupChatOn by viewModel.groupChatEnabled.collectAsState()
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.chat_menu_group_chat)) },
-                                onClick = { viewModel.setGroupChatEnabled(!groupChatOn) },
-                                leadingIcon = { Icon(Icons.Default.Forum, contentDescription = null) },
-                                trailingIcon = {
-                                    // The row already toggles. A live switch here
-                                    // also consumes the tap and flips the flag
-                                    // back off, so @ keeps opening skill files.
-                                    SettingsSwitch(
-                                        checked = groupChatOn,
-                                        onCheckedChange = null,
-                                    )
-                                },
-                            )
-                            // [P0-6] 结束讨论 lives ONLY on the group-chat
-                            // banner (same endGroupChat(), always visible
-                            // while a group chat runs, one tap away). The
-                            // duplicate overflow-menu entry was two taps to
-                            // reach the same call and only ever enabled in
-                            // the exact state where the banner is on screen.
-                            if (restorableCount > 0) {
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.chat_menu_restore_deleted)) },
-                                    onClick = {
-                                        showChatMenu = false
-                                        showRestoreDialog = true
-                                    },
-                                    leadingIcon = { Icon(Icons.Default.Restore, contentDescription = null) },
-                                )
-                            }
-                            // [P0-6] 工具段：会话内的扩展面。
-                            MinisMenuSectionHeader(stringResource(R.string.chat_menu_section_tools))
-                            // [P2-git-panel] Git panel — desktop-style git UI
-                            // over the session workspace.
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.chat_menu_git_panel)) },
-                                onClick = {
-                                    showChatMenu = false
-                                    onOpenGitPanel()
-                                },
-                                leadingIcon = {
-                                    Icon(Icons.Default.MergeType, contentDescription = null)
-                                },
-                            )
-                            // Session Skills (iOS parity)
-                            if (skillRepository != null) {
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.session_skills_title)) },
-                                    onClick = {
-                                        showChatMenu = false
-                                        showSkillsSheet = true
-                                    },
-                                    leadingIcon = {
-                                        Icon(m3Icon(Icons.Default.Build), contentDescription = null)
-                                    },
-                                )
-                            }
-                            // [T-mcp-integration-android] MCPs in Session, next to Skills.
-                            if (mcpRepository != null) {
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.session_mcps_title)) },
-                                    onClick = {
-                                        showChatMenu = false
-                                        showMcpsSheet = true
-                                    },
-                                    leadingIcon = {
-                                        Icon(Icons.Default.Extension, contentDescription = null)
-                                    },
-                                )
-                            }
-                            // Session Memory (iOS parity)
-                            if (memoryRepository != null && menuMemoryEnabled) {
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.session_memory_title)) },
-                                    onClick = {
-                                        showChatMenu = false
-                                        viewModel.toggleMemorySheet()
-                                    },
-                                    leadingIcon = {
-                                        Icon(m3Icon(Icons.Default.Psychology), contentDescription = null)
-                                    },
-                                )
-                            }
-                            // [P0-6] 设置段：模型调用与会话开销类开关。增强缓存/
-                            // 极速模式保留在此而非移入系统设置页：它们的可见性
-                            // 由当前会话的模型/提供方决定（showFastModeToggle、
-                            // showEnhancedCacheToggle），设置页没有会话上下文。
-                            MinisMenuSectionHeader(stringResource(R.string.chat_menu_section_settings))
-                            // Token Usage (iOS parity)
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.settings_token_usage)) },
-                                onClick = {
-                                    showChatMenu = false
-                                    showTokenUsageSheet = true
-                                },
-                                leadingIcon = {
-                                    val contextUsage by viewModel.contextUsage.collectAsState()
-                                    ContextRing(usage = contextUsage)
-                                },
-                            )
-                            // Enhanced Cache (iOS parity, commit 57aaf122):
-                            // 1-hour Anthropic cache TTL. Only shown for the
-                            // official Anthropic API (not relays / other
-                            // providers) — showEnhancedCacheToggle recomputes on
-                            // model/provider switch. First enable prompts a
-                            // one-time extra-billing confirmation.
-                            val showEnhancedCache by viewModel.showEnhancedCacheToggle.collectAsState()
-                            val enhancedCacheOn by viewModel.enhancedCacheEnabled.collectAsState()
-                            if (showEnhancedCache) {
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.chat_menu_enhanced_cache)) },
-                                    onClick = {
-                                        if (enhancedCacheOn) {
-                                            viewModel.setEnhancedCacheEnabled(false)
-                                        } else if (viewModel.isEnhancedCacheConfirmed()) {
-                                            viewModel.setEnhancedCacheEnabled(true)
-                                        } else {
-                                            showChatMenu = false
-                                            showEnhancedCacheDialog = true
-                                        }
-                                    },
-                                    leadingIcon = {
-                                        Icon(Icons.Default.Bolt, contentDescription = null)
-                                    },
-                                    trailingIcon = {
-                                        SettingsSwitch(
-                                            checked = enhancedCacheOn,
-                                            onCheckedChange = {
-                                                if (enhancedCacheOn) {
-                                                    viewModel.setEnhancedCacheEnabled(false)
-                                                } else if (viewModel.isEnhancedCacheConfirmed()) {
-                                                    viewModel.setEnhancedCacheEnabled(true)
-                                                } else {
-                                                    showChatMenu = false
-                                                    showEnhancedCacheDialog = true
-                                                }
-                                            },
-                                        )
-                                    },
-                                )
-                            }
-                            // [T-codex-fast-mode] Fast Mode (iOS parity,
-                            // fb671083 + 838ba929): shown when the active model
-                            // is a gpt-family model served through the
-                            // Responses path (useResponsesAPI instance or Codex
-                            // OAuth). App-level persisted toggle; while on, the
-                            // Responses body carries service_tier="priority"
-                            // (≈1.5x faster at 2x credit burn on the ChatGPT
-                            // subscription) and the nav model row shows a ⚡
-                            // badge. Sits next to Enhanced Cache — both are
-                            // model-invocation controls (iOS 09944220 grouping).
-                            val showFastMode by viewModel.showFastModeToggle.collectAsState()
-                            val fastModeOn by viewModel.fastModeEnabled.collectAsState()
-                            if (showFastMode) {
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.chat_menu_fast_mode)) },
-                                    onClick = { viewModel.setFastModeEnabled(!fastModeOn) },
-                                    leadingIcon = {
-                                        Icon(Icons.Default.Bolt, contentDescription = null)
-                                    },
-                                    trailingIcon = {
-                                        SettingsSwitch(
-                                            checked = fastModeOn,
-                                            onCheckedChange = { viewModel.setFastModeEnabled(it) },
-                                        )
-                                    },
-                                )
-                            }
-                            // Auto Compact: app-level persisted toggle mirroring
-                            // iOS `autoCompactEnabled`. On → crossing the
-                            // compact threshold before a send compacts silently
-                            // and sends; off → the user is asked first. Lives
-                            // beside Fast Mode because both are model-invocation
-                            // controls the user flips mid-conversation.
-                            val autoCompactOn by viewModel.autoCompactEnabled.collectAsState()
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.chat_menu_auto_compact)) },
-                                onClick = { viewModel.setAutoCompactEnabled(!autoCompactOn) },
-                                leadingIcon = {
-                                    Icon(Icons.Default.Compress, contentDescription = null)
-                                },
-                                trailingIcon = {
-                                    SettingsSwitch(
-                                        checked = autoCompactOn,
-                                        onCheckedChange = { viewModel.setAutoCompactEnabled(it) },
-                                    )
-                                },
-                            )
-                            // T287: debug-only crash trigger so the user can verify
-                            // ACRA/native crash log generation (T283). Throws a
-                            // RuntimeException from the click handler — the
-                            // uncaught-exception handler catches it and writes
-                            // a crash-<stamp>.log under filesDir/logs/.
-                            if (BuildConfig.DEBUG) {
-                                MinisMenuDivider()
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            stringResource(R.string.debug_trigger_crash_menu),
-                                            color = MaterialTheme.colorScheme.error,
-                                        )
-                                    },
-                                    onClick = {
-                                        showChatMenu = false
-                                        throw RuntimeException(
-                                            "Debug crash triggered by user (T287)",
-                                        )
-                                    },
-                                    leadingIcon = {
-                                        Icon(
-                                            Icons.Default.BugReport,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.error,
-                                        )
-                                    },
-                                )
-                            }
-                        }
-                    }
+                    ChatTopBarActions(
+                        viewModel = viewModel,
+                        memoryRepository = memoryRepository,
+                        skillRepository = skillRepository,
+                        mcpRepository = mcpRepository,
+                        restorableCount = restorableCount,
+                        showChatMenu = showChatMenuState,
+                        onShowRestoreDialog = { showRestoreDialog = true },
+                        onShowSkillsSheet = { showSkillsSheet = true },
+                        onShowMcpsSheet = { showMcpsSheet = true },
+                        onShowTokenUsageSheet = { showTokenUsageSheet = true },
+                        onShowEnhancedCacheDialog = { showEnhancedCacheDialog = true },
+                        onOpenTerminal = onOpenTerminal,
+                        onBrowseChatFiles = onBrowseChatFiles,
+                        onOpenGitPanel = onOpenGitPanel,
+                    )
                 },
                 windowInsets = WindowInsets.statusBars,
                 colors = androidx.compose.material3.TopAppBarDefaults.centerAlignedTopAppBarColors(
@@ -2802,7 +2080,7 @@ fun ChatScreen(
                 onDeny = { viewModel.denyPendingTool(it) },
                 onDismissIntercept = { InterceptFeedback.dismiss(it) },
             )
-            val groupChatOn by viewModel.groupChatEnabled.collectAsState()
+            val groupChatOn by viewModel.groupChatEnabled.collectAsStateWithLifecycle()
             if (groupChatOn) {
                 Surface(
                     color = MaterialTheme.colorScheme.secondaryContainer,
@@ -2900,7 +2178,7 @@ fun ChatScreen(
                 // mount uses `lastToolBlocks.isNotEmpty()` over the merged
                 // view; we mirror that semantically by checking the same
                 // filter on both sources.
-                val streamingById by viewModel.streamingById.collectAsState()
+                val streamingById by viewModel.streamingById.collectAsStateWithLifecycle()
                 // [T-android-fold-expanded-duplicate] Hoisted above
                 // `hasFloatingTools` — same composable scope, so this is a pure
                 // move, not a new state holder. The padding reservation and the
@@ -3117,7 +2395,7 @@ fun ChatScreen(
                 var searchFocusActive by remember(sessionId) { mutableStateOf(false) }
                 val searchFocusRevision by com.openminis.app.deeplink.DeepLinkCoordinator
                     .searchFocusRevision
-                    .collectAsState()
+                    .collectAsStateWithLifecycle()
                 LaunchedEffect(sessionId, searchFocusRevision) {
                     val focus = com.openminis.app.deeplink.DeepLinkCoordinator
                         .consumePendingSearchFocus(sessionId) ?: return@LaunchedEffect
@@ -3354,7 +2632,8 @@ fun ChatScreen(
                 // firstItem.placed; prewarmMs is filled by the parallel
                 // prewarm when (if) it has finished by then, else -1.
                 var lastColdPrewarmMs by remember(sessionId) { mutableStateOf(-1L) }
-                var coldOpenSummaryEmitted by remember(sessionId) { mutableStateOf(false) }
+                val coldOpenSummaryEmittedState = remember(sessionId) { mutableStateOf(false) }
+                var coldOpenSummaryEmitted by coldOpenSummaryEmittedState
                 val screenMountAtMs = remember(sessionId) { System.currentTimeMillis() }
                 // T-streaming-side-channel: messages-level changes (new
                 // message, retry, etc.) AND streamingById deltas both feed
@@ -3809,10 +3088,10 @@ fun ChatScreen(
                 // tap-spy below can react to it. The popup itself, declared
                 // further down near the composer, reads viewModel.showSlashMenu
                 // again — both subscriptions snap to the same StateFlow.
-                val slashMenuOpen by viewModel.showSlashMenu.collectAsState()
+                val slashMenuOpen by viewModel.showSlashMenu.collectAsStateWithLifecycle()
                 // T4: mirror state hoist for the mention picker so the chat-list
                 // tap-spy can dismiss it the same way as the slash popup.
-                val mentionMenuOpenForSpy by viewModel.showMentionMenu.collectAsState()
+                val mentionMenuOpenForSpy by viewModel.showMentionMenu.collectAsStateWithLifecycle()
                 // Intercept back press to dismiss slash/mention menus before
                 // navigating away from the chat screen.
                 androidx.activity.compose.BackHandler(
@@ -4088,371 +3367,47 @@ fun ChatScreen(
                                 }
                             }
                         }
-                        val isNewestItem = item == flatItems.lastOrNull()
-                        // [T-android-search-jump] Pulse highlight for the
-                        // search-focus row(s). A message flattens into several
-                        // rows (text / mdblock / thinking / tool) — matching on
-                        // the parsed messageId lights the whole message, which
-                        // reads as one highlighted block. animateFloatAsState
-                        // gives a soft 0→0.3→0 fade; the modifier is only
-                        // attached while visible so idle rows pay nothing.
-                        val searchFocusId = searchFocusMessageId
-                        val isSearchFocusRow = searchFocusId != null &&
-                            FlatKeys.parse(item.key)?.messageId == searchFocusId
-                        val searchFocusAlpha by androidx.compose.animation.core.animateFloatAsState(
-                            targetValue = if (isSearchFocusRow && searchFocusActive) 0.30f else 0f,
-                            animationSpec = androidx.compose.animation.core.tween(
-                                durationMillis = 600,
-                            ),
-                            label = "searchFocusHighlight",
+                        ChatFlatItemRow(
+                            item = item,
+                            rhythmGap = rhythmGap,
+                            rowAlpha = rowAlpha,
+                            flatItems = flatItems,
+                            searchFocusMessageId = searchFocusMessageId,
+                            searchFocusActive = searchFocusActive,
+                            perfFirstItemPlacedFired = perfFirstItemPlacedFired,
+                            sessionId = sessionId,
+                            messages = messages,
+                            lastColdPrewarmMs = lastColdPrewarmMs,
+                            coldOpenSummaryEmitted = coldOpenSummaryEmittedState,
+                            screenMountAtMs = screenMountAtMs,
+                            viewModel = viewModel,
+                            isStreaming = isStreaming,
+                            canResume = canResume,
+                            coroutineScope = coroutineScope,
+                            tracedScrollToItem = tracedScrollToItem,
+                            safeMutate = safeMutate,
+                            deleteFromHereTargetId = deleteFromHereTargetIdState,
+                            inputFocusRequester = inputFocusRequester,
+                            previewFileOrBrowser = previewFileOrBrowser,
+                            onOpenTerminalWithCommand = onOpenTerminalWithCommand,
+                            onToggleProcessCard = { id ->
+                                if (id in expandedProcessIds) {
+                                    expandedProcessIds = expandedProcessIds - id
+                                    // Collapse by hand: this card stays
+                                    // collapsed for the rest of its run.
+                                    userCollapsedCards += id
+                                } else {
+                                    expandedProcessIds = expandedProcessIds + id
+                                    userCollapsedCards -= id
+                                    // [P-process-card] Open by hand: from
+                                    // now on this card is never auto-closed
+                                    // (the 500ms settle skips it). "User
+                                    // opened it, it stays open."
+                                    manualReopenedCards += id
+                                }
+                            },
+                            selectionController = selectionController,
                         )
-                        Box(
-                            modifier = Modifier
-                                .padding(top = rhythmGap)
-                                .alpha(rowAlpha)
-                                .then(
-                                    if (searchFocusAlpha > 0.01f) {
-                                        Modifier.background(
-                                            MaterialTheme.colorScheme.primary.copy(
-                                                alpha = searchFocusAlpha,
-                                            ),
-                                        )
-                                    } else {
-                                        Modifier
-                                    },
-                                )
-                                .then(
-                                    if (isNewestItem) {
-                                        Modifier.onPlaced {
-                                            if (perfFirstItemPlacedFired.compareAndSet(false, true)) {
-                                                com.openminis.app.diagnostics.PerfLongCtx.step(
-                                                    sessionId,
-                                                    "lazyColumn.firstItem.placed",
-                                                    "size=${it.size.width}x${it.size.height}",
-                                                )
-                                            }
-                                            // [T-android-jank-diag-logging]
-                                            // One quotable line per session
-                                            // open, after the first frame's
-                                            // newest row has laid out.
-                                            if (!coldOpenSummaryEmitted) {
-                                                coldOpenSummaryEmitted = true
-                                                val totalChars = messages.sumOf { m -> m.content.length }
-                                                val maxChars = messages.maxOfOrNull { m -> m.content.length } ?: 0
-                                                AppLogger.info(
-                                                    "JankDiag",
-                                                    "[JankDiag] coldOpen summary session=$sessionId msgs=${messages.size} rows=${flatItems.size} " +
-                                                        "totalChars=$totalChars maxChars=$maxChars prewarmMs=$lastColdPrewarmMs " +
-                                                        "sinceMountMs=${System.currentTimeMillis() - screenMountAtMs} " +
-                                                        "hangCount=${com.openminis.app.diagnostics.HangDetector.currentHangCount(context)}",
-                                                )
-                                                // [T-android-content-perf-diag] Per-large-message structural
-                                                // fingerprint so a future hang report maps straight to "which
-                                                // message, what structure" without re-querying the DB. Gated at
-                                                // 5000 chars — small messages never drive a render hang.
-                                                messages.forEachIndexed { idx, m ->
-                                                    if (m.content.length >= com.openminis.app.diagnostics.CONTENT_DIAG_MIN_CHARS) {
-                                                        val s = com.openminis.app.diagnostics.ContentDiag.summarize(m.content)
-                                                        AppLogger.info(
-                                                            "Perf",
-                                                            "[Perf][ContentDiag] session=$sessionId msgIdx=$idx role=${m.role} " +
-                                                                "streaming=${m.isStreaming} ${s.asLogFields()}",
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    } else {
-                                        Modifier
-                                    },
-                                ),
-                        ) {
-                        when (item) {
-                            is FlatChatItem.UserBubble -> {
-                                // User bubbles intentionally don't register
-                                // MinisTextKit shards — long-press on a user
-                                // bubble shows its own action menu (Copy /
-                                // Retry / Edit) instead of starting text
-                                // selection, matching iOS UX.
-                                UserMessageBubble(
-                                message = item.message,
-                                onCopy = {
-                                    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("message", item.message.content))
-                                },
-                                // T119: pass null while a turn is in flight so
-                                // the long-press menu hides Retry; once the
-                                // stream stops (cancel or natural end) the
-                                // option reappears. Gating execution alone
-                                // wasn't enough — users still saw a tappable
-                                // Retry that silently no-op'd.
-                                onRetry = if (isStreaming) null else ({
-                                    coroutineScope.launch {
-                                        tracedScrollToItem("RETRY-FROM-MSG", 0, 0)
-                                    }
-                                    safeMutate { viewModel.retryFromMessage(item.message.id) }
-                                }),
-                                // [T-android-delete-from-here] Gated while
-                                // streaming for the same reason as Retry:
-                                // truncating rows under a live agent loop
-                                // leaves agentHistory describing messages that
-                                // no longer exist. Opens a confirmation rather
-                                // than cutting straight away — there is no undo.
-                                onDeleteFromHere = if (isStreaming) null else ({
-                                    deleteFromHereTargetId = item.message.id
-                                }),
-                                // T187: long-press → Edit pulls the user message
-                                // text into the composer; the next send truncates
-                                // from this turn (inclusive) before persisting
-                                // the edited content. Gated on isStreaming the
-                                // same way Retry is.
-                                onEdit = if (isStreaming || item.message.isQueued) null else ({
-                                    val prefill = viewModel.editMessage(item.message.id)
-                                    if (prefill != null) {
-                                        viewModel.setInputText(prefill)
-                                        coroutineScope.launch {
-                                            tracedScrollToItem("EDIT-MSG", 0, 0)
-                                        }
-                                        inputFocusRequester.requestFocus()
-                                    }
-                                }),
-                                onWithdraw = if (item.message.isQueued) {
-                                    { safeMutate { viewModel.withdrawQueuedMessage(item.message.id) } }
-                                } else null,
-                                onPreviewFile = { uri, name ->
-                                    // T150: turn the persisted file:// URI back
-                                    // into a FileItem and hand off to the host
-                                    // navigator (FilePreviewScreen). Mirrors
-                                    // FileBrowser's onPreviewFile contract so
-                                    // both entry points share one screen.
-                                    val file = uri.path?.let { java.io.File(it) }
-                                    if (file != null && file.exists()) {
-                                        previewFileOrBrowser(
-                                            com.openminis.app.ui.sandbox.FileItem(
-                                                file = file,
-                                                name = name,
-                                                isDirectory = false,
-                                                isSymlink = false,
-                                                size = file.length(),
-                                                modifiedMs = file.lastModified(),
-                                            )
-                                        )
-                                    }
-                                },
-                            )
-                            } // close UserBubble SideEffect + UserMessageBubble block
-                            is FlatChatItem.AssistantHeader -> AssistantHeader(item.speakerName, item.speakerVendor)
-                            // Assistant text renders ONLY here: the
-                            // FlatChatItem.AssistantText row class was deleted
-                            // (nothing ever built one), and its branch below is
-                            // the one every text block reaches.
-                            // T-android-gc-storm-issue17: LargeContentGuard
-                            // collapses oversized frozen assistant text before
-                            // feeding the markdown parser — the GC-storm hotspot
-                            // for legacy sessions.
-                            is FlatChatItem.AssistantMarkdownBlock -> BoundsTrackedBlock(
-                                messageId = item.messageId,
-                                slotKey = "mdblock:${item.parentBlockId}:${item.blockIndex}",
-                                markdown = item.messageMarkdown,
-                            ) {
-                                LargeContentGuard(
-                                    content = item.rawText,
-                                    isStreaming = item.isStreaming,
-                                    stableKey = "mdblock:${item.messageId}:${item.parentBlockId}:${item.blockIndex}",
-                                ) {
-                                    SideEffect {
-                                        selectionController.rememberMessageMarkdown(item.messageId, item.messageMarkdown)
-                                    }
-                                    if (item.showTranslate) {
-                                        TranslateCorner(
-                                            button = {
-                                                AssistantTranslateButton(
-                                                    source = item.segmentText.ifBlank { item.rawText },
-                                                    taskScope = coroutineScope,
-                                                    onTranslated = {
-                                                        if (item.translateWholeReply) {
-                                                            viewModel.replaceAssistantOutput(item.messageId, it)
-                                                        } else {
-                                                            viewModel.replaceAssistantTextBlock(item.messageId, item.parentBlockId, it)
-                                                        }
-                                                    },
-                                                )
-                                            },
-                                        ) {
-                                            MarkdownBlock(
-                                                rawText = item.rawText,
-                                                isStreaming = item.isStreaming,
-                                                shardId = TextShardId(
-                                                    messageId = item.messageId,
-                                                    shardId = "mdblock:${item.parentBlockId}:${item.blockIndex}",
-                                                ),
-                                            )
-                                        }
-                                    } else {
-                                        MarkdownBlock(
-                                            rawText = item.rawText,
-                                            isStreaming = item.isStreaming,
-                                            shardId = TextShardId(
-                                                messageId = item.messageId,
-                                                shardId = "mdblock:${item.parentBlockId}:${item.blockIndex}",
-                                            ),
-                                        )
-                                    }
-                                }
-                            }
-                            is FlatChatItem.AssistantProcessSummary -> ProcessSummaryBar(
-                                thinkingCount = item.thinkingCount,
-                                toolCount = item.toolCount,
-                                expanded = item.expanded,
-                                hasFailure = item.hasFailure,
-                                totalMs = item.totalMs,
-                                steps = item.steps,
-                                running = item.running,
-                                activity = item.activity,
-                                activityTitle = item.activityTitle,
-                                startedAtMs = item.startedAtMs,
-                                onOpenStep = { viewModel.openToolDetail(it) },
-                                onToggle = {
-                                    val id = item.messageId
-                                    if (id in expandedProcessIds) {
-                                        expandedProcessIds = expandedProcessIds - id
-                                        // Collapse by hand: this card stays
-                                        // collapsed for the rest of its run.
-                                        userCollapsedCards += id
-                                    } else {
-                                        expandedProcessIds = expandedProcessIds + id
-                                        userCollapsedCards -= id
-                                        // [P-process-card] Open by hand: from
-                                        // now on this card is never auto-closed
-                                        // (the 500ms settle skips it). "User
-                                        // opened it, it stays open."
-                                        manualReopenedCards += id
-                                    }
-                                },
-                            )
-                            is FlatChatItem.AssistantThinking -> {
-                                // [T-android-thinking-forced-visible] Render
-                                // the block whenever it carries CONTENT,
-                                // regardless of the session's thinking level.
-                                // T300 hid OFF-level thinking entirely, but
-                                // forced-reasoning models (xAI Grok 4.x,
-                                // MiniMax M2, several OpenRouter routes)
-                                // stream reasoning_content even when the
-                                // request carries no reasoning field — that
-                                // thinking was silently swallowed, and the
-                                // user saw "model isn't thinking". The level
-                                // is a REQUEST knob (do we ask the model to
-                                // reason), not a DISPLAY filter; content that
-                                // actually arrived is always shown. The OFF
-                                // case still gets the collapsed default
-                                // (isStreaming=false → ThinkingBlock's own
-                                // collapsed presentation), which preserves
-                                // T300's intent of not splashing unsolicited
-                                // reasoning across the chat.
-                                if (item.block.content.isNotBlank() || item.messageIsStreaming) {
-                                    // [T-android-thinking-stable-expand] The
-                                    // builder folds the complete signal into
-                                    // messageIsStreaming (streaming AND no
-                                    // reply text after this block — see
-                                    // hasReplyTextAfter); it flips only when
-                                    // the reply starts or the stream ends, so
-                                    // the 500ms auto-collapse fires once per
-                                    // reasoning phase, not per tool round.
-                                    ThinkingBlock(
-                                        block = item.block,
-                                        isStreaming = item.messageIsStreaming,
-                                        isLast = item.isLast,
-                                    )
-                                }
-                            }
-                            is FlatChatItem.AssistantToolUse -> ToolCallPill(
-                                block = item.block,
-                                allToolBlocks = item.allToolBlocks,
-                                onRetry = if (item.isLastCancelled && !isStreaming && !canResume) ({ safeMutate { viewModel.retryLast() } }) else null,
-                                // T14: route per-card stop to the global
-                                // cancelStream(). The button only renders
-                                // when the block is RUNNING/STREAMING — see
-                                // ToolCallPill `isRunning && onStop != null`
-                                // — so passing it unconditionally is safe.
-                                onStop = { viewModel.cancelStream() },
-                                onOpenTerminalWithCommand = onOpenTerminalWithCommand,
-                                // T261: route detail open through ViewModel so
-                                // the sheet is hoisted out of LazyColumn item
-                                // scope (otherwise the sheet snaps shut when
-                                // the pill scrolls off-screen and Compose
-                                // disposes the item).
-                                onOpenDetail = { viewModel.openToolDetail(it) },
-                                // [T-android-rerun-from-tool-block-position]
-                                // Re-run cuts at THIS tool_use block: keep the
-                                // blocks before it in the same turn, drop it +
-                                // everything after, then regenerate. The block
-                                // id (== tool_use id for a tool_use block) is
-                                // the stable anchor. Gated off while streaming
-                                // (mutating an in-flight turn corrupts agent
-                                // state, same rule as Retry on the user bubble).
-                                // safeMutate tears down the selection toolbar
-                                // before the truncation reshuffles the list.
-                                onRerunFromHere = if (!isStreaming) ({
-                                    coroutineScope.launch {
-                                        tracedScrollToItem("RERUN-FROM-TOOL", 0, 0)
-                                    }
-                                    safeMutate { viewModel.rerunFromToolBlock(item.messageId, item.block.id) }
-                                }) else null,
-                                onCopyDetails = {
-                                    val text = formatToolDetailsForClipboard(item.block)
-                                    val cb = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                                    cb.setPrimaryClip(android.content.ClipData.newPlainText("tool", text))
-                                    android.widget.Toast.makeText(
-                                        context,
-                                        context.getString(R.string.tool_longpress_copied_toast),
-                                        android.widget.Toast.LENGTH_SHORT,
-                                    ).show()
-                                },
-                            )
-                            is FlatChatItem.AssistantInfo -> FallbackInfoBlock(
-                                block = item.block,
-                                // Only the compact-divider info block should
-                                // surface a "Revert Compact" button on its
-                                // detail sheet — other info rows (slash
-                                // notices, fallback notices) have nothing
-                                // to revert.
-                                onRevert = if (item.block.toolName == "compact") {
-                                    { viewModel.revertCompact() }
-                                } else null,
-                            )
-                            is FlatChatItem.AssistantTyping -> TypingIndicator()
-                            is FlatChatItem.AssistantError -> InlineErrorBanner(
-                                error = item.error,
-                                onRetry = {
-                                    coroutineScope.launch { tracedScrollToItem("INLINE-RETRY-LAST", 0, 0) }
-                                    safeMutate { if (canResume) viewModel.resume() else viewModel.retryLast() }
-                                },
-                            )
-                            is FlatChatItem.AssistantLegacyContent -> BoundsTrackedBlock(
-                                messageId = item.messageId,
-                                slotKey = "legacy",
-                                markdown = item.messageMarkdown,
-                            ) {
-                                LargeContentGuard(
-                                    content = item.content,
-                                    isStreaming = item.isStreaming,
-                                    stableKey = "legacy:${item.messageId}",
-                                ) {
-                                    SideEffect {
-                                        selectionController.rememberMessageMarkdown(item.messageId, item.messageMarkdown)
-                                    }
-                                    StreamingMarkdownText(
-                                        content = item.content,
-                                        isStreaming = item.isStreaming,
-                                        shardId = TextShardId(
-                                            messageId = item.messageId,
-                                            shardId = "legacy",
-                                        ),
-                                    )
-                                }
-                            }
-                        }
-                        } // Box (alpha wrapper)
                     }
                     if (hasOlderMessages) {
                         item(key = "__load_older__", contentType = "history_edge") {
@@ -4680,7 +3635,7 @@ fun ChatScreen(
                 // tools, clearChat, etc.). Uses detailToolBlocks (all tool_use
                 // rows, including folded completed ones) so opening a chip
                 // after foldAiProcess collapses the overlay still works.
-                val selectedToolDetailId by viewModel.selectedToolDetailId.collectAsState()
+                val selectedToolDetailId by viewModel.selectedToolDetailId.collectAsStateWithLifecycle()
                 LaunchedEffect(selectedToolDetailId, detailToolBlocks) {
                     val id = selectedToolDetailId ?: return@LaunchedEffect
                     if (detailToolBlocks.none { it.id == id }) viewModel.closeToolDetail()
@@ -4902,7 +3857,7 @@ fun ChatScreen(
                     .padding(horizontal = 12.dp)
                     .padding(top = 2.dp, bottom = 8.dp),
             ) {
-                val pendingUserQuestions by viewModel.pendingUserQuestions.collectAsState()
+                val pendingUserQuestions by viewModel.pendingUserQuestions.collectAsStateWithLifecycle()
                 pendingUserQuestions?.let { qs ->
                     AskUserQuestionsCard(
                         questions = qs,
@@ -4919,540 +3874,24 @@ fun ChatScreen(
                 // visual end of the message list (mirrors iOS — see the
                 // banner item before items() in the LazyColumn block above).
 
-                // Slash-command menu (mirrors iOS slashCommandMenu) — rendered as
-                // a Popup so it overlays content (tool status bar, chat list)
-                // instead of pushing them up. Anchored above the composer via
-                // PopupProperties so its bottom edge sits just above this Column.
-                // Tap-outside dismisses via dismissOnClickOutside.
-                val showSlashMenu by viewModel.showSlashMenu.collectAsState()
+                val showSlashMenu by viewModel.showSlashMenu.collectAsStateWithLifecycle()
+                val showMentionMenu by viewModel.showMentionMenu.collectAsStateWithLifecycle()
                 val filteredSlashCommands = remember(
                     showSlashMenu,
-                    viewModel.slashFilter.collectAsState().value,
-                    viewModel.memoryEnabled.collectAsState().value,
-                    viewModel.thinkingLevel.collectAsState().value,
+                    viewModel.slashFilter.collectAsStateWithLifecycle().value,
+                    viewModel.memoryEnabled.collectAsStateWithLifecycle().value,
+                    viewModel.thinkingLevel.collectAsStateWithLifecycle().value,
                 ) { viewModel.filteredSlashCommands() }
 
-                if (showSlashMenu && filteredSlashCommands.isNotEmpty()) {
-                    val thinkingLevelState by viewModel.thinkingLevel.collectAsState()
-                    val thinkingSupported = viewModel.currentModelSupportsReasoning
-                    val memoryOnState by viewModel.memoryEnabled.collectAsState()
-                    androidx.compose.ui.window.Popup(
-                        popupPositionProvider = remember {
-                            object : androidx.compose.ui.window.PopupPositionProvider {
-                                override fun calculatePosition(
-                                    anchorBounds: androidx.compose.ui.unit.IntRect,
-                                    windowSize: androidx.compose.ui.unit.IntSize,
-                                    layoutDirection: androidx.compose.ui.unit.LayoutDirection,
-                                    popupContentSize: androidx.compose.ui.unit.IntSize,
-                                ): androidx.compose.ui.unit.IntOffset {
-                                    // Anchor: top-edge of the composer column. Place
-                                    // the popup so its bottom sits 12dp above that edge.
-                                    // T301: bumped from 6dp — at 6dp the panel was
-                                    // visually glued to the composer; 12dp gives a
-                                    // clear breathing gap matching the iOS spacing.
-                                    val gap = 12
-                                    val x = ((anchorBounds.left + anchorBounds.right - popupContentSize.width) / 2)
-                                        .coerceIn(0, (windowSize.width - popupContentSize.width).coerceAtLeast(0))
-                                    val y = (anchorBounds.top - popupContentSize.height - gap)
-                                        .coerceAtLeast(0)
-                                    return androidx.compose.ui.unit.IntOffset(x, y)
-                                }
-                            }
-                        },
-                        onDismissRequest = {
-                            viewModel.setInputText(viewModel.dismissSlashMenu(inputText))
-                        },
-                        properties = androidx.compose.ui.window.PopupProperties(
-                            focusable = false,
-                            dismissOnBackPress = true,
-                            // dismissOnClickOutside=false: with focusable=false the popup
-                            // never receives focus, so the system "click outside" detector
-                            // can't tell a tap on the BasicTextField below from a tap on
-                            // the chat list — flipping this off would dismiss the popup
-                            // every time the IME caret was moved. Dismiss is driven from
-                            // the chat list / topbar tap-spy below instead, which lets
-                            // the input field keep focus while still closing the menu
-                            // when the user clearly looks elsewhere.
-                            dismissOnClickOutside = false,
-                        ),
-                    ) {
-                        // [T-slash-picker-fixed-height port from iOS 73f1b94a]
-                        // Locked popup height = 4 rows × 46dp + 8dp = 192dp.
-                        // Short lists show empty space below the last row;
-                        // long lists scroll inside the same frame with a
-                        // visible scroll indicator. Prevents installed
-                        // Skills + built-ins from pushing the menu past
-                        // the input bar / off the top of the screen.
-                        val slashListState = androidx.compose.foundation.lazy.rememberLazyListState()
-                        Box(
-                            modifier = Modifier
-                                // [T-android-slash-popup-width] Match the
-                                // composer, not the window. A Popup is its own
-                                // window, so fillMaxWidth here filled the whole
-                                // tablet; the menu began under the session list
-                                // and overhung the composer's right edge. Fall
-                                // back to fillMaxWidth only until the first
-                                // measurement arrives (width 0 would collapse
-                                // the panel on the very first frame).
-                                .then(
-                                    if (composerWidthPx > 0) {
-                                        Modifier.width(
-                                            with(LocalDensity.current) { composerWidthPx.toDp() },
-                                        )
-                                    } else {
-                                        Modifier.fillMaxWidth()
-                                    },
-                                )
-                                .padding(horizontal = 12.dp)
-                                // T240: keep a thin visible border instead of the
-                                // diffuse 8dp halo that bled out past the panel edge.
-                                .shadow(elevation = 3.dp, shape = RoundedCornerShape(10.dp))
-                                .background(ChatColors.inputBg, RoundedCornerShape(10.dp))
-                                .border(0.5.dp, ChatColors.toolBorder, RoundedCornerShape(10.dp)),
-                        ) {
-                            androidx.compose.foundation.lazy.LazyColumn(
-                                state = slashListState,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    // [T-android-slash-picker-fontscale] Defaults
-                                    // match this list's own row (14sp/11sp text,
-                                    // 7dp padding, 18dp icon).
-                                    .height(slashPickerHeight())
-                                    .verticalScrollbar(slashListState),
-                            ) {
-                            itemsIndexed(filteredSlashCommands, key = { _, c -> c.id }) { index, cmd ->
-                                // Section divider between builtins and
-                                // installed Skills (mirrors iOS divider
-                                // at the first skill row). Drawn as the
-                                // top of the skill row, not between every
-                                // row — keeps the menu visually grouped
-                                // without splitting every command.
-                                if (cmd.isSkill && index > 0 && !filteredSlashCommands[index - 1].isSkill) {
-                                    HorizontalDivider(
-                                        thickness = 0.5.dp,
-                                        color = ChatColors.toolBorder,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                                    )
-                                }
-                                val isThinking = cmd.id == "thinking"
-                                val isThinkingActive = isThinking && thinkingLevelState.isEnabled && thinkingSupported
-                                val titleColor = if (isThinkingActive) ChatColors.sendButton else ChatColors.primaryText
-                                val subtitleColor = if (isThinking && !thinkingSupported) {
-                                    ChatColors.secondaryText
-                                } else if (isThinkingActive) {
-                                    ChatColors.sendButton.copy(alpha = 0.7f)
-                                } else ChatColors.secondaryText
-                                val iconTint = if (isThinkingActive) ChatColors.sendButton else ChatColors.primaryText
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .let {
-                                            if (!isThinking) {
-                                                it.clickable {
-                                                    // [T-android-slash-menu-clears-input] Pass the
-                                                    // LIVE input so an action command keeps the
-                                                    // user's body text instead of wiping it.
-                                                    viewModel.setInputText(viewModel.executeSlashCommand(cmd, inputText))
-                                                    // For Skill rows, "/<name> "
-                                                    // is a typing aid — the user
-                                                    // still needs to type
-                                                    // arguments. Bring the IME
-                                                    // back up + grab focus so
-                                                    // they can keep typing
-                                                    // without an extra tap on
-                                                    // the composer.
-                                                    if (cmd.isSkill) {
-                                                        try {
-                                                            inputFocusRequester.requestFocus()
-                                                        } catch (_: IllegalStateException) {
-                                                            // FocusRequester not attached yet.
-                                                        }
-                                                        keyboardController?.show()
-                                                    }
-                                                }
-                                            } else if (thinkingSupported) {
-                                                it.clickable {
-                                                    val newLevel = if (thinkingLevelState.isEnabled) ThinkingLevel.OFF else ThinkingLevel.MEDIUM
-                                                    viewModel.setThinkingLevel(newLevel)
-                                                }
-                                            } else it
-                                        }
-                                        // [T-android-slash-menu-density] Tighter
-                                        // vertical padding (10→7) so slash rows
-                                        // read as compact as iOS, not sparse.
-                                        .padding(horizontal = 14.dp, vertical = 7.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Icon(
-                                        imageVector = m3Icon(cmd.icon),
-                                        contentDescription = null,
-                                        tint = iconTint,
-                                        modifier = Modifier.size(18.dp),
-                                    )
-                                    Spacer(modifier = Modifier.width(10.dp))
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = "/${cmd.title.lowercase()}",
-                                            fontSize = 14.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = titleColor,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                        )
-                                        // Cap to one line + ellipsis (mirrors
-                                        // iOS T-slash-picker-product-rules
-                                        // 051896e2). Long Skill descriptions
-                                        // would otherwise stretch the row,
-                                        // breaking the locked 4-row band and
-                                        // crowding the menu visually.
-                                        Text(
-                                            text = cmd.subtitle,
-                                            fontSize = 11.sp,
-                                            color = subtitleColor,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                        )
-                                    }
-                                    if (cmd.id == "memory") {
-                                        Icon(
-                                            imageVector = if (memoryOnState) m3Icon(Icons.Default.CheckCircle) else Icons.Default.Block,
-                                            contentDescription = null,
-                                            tint = if (memoryOnState) ChatColors.sendButton else ChatColors.secondaryText,
-                                            modifier = Modifier.size(18.dp),
-                                        )
-                                    }
-                                    if (isThinking && thinkingSupported) {
-                                        ThinkingLevelPicker(
-                                            current = thinkingLevelState,
-                                            // [T-android-thinking-level-arch] Only
-                                            // offer tiers the bound model supports.
-                                            availableLevels = viewModel.availableThinkingLevels,
-                                            onSelect = { level -> viewModel.setThinkingLevel(level) },
-                                        )
-                                    }
-                                }
-                            }
-                            }
-                        }
-                    }
-                }
+                ChatComposerSlashAndMentionPopups(
+                    viewModel = viewModel,
+                    inputText = inputText,
+                    inputFieldValue = inputFieldValueState,
+                    composerWidthPx = composerWidthPx,
+                    inputFocusRequester = inputFocusRequester,
+                    keyboardController = keyboardController,
+                )
 
-                // T4: @ file-mention picker — same anchoring + tap-spy
-                // contract as the slash popup (mutually exclusive in the VM,
-                // so they never both render). Reuses Popup so the bar over
-                // the composer is consistent and respects IME inset.
-                val showMentionMenu by viewModel.showMentionMenu.collectAsState()
-                val mentionEntries by viewModel.mentionEntries.collectAsState()
-                val isMentionScanning by viewModel.isMentionScanning.collectAsState()
-                val mentionSelectedIndex by viewModel.mentionSelectedIndex.collectAsState()
-                val groupChatMentioning by viewModel.mentionListsModels.collectAsState()
-                val groupMentions by viewModel.groupMentions.collectAsState()
-                if (showMentionMenu) {
-                    androidx.compose.ui.window.Popup(
-                        popupPositionProvider = remember {
-                            object : androidx.compose.ui.window.PopupPositionProvider {
-                                override fun calculatePosition(
-                                    anchorBounds: androidx.compose.ui.unit.IntRect,
-                                    windowSize: androidx.compose.ui.unit.IntSize,
-                                    layoutDirection: androidx.compose.ui.unit.LayoutDirection,
-                                    popupContentSize: androidx.compose.ui.unit.IntSize,
-                                ): androidx.compose.ui.unit.IntOffset {
-                                    val gap = 6
-                                    val x = ((anchorBounds.left + anchorBounds.right - popupContentSize.width) / 2)
-                                        .coerceIn(0, (windowSize.width - popupContentSize.width).coerceAtLeast(0))
-                                    val y = (anchorBounds.top - popupContentSize.height - gap)
-                                        .coerceAtLeast(0)
-                                    return androidx.compose.ui.unit.IntOffset(x, y)
-                                }
-                            }
-                        },
-                        onDismissRequest = { viewModel.dismissMentionMenu() },
-                        properties = androidx.compose.ui.window.PopupProperties(
-                            focusable = false,
-                            dismissOnBackPress = true,
-                            // Same rationale as the slash popup: dismissOnClickOutside=false
-                            // because the input field below the popup sits in the
-                            // "outside" region (focusable=false → caret moves still
-                            // count as outside). The chat-list tap-spy that drives
-                            // dismissSlashMenu also dismisses this menu via
-                            // dismissMentionMenu(); see the LazyColumn pointerInput.
-                            dismissOnClickOutside = false,
-                        ),
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                // [T-android-slash-popup-width] Same as the
-                                // slash menu — match the composer, not the
-                                // popup's own window.
-                                .then(
-                                    if (composerWidthPx > 0) {
-                                        Modifier.width(
-                                            with(LocalDensity.current) { composerWidthPx.toDp() },
-                                        )
-                                    } else {
-                                        Modifier.fillMaxWidth()
-                                    },
-                                )
-                                .padding(horizontal = 12.dp)
-                                .shadow(elevation = 8.dp, shape = RoundedCornerShape(10.dp))
-                                .background(ChatColors.inputBg, RoundedCornerShape(10.dp))
-                                .border(0.5.dp, ChatColors.toolBorder, RoundedCornerShape(10.dp)),
-                        ) {
-                            if (groupChatMentioning) {
-                                Text(
-                                    text = stringResource(R.string.mention_model_caption),
-                                    fontSize = 11.sp,
-                                    color = ChatColors.secondaryText,
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                                )
-                                if (groupMentions.isEmpty()) {
-                                    Text(
-                                        text = stringResource(R.string.mention_no_model),
-                                        fontSize = 13.sp,
-                                        color = ChatColors.secondaryText,
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                                    )
-                                } else {
-                                    val modelListState = androidx.compose.foundation.lazy.rememberLazyListState()
-                                    LaunchedEffect(mentionSelectedIndex, groupMentions.size) {
-                                        val idx = mentionSelectedIndex
-                                        if (idx in groupMentions.indices) {
-                                            modelListState.animateScrollToItem(idx)
-                                        }
-                                    }
-                                    LazyColumn(
-                                        state = modelListState,
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(
-                                                slashPickerHeight(
-                                                    titleSp = 13.sp,
-                                                    subtitleSp = 11.sp,
-                                                    verticalPadding = 8.dp,
-                                                    iconSize = 16.dp,
-                                                ),
-                                            )
-                                            .verticalScrollbar(modelListState),
-                                    ) {
-                                        itemsIndexed(
-                                            groupMentions,
-                                            key = { _, e -> "${e.host}|${e.modelId}|${e.name}" },
-                                        ) { i, entry ->
-                                            val isSelected = i == mentionSelectedIndex
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .background(
-                                                        if (isSelected) {
-                                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-                                                        } else {
-                                                            Color.Transparent
-                                                        },
-                                                    )
-                                                    .clickable {
-                                                        val (newText, newCaret) = viewModel.selectGroupMention(
-                                                            entry,
-                                                            currentText = inputFieldValue.text,
-                                                            currentCaret = inputFieldValue.selection.end,
-                                                        )
-                                                        viewModel.setInputText(newText)
-                                                        inputFieldValue = androidx.compose.ui.text.input.TextFieldValue(
-                                                            text = newText,
-                                                            selection = androidx.compose.ui.text.TextRange(newCaret),
-                                                        )
-                                                    }
-                                                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                                                verticalAlignment = Alignment.CenterVertically,
-                                            ) {
-                                                VendorMark(
-                                                    vendor = entry.vendor,
-                                                    fallbackName = entry.name,
-                                                    size = 16.dp,
-                                                )
-                                                Spacer(modifier = Modifier.width(10.dp))
-                                                Column(modifier = Modifier.weight(1f)) {
-                                                    Text(
-                                                        text = entry.name,
-                                                        fontSize = 13.sp,
-                                                        fontWeight = FontWeight.Medium,
-                                                        color = ChatColors.primaryText,
-                                                        maxLines = 1,
-                                                        overflow = TextOverflow.Ellipsis,
-                                                    )
-                                                    Text(
-                                                        text = when {
-                                                            entry.host &&
-                                                                entry.extra.isNotBlank() &&
-                                                                entry.extra != entry.name ->
-                                                                entry.extra + " · " + entry.modelId.ifBlank { entry.name }
-                                                            entry.modelId.isNotBlank() &&
-                                                                entry.modelId != entry.name -> entry.modelId
-                                                            else -> stringResource(R.string.mention_model_only)
-                                                        },
-                                                        fontSize = 11.sp,
-                                                        color = ChatColors.secondaryText,
-                                                        maxLines = 1,
-                                                        overflow = TextOverflow.Ellipsis,
-                                                    )
-                                                }
-                                                Spacer(modifier = Modifier.width(6.dp))
-                                                Text(
-                                                    text = stringResource(
-                                                        if (entry.host) R.string.group_chat_host_suffix
-                                                        else R.string.mention_model_badge
-                                                    ),
-                                                    fontSize = 10.sp,
-                                                    fontWeight = FontWeight.Medium,
-                                                    color = ChatColors.secondaryText,
-                                                    modifier = Modifier
-                                                        .background(
-                                                            ChatColors.toolCapsuleBg,
-                                                            RoundedCornerShape(8.dp),
-                                                        )
-                                                        .padding(horizontal = 6.dp, vertical = 2.dp),
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            } else if (mentionEntries.isEmpty()) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    if (isMentionScanning) {
-                                        androidx.compose.material3.CircularProgressIndicator(
-                                            modifier = Modifier.size(14.dp),
-                                            strokeWidth = 1.5.dp,
-                                            color = ChatColors.secondaryText,
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                    }
-                                    Text(
-                                        text = stringResource(
-                                            if (isMentionScanning) R.string.mention_scanning
-                                            else R.string.mention_no_match
-                                        ),
-                                        fontSize = 13.sp,
-                                        color = ChatColors.secondaryText,
-                                    )
-                                }
-                            } else {
-                                // [T-slash-picker-fixed-height port from iOS 73f1b94a]
-                                // Mention picker shares the slash picker's
-                                // locked 192dp height (4 rows × 46dp + 8dp)
-                                // so both popups have the same band on screen.
-                                val mentionListState = androidx.compose.foundation.lazy.rememberLazyListState()
-                                // Keep the highlighted row visible when the user
-                                // navigates with a hardware keyboard. iOS gets this
-                                // for free from SwiftUI's List/scrollTo binding;
-                                // mimic it explicitly here.
-                                LaunchedEffect(mentionSelectedIndex, mentionEntries.size) {
-                                    val idx = mentionSelectedIndex
-                                    if (idx in mentionEntries.indices) {
-                                        mentionListState.animateScrollToItem(idx)
-                                    }
-                                }
-                                LazyColumn(
-                                    state = mentionListState,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        // [T-android-slash-picker-fontscale] Same
-                                        // clipping applies here — this list shares
-                                        // the band height but has its OWN row
-                                        // metrics (13sp/11sp, 8dp padding, 16dp
-                                        // icon), so it passes them rather than
-                                        // inheriting the slash row's.
-                                        .height(
-                                            slashPickerHeight(
-                                                titleSp = 13.sp,
-                                                subtitleSp = 11.sp,
-                                                verticalPadding = 8.dp,
-                                                iconSize = 16.dp,
-                                            ),
-                                        )
-                                        .verticalScrollbar(mentionListState),
-                                ) {
-                                    itemsIndexed(mentionEntries, key = { _, e -> e.linuxPath }) { i, entry ->
-                                        val isSelected = i == mentionSelectedIndex
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .background(
-                                                    if (isSelected) {
-                                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-                                                    } else {
-                                                        Color.Transparent
-                                                    },
-                                                )
-                                                .clickable {
-                                                    val (newText, newCaret) = viewModel.selectMention(
-                                                        entry,
-                                                        currentText = inputFieldValue.text,
-                                                        currentCaret = inputFieldValue.selection.end,
-                                                    )
-                                                    viewModel.setInputText(newText)
-                                                    inputFieldValue = androidx.compose.ui.text.input.TextFieldValue(
-                                                        text = newText,
-                                                        selection = androidx.compose.ui.text.TextRange(newCaret),
-                                                    )
-                                                }
-                                                .padding(horizontal = 12.dp, vertical = 8.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                        ) {
-                                            // Single doc icon for every entry — the scope/mount
-                                            // capsule on the right already labels what bucket
-                                            // this is (workspace / skills / shared / memory /
-                                            // <mountName>). iOS varies the icon per scope but
-                                            // we keep it uniform here so the row stays
-                                            // visually consistent at small sizes on Pixel 4a.
-                                            Icon(
-                                                imageVector = m3Icon(Icons.Default.Description),
-                                                contentDescription = null,
-                                                tint = ChatColors.secondaryText,
-                                                modifier = Modifier.size(16.dp),
-                                            )
-                                            Spacer(modifier = Modifier.width(10.dp))
-                                            Column(modifier = Modifier.weight(1f)) {
-                                                Text(
-                                                    text = entry.basename,
-                                                    fontSize = 13.sp,
-                                                    fontWeight = FontWeight.Medium,
-                                                    color = ChatColors.primaryText,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis,
-                                                )
-                                                Text(
-                                                    text = entry.displayPath,
-                                                    fontSize = 11.sp,
-                                                    color = ChatColors.secondaryText,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis,
-                                                )
-                                            }
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            // Scope / mount badge — matches iOS capsule.
-                                            Text(
-                                                text = entry.mountName ?: entry.scope.displayLabel,
-                                                fontSize = 10.sp,
-                                                fontWeight = FontWeight.Medium,
-                                                color = ChatColors.secondaryText,
-                                                modifier = Modifier
-                                                    .background(
-                                                        ChatColors.toolCapsuleBg,
-                                                        RoundedCornerShape(8.dp),
-                                                    )
-                                                    .padding(horizontal = 6.dp, vertical = 2.dp),
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
 
                 // Input box: iOS-style floating card — no visible border, separated
                 // from the backdrop by a symmetric soft shadow painted by hand
@@ -5472,7 +3911,7 @@ fun ChatScreen(
                 // free overlay primitive that doesn't need a Box wrapper,
                 // and an in-flow Row at the top with Arrangement.End is the
                 // cleanest equivalent.
-                val showMoveCapsule by viewModel.hasInjectedShareContent.collectAsState()
+                val showMoveCapsule by viewModel.hasInjectedShareContent.collectAsStateWithLifecycle()
                 // Mirrors iOS swipe-up-to-send: drag the input bar upward —
                 // if it holds text, a floating send-arrow + "Release to send"
                 // capsule track the finger; releasing past `swipeArmFraction`
@@ -5610,22 +4049,8 @@ fun ChatScreen(
                         val popupDensity = androidx.compose.ui.platform.LocalDensity.current
                         val rightInsetPx = with(popupDensity) { 12.dp.roundToPx() }
                         val topInsetPx = with(popupDensity) { 6.dp.roundToPx() }
-                        androidx.compose.ui.window.Popup(
-                            popupPositionProvider = remember(rightInsetPx, topInsetPx) {
-                                object : androidx.compose.ui.window.PopupPositionProvider {
-                                    override fun calculatePosition(
-                                        anchorBounds: androidx.compose.ui.unit.IntRect,
-                                        windowSize: androidx.compose.ui.unit.IntSize,
-                                        layoutDirection: androidx.compose.ui.unit.LayoutDirection,
-                                        popupContentSize: androidx.compose.ui.unit.IntSize,
-                                    ): androidx.compose.ui.unit.IntOffset {
-                                        val x = (anchorBounds.right - popupContentSize.width - rightInsetPx)
-                                            .coerceIn(0, (windowSize.width - popupContentSize.width).coerceAtLeast(0))
-                                        val y = (anchorBounds.top + topInsetPx).coerceAtLeast(0)
-                                        return androidx.compose.ui.unit.IntOffset(x, y)
-                                    }
-                                }
-                            },
+                        AnchorPopup(
+                            anchor = AnchorSpec.RightOfTop(rightInset = rightInsetPx, topInset = topInsetPx),
                             onDismissRequest = {},
                             properties = androidx.compose.ui.window.PopupProperties(
                                 focusable = false,
@@ -5874,7 +4299,7 @@ fun ChatScreen(
                     // mic button's callback, so when recording ends the field
                     // shows the full recognized string automatically.
                     val recSttState by com.openminis.app.speech.SpeechRecognitionManager
-                        .state.collectAsState()
+                        .state.collectAsStateWithLifecycle()
                     val recIsRecording = recSttState == com.openminis.app.speech.RecognitionState.RECORDING ||
                         recSttState == com.openminis.app.speech.RecognitionState.STARTING ||
                         recSttState == com.openminis.app.speech.RecognitionState.FINISHING
@@ -5904,9 +4329,9 @@ fun ChatScreen(
                         )
                     } else if (recIsRecording) {
                         val levels by com.openminis.app.speech.SpeechRecognitionManager
-                            .audioLevels.collectAsState()
+                            .audioLevels.collectAsStateWithLifecycle()
                         val partial by com.openminis.app.speech.SpeechRecognitionManager
-                            .recognizedText.collectAsState()
+                            .recognizedText.collectAsStateWithLifecycle()
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -6127,16 +4552,19 @@ fun ChatScreen(
                                 // ordinary placeholder instead, so an unwritable
                                 // cache degrades to the old behaviour rather
                                 // than losing what the user pasted.
+                                var pendingFileStash: String? = null
                                 val value = foldLongPasteIfNeeded(
                                     old = inputFieldValue,
                                     new = tfv,
                                     stash = { pasted ->
                                         if (pasted.length > PASTE_AS_FILE_THRESHOLD) {
-                                            if (viewModel.stashPastedTextAsFile(pasted) != null) {
-                                                ""
-                                            } else {
-                                                viewModel.stashPastedText(pasted)
-                                            }
+                                            // [T-android-paste-oversize] The write runs
+                                            // on Dispatchers.IO behind a suspend fun, so
+                                            // the fold cannot take its outcome here: the
+                                            // run is dropped from the field now and the
+                                            // write chased below.
+                                            pendingFileStash = pasted
+                                            ""
                                         } else {
                                             viewModel.stashPastedText(pasted)
                                         }
@@ -6157,6 +4585,33 @@ fun ChatScreen(
                                     text = value.text,
                                     caret = value.selection.end,
                                 )
+                                pendingFileStash?.let { pasted ->
+                                    pendingFileStash = null
+                                    coroutineScope.launch {
+                                        if (viewModel.stashPastedTextAsFile(pasted) != null) return@launch
+                                        // Failure path of the split above: the fold's
+                                        // empty marker already removed the run, so the
+                                        // placeholder re-folds at the caret — the same
+                                        // spot, so an unwritable cache degrades to the
+                                        // chip rather than losing the paste.
+                                        val marker = viewModel.stashPastedText(pasted)
+                                        val v = inputFieldValue
+                                        val at = v.selection.start.coerceIn(0, v.text.length)
+                                        val folded = v.text.substring(0, at) + marker + v.text.substring(at)
+                                        inputFieldValue = v.copy(
+                                            text = folded,
+                                            selection = androidx.compose.ui.text.TextRange(at + marker.length),
+                                        )
+                                        if (inputText != folded) {
+                                            viewModel.setInputText(folded)
+                                            viewModel.updateSlashMenuState(folded)
+                                        }
+                                        viewModel.updateMentionMenuState(
+                                            text = folded,
+                                            caret = at + marker.length,
+                                        )
+                                    }
+                                }
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -6346,8 +4801,8 @@ fun ChatScreen(
                                         // so renames in Soul Settings reflect
                                         // here live.
                                         val soulName by com.openminis.app.agent.SoulStore
-                                            .cachedMetadata.collectAsState()
-                                        val groupChatOn by viewModel.groupChatEnabled.collectAsState()
+                                            .cachedMetadata.collectAsStateWithLifecycle()
+                                        val groupChatOn by viewModel.groupChatEnabled.collectAsStateWithLifecycle()
                                         if (groupChatOn) {
                                             Text(
                                                 stringResource(R.string.chat_input_placeholder_group),
@@ -6524,7 +4979,7 @@ fun ChatScreen(
                         // is non-null. Tap clears the edit flag + composer text
                         // without truncating history. iOS parity:
                         // AIChatView.swift L1586 editExitButton.
-                        val editingId by viewModel.editingMessageId.collectAsState()
+                        val editingId by viewModel.editingMessageId.collectAsStateWithLifecycle()
                         if (editingId != null) {
                             Spacer(modifier = Modifier.width(8.dp))
                             Surface(
@@ -6550,11 +5005,11 @@ fun ChatScreen(
                         // is actually available on this device (handles the
                         // AOSP / HarmonyOS / GMS-free case).
                         val sttAvailable by com.openminis.app.speech.SpeechRecognitionManager
-                            .isAvailable.collectAsState()
+                            .isAvailable.collectAsStateWithLifecycle()
                         val sttState by com.openminis.app.speech.SpeechRecognitionManager
-                            .state.collectAsState()
+                            .state.collectAsStateWithLifecycle()
                         val sttLocale by com.openminis.app.speech.SpeechRecognitionManager
-                            .locale.collectAsState()
+                            .locale.collectAsStateWithLifecycle()
                         var showLangSheet by remember { mutableStateOf(false) }
                         // While recording, a tappable 2-letter language pill
                         // appears to the left of the mic button. Outside a
@@ -6674,9 +5129,9 @@ fun ChatScreen(
                                 com.openminis.app.speech.VoiceOutputState.init(context)
                             }
                             val ttsEnabled by com.openminis.app.speech.VoiceOutputState
-                                .isEnabled.collectAsState()
+                                .isEnabled.collectAsStateWithLifecycle()
                             val ttsMuted by com.openminis.app.speech.VoiceOutputState
-                                .isMuted.collectAsState()
+                                .isMuted.collectAsStateWithLifecycle()
                             val readReplies = ttsEnabled && !ttsMuted
                             // [T-android-provider-tts-readaloud] Routes each
                             // utterance through the resolved Voice Output
@@ -7091,176 +5546,6 @@ fun ChatScreen(
             } // end swipe-to-send Box wrapping the composer Column
             } // ChatComposerScope
 
-            if (showMoveSheet) {
-                MoveToSessionSheet(
-                    currentSessionId = sessionId,
-                    chatRepository = chatRepository,
-                    onDismiss = { showMoveSheet = false },
-                    onSelect = { targetId ->
-                        ChatViewModelStore.stashPendingTransfer(
-                            ChatViewModelStore.PendingTransfer(
-                                inputText = inputText,
-                                attachments = viewModel.attachments.value,
-                                // [T-android-moveto-stash-binding] Bind the stash to
-                                // the chosen target so no other session can drain it.
-                                targetId = targetId,
-                            ),
-                        )
-                        viewModel.setInputText("")
-                        viewModel.clearAttachments()
-                        viewModel.clearShareInjectedFlag()
-                        showMoveSheet = false
-                        onMoveToSession(targetId)
-                    },
-                )
-            }
-
-            // Pre-send context gate (iOS "Context Near Capacity" alert).
-            // Raised when the compact threshold is crossed and auto-compact is
-            // OFF; with it on the ViewModel compacts silently and never gets
-            // here. Three actions, matching iOS:
-            //   Send Anyway                  — skip compaction entirely
-            //   Compact & Send               — compact this once, pref untouched
-            //   Compact & Enable Auto-Compact— compact AND opt in, so the
-            //                                  threshold stops prompting from
-            //                                  now on (iOS T-chat-auto-compact-opt-in)
-            val showCompactBeforeSend by viewModel.showCompactBeforeSendPrompt.collectAsState()
-            if (showCompactBeforeSend) {
-                MinisAlertDialog(
-                    // Back-gesture / scrim dismissal must NOT silently drop the
-                    // user's text — cancelCompactBeforeSend puts it back in the
-                    // composer.
-                    onDismissRequest = { viewModel.cancelCompactBeforeSend() },
-                    title = stringResource(R.string.context_near_capacity_title),
-                    text = stringResource(R.string.context_near_capacity_message),
-                    confirmText = stringResource(R.string.context_compact_and_send),
-                    onConfirm = { viewModel.compactAndSendPending() },
-                    dismissText = stringResource(R.string.context_send_anyway),
-                    onDismiss = { viewModel.sendPendingWithoutCompacting() },
-                    neutralText = stringResource(R.string.context_compact_and_enable_auto),
-                    onNeutral = {
-                        viewModel.compactAndSendPending(alsoEnableAutoCompact = true)
-                    },
-                )
-            }
-
-            // [T-android-foreground-approval] In-app approval gate for sensitive
-            // tools (file_write / file_edit). ApprovalGate.requestApproval blocks
-            // the tool coroutine in waitFor(id); while the user is IN the chat we
-            // surface the request here instead of relying on the notification-bar
-            // action (which remains the background fallback). Resolving from here
-            // wakes the waiter and cancels the matching notification via the
-            // ViewModel helpers. When several are queued the oldest is shown first;
-            // the next appears as soon as this one resolves.
-            val pendingApprovals by viewModel.pendingApprovals.collectAsState()
-            pendingApprovals.values.firstOrNull()?.let { approval ->
-                MinisAlertDialog(
-                    // Back-gesture / scrim dismissal is treated as a deny — the
-                    // safe default, and it still wakes the blocked coroutine.
-                    onDismissRequest = { viewModel.denyPendingTool(approval.id) },
-                    title = "需要审批: ${approval.toolName}",
-                    text = approval.preview.ifBlank { "Agent 请求执行敏感操作" },
-                    confirmText = "同意",
-                    onConfirm = { viewModel.approvePendingTool(approval.id) },
-                    dismissText = "拒绝",
-                    onDismiss = { viewModel.denyPendingTool(approval.id) },
-                    // [T-session-allow-all] Third action: approve this request
-                    // and auto-approve every remaining request this session.
-                    neutralText = "本次会话全部允许",
-                    onNeutral = { viewModel.approveAllForSession(approval.id) },
-                )
-            }
-
-            if (showRestoreDialog) {
-                MinisAlertDialog(
-                    onDismissRequest = { showRestoreDialog = false },
-                    title = stringResource(R.string.chat_menu_restore_deleted),
-                    text = pluralStringResource(
-                        R.plurals.chat_restore_deleted_dialog_body,
-                        restorableCount,
-                        restorableCount,
-                    ),
-                    confirmText = stringResource(R.string.chat_restore_deleted_confirm),
-                    onConfirm = {
-                        viewModel.restoreArchivedMessages()
-                        showRestoreDialog = false
-                        restorableCount = 0
-                    },
-                )
-            }
-            if (showClearChatDialog) {
-                MinisAlertDialog(
-                    onDismissRequest = { showClearChatDialog = false },
-                    title = stringResource(R.string.chat_menu_clear_chat),
-                    text = stringResource(R.string.chat_clear_dialog_body),
-                    confirmText = stringResource(R.string.chat_clear_dialog_confirm),
-                    isDestructive = true,
-                    onConfirm = {
-                        viewModel.clearChat()
-                        viewModel.setInputText("")
-                        showClearChatDialog = false
-                    },
-                )
-            }
-            // [T-android-delete-from-here] Confirm before truncating. The cut
-            // removes the tapped message AND everything after it with no undo,
-            // so the body states how many messages that actually is — "delete
-            // from here" alone doesn't convey whether it's one message or
-            // forty. Counting from the live list keeps it accurate even if the
-            // conversation grew while the menu was open.
-            deleteFromHereTargetId?.let { targetId ->
-                val affected = remember(targetId, messages) {
-                    val idx = messages.indexOfFirst { it.id == targetId }
-                    if (idx < 0) 0 else messages.size - idx
-                }
-                MinisAlertDialog(
-                    onDismissRequest = { deleteFromHereTargetId = null },
-                    title = stringResource(R.string.chat_longpress_delete_from_here),
-                    text = pluralStringResource(
-                        R.plurals.chat_delete_from_here_dialog_body,
-                        affected,
-                        affected,
-                    ),
-                    confirmText = stringResource(R.string.chat_delete_from_here_confirm),
-                    isDestructive = true,
-                    onConfirm = {
-                        viewModel.deleteFromMessage(targetId)
-                        deleteFromHereTargetId = null
-                    },
-                )
-            }
-            // [T-new-chat-menu-entry] Streaming guard for the menu's New Chat:
-            // confirm → stop the running task, then navigate to a fresh draft;
-            // dismiss → stay in the current chat.
-            if (showNewChatStopDialog) {
-                MinisAlertDialog(
-                    onDismissRequest = { showNewChatStopDialog = false },
-                    title = stringResource(R.string.chat_menu_new_chat),
-                    text = stringResource(R.string.chat_new_chat_stop_dialog_body),
-                    confirmText = stringResource(R.string.chat_new_chat_stop_dialog_confirm),
-                    isDestructive = true,
-                    onConfirm = {
-                        showNewChatStopDialog = false
-                        viewModel.cancelStream()
-                        onNewChat()
-                    },
-                )
-            }
-            // [T-android-enhanced-cache] One-time extra-billing confirmation
-            // before the first enable. Accepting records the durable ack and
-            // turns the toggle on; subsequent enables skip the dialog.
-            if (showEnhancedCacheDialog) {
-                MinisAlertDialog(
-                    onDismissRequest = { showEnhancedCacheDialog = false },
-                    title = stringResource(R.string.chat_menu_enhanced_cache),
-                    text = stringResource(R.string.enhanced_cache_dialog_body),
-                    confirmText = stringResource(R.string.enhanced_cache_dialog_confirm),
-                    onConfirm = {
-                        viewModel.confirmAndEnableEnhancedCache()
-                        showEnhancedCacheDialog = false
-                    },
-                )
-            }
         }
         // Top gradient fade: messages fade into the Scaffold background.
         Box(
@@ -7280,191 +5565,31 @@ fun ChatScreen(
         }
     }
 
-    // Browser bottom sheet
-    if (showBrowserSheet) {
-        BrowserSheet(
-            tabPool = viewModel.browserTabPool,
-            onDismiss = { viewModel.dismissBrowserSheet() },
-        )
-    }
-
-    // Session Token Usage bottom sheet
-    if (showTokenUsageSheet) {
-        TokenUsageSheet(
-            viewModel = viewModel,
-            onDismiss = { showTokenUsageSheet = false },
-        )
-    }
-
-    // Memory bottom sheet
-    if (showMemorySheet && memoryRepository != null) {
-        SessionMemorySheet(
-            memoryRepository = memoryRepository,
-            toolRecords = memoryToolRecords,
-            onDismiss = { viewModel.dismissMemorySheet() },
-            onRevokeRecord = { record -> viewModel.revokeMemoryRecord(record) },
-            onSaveRecord = { record, newContent -> viewModel.replaceMemoryRecord(record, newContent) },
-            // Show what the injector reads, not a file guess: resolved persona
-            // for this session's provider, both GLOBAL.md levels, and the
-            // captured assembly snapshot as ground truth.
-            sources = InjectionSources(
-                appRepo = viewModel.memoryRepository,
-                sessionRepo = runCatching { viewModel.sessionMemoryRepo() }.getOrNull(),
-                providerInstanceId = viewModel.activeProviderInstanceId(),
-                providerLabel = viewModel.activeProviderInstanceLabel(),
-                sessionId = viewModel.sessionId,
-            ),
-        )
-    }
-
-    // Session Skills bottom sheet
-    if (showSkillsSheet && skillRepository != null) {
-        SessionSkillsSheet(
-            skillRepository = skillRepository,
-            sessionId = sessionId,
-            onDismiss = { showSkillsSheet = false },
-        )
-    }
-
-    // [T-mcp-integration-android] MCPs-in-Session sheet.
-    if (showMcpsSheet && mcpRepository != null) {
-        SessionMcpsSheet(
-            mcpRepository = mcpRepository,
-            sessionId = sessionId,
-            onDismiss = { showMcpsSheet = false },
-        )
-    }
-
-    // [T-android-thinking-badge-navbar] Thinking-level sheet opened by tapping
-    // the navbar thinking badge. Mirrors iOS ThinkingLevelSheetView: an Off row
-    // plus every level the current model supports, each selectable.
-    if (showThinkingLevelSheet) {
-        val currentThinkingLevel by viewModel.thinkingLevel.collectAsState()
-        ThinkingLevelSheet(
-            currentLevel = currentThinkingLevel,
-            availableLevels = viewModel.availableThinkingLevels,
-            onSelect = { level ->
-                viewModel.setThinkingLevel(level)
-                showThinkingLevelSheet = false
-            },
-            onDismiss = { showThinkingLevelSheet = false },
-        )
-    }
-
-    // Model Picker bottom sheet
-    if (showModelPicker) {
-        val config by providerRepository.config.collectAsState()
-        val activeEntryId by viewModel.activeEntryId.collectAsState()
-
-        // When the user picks a model whose output is image/audio/video, defer
-        // the actual binding behind a confirmation dialog — those models can't
-        // drive an Agent loop, so we steer the user toward a text-output model
-        // (or, if they really want it, hint at adding it as a tool inside an
-        // Agent loop instead).
-        var pendingNonTextSelection by remember {
-            mutableStateOf<PendingNonTextSelection?>(null)
-        }
-        val resolveImageLabel = stringResource(R.string.model_picker_modality_image)
-        val resolveAudioLabel = stringResource(R.string.model_picker_modality_audio)
-        val resolveVideoLabel = stringResource(R.string.model_picker_modality_video)
-        fun nonTextLabelFor(model: LLMModel): String? {
-            val mods = model.outputModalities?.map { it.lowercase() } ?: emptyList()
-            return when {
-                "image" in mods -> resolveImageLabel
-                "audio" in mods -> resolveAudioLabel
-                "video" in mods -> resolveVideoLabel
-                else -> null
-            }
-        }
-        fun entryById(entryId: String): ModelEntry? =
-            config.modelEntries.firstOrNull { it.id == entryId }
-
-        ModelPickerSheet(
-            groups = availableGroups,
-            selectedGroupId = selectedGroupId,
-            activeEntryId = activeEntryId,
-            defaultPrimaryGroupId = config.defaultPrimaryGroupId,
-            config = config,
-            providerRepository = providerRepository,
-            onSelectGroup = { groupId ->
-                val group = availableGroups.firstOrNull { it.id == groupId }
-                val firstEntry = group?.memberEntryIds?.firstNotNullOfOrNull(::entryById)
-                val label = firstEntry?.model?.let(::nonTextLabelFor)
-                if (label != null) {
-                    pendingNonTextSelection = PendingNonTextSelection.Group(
-                        groupId = groupId,
-                        modelDisplayName = firstEntry.model.displayName,
-                        modalityLabel = label,
-                    )
-                } else {
-                    viewModel.selectGroup(groupId)
-                    showModelPicker = false
-                }
-            },
-            onSelectGroupEntry = { groupId, entryId ->
-                val entry = entryById(entryId)
-                val label = entry?.model?.let(::nonTextLabelFor)
-                if (entry != null && label != null) {
-                    pendingNonTextSelection = PendingNonTextSelection.GroupEntry(
-                        groupId = groupId,
-                        entryId = entryId,
-                        modelDisplayName = entry.model.displayName,
-                        modalityLabel = label,
-                    )
-                } else {
-                    viewModel.selectGroupEntry(groupId, entryId)
-                    showModelPicker = false
-                }
-            },
-            onSelectEntry = { entryId ->
-                val entry = entryById(entryId)
-                val label = entry?.model?.let(::nonTextLabelFor)
-                if (entry != null && label != null) {
-                    pendingNonTextSelection = PendingNonTextSelection.Entry(
-                        entryId = entryId,
-                        modelDisplayName = entry.model.displayName,
-                        modalityLabel = label,
-                    )
-                } else {
-                    viewModel.selectEntry(entryId)
-                    showModelPicker = false
-                }
-            },
-            onDismiss = { showModelPicker = false },
-            // [T-android-modelpicker-group-edit] Close the picker first, then
-            // navigate — pushing the management screen on top of an open bottom
-            // sheet leaves the sheet lingering behind it on back.
-            onEditGroups = {
-                showModelPicker = false
-                onModelGroupsClick()
-            },
-        )
-
-        pendingNonTextSelection?.let { pending ->
-            MinisAlertDialog(
-                onDismissRequest = { pendingNonTextSelection = null },
-                title = stringResource(R.string.model_picker_non_text_warning_title),
-                text = stringResource(
-                    R.string.model_picker_non_text_warning_body,
-                    pending.modelDisplayName,
-                    pending.modalityLabel,
-                    pending.modalityLabel,
-                ),
-                confirmText = stringResource(R.string.model_picker_non_text_warning_use_anyway),
-                dismissText = stringResource(R.string.model_picker_non_text_warning_choose_other),
-                onConfirm = {
-                    when (val sel = pending) {
-                        is PendingNonTextSelection.Group -> viewModel.selectGroup(sel.groupId)
-                        is PendingNonTextSelection.GroupEntry ->
-                            viewModel.selectGroupEntry(sel.groupId, sel.entryId)
-                        is PendingNonTextSelection.Entry -> viewModel.selectEntry(sel.entryId)
-                    }
-                    pendingNonTextSelection = null
-                    showModelPicker = false
-                },
-            )
-        }
-    }
+    ChatSheetsHost(
+        viewModel = viewModel,
+        sessionId = sessionId,
+        inputText = inputText,
+        chatRepository = chatRepository,
+        providerRepository = providerRepository,
+        memoryRepository = memoryRepository,
+        skillRepository = skillRepository,
+        mcpRepository = mcpRepository,
+        onMoveToSession = onMoveToSession,
+        onNewChat = onNewChat,
+        onModelGroupsClick = onModelGroupsClick,
+        showMoveSheet = showMoveSheetState,
+        showTokenUsageSheet = showTokenUsageSheetState,
+        showSkillsSheet = showSkillsSheetState,
+        showMcpsSheet = showMcpsSheetState,
+        showThinkingLevelSheet = showThinkingLevelSheetState,
+        showModelPicker = showModelPickerState,
+        showRestoreDialog = showRestoreDialogState,
+        showClearChatDialog = showClearChatDialogState,
+        showNewChatStopDialog = showNewChatStopDialogState,
+        showEnhancedCacheDialog = showEnhancedCacheDialogState,
+        deleteFromHereTargetId = deleteFromHereTargetIdState,
+        restorableCount = restorableCountState,
+    )
 
     // Offload permission dialog
     OffloadPermissionDialog()

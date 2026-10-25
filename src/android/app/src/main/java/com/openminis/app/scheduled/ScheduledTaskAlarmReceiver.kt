@@ -5,9 +5,6 @@ import android.content.Context
 import android.content.Intent
 import android.os.SystemClock
 import com.openminis.app.logging.AppLogger
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 

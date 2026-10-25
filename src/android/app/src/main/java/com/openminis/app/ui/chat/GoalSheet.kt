@@ -1,8 +1,6 @@
 package com.openminis.app.ui.chat
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,7 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -36,7 +33,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -53,6 +50,7 @@ import com.openminis.app.data.db.GoalStatus
 import com.openminis.app.data.db.SessionGoalEntity
 import com.openminis.app.goal.GoalManager
 import com.openminis.app.goal.GoalSheetSignal
+import com.openminis.app.ui.components.MinisSheetDragHandle
 import com.openminis.app.ui.theme.m3Icon
 import kotlinx.coroutines.launch
 
@@ -67,13 +65,20 @@ import kotlinx.coroutines.launch
 @Composable
 internal fun GoalSheet(viewModel: ChatViewModel) {
     var open by remember { mutableStateOf(false) }
-    val requests by GoalSheetSignal.requests.collectAsState()
+    val requests by GoalSheetSignal.requests.collectAsStateWithLifecycle()
     LaunchedEffect(requests) { if (requests > 0) open = true }
     if (!open) return
     ModalBottomSheet(
         onDismissRequest = { open = false },
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        dragHandle = { SheetDragHandle() },
+        // Slim 32×4dp drag handle matching the app's other sheets — shared
+        // [MinisSheetDragHandle]; GoalSheet passes the M3 token directly
+        // (onSurfaceVariant at 40% alpha), exactly as its local copy did.
+        dragHandle = {
+            MinisSheetDragHandle(
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+            )
+        },
     ) {
         GoalSheetContent(
             viewModel = viewModel,
@@ -82,30 +87,9 @@ internal fun GoalSheet(viewModel: ChatViewModel) {
     }
 }
 
-/** Slim 32×4dp drag handle matching the app's other sheets. */
-@Composable
-private fun SheetDragHandle() {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 6.dp, bottom = 4.dp),
-        contentAlignment = Alignment.TopCenter,
-    ) {
-        Box(
-            modifier = Modifier
-                .width(32.dp)
-                .height(4.dp)
-                .background(
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                    shape = RoundedCornerShape(2.dp),
-                ),
-        )
-    }
-}
-
 @Composable
 private fun GoalSheetContent(viewModel: ChatViewModel, onClose: () -> Unit) {
-    val goalVersion by GoalManager.version.collectAsState()
+    val goalVersion by GoalManager.version.collectAsStateWithLifecycle()
     var goal by remember { mutableStateOf<SessionGoalEntity?>(null) }
     LaunchedEffect(goalVersion) { goal = viewModel.currentGoal() }
     val scope = rememberCoroutineScope()

@@ -7,6 +7,8 @@ import com.openminis.app.sandbox.SessionWorkspace
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 import kotlinx.serialization.Serializable
@@ -136,9 +138,12 @@ object SupervisorRunStore {
     }
 
     /** Begin a run: replaces any prior record for this session. */
-    fun start(sessionId: String, context: Context?, objective: String, maxWorkerTurns: Int): RunRecord {
+    // [T-supervisor-runstore-io] Lock, memory map and disk move together onto the
+    // IO dispatcher: mutual exclusion and persist-before-return ordering unchanged,
+    // only the thread they run on leaves Main.
+    suspend fun start(sessionId: String, context: Context?, objective: String, maxWorkerTurns: Int): RunRecord = withContext(Dispatchers.IO) {
         val k = key(sessionId)
-        return lock(k).withLock {
+        lock(k).withLock {
             val record = RunRecord(
                 sessionId = k,
                 objective = objective.trim().take(MAX_OBJECTIVE_CHARS),
@@ -154,13 +159,13 @@ object SupervisorRunStore {
         }
     }
 
-    fun appendRound(
+    suspend fun appendRound(
         sessionId: String,
         context: Context?,
         n: Int,
         instructionDigest: String,
         reportDigest: String,
-    ) {
+    ): Unit = withContext(Dispatchers.IO) {
         val k = key(sessionId)
         lock(k).withLock {
             val runs = loadLocked(k, context)
@@ -181,7 +186,7 @@ object SupervisorRunStore {
         }
     }
 
-    fun markTerminal(sessionId: String, context: Context?, state: String, summary: String? = null) {
+    suspend fun markTerminal(sessionId: String, context: Context?, state: String, summary: String? = null): Unit = withContext(Dispatchers.IO) {
         val k = key(sessionId)
         lock(k).withLock {
             val runs = loadLocked(k, context)
@@ -210,9 +215,9 @@ object SupervisorRunStore {
      * [clear] or a new [start] retires the offer. Never called while a loop
      * is live — a live loop owns the record.
      */
-    fun interrupted(sessionId: String, context: Context?): RunRecord? {
+    suspend fun interrupted(sessionId: String, context: Context?): RunRecord? = withContext(Dispatchers.IO) {
         val k = key(sessionId)
-        return lock(k).withLock {
+        lock(k).withLock {
             val runs = loadLocked(k, context)
             val head = runs.firstOrNull() ?: return@withLock null
             if (head.state == STATE_INTERRUPTED) return@withLock head
@@ -231,14 +236,14 @@ object SupervisorRunStore {
      * "what does the record say right now" (terminal summaries, live
      * progress, test round-trips).
      */
-    fun latest(sessionId: String, context: Context?): RunRecord? {
+    suspend fun latest(sessionId: String, context: Context?): RunRecord? = withContext(Dispatchers.IO) {
         val k = key(sessionId)
-        return lock(k).withLock {
+        lock(k).withLock {
             loadLocked(k, context).firstOrNull()
         }
     }
 
-    fun clear(sessionId: String, context: Context?) {
+    suspend fun clear(sessionId: String, context: Context?): Unit = withContext(Dispatchers.IO) {
         val k = key(sessionId)
         lock(k).withLock {
             memory.remove(k)

@@ -3,7 +3,6 @@ package com.openminis.app.offload
 import android.media.MediaPlayer
 import android.util.Log
 import com.openminis.app.sandbox.PRootKernel
-import java.io.File
 
 /**
  * Manages multiple concurrent MediaPlayer sessions keyed by session ID.

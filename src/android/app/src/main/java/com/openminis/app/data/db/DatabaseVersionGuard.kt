@@ -3,6 +3,10 @@ package com.openminis.app.data.db
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import com.openminis.app.logging.AppLogger
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 /**
  * [T-android-downgrade-compat] Detects a database written by a NEWER build
@@ -133,5 +137,32 @@ object DatabaseVersionGuard {
         if (onDisk <= CODE_DB_VERSION) return Decision.PROCEED
         if (isHandledDowngrade(onDisk)) return Decision.PROCEED
         return Decision.SHOW_NEWER_DB_GUIDANCE
+    }
+
+    /**
+     * [T-perf-launch-probe-async] Same probe as [evaluate], dispatched onto
+     * [scope]'s IO dispatcher so Application.onCreate never opens the database
+     * file on the main thread.
+     *
+     * The contract that keeps this behaviour-identical to the inline call: the
+     * first consumer (MinisApp.onCreate, which refuses to build repositories
+     * on SHOW_NEWER_DB_GUIDANCE) blocks on the returned deferred at the exact
+     * program position where the synchronous call used to sit. That barrier
+     * preserves both old invariants — the decision is final before any
+     * downstream reader runs, and the probe still completes before Room's
+     * first open, because that consumer sits upstream of
+     * MinisAppAsyncInit.startWarmup on the main thread. Exceptions surface
+     * from `await()` exactly where the inline call would have thrown.
+     */
+    fun evaluateAsync(context: Context, scope: CoroutineScope): CompletableDeferred<Decision> {
+        val result = CompletableDeferred<Decision>()
+        scope.launch(Dispatchers.IO) {
+            try {
+                result.complete(evaluate(context))
+            } catch (t: Throwable) {
+                result.completeExceptionally(t)
+            }
+        }
+        return result
     }
 }

@@ -13,7 +13,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -27,9 +27,7 @@ import com.openminis.app.R
 import com.openminis.app.data.repository.MCPRepository
 import com.openminis.app.plugins.LocalToolPluginStore
 import com.openminis.app.plugins.OnlinePluginStore
-import com.openminis.app.plugins.PluginCatalog
 import com.openminis.app.plugins.PluginRegistry
-import com.openminis.app.tools.FetchUrlGuard
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -51,7 +49,7 @@ fun PluginMarketScreen(
     val fallbackServers = remember {
         kotlinx.coroutines.flow.MutableStateFlow(emptyList<MCPRepository.MCPServerConfig>())
     }
-    val servers by (mcpRepository?.servers ?: fallbackServers).collectAsState()
+    val servers by (mcpRepository?.servers ?: fallbackServers).collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
         mcpRepository?.reloadFromDisk()

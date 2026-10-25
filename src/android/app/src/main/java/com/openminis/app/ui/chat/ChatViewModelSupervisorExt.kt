@@ -18,6 +18,7 @@ import com.openminis.app.tools.WritePathGuard
 import androidx.lifecycle.viewModelScope
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -156,7 +157,7 @@ internal fun ChatViewModel.supervisorSessionActive(): Boolean =
  * record from a dead process flips to INTERRUPTED and is offered back for
  * recovery. Never called while a loop is live — a live loop owns the record.
  */
-internal fun ChatViewModel.pendingSupervisorRecovery(): SupervisorRunStore.RunRecord? {
+internal suspend fun ChatViewModel.pendingSupervisorRecovery(): SupervisorRunStore.RunRecord? {
     if (supervisorSessionActive()) return null
     return SupervisorRunStore.interrupted(activeSessionId, context)
 }
@@ -170,7 +171,7 @@ internal fun ChatViewModel.pendingSupervisorRecovery(): SupervisorRunStore.RunRe
  * turn's recovery section so the supervisor re-verifies completed work
  * before issuing new instructions.
  */
-internal fun ChatViewModel.startSupervisorSession(
+internal suspend fun ChatViewModel.startSupervisorSession(
     objective: String,
     recovery: SupervisorRunStore.RunRecord? = null,
 ): Boolean {
@@ -199,7 +200,11 @@ internal fun ChatViewModel.startSupervisorSession(
     SupervisorUiHost.reset(sessionId)
     SupervisorUiHost.update(sessionId, SupervisorUiHost.Phase.INSTRUCTING, trimmed, 0)
 
-    val job = viewModelScope.launch {
+    // [T-supervisor-register-race] The Live must be registered before the
+    // loop body can run: a terminal that overtakes register would leave a
+    // dead session in the host, permanently "live". LAZY start keeps the
+    // body from starting until the register above has landed.
+    val job = viewModelScope.launch(start = CoroutineStart.LAZY) {
         runSupervisorSession(
             sessionId = sessionId,
             objective = trimmed,
@@ -216,6 +221,14 @@ internal fun ChatViewModel.startSupervisorSession(
     SupervisorSessionHost.register(
         SupervisorSessionHost.Live(sessionId, trimmed, inbox, job),
     )
+    if (!job.start()) {
+        // Halt landed between register and start: the loop body never ran,
+        // so the terminal observer cannot fire — settle the record and the
+        // bar here, same terminal shape as the halt path.
+        SupervisorSessionHost.remove(sessionId)
+        SupervisorRunStore.markTerminal(sessionId, context, SupervisorRunStore.STATE_USER_HALTED, null)
+        SupervisorUiHost.update(sessionId, SupervisorUiHost.Phase.HALTED, trimmed, 0)
+    }
     return true
 }
 
@@ -225,7 +238,7 @@ internal fun ChatViewModel.startSupervisorSession(
  * re-verified before new instructions are issued (spec §3.8). Returns
  * false when there is nothing to resume or the start was refused.
  */
-internal fun ChatViewModel.resumeSupervisorSession(): Boolean {
+internal suspend fun ChatViewModel.resumeSupervisorSession(): Boolean {
     val recovery = pendingSupervisorRecovery() ?: return false
     return startSupervisorSession(recovery.objective, recovery)
 }
@@ -235,7 +248,7 @@ internal fun ChatViewModel.resumeSupervisorSession(): Boolean {
  * whatever was streamed before the interruption; only the run record and
  * the bar's INTERRUPTED phase are cleared.
  */
-internal fun ChatViewModel.discardSupervisorRecovery() {
+internal suspend fun ChatViewModel.discardSupervisorRecovery() {
     val sessionId = activeSessionId
     SupervisorRunStore.clear(sessionId, context)
     SupervisorUiHost.reset(sessionId)
@@ -265,10 +278,6 @@ internal fun ChatViewModel.pushSupervisorUserMessage(text: String): Boolean {
     live.inbox.push(trimmed)
     return true
 }
-
-/** Armed state: the next user send becomes a supervisor objective. */
-internal val ChatViewModel.supervisorArmed: StateFlow<Boolean>
-    get() = _supervisorArmed.asStateFlow()
 
 /**
  * Toggles the armed state from the slash panel. The hint text is emitted by
@@ -374,10 +383,9 @@ private suspend fun ChatViewModel.runSupervisorSession(
                 executeTool = { name, json ->
                     if (SubAgentKind.blocks(SubAgentKind.WORKER, name)) {
                         ToolExecutionResult("Error: WORKER sub-agent cannot use $name.", false)
-                    } else if (name == com.openminis.app.tools.GrepSourceTool.NAME) {
-                        com.openminis.app.tools.GrepSourceTool.execute(json, activeSessionId, context)
                     } else {
-                        executeTool(name, json, "", mutableListOf(), "", "")
+                        grepSourceToolResult(name, json)
+                            ?: executeTool(name, json, "", mutableListOf(), "", "")
                     }
                 },
                 kind = SubAgentKind.WORKER,

@@ -4,7 +4,6 @@ import android.Manifest
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -20,8 +19,6 @@ import com.openminis.app.sandbox.NativeOffloadHandler
 import com.openminis.app.sandbox.NativeOffloadRequest
 import com.openminis.app.sandbox.NativeOffloadResult
 import com.openminis.app.sandbox.PRootKernel
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -251,54 +248,25 @@ class SpeechOffloadHandler(private val context: Context) : NativeOffloadHandler 
     private fun ensureMicPermission(args: OffloadArgs): NativeOffloadResult? {
         if (hasMic()) return null
         AppLogger.warning(TAG, "RECORD_AUDIO not granted — routing through permission flow")
-        val result = runBlocking {
-            withTimeoutOrNull(OffloadPermissionManager.INTERACTIVE_BUDGET_MS) {
-            var r = OffloadPermissionManager.requestAndroidPermission(
-                listOf(Manifest.permission.RECORD_AUDIO),
-            )
-            if (r == OffloadPermissionManager.AndroidPermissionResult.DENIED &&
-                OffloadPermissionManager.pollForPermissionGrant({ hasMic() })
-            ) {
-                AppLogger.info(TAG, "Mic permission granted during post-DENY poll")
-                r = OffloadPermissionManager.AndroidPermissionResult.GRANTED
-            }
-            if (r == OffloadPermissionManager.AndroidPermissionResult.DENIED) {
-                r = OffloadPermissionManager.requestSettingsGate(
-                    OffloadPermissionManager.SettingsGateRequest(
-                        id = Manifest.permission.RECORD_AUDIO,
-                        title = "Microphone permission needed",
-                        message = "Minis needs microphone permission to transcribe speech. Open Settings to allow it.",
-                        settingsAction = android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                        requiresPackageUri = true,
-                        positiveLabel = "Open Settings",
-                    ),
-                    check = { hasMic() },
-                )
-            }
-            r
-                }
-        } ?: OffloadPermissionManager.AndroidPermissionResult.TIMEOUT
-        return when (result) {
-            OffloadPermissionManager.AndroidPermissionResult.GRANTED -> null
-            OffloadPermissionManager.AndroidPermissionResult.DENIED -> NativeOffloadResult(
-                77,
-                OffloadOutput.formatBody(
-                    JSONObject().put("error", "permission_denied")
-                        .put("message", "The user declined the microphone permission.")
-                        .toString(),
-                    args,
-                ) + "\n",
-            )
-            OffloadPermissionManager.AndroidPermissionResult.TIMEOUT -> NativeOffloadResult(
-                77,
-                OffloadOutput.formatBody(
-                    JSONObject().put("error", "timeout")
-                        .put("message", "Timed out waiting for the user to grant the microphone permission.")
-                        .toString(),
-                    args,
-                ) + "\n",
-            )
-        }
+        return OffloadInteractivePermission.ensureInteractive(
+            logTag = TAG,
+            permissions = listOf(Manifest.permission.RECORD_AUDIO),
+            satisfied = { hasMic() },
+            gate = OffloadPermissionManager.SettingsGateRequest(
+                id = Manifest.permission.RECORD_AUDIO,
+                title = "Microphone permission needed",
+                message = "Minis needs microphone permission to transcribe speech. Open Settings to allow it.",
+                settingsAction = android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                requiresPackageUri = true,
+                positiveLabel = "Open Settings",
+            ),
+            pollGrantedLog = "Mic permission granted during post-DENY poll",
+            copy = OffloadInteractivePermission.DenialCopy(
+                deniedMessage = "The user declined the microphone permission.",
+                timeoutMessage = "Timed out waiting for the user to grant the microphone permission.",
+            ),
+            args = args,
+        )
     }
 
     private fun recognize(language: String?, maxResults: Int, timeoutSec: Long): String {

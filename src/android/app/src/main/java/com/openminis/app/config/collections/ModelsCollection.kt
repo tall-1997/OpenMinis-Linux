@@ -10,7 +10,6 @@ import com.openminis.app.config.fields.ClosureField
 import com.openminis.app.config.fields.ReadOnlyField
 import com.openminis.app.data.model.LLMModel
 import com.openminis.app.data.model.ModelEntry
-import com.openminis.app.data.model.ModelOverrides
 import com.openminis.app.data.repository.ProviderRepository
 
 /**

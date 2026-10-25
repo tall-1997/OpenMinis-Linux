@@ -2,7 +2,9 @@ package com.openminis.app.diagnostics
 
 import android.content.Context
 import com.openminis.app.data.body.ResourceLimits
+import com.openminis.app.tools.AtomicFileWrite
 import java.io.File
+import java.io.IOException
 
 /**
  * An automatically entered route that did not survive a healthy tick is not
@@ -65,11 +67,13 @@ object RouteFuse {
     private fun write(dir: File, line: String) {
         dir.mkdirs()
         val file = File(dir, FILE_NAME)
-        val tmp = File(dir, "$FILE_NAME.tmp")
-        tmp.writeText(line)
-        if (!tmp.renameTo(file)) {
-            file.writeText(line)
-            tmp.delete()
+        // Unified atomic write: same tmp+rename dance plus per-path lock,
+        // short-write detection and post-write verify. The old rename-failed
+        // direct-writeText fallback is covered by the copy-over fallback
+        // inside AtomicFileWrite; null (both failed, previous bytes kept)
+        // throws like the old tmp.writeText did.
+        if (AtomicFileWrite.write(file, line, temp = File(dir, "$FILE_NAME.tmp")) == null) {
+            throw IOException("route-fuse write failed for ${file.name}")
         }
     }
 

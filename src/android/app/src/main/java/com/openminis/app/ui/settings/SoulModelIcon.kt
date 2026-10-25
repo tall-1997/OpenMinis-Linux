@@ -2,7 +2,7 @@ package com.openminis.app.ui.settings
 
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -59,7 +59,7 @@ internal fun SoulModelIconAvatar(sizeDp: Dp, emojiSp: TextUnit) {
 @Composable
 private fun foregroundSessionModelIdentity(): SoulModelIdentity? {
     val vm = ChatViewModelStore.foregroundViewModel() ?: return null
-    val name by vm.modelName.collectAsState()
+    val name by vm.modelName.collectAsStateWithLifecycle()
     if (name.isBlank()) return null
     val slug = remember(name) { ModelBrandResolver.resolve(name) } ?: return null
     return SoulModelIdentity(brandSlug = slug, displayName = name)

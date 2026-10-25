@@ -4,7 +4,6 @@ import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,7 +18,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -218,7 +217,7 @@ internal fun LargeContentGuard(
     val wasDegraded = remember(stableKey) { mutableStateOf(false) }
     if (isStreaming) {
         val breakerActive by com.openminis.app.diagnostics.HangDetector
-            .renderBreakerActive.collectAsState()
+            .renderBreakerActive.collectAsStateWithLifecycle()
         if (breakerActive || content.length > STREAM_DEGRADE_CHARS) {
             wasDegraded.value = true
             // [T-android-content-perf-diag] Log the degrade with a structural

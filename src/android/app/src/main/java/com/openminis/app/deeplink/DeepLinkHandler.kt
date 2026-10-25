@@ -1,7 +1,7 @@
 package com.openminis.app.deeplink
 
 import android.net.Uri
-import com.openminis.app.ui.navigation.Routes
+import com.openminis.app.navigation.Routes
 
 /**
  * Parses minis:// deep link URIs into navigation actions.

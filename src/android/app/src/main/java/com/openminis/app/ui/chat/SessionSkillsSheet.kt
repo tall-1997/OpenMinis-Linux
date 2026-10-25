@@ -17,7 +17,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
@@ -53,7 +53,7 @@ fun SessionSkillsSheet(
     skillRepository: SkillRepository,
     onDismiss: () -> Unit,
 ) {
-    val skills by skillRepository.skills.collectAsState()
+    val skills by skillRepository.skills.collectAsStateWithLifecycle()
 
     // [T-android-session-skill-override-init-timing] Key the seed on `skills`
     // so the override map re-derives when the live skills list arrives.

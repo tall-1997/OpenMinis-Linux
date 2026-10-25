@@ -1,5 +1,7 @@
 package com.openminis.app.ui.settings
 
+import com.openminis.app.config.KEY_LANGUAGE
+import com.openminis.app.config.PREF_APPEARANCE
 import com.openminis.app.R
 import com.openminis.app.ui.theme.*
 import com.openminis.app.data.repository.AppIconRepository
@@ -43,7 +45,6 @@ import androidx.compose.material.icons.outlined.FormatSize
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Keyboard
-import androidx.compose.material.icons.outlined.Launch
 import androidx.compose.material.icons.outlined.Psychology
 import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.ScreenLockPortrait
@@ -79,8 +80,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.stringResource
 import kotlin.math.roundToInt
 
-// -- Preference Keys --
-const val PREF_APPEARANCE = "appearance_prefs"
 const val KEY_THEME_MODE = "theme_mode"            // 0=System, 1=Light, 2=Dark
 const val KEY_LAUNCH_SESSION = "launch_session"    // 0=Auto, 1=LastSession, 2=NewChat, 3=Home
 // iOS-aligned key names — match `@AppStorage("returnKeyBehavior")` and
@@ -146,11 +145,6 @@ const val KEY_FONT_MESSAGE = "font_message"        // Int scale level -2..3
 const val KEY_FONT_APP_BASE = "font_app_base"      // Int scale level -2..3
 // "" = system, else a BCP-47 tag: "en", "zh", "zh-Hant", "ja", "ko", "fr",
 // "de", "ru", "es". Region-qualified tags are stored in BCP-47 form so both
-// LocaleList.forLanguageTags (API 33+) and LocaleWrap.parseLocale (pre-33)
-// resolve them; every value here must also appear in res/xml/locales_config.xml
-// or Android will not offer the language in system per-app settings.
-const val KEY_LANGUAGE = "app_language"
-
 /** True when Enter (without Shift) should send the message. iOS calls this
  *  `returnKeyBehavior == 1`. Default 0 = Enter inserts a newline (matches
  *  iOS shipping default + most desktop chat clients). */

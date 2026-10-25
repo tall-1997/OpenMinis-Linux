@@ -10,7 +10,6 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.openminis.app.R
-import com.openminis.app.service.ApprovalGate
 
 /**
  * [T-approval-action-single-source] The ONE definition of the approval

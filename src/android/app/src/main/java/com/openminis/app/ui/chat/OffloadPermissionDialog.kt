@@ -11,7 +11,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -41,7 +41,7 @@ import com.openminis.app.ui.components.MinisTextButton
  */
 @Composable
 fun OffloadPermissionDialog() {
-    val request by OffloadPermissionManager.pendingRequest.collectAsState()
+    val request by OffloadPermissionManager.pendingRequest.collectAsStateWithLifecycle()
     val req = request ?: return
 
     AlertDialog(

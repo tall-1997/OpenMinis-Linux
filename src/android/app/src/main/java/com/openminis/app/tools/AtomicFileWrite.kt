@@ -124,14 +124,19 @@ object AtomicFileWrite {
      * Overwrite [file] with [content], atomically and verified.
      *
      * @param append when true, append instead of overwrite (verified, not atomic)
+     * @param temp optional explicit temp file. Defaults to a `.minis-tmp`
+     *   sibling. Callers migrating a hand-rolled `X.tmp` sibling onto this
+     *   implementation pass their original name so on-disk naming (leftover
+     *   sweeps, tests that occupy the temp path) stays byte-for-byte stable.
+     *   It must be a sibling of [file] — the replace is a same-directory rename.
      * @return the byte length reported on disk, or null when the write did not
      *   verifiably land — callers must treat null as a failure, NOT as success.
      */
-    fun write(file: File, content: String, append: Boolean = false): Long? {
+    fun write(file: File, content: String, append: Boolean = false, temp: File? = null): Long? {
         val lock = lockFor(file)
         lock.lock()
         try {
-            return writeLocked(file, content, append)
+            return writeLocked(file, content, append, temp)
         } finally {
             lock.unlock()
         }
@@ -177,7 +182,7 @@ object AtomicFileWrite {
         }
     }
 
-    private fun writeLocked(file: File, content: String, append: Boolean): Long? {
+    private fun writeLocked(file: File, content: String, append: Boolean, temp: File? = null): Long? {
         val parent = file.parentFile
         if (parent != null && !parent.exists()) {
             if (!parent.mkdirs()) {
@@ -217,7 +222,7 @@ object AtomicFileWrite {
             }
         }
 
-        val tmp = File(parent, file.name + TEMP_SUFFIX)
+        val tmp = temp ?: File(parent, file.name + TEMP_SUFFIX)
         try {
             tmp.writeText(content)
             val written = tmp.length()

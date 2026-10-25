@@ -25,7 +25,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
@@ -42,12 +41,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
@@ -56,9 +53,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.FolderOff
-import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Refresh
@@ -74,11 +69,8 @@ import androidx.compose.material.icons.outlined.Book
 import androidx.compose.material.icons.outlined.Brush
 import androidx.compose.material.icons.outlined.Calculate
 import androidx.compose.material.icons.outlined.CalendarMonth
-import androidx.compose.material.icons.outlined.ChecklistRtl
-import androidx.compose.material.icons.outlined.Circle
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Schedule
-import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Favorite
 import androidx.compose.material.icons.outlined.CreateNewFolder
@@ -86,7 +78,6 @@ import androidx.compose.material.icons.outlined.Forum
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Map
-import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Payments
 import androidx.compose.material.icons.outlined.Search
@@ -122,10 +113,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import com.openminis.app.ui.components.MinisCenterTopBar
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.AlertDialog
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -154,7 +144,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -166,7 +155,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -525,7 +513,7 @@ fun SessionListScreen(
             context.applicationContext,
         ),
     )
-    val persistedSessions by viewModel.displayedSessions.collectAsState()
+    val persistedSessions by viewModel.displayedSessions.collectAsStateWithLifecycle()
     // [T-android-draft-placeholder-row] Prepend the synthetic draft row. Built
     // here rather than in the ViewModel precisely because it must never reach
     // the database or the repository's flows — it exists for exactly as long
@@ -551,17 +539,17 @@ fun SessionListScreen(
             ) + persistedSessions
         }
     }
-    val isInitialLoadComplete by viewModel.isInitialLoadComplete.collectAsState()
-    val isSearchActive by viewModel.isSearchActive.collectAsState()
-    val searchQuery by viewModel.searchQuery.collectAsState()
-    val isSearching by viewModel.isSearching.collectAsState()
-    val searchSnippets by viewModel.searchSnippets.collectAsState()
+    val isInitialLoadComplete by viewModel.isInitialLoadComplete.collectAsStateWithLifecycle()
+    val isSearchActive by viewModel.isSearchActive.collectAsStateWithLifecycle()
+    val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
+    val isSearching by viewModel.isSearching.collectAsStateWithLifecycle()
+    val searchSnippets by viewModel.searchSnippets.collectAsStateWithLifecycle()
     // [T-android-search-jump] Session id → matched message id, collected so
     // the click handler below can read the CURRENT map without a second
     // subscription (the guarded lambda is rebuilt per recomposition anyway).
-    val searchAnchors by viewModel.searchAnchors.collectAsState()
-    val regeneratingIds by viewModel.regeneratingIds.collectAsState()
-    val providerConfig by providerRepository.config.collectAsState()
+    val searchAnchors by viewModel.searchAnchors.collectAsStateWithLifecycle()
+    val regeneratingIds by viewModel.regeneratingIds.collectAsStateWithLifecycle()
+    val providerConfig by providerRepository.config.collectAsStateWithLifecycle()
     val hasProviders = providerConfig.instances.isNotEmpty()
     val hasGroups = providerConfig.modelGroups.isNotEmpty()
     // [T-android-startup-config-stall] Provider config now loads off-thread, so
@@ -569,7 +557,7 @@ fun SessionListScreen(
     // Gate the onboarding/list render on this too (alongside the sessions
     // initial-load flag) so an existing user with providers but zero sessions
     // doesn't flash the "add a provider" onboarding before the real config emits.
-    val configLoaded by providerRepository.configLoaded.collectAsState()
+    val configLoaded by providerRepository.configLoaded.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     // [T-android-entry-ime-guard] Blank-search collapse + focus release before
     // any navigation into a chat; the policy lives in SessionListFocusGate.kt.
@@ -633,10 +621,10 @@ fun SessionListScreen(
     // [T-android-session-grouping] Groups are pulled out FIRST; only the
     // leftovers go through date bucketing. Assembly order below is
     // Pinned → group block → date buckets, matching iOS.
-    val folders by viewModel.folders.collectAsState()
-    val collapsedFolderIds by viewModel.collapsedFolderIds.collectAsState()
-    val folderMemberCounts by viewModel.folderMemberCounts.collectAsState()
-    val groupPickerRequest by viewModel.groupPickerRequest.collectAsState()
+    val folders by viewModel.folders.collectAsStateWithLifecycle()
+    val collapsedFolderIds by viewModel.collapsedFolderIds.collectAsStateWithLifecycle()
+    val folderMemberCounts by viewModel.folderMemberCounts.collectAsStateWithLifecycle()
+    val groupPickerRequest by viewModel.groupPickerRequest.collectAsStateWithLifecycle()
     // While searching, group cards are suppressed: padding a result set with
     // every non-matching group is noise, not structure.
     val showFolderBlock = !isSearchActive || searchQuery.isBlank()
@@ -651,8 +639,8 @@ fun SessionListScreen(
     // (badge already at the head of its queue) leaves `byId` equals-identical
     // and is therefore conflated away — yet it can flip a card from stale to
     // fresh. See SessionBadgeStore.revision.
-    val sessionBadges by com.openminis.app.service.SessionBadgeStore.byId.collectAsState()
-    val badgeRevision by com.openminis.app.service.SessionBadgeStore.revision.collectAsState()
+    val sessionBadges by com.openminis.app.service.SessionBadgeStore.byId.collectAsStateWithLifecycle()
+    val badgeRevision by com.openminis.app.service.SessionBadgeStore.revision.collectAsStateWithLifecycle()
     val freshBadgedIds = remember(sessionBadges, badgeRevision) {
         com.openminis.app.service.SessionBadgeStore
             .freshCornerBadgeSessionIds(GROUP_BADGE_FRESH_WINDOW_MS)
@@ -661,7 +649,7 @@ fun SessionListScreen(
     // can show that one of its members is still working. Keyed into the
     // partition memo — without it the blocks would keep a stale snapshot and
     // the ring would never appear or never clear.
-    val activeSessionIds by SessionActivityTracker.activeSessions.collectAsState()
+    val activeSessionIds by SessionActivityTracker.activeSessions.collectAsStateWithLifecycle()
     val folderPartition = remember(
         sessions, folders, collapsedFolderIds, showFolderBlock, freshBadgedIds, activeSessionIds,
     ) {
@@ -778,7 +766,7 @@ fun SessionListScreen(
     val scheduledTaskCount by remember {
         com.openminis.app.scheduled.ScheduledTaskStore(context).observe()
             .map { list -> list.count { it.enabled } }
-    }.collectAsState(initial = 0)
+    }.collectAsStateWithLifecycle(initialValue = 0)
 
     Scaffold(
         topBar = {
@@ -1257,9 +1245,9 @@ fun SessionListScreen(
         // [T-android-group-ai-suggest] Suggestion state lives on the VM, not
         // in the sheet, so an in-flight request survives recomposition (and
         // the sheet's own remembered state being torn down).
-        val suggesting by viewModel.groupSuggesting.collectAsState()
-        val suggestFailed by viewModel.groupSuggestFailed.collectAsState()
-        val suggestion by viewModel.groupSuggestion.collectAsState()
+        val suggesting by viewModel.groupSuggesting.collectAsStateWithLifecycle()
+        val suggestFailed by viewModel.groupSuggestFailed.collectAsStateWithLifecycle()
+        val suggestion by viewModel.groupSuggestion.collectAsStateWithLifecycle()
         GroupPickerSheet(
             folders = folders,
             memberCounts = folderMemberCounts,
@@ -2647,7 +2635,7 @@ private fun SessionRow(
 
         // Category icon in colored circle (18% opacity matching iOS)
         // isActive / badgeHead arrive as parameters — see their KDoc. The
-        // per-row collectAsState() calls that used to sit here are hoisted to
+        // per-row collectAsStateWithLifecycle() calls that used to sit here are hoisted to
         // the list (activeSessionIds, sessionBadges).
         Box(
             modifier = Modifier.size(44.dp),

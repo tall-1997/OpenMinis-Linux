@@ -1,6 +1,7 @@
 package com.openminis.app.session
 
 import com.openminis.app.data.model.ThinkingLevel
+import com.openminis.app.di.AppGraph
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -33,10 +34,11 @@ interface ChatSessionBinder {
 }
 
 object ChatRuntime {
-    @Volatile
-    var binder: ChatSessionBinder? = null
-
+    /**
+     * The binder instance lives in [AppGraph] (installed once from
+     * MinisApp.onCreate); this object stays the UI-agnostic lookup surface.
+     */
     fun bind(sessionId: String): ChatSessionPort =
-        binder?.bind(sessionId)
-            ?: error("ChatRuntime.binder not registered — MinisApp.onCreate must install ChatViewModelBinder")
+        AppGraph.chatBinderOrNull()?.bind(sessionId)
+            ?: error("AppGraph.chatBinder not installed — MinisApp.onCreate must install ChatViewModelBinder")
 }

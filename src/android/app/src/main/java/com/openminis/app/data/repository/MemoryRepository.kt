@@ -5,7 +5,9 @@ import com.openminis.app.evolution.LearnedPrefsStore
 import com.openminis.app.evolution.SceneTag
 import com.openminis.app.text.BoundedText
 import com.openminis.app.logging.AppLogger
+import com.openminis.app.tools.AtomicFileWrite
 import java.io.File
+import java.io.IOException
 import com.openminis.app.util.IsoTime
 
 /**
@@ -793,17 +795,15 @@ class MemoryRepository(private val memoryDir: File) {
  * silently dropped the user's global rules or diary entry. Rename is atomic
  * on every filesystem this app writes to.
  *
+ * Delegates to [AtomicFileWrite] (per-path lock, short-write detection, post-write re-read verify);
+ * its copy-over covers the old rename-failed writeText fallback, null surfaces as the same IOException.
+ *
  * Top-level rather than a member so the companion-object seeding path and the
  * instance save paths share one implementation.
  */
 internal fun writeTextAtomic(file: File, content: String) {
-    file.parentFile?.mkdirs()
-    val tmp = File(file.parentFile, "${file.name}.tmp")
-    tmp.writeText(content)
-    if (!tmp.renameTo(file)) {
-        // Filesystems that refuse rename over an existing target.
-        file.writeText(content)
-        tmp.delete()
+    if (AtomicFileWrite.write(file, content, temp = File(file.parentFile, "${file.name}.tmp")) == null) {
+        throw IOException("atomic write failed for ${file.name}")
     }
 }
 

@@ -1,6 +1,5 @@
 package com.openminis.app.agent
 
-import java.io.File
 
 /**
  * [T-message-transformers] Send-path text sanitizers (RikkaHub

@@ -1,6 +1,7 @@
 package com.openminis.app.config.confirm
 
 import com.openminis.app.config.ConfigRisk
+import com.openminis.app.di.AppGraph
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
@@ -43,7 +44,9 @@ class ConfigConfirmationGateNotifyTest {
         notified.clear()
         cancelled.clear()
         appForeground = false
-        ConfigConfirmationGate.backgroundNotifier = { change ->
+        // The hooks are reinstallable AppGraph slots (once = false) so each
+        // test can install its own stubs and tearDown can unhook them.
+        AppGraph.installConfigConfirmBackgroundNotifier { change ->
             if (appForeground) {
                 false
             } else {
@@ -51,7 +54,7 @@ class ConfigConfirmationGateNotifyTest {
                 true
             }
         }
-        ConfigConfirmationGate.cancelNotification = { id -> cancelled.add(id) }
+        AppGraph.installConfigConfirmCancelNotification { id -> cancelled.add(id) }
     }
 
     @After
@@ -59,8 +62,8 @@ class ConfigConfirmationGateNotifyTest {
         // Drain anything still pending so the singleton doesn't leak into the
         // next test, then unhook.
         ConfigConfirmationGate.userReject()
-        ConfigConfirmationGate.backgroundNotifier = null
-        ConfigConfirmationGate.cancelNotification = null
+        AppGraph.installConfigConfirmBackgroundNotifier(null)
+        AppGraph.installConfigConfirmCancelNotification(null)
         Dispatchers.resetMain()
     }
 

@@ -35,7 +35,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -76,14 +76,14 @@ fun RestoreBrowseScreen(
     onBack: () -> Unit,
     onPicked: () -> Unit,
 ) {
-    val entries by vm.browseEntries.collectAsState()
-    val path by vm.browsePath.collectAsState()
-    val loading by vm.browsing.collectAsState()
-    val error by vm.errorText.collectAsState()
-    val transfer by vm.transfer.collectAsState()
-    val openStage by vm.openStage.collectAsState()
-    val openProgress by vm.openProgress.collectAsState()
-    val pending by vm.pending.collectAsState()
+    val entries by vm.browseEntries.collectAsStateWithLifecycle()
+    val path by vm.browsePath.collectAsStateWithLifecycle()
+    val loading by vm.browsing.collectAsStateWithLifecycle()
+    val error by vm.errorText.collectAsStateWithLifecycle()
+    val transfer by vm.transfer.collectAsStateWithLifecycle()
+    val openStage by vm.openStage.collectAsStateWithLifecycle()
+    val openProgress by vm.openProgress.collectAsStateWithLifecycle()
+    val pending by vm.pending.collectAsStateWithLifecycle()
 
     var confirming by remember { mutableStateOf<RcloneChunkedUpload.RemoteEntry?>(null) }
 

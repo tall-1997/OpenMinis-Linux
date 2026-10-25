@@ -25,14 +25,13 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -59,7 +58,7 @@ fun SubAgentLiveBar(
     modifier: Modifier = Modifier,
     onStop: (String) -> Unit = {},
 ) {
-    val members by SubAgentActivityTracker.members.collectAsState()
+    val members by SubAgentActivityTracker.members.collectAsStateWithLifecycle()
     val mine = members.filter { it.parentSessionId == sessionId }
     var detailMemberId by remember { mutableStateOf<String?>(null) }
 

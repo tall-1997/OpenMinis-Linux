@@ -125,7 +125,7 @@ internal suspend fun ChatViewModel.executeTool(
         com.openminis.app.tools.EvolutionTool.NAME ->
             com.openminis.app.tools.EvolutionTool.execute(
                 argsJson,
-                com.openminis.app.evolution.EvolutionHooks.engine,
+                com.openminis.app.di.AppGraph.evolutionEngineOrNull(),
             )
         com.openminis.app.tools.DispatchAgentsTool.NAME -> executeRunSubAgent(
             com.openminis.app.tools.DispatchAgentsTool.toSpawnArgs(argsJson, context),

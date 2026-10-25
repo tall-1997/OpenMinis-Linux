@@ -20,7 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,15 +48,15 @@ fun MultiAgentSettingsScreen(
     val repo = app.multiAgentSettingsRepository
     val providerRepo = app.providerRepository
 
-    val enabled by repo.enabled.collectAsState()
-    val maxConcurrent by repo.maxConcurrent.collectAsState()
+    val enabled by repo.enabled.collectAsStateWithLifecycle()
+    val maxConcurrent by repo.maxConcurrent.collectAsStateWithLifecycle()
     // Turn budget is coordinator-assigned (1.27 unclamp); only the retry-attempts
     // stepper still reads a repo StateFlow here.
-    val subagentMaxAttempts by repo.subagentMaxAttempts.collectAsState()
-    val selectedIds by repo.selectedModelEntryIds.collectAsState()
-    val selectedThinkingLevels by repo.selectedThinkingLevels.collectAsState()
-    val config by providerRepo.config.collectAsState()
-    val configLoaded by providerRepo.configLoaded.collectAsState()
+    val subagentMaxAttempts by repo.subagentMaxAttempts.collectAsStateWithLifecycle()
+    val selectedIds by repo.selectedModelEntryIds.collectAsStateWithLifecycle()
+    val selectedThinkingLevels by repo.selectedThinkingLevels.collectAsStateWithLifecycle()
+    val config by providerRepo.config.collectAsStateWithLifecycle()
+    val configLoaded by providerRepo.configLoaded.collectAsStateWithLifecycle()
 
     val instancesById = config.instances.associateBy { it.id }
     val candidates = config.modelEntries.filter { entry ->
@@ -148,8 +148,8 @@ fun MultiAgentSettingsScreen(
         // The worker model slot is "" = follow the session model; the max
         // turns stepper bounds the runner's force-close budget. Both live in
         // MultiAgentSettingsRepository and are read by the runner at start.
-        val workerModelId by repo.workerModelEntryId.collectAsState()
-        val supervisorMaxTurns by repo.supervisorMaxWorkerTurns.collectAsState()
+        val workerModelId by repo.workerModelEntryId.collectAsStateWithLifecycle()
+        val supervisorMaxTurns by repo.supervisorMaxWorkerTurns.collectAsStateWithLifecycle()
         SettingsSection(
             header = stringResource(R.string.settings_supervisor_section),
             footer = stringResource(R.string.settings_supervisor_max_turns_footer),

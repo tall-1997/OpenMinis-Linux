@@ -20,7 +20,6 @@ import java.io.ByteArrayOutputStream
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.log10
-import kotlin.math.max
 import kotlin.math.sqrt
 
 /**

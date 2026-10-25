@@ -23,8 +23,6 @@ import com.openminis.app.offload.ScheduledNotificationStore
 import com.openminis.app.sandbox.NativeOffloadHandler
 import com.openminis.app.sandbox.NativeOffloadRequest
 import com.openminis.app.sandbox.NativeOffloadResult
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
 import com.openminis.app.util.IsoTime
@@ -104,74 +102,38 @@ class NotificationOffloadHandler(private val context: Context) : NativeOffloadHa
         // Android 13+: POST_NOTIFICATIONS is a runtime permission. First try
         // the system dialog; if the user has permanently denied it the dialog
         // won't re-appear, so fall back to an in-app "go to settings" gate
-        // that polls for the grant.
+        // that polls for the grant. Shared skeleton (runBlocking on the offload
+        // worker, bounded by OffloadPermissionManager.INTERACTIVE_BUDGET_MS)
+        // lives in OffloadInteractivePermission.ensureInteractive.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
             PackageManager.PERMISSION_GRANTED
         ) {
-            val result = runBlocking {
-                withTimeoutOrNull(OffloadPermissionManager.INTERACTIVE_BUDGET_MS) {
-                var r = OffloadPermissionManager.requestAndroidPermission(
-                    listOf(Manifest.permission.POST_NOTIFICATIONS)
-                )
-                val hasNotifPerm = {
+            OffloadInteractivePermission.ensureInteractive(
+                logTag = TAG,
+                permissions = listOf(Manifest.permission.POST_NOTIFICATIONS),
+                satisfied = {
                     ContextCompat.checkSelfPermission(
                         context, Manifest.permission.POST_NOTIFICATIONS
                     ) == PackageManager.PERMISSION_GRANTED
-                }
-                if (r == OffloadPermissionManager.AndroidPermissionResult.DENIED &&
-                    OffloadPermissionManager.pollForPermissionGrant(hasNotifPerm)
-                ) {
-                    AppLogger.info(TAG, "Notification permission granted during post-DENY poll")
-                    r = OffloadPermissionManager.AndroidPermissionResult.GRANTED
-                }
-                if (r == OffloadPermissionManager.AndroidPermissionResult.DENIED) {
-                    // Dialog either won't re-appear or the user just tapped
-                    // "Don't allow". Offer the in-app path to Settings.
-                    r = OffloadPermissionManager.requestSettingsGate(
-                        OffloadPermissionManager.SettingsGateRequest(
-                            id = Manifest.permission.POST_NOTIFICATIONS,
-                            title = "Notifications are off",
-                            message = "Minis needs notification permission to send notifications. Open Settings to allow it.",
-                            settingsAction = Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                            requiresPackageUri = true,
-                            positiveLabel = "Open Settings",
-                        ),
-                        check = {
-                            ContextCompat.checkSelfPermission(
-                                context, Manifest.permission.POST_NOTIFICATIONS
-                            ) == PackageManager.PERMISSION_GRANTED
-                        },
-                    )
-                }
-                r
-                }
-            } ?: OffloadPermissionManager.AndroidPermissionResult.TIMEOUT
-            when (result) {
-                OffloadPermissionManager.AndroidPermissionResult.GRANTED -> {} // continue
-                OffloadPermissionManager.AndroidPermissionResult.DENIED -> {
-                    return NativeOffloadResult(
-                        77,
-                        OffloadOutput.formatBody(
-                            JSONObject().put("error", "permission_denied")
-                                .put("message", "The user declined the notification permission.")
-                                .toString(),
-                            args,
-                        ) + "\n",
-                    )
-                }
-                OffloadPermissionManager.AndroidPermissionResult.TIMEOUT -> {
-                    return NativeOffloadResult(
-                        77,
-                        OffloadOutput.formatBody(
-                            JSONObject().put("error", "timeout")
-                                .put("message", "Timed out waiting for the user to respond to the notification permission prompt.")
-                                .toString(),
-                            args,
-                        ) + "\n",
-                    )
-                }
-            }
+                },
+                gate = OffloadPermissionManager.SettingsGateRequest(
+                    id = Manifest.permission.POST_NOTIFICATIONS,
+                    title = "Notifications are off",
+                    message = "Minis needs notification permission to send notifications. Open Settings to allow it.",
+                    settingsAction = Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    requiresPackageUri = true,
+                    positiveLabel = "Open Settings",
+                ),
+                pollGrantedLog = "Notification permission granted during post-DENY poll",
+                // This handler's timeout copy says "respond to" rather than
+                // "grant" — kept verbatim.
+                copy = OffloadInteractivePermission.DenialCopy(
+                    deniedMessage = "The user declined the notification permission.",
+                    timeoutMessage = "Timed out waiting for the user to respond to the notification permission prompt.",
+                ),
+                args = args,
+            )?.let { return it }
         }
 
         val body = args.get("body") ?: ""
@@ -489,49 +451,31 @@ class NotificationOffloadHandler(private val context: Context) : NativeOffloadHa
             // Notification Access can only be granted from the system settings
             // page — requestPermissions is not an option. Use the in-app
             // "settings gate" which shows a dialog, opens the settings page,
-            // and polls for the user to complete the grant.
-            val result = runBlocking {
-                withTimeoutOrNull(OffloadPermissionManager.INTERACTIVE_BUDGET_MS) {
-                    OffloadPermissionManager.requestSettingsGate(
-                        OffloadPermissionManager.SettingsGateRequest(
-                            id = "notification_access",
-                            title = "Notification access needed",
-                            message = "Minis needs Notification access to read the status-bar notifications. Open Settings and enable \"Minis\" under Notification access.",
-                            settingsAction = MinisNotificationListenerService.SETTINGS_ACTION,
-                            requiresPackageUri = false,
-                            positiveLabel = "Open Settings",
-                        ),
-                        check = { MinisNotificationListenerService.isEnabled(context) },
-                    )
-                }
-            } ?: OffloadPermissionManager.AndroidPermissionResult.TIMEOUT
-            when (result) {
-                OffloadPermissionManager.AndroidPermissionResult.GRANTED -> {} // continue
-                OffloadPermissionManager.AndroidPermissionResult.DENIED -> {
-                    return NativeOffloadResult(
-                        77,
-                        OffloadOutput.formatBody(
-                            JSONObject()
-                                .put("error", "notification_access_not_granted")
-                                .put("message", "The user declined to grant Notification access.")
-                                .toString(),
-                            args,
-                        ) + "\n",
-                    )
-                }
-                OffloadPermissionManager.AndroidPermissionResult.TIMEOUT -> {
-                    return NativeOffloadResult(
-                        77,
-                        OffloadOutput.formatBody(
-                            JSONObject()
-                                .put("error", "timeout")
-                                .put("message", "Timed out waiting for the user to enable Notification access.")
-                                .toString(),
-                            args,
-                        ) + "\n",
-                    )
-                }
-            }
+            // and polls for the user to complete the grant. This is the
+            // settings-gate-only variant (no runtime dialog) of the shared
+            // skeleton: OffloadInteractivePermission.ensureInteractiveGate.
+            //
+            // The decline envelope keeps this flow's distinct
+            // `notification_access_not_granted` literal — it is not a
+            // runtime-permission denial, so the generic `permission_denied`
+            // would misclassify it.
+            OffloadInteractivePermission.ensureInteractiveGate(
+                gate = OffloadPermissionManager.SettingsGateRequest(
+                    id = "notification_access",
+                    title = "Notification access needed",
+                    message = "Minis needs Notification access to read the status-bar notifications. Open Settings and enable \"Minis\" under Notification access.",
+                    settingsAction = MinisNotificationListenerService.SETTINGS_ACTION,
+                    requiresPackageUri = false,
+                    positiveLabel = "Open Settings",
+                ),
+                satisfied = { MinisNotificationListenerService.isEnabled(context) },
+                copy = OffloadInteractivePermission.DenialCopy(
+                    deniedError = OffloadInteractivePermission.ERROR_NOTIFICATION_ACCESS_NOT_GRANTED,
+                    deniedMessage = "The user declined to grant Notification access.",
+                    timeoutMessage = "Timed out waiting for the user to enable Notification access.",
+                ),
+                args = args,
+            )?.let { return it }
         }
 
         // `NotificationManager.activeNotifications` only exposes this app's

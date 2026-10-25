@@ -38,7 +38,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -130,16 +130,16 @@ fun SpeechPlayerCapsule(
     val context = LocalContext.current
     LaunchedEffect(Unit) { VoiceOutputState.init(context) }
 
-    val enabled by VoiceOutputState.isEnabled.collectAsState()
-    val muted by VoiceOutputState.isMuted.collectAsState()
-    val speed by VoiceOutputState.speed.collectAsState()
-    val speaking by VoiceOutputState.isSpeaking.collectAsState()
-    val synthesizing by VoiceOutputState.isSynthesizing.collectAsState()
-    val modelLabel by VoiceOutputState.activeModelLabel.collectAsState()
+    val enabled by VoiceOutputState.isEnabled.collectAsStateWithLifecycle()
+    val muted by VoiceOutputState.isMuted.collectAsStateWithLifecycle()
+    val speed by VoiceOutputState.speed.collectAsStateWithLifecycle()
+    val speaking by VoiceOutputState.isSpeaking.collectAsStateWithLifecycle()
+    val synthesizing by VoiceOutputState.isSynthesizing.collectAsStateWithLifecycle()
+    val modelLabel by VoiceOutputState.activeModelLabel.collectAsStateWithLifecycle()
     // [T-android-system-voice-catalog] The picked system voice's label shows
     // on the chip IMMEDIATELY after selection (iOS refreshModelLabel reads the
     // configured selection), not only once the first utterance speaks.
-    val systemVoiceLabel by VoiceOutputState.systemVoiceLabel.collectAsState()
+    val systemVoiceLabel by VoiceOutputState.systemVoiceLabel.collectAsStateWithLifecycle()
 
     // Visible whenever read-replies is ON (so it can be turned off from
     // anywhere) or something is actively playing/synthesizing.
@@ -270,7 +270,7 @@ fun SpeechPlayerCapsule(
         // the edge the user can now never leave — and it needs no migration
         // code. The stale X stays on disk harmlessly and is overwritten as 0
         // on the next drag release.
-        val savedOffset by VoiceOutputState.dragOffsetDp.collectAsState()
+        val savedOffset by VoiceOutputState.dragOffsetDp.collectAsStateWithLifecycle()
         LaunchedEffect(savedOffset, capsuleH, maxHPx, isDragging) {
             if (isDragging || capsuleH <= 0) return@LaunchedEffect
             val targetY = savedOffset?.let { (_, yDp) ->

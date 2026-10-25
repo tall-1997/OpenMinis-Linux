@@ -24,7 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -153,7 +153,7 @@ fun MCPToolsScreen(
     onBack: () -> Unit,
     onManage: () -> Unit,
 ) {
-    val servers by mcpRepository.servers.collectAsState()
+    val servers by mcpRepository.servers.collectAsStateWithLifecycle()
     val server = servers.find { it.id == serverId }
     val context = LocalContext.current
     var busy by remember { mutableStateOf(true) }

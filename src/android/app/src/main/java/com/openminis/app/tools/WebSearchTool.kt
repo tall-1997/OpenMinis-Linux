@@ -553,29 +553,6 @@ object WebSearchTool {
         return out.distinctBy { it.url }.take(max)
     }
 
-    @Suppress("unused")
-    private fun searchNoKeyFallbackLegacy(query: String, max: Int, context: Context?): List<Result> {
-        val out = mutableListOf<Result>()
-        out += searchWikipedia(query, max, context)
-        if (out.size < max) {
-            out += searchHtmlLinks(
-                "https://www.bing.com/search?q=${enc(query)}&setlang=zh-Hans",
-                max - out.size,
-                context,
-                Regex("""<h2>\s*<a[^>]+href="(https?://[^"]+)"[^>]*>(.*?)</a>""", RegexOption.IGNORE_CASE),
-            )
-        }
-        if (out.size < max) {
-            out += searchHtmlLinks(
-                "https://www.mojeek.com/search?q=${enc(query)}",
-                max - out.size,
-                context,
-                Regex("""<a[^>]+class="[^"]*title[^"]*"[^>]+href="(https?://[^"]+)"[^>]*>(.*?)</a>""", RegexOption.IGNORE_CASE),
-            )
-        }
-        return out.distinctBy { it.url }.take(max)
-    }
-
     /**
      * Runs [KeylessSearchSources.chain] in order and returns the first
      * source that produced results, as (source label, hits). Every fetch
@@ -623,30 +600,6 @@ object WebSearchTool {
         } catch (_: Exception) {
             emptyList()
         }
-    }
-
-    private fun searchHtmlLinks(
-        url: String,
-        max: Int,
-        context: Context?,
-        pattern: Regex,
-    ): List<Result> {
-        if (max <= 0) return emptyList()
-        val html = fetchUrl(url, context = context) ?: return emptyList()
-        val out = mutableListOf<Result>()
-        for (match in pattern.findAll(html)) {
-            val link = match.groupValues.getOrNull(1)?.trim().orEmpty()
-            if (!link.startsWith("http") || link.contains("bing.com/ck/") || link.contains("microsoft.com")) continue
-            val title = match.groupValues.getOrNull(2).orEmpty()
-                .replace(Regex("<[^>]+>"), "")
-                .replace("&amp;", "&")
-                .replace("&quot;", "\"")
-                .trim()
-            if (title.isEmpty()) continue
-            out += Result(title, link, "")
-            if (out.size >= max) break
-        }
-        return out
     }
 
     private fun httpUserAgent(context: Context?): String {

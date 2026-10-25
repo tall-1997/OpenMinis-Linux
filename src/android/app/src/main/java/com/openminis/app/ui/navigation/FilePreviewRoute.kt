@@ -1,5 +1,6 @@
 package com.openminis.app.ui.navigation
 
+import com.openminis.app.navigation.navEnc
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.navigation.NavBackStackEntry
@@ -11,8 +12,7 @@ import java.io.File
 /**
  * Navigation plumbing for the file-preview destinations, extracted from
  * AppNavigation so that file stays under the architecture-policy ceiling.
- * Three concerns live here: the process-static hand-off holder, the
- * percent-encoding recipe shared by all path-carrying routes, and the
+ * Two concerns live here: the process-static hand-off holder and the
  * process-death rehydration of the FILE_PREVIEW destination.
  */
 
@@ -34,15 +34,6 @@ internal object FilePreviewHolder {
     var currentItem: FileItem? = null
     var fileBrowserViewModel: FileBrowserViewModel? = null
 }
-
-/**
- * Percent-encoding recipe for path/query values carried in nav routes.
- * URLEncoder is plain-JVM (unit-testable without Robolectric), and `+` must
- * become `%20` because Navigation percent-decodes query params — a bare `+`
- * would reach the screen as a literal plus (PR6 media-path bug class).
- */
-internal fun navEnc(v: String): String =
-    java.net.URLEncoder.encode(v, "UTF-8").replace("+", "%20")
 
 /**
  * Resolves the item to preview for the FILE_PREVIEW destination.

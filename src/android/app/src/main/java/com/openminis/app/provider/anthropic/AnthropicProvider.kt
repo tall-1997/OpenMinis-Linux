@@ -5,8 +5,6 @@ import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.model.sanitizeToolId
 import com.openminis.app.data.model.LLMError
-import com.openminis.app.provider.HttpRetryAfter
-import com.openminis.app.provider.CredentialAcceptance
 import com.openminis.app.provider.FullBodyJson
 import com.openminis.app.provider.NonFiniteJson
 import com.openminis.app.provider.ProviderKeyGate
@@ -21,6 +19,7 @@ import com.openminis.app.provider.LLMProvider
 import com.openminis.app.provider.SamplingIdentity
 import com.openminis.app.provider.SamplingPolicy
 import com.openminis.app.provider.applyUserAgentOverride
+import com.openminis.app.provider.mapHttpErrorShared
 import com.openminis.app.provider.safeOptString
 import com.openminis.app.provider.ssePayloads
 import kotlinx.coroutines.Dispatchers
@@ -1189,59 +1188,20 @@ class AnthropicProvider(
         return mapHttpError(status, event.toString())
     }
 
-    private fun mapHttpError(statusCode: Int, body: String, retryAfterHeader: String? = null): LLMError {
-        if (statusCode == 401 || statusCode == 403) {
-            // [T-llm-error-401-model-scope] See OpenAIProviderErrors: an
-            // upstream-pool gateway's 401 is often about the model, not the key.
-            if (CredentialAcceptance.isAccepted(credentialGateKey)) {
-                return LLMError.InvalidApiKey(
-                    "HTTP $statusCode — the same credential was accepted by this host recently, " +
-                        "so the refusal is about this model, not the key",
-                    credentialAccepted = true,
-                )
-            }
-            return LLMError.InvalidApiKey()
-        }
-        if (statusCode == 429) return HttpRetryAfter.map429(body, retryAfterHeader)
-
-        val message = try {
-            val json = JSONObject(body)
-            val error = json.optJSONObject("error")
-            val errorType = error?.safeOptString("type", "") ?: "error"
-            val errorMessage = error?.safeOptString("message", "") ?: body
-            // [T-llm-error-secret-mask] Both strings below are UPSTREAM-CONTROLLED
-            // and reach LLMError.message, which the chat UI renders and AppLogger
-            // persists. Relays occasionally echo request material in their message
-            // (and a non-JSON body is embedded verbatim), so key-shaped material
-            // rides along unless masked. OpenAI's mapper has masked here from the
-            // start (OpenAIProviderErrors) — Anthropic was the drifting copy.
-            "[$errorType] ${com.openminis.app.util.SecretMasking.mask(errorMessage)}"
-        } catch (_: Exception) {
-            "HTTP $statusCode: ${com.openminis.app.util.SecretMasking.mask(body.take(500))}"
-        }
-
-        // [T-llm-error-classification] 细分 provider 错误，不再笼统地归 ProviderError。
-        val lower = message.lowercase()
-        when {
-            // "max_tokens too large" 是输出参数超限（max_tokens 请求过大），
-            // 不是上下文超长，保持 ProviderError。
-            !lower.contains("max_tokens too large") && (
-                lower.contains("context_length_exceeded") || lower.contains("maximum context length") ||
-                lower.contains("too many tokens") || lower.contains("reduce the length") ||
-                (statusCode == 400 && (lower.contains("token") && (lower.contains("max") || lower.contains("limit") || lower.contains("exceed"))))
-            ) -> return LLMError.ContextLengthExceeded(message)
-            lower.contains("content_filter") || lower.contains("content_policy") ||
-            lower.contains("safety") || lower.contains("inappropriate") ||
-            statusCode == 422 && lower.contains("content") ->
-                return LLMError.ContentFiltered(message)
-        }
-
-        val transientCodes = setOf(500, 502, 503, 504, 529)
-        if (statusCode in transientCodes) {
-            return LLMError.TransientError(message)
-        }
-        return LLMError.ProviderError(message)
-    }
+    internal fun mapHttpError(statusCode: Int, body: String, retryAfterHeader: String? = null): LLMError =
+        mapHttpErrorShared(
+            statusCode,
+            body,
+            retryAfterHeader,
+            credentialGateKey = credentialGateKey,
+            isContextLimit = ::anthropicContextLimit,
+            isContentFiltered = ::anthropicContentFiltered,
+            // [T-llm-error-secret-mask] The label and message are both
+            // UPSTREAM-CONTROLLED and reach LLMError.message, which the chat UI
+            // renders. Anthropic labels the envelope with the upstream
+            // error.type (its primary error identity) instead of the status.
+            messageLabel = { _, error -> "[${error?.safeOptString("type", "") ?: "error"}]" },
+        )
 
     private fun mapError(error: Throwable): LLMError {
         if (error is LLMError) return error
@@ -1249,3 +1209,18 @@ class AnthropicProvider(
         return LLMError.Unknown(error)
     }
 }
+
+// [T-llm-error-classification] 细分 provider 错误，不再笼统地归 ProviderError。
+// "max_tokens too large" 是输出参数超限（max_tokens 请求过大），
+// 不是上下文超长，保持 ProviderError。
+private fun anthropicContextLimit(statusCode: Int, lower: String): Boolean =
+    !lower.contains("max_tokens too large") && (
+        lower.contains("context_length_exceeded") || lower.contains("maximum context length") ||
+            lower.contains("too many tokens") || lower.contains("reduce the length") ||
+            (statusCode == 400 && (lower.contains("token") && (lower.contains("max") || lower.contains("limit") || lower.contains("exceed"))))
+    )
+
+private fun anthropicContentFiltered(statusCode: Int, lower: String): Boolean =
+    lower.contains("content_filter") || lower.contains("content_policy") ||
+        lower.contains("safety") || lower.contains("inappropriate") ||
+        statusCode == 422 && lower.contains("content")

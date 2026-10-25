@@ -1,5 +1,6 @@
 package com.openminis.app.config.confirm
 
+import com.openminis.app.di.AppGraph
 import com.openminis.app.logging.AppLogger
 import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.CoroutineScope
@@ -40,28 +41,23 @@ object ConfigConfirmationGate {
      * app is backgrounded the OLD 30s window elapsed before the user ever saw
      * the dialog (iOS reported three back-to-back timedOut with no chance to
      * approve). Widened to 2 minutes so a backgrounded user has time to react
-     * to the [backgroundNotifier] nudge and return. Mirrors iOS 073fb9c5.
+     * to the background-notifier nudge and return. Mirrors iOS 073fb9c5.
      */
     const val TIMEOUT_MS: Long = 120_000
 
-    /**
-     * [T-android-config-confirm-timeout] Posts a "config change awaiting
-     * approval" notification when a change is pending and the app is
-     * backgrounded. Injected by MinisApp.onCreate (kept out of this global
-     * object so it stays Context-free and unit-testable). Returns true when a
-     * notification was actually posted, so [notifiedIds] only records ids we
-     * really notified.
+    /*
+     * [T-android-config-confirm-timeout] The two injected hooks below used to
+     * be public static fields on this object; they now live in [AppGraph]
+     * (installed by MinisApp.onCreate, kept out of this global object so it
+     * stays Context-free and unit-testable):
+     *   - backgroundNotifier: posts a "config change awaiting approval"
+     *     notification when a change is pending and the app is backgrounded.
+     *     Returns true when a notification was actually posted, so
+     *     [notifiedIds] only records ids we really notified.
+     *   - cancelNotification: cancels a previously-posted pending-approval
+     *     notification once the change resolves. Installed alongside
+     *     the background notifier.
      */
-    @Volatile
-    var backgroundNotifier: ((PendingConfigChange) -> Boolean)? = null
-
-    /**
-     * [T-android-config-confirm-timeout] Cancels a previously-posted
-     * pending-approval notification once the change resolves. Injected
-     * alongside [backgroundNotifier].
-     */
-    @Volatile
-    var cancelNotification: ((String) -> Unit)? = null
 
     /** Ids we've already posted a background notification for, so a change that
      *  surfaces in the background AND later triggers a didEnterBackground pass
@@ -157,7 +153,7 @@ object ConfigConfirmationGate {
                 return
             }
         }
-        cancelNotification?.invoke(id)
+        AppGraph.configConfirmCancelNotificationOrNull()?.invoke(id)
         if (advance) advancedTo?.let { notifyIfBackgrounded(it) }
     }
 
@@ -177,7 +173,7 @@ object ConfigConfirmationGate {
             }
         }
         // The change is done — clear any pending-approval notification for it.
-        cancelNotification?.invoke(id)
+        AppGraph.configConfirmCancelNotificationOrNull()?.invoke(id)
         // [T-android-config-confirm-timeout] The newly-surfaced change also
         // needs a background nudge if the user is away.
         advancedTo?.let { notifyIfBackgrounded(it) }
@@ -202,7 +198,7 @@ object ConfigConfirmationGate {
      * applies the foreground / setting / permission guards.
      */
     private fun notifyIfBackgrounded(change: PendingConfigChange) {
-        val notifier = backgroundNotifier ?: return
+        val notifier = AppGraph.configConfirmBackgroundNotifierOrNull() ?: return
         scope.launch {
             mutex.withLock {
                 if (notifiedIds.contains(change.id)) return@launch

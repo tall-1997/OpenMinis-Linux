@@ -16,8 +16,6 @@ import com.openminis.app.offload.OffloadPermissionManager
 import com.openminis.app.sandbox.NativeOffloadHandler
 import com.openminis.app.sandbox.NativeOffloadRequest
 import com.openminis.app.sandbox.NativeOffloadResult
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -212,7 +210,8 @@ class PhotosOffloadHandler(private val context: Context) : NativeOffloadHandler 
     /**
      * Drive the system-dialog → settings-gate flow. On A13+ we ask for the
      * granular media permissions; A14+ treats visual-user-selected as partial
-     * access, which [hasMediaPermission] already accepts.
+     * access, which [hasMediaPermission] already accepts. Shared skeleton in
+     * [OffloadInteractivePermission.ensureInteractive].
      */
     private fun ensureMediaPermission(args: OffloadArgs): NativeOffloadResult? {
         if (hasMediaPermission()) return null
@@ -225,52 +224,25 @@ class PhotosOffloadHandler(private val context: Context) : NativeOffloadHandler 
         } else {
             listOf(Manifest.permission.READ_EXTERNAL_STORAGE)
         }
-        val result = runBlocking {
-            withTimeoutOrNull(OffloadPermissionManager.INTERACTIVE_BUDGET_MS) {
-            var r = OffloadPermissionManager.requestAndroidPermission(requestList)
-            if (r == OffloadPermissionManager.AndroidPermissionResult.DENIED &&
-                OffloadPermissionManager.pollForPermissionGrant({ hasMediaPermission() })
-            ) {
-                AppLogger.info(TAG, "Photos permission granted during post-DENY poll")
-                r = OffloadPermissionManager.AndroidPermissionResult.GRANTED
-            }
-            if (r == OffloadPermissionManager.AndroidPermissionResult.DENIED) {
-                r = OffloadPermissionManager.requestSettingsGate(
-                    OffloadPermissionManager.SettingsGateRequest(
-                        id = "photos_media",
-                        title = "Photos permission needed",
-                        message = "Minis needs media permission to read your photo library. Open Settings to allow it.",
-                        settingsAction = android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                        requiresPackageUri = true,
-                        positiveLabel = "Open Settings",
-                    ),
-                    check = { hasMediaPermission() },
-                )
-            }
-            r
-            }
-        } ?: OffloadPermissionManager.AndroidPermissionResult.TIMEOUT
-        return when (result) {
-            OffloadPermissionManager.AndroidPermissionResult.GRANTED -> null
-            OffloadPermissionManager.AndroidPermissionResult.DENIED -> NativeOffloadResult(
-                77,
-                OffloadOutput.formatBody(
-                    JSONObject().put("error", "permission_denied")
-                        .put("message", "The user declined the photos/media permission.")
-                        .toString(),
-                    args,
-                ) + "\n",
-            )
-            OffloadPermissionManager.AndroidPermissionResult.TIMEOUT -> NativeOffloadResult(
-                77,
-                OffloadOutput.formatBody(
-                    JSONObject().put("error", "timeout")
-                        .put("message", "Timed out waiting for the user to grant the photos/media permission.")
-                        .toString(),
-                    args,
-                ) + "\n",
-            )
-        }
+        return OffloadInteractivePermission.ensureInteractive(
+            logTag = TAG,
+            permissions = requestList,
+            satisfied = { hasMediaPermission() },
+            gate = OffloadPermissionManager.SettingsGateRequest(
+                id = "photos_media",
+                title = "Photos permission needed",
+                message = "Minis needs media permission to read your photo library. Open Settings to allow it.",
+                settingsAction = android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                requiresPackageUri = true,
+                positiveLabel = "Open Settings",
+            ),
+            pollGrantedLog = "Photos permission granted during post-DENY poll",
+            copy = OffloadInteractivePermission.DenialCopy(
+                deniedMessage = "The user declined the photos/media permission.",
+                timeoutMessage = "Timed out waiting for the user to grant the photos/media permission.",
+            ),
+            args = args,
+        )
     }
 
     private fun hasMediaLocationPermission(): Boolean =
@@ -283,59 +255,32 @@ class PhotosOffloadHandler(private val context: Context) : NativeOffloadHandler 
      * `near` reads GPS EXIF; without ACCESS_MEDIA_LOCATION the MediaStore
      * strips it from the streams we open and the result set is always empty.
      * On A10+ it's a runtime permission — manifest entry alone is not enough.
-     * Pre-Q the permission doesn't exist; treat it as granted.
+     * Pre-Q the permission doesn't exist; treat it as granted. Shared
+     * skeleton in [OffloadInteractivePermission.ensureInteractive] (same
+     * interactive budget as the media flow above).
      */
     private fun ensureMediaLocationPermission(args: OffloadArgs): NativeOffloadResult? {
         if (hasMediaLocationPermission()) return null
         AppLogger.warning(TAG, "ACCESS_MEDIA_LOCATION not granted — routing through permission flow")
-        val result = runBlocking {
-            withTimeoutOrNull(OffloadPermissionManager.INTERACTIVE_BUDGET_MS) {
-            var r = OffloadPermissionManager.requestAndroidPermission(
-                listOf("android.permission.ACCESS_MEDIA_LOCATION"),
-            )
-            if (r == OffloadPermissionManager.AndroidPermissionResult.DENIED &&
-                OffloadPermissionManager.pollForPermissionGrant({ hasMediaLocationPermission() })
-            ) {
-                AppLogger.info(TAG, "Media location permission granted during post-DENY poll")
-                r = OffloadPermissionManager.AndroidPermissionResult.GRANTED
-            }
-            if (r == OffloadPermissionManager.AndroidPermissionResult.DENIED) {
-                r = OffloadPermissionManager.requestSettingsGate(
-                    OffloadPermissionManager.SettingsGateRequest(
-                        id = "ACCESS_MEDIA_LOCATION",
-                        title = "Photo location needed",
-                        message = "Minis needs photo-location permission to read GPS EXIF for the `near` query. Open Settings to allow it.",
-                        settingsAction = android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                        requiresPackageUri = true,
-                        positiveLabel = "Open Settings",
-                    ),
-                    check = { hasMediaLocationPermission() },
-                )
-            }
-            r
-                }
-        } ?: OffloadPermissionManager.AndroidPermissionResult.TIMEOUT
-        return when (result) {
-            OffloadPermissionManager.AndroidPermissionResult.GRANTED -> null
-            OffloadPermissionManager.AndroidPermissionResult.DENIED -> NativeOffloadResult(
-                77,
-                OffloadOutput.formatBody(
-                    JSONObject().put("error", "permission_denied")
-                        .put("message", "The user declined the photo-location permission. Without it, GPS EXIF is redacted and `near` cannot match any photos.")
-                        .toString(),
-                    args,
-                ) + "\n",
-            )
-            OffloadPermissionManager.AndroidPermissionResult.TIMEOUT -> NativeOffloadResult(
-                77,
-                OffloadOutput.formatBody(
-                    JSONObject().put("error", "timeout")
-                        .put("message", "Timed out waiting for the user to grant the photo-location permission.")
-                        .toString(),
-                    args,
-                ) + "\n",
-            )
-        }
+        return OffloadInteractivePermission.ensureInteractive(
+            logTag = TAG,
+            permissions = listOf("android.permission.ACCESS_MEDIA_LOCATION"),
+            satisfied = { hasMediaLocationPermission() },
+            gate = OffloadPermissionManager.SettingsGateRequest(
+                id = "ACCESS_MEDIA_LOCATION",
+                title = "Photo location needed",
+                message = "Minis needs photo-location permission to read GPS EXIF for the `near` query. Open Settings to allow it.",
+                settingsAction = android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                requiresPackageUri = true,
+                positiveLabel = "Open Settings",
+            ),
+            pollGrantedLog = "Media location permission granted during post-DENY poll",
+            copy = OffloadInteractivePermission.DenialCopy(
+                deniedMessage = "The user declined the photo-location permission. Without it, GPS EXIF is redacted and `near` cannot match any photos.",
+                timeoutMessage = "Timed out waiting for the user to grant the photo-location permission.",
+            ),
+            args = args,
+        )
     }
 
     // ── albums (T64) ─────────────────────────────────────────────────────

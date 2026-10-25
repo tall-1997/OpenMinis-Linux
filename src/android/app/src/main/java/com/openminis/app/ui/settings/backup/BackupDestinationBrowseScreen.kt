@@ -21,7 +21,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -58,9 +58,9 @@ fun BackupDestinationBrowseScreen(
     vm: BackupViewModel,
     onBack: () -> Unit,
 ) {
-    val packages by vm.serverPackages.collectAsState()
-    val running by vm.isRunning.collectAsState()
-    val error by vm.errorText.collectAsState()
+    val packages by vm.serverPackages.collectAsStateWithLifecycle()
+    val running by vm.isRunning.collectAsStateWithLifecycle()
+    val error by vm.errorText.collectAsStateWithLifecycle()
     var pendingDelete by remember { mutableStateOf<RcloneChunkedUpload.RemotePackage?>(null) }
 
     LaunchedEffect(remote.name) { vm.clearError(); vm.listServerPackages(remote) }

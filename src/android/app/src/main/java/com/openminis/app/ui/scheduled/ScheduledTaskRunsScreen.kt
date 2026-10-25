@@ -28,9 +28,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import com.openminis.app.ui.components.MinisCenterTopBar
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -61,7 +60,7 @@ fun ScheduledTaskRunsScreen(
     val vm: ScheduledTasksViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
         factory = ScheduledTasksViewModel.factory(context),
     )
-    val tasks by vm.tasks.collectAsState()
+    val tasks by vm.tasks.collectAsStateWithLifecycle()
     val task = tasks.firstOrNull { it.id == taskId }
     val runs = task?.runHistory ?: emptyList()
 

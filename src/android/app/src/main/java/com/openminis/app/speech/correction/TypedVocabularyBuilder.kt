@@ -5,7 +5,6 @@ import android.util.Log
 import com.openminis.app.data.db.ChatDao
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 

@@ -11,13 +11,9 @@ import android.graphics.BitmapFactory
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.Build
-import android.os.Environment
 import android.os.ParcelFileDescriptor
-import android.print.PrintAttributes
-import android.print.PrintManager
 import android.webkit.MimeTypeMap
 import android.webkit.WebView
-import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -58,7 +54,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import com.openminis.app.ui.components.MinisCenterTopBar
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -82,8 +77,6 @@ import androidx.core.content.FileProvider
 import androidx.core.graphics.drawable.toBitmap
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.ui.components.rememberIosBounceOverscrollEffect
-import com.openminis.app.ui.markdown.MarkdownText
-import com.openminis.app.ui.chat.StreamingMarkdownText
 import com.openminis.app.ui.media.InlineAudioPlayer
 import com.openminis.app.ui.media.InlineVideoPlayer
 import kotlinx.coroutines.Dispatchers

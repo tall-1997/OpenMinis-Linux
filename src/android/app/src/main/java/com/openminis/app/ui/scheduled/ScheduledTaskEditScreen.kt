@@ -40,12 +40,11 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TimeInput
 import com.openminis.app.ui.components.MinisCenterTopBar
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -175,7 +174,7 @@ fun ScheduledTaskEditScreen(
         loaded = true
     }
 
-    val runNowState by vm.runNowState.collectAsState()
+    val runNowState by vm.runNowState.collectAsStateWithLifecycle()
 
     fun currentTask(): ScheduledTask = buildTask(
         id = taskId, label = label, prompt = prompt, hour = hour, minute = minute,
@@ -578,7 +577,7 @@ private fun EditFormBody(
         // picker's three callback shapes (group / group+entry / standalone
         // entry). The picker doesn't surface a "default model" option — we
         // model that as null binding via the row's onClear action above.
-        val cfg by providerRepo.config.collectAsState()
+        val cfg by providerRepo.config.collectAsStateWithLifecycle()
         val entryById: (String) -> com.openminis.app.data.model.ModelEntry? = { id ->
             cfg.modelEntries.firstOrNull { it.id == id }
         }

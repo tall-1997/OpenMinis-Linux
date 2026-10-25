@@ -1,11 +1,9 @@
 package com.openminis.app.ui.chat
 
 import android.util.Log
-import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMError
 import com.openminis.app.data.model.ModelEntry
 import com.openminis.app.data.model.hasImageInput
-import com.openminis.app.service.SessionActivityTracker
 import com.openminis.app.data.repository.MultiAgentSettings
 import com.openminis.app.provider.LLMProvider
 import com.openminis.app.provider.ProviderFactory
@@ -13,7 +11,6 @@ import com.openminis.app.provider.effectiveMaxThinkingLevel
 import com.openminis.app.data.model.ThinkingLevel
 import com.openminis.app.sandbox.ExecutionCoordinator
 import com.openminis.app.tools.AgentTools
-import com.openminis.app.tools.PlanDiscussionOrchestrator
 import com.openminis.app.tools.SubAgentLane
 import com.openminis.app.tools.SubAgentRunner
 import com.openminis.app.tools.SubAgentTokenBudget
@@ -88,147 +85,6 @@ private suspend fun publishSubAgentUi(trackerId: String, event: com.openminis.ap
     }
 }
 
-internal suspend fun ChatViewModel.runPlanDiscussion(provider: LLMProvider): String {
-        val assistantId = java.util.UUID.randomUUID().toString()
-        withContext(Dispatchers.Main) {
-            _messages.value = _messages.value + ChatMessage(
-                id = assistantId,
-                role = "assistant",
-                content = "",
-                isStreaming = true,
-                isAwaitingModelResponse = true,
-            )
-        }
-        val userText = _messages.value.lastOrNull { it.role == "user" && !it.isQueued }?.content.orEmpty()
-        val excerpt = _messages.value.takeLast(16).joinToString("\n") {
-            "${it.role}: ${it.content.take(500)}"
-        }
-        val config = providerRepository.config.value
-        val mainEntry = _activeEntryId.value?.let { id -> config.modelEntries.find { it.id == id } }
-        val mainName = mainEntry?.model?.displayName ?: currentModel?.displayName ?: "main"
-        val mainMax = (mainEntry?.model?.maxOutputTokens ?: currentModel?.maxOutputTokens ?: 4096).coerceIn(256, 8192)
-        val mainMember = PlanDiscussionOrchestrator.Member(
-            displayName = mainName,
-            stance = "facilitator",
-            provider = provider,
-            maxTokens = mainMax,
-            temperature = mainEntry?.overrides?.temperature,
-            thinkingLevel = mainEntry?.effectiveMaxThinkingLevel ?: ThinkingLevel.ULTRA,
-        )
-        val stances = listOf("architect", "skeptic", "implementer", "operator")
-        val pool = MultiAgentSettings.retainLive(
-            multiAgentSettings.selectedModelEntryIds.value,
-            config.modelEntries.map { it.id }.toSet(),
-            multiAgentSettings.maxConcurrent.value,
-        )
-        val members = mutableListOf<PlanDiscussionOrchestrator.Member>()
-        if (pool.isNotEmpty()) {
-            pool.forEachIndexed { i, id ->
-                val entry = config.modelEntries.find { it.id == id } ?: return@forEachIndexed
-                val p = providerForModelEntry(entry) ?: return@forEachIndexed
-                members += PlanDiscussionOrchestrator.Member(
-                    displayName = entry.model.displayName,
-                    stance = stances[i % stances.size],
-                    provider = p,
-                    maxTokens = (entry.model.maxOutputTokens ?: 4096).coerceIn(256, 8192),
-                    temperature = entry.overrides.temperature,
-                    thinkingLevel = parseThinkingLevel(
-                        multiAgentSettings.slotThinkingLevel(i),
-                        entry.effectiveMaxThinkingLevel,
-                    ),
-                )
-            }
-        }
-        if (members.isEmpty()) {
-            members += mainMember.copy(stance = "architect")
-            members += mainMember.copy(displayName = "$mainName · critic", stance = "skeptic")
-            members += mainMember.copy(displayName = "$mainName · implementer", stance = "implementer")
-        }
-        val tools = AgentTools.makeAgentTools(
-            supportsImageInput = currentModel?.hasImageInput == true,
-            visionGroupConfigured = com.openminis.app.tools.VisionGroupResolver.isConfigured(
-                providerRepository, context,
-            ),
-            memoryEnabled = false,
-            subAgentEnabled = false,
-        )
-        val result = try {
-            PlanDiscussionOrchestrator.run(
-                userText = userText,
-                conversationExcerpt = excerpt,
-                main = mainMember,
-                members = members,
-                tools = tools,
-                executeTool = { name, json ->
-                    // [T-subagent-browser-readonly-actions] Discussion seats
-                    // are PLAN-filtered, so browser_use reaches them — but the
-                    // Runner loop (with the read-only browser gate) is not in
-                    // this path. Deny mutating actions at the seat boundary.
-                    val browserDenial = if (name == "browser_use") {
-                        com.openminis.app.tools.SubAgentKind.readOnlyBrowserDenial(
-                            runCatching { org.json.JSONObject(json).optString("action") }.getOrDefault(""),
-                        )
-                    } else {
-                        null
-                    }
-                    if (browserDenial != null) {
-                        com.openminis.app.tools.ToolExecutionResult(browserDenial, false)
-                    } else {
-                        executeTool(name, json, "", mutableListOf(), assistantId, "")
-                    }
-                },
-                onProgress = { msg ->
-                    withContext(Dispatchers.Main) {
-                        val overlay = msg.lineSequence()
-                            .firstOrNull { it.startsWith("**状态：**") }
-                            ?.removePrefix("**状态：**")
-                            ?.trim()
-                            ?: "计划讨论"
-                        SessionActivityTracker.updateToolStatus(overlay, "plan_discussion", true, overlay)
-                        _messages.value = _messages.value.map {
-                            if (it.id == assistantId) {
-                                it.copy(content = msg, isAwaitingModelResponse = true, isStreaming = true)
-                            } else it
-                        }
-                    }
-                },
-            )
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            val err = "计划讨论失败: ${e.message ?: e.javaClass.simpleName}"
-            withContext(Dispatchers.Main) {
-                _messages.value = _messages.value.map {
-                    if (it.id == assistantId) {
-                        it.copy(content = err, isStreaming = false, isAwaitingModelResponse = false)
-                    } else it
-                }
-            }
-            return ""
-        }
-        val persistedId = persistAssistantTurnForRun(
-            checkNotNull(com.openminis.app.service.ActiveRunContext.current()) {
-                "Plan discussion has no persistence owner"
-            },
-            listOf(AgentContentPart.Text(result.markdown)),
-            usage = null,
-            assistantText = result.markdown,
-            uiMessageId = assistantId,
-        ) ?: throw CancellationException("Plan discussion was stopped before persistence")
-        withContext(Dispatchers.Main) {
-            SessionActivityTracker.updateToolStatus("", null, false)
-            _messages.value = _messages.value.map {
-                if (it.id == assistantId) it.copy(
-                    id = persistedId,
-                    content = result.markdown,
-                    isStreaming = false,
-                    isAwaitingModelResponse = false,
-                ) else it
-            }
-        }
-        return result.contract.ifBlank { result.markdown }
-    }
-
 internal suspend fun ChatViewModel.publishRunSubagentLog(
         toolId: String,
         assistantId: String,
@@ -260,13 +116,25 @@ internal fun currentSubAgentLine(spawn: ChatSubAgentSpawn, index: Int, total: In
     }
 
 /**
+ * GrepSource reads the session workspace directly and needs the live session
+ * id, so every seat (sub-agent lanes and the supervisor's worker alike)
+ * routes it here ahead of the generic dispatcher; null means "not this tool".
+ */
+internal fun ChatViewModel.grepSourceToolResult(name: String, argsJson: String): ToolExecutionResult? =
+    if (name == com.openminis.app.tools.GrepSourceTool.NAME) {
+        com.openminis.app.tools.GrepSourceTool.execute(argsJson, activeSessionId, context)
+    } else {
+        null
+    }
+
+/**
  * One card per sub-agent. A batch shares the parent tool id, so each member
  * gets `$toolId#sub-$index`. A single spawn keeps the parent card and must
  * not publish every live sibling's transcript into it.
  */
 internal fun ChatViewModel.subAgentChipsEnabled(): Boolean =
     context.getSharedPreferences(
-        com.openminis.app.ui.settings.PREF_APPEARANCE,
+        com.openminis.app.config.PREF_APPEARANCE,
         android.content.Context.MODE_PRIVATE,
     ).getBoolean(com.openminis.app.ui.settings.KEY_SHOW_SUBAGENT_BAR, true)
 
@@ -1005,10 +873,9 @@ private suspend fun ChatViewModel.runOneSubAgentInner(
                             type != null && type.toolNames.isNotEmpty() && name !in type.toolNames
                         }) {
                             ToolExecutionResult("Error: type $role cannot use $name.", false)
-                        } else if (name == com.openminis.app.tools.GrepSourceTool.NAME) {
-                            com.openminis.app.tools.GrepSourceTool.execute(json, activeSessionId, context)
                         } else {
-                            executeTool(name, json, "", mutableListOf(), "", "")
+                            grepSourceToolResult(name, json)
+                                ?: executeTool(name, json, "", mutableListOf(), "", "")
                         }
                     },
                     onStep = { turn, toolName -> onStep(turn, toolName) },

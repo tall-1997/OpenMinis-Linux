@@ -229,4 +229,51 @@ class SupervisorSessionRunnerTest {
         )
         assertTrue(sup.calls[0].contains("上次中断于第 7 轮"))
     }
+
+    @Test
+    fun envelopeRejectedThreeTimes_failsWithoutWorkerTurn() = runTest {
+        var workerCalls = 0
+        val terminals = mutableListOf<String>()
+        val outcome = SupervisorSessionRunner.run(
+            objective = "obj",
+            contextDigest = "",
+            maxWorkerTurns = 10,
+            supervisorSystem = system,
+            supervisor = { _, _, _ -> "no envelope here" },
+            worker = { _, _, _ ->
+                workerCalls++
+                "report"
+            },
+            inbox = SupervisorChat.SupervisorInbox(),
+            onTerminal = { state, _ -> terminals += state },
+        )
+        assertEquals(SupervisorSessionRunner.Outcome.FAILED::class, outcome::class)
+        assertTrue(
+            (outcome as SupervisorSessionRunner.Outcome.FAILED).reason.contains("rejected"),
+        )
+        assertEquals(listOf(SupervisorRunStore.STATE_FAILED), terminals)
+        assertEquals(0, workerCalls)
+    }
+
+    @Test
+    fun supervisorCallBudget_failsSessionWithSingleTerminal() = runTest {
+        val terminals = mutableListOf<String>()
+        val envelope = envelope("do a", "tests pass")
+        val outcome = SupervisorSessionRunner.run(
+            objective = "obj",
+            contextDigest = "",
+            maxWorkerTurns = 10_000,
+            supervisorSystem = system,
+            supervisor = { _, _, _ -> envelope },
+            worker = { _, _, _ -> "report" },
+            inbox = SupervisorChat.SupervisorInbox(),
+            onTerminal = { state, _ -> terminals += state },
+        )
+        assertEquals(SupervisorSessionRunner.Outcome.FAILED::class, outcome::class)
+        assertTrue(
+            (outcome as SupervisorSessionRunner.Outcome.FAILED).reason.contains("budget"),
+        )
+        // The budget path settles the session through terminal() exactly once.
+        assertEquals(listOf(SupervisorRunStore.STATE_FAILED), terminals)
+    }
 }

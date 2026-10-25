@@ -5,8 +5,6 @@ import java.io.ByteArrayOutputStream
 import java.io.DataInputStream
 import java.io.File
 import java.io.FileInputStream
-import java.io.FileOutputStream
-import java.io.RandomAccessFile
 import java.security.MessageDigest
 import java.util.zip.Deflater
 import java.util.zip.DeflaterOutputStream

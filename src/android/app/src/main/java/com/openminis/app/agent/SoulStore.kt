@@ -2,7 +2,9 @@ package com.openminis.app.agent
 
 import android.content.Context
 import com.openminis.app.logging.AppLogger
+import com.openminis.app.tools.AtomicFileWrite
 import java.io.File
+import java.io.IOException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -412,11 +414,12 @@ lang: "auto"
         if (current == asset) return            // already up to date
         if (current != OLD_DEFAULT_STARTER && current != PREVIOUS_DEFAULT_SOUL) return // user-customized: respect it
         try {
-            val tmp = File(file.parentFile, "${file.name}.upgrade")
-            tmp.writeText(asset)
-            if (!tmp.renameTo(file)) {
-                file.writeText(asset)
-                tmp.delete()
+            // Unified atomic write: AtomicFileWrite keeps the tmp+rename dance
+            // (same `.upgrade` sibling name) and its copy-over fallback covers
+            // the old rename-failed direct-writeText path. A null result (both
+            // failed) throws so the catch below logs it exactly as before.
+            if (AtomicFileWrite.write(file, asset, temp = File(file.parentFile, "${file.name}.upgrade")) == null) {
+                throw IOException("stale-default SOUL.md write failed")
             }
             AppLogger.info(TAG, "upgraded stale default SOUL.md to shipped persona (${asset.length} bytes)")
             refreshCache(context)
@@ -491,16 +494,15 @@ lang: "auto"
     /** Atomic write through a `.tmp` sibling, then rename. */
     fun save(context: Context, file: SoulFile) {
         val target = fileLocation(context)
-        target.parentFile?.mkdirs()
         val text = SoulMDParser.serialize(file)
-        val tmp = File(target.parentFile, "${target.name}.tmp")
-        tmp.writeText(text)
-        if (!tmp.renameTo(target)) {
-            // Fallback: copy + delete tmp on filesystems that reject
-            // cross-inode rename (shouldn't apply inside filesDir, but
-            // defensive — keeps us from leaving a stale .tmp behind).
-            target.writeText(text)
-            tmp.delete()
+        // Unified atomic write: AtomicFileWrite adds the per-path lock,
+        // short-write detection and post-write verify on top of the same
+        // tmp+rename dance. Its copy-over fallback covers the old
+        // rename-failed direct-writeText path; null (both failed, previous
+        // bytes kept) throws like the old tmp.writeText did, so the cached
+        // metadata below is still only updated on a landed write.
+        if (AtomicFileWrite.write(target, text, temp = File(target.parentFile, "${target.name}.tmp")) == null) {
+            throw IOException("SOUL.md save failed for ${target.name}")
         }
         _cachedMetadata.value = file.metadata
     }

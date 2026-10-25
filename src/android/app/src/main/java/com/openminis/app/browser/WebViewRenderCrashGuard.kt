@@ -3,7 +3,6 @@ package com.openminis.app.browser
 import android.util.Log
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebView
-import android.webkit.WebViewClient
 
 /**
  * 统一的渲染进程死亡处理。

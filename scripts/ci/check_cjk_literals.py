@@ -1,10 +1,16 @@
 #!/usr/bin/env python3
-"""CJK hardcoded-string ratchet for app UI sources.
+"""CJK hardcoded-string ratchet for app sources.
 
 The l10n gate (`check_new_untranslated.py`) only covers keys that were added
-to `strings.xml`; it cannot see a Chinese literal typed directly into a
-composable. This gate counts Chinese characters inside Kotlin string literals
-under `com/openminis/app/ui/` and freezes the current debt in a baseline.
+to `strings.xml`; it cannot see a Chinese literal typed directly into Kotlin.
+This gate counts Chinese characters inside Kotlin string literals under
+`src/android/app/src/main/java` (the whole app module — UI and non-UI alike)
+and freezes the current debt in a baseline.
+
+Scope note: this used to watch only `com/openminis/app/ui/`, which let
+non-UI layers hoard Chinese copy (e.g. tools/ prompts whose own KDoc said
+the file sits outside the CJK gate). The gate now covers every app source,
+so that escape hatch is closed.
 
 Rules:
   * a file absent from the baseline may not contain CJK literals;
@@ -14,7 +20,8 @@ Rules:
 
 Comments and char literals are ignored; line comments, block comments and
 triple-quoted strings are handled so a Chinese explanation in KDoc does not
-trip the gate.
+trip the gate. Files that are not valid UTF-8 are read with replacement
+characters (matching the architecture policy) instead of crashing the scan.
 """
 from __future__ import annotations
 
@@ -25,7 +32,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-UI_ROOT = ROOT / "src" / "android" / "app" / "src" / "main" / "java" / "com" / "openminis" / "app" / "ui"
+SCAN_ROOT = ROOT / "src" / "android" / "app" / "src" / "main" / "java"
 BASELINE = Path(__file__).with_name("cjk-baseline.json")
 CJK = re.compile(r"[\u4e00-\u9fff]")
 
@@ -48,7 +55,7 @@ def _string_literal(text: str, start: int, quote: str) -> tuple[str, int]:
 
 
 def count_cjk_literals(path: Path) -> int:
-    text = path.read_text(encoding="utf-8")
+    text = path.read_text(encoding="utf-8", errors="replace")
     i = 0
     hits = 0
     n = len(text)
@@ -77,9 +84,9 @@ def count_cjk_literals(path: Path) -> int:
 
 def scan() -> dict[str, int]:
     counts: dict[str, int] = {}
-    if not UI_ROOT.is_dir():
+    if not SCAN_ROOT.is_dir():
         return counts
-    for path in sorted(UI_ROOT.rglob("*.kt")):
+    for path in sorted(SCAN_ROOT.rglob("*.kt")):
         hits = count_cjk_literals(path)
         if hits:
             counts[path.relative_to(ROOT).as_posix()] = hits
@@ -93,8 +100,15 @@ def main() -> int:
 
     actual = scan()
     if args.update_baseline:
+        data: dict = {}
+        if BASELINE.exists():
+            try:
+                data = json.loads(BASELINE.read_text(encoding="utf-8"))
+            except json.JSONDecodeError:
+                data = {}
+        data["files"] = actual  # metadata keys (e.g. "comment") are preserved
         BASELINE.write_text(
-            json.dumps({"files": actual}, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
         print(f"cjk ratchet baseline updated: {len(actual)} files, {sum(actual.values())} literals")

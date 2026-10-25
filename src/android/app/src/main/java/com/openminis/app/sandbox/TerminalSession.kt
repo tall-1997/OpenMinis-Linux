@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import com.openminis.app.di.AppGraph
 import com.termux.terminal.TerminalSessionClient
 import com.termux.view.TerminalView
 import kotlinx.coroutines.CoroutineScope
@@ -21,7 +22,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.lang.ref.WeakReference
-import java.nio.charset.StandardCharsets
 import java.util.concurrent.CopyOnWriteArrayList
 
 /**
@@ -477,7 +477,7 @@ class TerminalSession(private val context: Context) {
         envMap["LC_ALL"] = "C.UTF-8"
         envMap["TZ"] = PRootKernel.guestTz()
         for ((k, v) in PRootKernel.customEnvironment) envMap[k] = v
-        ExecutionCoordinator.envVarRepository?.allAsDict()?.forEach { (k, v) -> envMap[k] = v }
+        AppGraph.executionEnvVarRepositoryOrNull()?.allAsDict()?.forEach { (k, v) -> envMap[k] = v }
         return envMap.map { (k, v) -> "$k=$v" }
     }
 

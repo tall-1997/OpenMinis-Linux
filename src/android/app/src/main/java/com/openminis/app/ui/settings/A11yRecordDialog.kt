@@ -8,7 +8,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -28,8 +28,8 @@ fun A11yRecordDialog(
     skillRepository: SkillRepository,
     onDismiss: () -> Unit,
 ) {
-    val recording by A11yScriptRecorder.recording.collectAsState()
-    val steps by A11yScriptRecorder.steps.collectAsState()
+    val recording by A11yScriptRecorder.recording.collectAsStateWithLifecycle()
+    val steps by A11yScriptRecorder.steps.collectAsStateWithLifecycle()
     var name by remember { mutableStateOf("recorded-scene") }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()

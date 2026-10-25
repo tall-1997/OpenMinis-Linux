@@ -6,7 +6,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -32,8 +32,8 @@ fun SuPermissionScreen(
     onBack: () -> Unit,
     onOpenShizuku: () -> Unit = {},
 ) {
-    val suSnap by HostSuManager.snapshot.collectAsState()
-    val shizukuSnap by ShizukuManager.snapshot.collectAsState()
+    val suSnap by HostSuManager.snapshot.collectAsStateWithLifecycle()
+    val shizukuSnap by ShizukuManager.snapshot.collectAsStateWithLifecycle()
     var probing by remember { mutableStateOf(false) }
     var probeText by remember { mutableStateOf<String?>(null) }
     var probeOk by remember { mutableStateOf<Boolean?>(null) }

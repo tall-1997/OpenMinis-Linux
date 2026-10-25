@@ -2,6 +2,7 @@ package com.openminis.app.backup
 
 import android.content.Context
 import com.openminis.app.logging.AppLogger
+import com.openminis.app.tools.AtomicFileWrite
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
@@ -143,14 +144,18 @@ class BackupHistory private constructor(private val context: Context) {
         cache = list
         // 先写临时文件再改名。直接覆盖时进程在写到一半被杀，会留下半截 JSON，
         // 下次加载整份历史报废。rename 在同一目录内是原子的，失败时原文件不动。
+        // 统一走 AtomicFileWrite：同一 tmp+rename 流程，外加按路径锁、短写检测
+        // 与写后回读校验；其 copy-over 兜底覆盖了 rename 失败的场景（原实现直接
+        // 报错放弃，旧字节保留——新实现多一次成功落盘的机会，仍失败时同样报错）。
         runCatching {
             val target = storeFile
-            target.parentFile?.mkdirs()
-            val tmp = java.io.File(target.parentFile, "${target.name}.tmp")
-            tmp.writeText(JSON.encodeToString(RECORD_LIST, list))
-            if (!tmp.renameTo(target)) {
-                tmp.delete()
-                error("rename ${tmp.name} -> ${target.name} failed")
+            if (AtomicFileWrite.write(
+                    target,
+                    JSON.encodeToString(RECORD_LIST, list),
+                    temp = java.io.File(target.parentFile, "${target.name}.tmp"),
+                ) == null
+            ) {
+                error("history write failed for ${target.name}")
             }
         }.onFailure { AppLogger.error(TAG, "[Backup] history write failed: ${it.message}") }
     }

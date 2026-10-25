@@ -38,7 +38,7 @@ internal object HeadlessChatRunner {
     @Synchronized
     private fun viewModel(context: Context, sessionId: String): ChatSessionPort {
         sessions[sessionId]?.let { return it }
-        app(context) // ensure MinisApp is up (ChatRuntime.binder set in onCreate)
+        app(context) // ensure MinisApp is up (AppGraph.chatBinder installed in onCreate)
         val port = ChatRuntime.bind(sessionId)
         sessions[sessionId] = port
         return port
