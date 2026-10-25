@@ -630,5 +630,22 @@
                 android:resource="@xml/minis_accessibility_service" />
         </service>
 
+        <!-- [T-android-documents-provider] Exposes filesDir/minis-global/
+             {memory,skills,shared} to the system Files app (iOS
+             FileProviderExtension parity, spec_FileMount §1): memory/skills
+             are read-only, shared/ is writable, the root itself is immutable.
+             MANAGE_DOCUMENTS gates direct access to the system DocumentsUI;
+             SAF grantUriPermissions covers the picker flow. -->
+        <provider
+            android:name=".documentsprovider.MinisDocumentsProvider"
+            android:authorities="com.openminis.minis.documents"
+            android:exported="true"
+            android:grantUriPermissions="true"
+            android:permission="android.permission.MANAGE_DOCUMENTS">
+            <intent-filter>
+                <action android:name="android.content.action.DOCUMENTS_PROVIDER" />
+            </intent-filter>
+        </provider>
+
     </application>
 </manifest>
