@@ -1966,4 +1966,5 @@
     <string name="settings_supervisor_max_turns">Ture worker max</string>
     <string name="settings_supervisor_max_turns_subtitle">Închidere forțată după %1$d ture de worker</string>
     <string name="settings_supervisor_max_turns_footer">Supervizorul instruiește, workerul execută, supervizorul verifică. Turele workerului sunt închise forțat la limită pentru a încadra sesiunile care scapă de sub control.</string>
+    <string name="present_card_shared_hint">Disponibil și în aplicația Fișiere a sistemului, sub Minis Ultra › shared.</string>
 </resources>

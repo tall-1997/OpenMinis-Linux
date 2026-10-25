@@ -195,6 +195,12 @@ internal suspend fun ChatViewModel.executeTool(
             ToolExecutionResult(out, true, toolTitle = "translate_text")
         }
         CronJobTool.NAME -> CronJobTool.execute(argsJson, context)
+        com.openminis.app.tools.JobTools.NAME ->
+            com.openminis.app.tools.JobTools.execute(argsJson, activeSessionId, context)
+        com.openminis.app.tools.TerminalTools.NAME ->
+            com.openminis.app.tools.TerminalTools.execute(argsJson, activeSessionId, context)
+        com.openminis.app.tools.PresentTool.NAME ->
+            com.openminis.app.tools.PresentTool.execute(argsJson, activeSessionId, context)
         SubAgentKind.SPAWN_AGENT, SubAgentKind.RUN_SUBAGENT ->
             executeRunSubAgent(argsJson, toolId, toolBlocks, assistantId, currentText)
         com.openminis.app.tools.WebSearchTool.NAME,

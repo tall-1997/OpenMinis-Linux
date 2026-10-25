@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "mimosa-hook-status/v1",
+  "recordedAt": "2026-10-25T06:37:22.677Z",
+  "sessionId": "session_89b88d80884848266d9ca3f5861cd270",
+  "event": "PostToolUse",
+  "toolName": "Edit",
+  "file": "app/src/main/java/com/openminis/app/ui/navigation/ChatSplitScaffold.kt",
+  "outcome": "clear",
+  "coverage": "complete",
+  "findingCount": 0,
+  "durationMs": 21,
+  "hostState": "hook_complete",
+  "reportHint": ".mimosa/reports/"
+}

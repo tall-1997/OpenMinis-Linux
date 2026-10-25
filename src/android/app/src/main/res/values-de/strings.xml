@@ -1964,4 +1964,5 @@
     <string name="settings_supervisor_max_turns">Max. Worker-Runden</string>
     <string name="settings_supervisor_max_turns_subtitle">Zwangsbeenden nach %1$d Worker-Runden</string>
     <string name="settings_supervisor_max_turns_footer">Der Supervisor weist an, der Worker führt aus, der Supervisor prüft. Worker-Runden werden am Limit zwangsbeendet, um ausufernde Sitzungen zu begrenzen.</string>
+    <string name="present_card_shared_hint">Auch in der Dateien-App des Systems unter Minis Ultra › shared verfügbar.</string>
 </resources>

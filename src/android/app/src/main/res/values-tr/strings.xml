@@ -1962,4 +1962,5 @@
     <string name="settings_supervisor_max_turns">Maks. worker turu</string>
     <string name="settings_supervisor_max_turns_subtitle">%1$d worker turundan sonra zorla kapat</string>
     <string name="settings_supervisor_max_turns_footer">Supervizör talimat verir, worker uygular, supervizör gözden geçirir. Kontrolsüz oturumları sınırlamak için worker turları limitte zorla kapatılır.</string>
+    <string name="present_card_shared_hint">Sistem Dosyaları uygulamasında Minis Ultra › shared altında da kullanılabilir.</string>
 </resources>

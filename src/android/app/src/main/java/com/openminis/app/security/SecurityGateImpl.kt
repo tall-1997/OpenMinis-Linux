@@ -148,6 +148,12 @@ class SecurityGateImpl : SecurityGate {
             "agent_plan", "cronjob", "invoke_skill", "skill_manage", "ask_reasoning",
             "memory_write", "memory_get", "ask_user_question",
             -> GateCommand(name, toolArgs, Capability.SYSTEM, Reversibility.REVERSIBLE, "会话协调工具")
+            // [T-android-jobs-registry] start/kill = sandbox execution; list/output = reads.
+            "background_job" -> classifyJob(name, toolArgs)
+            // [T-android-agent-terminal] agent PTYs share the PRoot trust domain.
+            "agent_terminal" -> classifyTerminal(name, toolArgs)
+            // [T-android-present-tool] copies a deliverable into app-owned shared/.
+            "present_file" -> GateCommand(name, toolArgs, Capability.FS, Reversibility.REVERSIBLE, "Copies a deliverable into the app-owned shared folder")
             else -> GateCommand(name, toolArgs, Capability.UNKNOWN, Reversibility.IRREVERSIBLE, "未知工具类型，默认不可逆")
         }
     }
@@ -306,7 +312,11 @@ class SecurityGateImpl : SecurityGate {
             if (cmd.toolName in WRITE_TOOLS || cmd.toolName in SHELL_TOOLS ||
                 cmd.toolName == "mcp" ||
                 (cmd.toolName == "ssh_exec" && !isSshReadOnlyAction(cmd)) ||
-                (cmd.toolName == "browser_use" && !isBrowserReadOnlyAction(cmd))
+                (cmd.toolName == "browser_use" && !isBrowserReadOnlyAction(cmd)) ||
+                // [T-android-jobs-registry] job start/kill and [T-android-agent-terminal]
+                // PTY open/send/signal are execution; their FS reads stay readable.
+                (cmd.toolName == "background_job" && cmd.capability != Capability.FS) ||
+                (cmd.toolName == "agent_terminal" && cmd.capability != Capability.FS)
             ) {
                 return Decision.Denied("只读/计划模式禁止写与执行")
             }
@@ -450,6 +460,10 @@ class SecurityGateImpl : SecurityGate {
         if (cmd.toolName in READ_ONLY_TOOLS && !(cmd.toolName == "browser_use" && cmd.reversibility == Reversibility.IRREVERSIBLE)) return true
         if (cmd.toolName in COORDINATOR_TOOLS) return true
         if (cmd.toolName in SHELL_TOOLS) return isSafeReadOnlyCommand(command)
+        // [T-android-jobs-registry] job list/output and [T-android-agent-terminal]
+        // read/list are pure bookkeeping reads; the mutating actions ask normally.
+        if (cmd.toolName == "background_job" && cmd.capability == Capability.FS) return true
+        if (cmd.toolName == "agent_terminal" && cmd.capability == Capability.FS) return true
         return false
     }
 
@@ -696,6 +710,31 @@ class SecurityGateImpl : SecurityGate {
         sshAction(cmd.toolArgs) in SSH_READ_ACTIONS
 
     private fun sshAction(toolArgs: String): String =
+        try { JSONObject(toolArgs).optString("action", "").lowercase() } catch (_: Exception) { "" }
+
+    // [T-android-jobs-registry] start/kill classify as SYSTEM (execution);
+    // everything else on the job tool is bookkeeping read.
+    private fun classifyJob(name: String, toolArgs: String): GateCommand {
+        val action = jobAction(toolArgs)
+        return if (action == "start" || action == "kill") {
+            GateCommand(name, toolArgs, Capability.SYSTEM, Reversibility.REVERSIBLE, "Sandboxed background job start/kill")
+        } else {
+            GateCommand(name, toolArgs, Capability.FS, Reversibility.REVERSIBLE, "Read-only background job status/output")
+        }
+    }
+
+    // [T-android-agent-terminal] open/send/signal drive a live PTY (TERMINAL);
+    // read/list only observe output (FS, read-only).
+    private fun classifyTerminal(name: String, toolArgs: String): GateCommand {
+        val action = jobAction(toolArgs)
+        return if (action == "read" || action == "list") {
+            GateCommand(name, toolArgs, Capability.FS, Reversibility.REVERSIBLE, "Read-only terminal output")
+        } else {
+            GateCommand(name, toolArgs, Capability.TERMINAL, Reversibility.REVERSIBLE, "Interactive sandbox terminal (PTY)")
+        }
+    }
+
+    private fun jobAction(toolArgs: String): String =
         try { JSONObject(toolArgs).optString("action", "").lowercase() } catch (_: Exception) { "" }
 
     private fun isBrowserReadOnlyAction(cmd: GateCommand): Boolean {

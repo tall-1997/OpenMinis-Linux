@@ -2053,4 +2053,5 @@
     <string name="settings_supervisor_max_turns">Worker 最大輪數</string>
     <string name="settings_supervisor_max_turns_subtitle">Worker 輪數達 %1$d 後強制收束</string>
     <string name="settings_supervisor_max_turns_footer">Supervisor 下達指令，Worker 執行，Supervisor 驗收。Worker 輪數在達到上限時強制收束，防止工作階段失控。</string>
+    <string name="present_card_shared_hint">也可在系統「檔案」應用的 Minis Ultra › shared 中找到。</string>
 </resources>

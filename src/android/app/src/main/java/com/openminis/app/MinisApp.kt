@@ -631,6 +631,7 @@ class MinisApp : Application(), ImageLoaderFactory {
         // Initialize sandbox singletons (does not trigger extraction)
         RootfsManager.getInstance(this)
         ExecutionCoordinator.init(this)
+        com.openminis.app.sandbox.jobs.JobSpawner.install(this)
         HostEventHooks.init(this)
         AppGraph.installExecutionEnvVarRepository(envVarRepository)
 
@@ -810,8 +811,7 @@ class MinisApp : Application(), ImageLoaderFactory {
                 if (!loaded) return@collect
                 val enabled = cfg.instances.associate { it.id to it.isEnabled }
                 val live = cfg.modelEntries
-                    .filter { !it.isHidden && enabled[it.providerInstanceId] == true }
-                    .map { it.id }
+                    .filter { !it.isHidden && enabled[it.providerInstanceId] == true }.map { it.id }
                     .toSet()
                 multiAgentSettingsRepository.retainLiveEntries(live)
             }

@@ -1961,4 +1961,5 @@
     <string name="settings_supervisor_max_turns">최대 워커 턴 수</string>
     <string name="settings_supervisor_max_turns_subtitle">워커 턴 %1$d회 후 강제 종료</string>
     <string name="settings_supervisor_max_turns_footer">슈퍼바이저가 지시하고 워커가 실행하며 슈퍼바이저가 검토합니다. 세션 폭주를 막기 위해 워커 턴은 한도에서 강제 종료됩니다.</string>
+    <string name="present_card_shared_hint">시스템 파일 앱의 Minis Ultra › shared에서도 열 수 있습니다.</string>
 </resources>

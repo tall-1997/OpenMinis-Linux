@@ -1970,4 +1970,5 @@
     <string name="settings_supervisor_max_turns">Maks. tury workera</string>
     <string name="settings_supervisor_max_turns_subtitle">Wymuszone zamknięcie po %1$d turach workera</string>
     <string name="settings_supervisor_max_turns_footer">Supervisor wydaje polecenia, worker je wykonuje, supervisor je weryfikuje. Tury workera są wymuszenie zamykane na limicie, by ograniczyć sesje wymykające się spod kontroli.</string>
+    <string name="present_card_shared_hint">Dostępne także w systemowej aplikacji Pliki, w folderze Minis Ultra › shared.</string>
 </resources>

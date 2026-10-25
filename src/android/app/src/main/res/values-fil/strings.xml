@@ -1962,4 +1962,5 @@
     <string name="settings_supervisor_max_turns">Max na turnos ng worker</string>
     <string name="settings_supervisor_max_turns_subtitle">Pilit na isara pagkatapos ng %1$d turnos ng worker</string>
     <string name="settings_supervisor_max_turns_footer">Nagtuturo ang supervisor, nagtatrabaho ang worker, tinitingnan ng supervisor. Pilit na sinasara ang turnos ng worker sa limit upang mapigilan ang napakalalaking sesyon.</string>
+    <string name="present_card_shared_hint">Available din sa Files app ng system sa ilalim ng Minis Ultra › shared.</string>
 </resources>

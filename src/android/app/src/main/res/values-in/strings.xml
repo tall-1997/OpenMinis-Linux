@@ -1967,4 +1967,5 @@
     <string name="settings_supervisor_max_turns">Putaran worker maks</string>
     <string name="settings_supervisor_max_turns_subtitle">Tutup paksa setelah %1$d putaran worker</string>
     <string name="settings_supervisor_max_turns_footer">Supervisor memberi instruksi, worker mengeksekusi, supervisor meninjau. Putaran worker ditutup paksa pada batas untuk membatasi sesi yang tak terkendali.</string>
+    <string name="present_card_shared_hint">Juga tersedia di aplikasi File sistem di bawah Minis Ultra › shared.</string>
 </resources>

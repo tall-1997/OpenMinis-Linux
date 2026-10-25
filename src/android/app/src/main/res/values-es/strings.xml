@@ -1964,4 +1964,5 @@
     <string name="settings_supervisor_max_turns">Turnos máximos del worker</string>
     <string name="settings_supervisor_max_turns_subtitle">Cierre forzado tras %1$d turnos del worker</string>
     <string name="settings_supervisor_max_turns_footer">El supervisor instruye, el worker ejecuta, el supervisor revisa. Los turnos del worker se cierran a la fuerza en el límite para acotar sesiones descontroladas.</string>
+    <string name="present_card_shared_hint">También disponible en la app Archivos del sistema, en Minis Ultra › shared.</string>
 </resources>
