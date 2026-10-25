@@ -1,5 +1,6 @@
 package com.openminis.app.ui.chat
 
+import com.openminis.app.R
 import com.openminis.app.goal.GoalSheetSignal
 import com.openminis.app.logging.AppLogger
 
@@ -54,6 +55,19 @@ fun ChatViewModel.executeSlashCommand(cmd: SlashCommand, currentInput: String = 
         "thinking" -> toggleThinking()
         "goal" -> GoalSheetSignal.open()
         "clear" -> _clearChatConfirmRequested.value = true
+        // [T-supervisor-slash-entry] Toggle the armed state; the hint lands
+        // as a system-info row so the composer text is untouched (the
+        // objective is whatever the user types next, not "/supervisor ...").
+        "supervisor" -> {
+            toggleSupervisorArmed()
+            appendSystemInfo(
+                text = context.getString(
+                    if (_supervisorArmed.value) R.string.supervisor_armed_hint
+                    else R.string.supervisor_disarmed_hint
+                ),
+                iconKind = "supervisor",
+            )
+        }
         else -> AppLogger.info(ChatViewModel.TAG, "[Slash] unrecognized id=${cmd.id} — no dispatch")
     }
     // [T-android-slash-menu-align-ios-prepend] Action command: restore the

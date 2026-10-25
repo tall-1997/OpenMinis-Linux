@@ -1941,4 +1941,25 @@
     <string name="env_var_disabled_badge">Dilumpuhkan</string>
     <string name="env_var_enabled">Didayakan</string>
     <string name="env_var_enabled_hint">Apabila dimatikan, pemboleh ubah tidak disuntik ke dalam sandbox, pelayan MCP atau kelayakan penyedia. Nilai yang disimpan kekal.</string>
+    <string name="supervisor_phase_instructing">Merancang</string>
+    <string name="supervisor_phase_executing">Melaksanakan</string>
+    <string name="supervisor_phase_reviewing">Menyemak</string>
+    <string name="supervisor_phase_done">Tugas selesai</string>
+    <string name="supervisor_phase_halted">Dihentikan</string>
+    <string name="supervisor_phase_interrupted">Terganggu</string>
+    <string name="supervisor_phase_failed">Gagal</string>
+    <string name="supervisor_recovery_resume">Resume</string>
+    <string name="supervisor_recovery_discard">Discard</string>
+    <string name="supervisor_sheet_worker_turns">Pusingan worker: %1$d</string>
+    <string name="supervisor_armed_hint">Mod penyelia sedia — mesej seterusnya menjadi objektif tugasan</string>
+    <string name="supervisor_disarmed_hint">Mod penyelia dimatikan</string>
+    <string name="supervisor_attachments_unsupported">Mod penyelia mengabaikan lampiran — objektif hanya teks</string>
+    <string name="supervisor_session_ended">Sesi penyelia tamat</string>
+    <string name="supervisor_start_failed">Gagal memulakan sesi penyelia: %1$s</string>
+    <string name="settings_supervisor_section">Sesi penyelia</string>
+    <string name="settings_supervisor_worker_model">Model pekerja</string>
+    <string name="settings_supervisor_worker_model_follow">Ikut model sesi</string>
+    <string name="settings_supervisor_max_turns">Giliran pekerja maks</string>
+    <string name="settings_supervisor_max_turns_subtitle">Tutup paksa selepas %1$d giliran pekerja</string>
+    <string name="settings_supervisor_max_turns_footer">Penyelia memberi arahan, pekerja melaksanakan, penyelia menyemak. Giliran pekerja ditutup paksa pada had untuk mengehadkan sesi yang liar.</string>
 </resources>

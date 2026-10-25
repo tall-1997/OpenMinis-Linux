@@ -63,6 +63,55 @@ internal fun ChatViewModel.sendMessage(
         )
         return
     }
+    // [T-supervisor-slash-entry] Supervisor routing — two shapes, both
+    // consume the send before the normal chat pipeline:
+    // 1. LIVE session: the text is an interjection. It persists as a user
+    //    row (the transcript must show what the user asked mid-run) and is
+    //    routed into the inbox; the supervisor folds it into the next
+    //    instruction. It never enters agentHistory — the loop owns its
+    //    own context pipeline, and the digest was already cut at start.
+    // 2. ARMED composer: the text is the objective. Disarm first (a failed
+    //    start must not leave the composer silently re-armed), persist the
+    //    objective row, then hand the loop to startSupervisorSession.
+    // Attachments are rejected on the armed path: the objective is a text
+    // instruction; silently dropping images the user can still see in the
+    // composer would be a bug, not a convenience.
+    if (!internalGoalRun && trimmed.isNotBlank()) {
+        if (supervisorSessionActive()) {
+            _inputText.value = ""
+            viewModelScope.launch {
+                persistSupervisorUserTurn(trimmed)
+                if (!pushSupervisorUserMessage(trimmed)) {
+                    appendSystemInfo(
+                        text = context.getString(R.string.supervisor_session_ended),
+                        iconKind = "info",
+                    )
+                }
+            }
+            return
+        }
+        if (_supervisorArmed.value) {
+            if (_attachments.value.isNotEmpty()) {
+                appendSystemInfo(
+                    text = context.getString(R.string.supervisor_attachments_unsupported),
+                    iconKind = "info",
+                )
+                return
+            }
+            disarmSupervisor()
+            _inputText.value = ""
+            viewModelScope.launch {
+                persistSupervisorUserTurn(trimmed)
+                if (!startSupervisorSession(trimmed)) {
+                    appendSystemInfo(
+                        text = context.getString(R.string.supervisor_start_failed),
+                        iconKind = "error",
+                    )
+                }
+            }
+            return
+        }
+    }
     // Context pressure check. Unlike before, needsCompact now HOLDS the
     // send: either compact silently (auto-compact on) or ask first. The
     // whole point is that the request which tripped the threshold must not

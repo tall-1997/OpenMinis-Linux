@@ -19,6 +19,9 @@ import androidx.lifecycle.viewModelScope
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 /**
@@ -53,6 +56,53 @@ internal object SupervisorSessionHost {
 }
 
 /**
+ * UI projection of a supervisor session, keyed by session id. The runner
+ * coroutine is the only writer while a loop is live; [reset] clears the
+ * slot when the chat switches sessions so a stale bar never follows the
+ * user into another conversation.
+ */
+internal object SupervisorUiHost {
+
+    /** Coarse phase for the status bar. Terminal phases linger, then clear. */
+    internal enum class Phase { INSTRUCTING, EXECUTING, REVIEWING, DONE, HALTED, FAILED, INTERRUPTED }
+
+    internal data class UiState(
+        val sessionId: String,
+        val phase: Phase,
+        val objective: String,
+        val workerTurns: Int = 0,
+    ) {
+        val isLive: Boolean
+            get() = phase == Phase.INSTRUCTING || phase == Phase.EXECUTING || phase == Phase.REVIEWING
+    }
+
+    private val states = ConcurrentHashMap<String, UiState>()
+    private val flow = MutableStateFlow<UiState?>(null)
+
+    /** The bar renders this; null means no supervisor activity to show. */
+    val uiState: StateFlow<UiState?> = flow.asStateFlow()
+
+    internal fun update(sessionId: String, phase: Phase, objective: String, workerTurns: Int) {
+        if (sessionId.isBlank()) return
+        val state = UiState(sessionId, phase, objective, workerTurns)
+        states[sessionId] = state
+        flow.value = state
+    }
+
+    /** Clears the slot for one session (discard / switch away). */
+    internal fun reset(sessionId: String) {
+        states.remove(sessionId)
+        if (flow.value?.sessionId == sessionId) flow.value = null
+    }
+
+    /** Re-publishes the stored state for a session after a switch back. */
+    internal fun republish(sessionId: String) {
+        val state = states[sessionId] ?: return
+        flow.value = state
+    }
+}
+
+/**
  * ChatViewModel wiring for Supervisor-Worker sessions
  * (spec: docs/superpowers/specs/2026-10-24-supervisor-worker-loop-design.md §3).
  *
@@ -62,9 +112,10 @@ internal object SupervisorSessionHost {
  * inside the instruction's WritePathGuard scope) and owns the lifecycle:
  * start, halt, user interjections, run-store persistence, and recovery.
  *
- * Speaker labels are plain English until the UI pass lands (PR#3 of the
- * spec) — the L10n gate requires all 17 locales in one commit, so no
- * half-translated string keys are added here.
+ * Speaker labels are plain English by design: the supervisor's bubble
+ * text is model-generated protocol output (instruction envelopes, DONE
+ * lines), not UI chrome — only the status bar and slash panel carry
+ * localized strings (this PR).
  */
 private const val SUPERVISOR_SPEAKER = "Supervisor"
 
@@ -142,8 +193,11 @@ internal fun ChatViewModel.startSupervisorSession(
     // Written before the job launches so a halt that lands before the first
     // suspension point still has a record to mark USER_HALTED — markTerminal
     // no-ops on a missing head, and a lost record means a phantom "running"
-    // run the next time the session is opened.
+    // run the next time the session is opened. Same ordering for the UI
+    // state: the bar must appear the instant the send is consumed.
     SupervisorRunStore.start(sessionId, context, trimmed, maxWorkerTurns)
+    SupervisorUiHost.reset(sessionId)
+    SupervisorUiHost.update(sessionId, SupervisorUiHost.Phase.INSTRUCTING, trimmed, 0)
 
     val job = viewModelScope.launch {
         runSupervisorSession(
@@ -163,6 +217,28 @@ internal fun ChatViewModel.startSupervisorSession(
         SupervisorSessionHost.Live(sessionId, trimmed, inbox, job),
     )
     return true
+}
+
+/**
+ * Resumes the interrupted run for this session. The stored digest becomes
+ * the recovery section of the first supervisor turn, so completed work is
+ * re-verified before new instructions are issued (spec §3.8). Returns
+ * false when there is nothing to resume or the start was refused.
+ */
+internal fun ChatViewModel.resumeSupervisorSession(): Boolean {
+    val recovery = pendingSupervisorRecovery() ?: return false
+    return startSupervisorSession(recovery.objective, recovery)
+}
+
+/**
+ * Withdraws the recovery offer for this session. The transcript keeps
+ * whatever was streamed before the interruption; only the run record and
+ * the bar's INTERRUPTED phase are cleared.
+ */
+internal fun ChatViewModel.discardSupervisorRecovery() {
+    val sessionId = activeSessionId
+    SupervisorRunStore.clear(sessionId, context)
+    SupervisorUiHost.reset(sessionId)
 }
 
 /**
@@ -190,6 +266,53 @@ internal fun ChatViewModel.pushSupervisorUserMessage(text: String): Boolean {
     return true
 }
 
+/** Armed state: the next user send becomes a supervisor objective. */
+internal val ChatViewModel.supervisorArmed: StateFlow<Boolean>
+    get() = _supervisorArmed.asStateFlow()
+
+/**
+ * Toggles the armed state from the slash panel. The hint text is emitted by
+ * the caller (SlashExec) so this stays a pure state flip.
+ */
+internal fun ChatViewModel.toggleSupervisorArmed() {
+    _supervisorArmed.value = !_supervisorArmed.value
+}
+
+/**
+ * Disarms and returns the previous value — the send path calls this once it
+ * has consumed the objective, so a failed start cannot leave the composer
+ * silently armed for the next send.
+ */
+internal fun ChatViewModel.disarmSupervisor(): Boolean {
+    val was = _supervisorArmed.value
+    _supervisorArmed.value = false
+    return was
+}
+
+/**
+ * Persists a user turn that belongs to a supervisor session (the objective
+ * on start, or an interjection while live). The row is the same shape a
+ * normal send produces, but it never enters agentHistory: the supervisor
+ * loop owns its own context pipeline, and user interjections reach the
+ * supervisor through the inbox, not through the chat transcript.
+ */
+internal suspend fun ChatViewModel.persistSupervisorUserTurn(text: String) {
+    val trimmed = text.trim()
+    if (trimmed.isEmpty()) return
+    val sessionId = activeSessionId
+    if (sessionId.isBlank()) return
+    val partsJson = buildUserPartsJson(trimmed, emptyList(), null)
+    val persisted = chatRepository.appendMessage(sessionId, "user", partsJson) ?: return
+    val userMsg = ChatMessage(
+        id = persisted.id,
+        role = "user",
+        content = trimmed,
+        sourceDbIds = listOf(persisted.id),
+    )
+    _messages.value = trimLoadedWindow(_messages.value + userMsg)
+    notePersistedUiRow(persisted.id, persisted.id)
+}
+
 private suspend fun ChatViewModel.runSupervisorSession(
     sessionId: String,
     objective: String,
@@ -214,6 +337,7 @@ private suspend fun ChatViewModel.runSupervisorSession(
     supervisorNotice("Supervisor session started — objective: $objective")
 
     var workerRound = 0
+    SupervisorUiHost.update(sessionId, SupervisorUiHost.Phase.INSTRUCTING, objective, 0)
 
     val supervisorSeat = SupervisorSessionRunner.Seat { user, system, _ ->
         upsertGroupBubble(supervisorBubbleId, SUPERVISOR_SPEAKER, "", analyzing = true)
@@ -235,6 +359,7 @@ private suspend fun ChatViewModel.runSupervisorSession(
 
     val workerSeat = SupervisorSessionRunner.Seat { user, _, writePaths ->
         workerRound += 1
+        SupervisorUiHost.update(sessionId, SupervisorUiHost.Phase.EXECUTING, objective, workerRound)
         val bubbleId = "supervisor-worker-$sessionId-$workerRound"
         upsertGroupBubble(bubbleId, workerSpeaker, "", analyzing = true)
         val result = WritePathGuard.withPaths(writePaths) {
@@ -262,6 +387,7 @@ private suspend fun ChatViewModel.runSupervisorSession(
             )
         }
         upsertGroupBubble(bubbleId, workerSpeaker, result.output, analyzing = false)
+        SupervisorUiHost.update(sessionId, SupervisorUiHost.Phase.REVIEWING, objective, workerRound)
         result.output
     }
 
@@ -280,6 +406,12 @@ private suspend fun ChatViewModel.runSupervisorSession(
         onTerminal = { state, summary ->
             SupervisorRunStore.markTerminal(sessionId, context, state, summary)
             SupervisorSessionHost.remove(sessionId)
+            val phase = when (state) {
+                SupervisorRunStore.STATE_DONE -> SupervisorUiHost.Phase.DONE
+                SupervisorRunStore.STATE_USER_HALTED -> SupervisorUiHost.Phase.HALTED
+                else -> SupervisorUiHost.Phase.FAILED
+            }
+            SupervisorUiHost.update(sessionId, phase, objective, workerRound)
             val text = when (state) {
                 SupervisorRunStore.STATE_DONE ->
                     "Supervisor session complete. ${summary.orEmpty().trim()}".trim()

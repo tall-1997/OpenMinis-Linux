@@ -1949,4 +1949,25 @@
     <string name="env_var_disabled_badge">Wyłączona</string>
     <string name="env_var_enabled">Włączona</string>
     <string name="env_var_enabled_hint">Gdy jest wyłączona, zmienna nie jest wstrzykiwana do piaskownicy, serwerów MCP ani poświadczeń dostawcy. Zapisana wartość zostaje zachowana.</string>
+    <string name="supervisor_phase_instructing">Planowanie</string>
+    <string name="supervisor_phase_executing">Wykonywanie</string>
+    <string name="supervisor_phase_reviewing">Sprawdzanie</string>
+    <string name="supervisor_phase_done">Zadanie ukończone</string>
+    <string name="supervisor_phase_halted">Zatrzymano</string>
+    <string name="supervisor_phase_interrupted">Przerwano</string>
+    <string name="supervisor_phase_failed">Niepowodzenie</string>
+    <string name="supervisor_recovery_resume">Resume</string>
+    <string name="supervisor_recovery_discard">Discard</string>
+    <string name="supervisor_sheet_worker_turns">Tury workera: %1$d</string>
+    <string name="supervisor_armed_hint">Tryb nadzorcy uzbrojony — Twoja następna wiadomość stanie się celem zadania</string>
+    <string name="supervisor_disarmed_hint">Tryb nadzorcy rozbrojony</string>
+    <string name="supervisor_attachments_unsupported">Tryb nadzorcy ignoruje załączniki — cel to wyłącznie tekst</string>
+    <string name="supervisor_session_ended">Sesja nadzorcy zakończona</string>
+    <string name="supervisor_start_failed">Nie udało się uruchomić sesji nadzorcy: %1$s</string>
+    <string name="settings_supervisor_section">Sesje supervisora</string>
+    <string name="settings_supervisor_worker_model">Model workera</string>
+    <string name="settings_supervisor_worker_model_follow">Zgodnie z modelem sesji</string>
+    <string name="settings_supervisor_max_turns">Maks. tury workera</string>
+    <string name="settings_supervisor_max_turns_subtitle">Wymuszone zamknięcie po %1$d turach workera</string>
+    <string name="settings_supervisor_max_turns_footer">Supervisor wydaje polecenia, worker je wykonuje, supervisor je weryfikuje. Tury workera są wymuszenie zamykane na limicie, by ograniczyć sesje wymykające się spod kontroli.</string>
 </resources>

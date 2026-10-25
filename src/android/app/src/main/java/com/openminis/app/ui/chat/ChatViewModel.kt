@@ -2288,6 +2288,13 @@ class ChatViewModel(
     internal val _thinkingLevel = MutableStateFlow(ThinkingLevel.OFF)
     override val thinkingLevel: StateFlow<ThinkingLevel> = _thinkingLevel.asStateFlow()
 
+    // [T-supervisor-slash-entry] Armed by the slash panel; the next send
+    // becomes the objective of a supervisor-worker session (see
+    // ChatViewModelSupervisorExt + ChatViewModelSendExt routing). Per-VM,
+    // not persisted — arming is a transient intent, never a sticky mode.
+    internal val _supervisorArmed = MutableStateFlow(false)
+    val supervisorArmed: StateFlow<Boolean> = _supervisorArmed.asStateFlow()
+
     internal val _permissionMode = MutableStateFlow(com.openminis.app.security.PermissionMode.ASK)
     val permissionMode: StateFlow<com.openminis.app.security.PermissionMode> = _permissionMode.asStateFlow()
 
@@ -2974,34 +2981,10 @@ class ChatViewModel(
 
     /** Static catalogue of available slash commands, in display order.
      *  Subtitles are placeholders here — [filteredSlashCommands] always
-     *  rebuilds them with the current localized state. */
-    internal val availableSlashCommands: List<SlashCommand> = listOf(
-        SlashCommand(
-            id = "clear",
-            icon = Icons.Default.Delete,
-            title = "Clear",
-            subtitle = "",
-        ),
-        SlashCommand(
-            id = "compact",
-            icon = Icons.Default.Compress,
-            title = "Compact",
-            subtitle = "",
-        ),
-        SlashCommand(
-            id = "memory",
-            icon = Icons.Default.Psychology,
-            title = "Memory",
-            subtitle = "",
-        ),
-        SlashCommand(
-            id = "thinking",
-            icon = Icons.Default.Lightbulb,
-            title = "Thinking",
-            subtitle = "",
-        ),
-        SlashCommand(id = "goal", icon = Icons.Outlined.Build, title = "Goal", subtitle = ""),
-    )
+     *  rebuilds them with the current localized state. The catalogue itself
+     *  lives in ChatViewModelSlashExt.kt ([chatSlashCommands]) so this file
+     *  keeps shrinking. */
+    internal val availableSlashCommands: List<SlashCommand> = chatSlashCommands
 
     // [T-android-split-chat] filteredSlashCommands / updateSlashMenuState /
     // showSlashMenuOverInput / dismissSlashMenu / slashMenuSetSelectedIndex moved

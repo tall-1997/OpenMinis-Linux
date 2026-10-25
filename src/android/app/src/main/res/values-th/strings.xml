@@ -1941,4 +1941,25 @@
     <string name="env_var_disabled_badge">ปิดใช้</string>
     <string name="env_var_enabled">เปิดใช้</string>
     <string name="env_var_enabled_hint">เมื่อปิด ตัวแปรจะไม่ถูกฉีดเข้าแซนด์บ็อกซ์ เซิร์ฟเวอร์ MCP หรือข้อมูลรับรองของผู้ให้บริการ ค่าที่บันทึกไว้จะยังคงอยู่</string>
+    <string name="supervisor_phase_instructing">กำลังวางแผน</string>
+    <string name="supervisor_phase_executing">กำลังทำงาน</string>
+    <string name="supervisor_phase_reviewing">กำลังตรวจสอบ</string>
+    <string name="supervisor_phase_done">งานเสร็จสมบูรณ์</string>
+    <string name="supervisor_phase_halted">หยุดแล้ว</string>
+    <string name="supervisor_phase_interrupted">ถูกขัดจังหวะ</string>
+    <string name="supervisor_phase_failed">ล้มเหลว</string>
+    <string name="supervisor_recovery_resume">Resume</string>
+    <string name="supervisor_recovery_discard">Discard</string>
+    <string name="supervisor_sheet_worker_turns">รอบของเวิร์กเกอร์: %1$d</string>
+    <string name="supervisor_armed_hint">โหมดผู้ควบคุมพร้อมแล้ว——ข้อความถัดไปจะเป็นเป้าหมายของงาน</string>
+    <string name="supervisor_disarmed_hint">ยกเลิกโหมดผู้ควบคุมแล้ว</string>
+    <string name="supervisor_attachments_unsupported">โหมดผู้ควบคุมไม่รองรับไฟล์แนบ——เป้าหมายต้องเป็นข้อความเท่านั้น</string>
+    <string name="supervisor_session_ended">เซสชันผู้ควบคุมจบแล้ว</string>
+    <string name="supervisor_start_failed">เริ่มเซสชันผู้ควบคุมไม่สำเร็จ: %1$s</string>
+    <string name="settings_supervisor_section">เซสชันผู้ควบคุม</string>
+    <string name="settings_supervisor_worker_model">โมเดลของเวิร์กเกอร์</string>
+    <string name="settings_supervisor_worker_model_follow">ตามโมเดลของเซสชัน</string>
+    <string name="settings_supervisor_max_turns">เทิร์นเวิร์กเกอร์สูงสุด</string>
+    <string name="settings_supervisor_max_turns_subtitle">ปิดโดยบังคับหลัง %1$d เทิร์นของเวิร์กเกอร์</string>
+    <string name="settings_supervisor_max_turns_footer">ผู้ควบคุมสั่งงาน เวิร์กเกอร์ลงมือ ผู้ควบคุมตรวจรับ เทิร์นของเวิร์กเกอร์จะถูกปิดโดยบังคับเมื่อถึงขีดจำกัด เพื่อคุมเซสชันที่รันไม่หยุด</string>
 </resources>

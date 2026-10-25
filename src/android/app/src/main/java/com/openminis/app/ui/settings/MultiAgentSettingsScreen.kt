@@ -144,6 +144,78 @@ fun MultiAgentSettingsScreen(
             }
         }
 
+        // [T-supervisor-settings] Supervisor-Worker chat seats (spec §3.7).
+        // The worker model slot is "" = follow the session model; the max
+        // turns stepper bounds the runner's force-close budget. Both live in
+        // MultiAgentSettingsRepository and are read by the runner at start.
+        val workerModelId by repo.workerModelEntryId.collectAsState()
+        val supervisorMaxTurns by repo.supervisorMaxWorkerTurns.collectAsState()
+        SettingsSection(
+            header = stringResource(R.string.settings_supervisor_section),
+            footer = stringResource(R.string.settings_supervisor_max_turns_footer),
+        ) {
+            var workerExpanded by remember { mutableStateOf(false) }
+            val workerEntry = candidates.find { it.id == workerModelId }
+            val workerValue = workerEntry?.let { slotModelLabel(it, instancesById) }
+                ?: stringResource(R.string.settings_supervisor_worker_model_follow)
+            Box(modifier = Modifier.fillMaxWidth()) {
+                SettingsValueRow(
+                    title = stringResource(R.string.settings_supervisor_worker_model),
+                    value = workerValue,
+                    onClick = { workerExpanded = true },
+                    showDivider = true,
+                )
+                DropdownMenu(
+                    expanded = workerExpanded,
+                    onDismissRequest = { workerExpanded = false },
+                ) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.settings_supervisor_worker_model_follow)) },
+                        onClick = {
+                            repo.setWorkerModelEntryId("")
+                            workerExpanded = false
+                        },
+                    )
+                    candidates.forEach { entry ->
+                        DropdownMenuItem(
+                            text = { Text(slotModelLabel(entry, instancesById)) },
+                            onClick = {
+                                repo.setWorkerModelEntryId(entry.id)
+                                workerExpanded = false
+                            },
+                        )
+                    }
+                }
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                    Text(
+                        stringResource(R.string.settings_supervisor_max_turns),
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                    Text(
+                        stringResource(R.string.settings_supervisor_max_turns_subtitle, supervisorMaxTurns),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                PlusMinusStepper(
+                    value = supervisorMaxTurns,
+                    min = MultiAgentSettings.MIN_SUPERVISOR_TURNS,
+                    max = MultiAgentSettings.MAX_SUPERVISOR_TURNS,
+                    onValueChange = { repo.setSupervisorMaxWorkerTurns(it) },
+                    decreaseContentDescription = stringResource(R.string.settings_multi_agent_decrease),
+                    increaseContentDescription = stringResource(R.string.settings_multi_agent_increase),
+                )
+            }
+        }
+
         SettingsSection(
             header = stringResource(R.string.settings_multi_agent_section_models),
             footer = stringResource(R.string.settings_multi_agent_footer_models, maxConcurrent),

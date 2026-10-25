@@ -1940,4 +1940,25 @@
     <string name="env_var_disabled_badge">사용 안 함</string>
     <string name="env_var_enabled">사용</string>
     <string name="env_var_enabled_hint">끄면 샌드박스, MCP 서버, 제공자 자격 증명에 변수가 주입되지 않습니다. 저장된 값은 유지됩니다.</string>
+    <string name="supervisor_phase_instructing">계획 중</string>
+    <string name="supervisor_phase_executing">실행 중</string>
+    <string name="supervisor_phase_reviewing">검토 중</string>
+    <string name="supervisor_phase_done">작업 완료</string>
+    <string name="supervisor_phase_halted">중지됨</string>
+    <string name="supervisor_phase_interrupted">중단됨</string>
+    <string name="supervisor_phase_failed">실패</string>
+    <string name="supervisor_recovery_resume">Resume</string>
+    <string name="supervisor_recovery_discard">Discard</string>
+    <string name="supervisor_sheet_worker_turns">워커 턴 수: %1$d</string>
+    <string name="supervisor_armed_hint">감독 모드 준비 완료——다음 메시지가 작업 목표가 됩니다</string>
+    <string name="supervisor_disarmed_hint">감독 모드가 해제되었습니다</string>
+    <string name="supervisor_attachments_unsupported">감독 모드는 첨부 파일을 무시합니다——목표는 텍스트만 가능합니다</string>
+    <string name="supervisor_session_ended">감독 세션이 종료되었습니다</string>
+    <string name="supervisor_start_failed">감독 세션을 시작할 수 없습니다: %1$s</string>
+    <string name="settings_supervisor_section">슈퍼바이저 세션</string>
+    <string name="settings_supervisor_worker_model">워커 모델</string>
+    <string name="settings_supervisor_worker_model_follow">세션 모델 따르기</string>
+    <string name="settings_supervisor_max_turns">최대 워커 턴 수</string>
+    <string name="settings_supervisor_max_turns_subtitle">워커 턴 %1$d회 후 강제 종료</string>
+    <string name="settings_supervisor_max_turns_footer">슈퍼바이저가 지시하고 워커가 실행하며 슈퍼바이저가 검토합니다. 세션 폭주를 막기 위해 워커 턴은 한도에서 강제 종료됩니다.</string>
 </resources>

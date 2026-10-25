@@ -1941,4 +1941,25 @@
     <string name="env_var_disabled_badge">Naka-disable</string>
     <string name="env_var_enabled">Naka-enable</string>
     <string name="env_var_enabled_hint">Kapag naka-disable, hindi ilalagay ang variable sa sandbox, mga MCP server o provider credential. Mananatili ang nakaimbak na value.</string>
+    <string name="supervisor_phase_instructing">Nagpaplano</string>
+    <string name="supervisor_phase_executing">Gumagawa</string>
+    <string name="supervisor_phase_reviewing">Sinusuri</string>
+    <string name="supervisor_phase_done">Tapos na ang gawain</string>
+    <string name="supervisor_phase_halted">Nahinto</string>
+    <string name="supervisor_phase_interrupted">Na-abala</string>
+    <string name="supervisor_phase_failed">Nabigo</string>
+    <string name="supervisor_recovery_resume">Resume</string>
+    <string name="supervisor_recovery_discard">Discard</string>
+    <string name="supervisor_sheet_worker_turns">Mga turn ng worker: %1$d</string>
+    <string name="supervisor_armed_hint">Handa na ang supervisor mode — ang susunod na mensahe magiging layunin ng gawain</string>
+    <string name="supervisor_disarmed_hint">Naka-off na ang supervisor mode</string>
+    <string name="supervisor_attachments_unsupported">Hindi pinapansin ng supervisor mode ang mga attachment — text lang ang layunin</string>
+    <string name="supervisor_session_ended">Tapos na ang supervisor session</string>
+    <string name="supervisor_start_failed">Hindi nagsimula ang supervisor session: %1$s</string>
+    <string name="settings_supervisor_section">Mga sesyon ng supervisor</string>
+    <string name="settings_supervisor_worker_model">Modelo ng worker</string>
+    <string name="settings_supervisor_worker_model_follow">Sundin ang modelo ng sesyon</string>
+    <string name="settings_supervisor_max_turns">Max na turnos ng worker</string>
+    <string name="settings_supervisor_max_turns_subtitle">Pilit na isara pagkatapos ng %1$d turnos ng worker</string>
+    <string name="settings_supervisor_max_turns_footer">Nagtuturo ang supervisor, nagtatrabaho ang worker, tinitingnan ng supervisor. Pilit na sinasara ang turnos ng worker sa limit upang mapigilan ang napakalalaking sesyon.</string>
 </resources>

@@ -1951,4 +1951,25 @@
     <string name="env_var_disabled_badge">Отключена</string>
     <string name="env_var_enabled">Включена</string>
     <string name="env_var_enabled_hint">Когда выключена, переменная не передаётся в песочницу, MCP-серверы и учётные данные провайдера. Сохранённое значение остаётся.</string>
+    <string name="supervisor_phase_instructing">Планирование</string>
+    <string name="supervisor_phase_executing">Выполнение</string>
+    <string name="supervisor_phase_reviewing">Проверка</string>
+    <string name="supervisor_phase_done">Задача завершена</string>
+    <string name="supervisor_phase_halted">Остановлено</string>
+    <string name="supervisor_phase_interrupted">Прервано</string>
+    <string name="supervisor_phase_failed">Ошибка</string>
+    <string name="supervisor_recovery_resume">Resume</string>
+    <string name="supervisor_recovery_discard">Discard</string>
+    <string name="supervisor_sheet_worker_turns">Раунды воркера: %1$d</string>
+    <string name="supervisor_armed_hint">Режим супервайзера включён — следующее сообщение станет целью задачи</string>
+    <string name="supervisor_disarmed_hint">Режим супервайзера выключен</string>
+    <string name="supervisor_attachments_unsupported">Режим супервайзера игнорирует вложения — цель только в виде текста</string>
+    <string name="supervisor_session_ended">Сессия супервайзера завершена</string>
+    <string name="supervisor_start_failed">Не удалось запустить сессию супервайзера: %1$s</string>
+    <string name="settings_supervisor_section">Сессии супервизора</string>
+    <string name="settings_supervisor_worker_model">Модель воркера</string>
+    <string name="settings_supervisor_worker_model_follow">Как у модели сессии</string>
+    <string name="settings_supervisor_max_turns">Макс. ходов воркера</string>
+    <string name="settings_supervisor_max_turns_subtitle">Принудительное закрытие после %1$d ходов воркера</string>
+    <string name="settings_supervisor_max_turns_footer">Супервизор инструктирует, воркер исполняет, супервизор проверяет. Ходы воркера принудительно закрываются по достижении лимита, чтобы сдерживать убегающие сессии.</string>
 </resources>

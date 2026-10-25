@@ -4912,8 +4912,8 @@ fun ChatScreen(
                 }
 
                 // Live plan-board + goal card above the composer.
-                PlanGoalCard(viewModel)
-                GoalSheet(viewModel)
+                // [T-supervisor-status-bar] Composer header cluster lives in ChatComposerHeader.kt.
+                ChatComposerHeader(viewModel = viewModel, sessionId = sessionId)
 
                 // T13 banner moved INSIDE the LazyColumn so it renders at the
                 // visual end of the message list (mirrors iOS — see the

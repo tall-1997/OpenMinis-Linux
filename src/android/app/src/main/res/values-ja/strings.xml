@@ -1940,4 +1940,25 @@
     <string name="env_var_disabled_badge">無効</string>
     <string name="env_var_enabled">有効</string>
     <string name="env_var_enabled_hint">オフの場合、この変数はサンドボックス、MCP サーバー、プロバイダーの認証情報に渡されません。保存済みの値は保持されます。</string>
+    <string name="supervisor_phase_instructing">計画中</string>
+    <string name="supervisor_phase_executing">実行中</string>
+    <string name="supervisor_phase_reviewing">レビュー中</string>
+    <string name="supervisor_phase_done">タスク完了</string>
+    <string name="supervisor_phase_halted">停止しました</string>
+    <string name="supervisor_phase_interrupted">中断されました</string>
+    <string name="supervisor_phase_failed">失敗</string>
+    <string name="supervisor_recovery_resume">Resume</string>
+    <string name="supervisor_recovery_discard">Discard</string>
+    <string name="supervisor_sheet_worker_turns">ワーカーのターン数: %1$d</string>
+    <string name="supervisor_armed_hint">スーパーバイザーモード準備完了——次のメッセージがタスク目標になります</string>
+    <string name="supervisor_disarmed_hint">スーパーバイザーモードを解除しました</string>
+    <string name="supervisor_attachments_unsupported">スーパーバイザーモードは添付を無視します——目標はテキストのみです</string>
+    <string name="supervisor_session_ended">スーパーバイザーセッションが終了しました</string>
+    <string name="supervisor_start_failed">スーパーバイザーセッションを開始できませんでした：%1$s</string>
+    <string name="settings_supervisor_section">スーパーバイザーセッション</string>
+    <string name="settings_supervisor_worker_model">ワーカーモデル</string>
+    <string name="settings_supervisor_worker_model_follow">セッションモデルに従う</string>
+    <string name="settings_supervisor_max_turns">最大ワーカーターン数</string>
+    <string name="settings_supervisor_max_turns_subtitle">%1$d ワーカーターンで強制終了</string>
+    <string name="settings_supervisor_max_turns_footer">スーパーバイザーが指示し、ワーカーが実行し、スーパーバイザーが確認します。暴走セッションを防ぐため、ワーカーターンは上限で強制終了されます。</string>
 </resources>
