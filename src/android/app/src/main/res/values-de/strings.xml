@@ -1943,4 +1943,25 @@
     <string name="env_var_disabled_badge">Deaktiviert</string>
     <string name="env_var_enabled">Aktiviert</string>
     <string name="env_var_enabled_hint">Wenn aus, wird die Variable nicht in die Sandbox, MCP-Server oder Anbieter-Zugangsdaten injiziert. Der gespeicherte Wert bleibt erhalten.</string>
+    <string name="supervisor_phase_instructing">Plant</string>
+    <string name="supervisor_phase_executing">Ausführung</string>
+    <string name="supervisor_phase_reviewing">Prüfung</string>
+    <string name="supervisor_phase_done">Aufgabe abgeschlossen</string>
+    <string name="supervisor_phase_halted">Angehalten</string>
+    <string name="supervisor_phase_interrupted">Unterbrochen</string>
+    <string name="supervisor_phase_failed">Fehlgeschlagen</string>
+    <string name="supervisor_recovery_resume">Resume</string>
+    <string name="supervisor_recovery_discard">Discard</string>
+    <string name="supervisor_sheet_worker_turns">Worker-Runden: %1$d</string>
+    <string name="supervisor_armed_hint">Supervisor-Modus aktiviert — Ihre nächste Nachricht wird das Aufgabenziel</string>
+    <string name="supervisor_disarmed_hint">Supervisor-Modus deaktiviert</string>
+    <string name="supervisor_attachments_unsupported">Der Supervisor-Modus ignoriert Anhänge — das Ziel ist reiner Text</string>
+    <string name="supervisor_session_ended">Supervisor-Sitzung beendet</string>
+    <string name="supervisor_start_failed">Supervisor-Sitzung konnte nicht gestartet werden: %1$s</string>
+    <string name="settings_supervisor_section">Supervisor-Sitzungen</string>
+    <string name="settings_supervisor_worker_model">Worker-Modell</string>
+    <string name="settings_supervisor_worker_model_follow">Sitzungsmodell folgen</string>
+    <string name="settings_supervisor_max_turns">Max. Worker-Runden</string>
+    <string name="settings_supervisor_max_turns_subtitle">Zwangsbeenden nach %1$d Worker-Runden</string>
+    <string name="settings_supervisor_max_turns_footer">Der Supervisor weist an, der Worker führt aus, der Supervisor prüft. Worker-Runden werden am Limit zwangsbeendet, um ausufernde Sitzungen zu begrenzen.</string>
 </resources>

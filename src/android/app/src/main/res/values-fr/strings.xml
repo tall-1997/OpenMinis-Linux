@@ -1943,4 +1943,25 @@
     <string name="env_var_disabled_badge">Désactivée</string>
     <string name="env_var_enabled">Activée</string>
     <string name="env_var_enabled_hint">Lorsqu\'elle est désactivée, la variable n\'est pas injectée dans le sandbox, les serveurs MCP ni les identifiants du fournisseur. La valeur enregistrée est conservée.</string>
+    <string name="supervisor_phase_instructing">Planification</string>
+    <string name="supervisor_phase_executing">Exécution</string>
+    <string name="supervisor_phase_reviewing">Révision</string>
+    <string name="supervisor_phase_done">Tâche terminée</string>
+    <string name="supervisor_phase_halted">Interrompue</string>
+    <string name="supervisor_phase_interrupted">Interrompue</string>
+    <string name="supervisor_phase_failed">Échec</string>
+    <string name="supervisor_recovery_resume">Resume</string>
+    <string name="supervisor_recovery_discard">Discard</string>
+    <string name="supervisor_sheet_worker_turns">Tours du worker : %1$d</string>
+    <string name="supervisor_armed_hint">Mode superviseur armé — votre prochain message devient l\'objectif de la tâche</string>
+    <string name="supervisor_disarmed_hint">Mode superviseur désarmé</string>
+    <string name="supervisor_attachments_unsupported">Le mode superviseur ignore les pièces jointes — l\'objectif est du texte uniquement</string>
+    <string name="supervisor_session_ended">Session superviseur terminée</string>
+    <string name="supervisor_start_failed">Impossible de démarrer la session superviseur : %1$s</string>
+    <string name="settings_supervisor_section">Sessions superviseur</string>
+    <string name="settings_supervisor_worker_model">Modèle worker</string>
+    <string name="settings_supervisor_worker_model_follow">Suivre le modèle de la session</string>
+    <string name="settings_supervisor_max_turns">Tours worker max</string>
+    <string name="settings_supervisor_max_turns_subtitle">Fermeture forcée après %1$d tours de worker</string>
+    <string name="settings_supervisor_max_turns_footer">Le superviseur instruit, le worker exécute, le superviseur vérifie. Les tours du worker sont fermés de force à la limite pour borner les sessions qui dérapent.</string>
 </resources>

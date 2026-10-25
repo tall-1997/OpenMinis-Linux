@@ -194,14 +194,28 @@ object SupervisorRunStore {
     /**
      * The interrupted run for recovery, or null. Reconciles on read: a RUNNING
      * record whose `createdAt` predates [processStartedAt] was written by a
-     * dead process, flips to INTERRUPTED (persisted), and is returned. A record
-     * created by this process is never touched — it may be mid-flight.
+     * dead process, flips to INTERRUPTED (persisted), and is returned. A
+     * head already in INTERRUPTED keeps being offered — that state means
+     * "reconciled, awaiting the user's resume/discard", so it survives any
+     * number of reads (session load, then the Resume tap). Only [clear] or
+     * a new [start] retires the offer. A record created by this process is
+     * never touched — it may be mid-flight.
+     */
+    /**
+     * The interrupted run for this session, or null. A RUNNING record whose
+     * creation predates this process is reconciled to INTERRUPTED and
+     * returned; a head already in INTERRUPTED keeps being offered — the
+     * state means "reconciled, awaiting the user's resume/discard", so it
+     * must survive any number of reads (load, then the Resume tap). Only
+     * [clear] or a new [start] retires the offer. Never called while a loop
+     * is live — a live loop owns the record.
      */
     fun interrupted(sessionId: String, context: Context?): RunRecord? {
         val k = key(sessionId)
         return lock(k).withLock {
             val runs = loadLocked(k, context)
             val head = runs.firstOrNull() ?: return@withLock null
+            if (head.state == STATE_INTERRUPTED) return@withLock head
             if (head.state != STATE_RUNNING) return@withLock null
             if (head.createdAt >= processStartedAt) return@withLock null
             val flipped = head.copy(state = STATE_INTERRUPTED, updatedAt = System.currentTimeMillis())

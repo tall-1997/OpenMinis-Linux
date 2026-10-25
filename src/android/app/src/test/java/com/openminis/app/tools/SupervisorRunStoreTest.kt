@@ -70,6 +70,23 @@ class SupervisorRunStoreTest {
     }
 
     @Test
+    fun interrupted_keepsOfferingAfterTheFlip() {
+        freshStore()
+        val r = SupervisorRunStore.start("s4b", null, "objective 4b", 6)
+        SupervisorRunStore.internalReplaceForTest("s4b", r.copy(createdAt = 1_000L))
+        // First read reconciles RUNNING -> INTERRUPTED (session load).
+        val first = SupervisorRunStore.interrupted("s4b", null)
+        assertEquals(SupervisorRunStore.STATE_INTERRUPTED, first?.state)
+        // Second read (the Resume tap) must still offer the same record —
+        // INTERRUPTED means "awaiting the user's decision", not "consumed".
+        val second = SupervisorRunStore.interrupted("s4b", null)
+        assertEquals(first, second)
+        // The offer retires only via clear (discard) or a new start (resume).
+        SupervisorRunStore.clear("s4b", null)
+        assertNull(SupervisorRunStore.interrupted("s4b", null))
+    }
+
+    @Test
     fun interrupted_neverTouchesThisProcessRunningRecord() {
         freshStore()
         SupervisorRunStore.start("s5", null, "objective five", 6)

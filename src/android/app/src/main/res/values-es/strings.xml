@@ -1943,4 +1943,25 @@
     <string name="env_var_disabled_badge">Desactivada</string>
     <string name="env_var_enabled">Activada</string>
     <string name="env_var_enabled_hint">Si está desactivada, la variable no se inyecta en el sandbox, los servidores MCP ni las credenciales del proveedor. El valor guardado se conserva.</string>
+    <string name="supervisor_phase_instructing">Planificando</string>
+    <string name="supervisor_phase_executing">Ejecutando</string>
+    <string name="supervisor_phase_reviewing">Revisando</string>
+    <string name="supervisor_phase_done">Tarea completada</string>
+    <string name="supervisor_phase_halted">Detenida</string>
+    <string name="supervisor_phase_interrupted">Interrumpida</string>
+    <string name="supervisor_phase_failed">Error</string>
+    <string name="supervisor_recovery_resume">Resume</string>
+    <string name="supervisor_recovery_discard">Discard</string>
+    <string name="supervisor_sheet_worker_turns">Rondas del worker: %1$d</string>
+    <string name="supervisor_armed_hint">Modo supervisor activado — tu próximo mensaje será el objetivo de la tarea</string>
+    <string name="supervisor_disarmed_hint">Modo supervisor desactivado</string>
+    <string name="supervisor_attachments_unsupported">El modo supervisor ignora los adjuntos — el objetivo es solo texto</string>
+    <string name="supervisor_session_ended">Sesión de supervisor finalizada</string>
+    <string name="supervisor_start_failed">No se pudo iniciar la sesión de supervisor: %1$s</string>
+    <string name="settings_supervisor_section">Sesiones de supervisor</string>
+    <string name="settings_supervisor_worker_model">Modelo de worker</string>
+    <string name="settings_supervisor_worker_model_follow">Seguir el modelo de la sesión</string>
+    <string name="settings_supervisor_max_turns">Turnos máximos del worker</string>
+    <string name="settings_supervisor_max_turns_subtitle">Cierre forzado tras %1$d turnos del worker</string>
+    <string name="settings_supervisor_max_turns_footer">El supervisor instruye, el worker ejecuta, el supervisor revisa. Los turnos del worker se cierran a la fuerza en el límite para acotar sesiones descontroladas.</string>
 </resources>

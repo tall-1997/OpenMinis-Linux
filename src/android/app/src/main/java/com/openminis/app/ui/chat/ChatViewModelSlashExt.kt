@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.outlined.Extension
+import androidx.compose.material.icons.outlined.Groups
 import com.openminis.app.data.BPETokenizer
 import com.openminis.app.data.ContextOffload
 import com.openminis.app.data.ContextPolicy
@@ -100,6 +101,46 @@ import java.io.ByteArrayOutputStream
  *  honored the override — the agent knew about the skill but the user
  *  couldn't surface it via slash. (DM 𝙓𝙄𝙉 304891.)
  */
+/**
+ * Static catalogue of slash commands, in display order. Extracted from
+ * ChatViewModel (T-supervisor-slash-entry): the catalogue is data, not VM
+ * state — subtitles are placeholders here and [filteredSlashCommands]
+ * rebuilds them with the current localized state.
+ */
+internal val chatSlashCommands: List<SlashCommand> = listOf(
+    SlashCommand(
+        id = "clear",
+        icon = Icons.Default.Delete,
+        title = "Clear",
+        subtitle = "",
+    ),
+    SlashCommand(
+        id = "compact",
+        icon = Icons.Default.Compress,
+        title = "Compact",
+        subtitle = "",
+    ),
+    SlashCommand(
+        id = "memory",
+        icon = Icons.Default.Psychology,
+        title = "Memory",
+        subtitle = "",
+    ),
+    SlashCommand(
+        id = "thinking",
+        icon = Icons.Default.Lightbulb,
+        title = "Thinking",
+        subtitle = "",
+    ),
+    SlashCommand(id = "goal", icon = Icons.Outlined.Build, title = "Goal", subtitle = ""),
+    SlashCommand(
+        id = "supervisor",
+        icon = Icons.Outlined.Groups,
+        title = "Supervisor",
+        subtitle = "",
+    ),
+)
+
 internal fun ChatViewModel.filteredSlashCommands(): List<SlashCommand> {
     val filter = _slashFilter.value.lowercase()
     val base = availableSlashCommands.map { cmd ->

@@ -1945,4 +1945,25 @@
     <string name="env_var_disabled_badge">Dezactivată</string>
     <string name="env_var_enabled">Activată</string>
     <string name="env_var_enabled_hint">Când este dezactivată, variabila nu este injectată în sandbox, în serverele MCP sau în credențialele furnizorului. Valoarea stocată este păstrată.</string>
+    <string name="supervisor_phase_instructing">Se planifică</string>
+    <string name="supervisor_phase_executing">Se execută</string>
+    <string name="supervisor_phase_reviewing">Se verifică</string>
+    <string name="supervisor_phase_done">Sarcină finalizată</string>
+    <string name="supervisor_phase_halted">Oprită</string>
+    <string name="supervisor_phase_interrupted">Întreruptă</string>
+    <string name="supervisor_phase_failed">Eșec</string>
+    <string name="supervisor_recovery_resume">Resume</string>
+    <string name="supervisor_recovery_discard">Discard</string>
+    <string name="supervisor_sheet_worker_turns">Runde worker: %1$d</string>
+    <string name="supervisor_armed_hint">Mod supervizor activat — următorul tău mesaj devine obiectivul sarcinii</string>
+    <string name="supervisor_disarmed_hint">Mod supervizor dezactivat</string>
+    <string name="supervisor_attachments_unsupported">Modul supervizor ignoră atașamentele — obiectivul este doar text</string>
+    <string name="supervisor_session_ended">Sesiunea supervizor s-a încheiat</string>
+    <string name="supervisor_start_failed">Nu s-a putut porni sesiunea supervizor: %1$s</string>
+    <string name="settings_supervisor_section">Sesiuni de supervizor</string>
+    <string name="settings_supervisor_worker_model">Model worker</string>
+    <string name="settings_supervisor_worker_model_follow">Urmează modelul sesiunii</string>
+    <string name="settings_supervisor_max_turns">Ture worker max</string>
+    <string name="settings_supervisor_max_turns_subtitle">Închidere forțată după %1$d ture de worker</string>
+    <string name="settings_supervisor_max_turns_footer">Supervizorul instruiește, workerul execută, supervizorul verifică. Turele workerului sunt închise forțat la limită pentru a încadra sesiunile care scapă de sub control.</string>
 </resources>

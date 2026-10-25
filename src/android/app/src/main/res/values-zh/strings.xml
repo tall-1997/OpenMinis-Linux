@@ -2586,4 +2586,25 @@
     <string name="env_var_disabled_badge">已停用</string>
     <string name="env_var_enabled">启用</string>
     <string name="env_var_enabled_hint">关闭后不会注入沙箱、MCP 服务器和提供商凭据，已保存的值会保留。</string>
+    <string name="supervisor_phase_instructing">规划中</string>
+    <string name="supervisor_phase_executing">执行中</string>
+    <string name="supervisor_phase_reviewing">审查中</string>
+    <string name="supervisor_phase_done">任务完成</string>
+    <string name="supervisor_phase_halted">已停止</string>
+    <string name="supervisor_phase_interrupted">已中断</string>
+    <string name="supervisor_phase_failed">失败</string>
+    <string name="supervisor_recovery_resume">Resume</string>
+    <string name="supervisor_recovery_discard">Discard</string>
+    <string name="supervisor_sheet_worker_turns">执行轮数：%1$d</string>
+    <string name="supervisor_armed_hint">监督模式已就绪——下一条消息将作为任务目标</string>
+    <string name="supervisor_disarmed_hint">监督模式已取消</string>
+    <string name="supervisor_attachments_unsupported">监督模式不处理附件——任务目标仅支持文本</string>
+    <string name="supervisor_session_ended">监督会话已结束</string>
+    <string name="supervisor_start_failed">监督会话启动失败：%1$s</string>
+    <string name="settings_supervisor_section">Supervisor 会话</string>
+    <string name="settings_supervisor_worker_model">Worker 模型</string>
+    <string name="settings_supervisor_worker_model_follow">跟随会话模型</string>
+    <string name="settings_supervisor_max_turns">Worker 最大轮数</string>
+    <string name="settings_supervisor_max_turns_subtitle">Worker 轮数达 %1$d 后强制收束</string>
+    <string name="settings_supervisor_max_turns_footer">Supervisor 下达指令，Worker 执行，Supervisor 验收。Worker 轮数在达到上限时强制收束，防止会话失控。</string>
 </resources>

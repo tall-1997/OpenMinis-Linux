@@ -1946,4 +1946,25 @@
     <string name="env_var_disabled_badge">Dinonaktifkan</string>
     <string name="env_var_enabled">Diaktifkan</string>
     <string name="env_var_enabled_hint">Jika nonaktif, variabel tidak disuntikkan ke sandbox, server MCP, atau kredensial penyedia. Nilai yang tersimpan tetap ada.</string>
+    <string name="supervisor_phase_instructing">Merencanakan</string>
+    <string name="supervisor_phase_executing">Mengerjakan</string>
+    <string name="supervisor_phase_reviewing">Meninjau</string>
+    <string name="supervisor_phase_done">Tugas selesai</string>
+    <string name="supervisor_phase_halted">Dihentikan</string>
+    <string name="supervisor_phase_interrupted">Terputus</string>
+    <string name="supervisor_phase_failed">Gagal</string>
+    <string name="supervisor_recovery_resume">Resume</string>
+    <string name="supervisor_recovery_discard">Discard</string>
+    <string name="supervisor_sheet_worker_turns">Putaran worker: %1$d</string>
+    <string name="supervisor_armed_hint">Mode supervisor siap — pesan berikutnya menjadi tujuan tugas</string>
+    <string name="supervisor_disarmed_hint">Mode supervisor dimatikan</string>
+    <string name="supervisor_attachments_unsupported">Mode supervisor mengabaikan lampiran — tujuannya hanya teks</string>
+    <string name="supervisor_session_ended">Sesi supervisor berakhir</string>
+    <string name="supervisor_start_failed">Tidak dapat memulai sesi supervisor: %1$s</string>
+    <string name="settings_supervisor_section">Sesi supervisor</string>
+    <string name="settings_supervisor_worker_model">Model worker</string>
+    <string name="settings_supervisor_worker_model_follow">Ikuti model sesi</string>
+    <string name="settings_supervisor_max_turns">Putaran worker maks</string>
+    <string name="settings_supervisor_max_turns_subtitle">Tutup paksa setelah %1$d putaran worker</string>
+    <string name="settings_supervisor_max_turns_footer">Supervisor memberi instruksi, worker mengeksekusi, supervisor meninjau. Putaran worker ditutup paksa pada batas untuk membatasi sesi yang tak terkendali.</string>
 </resources>

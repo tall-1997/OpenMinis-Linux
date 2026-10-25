@@ -1941,4 +1941,25 @@
     <string name="env_var_disabled_badge">Devre dışı</string>
     <string name="env_var_enabled">Etkin</string>
     <string name="env_var_enabled_hint">Kapalıyken değişken sandbox\'a, MCP sunucularına veya sağlayıcı kimlik bilgilerine aktarılmaz. Kaydedilen değer korunur.</string>
+    <string name="supervisor_phase_instructing">Planlanıyor</string>
+    <string name="supervisor_phase_executing">Yürütülüyor</string>
+    <string name="supervisor_phase_reviewing">Gözden geçiriliyor</string>
+    <string name="supervisor_phase_done">Görev tamamlandı</string>
+    <string name="supervisor_phase_halted">Durduruldu</string>
+    <string name="supervisor_phase_interrupted">Kesildi</string>
+    <string name="supervisor_phase_failed">Başarısız</string>
+    <string name="supervisor_recovery_resume">Resume</string>
+    <string name="supervisor_recovery_discard">Discard</string>
+    <string name="supervisor_sheet_worker_turns">Worker tur sayısı: %1$d</string>
+    <string name="supervisor_armed_hint">Süpervizör modu hazır — bir sonraki mesajınız görev hedefi olur</string>
+    <string name="supervisor_disarmed_hint">Süpervizör modu kapatıldı</string>
+    <string name="supervisor_attachments_unsupported">Süpervizör modu ekleri yok sayar — hedef yalnızca metindir</string>
+    <string name="supervisor_session_ended">Süpervizör oturumu sona erdi</string>
+    <string name="supervisor_start_failed">Süpervizör oturumu başlatılamadı: %1$s</string>
+    <string name="settings_supervisor_section">Supervizör oturumları</string>
+    <string name="settings_supervisor_worker_model">Worker modeli</string>
+    <string name="settings_supervisor_worker_model_follow">Oturum modelini izle</string>
+    <string name="settings_supervisor_max_turns">Maks. worker turu</string>
+    <string name="settings_supervisor_max_turns_subtitle">%1$d worker turundan sonra zorla kapat</string>
+    <string name="settings_supervisor_max_turns_footer">Supervizör talimat verir, worker uygular, supervizör gözden geçirir. Kontrolsüz oturumları sınırlamak için worker turları limitte zorla kapatılır.</string>
 </resources>

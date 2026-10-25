@@ -78,6 +78,29 @@ internal fun ChatViewModel.loadSession() {
 
         // Existing session: load from DB
         val session = chatRepository.getSession(sessionId) ?: return@launch
+
+        // [T-supervisor-status-bar] The UI host is a process-wide singleton,
+        // so switching conversations leaves the PREVIOUS session's live
+        // state parked in `flow`. Re-publish ours (no-op when we never ran
+        // a supervisor session) so the status bar re-appears on return.
+        // Render-side sessionId gating hides other sessions' states in the
+        // meantime; this call only restores ours.
+        SupervisorUiHost.republish(sessionId)
+        // A run left RUNNING by a dead process reads as INTERRUPTED on
+        // first touch (pendingSupervisorRecovery reconciles the record).
+        // Surface it as the bar's INTERRUPTED phase so the user gets the
+        // resume/discard offer instead of a silent dead end. Ordering is
+        // safe: a live loop makes the recovery read null, and a terminal
+        // record never flips — so this only fires where republish was a
+        // no-op (cold start with a dead run on disk).
+        pendingSupervisorRecovery()?.let { record ->
+            SupervisorUiHost.update(
+                sessionId,
+                SupervisorUiHost.Phase.INTERRUPTED,
+                record.objective,
+                record.workerTurns,
+            )
+        }
         _sessionTitle.value = session.title ?: "New Chat"
         _sessionCategory.value = session.category
         _memoryEnabled.value = session.memoryEnabled != 0
