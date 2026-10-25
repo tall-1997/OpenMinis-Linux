@@ -313,12 +313,6 @@ internal suspend fun ChatViewModel.persistSupervisorUserTurn(text: String) {
     notePersistedUiRow(persisted.id, persisted.id)
 }
 
-/** Discards an interrupted run record and its UI projection. */
-internal fun ChatViewModel.discardSupervisorRecovery() {
-    SupervisorRunStore.clear(activeSessionId, context)
-    SupervisorUiHost.reset(activeSessionId)
-}
-
 private suspend fun ChatViewModel.runSupervisorSession(
     sessionId: String,
     objective: String,
