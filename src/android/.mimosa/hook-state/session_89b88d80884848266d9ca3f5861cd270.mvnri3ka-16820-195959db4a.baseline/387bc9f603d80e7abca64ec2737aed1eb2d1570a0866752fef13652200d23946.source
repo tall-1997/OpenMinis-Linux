@@ -1,0 +1,107 @@
+package com.openminis.app.data
+
+/**
+ * Pure-logic policy that decides, given a token estimate and the model's
+ * context window, whether the agent loop should offload big tool results,
+ * trigger a compact/summarize pass, or surface "context exhausted" to the UI.
+ *
+ * Mirrors iOS `ContextPolicy` (ContextPolicy.swift): 4-tier thresholds keyed
+ * off the model's context window, with no summarization algorithm embedded —
+ * the actual compact + offload execution lives in the agent loop, this struct
+ * only answers "what state are we in?".
+ *
+ * Thresholds intentionally leave headroom (10k/20k/40k below the ceiling) so
+ * one more agent turn can still fit before the user sees any disruption.
+ */
+data class ContextPolicy(
+    /** Above this token count, next tool result should be written to disk. 0 disables. */
+    val offloadThreshold: Int,
+    /** After offload, shrink context toward this target (lower than threshold). */
+    val offloadTarget: Int,
+    /** Above this, trigger a compact/summarize pass. 0 disables. */
+    val compactThreshold: Int,
+    /** When true, the tier is too small for auto-compact; only surface .exhausted. */
+    val exhaustedOnly: Boolean,
+    /** Whether the "Compact now" button is offered in the UI. */
+    val manualCompactAllowed: Boolean,
+) {
+    enum class CheckResult { OK, NEEDS_COMPACT, EXHAUSTED }
+
+    /**
+     * Classify the current turn's token pressure. Priority:
+     *   1. If compact is available and tokens crossed [compactThreshold] → NEEDS_COMPACT.
+     *   2. If this is a small-window tier (`exhaustedOnly`) and we're past the
+     *      offload line or 90% of the window → EXHAUSTED.
+     *   3. Otherwise OK.
+     */
+    fun check(estimatedTokens: Int, contextWindow: Int): CheckResult {
+        if (compactThreshold > 0 && estimatedTokens >= compactThreshold) {
+            return CheckResult.NEEDS_COMPACT
+        }
+        if (exhaustedOnly) {
+            val exhaustLine = if (offloadThreshold > 0) offloadThreshold else (contextWindow * 9 / 10)
+            if (estimatedTokens >= exhaustLine) return CheckResult.EXHAUSTED
+        }
+        return CheckResult.OK
+    }
+
+    /** Whether the next tool result should be offloaded to disk. */
+    fun shouldOffload(estimatedTokens: Int): Boolean =
+        offloadThreshold > 0 && estimatedTokens >= offloadThreshold
+
+    companion object {
+        /**
+         * Produce the policy for a given context window size. Four tiers:
+         *   - `<32K`   → offload/compact disabled; UI tells user to start a new chat.
+         *   - `32K–64K` → offload + auto-compact (threshold sits 15k below the
+         *     window, ahead of the offload line) so small-window models are not
+         *     doomed to hit the ceiling; `[T-compact-small-window-auto]`.
+         *   - `64K–128K` / `≥128K` → offload + compact at [compactPercent] of the window
+         *     (default 90).
+         */
+        fun forContextWindow(
+            contextWindow: Int,
+            compactPercent: Int = AutoCompactPrefs.DEFAULT_THRESHOLD_PERCENT,
+        ): ContextPolicy {
+            val pct = compactPercent.coerceIn(50, 95)
+            val compactAt = (contextWindow.toLong() * pct / 100L).toInt().coerceAtLeast(1)
+            return when {
+            contextWindow < 32_000 -> ContextPolicy(
+                offloadThreshold = 0,
+                offloadTarget = 0,
+                compactThreshold = 0,
+                exhaustedOnly = true,
+                manualCompactAllowed = false,
+            )
+            contextWindow < 64_000 -> ContextPolicy(
+                offloadThreshold = contextWindow - 10_000,
+                offloadTarget = contextWindow - 15_000,
+                // [T-compact-small-window-auto] Previously 0 (auto-compact
+                // disabled on this tier). On a bounded agentHistory a full
+                // history of tool results is far more expensive than a
+                // summary plus a short verbatim tail, so refusing to compact
+                // here only guaranteed the window ceiling gets hit instead.
+                // Compaction now fires BEFORE the offload line so the heavy
+                // tool payloads get folded while there is still headroom.
+                compactThreshold = contextWindow - 15_000,
+                exhaustedOnly = false,
+                manualCompactAllowed = true,
+            )
+            contextWindow < 128_000 -> ContextPolicy(
+                offloadThreshold = contextWindow - 20_000,
+                offloadTarget = contextWindow - 30_000,
+                compactThreshold = compactAt,
+                exhaustedOnly = false,
+                manualCompactAllowed = true,
+            )
+            else -> ContextPolicy(
+                offloadThreshold = contextWindow - 40_000,
+                offloadTarget = contextWindow - 60_000,
+                compactThreshold = compactAt,
+                exhaustedOnly = false,
+                manualCompactAllowed = true,
+            )
+            }
+        }
+    }
+}

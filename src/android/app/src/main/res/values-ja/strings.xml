@@ -1961,4 +1961,5 @@
     <string name="settings_supervisor_max_turns">最大ワーカーターン数</string>
     <string name="settings_supervisor_max_turns_subtitle">%1$d ワーカーターンで強制終了</string>
     <string name="settings_supervisor_max_turns_footer">スーパーバイザーが指示し、ワーカーが実行し、スーパーバイザーが確認します。暴走セッションを防ぐため、ワーカーターンは上限で強制終了されます。</string>
+    <string name="present_card_shared_hint">システムのファイルアプリの Minis Ultra › shared からも開けます。</string>
 </resources>

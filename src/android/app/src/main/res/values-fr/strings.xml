@@ -1964,4 +1964,5 @@
     <string name="settings_supervisor_max_turns">Tours worker max</string>
     <string name="settings_supervisor_max_turns_subtitle">Fermeture forcée après %1$d tours de worker</string>
     <string name="settings_supervisor_max_turns_footer">Le superviseur instruit, le worker exécute, le superviseur vérifie. Les tours du worker sont fermés de force à la limite pour borner les sessions qui dérapent.</string>
+    <string name="present_card_shared_hint">Également disponible dans l’application Fichiers du système, sous Minis Ultra › shared.</string>
 </resources>

@@ -1,0 +1,108 @@
+{
+  "schemaVersion": "mimosa-finding-ledger-batch/v1",
+  "batchId": "stop-20261025T113116535Z-33320-3ac75bfeac59",
+  "runId": "20261025T113116535Z-33320-3ac75bfeac59",
+  "runStatus": "inconclusive",
+  "coverage": {
+    "status": "partial",
+    "reasons": [
+      {
+        "code": "candidate_limit_exceeded",
+        "stage": "candidate-select",
+        "target": "app/src/main/java/com/openminis/app/deeplink/DeepLinkHandler.kt",
+        "detail": "5 changed reviewable file(s) were not scanned because the limit is 20",
+        "affectsCompletion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "app/src/test/java/com/openminis/app/tools/SupervisorRunStoreTest.kt",
+        "detail": "spawnSync C:\\Users\\Administrator\\AppData\\Local\\Programs\\node-v20.19.6\\node.exe ETIMEDOUT",
+        "affectsCompletion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "app/src/main/java/com/openminis/app/ui/chat/ChatComposerHeader.kt",
+        "detail": "spawnSync C:\\Users\\Administrator\\AppData\\Local\\Programs\\node-v20.19.6\\node.exe ETIMEDOUT",
+        "affectsCompletion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "app/src/main/java/com/openminis/app/ui/chat/ChatViewModelSupervisorExt.kt",
+        "detail": "spawnSync C:\\Users\\Administrator\\AppData\\Local\\Programs\\node-v20.19.6\\node.exe ETIMEDOUT",
+        "affectsCompletion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "app/src/main/java/com/openminis/app/tools/SupervisorRunStore.kt",
+        "detail": "spawnSync C:\\Users\\Administrator\\AppData\\Local\\Programs\\node-v20.19.6\\node.exe ETIMEDOUT",
+        "affectsCompletion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "app/src/main/java/com/openminis/app/documentsprovider/MinisDocumentsProvider.kt",
+        "detail": "spawnSync C:\\Users\\Administrator\\AppData\\Local\\Programs\\node-v20.19.6\\node.exe ETIMEDOUT",
+        "affectsCompletion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "candidate-select",
+        "target": "app/src/main/java/com/openminis/app/deeplink/DeepLinkHandler.kt",
+        "detail": "candidate_limit_exceeded: 5 changed reviewable file(s) were not scanned because the limit is 20",
+        "affectsCompletion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "app/src/test/java/com/openminis/app/tools/SupervisorRunStoreTest.kt",
+        "detail": "scanner_failed: spawnSync C:\\Users\\Administrator\\AppData\\Local\\Programs\\node-v20.19.6\\node.exe ETIMEDOUT",
+        "affectsCompletion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "app/src/main/java/com/openminis/app/ui/chat/ChatComposerHeader.kt",
+        "detail": "scanner_failed: spawnSync C:\\Users\\Administrator\\AppData\\Local\\Programs\\node-v20.19.6\\node.exe ETIMEDOUT",
+        "affectsCompletion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "app/src/main/java/com/openminis/app/ui/chat/ChatViewModelSupervisorExt.kt",
+        "detail": "scanner_failed: spawnSync C:\\Users\\Administrator\\AppData\\Local\\Programs\\node-v20.19.6\\node.exe ETIMEDOUT",
+        "affectsCompletion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "app/src/main/java/com/openminis/app/tools/SupervisorRunStore.kt",
+        "detail": "scanner_failed: spawnSync C:\\Users\\Administrator\\AppData\\Local\\Programs\\node-v20.19.6\\node.exe ETIMEDOUT",
+        "affectsCompletion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "app/src/main/java/com/openminis/app/documentsprovider/MinisDocumentsProvider.kt",
+        "detail": "scanner_failed: spawnSync C:\\Users\\Administrator\\AppData\\Local\\Programs\\node-v20.19.6\\node.exe ETIMEDOUT",
+        "affectsCompletion": true
+      }
+    ]
+  },
+  "source": {
+    "component": "zcode-hook",
+    "operationId": "Stop"
+  },
+  "revision": "c6cbaad61bce656aa7866de13c587af4fbeae42c",
+  "diffHash": "b3d953a86a913963e6901b38569d1b72219087700e23f2c7b98efb0d10153e89",
+  "rulesVersion": "unavailable",
+  "sessionHash": "3aa54dc23604761066db6b4ec1d147e930aa0a96993a7f7b0f8591c324acac81",
+  "reportRef": ".mimosa/reports/task-review-session_89b88d80884848266d9ca3f5861cd270-20261025T113116535Z-33320-3ac75bfeac59.json",
+  "events": [],
+  "observedFindingIds": [],
+  "verifiedFiles": [],
+  "recordedAt": "2026-10-25T11:31:17.026Z"
+}

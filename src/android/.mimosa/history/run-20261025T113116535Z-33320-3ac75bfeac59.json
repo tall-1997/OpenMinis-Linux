@@ -1,0 +1,45 @@
+{
+  "schemaVersion": "mimosa-finding-history/v1",
+  "runId": "20261025T113116535Z-33320-3ac75bfeac59",
+  "runStatus": "inconclusive",
+  "errors": [
+    "candidate-select:app/src/main/java/com/openminis/app/deeplink/DeepLinkHandler.kt: candidate_limit_exceeded: 5 changed reviewable file(s) were not scanned because the limit is 20",
+    "scan:app/src/test/java/com/openminis/app/tools/SupervisorRunStoreTest.kt: scanner_failed: spawnSync C:\\Users\\Administrator\\AppData\\Local\\Programs\\node-v20.19.6\\node.exe ETIMEDOUT",
+    "scan:app/src/main/java/com/openminis/app/ui/chat/ChatComposerHeader.kt: scanner_failed: spawnSync C:\\Users\\Administrator\\AppData\\Local\\Programs\\node-v20.19.6\\node.exe ETIMEDOUT",
+    "scan:app/src/main/java/com/openminis/app/ui/chat/ChatViewModelSupervisorExt.kt: scanner_failed: spawnSync C:\\Users\\Administrator\\AppData\\Local\\Programs\\node-v20.19.6\\node.exe ETIMEDOUT",
+    "scan:app/src/main/java/com/openminis/app/tools/SupervisorRunStore.kt: scanner_failed: spawnSync C:\\Users\\Administrator\\AppData\\Local\\Programs\\node-v20.19.6\\node.exe ETIMEDOUT",
+    "scan:app/src/main/java/com/openminis/app/documentsprovider/MinisDocumentsProvider.kt: scanner_failed: spawnSync C:\\Users\\Administrator\\AppData\\Local\\Programs\\node-v20.19.6\\node.exe ETIMEDOUT"
+  ],
+  "target": ".",
+  "revision": "c6cbaad61bce656aa7866de13c587af4fbeae42c",
+  "diffHash": "b3d953a86a913963e6901b38569d1b72219087700e23f2c7b98efb0d10153e89",
+  "rulesVersion": "unavailable",
+  "recordedAt": "2026-10-25T11:31:16.535Z",
+  "timing": {
+    "startedAt": "2026-10-25T11:31:13.971Z",
+    "completedAt": "2026-10-25T11:31:16.535Z",
+    "durationMs": 2564
+  },
+  "tokens": {
+    "input": 0,
+    "output": 0,
+    "total": 0,
+    "modelCalls": 0,
+    "measurement": "known-zero"
+  },
+  "findings": {
+    "total": 0,
+    "bySeverity": {},
+    "byStatus": {}
+  },
+  "coverage": {
+    "status": "partial",
+    "reasonCounts": {
+      "candidate_limit_exceeded": 1,
+      "scanner_failed": 5,
+      "project_check_failed": 6
+    }
+  },
+  "evidenceBoundary": "static_only",
+  "immutableReport": ".mimosa/reports/task-review-session_89b88d80884848266d9ca3f5861cd270-20261025T113116535Z-33320-3ac75bfeac59.json"
+}

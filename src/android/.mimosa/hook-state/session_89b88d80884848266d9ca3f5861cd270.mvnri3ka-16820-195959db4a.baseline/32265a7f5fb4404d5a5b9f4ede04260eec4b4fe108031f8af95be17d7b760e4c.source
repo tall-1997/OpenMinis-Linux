@@ -1,0 +1,251 @@
+package com.openminis.app.provider.openai
+
+import com.openminis.app.provider.ModelListFetchIsolation
+import com.openminis.app.provider.ModelListFetchRetry
+import com.openminis.app.provider.ProviderKeyGate
+import android.content.Context
+import com.openminis.app.data.model.LLMModel
+import com.openminis.app.data.model.normalizeModalities
+import com.openminis.app.logging.AppLogger
+import com.openminis.app.provider.ModelsDevApi
+import com.openminis.app.provider.ProviderModelsCache
+import com.openminis.app.provider.EndpointReasoning
+import com.openminis.app.provider.FreeLaneDirectory
+import com.openminis.app.provider.FreeLanes
+import com.openminis.app.provider.applyUserAgentOverride
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import com.openminis.app.network.SharedHttpClients
+import okhttp3.Request
+import org.json.JSONArray
+import org.json.JSONObject
+
+object OpenAIModelsApi {
+    private const val TAG = "OpenAIModelsApi"
+    private val client = SharedHttpClients.default
+    private val cache = ProviderModelsCache("openai")
+
+    /**
+     * Static model list for Codex OAuth (tokens can't call /v1/models).
+     * Matches iOS `LLMModel.allOpenAICodexOAuth` (Providers/LLMTypes.swift).
+     * Order is preserved so the model picker shows the same default rank.
+     */
+    // T119: every GPT-5.x model on Codex OAuth supports reasoning_effort
+    // (`/v1/responses` requires the `reasoning` object on this auth path),
+    // so set supportsReasoning = true up front. Without it the Thinking
+    // pill in chat is disabled and the user can't pick low/medium/high.
+    fun fetchModelsOAuth(): List<LLMModel> = listOf(
+        // [T-android-thinking-level-arch] GPT-5.6 family — Codex OAuth only
+        // (not in LLMModel.allOpenAI, matching iOS). sol/terra reach ULTRA,
+        // luna reaches MAX (see ThinkingLevelCatalog).
+        LLMModel("gpt-5.6-sol", "GPT-5.6 Sol", "OpenAI", supportsReasoning = true),
+        LLMModel("gpt-5.6-terra", "GPT-5.6 Terra", "OpenAI", supportsReasoning = true),
+        LLMModel("gpt-5.6-luna", "GPT-5.6 Luna", "OpenAI", supportsReasoning = true),
+        LLMModel("gpt-5.5", "GPT-5.5", "OpenAI", supportsReasoning = true),
+        LLMModel("gpt-5.4", "GPT-5.4", "OpenAI", supportsReasoning = true),
+        // [T-codex-oauth-model-prune] Verified callable on a live
+        // ChatGPT-account token (2026-08-01); we had never listed it.
+        LLMModel("gpt-5.4-mini", "GPT-5.4 Mini", "OpenAI", supportsReasoning = true),
+        // [T-codex-oauth-model-prune] gpt-5.3-codex, gpt-5.3-codex-spark,
+        // gpt-5-codex-mini, gpt-5.3, gpt-5.2 and gpt-5 were removed here.
+        // The Codex backend answers each with
+        //   HTTP 400 {"detail":"The '<id>' model is not supported when using
+        //   Codex with a ChatGPT account."}
+        // and that error renders as an EMPTY assistant turn, so leaving them in
+        // the picker reads to the user as "tool calls are broken" rather than
+        // "wrong model". Verified on-device 2026-08-01 against a real Codex
+        // OAuth token; the survivors match the set CLIProxyAPI ships for its
+        // Codex client (internal/registry/models/codex_client_models.json).
+        // Availability is tier-dependent — re-probe before restoring any id,
+        // do not add one back from documentation alone. Mirrors iOS
+        // LLMModel.allOpenAICodexOAuth.
+    ).let {
+        AppLogger.info(TAG, "Codex OAuth model list (${it.size} models): ${it.joinToString { m -> m.id }}")
+        ModelsDevApi.enrichModels(it)
+    } + listOf(
+        // [T-codex-gpt-image2-oauth-android] Special image-generation model on
+        // the Codex OAuth path. Appended AFTER enrichModels so its declared
+        // image input/output modalities survive (models.dev doesn't know it).
+        // It does NOT take the normal Chat Completions / Responses path — the
+        // gpt-image-2 branch in OpenAIProvider routes it through the Codex
+        // image_generation tool. Additive only: the GPT-5.x entries above and
+        // their existing OAuth flow are unchanged.
+        LLMModel(
+            id = "gpt-image-2",
+            displayName = "GPT Image 2",
+            provider = "OpenAI",
+            inputModalities = listOf("text", "image"),
+            outputModalities = listOf("image"),
+        ),
+    )
+
+    // Chat-capable model prefixes (matching iOS)
+    private val chatPrefixes = listOf("gpt-", "o1", "o3", "o4-", "codex-", "chatgpt-")
+
+    // Suffixes to exclude (matching iOS)
+    private val excludeSuffixes = listOf(
+        "-instruct", "-realtime", "-audio", "-transcribe", "-tts", "-embedding"
+    )
+
+    suspend fun fetchModels(
+        apiKey: String,
+        baseURL: String? = null,
+        context: Context? = null,
+        forceRefresh: Boolean = false,
+        // [T-provider-custom-user-agent] Per-provider UA override; null/blank
+        // keeps the default UA. Threaded from ProviderRepository.refreshModels.
+        customUserAgent: String? = null,
+        cacheScope: String = "",
+    ): List<LLMModel> = withContext(Dispatchers.IO) {
+        val isCustomBase = baseURL != null && !isOfficialOpenAI(baseURL)
+        // For third-party endpoints (vLLM, Ollama, etc.), return empty on failure
+        // so the caller preserves existing models instead of replacing with built-in GPT list.
+        val fallback = if (isCustomBase) emptyList() else LLMModel.allOpenAI
+
+        val cacheKey = ModelListFetchIsolation.cacheKey((baseURL ?: "") + "|" + apiKey, cacheScope)
+        if (context != null && !forceRefresh) {
+            cache.load(context, cacheKey)?.let { return@withContext it }
+        }
+
+        val url = buildURL(baseURL)
+        val request = Request.Builder()
+            .url(url)
+            // A keyless lane must be called with NO credential. An empty token
+            // is not a harmless no-op either way: "Bearer " is a token upstream
+            // cannot validate, and Kilo answers INVALID_TOKEN to any token it
+            // cannot validate — which would come back as a 401 for the whole
+            // catalogue and read as "this endpoint is broken".
+            .apply { if (apiKey.isNotBlank()) header("Authorization", "Bearer $apiKey") }
+            // [T-provider-custom-user-agent] models-list UA override.
+            .applyUserAgentOverride(customUserAgent)
+            .let { ModelListFetchIsolation.run { it.noStoreIf(forceRefresh) } }
+            .build()
+
+        // [T-models-fetch-transient-auth] one 401 sample used to empty the list
+        // and drop the cache; a relay in a bad channel window answers 401 for a
+        // key that works minutes later.
+        val response = ModelListFetchRetry.execute(
+            client,
+            request,
+            "OpenAIModels",
+            // [T-llm-error-401-model-scope] A 2xx proves this credential is good
+            // at this host, so a later 401 on a chat call can be blamed on the
+            // model's upstream channel instead of on the key.
+            credentialKey = ProviderKeyGate.credentialKey(baseURL.orEmpty(), apiKey),
+        )
+        val body = response.body?.string() ?: return@withContext fallback
+
+        if (!response.isSuccessful) {
+            if (context != null && (response.code == 401 || response.code == 403)) {
+                cache.invalidate(context, cacheKey)
+            }
+            return@withContext fallback
+        }
+
+        val models = try {
+            val json = JSONObject(body)
+            val data = json.optJSONArray("data") ?: return@withContext fallback
+            val parsed = mutableListOf<LLMModel>()
+            // Built-in keyless lane, recognised per lane by host AND by the
+            // credential shape it expects. A user-built instance with a real API
+            // key is never a free lane and keeps the full catalogue.
+            val lane = FreeLanes.forEndpoint(baseURL, apiKey)
+            // The listing's own free declaration per id. Empty for a lane whose
+            // listing makes none, which is what forces that lane onto its rule.
+            val serverSaysFree = mutableMapOf<String, Boolean>()
+            for (i in 0 until data.length()) {
+                val obj = data.getJSONObject(i)
+                val id = obj.getString("id")
+                if (obj.has("isFree")) serverSaysFree[id] = obj.optBoolean("isFree")
+
+                // Only filter by chat prefixes for official OpenAI endpoints;
+                // custom endpoints (vLLM, Ollama) may serve any model ID.
+                if (!isCustomBase) {
+                    if (!chatPrefixes.any { id.startsWith(it) }) continue
+                    if (excludeSuffixes.any { id.contains(it) }) continue
+                    if (id.contains(":ft-")) continue
+                }
+
+                val displayName = obj.optString("name", id)
+                // 端点返回的窗口参数优先于目录与兜底，这里必须读出来带下去。
+                val (contextWindow, maxOutputTokens) =
+                    com.openminis.app.provider.EndpointModelLimits.read(obj)
+                // Third-party gateways (vLLM, OpenRouter-compat proxies) often
+                // report per-model modalities under `architecture.{input,output}_modalities`
+                // the same way OpenRouter does — pick them up so vision/audio
+                // models are routable without waiting for models.dev enrichment.
+                val arch = obj.optJSONObject("architecture")
+                // OpenAI / OpenRouter return modalities as `image_input` / `text_output` with
+                // suffixes; the rest of the codebase (models.dev, capability fragments,
+                // ModelEntryDetailScreen toggles) uses the bare form. Normalize at the parse
+                // boundary so persisted overrides round-trip correctly through the toggles.
+                val inputModalities = arch?.optJSONArray("input_modalities")?.toStringList().normalizeModalities()
+                val outputModalities = arch?.optJSONArray("output_modalities")?.toStringList().normalizeModalities()
+
+                // T119 kept, and no longer the whole story: the endpoint's own
+                // `supported_parameters` / `opencode.variants` declaration wins,
+                // and the known-family prefixes survive inside EndpointReasoning
+                // as the fallback for listings that declare nothing.
+                val reasoning = EndpointReasoning.read(obj, id)
+
+                parsed.add(
+                    LLMModel(
+                        id = id,
+                        displayName = displayName,
+                        provider = if (isCustomBase) "Custom" else "OpenAI",
+                        contextWindow = contextWindow,
+                        maxOutputTokens = maxOutputTokens,
+                        inputModalities = inputModalities,
+                        outputModalities = outputModalities,
+                        supportsReasoning = reasoning.supportsReasoning,
+                        reasoningEffortValues = reasoning.reasoningEffortValues,
+                        declaresNoEffortTiers = reasoning.declaresNoEffortTiers,
+                    )
+                )
+            }
+            if (parsed.isEmpty() && lane == null) return@withContext fallback
+            // A free lane owns the empty case: resolve() rebuilds the last known
+            // ids rather than letting a dropped network empty the picker, so it
+            // has to run even when this fetch produced nothing.
+            val enriched = if (parsed.isEmpty()) {
+                emptyList()
+            } else {
+                ModelsDevApi.enrichModels(parsed)
+            }
+            if (lane != null) {
+                FreeLaneDirectory.resolve(context, lane, baseURL, enriched, serverSaysFree)
+            } else {
+                enriched
+            }
+        } catch (_: Exception) {
+            return@withContext fallback
+        }
+
+        if (context != null) cache.save(context, cacheKey, models)
+        models
+    }
+
+    private fun JSONArray.toStringList(): List<String> {
+        val out = ArrayList<String>(length())
+        for (i in 0 until length()) {
+            val s = optString(i, "")
+            if (s.isNotEmpty()) out.add(s)
+        }
+        return out
+    }
+
+    /** Check if a base URL points to official OpenAI endpoints. */
+    private fun isOfficialOpenAI(baseURL: String): Boolean {
+        val lower = baseURL.lowercase()
+        return lower.contains("api.openai.com") || lower.contains("chatgpt.com")
+    }
+
+    private fun buildURL(baseURL: String?): String {
+        if (baseURL == null) return "https://api.openai.com/v1/models"
+        // baseURL is ProviderConfig.effectiveBaseURL — it already has /v1 iff the
+        // appendV1Suffix toggle is on. Only append /models; never force /v1, or the
+        // toggle is overridden and services without /v1 return 404.
+        val base = baseURL.trimEnd('/')
+        return "$base/models"
+    }
+}

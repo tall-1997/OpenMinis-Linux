@@ -11,6 +11,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.openminis.app.data.model.ThinkingLevel
+import com.openminis.app.tools.PresentTool
 
 internal sealed class FlatChatItem {
     abstract val key: String
@@ -195,6 +196,22 @@ internal sealed class FlatChatItem {
         val allToolBlocks: List<AssistantBlock>,
         /** True if this is the last cancelled tool in its message — only one Retry button per message. */
         val isLastCancelled: Boolean = false,
+        private val keySuffix: String = "",
+    ) : FlatChatItem() {
+        override val key = FlatKeys.of(FlatKeys.KIND_TOOL, messageId, block.id) + keySuffix
+        override val contentType = "tool"
+        override fun withKeySuffix(suffix: String): FlatChatItem = copy(keySuffix = suffix)
+    }
+
+    /**
+     * [T-android-present-tool] A completed `present` call: the deliverable
+     * card (PresentDeliverableCard) replaces the generic tool pill. Reuses
+     * KIND_TOOL keys so FlatKeys.parse keeps resolving the real messageId,
+     * and the dedupe/selection machinery treats the row like a tool row.
+     */
+    data class AssistantPresentCard(
+        val messageId: String,
+        val block: AssistantBlock,
         private val keySuffix: String = "",
     ) : FlatChatItem() {
         override val key = FlatKeys.of(FlatKeys.KIND_TOOL, messageId, block.id) + keySuffix
@@ -395,8 +412,7 @@ private fun effectiveBlocks(message: ChatMessage, activeSubAgentToolIds: Set<Str
     // completed sub-agent left no trace anywhere on the session page.
     fun hiddenSubAgent(block: AssistantBlock): Boolean =
         isSubAgentTranscriptCard(block) &&
-            (block.id in activeSubAgentToolIds ||
-                block.id.substringBefore("#sub-") in activeSubAgentToolIds)
+            (block.id in activeSubAgentToolIds || block.id.substringBefore("#sub-") in activeSubAgentToolIds)
     return message.toolBlocks.filterNot { block ->
         hiddenSubAgent(block) || (hideSpeakerTools && block.kind == "tool_use")
     }
@@ -490,23 +506,13 @@ private fun splitRounds(
                 // [P-process-card-dup] The run that ends exactly at the split
                 // is the one the streamed message continues, so the two builds
                 // must not BOTH emit its card row.
-                deferredCard = processCardBoundary >= 0 &&
-                    segLastMessageIdx == processCardBoundary - 1,
+                deferredCard = processCardBoundary >= 0 && segLastMessageIdx == processCardBoundary - 1,
             ))
         }
-        segLastMessageIdx = -1
-        segFirstId = ""
-        segLastId = ""
-        segIds.clear()
-        segSteps.clear()
-        segThinking = 0
-        segTools = 0
-        segFailure = false
-        segMs = 0L
-        segRunning = false
-        segActivity = ""
-        segActivityTitle = ""
-        segStartedAt = 0L
+        segLastMessageIdx = -1; segFirstId = ""; segLastId = ""
+        segIds.clear(); segSteps.clear()
+        segThinking = 0; segTools = 0; segFailure = false; segMs = 0L
+        segRunning = false; segActivity = ""; segActivityTitle = ""; segStartedAt = 0L
     }
 
     fun closeRound(endExclusive: Int) {
@@ -515,13 +521,9 @@ private fun splitRounds(
         val round = ChatRound(
             // [P-process-card-dup] Stable anchor, never `lastAssistantIdx`.
             key = roundUserId ?: roundFirstAssistantId ?: messages[lastAssistantIdx].id,
-            lastAssistantIdx = lastAssistantIdx,
-            isRunning = running,
-            thinkingCount = thinkingCount,
-            toolCount = toolCount,
-            hasFailure = hasFailure,
-            totalMs = totalMs,
-            segments = segments.toList(),
+            lastAssistantIdx = lastAssistantIdx, isRunning = running,
+            thinkingCount = thinkingCount, toolCount = toolCount,
+            hasFailure = hasFailure, totalMs = totalMs, segments = segments.toList(),
         )
         val roundIdx = rounds.size
         rounds.add(round)
@@ -589,15 +591,13 @@ private fun splitRounds(
                 segMs += block.durationMs
                 if (segStartedAt == 0L && block.startTimeMs > 0L) segStartedAt = block.startTimeMs
                 val stepRunning = block.toolStatus in IN_FLIGHT_PROCESS_TOOL_STATUSES ||
-                    (block.kind == "thinking" && raw.isStreaming &&
-                        block.id == blocks.lastOrNull()?.id)
+                    (block.kind == "thinking" && raw.isStreaming && block.id == blocks.lastOrNull()?.id)
                 if (stepRunning) {
                     segRunning = true
                     // Latest running step wins: the header reports what is
                     // happening NOW, not what happened first.
                     segActivity = if (block.kind == "thinking") "thinking" else "tool"
-                    segActivityTitle = if (block.kind == "thinking") ""
-                        else block.toolTitle.ifEmpty { block.toolName }
+                    segActivityTitle = if (block.kind == "thinking") "" else block.toolTitle.ifEmpty { block.toolName }
                 }
                 when (block.kind) {
                     "thinking" -> {
@@ -618,8 +618,7 @@ private fun splitRounds(
                 segSteps += ProcessStepRef(
                     id = block.id,
                     kind = block.kind,
-                    title = if (block.kind == "thinking") ""
-                        else block.toolTitle.ifEmpty { block.toolName }.ifEmpty { "tool" },
+                    title = if (block.kind == "thinking") "" else block.toolTitle.ifEmpty { block.toolName }.ifEmpty { "tool" },
                     status = block.toolStatus,
                     durationMs = block.durationMs,
                     running = stepRunning,
@@ -690,9 +689,8 @@ internal fun buildFlatChatItems(
         processCardBoundary == fromIndex
     ) {
         roundSplit.roundAt(fromIndex - 1)?.let { round ->
-            round.segments.firstOrNull {
-                it.deferredCard && it.lastMessageIdx == fromIndex - 1
-            }?.let { round to it }
+            round.segments.firstOrNull { it.deferredCard && it.lastMessageIdx == fromIndex - 1 }
+                ?.let { round to it }
         }
     } else null
     fun dedupe(item: FlatChatItem): FlatChatItem {
@@ -794,8 +792,7 @@ internal fun buildFlatChatItems(
         // same model continued, not a new participant.
         val prevSpeaker = prevNonSystem?.speakerName?.trim().orEmpty()
         val thisSpeaker = message.speakerName?.trim().orEmpty()
-        val isResumeContinuation = prevNonSystem?.role == "assistant" &&
-            prevSpeaker == thisSpeaker
+        val isResumeContinuation = prevNonSystem?.role == "assistant" && prevSpeaker == thisSpeaker
 
         val blocks = message.toolBlocks
         val toolPillBlocks = blocks.filter { it.kind == "tool_use" }
@@ -826,11 +823,8 @@ internal fun buildFlatChatItems(
         // inline — the old `!roundFolded || in keepVisibleIds` gate hid
         // them whenever ANY card existed in the round, which silently
         // dropped the lone thinking (user: "只有一步思考的气泡被丢弃了").
-        val foldedBlockIds: Set<String> = if (round == null || isSystem) {
-            emptySet()
-        } else {
-            round.segments.flatMapTo(mutableSetOf()) { it.blockIds }
-        }
+        val foldedBlockIds: Set<String> =
+            if (round == null || isSystem) emptySet() else round.segments.flatMapTo(mutableSetOf()) { it.blockIds }
         val roundFolded = foldedBlockIds.isNotEmpty()
         val replyText = AssistantReplyText.joined(blocks)
         // [T-android-fold-toolonly-blank] A turn whose entire visible payload
@@ -844,16 +838,12 @@ internal fun buildFlatChatItems(
                 "text" -> block.content.isNotEmpty()
                 "info" -> true
                 "thinking" -> block.id !in foldedBlockIds
-                "tool_use" -> block.id !in foldedBlockIds && shouldShowProcessToolRow(
-                    block,
-                    showCompletedToolCards = showCompletedToolCards,
-                    foldAiProcess = foldAiProcess,
-                )
+                "tool_use" -> block.id !in foldedBlockIds &&
+                    shouldShowProcessToolRow(block, showCompletedToolCards, foldAiProcess)
                 else -> false
             }
         }
-        val headerHiddenByFold = roundFolded && !headerVisibleInBlocks &&
-            message.content.isBlank() && message.error == null
+        val headerHiddenByFold = roundFolded && !headerVisibleInBlocks && message.content.isBlank() && message.error == null
         if (!isSystem && !isResumeContinuation && !headerHiddenByFold) {
             out.add(dedupe(FlatChatItem.AssistantHeader(
                 message.id,
@@ -907,11 +897,7 @@ internal fun buildFlatChatItems(
                         // list changed under it.
                         val isLastAssistantTurn = idx == messages.lastIndex ||
                             (idx + 1 until messages.size).all { messages[it].role != "assistant" }
-                        val fragments = if (isLastText && isLastAssistantTurn) {
-                            rawFragments
-                        } else {
-                            coalesceMarkdownFragments(rawFragments)
-                        }
+                        val fragments = if (isLastText && isLastAssistantTurn) rawFragments else coalesceMarkdownFragments(rawFragments)
                         if (fragments.isEmpty()) {
                             // Defensive: if the splitter returns nothing for
                             // a non-empty input (shouldn't happen), fall back
@@ -924,11 +910,9 @@ internal fun buildFlatChatItems(
                                 isLastBlockOfMessage = isLastText && message.isStreaming,
                                 messageIsStreaming = message.isStreaming && isLastText,
                                 messageMarkdown = joinedMarkdown,
-                                showTranslate = !message.isStreaming && block.content.isNotBlank() &&
-                                    (!roundFolded || isLastText),
+                                showTranslate = !message.isStreaming && block.content.isNotBlank() && (!roundFolded || isLastText),
                                 segmentText = if (roundFolded && isLastText) replyText else block.content,
-                                translateWholeReply = roundFolded && isLastText &&
-                                    !message.isStreaming && block.content.isNotBlank(),
+                                translateWholeReply = roundFolded && isLastText && !message.isStreaming && block.content.isNotBlank(),
                             )))
                         } else {
                             fragments.forEachIndexed { fragIdx, raw ->
@@ -941,12 +925,10 @@ internal fun buildFlatChatItems(
                                     isLastBlockOfMessage = isLastText && isLastFragOfText,
                                     messageIsStreaming = message.isStreaming && isLastText,
                                     messageMarkdown = joinedMarkdown,
-                                    showTranslate = isLastFragOfText && !message.isStreaming && block.content.isNotBlank() &&
-                                        (!roundFolded || isLastText),
+                                    showTranslate = isLastFragOfText && !message.isStreaming && block.content.isNotBlank() && (!roundFolded || isLastText),
                                     segmentText = if (roundFolded && isLastText && isLastFragOfText) replyText
                                         else if (isLastFragOfText) block.content else "",
-                                    translateWholeReply = roundFolded && isLastText && isLastFragOfText &&
-                                        !message.isStreaming && block.content.isNotBlank(),
+                                    translateWholeReply = roundFolded && isLastText && isLastFragOfText && !message.isStreaming && block.content.isNotBlank(),
                                 )))
                             }
                         }
@@ -970,13 +952,20 @@ internal fun buildFlatChatItems(
                     messageId = message.id,
                     block = block,
                 )))
-                else -> if (block.id !in foldedBlockIds && shouldShowProcessToolRow(
+                // [T-android-present-tool] A completed present call renders
+                // as its deliverable card, not a tool pill. present is in
+                // isAlwaysVisibleProcessTool, so it never lands inside
+                // foldedBlockIds and always reaches this first arm.
+                else -> when {
+                    isPresentDeliverable(block) -> out.add(dedupe(FlatChatItem.AssistantPresentCard(
+                        messageId = message.id,
+                        block = block,
+                    )))
+                    block.id !in foldedBlockIds && shouldShowProcessToolRow(
                         block,
                         showCompletedToolCards = showCompletedToolCards,
                         foldAiProcess = foldAiProcess,
-                    )
-                ) {
-                    out.add(dedupe(FlatChatItem.AssistantToolUse(
+                    ) -> out.add(dedupe(FlatChatItem.AssistantToolUse(
                         messageId = message.id,
                         block = block,
                         allToolBlocks = toolPillBlocks,
@@ -1069,7 +1058,19 @@ internal fun isSubAgentTranscriptCard(block: AssistantBlock): Boolean =
     )
 
 internal fun isAlwaysVisibleProcessTool(block: AssistantBlock): Boolean =
-    block.kind == "tool_use" && block.toolName == "ask_user_question"
+    block.kind == "tool_use" && (
+        block.toolName == "ask_user_question" || block.toolName == PresentTool.NAME
+        )
+
+/**
+ * [T-android-present-tool] A completed present call with a parseable archive
+ * path renders as [FlatChatItem.AssistantPresentCard]; everything else (still
+ * running, failed, legacy output without the Path: line) stays a tool pill.
+ */
+internal fun isPresentDeliverable(block: AssistantBlock): Boolean =
+    block.kind == "tool_use" && block.toolName == PresentTool.NAME &&
+        block.toolStatus == ToolBlockStatus.SUCCESS &&
+        PresentTool.parseSharedGuestPath(block.content) != null
 
 internal fun shouldShowProcessToolRow(
     block: AssistantBlock,
@@ -1161,8 +1162,7 @@ internal fun floatingOverlayBlocks(
     .filter { isFloatingProcessTool(it, foldAiProcess) }
     .filterNot {
         showSubAgentBar && isSubAgentTranscriptCard(it) &&
-            (it.id in activeSubAgentToolIds ||
-                it.id.substringBefore("#sub-") in activeSubAgentToolIds)
+            (it.id in activeSubAgentToolIds || it.id.substringBefore("#sub-") in activeSubAgentToolIds)
     }
 
 // ── [P1-3] Row rhythm ───────────────────────────────────────────────────

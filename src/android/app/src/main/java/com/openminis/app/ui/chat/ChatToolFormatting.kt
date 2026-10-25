@@ -7,6 +7,7 @@ import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.IosShare
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Search
@@ -35,6 +36,7 @@ internal fun toolAccentColor(toolName: String): Color = when (toolName) {
     "search_sessions", "read_session" -> Color(0xFF64D2FF)
     "spawn_agent", "run_subagent" -> Color(0xFF5856D6)
     "cronjob" -> Color(0xFFFF9500)
+    "present_file" -> Color(0xFF30D158)     // deliverable green
     else -> if (toolName.startsWith("online_")) Color(0xFF007AFF) else Color(0xFF8E8E93)
 }
 
@@ -51,6 +53,7 @@ internal fun toolIconFor(toolName: String) = when (toolName) {
     "search_sessions", "read_session" -> Icons.Default.Search
     "spawn_agent", "run_subagent" -> Icons.Default.Groups
     "cronjob" -> Icons.Default.Alarm
+    "present_file" -> Icons.Default.IosShare
     else -> if (toolName.startsWith("online_")) Icons.Default.Language else Icons.Default.Search
 }
 
@@ -69,6 +72,7 @@ internal fun toolDisplayName(toolName: String): String = when (toolName) {
     "read_session" -> "session reader"
     "spawn_agent", "run_subagent" -> "sub-agent"
     "cronjob" -> "cron"
+    "present_file" -> "present_file"
     else -> if (toolName.startsWith("online_")) "online plugin" else toolName
 }
 
@@ -89,6 +93,7 @@ internal fun toolTitleLabel(toolName: String): String = when (toolName) {
     "read_session" -> "Minis is reading a Session"
     "spawn_agent", "run_subagent" -> "Minis is coordinating a sub-agent"
     "cronjob" -> "Minis is scheduling a task"
+    "present_file" -> "Minis is delivering a file"
     else -> "Minis is using ${toolDisplayName(toolName)}"
 }
 

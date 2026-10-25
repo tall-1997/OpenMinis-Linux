@@ -314,8 +314,8 @@ fun ChatScreen(
     val context = LocalContext.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
-    // Scoped to a process-level per-session ViewModelStore (ChatViewModelStore)
-    // so the ViewModel and its viewModelScope survive:
+    // Scoped to a process-level per-session ViewModelStore (ChatViewModelStore) so the
+    // ViewModel and its viewModelScope survive:
     //   - configuration changes (rotation — NavBackStackEntry still alive)
     //   - leaving the chat screen via popBackStack (NavBackStackEntry destroyed)
     // The VM is released only when the session is deleted (see SessionListViewModel).
@@ -1256,10 +1256,8 @@ fun ChatScreen(
     // and it recomposes the caller for free. Verified on a Mate Pad, which
     // reports `keysexposed-qwerty` with its keyboard attached.
     val configuration = LocalConfiguration.current
-    val hasHardwareKeyboard = configuration.keyboard ==
-        android.content.res.Configuration.KEYBOARD_QWERTY &&
-        configuration.hardKeyboardHidden ==
-        android.content.res.Configuration.HARDKEYBOARDHIDDEN_NO
+    val hasHardwareKeyboard = configuration.keyboard == android.content.res.Configuration.KEYBOARD_QWERTY &&
+        configuration.hardKeyboardHidden == android.content.res.Configuration.HARDKEYBOARDHIDDEN_NO
 
     /**
      * [T-android-hwkeyboard-keep-focus] Release the composer after a send —
@@ -2996,6 +2994,7 @@ fun ChatScreen(
                     is FlatChatItem.AssistantTyping -> false
                     is FlatChatItem.AssistantError -> grayedMap[messageId] == true
                     is FlatChatItem.AssistantLegacyContent -> grayedMap[messageId] == true
+                    else -> false // AssistantPresentCard: deliverable rows never grayed
                 }
                 // SelectionContainer must wrap the WHOLE LazyColumn — placing
                 // it per-item breaks long-press because items get disposed

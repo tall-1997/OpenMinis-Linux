@@ -98,6 +98,15 @@ object AgentTools {
         // SshConfigStore; empty state self-documents via list_hosts). Kept
         // OUT of alwaysOn: long-tail, discovered via find_tools("ssh").
         add(SshTool.definition())
+        // [T-android-jobs-registry] Background jobs. Long-tail like ssh: no
+        // prompt fragment announces it, find_tools("background_job") discovers it.
+        add(JobTools.definition())
+        // [T-android-agent-terminal] Interactive PTY terminals. Long-tail:
+        // shell_execute stays the default; terminals are for TUI and
+        // interactive programs only (the description says so too).
+        add(TerminalTools.definition())
+        // [T-android-present-tool] Deliverable cards. Long-tail.
+        add(PresentTool.definition())
         if (memoryEnabled) {
             add(memoryWriteDefinition())
             add(memoryGetDefinition())

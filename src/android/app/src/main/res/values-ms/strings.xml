@@ -1962,4 +1962,5 @@
     <string name="settings_supervisor_max_turns">Giliran pekerja maks</string>
     <string name="settings_supervisor_max_turns_subtitle">Tutup paksa selepas %1$d giliran pekerja</string>
     <string name="settings_supervisor_max_turns_footer">Penyelia memberi arahan, pekerja melaksanakan, penyelia menyemak. Giliran pekerja ditutup paksa pada had untuk mengehadkan sesi yang liar.</string>
+    <string name="present_card_shared_hint">Turut tersedia dalam apl Fail sistem di bawah Minis Ultra › shared.</string>
 </resources>

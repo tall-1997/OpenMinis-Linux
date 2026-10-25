@@ -53,6 +53,7 @@ class ChatFlatItemsToolOnlyFoldTest {
             is FlatChatItem.AssistantProcessSummary -> "summary"
             is FlatChatItem.AssistantThinking -> "thinking"
             is FlatChatItem.AssistantToolUse -> "tool:${item.block.toolName}"
+            is FlatChatItem.AssistantPresentCard -> "present"
             is FlatChatItem.AssistantInfo -> "info"
             is FlatChatItem.AssistantTyping -> "typing"
             is FlatChatItem.AssistantError -> "error"

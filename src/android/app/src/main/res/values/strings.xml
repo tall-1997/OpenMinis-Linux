@@ -2793,4 +2793,6 @@
     <string name="settings_supervisor_max_turns">Max worker turns</string>
     <string name="settings_supervisor_max_turns_subtitle">Force-close after %1$d worker turns</string>
     <string name="settings_supervisor_max_turns_footer">The supervisor instructs, the worker executes, the supervisor reviews. Worker turns are force-closed at the limit to bound runaway sessions.</string>
+    <!-- [T-android-present-tool] Hint on the present deliverable card: where the archived copy lives in the system Files app. -->
+    <string name="present_card_shared_hint">Also available in the system Files app under Minis Ultra › shared.</string>
 </resources>

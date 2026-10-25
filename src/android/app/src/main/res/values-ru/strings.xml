@@ -1972,4 +1972,5 @@
     <string name="settings_supervisor_max_turns">Макс. ходов воркера</string>
     <string name="settings_supervisor_max_turns_subtitle">Принудительное закрытие после %1$d ходов воркера</string>
     <string name="settings_supervisor_max_turns_footer">Супервизор инструктирует, воркер исполняет, супервизор проверяет. Ходы воркера принудительно закрываются по достижении лимита, чтобы сдерживать убегающие сессии.</string>
+    <string name="present_card_shared_hint">Также доступно в системном приложении «Файлы», папка Minis Ultra › shared.</string>
 </resources>

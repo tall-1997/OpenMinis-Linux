@@ -359,6 +359,19 @@ internal fun ChatFlatItemRow(
                                     ).show()
                                 },
                             )
+                            is FlatChatItem.AssistantPresentCard ->
+                                // [T-android-present-tool] Deliverable card
+                                // for a completed present call: Open routes
+                                // through the same previewFileOrBrowser
+                                // channel the file browser uses (HTML goes
+                                // to BrowserSheet, everything else to
+                                // FilePreviewScreen); Share lives inside the
+                                // card via FileProvider.
+                                PresentDeliverableCard(
+                                    block = item.block,
+                                    sessionId = sessionId,
+                                    onOpenFile = previewFileOrBrowser,
+                                )
                             is FlatChatItem.AssistantInfo -> FallbackInfoBlock(
                                 block = item.block,
                                 // Only the compact-divider info block should
