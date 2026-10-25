@@ -1,6 +1,8 @@
 package com.openminis.app.ui.chat
 
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -127,10 +129,10 @@ class SupervisorUiHostTest {
     }
 
     @Test
-    fun flowEmitsLatestStateForCollectors() {
+    fun flowEmitsLatestStateForCollectors() = runBlocking {
         clean("ui-7")
         SupervisorUiHost.update("ui-7", SupervisorUiHost.Phase.EXECUTING, "objective", 4)
-        val state = SupervisorUiHost.uiState.first { it != null }
+        val state = SupervisorUiHost.uiState.filterNotNull().first()
         assertEquals("ui-7", state.sessionId)
         assertEquals(4, state.workerTurns)
         clean("ui-7")
