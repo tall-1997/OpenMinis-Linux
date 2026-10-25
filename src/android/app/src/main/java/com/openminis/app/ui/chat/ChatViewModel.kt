@@ -1,32 +1,20 @@
 package com.openminis.app.ui.chat
 
 import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.compose.foundation.lazy.LazyListState
-import com.openminis.app.agent.Level
 import com.openminis.app.agent.ToolLoopDetector
 import com.openminis.app.browser.BrowserActionInput
 import com.openminis.app.browser.BrowserTabPool
 import com.openminis.app.data.db.MessageEntity
-import com.openminis.app.data.db.AppDatabase
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Compress
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Lightbulb
-import androidx.compose.material.icons.filled.Psychology
-import androidx.compose.material.icons.outlined.Build
-import androidx.compose.material.icons.outlined.Extension
 import com.openminis.app.data.BPETokenizer
 import com.openminis.app.data.ToolLimitPrefs
 import com.openminis.app.ui.chat.retention.HotWindow
 import com.openminis.app.ui.chat.retention.ResidentWindow
-import com.openminis.app.data.ContextPolicy
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.data.FileMentionIndex
 import com.openminis.app.data.db.CompactMarkerEntity
@@ -38,19 +26,13 @@ import com.openminis.app.data.model.LLMModel
 import com.openminis.app.data.model.LLMStreamChunk
 import com.openminis.app.data.model.LLMUsage
 import com.openminis.app.data.model.ModelGroup
-import com.openminis.app.data.model.RoutingStrategy
 import com.openminis.app.data.model.hasImageInput
-import com.openminis.app.data.model.isPureVideoGenerator
-import com.openminis.app.data.CapabilityRouter
-import com.openminis.app.data.ModelCapability
 import com.openminis.app.data.model.ThinkingLevel
 import com.openminis.app.R
 import com.openminis.app.data.repository.ChatRepository
 import com.openminis.app.data.repository.MemoryRepository
 import com.openminis.app.data.repository.ProviderRepository
-import com.openminis.app.data.repository.MultiAgentSettings
 import com.openminis.app.data.repository.MultiAgentSettingsRepository
-import com.openminis.app.data.model.ModelEntry
 import com.openminis.app.tools.GroupChat
 import com.openminis.app.provider.ImageBudget
 import com.openminis.app.provider.LLMProvider
@@ -58,39 +40,19 @@ import com.openminis.app.provider.NonFiniteJson
 import com.openminis.app.provider.ProviderFactory
 import com.openminis.app.provider.catalogMaxThinkingLevel
 import com.openminis.app.provider.effectiveMaxThinkingLevel
-import com.openminis.app.agent.shell.BashismDetector
-import com.openminis.app.agent.shell.BashismReminder
-import com.openminis.app.agent.shell.OnDemandBash
 import com.openminis.app.sandbox.ExecutionCoordinator
-import com.openminis.app.terminal.MinisOpenUrlBroker
-import com.openminis.app.terminal.MinisUrlMarker
 import com.openminis.app.tools.AgentTools
-import com.openminis.app.tools.CodeGraphTool
-import com.openminis.app.tools.SubAgentKind
-import com.openminis.app.tools.SubAgentLane
-import com.openminis.app.tools.FileEditTool
-import com.openminis.app.tools.FileReadTool
-import com.openminis.app.tools.FileWriteTool
 import com.openminis.app.tools.MemoryTools
-import com.openminis.app.tools.CronJobTool
-import com.openminis.app.tools.ReadImageTool
 import com.openminis.app.tools.ToolExecutionResult
-import com.openminis.app.tools.SubAgentRunner
-import com.openminis.app.tools.PlanDiscussionOrchestrator
-import com.openminis.app.data.PlanDiscussionPrefs
-import com.openminis.app.data.PlanDiscussionTrigger
 import com.openminis.app.MinisApp
-import com.openminis.app.offload.OffloadPermissionManager
 import com.openminis.app.service.ApprovalGate
 import com.openminis.app.security.SecurityGateHolder
 import com.openminis.app.notification.ApprovalNotifier
 import com.openminis.app.service.SessionActivityTracker
-import com.openminis.app.service.SessionConcurrencyManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -104,19 +66,12 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlinx.coroutines.yield
 import org.json.JSONObject
-import java.io.ByteArrayOutputStream
 import com.openminis.app.util.IsoTime
 // [T-android-split-chat] StreamingDelta / ChatMessage / QueuedPrompt /
 // ToolBlockStatus / SlashCommand / AssistantBlock moved verbatim to ChatModels.kt.
@@ -1644,10 +1599,10 @@ class ChatViewModel(
      * hold this for a long time before send, so it must not live anywhere the
      * system might reclaim mid-draft.
      *
-     * Returns null if the write fails, and the caller then leaves the paste in
-     * the text field verbatim — worse-looking than a chip, but nothing is lost.
+     * Returns null if the write fails; the caller then stashes the paste as an
+     * ordinary placeholder instead — an unwritable cache degrades to the chip, never to lost text.
      */
-    fun stashPastedTextAsFile(text: String): InputAttachment? {
+    suspend fun stashPastedTextAsFile(text: String): InputAttachment? {
         val dir = java.io.File(context.cacheDir, "pasted_text").apply { mkdirs() }
         // Timestamp + short uuid: sorts chronologically in a file listing and
         // cannot collide when two pastes land in the same millisecond.
@@ -1655,7 +1610,7 @@ class ChatViewModel(
         val name = "Pasted_$stamp-${java.util.UUID.randomUUID().toString().take(8)}.txt"
         val file = java.io.File(dir, name)
         return try {
-            file.writeText(text)
+            withContext(Dispatchers.IO) { file.writeText(text) }
             val attachment = InputAttachment(
                 fileName = name,
                 uri = android.net.Uri.fromFile(file),

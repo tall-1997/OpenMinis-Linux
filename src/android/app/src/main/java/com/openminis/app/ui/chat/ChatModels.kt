@@ -6,8 +6,6 @@ package com.openminis.app.ui.chat
 
 import android.net.Uri
 import com.openminis.app.data.model.ThinkingLevel
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.first
 
 /**
  * Per-message streaming snapshot — the high-frequency fields that

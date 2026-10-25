@@ -29,6 +29,7 @@ import com.openminis.app.data.repository.ProviderRepository
 import com.openminis.app.data.repository.WebAppShortcutRepository
 import com.openminis.app.data.repository.MCPRepository
 import com.openminis.app.data.repository.SkillRepository
+import com.openminis.app.di.AppGraph
 import com.openminis.app.evolution.EvolutionEngine
 import com.openminis.app.evolution.EvolutionHooks
 import com.openminis.app.notification.BackgroundTaskNotifier
@@ -37,7 +38,6 @@ import com.openminis.app.network.NetworkMonitor
 import com.openminis.app.offload.OffloadPermissionManager
 import com.openminis.app.provider.ModelsDevApi
 import com.openminis.app.sandbox.ExecutionCoordinator
-import com.openminis.app.sandbox.MountedFolderCoordinator
 import com.openminis.app.sandbox.NativeOffloadServer
 import com.openminis.app.sandbox.PRootKernel
 import com.openminis.app.sandbox.RootfsManager
@@ -281,9 +281,12 @@ class MinisApp : Application(), ImageLoaderFactory {
         // the exact launch where the user is trying to read the crash files.
         AppLogger.primeContext(this)
 
+        com.openminis.app.crash.LaunchPhaseProbes.startLaunchScan(this, appCoroutineScopes.io)
+        com.openminis.app.crash.LaunchPhaseProbes.startDbVersionProbe(this, appCoroutineScopes.io)
+
         com.openminis.app.platform.OptionalPackages.probe(this)
-        com.openminis.app.session.ChatRuntime.binder =
-            com.openminis.app.ui.chat.ChatViewModelBinder(this)
+        // Chat bridge for debug/headless RPC — via the AppGraph registry.
+        AppGraph.installChatBinder(com.openminis.app.ui.chat.ChatViewModelBinder(this))
 
         // [T-codex-fast-mode] Capture the app context + warm the Fast Mode
         // flag cache so the provider layer (no Context) can read it at
@@ -358,12 +361,6 @@ class MinisApp : Application(), ImageLoaderFactory {
             Log.w("MinisApp", "install FGS-timeout handler failed: ${t.message}")
         }
 
-        // T-android-crash-freq-share: local fallback for Crashlytics (#458).
-        // Scan filesDir/logs/ for crash-*.log + native-crash-*.log files
-        // touched in the last hour; if THRESHOLD+ are present, stash the
-        // list so MainActivity.onCreate can prompt to share them.
-        com.openminis.app.crash.CrashFrequencyDetector.checkAtLaunch(this)
-
         // Hard short-circuit: when checkAtLaunch flips safe-mode ON, skip
         // every heavy subsystem (DB, repositories, offload server, PRoot
         // bind mounts, network monitor, …). The only thing MainActivity
@@ -388,6 +385,7 @@ class MinisApp : Application(), ImageLoaderFactory {
         // onward is a potential re-crash trigger on a loop — the whole
         // point of safe-mode is to stop the bleeding before another
         // segfault rewrites the log files.
+        com.openminis.app.crash.LaunchPhaseProbes.awaitLaunchScan()
         if (com.openminis.app.crash.CrashFrequencyDetector.isSafeMode()) {
             Log.w("MinisApp", "safe-mode ON — skipping app subsystem init")
             return
@@ -470,7 +468,7 @@ class MinisApp : Application(), ImageLoaderFactory {
         // is still untouched, read only via SQLiteDatabase.OPEN_READONLY — lets
         // the UI show recoverable guidance instead of dying, and guarantees
         // nothing has migrated or dropped a table by the time we choose.
-        dbVersionDecision = DatabaseVersionGuard.evaluate(this)
+        dbVersionDecision = com.openminis.app.crash.LaunchPhaseProbes.awaitDbVersionProbe()
 
         try {
         // Guard INSIDE the try, so a newer-schema database takes the very same
@@ -526,7 +524,8 @@ class MinisApp : Application(), ImageLoaderFactory {
                 skillRepository = skillRepository,
             )
         }.onFailure { Log.e("MinisApp", "evolution init failed", it) }.getOrNull()
-        EvolutionHooks.engine = appContainer.evolutionEngine
+        // Possibly null (runCatching-guarded); EvolutionHooks readers tolerate null.
+        AppGraph.installEvolutionEngine(appContainer.evolutionEngine)
         appContainer.webAppShortcutRepository = WebAppShortcutRepository(database.webAppShortcutDao())
         MinisAppAsyncInit.startWarmup(appContainer)
 
@@ -633,12 +632,12 @@ class MinisApp : Application(), ImageLoaderFactory {
         RootfsManager.getInstance(this)
         ExecutionCoordinator.init(this)
         HostEventHooks.init(this)
-        ExecutionCoordinator.envVarRepository = envVarRepository
+        AppGraph.installExecutionEnvVarRepository(envVarRepository)
 
-        // Privacy Mode store + redactor wiring. Mirrors iOS
-        // EnvVarPrivacyStore.init / EnvVarRedactor static handoff.
+        // Privacy Mode store + redactor wiring (repo handoff via AppGraph).
+        // Mirrors iOS EnvVarPrivacyStore.init.
         com.openminis.app.data.EnvVarPrivacyStore.init(this)
-        com.openminis.app.data.EnvVarRedactor.envVarRepository = envVarRepository
+        AppGraph.installRedactorEnvVarRepository(envVarRepository)
 
         // Start network monitoring — mirrors iOS NetworkMonitor.shared.start().
         // The monitor writes /etc/resolv.conf immediately and on every
@@ -658,16 +657,16 @@ class MinisApp : Application(), ImageLoaderFactory {
         // (cloud providers, unmounted SD card) are silently skipped by
         // bindMountSpecs.
         appContainer.mountedFoldersStore = MountedFoldersStore(this)
-        // T219-5: hand the singleton to PRootKernel so applyMountedFoldersSnapshot
-        // can read the live state, and wire an onChange callback so any UI CRUD
-        // (add/remove/rename/toggle) re-applies the snapshot.
+        // T219-5: register the singleton in AppGraph so PRootKernel's
+        // applyMountedFoldersSnapshot can read the live state, and wire an
+        // onChange callback so any UI CRUD (add/remove/rename/toggle) re-applies it.
         // T277: PersistentShell reuses one PRoot process per chat session for the
         // session's lifetime, so an applyMountedFoldersSnapshot call alone never
         // reaches the live shell — proot's `-b` argv is frozen at spawn time.
         // Kill any live shells so the next execute() rebuilds them with the
         // updated bind set. Mount CRUD is a Settings-screen action; the user
         // is not in chat mid-command, so this restart is safe and user-invisible.
-        PRootKernel.mountedFoldersStore = appContainer.mountedFoldersStore
+        AppGraph.installMountedFoldersStore(appContainer.requireMountedFoldersStore())
         mountedFoldersStore.onChange = {
             PRootKernel.applyMountedFoldersSnapshot(this)
             ExecutionCoordinator.stopCurrentCommand()
@@ -837,12 +836,10 @@ class MinisApp : Application(), ImageLoaderFactory {
             backgroundSettings = backgroundSettingsRepository,
             isAppForeground = ::isAppForeground,
         )
-        com.openminis.app.config.confirm.ConfigConfirmationGate.backgroundNotifier = {
-            configConfirmNotifier.notifyIfBackgrounded(it)
-        }
-        com.openminis.app.config.confirm.ConfigConfirmationGate.cancelNotification = {
-            configConfirmNotifier.cancel(it)
-        }
+        // Both hooks are reinstallable AppGraph slots (Context-free gate kept
+        // unit-testable); the notifier instance is constructed once here.
+        AppGraph.installConfigConfirmBackgroundNotifier(configConfirmNotifier::notifyIfBackgrounded)
+        AppGraph.installConfigConfirmCancelNotification(configConfirmNotifier::cancel)
 
         // Track foreground state via ActivityLifecycleCallbacks. Counting
         // started/stopped balances out around configuration changes (the

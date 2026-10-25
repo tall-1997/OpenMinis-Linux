@@ -11,8 +11,6 @@ import com.openminis.app.offload.OffloadPermissionManager
 import com.openminis.app.sandbox.NativeOffloadHandler
 import com.openminis.app.sandbox.NativeOffloadRequest
 import com.openminis.app.sandbox.NativeOffloadResult
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
 import com.openminis.app.util.IsoTime
@@ -82,6 +80,11 @@ class CalendarOffloadHandler(private val context: Context) : NativeOffloadHandle
      * Mirrors the location handler's pattern: system dialog → settings gate.
      * Returns null if permission ends up granted; otherwise a ready-to-return
      * error [NativeOffloadResult] describing why we gave up.
+     *
+     * The dialog → post-DENY poll → settings-gate skeleton (runBlocking +
+     * [OffloadPermissionManager.INTERACTIVE_BUDGET_MS] cap) lives in
+     * [OffloadInteractivePermission.ensureInteractive]; only the calendar-
+     * specific permission set, settings-gate copy and log labels sit here.
      */
     private fun ensurePermission(
         permissions: List<String>,
@@ -92,54 +95,25 @@ class CalendarOffloadHandler(private val context: Context) : NativeOffloadHandle
     ): NativeOffloadResult? {
         if (satisfied()) return null
         AppLogger.warning(TAG, "$humanLabel not granted — routing through permission flow")
-        val result = runBlocking {
-            withTimeoutOrNull(OffloadPermissionManager.INTERACTIVE_BUDGET_MS) {
-            var r = OffloadPermissionManager.requestAndroidPermission(permissions)
-            if (r == OffloadPermissionManager.AndroidPermissionResult.DENIED &&
-                OffloadPermissionManager.pollForPermissionGrant(satisfied)
-            ) {
-                AppLogger.info(TAG, "Calendar $humanLabel permission granted during post-DENY poll")
-                r = OffloadPermissionManager.AndroidPermissionResult.GRANTED
-            }
-            if (r == OffloadPermissionManager.AndroidPermissionResult.DENIED) {
-                r = OffloadPermissionManager.requestSettingsGate(
-                    OffloadPermissionManager.SettingsGateRequest(
-                        id = settingsId,
-                        title = "Calendar permission needed",
-                        message = "Minis needs $humanLabel permission to $humanLabel your calendar. Open Settings to allow it.",
-                        settingsAction = android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                        requiresPackageUri = true,
-                        positiveLabel = "Open Settings",
-                    ),
-                    check = { satisfied() },
-                )
-            }
-            r
-            }
-        } ?: OffloadPermissionManager.AndroidPermissionResult.TIMEOUT
-        return when (result) {
-            OffloadPermissionManager.AndroidPermissionResult.GRANTED -> null
-            OffloadPermissionManager.AndroidPermissionResult.DENIED -> NativeOffloadResult(
-                77,
-                OffloadOutput.formatBody(
-                    JSONObject()
-                        .put("error", "permission_denied")
-                        .put("message", "The user declined the $humanLabel permission.")
-                        .toString(),
-                    args,
-                ) + "\n",
-            )
-            OffloadPermissionManager.AndroidPermissionResult.TIMEOUT -> NativeOffloadResult(
-                77,
-                OffloadOutput.formatBody(
-                    JSONObject()
-                        .put("error", "timeout")
-                        .put("message", "Timed out waiting for the user to grant the $humanLabel permission.")
-                        .toString(),
-                    args,
-                ) + "\n",
-            )
-        }
+        return OffloadInteractivePermission.ensureInteractive(
+            logTag = TAG,
+            permissions = permissions,
+            satisfied = satisfied,
+            gate = OffloadPermissionManager.SettingsGateRequest(
+                id = settingsId,
+                title = "Calendar permission needed",
+                message = "Minis needs $humanLabel permission to $humanLabel your calendar. Open Settings to allow it.",
+                settingsAction = android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                requiresPackageUri = true,
+                positiveLabel = "Open Settings",
+            ),
+            pollGrantedLog = "Calendar $humanLabel permission granted during post-DENY poll",
+            copy = OffloadInteractivePermission.DenialCopy(
+                deniedMessage = "The user declined the $humanLabel permission.",
+                timeoutMessage = "Timed out waiting for the user to grant the $humanLabel permission.",
+            ),
+            args = args,
+        )
     }
 
     private fun doList(args: OffloadArgs): NativeOffloadResult {

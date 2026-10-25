@@ -7,6 +7,7 @@ import com.openminis.app.data.db.CompactMarkerEntity
 import com.openminis.app.data.db.FolderEntity
 import com.openminis.app.data.db.MessageEntity
 import com.openminis.app.logging.AppLogger
+import com.openminis.app.tools.AtomicFileWrite
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
@@ -717,8 +718,7 @@ class BackupExporter(
     private fun encryptStagedMembers(staging: File, keys: BackupCrypto.Keys) {
         val base = staging.canonicalFile
         val members = base.walkTopDown()
-            .filter { it.isFile && it.name != "manifest.json" }
-            .toList()
+            .filter { it.isFile && it.name != "manifest.json" }.toList()
         for (file in members) {
             val rel = file.relativeTo(base).path.replace(File.separatorChar, '/')
             val key = if (rel == "secrets.json") keys.secretsKey else keys.dataKey
@@ -756,8 +756,7 @@ class BackupExporter(
         val integrity = base.walkTopDown()
             .filter { it.isFile && it.name != "manifest.json" } // can't hash itself
             .associate { file ->
-                file.relativeTo(base).path.replace(File.separatorChar, '/') to
-                    BackupBlobStore.sha256OfFile(file)
+                file.relativeTo(base).path.replace(File.separatorChar, '/') to BackupBlobStore.sha256OfFile(file)
             }
 
         return BackupManifest(
@@ -802,7 +801,8 @@ class BackupExporter(
         partial.delete()
         try {
             BackupZip.archive(staging, partial)
-            if (!partial.renameTo(out)) {
+            // moveIntoPlace: per-path lock + copy-over fallback; false (bytes kept, partial NOT deleted) throws the same BackupException.
+            if (!AtomicFileWrite.moveIntoPlace(partial, out)) {
                 throw BackupException("Could not finalise the backup package.")
             }
         } catch (e: Exception) {

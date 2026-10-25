@@ -4,6 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import kotlinx.coroutines.runBlocking
 import org.junit.Test
 
 class SupervisorRunStoreTest {
@@ -13,7 +14,7 @@ class SupervisorRunStoreTest {
     }
 
     @Test
-    fun start_returnsRunningRecordWithObjective() {
+    fun start_returnsRunningRecordWithObjective() = runBlocking {
         freshStore()
         val r = SupervisorRunStore.start("s1", null, "objective one", 6)
         assertEquals("s1", r.sessionId)
@@ -25,7 +26,7 @@ class SupervisorRunStoreTest {
     }
 
     @Test
-    fun start_capsObjectiveLength() {
+    fun start_capsObjectiveLength() = runBlocking {
         freshStore()
         val long = "x".repeat(600)
         val r = SupervisorRunStore.start("s-cap", null, long, 6)
@@ -33,7 +34,7 @@ class SupervisorRunStoreTest {
     }
 
     @Test
-    fun appendRound_appendsBumpsCountersAndCapsDigests() {
+    fun appendRound_appendsBumpsCountersAndCapsDigests() = runBlocking {
         freshStore()
         SupervisorRunStore.start("s2", null, "objective two", 6)
         val longInstruction = "i".repeat(1000)
@@ -47,7 +48,7 @@ class SupervisorRunStoreTest {
     }
 
     @Test
-    fun markTerminal_setsStateAndSummary() {
+    fun markTerminal_setsStateAndSummary() = runBlocking {
         freshStore()
         SupervisorRunStore.start("s3", null, "objective three", 6)
         SupervisorRunStore.markTerminal("s3", null, SupervisorRunStore.STATE_DONE, "all green")
@@ -57,7 +58,7 @@ class SupervisorRunStoreTest {
     }
 
     @Test
-    fun interrupted_flipsStaleRunningRecordFromDeadProcess() {
+    fun interrupted_flipsStaleRunningRecordFromDeadProcess() = runBlocking {
         freshStore()
         val r = SupervisorRunStore.start("s4", null, "objective four", 6)
         // Simulate a record written by a process that died: creation predates
@@ -70,7 +71,7 @@ class SupervisorRunStoreTest {
     }
 
     @Test
-    fun interrupted_keepsOfferingAfterTheFlip() {
+    fun interrupted_keepsOfferingAfterTheFlip() = runBlocking {
         freshStore()
         val r = SupervisorRunStore.start("s4b", null, "objective 4b", 6)
         SupervisorRunStore.internalReplaceForTest("s4b", r.copy(createdAt = 1_000L))
@@ -87,7 +88,7 @@ class SupervisorRunStoreTest {
     }
 
     @Test
-    fun interrupted_neverTouchesThisProcessRunningRecord() {
+    fun interrupted_neverTouchesThisProcessRunningRecord() = runBlocking {
         freshStore()
         SupervisorRunStore.start("s5", null, "objective five", 6)
         val found = SupervisorRunStore.interrupted("s5", null)
@@ -97,7 +98,7 @@ class SupervisorRunStoreTest {
     }
 
     @Test
-    fun encodeDecode_roundTripPreservesRoundsAndSummary() {
+    fun encodeDecode_roundTripPreservesRoundsAndSummary() = runBlocking {
         val record = SupervisorRunStore.RunRecord(
             id = "id-1",
             sessionId = "s6",
@@ -119,7 +120,7 @@ class SupervisorRunStoreTest {
     }
 
     @Test
-    fun clear_emptiesTheSession() {
+    fun clear_emptiesTheSession() = runBlocking {
         freshStore()
         SupervisorRunStore.start("s7", null, "objective seven", 6)
         SupervisorRunStore.clear("s7", null)

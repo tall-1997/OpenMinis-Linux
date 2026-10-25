@@ -58,12 +58,11 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -87,7 +86,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.openminis.app.ui.settings.SettingsSwitch
 import com.openminis.app.R
 import com.openminis.app.backup.BackupCategory
-import com.openminis.app.backup.BackupFormat
 import com.openminis.app.backup.BackupHistory
 import com.openminis.app.ui.components.MinisMenu
 import com.openminis.app.ui.components.MinisButton
@@ -224,16 +222,16 @@ private fun BackupTab(
     onConfirmChange: (String) -> Unit,
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    val selected by vm.selected.collectAsState()
-    val encrypt by vm.encrypt.collectAsState()
-    val maxFileSizeMB by vm.maxFileSizeMB.collectAsState()
-    val running by vm.isRunning.collectAsState()
-    val status by vm.statusText.collectAsState()
-    val error by vm.errorText.collectAsState()
-    val destinations by vm.destinations.collectAsState()
-    val phoneFolders by vm.phoneFolders.collectAsState()
-    val historyRecords by vm.historyRecords.collectAsState()
-    val lastResult by vm.lastResult.collectAsState()
+    val selected by vm.selected.collectAsStateWithLifecycle()
+    val encrypt by vm.encrypt.collectAsStateWithLifecycle()
+    val maxFileSizeMB by vm.maxFileSizeMB.collectAsStateWithLifecycle()
+    val running by vm.isRunning.collectAsStateWithLifecycle()
+    val status by vm.statusText.collectAsStateWithLifecycle()
+    val error by vm.errorText.collectAsStateWithLifecycle()
+    val destinations by vm.destinations.collectAsStateWithLifecycle()
+    val phoneFolders by vm.phoneFolders.collectAsStateWithLifecycle()
+    val historyRecords by vm.historyRecords.collectAsStateWithLifecycle()
+    val lastResult by vm.lastResult.collectAsStateWithLifecycle()
 
     // Re-read destinations every time this tab appears: the user may have just
     // added one via "Manage Destinations…" and navigated back, and a stale
@@ -816,22 +814,22 @@ private fun RestoreTab(
     passphrase: String,
     onPassphraseChange: (String) -> Unit,
 ) {
-    val running by vm.isRunning.collectAsState()
-    val status by vm.statusText.collectAsState()
-    val pending by vm.pending.collectAsState()
-    val restoreSelected by vm.restoreSelected.collectAsState()
-    val report by vm.report.collectAsState()
-    val error by vm.errorText.collectAsState()
-    val restoreProgress by vm.restoreProgress.collectAsState()
+    val running by vm.isRunning.collectAsStateWithLifecycle()
+    val status by vm.statusText.collectAsStateWithLifecycle()
+    val pending by vm.pending.collectAsStateWithLifecycle()
+    val restoreSelected by vm.restoreSelected.collectAsStateWithLifecycle()
+    val report by vm.report.collectAsStateWithLifecycle()
+    val error by vm.errorText.collectAsStateWithLifecycle()
+    val restoreProgress by vm.restoreProgress.collectAsStateWithLifecycle()
 
     // Which destination the user is browsing for a package to restore from.
     var browsing by remember {
         mutableStateOf<com.openminis.app.backup.remote.RcloneRemoteStore.Remote?>(null)
     }
-    val destinations by vm.destinations.collectAsState()
-    val phoneFolders by vm.phoneFolders.collectAsState()
-    val phoneRestoreFolder by vm.phoneRestoreFolder.collectAsState()
-    val phoneRestoreItems by vm.phoneRestoreItems.collectAsState()
+    val destinations by vm.destinations.collectAsStateWithLifecycle()
+    val phoneFolders by vm.phoneFolders.collectAsStateWithLifecycle()
+    val phoneRestoreFolder by vm.phoneRestoreFolder.collectAsStateWithLifecycle()
+    val phoneRestoreItems by vm.phoneRestoreItems.collectAsStateWithLifecycle()
     // [T-android-sessionlist-prefs-io] Same rclone-prefs parse as the backup
     // tab; off the main dispatcher for the same reason.
     LaunchedEffect(Unit) {
@@ -1549,9 +1547,9 @@ private fun ServerPackagePicker(
     remote: com.openminis.app.backup.remote.RcloneRemoteStore.Remote,
     onDismiss: () -> Unit,
 ) {
-    val serverPackages by vm.serverPackages.collectAsState()
-    val running by vm.isRunning.collectAsState()
-    val status by vm.statusText.collectAsState()
+    val serverPackages by vm.serverPackages.collectAsStateWithLifecycle()
+    val running by vm.isRunning.collectAsStateWithLifecycle()
+    val status by vm.statusText.collectAsStateWithLifecycle()
 
     AlertDialog(
         onDismissRequest = onDismiss,

@@ -16,7 +16,6 @@ import com.openminis.app.data.db.FolderEntity
 import com.openminis.app.data.db.MessageEntity
 import com.openminis.app.data.db.MessageVersionDao
 import com.openminis.app.data.db.MessageVersionEntity
-import com.openminis.app.data.db.PersistedMessageStatus
 import com.openminis.app.data.db.RawQuerySql
 import com.openminis.app.data.model.ModelAttributionSnapshot
 import com.openminis.app.logging.AppLogger

@@ -16,7 +16,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -52,12 +52,12 @@ fun TokenUsageSheet(
     onDismiss: () -> Unit,
 ) {
     var stats by remember { mutableStateOf<ChatViewModel.SessionTokenStats?>(null) }
-    val contextUsage by viewModel.contextUsage.collectAsState()
+    val contextUsage by viewModel.contextUsage.collectAsStateWithLifecycle()
     val contextWindow = viewModel.currentModelContextWindow
     val maxOutput = viewModel.currentModelMaxOutputTokens
     val thinking = remember { viewModel.thinkingInfo() }
     // [T-cache-hit-rate] 最近一轮的缓存命中率（0..1，无真实 usage 时为 null）。
-    val lastCacheHitRate by viewModel.lastCacheHitRate.collectAsState()
+    val lastCacheHitRate by viewModel.lastCacheHitRate.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
         // Recompute the context rows on open: contextUsage is a snapshot that

@@ -17,6 +17,8 @@ import com.openminis.app.provider.api.ChatRequest
 import com.openminis.app.provider.api.ModelProvider
 import com.openminis.app.provider.api.ProviderCapabilities
 import com.openminis.app.provider.api.StreamEvent
+import com.openminis.app.util.SecretMasking
+import org.json.JSONObject
 
 interface LLMProvider : ModelProvider {
     val name: String
@@ -336,4 +338,100 @@ fun Flow<LLMStreamChunk>.failOnSilentEmptyCompletion(providerName: String): Flow
         )
         throw LLMError.TransientError("Server returned an empty response (connection dropped or upstream error)")
     }
+}
+
+/** HTTP statuses that are transient upstream trouble by default. */
+private val TRANSIENT_HTTP_STATUSES = setOf(500, 502, 503, 504, 529)
+
+/**
+ * [T-llm-error-classification] Shared HTTP-error mapping core for the provider
+ * error mappers (OpenAI / Gemini / Anthropic). Owns the branches the three
+ * copies used to carry verbatim — the [T-llm-error-401-model-scope]
+ * credential-acceptance gate on 401/403, the [T-llm-error-403] plan/region
+ * denial detail, 429 [HttpRetryAfter.map429] Retry-After handling, the shared
+ * transient status set with the 503 permanent-capacity demotion, and the
+ * generic JSON message envelope with [SecretMasking].
+ *
+ * Provider differences are injected as hooks:
+ *  - [isContextLimit] / [isContentFiltered] — each provider's keyword dialect
+ *    for the [T-llm-error-classification] split; evaluated in that order on
+ *    the lowercased envelope message.
+ *  - [messageLabel] — the bracketed token of the JSON envelope ([statusCode]
+ *    by default; Anthropic labels with the upstream error.type).
+ *  - [envelope] — full override for mappers that never parse the body
+ *    (Gemini's "Gemini API error …" wording).
+ *  - [map413ToContextLength] — [T-llm-error-413]: OpenAI routes 413 to the
+ *    actionable ContextLengthExceeded class; the others keep ProviderError.
+ *
+ * OpenAI's Zen structured refusal ([zenStructuredProviderRefusal]) is checked
+ * by its own wrapper BEFORE this core runs, so it outranks every branch here.
+ */
+internal fun mapHttpErrorShared(
+    statusCode: Int,
+    body: String,
+    retryAfterHeader: String?,
+    credentialGateKey: String,
+    isContextLimit: (statusCode: Int, lowerMessage: String) -> Boolean,
+    isContentFiltered: (statusCode: Int, lowerMessage: String) -> Boolean,
+    messageLabel: (statusCode: Int, error: JSONObject?) -> String = { code, _ -> "[$code]" },
+    envelope: ((statusCode: Int, body: String) -> String)? = null,
+    map413ToContextLength: Boolean = false,
+): LLMError {
+    if (statusCode == 401 || statusCode == 403) {
+        // [T-llm-error-401-model-scope] A gateway fronting an upstream pool
+        // answers 401 for failures in the channel IT picked, not for anything
+        // wrong with the caller's key. When this same credential was accepted
+        // by this same host recently, "Invalid API key" is simply false, and
+        // its hint sends the user off to regenerate a key that works.
+        //
+        // No acceptance evidence falls through to the status-only mappings
+        // below, so nothing changes for a credential the app has never seen
+        // succeed.
+        if (CredentialAcceptance.isAccepted(credentialGateKey)) {
+            return LLMError.InvalidApiKey(
+                "HTTP $statusCode — the same credential was accepted by this host recently, " +
+                    "so the refusal is about this model, not the key",
+                credentialAccepted = true,
+            )
+        }
+    }
+    if (statusCode == 401) return LLMError.InvalidApiKey()
+    if (statusCode == 403) {
+        // [T-llm-error-403] 403 means "valid key, but this model or region is
+        // not allowed on your plan". Folding it into a bare InvalidApiKey()
+        // told users to check an API key that is actually fine.
+        return LLMError.InvalidApiKey(
+            "HTTP 403 forbidden — the credential was accepted but this model or region is not permitted on the current plan",
+        )
+    }
+    if (statusCode == 429) return HttpRetryAfter.map429(body, retryAfterHeader)
+
+    val message = envelope?.invoke(statusCode, body) ?: run {
+        try {
+            val json = JSONObject(body)
+            val error = json.optJSONObject("error")
+            val errorMessage = error?.safeOptString("message", "") ?: body
+            "${messageLabel(statusCode, error)} ${SecretMasking.mask(errorMessage)}"
+        } catch (_: Exception) {
+            "HTTP $statusCode: ${SecretMasking.mask(body.take(500))}"
+        }
+    }
+
+    // [T-llm-error-413] Payload Too Large is the request-size twin of
+    // context_length_exceeded — route it to the actionable class (compact /
+    // offload hint) instead of a generic, non-retryable ProviderError.
+    if (map413ToContextLength && statusCode == 413) return LLMError.ContextLengthExceeded(message)
+
+    val lower = message.lowercase()
+    if (isContextLimit(statusCode, lower)) return LLMError.ContextLengthExceeded(message)
+    if (isContentFiltered(statusCode, lower)) return LLMError.ContentFiltered(message)
+
+    if (statusCode in TRANSIENT_HTTP_STATUSES) {
+        // 503 with permanent failure indicators → ProviderError (trigger group fallback)
+        if (statusCode == 503 && HttpRetryAfter.isPermanentCapacityBody(body)) {
+            return LLMError.ProviderError(message)
+        }
+        return LLMError.TransientError(message)
+    }
+    return LLMError.ProviderError(message)
 }

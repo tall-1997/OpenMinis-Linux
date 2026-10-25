@@ -1,7 +1,7 @@
 package com.openminis.app.ui.settings
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -12,7 +12,7 @@ import com.openminis.app.data.ToolLimitPrefs
 
 @Composable
 fun ToolLimitsSettingsScreen(onBack: () -> Unit) {
-    val revision by ToolLimitPrefs.revision.collectAsState()
+    val revision by ToolLimitPrefs.revision.collectAsStateWithLifecycle()
     val shell = remember(revision) { ToolLimitPrefs.shellTimeoutSec() }
     val chars = remember(revision) { ToolLimitPrefs.fileReadMaxChars() }
     val lines = remember(revision) { ToolLimitPrefs.fileReadMaxLines() }

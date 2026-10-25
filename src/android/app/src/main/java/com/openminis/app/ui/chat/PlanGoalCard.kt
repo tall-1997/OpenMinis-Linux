@@ -38,7 +38,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -123,8 +123,8 @@ private fun trimZero(scaled: Double): String =
 internal fun PlanGoalCard(viewModel: ChatViewModel, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val sid = viewModel.activeSessionId
-    val planVersion by AgentPlanStore.version.collectAsState()
-    val goalVersion by GoalManager.version.collectAsState()
+    val planVersion by AgentPlanStore.version.collectAsStateWithLifecycle()
+    val goalVersion by GoalManager.version.collectAsStateWithLifecycle()
     val plans = remember(planVersion, sid) {
         runCatching { AgentPlanStore.list(sid, context) }.getOrDefault(emptyList())
     }

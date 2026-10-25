@@ -17,13 +17,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material.icons.filled.FileDownload
@@ -38,8 +35,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -134,8 +130,8 @@ fun ProviderListScreen(
     onProviderClick: (String) -> Unit,
     onVoiceServiceClick: (String) -> Unit,
 ) {
-    val config by providerRepository.config.collectAsState()
-    val credentialRevision by providerRepository.credentialRevision.collectAsState()
+    val config by providerRepository.config.collectAsStateWithLifecycle()
+    val credentialRevision by providerRepository.credentialRevision.collectAsStateWithLifecycle()
     val configRevision = config.revision
     val instances = config.instances.toList()
     val groupedInstances = instances.groupBy { it.providerType }

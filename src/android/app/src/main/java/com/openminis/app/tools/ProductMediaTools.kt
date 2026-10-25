@@ -2,7 +2,6 @@ package com.openminis.app.tools
 
 import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.model.AgentToolParam
-import org.json.JSONObject
 
 /**
  * Product-facing media tools. describe_image aliases read_image.

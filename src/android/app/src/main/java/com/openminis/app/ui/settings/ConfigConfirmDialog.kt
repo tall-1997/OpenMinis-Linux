@@ -20,16 +20,14 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -57,7 +55,7 @@ import com.openminis.app.ui.theme.m3Icon
  */
 @Composable
 fun ConfigConfirmDialogHost() {
-    val pending by ConfigConfirmationGate.pending.collectAsState()
+    val pending by ConfigConfirmationGate.pending.collectAsStateWithLifecycle()
     val change = pending ?: return
     ConfigConfirmDialog(change)
 }

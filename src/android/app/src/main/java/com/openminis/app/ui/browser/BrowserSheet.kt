@@ -9,7 +9,6 @@ import android.webkit.WebChromeClient
 import android.webkit.ValueCallback
 import com.openminis.app.R
 import androidx.compose.ui.res.stringResource
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -45,7 +44,6 @@ import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -55,7 +53,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -95,28 +93,28 @@ fun BrowserSheet(
     tabPool: BrowserTabPool,
     onDismiss: () -> Unit,
 ) {
-    val tabs by tabPool.tabs.collectAsState()
-    val selectedTabId by tabPool.selectedTabId.collectAsState()
+    val tabs by tabPool.tabs.collectAsStateWithLifecycle()
+    val selectedTabId by tabPool.selectedTabId.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
 
     val selectedTab = tabs.find { it.id == selectedTabId }
-    val currentURL = selectedTab?.manager?.currentURL?.collectAsState()?.value ?: ""
-    val pageTitle = selectedTab?.manager?.pageTitle?.collectAsState()?.value ?: ""
-    val isLoading = selectedTab?.manager?.isLoading?.collectAsState()?.value ?: false
-    val canGoBack = selectedTab?.manager?.canGoBack?.collectAsState()?.value ?: false
-    val canGoForward = selectedTab?.manager?.canGoForward?.collectAsState()?.value ?: false
+    val currentURL = selectedTab?.manager?.currentURL?.collectAsStateWithLifecycle()?.value ?: ""
+    val pageTitle = selectedTab?.manager?.pageTitle?.collectAsStateWithLifecycle()?.value ?: ""
+    val isLoading = selectedTab?.manager?.isLoading?.collectAsStateWithLifecycle()?.value ?: false
+    val canGoBack = selectedTab?.manager?.canGoBack?.collectAsStateWithLifecycle()?.value ?: false
+    val canGoForward = selectedTab?.manager?.canGoForward?.collectAsStateWithLifecycle()?.value ?: false
     val isAgentBusy = tabPool.isAgentBusy
-    val userAgentProfile = tabPool.currentUserAgentProfile.collectAsState().value
+    val userAgentProfile = tabPool.currentUserAgentProfile.collectAsStateWithLifecycle().value
 
     var urlInput by remember(currentURL) { mutableStateOf(currentURL) }
     var showHistory by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     // [T-android-browser-download-ux] Downloads panel + badge state.
     var showDownloads by remember { mutableStateOf(false) }
-    val downloadEntries by tabPool.downloads.collectAsState()
+    val downloadEntries by tabPool.downloads.collectAsStateWithLifecycle()
 
     // <input type="file"> support. WebView hands us a one-shot callback; the
     // ActivityResultLauncher owns the picker lifecycle so rotation/process
@@ -211,8 +209,8 @@ fun BrowserSheet(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     items(tabs, key = { it.id }) { tab ->
-                        val title = tab.manager.pageTitle.collectAsState().value
-                        val domain = tab.manager.currentURL.collectAsState().value
+                        val title = tab.manager.pageTitle.collectAsStateWithLifecycle().value
+                        val domain = tab.manager.currentURL.collectAsStateWithLifecycle().value
                             .let { url -> try { java.net.URI(url).host } catch (_: Exception) { null } }
                         val displayTitle = title.ifEmpty { domain ?: "Tab ${tab.id}" }
                             .take(20)
@@ -297,7 +295,7 @@ fun BrowserSheet(
             }
 
             // ── Download progress banner ──
-            val activeDownload by tabPool.activeDownload.collectAsState()
+            val activeDownload by tabPool.activeDownload.collectAsStateWithLifecycle()
             activeDownload?.let { dl ->
                 Row(
                     modifier = Modifier

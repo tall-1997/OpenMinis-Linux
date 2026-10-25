@@ -3,8 +3,10 @@ package com.openminis.app.data.db
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import com.openminis.app.logging.AppLogger
+import com.openminis.app.tools.AtomicFileWrite
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -525,11 +527,20 @@ object DatabaseHealthCheck {
     private fun reportFile(filesDir: File): File = File(filesDir, REPORT_FILE)
 
     fun writeReport(filesDir: File, report: StartupFailureReport) {
-        val tmp = File(filesDir, "$REPORT_FILE.tmp")
-        tmp.writeText(report.toJson().toString())
-        if (!tmp.renameTo(reportFile(filesDir))) {
-            reportFile(filesDir).writeText(report.toJson().toString())
-            tmp.delete()
+        // Unified atomic write: same `.tmp` sibling name (tests occupy exactly
+        // this path to provoke the ENOSPC/EISDIR failure), plus per-path lock,
+        // short-write detection and post-write verify. The old rename-failed
+        // direct-writeText fallback is covered by the copy-over fallback
+        // inside AtomicFileWrite; null (both failed, previous bytes kept)
+        // throws so callers' runCatching records reportWritten=false exactly
+        // as before.
+        if (AtomicFileWrite.write(
+                reportFile(filesDir),
+                report.toJson().toString(),
+                temp = File(filesDir, "$REPORT_FILE.tmp"),
+            ) == null
+        ) {
+            throw IOException("startup report write failed for $REPORT_FILE")
         }
         fsyncDirectory(filesDir)
     }

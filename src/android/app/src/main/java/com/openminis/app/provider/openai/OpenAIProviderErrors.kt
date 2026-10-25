@@ -1,8 +1,7 @@
 package com.openminis.app.provider.openai
 
 import com.openminis.app.data.model.LLMError
-import com.openminis.app.provider.CredentialAcceptance
-import com.openminis.app.provider.HttpRetryAfter
+import com.openminis.app.provider.mapHttpErrorShared
 import com.openminis.app.provider.safeOptString
 import org.json.JSONObject
 
@@ -27,84 +26,34 @@ internal fun OpenAIProvider.mapHttpError(statusCode: Int, body: String, retryAft
     if (com.openminis.app.provider.ZenEndpoint.isZenHost(basePath)) {
         zenStructuredProviderRefusal(body)?.let { return it }
     }
-    if (statusCode == 401 || statusCode == 403) {
-        // [T-llm-error-401-model-scope] A gateway fronting an upstream pool
-        // answers 401 for failures in the channel IT picked, not for anything
-        // wrong with the caller's key. When this same credential was accepted by
-        // this same host recently, "Invalid API key" is simply false, and its
-        // hint sends the user off to regenerate a key that works. Measured: one
-        // relay served 200 for a single model and 401 for the other four — same
-        // key, same minute, deterministic per model — while its own /v1/models
-        // returned 200 throughout.
-        //
-        // No acceptance evidence falls through to the historical mapping below,
-        // so nothing changes for a credential the app has never seen succeed.
-        if (CredentialAcceptance.isAccepted(credentialGateKey)) {
-            return LLMError.InvalidApiKey(
-                "HTTP $statusCode — the same credential was accepted by this host recently, " +
-                    "so the refusal is about this model, not the key",
-                credentialAccepted = true,
-            )
-        }
-    }
-    if (statusCode == 401) return LLMError.InvalidApiKey()
-    if (statusCode == 403) {
-        // [T-llm-error-403] OpenRouter / self-hosted gateways answer 403 for
-        // "valid key, but this model or region is not allowed on your plan".
-        // Folding that into a bare InvalidApiKey() told users to check an API
-        // key that is actually fine. The detail drives both the message and
-        // the actionableHint's dedicated 403 branch.
-        return LLMError.InvalidApiKey(
-            "HTTP 403 forbidden — the credential was accepted but this model or region is not permitted on the current plan"
-        )
-    }
-    if (statusCode == 429) return HttpRetryAfter.map429(body, retryAfterHeader)
+    return mapHttpErrorShared(
+        statusCode,
+        body,
+        retryAfterHeader,
+        credentialGateKey = credentialGateKey,
+        isContextLimit = ::openAIContextLimit,
+        isContentFiltered = ::openAIContentFiltered,
+        map413ToContextLength = true,
+    )
+}
 
-    val message = try {
-        val json = JSONObject(body)
-        val error = json.optJSONObject("error")
-        val errorMessage = error?.safeOptString("message", "") ?: body
-        "[$statusCode] ${maskSecrets(errorMessage)}"
-    } catch (_: Exception) {
-        "HTTP $statusCode: ${maskSecrets(body.take(500))}"
-    }
-
-    // [T-llm-error-413] Payload Too Large is the request-size twin of
-    // context_length_exceeded — route it to the actionable class (compact /
-    // offload hint) instead of a generic, non-retryable ProviderError.
-    if (statusCode == 413) return LLMError.ContextLengthExceeded(message)
-
-    // [T-llm-error-classification] 细分 OpenAI 400 类错误，不再笼统地归 ProviderError。
-    val lower = message.lowercase()
-    when {
-        // "max_tokens too large" 是输出参数超限（max_tokens 请求过大），
-        // 不是上下文超长，保持 ProviderError。
-        !lower.contains("max_tokens too large") && !lower.contains("max_output_tokens") && (
-            lower.contains("context_length_exceeded") || lower.contains("maximum context length") ||
+// [T-llm-error-classification] 细分 OpenAI 400 类错误，不再笼统地归 ProviderError。
+private fun openAIContextLimit(statusCode: Int, lower: String): Boolean =
+    !lower.contains("max_tokens too large") && !lower.contains("max_output_tokens") && (
+        lower.contains("context_length_exceeded") || lower.contains("maximum context length") ||
             (statusCode == 400 && (
                 lower.contains("too many tokens") ||
-                lower.contains("reduce the length") ||
-                // [T-llm-error-413-note] Excludes output-parameter errors
-                // (max_output_tokens mismatches) — a request-param problem is
-                // not the context-window problem this class's hint assumes.
-                (lower.contains("token") && (lower.contains("max") || lower.contains("limit") || lower.contains("exceed")))
+                    lower.contains("reduce the length") ||
+                    // [T-llm-error-413-note] Excludes output-parameter errors
+                    // (max_output_tokens mismatches) — a request-param problem is
+                    // not the context-window problem this class's hint assumes.
+                    (lower.contains("token") && (lower.contains("max") || lower.contains("limit") || lower.contains("exceed")))
             ))
-        ) -> return LLMError.ContextLengthExceeded(message)
-        lower.contains("content_filter") || lower.contains("content_policy") ||
-        lower.contains("safety") || statusCode == 422 && lower.contains("content") ->
-            return LLMError.ContentFiltered(message)
-    }
+    )
 
-    val transientCodes = setOf(500, 502, 503, 504, 529)
-    if (statusCode in transientCodes) {
-        // 503 with permanent failure indicators → ProviderError (trigger group fallback)
-        if (statusCode == 503 && HttpRetryAfter.isPermanentCapacityBody(body)) {
-            return LLMError.ProviderError(message)
-        }
-        return LLMError.TransientError(message)
-    }
-    return LLMError.ProviderError(message)
-}
+private fun openAIContentFiltered(statusCode: Int, lower: String): Boolean =
+    lower.contains("content_filter") || lower.contains("content_policy") ||
+        lower.contains("safety") || statusCode == 422 && lower.contains("content")
 
 internal fun OpenAIProvider.mapError(error: Throwable): LLMError = mapThrowableToLLMError(error)
 

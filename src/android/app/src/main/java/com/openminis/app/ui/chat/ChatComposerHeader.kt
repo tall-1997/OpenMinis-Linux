@@ -1,6 +1,8 @@
 package com.openminis.app.ui.chat
 
 import androidx.compose.runtime.Composable
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.launch
 
 /**
  * Composer-side header cluster: the plan/goal card, its management sheet,
@@ -24,7 +26,7 @@ internal fun ChatComposerHeader(
     SupervisorStatusBar(
         sessionId = sessionId,
         onHalt = { viewModel.haltSupervisorSession() },
-        onResume = { viewModel.resumeSupervisorSession() },
-        onDiscard = { viewModel.discardSupervisorRecovery() },
+        onResume = { viewModel.viewModelScope.launch { viewModel.resumeSupervisorSession() } },
+        onDiscard = { viewModel.viewModelScope.launch { viewModel.discardSupervisorRecovery() } },
     )
 }

@@ -4,8 +4,6 @@ import android.content.Context
 import android.util.Log
 import com.openminis.app.data.model.LLMModel
 import com.openminis.app.data.model.applyUnrecognizedModelDefaults
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import com.openminis.app.network.withDohDns
 import okhttp3.OkHttpClient
 import okhttp3.Request

@@ -1,5 +1,6 @@
-package com.openminis.app.data.db
+package com.openminis.app.data
 
+import com.openminis.app.data.db.ProviderThinkingRuleEntity
 import com.openminis.app.provider.thinking.ThinkingRule
 import com.openminis.app.provider.thinking.ThinkingRuleCoding
 

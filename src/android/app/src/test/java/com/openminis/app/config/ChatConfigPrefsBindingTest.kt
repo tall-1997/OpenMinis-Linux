@@ -153,7 +153,7 @@ class ChatConfigPrefsBindingTest {
         // did. It must come from PREF_APPEARANCE.
         assertTrue(
             "appearancePrefs must be built from PREF_APPEARANCE",
-            builtins.contains("com.openminis.app.ui.settings.PREF_APPEARANCE"),
+            builtins.contains("com.openminis.app.config.PREF_APPEARANCE"),
         )
     }
 }

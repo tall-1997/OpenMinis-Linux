@@ -17,7 +17,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -64,8 +64,8 @@ fun OffloadPermissionScreen(
     var privacyMenuOpen by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
-    val configEnabled by com.openminis.app.config.MinisConfigPermissionStore.enabled.collectAsState()
-    val privacyVersion by PrivacyPermissionPolicy.version.collectAsState()
+    val configEnabled by com.openminis.app.config.MinisConfigPermissionStore.enabled.collectAsStateWithLifecycle()
+    val privacyVersion by PrivacyPermissionPolicy.version.collectAsStateWithLifecycle()
     val privacyLevel = PrivacyPermissionPolicy.get(context)
     privacyVersion
 
@@ -106,8 +106,8 @@ fun OffloadPermissionScreen(
             delay(1000)
         }
     }
-    val shizukuSnap by ShizukuManager.snapshot.collectAsState()
-    val hostSuSnap by HostSuManager.snapshot.collectAsState()
+    val shizukuSnap by ShizukuManager.snapshot.collectAsStateWithLifecycle()
+    val hostSuSnap by HostSuManager.snapshot.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { HostSuManager.refresh() }
 
     SettingsScaffold(
@@ -596,13 +596,4 @@ private fun shizukuActionTitleRes(state: ShizukuManager.State): Int = when (stat
     ShizukuManager.State.NOT_RUNNING -> R.string.shizuku_open_btn
     ShizukuManager.State.NEED_PERMISSION -> R.string.shizuku_grant_btn
     ShizukuManager.State.READY -> 0  // never displayed (systemReady=true)
-}
-
-private fun performShizukuAction(context: Context, state: ShizukuManager.State) {
-    when (state) {
-        ShizukuManager.State.NOT_INSTALLED -> ShizukuManager.openInstallPage(context)
-        ShizukuManager.State.NOT_RUNNING -> ShizukuManager.openShizukuApp(context)
-        ShizukuManager.State.NEED_PERMISSION -> ShizukuManager.requestPermission()
-        ShizukuManager.State.READY -> {} // no-op; row never rendered
-    }
 }

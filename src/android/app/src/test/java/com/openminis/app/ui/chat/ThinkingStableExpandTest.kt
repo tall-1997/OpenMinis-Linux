@@ -145,9 +145,11 @@ class ThinkingStableExpandTest {
             "thinking block signature must skip the content-length term too",
             "if (!isThinking) {\n                    blockSig = blockSig xor b.content.length.toLong()" in src,
         )
+        // [T-chat-screen-sections] 行渲染随四区块抽取迁至 ChatMessageListSection。
         assertTrue(
             "renderer consumes the folded signal, not a trailing-block flag",
-            "isStreaming = item.messageIsStreaming," in src,
+            "isStreaming = item.messageIsStreaming," in
+                ProductionSources.read("ui/chat/ChatMessageListSection.kt"),
         )
     }
 

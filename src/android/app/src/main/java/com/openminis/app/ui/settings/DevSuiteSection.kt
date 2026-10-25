@@ -16,7 +16,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -63,8 +63,8 @@ fun DevSuiteSection(
     onPendingInstallConsumed: () -> Unit,
 ) {
     val context = LocalContext.current
-    val states by DevSuiteStore.states.collectAsState()
-    val busy by DevSuiteInstaller.busy.collectAsState()
+    val states by DevSuiteStore.states.collectAsStateWithLifecycle()
+    val busy by DevSuiteInstaller.busy.collectAsStateWithLifecycle()
     var confirmBundle by remember { mutableStateOf<DevBundle?>(null) }
     var preselectEverything by remember { mutableStateOf(false) }
     var confirmRemove by remember { mutableStateOf<DevComponent?>(null) }

@@ -1,6 +1,6 @@
 package com.openminis.app.data
 
-import com.openminis.app.data.repository.EnvVarRepository
+import com.openminis.app.di.AppGraph
 
 /**
  * Masks env-var values that leaked into shell tool output before they
@@ -30,13 +30,11 @@ object EnvVarRedactor {
     const val SYSTEM_REMINDER = "<system-reminder>Privacy mode is ON: one or more environment variable values were detected in this output and have been masked. Prefer running commands that consume secrets via environment variable references (e.g. `curl -H \"Authorization: Bearer \$API_KEY\" ...`) rather than echoing them. If the user needs to inspect raw values, ask them to disable Privacy Mode at Settings → Environment Variables.</system-reminder>"
 
     /**
-     * Static handoff so non-DI call sites (e.g. ShellExecutor on a
-     * background coroutine) can reach the repository without plumbing
-     * it through every layer. Set once from [com.openminis.app.MinisApp.onCreate].
+     * Handoff so non-DI call sites (e.g. ShellExecutor on a background
+     * coroutine) can reach the repository without plumbing it through every
+     * layer. The instance lives in [AppGraph] (installed once from
+     * [com.openminis.app.MinisApp.onCreate]).
      */
-    @Volatile
-    var envVarRepository: EnvVarRepository? = null
-
     fun mask(value: String): String {
         val n = value.length
         if (n < 8) return "*".repeat(n)
@@ -78,7 +76,7 @@ object EnvVarRedactor {
      */
     fun redactIfEnabled(output: String): Pair<String, Int> {
         if (!EnvVarPrivacyStore.isEnabled) return output to 0
-        val repo = envVarRepository ?: return output to 0
+        val repo = AppGraph.redactorEnvVarRepositoryOrNull() ?: return output to 0
         // [T-env-disable] allStoredValues, not allAsDict: masking covers every
         // secret, including variables currently switched off.
         val values = repo.allStoredValues().filter { it.isNotEmpty() }

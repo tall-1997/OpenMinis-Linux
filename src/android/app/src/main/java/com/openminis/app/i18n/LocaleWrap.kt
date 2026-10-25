@@ -4,8 +4,8 @@ import android.content.Context
 import android.content.res.Configuration
 import android.os.Build
 import android.os.LocaleList
-import com.openminis.app.ui.settings.KEY_LANGUAGE
-import com.openminis.app.ui.settings.PREF_APPEARANCE
+import com.openminis.app.config.KEY_LANGUAGE
+import com.openminis.app.config.PREF_APPEARANCE
 import java.util.Locale
 
 /**

@@ -4,19 +4,12 @@ package com.openminis.app.ui.chat
 // extracted verbatim from ChatScreen.kt: FlatChatItem (sealed), mergeStreamingOverlay,
 // buildFlatChatItems. Imports trimmed after ChatScreen.kt split; all internal.
 
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.filled.Build
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.mikepenz.markdown.m3.Markdown
 import com.openminis.app.data.model.ThinkingLevel
 
 internal sealed class FlatChatItem {

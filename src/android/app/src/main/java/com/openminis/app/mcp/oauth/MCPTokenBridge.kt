@@ -2,7 +2,9 @@ package com.openminis.app.mcp.oauth
 
 import android.content.Context
 import com.openminis.app.logging.AppLogger
+import com.openminis.app.tools.AtomicFileWrite
 import java.io.File
+import java.io.IOException
 import org.json.JSONObject
 
 /**
@@ -70,12 +72,15 @@ object MCPTokenBridge {
             val dir = oauthDir(context)
             dir.mkdirs()
             val target = File(dir, "$server.json")
-            val tmp = File(dir, "$server.json.tmp")
-            tmp.writeText(payload.toString())
-            if (!tmp.renameTo(target)) {
-                // Filesystems that refuse rename over an existing target.
-                target.writeText(payload.toString())
-                tmp.delete()
+            // Unified atomic write: the same tmp+rename dance plus per-path
+            // lock, short-write detection and post-write verify. The old
+            // rename-failed direct-writeText fallback is covered by the
+            // copy-over fallback inside AtomicFileWrite; null (both failed,
+            // previous bytes kept) throws so the catch below logs it as
+            // before and the permission tightening only runs on a landed
+            // write.
+            if (AtomicFileWrite.write(target, payload.toString(), temp = File(dir, "$server.json.tmp")) == null) {
+                throw IOException("atomic write did not verify")
             }
             target.setReadable(false, false)
             target.setWritable(false, false)

@@ -3,7 +3,6 @@ package com.openminis.app.plugins
 import android.content.Context
 import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.model.AgentToolParam
-import com.openminis.app.tools.FetchUrlGuard
 import com.openminis.app.provider.NonFiniteJson
 import com.openminis.app.tools.ToolExecutionResult
 import okhttp3.MediaType.Companion.toMediaType

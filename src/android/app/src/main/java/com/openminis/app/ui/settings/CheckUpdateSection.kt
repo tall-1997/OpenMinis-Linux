@@ -26,7 +26,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -85,7 +85,7 @@ fun CheckUpdateSection() {
 
     var checking by remember { mutableStateOf(false) }
     var statusMessage by remember { mutableStateOf<String?>(null) }
-    val selfBuild by SelfBuildRunner.state.collectAsState()
+    val selfBuild by SelfBuildRunner.state.collectAsStateWithLifecycle()
     // When the GitHub API returns 403 / 451 we surface a dedicated row with a
     // tappable "Open GitHub Releases" link beneath the row, so users behind a
     // geo-block know what to do without hunting for the URL themselves.
@@ -114,7 +114,7 @@ fun CheckUpdateSection() {
     // Download progress is mirrored from UpdateDownloadManager's process-wide
     // StateFlow so the download survives leaving this screen (background
     // tolerant). Re-entering simply re-collects the live state.
-    val dlState by UpdateDownloadManager.state.collectAsState()
+    val dlState by UpdateDownloadManager.state.collectAsStateWithLifecycle()
     // Progress/error that originate from the background downloader are read
     // straight off the StateFlow. Local UI errors (install-launch failure) live
     // in their own mutable slot so they can be assigned/cleared.

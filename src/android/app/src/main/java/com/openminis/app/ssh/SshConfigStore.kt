@@ -2,9 +2,8 @@ package com.openminis.app.ssh
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.openminis.app.tools.AtomicFileWrite
 import java.io.File
-import java.nio.file.Files
-import java.nio.file.StandardCopyOption
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -130,11 +129,21 @@ class SshConfigStore(
     private fun persist(hosts: List<SshHostConfig>) {
         val arr = JSONArray()
         for (h in hosts) arr.put(encode(h))
+        // Unified atomic write: same `.tmp` sibling + rename, now with the
+        // per-path lock, short-write detection and post-write verify of
+        // AtomicFileWrite. A null result throws inside the runCatching — the
+        // external never-throws contract is unchanged from the old
+        // Files.move(REPLACE_EXISTING) failure path, but the failure is now
+        // logged instead of invisible.
         runCatching {
-            metadataFile.parentFile?.mkdirs()
-            val tmp = File(metadataFile.parentFile, metadataFile.name + ".tmp")
-            tmp.writeText(arr.toString())
-            Files.move(tmp.toPath(), metadataFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            if (AtomicFileWrite.write(
+                    metadataFile,
+                    arr.toString(),
+                    temp = File(metadataFile.parentFile, metadataFile.name + ".tmp"),
+                ) == null
+            ) {
+                error("ssh metadata persist failed for ${metadataFile.name}")
+            }
         }
     }
 

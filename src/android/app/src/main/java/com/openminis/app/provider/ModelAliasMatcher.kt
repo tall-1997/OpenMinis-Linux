@@ -1,6 +1,5 @@
 package com.openminis.app.provider
 
-import java.util.Locale
 
 /**
  * Relay stations publish ids like `GPT-6免费` / `免费GPT-6 Astra`. After

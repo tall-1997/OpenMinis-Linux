@@ -287,7 +287,8 @@ class ModelBrandResolverTest {
     @Test
     fun everyCallSiteUsesTheSingleEntryPoint() {
         val files = listOf(
-            "ui/chat/ChatScreen.kt",
+            // [T-chat-screen-sections] ChatScreen 的品牌图标调用点随四区块抽取迁至 TopBar。
+            "ui/chat/ChatTopBarSection.kt",
             "ui/chat/ChatModelPickerSheet.kt",
             "ui/settings/ProviderDetailScreen.kt",
         )

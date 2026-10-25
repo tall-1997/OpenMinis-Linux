@@ -1,5 +1,6 @@
 package com.openminis.app.ui.navigation
 
+import com.openminis.app.navigation.Routes
 import androidx.lifecycle.Lifecycle
 import androidx.navigation.NavController
 import androidx.navigation.NavOptionsBuilder

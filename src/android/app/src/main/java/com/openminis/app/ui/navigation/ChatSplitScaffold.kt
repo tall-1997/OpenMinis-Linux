@@ -1,6 +1,6 @@
 package com.openminis.app.ui.navigation
 
-import com.openminis.app.ui.components.MinisCenterTopBar
+import com.openminis.app.navigation.Routes
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
@@ -9,13 +9,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.Chat
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -33,7 +31,7 @@ import androidx.compose.material3.VerticalDivider
 import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.material3.adaptive.layout.PaneScaffoldDirective
 import androidx.compose.material3.adaptive.layout.calculatePaneScaffoldDirective
@@ -785,9 +783,7 @@ private fun NoConversationSelected(
             }
         }
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(32.dp),
+            modifier = Modifier.fillMaxSize().padding(32.dp),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
@@ -800,7 +796,7 @@ private fun NoConversationSelected(
             // settings card use, so an emoji / custom image / unset-sparkle all
             // behave identically here (that shared-renderer rule is what keeps
             // image icons from silently failing on one surface).
-            val soulMeta by com.openminis.app.agent.SoulStore.cachedMetadata.collectAsState()
+            val soulMeta by com.openminis.app.agent.SoulStore.cachedMetadata.collectAsStateWithLifecycle()
             // Never scale a custom image ABOVE its stored resolution: icons are
             // saved at up to SoulIcon.STORED_PIXELS square and deliberately not
             // upscaled on save, so a 48px source blown up to a 64dp box would

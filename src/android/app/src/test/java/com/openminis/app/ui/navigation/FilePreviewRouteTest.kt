@@ -1,5 +1,6 @@
 package com.openminis.app.ui.navigation
 
+import com.openminis.app.navigation.Routes
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test

@@ -13,16 +13,13 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import kotlinx.coroutines.launch
-import androidx.compose.material.icons.outlined.Construction
 import androidx.compose.material.icons.outlined.Dns
-import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Language
@@ -36,14 +33,13 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -79,7 +75,7 @@ fun MCPIntegrationsScreen(
     // Null when the caller hasn't wired it — the picker affordance hides.
     envVarRepository: com.openminis.app.data.repository.EnvVarRepository? = null,
 ) {
-    val servers by mcpRepository.servers.collectAsState()
+    val servers by mcpRepository.servers.collectAsStateWithLifecycle()
 
     // [T-android-mcp-list-reload-on-appear] MCPRepository reads servers.json
     // only in init() (app launch). A server the agent writes via minis-mcp-cli
@@ -101,9 +97,9 @@ fun MCPIntegrationsScreen(
     // (MinisApp.onCreate), so it is non-null here in practice. Null-safe reads
     // fall back to defaults when the screen is shown before init.
     val mcpStore = remember { McpServerManager.configStore() }
-    val mcpConfig = mcpStore?.config?.collectAsState()?.value
+    val mcpConfig = mcpStore?.config?.collectAsStateWithLifecycle()?.value
         ?: McpServerConfigStore.Config()
-    val mcpState by McpServerManager.state.collectAsState()
+    val mcpState by McpServerManager.state.collectAsStateWithLifecycle()
     var showPortDialog by remember { mutableStateOf(false) }
     var showTokenDialog by remember { mutableStateOf(false) }
     var showShellPolicyDialog by remember { mutableStateOf(false) }
@@ -457,7 +453,7 @@ private fun MCPFormTab(
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
     // [T-mcp-env-var-picker-android] App env var keys for the STDIO env picker.
     val appEnvEntries by (envVarRepository?.entries
-        ?.collectAsState() ?: remember { mutableStateOf(emptyList<com.openminis.app.data.repository.EnvVarRepository.EnvVarEntry>()) })
+        ?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(emptyList<com.openminis.app.data.repository.EnvVarRepository.EnvVarEntry>()) })
     val appEnvKeys = remember(appEnvEntries) { appEnvEntries.map { it.key } }
     var showEnvVarPicker by remember { mutableStateOf(false) }
     // [T-mcp-http-headers-env-picker-android] Same $$VAR picker offered on the

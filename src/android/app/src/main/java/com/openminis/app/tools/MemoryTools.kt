@@ -52,7 +52,7 @@ object MemoryTools {
             val toolTitle = obj.optString("tool_title", "memory_get")
 
             if (scope == "evolution") {
-                val engine = com.openminis.app.evolution.EvolutionHooks.engine
+                val engine = com.openminis.app.di.AppGraph.evolutionEngineOrNull()
                 val body = if (engine == null) {
                     "Evolution engine is not available."
                 } else {

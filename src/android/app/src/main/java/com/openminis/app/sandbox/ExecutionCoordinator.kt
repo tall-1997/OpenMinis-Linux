@@ -4,7 +4,7 @@ import com.openminis.app.data.repository.MCPToolPolicy
 
 import android.content.Context
 import android.util.Log
-import com.openminis.app.data.repository.EnvVarRepository
+import com.openminis.app.di.AppGraph
 import com.openminis.app.notification.SandboxNotifyActions
 import com.openminis.app.sandbox.SandboxResourceGate
 import com.openminis.app.sandbox.kernel.BudgetClassifier
@@ -43,7 +43,8 @@ object ExecutionCoordinator {
 
     private var appContextRef: Context? = null
     private val appContext: Context get() = checkNotNull(appContextRef) { "ExecutionCoordinator.init must be called first" }
-    var envVarRepository: EnvVarRepository? = null
+    // Env-var source lives in AppGraph (installed by MinisApp.onCreate);
+    // read it via AppGraph.executionEnvVarRepositoryOrNull().
 
     /** Thread-safe per-session shell registry. */
     private val shells = ConcurrentHashMap<String, PersistentShell>()
@@ -215,7 +216,7 @@ object ExecutionCoordinator {
             // (T124a). Pass the previously-injected key set so applyEnvironment
             // can `unset` anything the user has since removed from settings;
             // otherwise the long-lived shell would keep stale values.
-            val envVars = envVarRepository?.allAsDict() ?: emptyMap()
+            val envVars = AppGraph.executionEnvVarRepositoryOrNull()?.allAsDict() ?: emptyMap()
             val previousKeys = lastInjectedKeys[sessionId] ?: emptySet()
             if (envVars.isNotEmpty() || previousKeys.isNotEmpty()) {
                 shell.applyEnvironment(envVars, previousKeys = previousKeys)
@@ -404,7 +405,7 @@ object ExecutionCoordinator {
         // path (debug.ls, file_read, …) but does NOT feed the live PRoot argv.
         // Skip entries whose SAF tree URI didn't decode to a POSIX path
         // (cloud providers, unmounted removable storage).
-        PRootKernel.mountedFoldersStore?.entries?.value?.forEach { entry ->
+        AppGraph.mountedFoldersStoreOrNull()?.entries?.value?.forEach { entry ->
             val host = entry.resolvedHostPath ?: return@forEach
             val linuxPath = "/var/minis/mounts/${entry.name}"
             mounts[linuxPath] = host

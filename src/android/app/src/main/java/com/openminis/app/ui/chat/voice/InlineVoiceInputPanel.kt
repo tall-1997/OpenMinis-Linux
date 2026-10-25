@@ -5,13 +5,11 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -19,18 +17,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -40,7 +34,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,8 +43,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -75,11 +67,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.foundation.Canvas
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 
 /**
  * [T-android-voice-panel] Inline voice input panel — Android port of iOS
@@ -178,10 +165,10 @@ fun InlineVoiceInputPanel(
     },
 ) {
     val scope = androidx.compose.runtime.rememberCoroutineScope()
-    val sttState by SpeechRecognitionManager.state.collectAsState()
-    val locale by SpeechRecognitionManager.locale.collectAsState()
-    val supportedLocales by SpeechRecognitionManager.supportedLocales.collectAsState()
-    val levels by SpeechRecognitionManager.audioLevels.collectAsState()
+    val sttState by SpeechRecognitionManager.state.collectAsStateWithLifecycle()
+    val locale by SpeechRecognitionManager.locale.collectAsStateWithLifecycle()
+    val supportedLocales by SpeechRecognitionManager.supportedLocales.collectAsStateWithLifecycle()
+    val levels by SpeechRecognitionManager.audioLevels.collectAsStateWithLifecycle()
 
     // Load the persisted expanded/compact choice before it is read below.
     // Idempotent, so running on every composition is harmless.
@@ -229,7 +216,7 @@ fun InlineVoiceInputPanel(
     val isRecording = sttState == RecognitionState.RECORDING || sttState == RecognitionState.STARTING
     val isTranscribing = sttState == RecognitionState.FINISHING
 
-    val config by providerRepository.config.collectAsState()
+    val config by providerRepository.config.collectAsStateWithLifecycle()
     val choice = remember(config) { providerRepository.resolveVoiceInputChoice() }
     val groupName = remember(config) { providerRepository.voiceInputGroupName() }
     val modelLabel = if (choice.isSystem) {
@@ -453,7 +440,7 @@ fun InlineVoiceInputPanel(
     // transcribed and link to the two things that fix it — the system speech
     // service, or an ASR provider configured in Minis. The composer's toggle
     // stays visible throughout, so leaving is always one tap away.
-    val engineAvailable by SpeechRecognitionManager.isAvailable.collectAsState()
+    val engineAvailable by SpeechRecognitionManager.isAvailable.collectAsStateWithLifecycle()
     if (!engineAvailable) {
         VoiceEngineUnavailableNotice(
             expanded = expanded,

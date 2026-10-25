@@ -413,6 +413,7 @@ dependencies {
     implementation("com.google.mlkit:text-recognition-chinese:16.0.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     // ProcessLifecycleOwner — used by XAIOAuthManager to detect Custom
     // Tab dismissal (T-xai-oauth-stop-resume port iOS d1dbdd5d).
     implementation("androidx.lifecycle:lifecycle-process:2.8.7")
@@ -498,9 +499,8 @@ dependencies {
     implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("io.coil-kt:coil-svg:2.7.0")
 
-    // Markdown rendering (mikepenz multiplatform-markdown-renderer)
-    implementation("com.mikepenz:multiplatform-markdown-renderer-android:0.33.0")
-    implementation("com.mikepenz:multiplatform-markdown-renderer-m3-android:0.33.0")
+    // Markdown rendering
+    implementation("org.jetbrains:markdown:0.7.3")
 
     // Chrome Custom Tabs (in-app browser for OAuth)
     implementation("androidx.browser:browser:1.8.0")

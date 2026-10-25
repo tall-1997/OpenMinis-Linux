@@ -7,7 +7,6 @@ import android.os.Build
 import android.provider.DocumentsContract
 import android.provider.MediaStore
 import java.io.File
-import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.util.UUID

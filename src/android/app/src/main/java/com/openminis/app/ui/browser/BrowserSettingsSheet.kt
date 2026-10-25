@@ -6,7 +6,6 @@ import android.webkit.WebStorage
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -22,7 +21,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -40,7 +38,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -96,8 +94,8 @@ fun BrowserSettingsSheet(
 
     // Viewport state — bound to the pool's flows so changes from other surfaces
     // (e.g. the agent calling set_viewport) reflect in this sheet immediately.
-    val customWidthFromPool by tabPool.customViewportWidth.collectAsState()
-    val customHeightFromPool by tabPool.customViewportHeight.collectAsState()
+    val customWidthFromPool by tabPool.customViewportWidth.collectAsStateWithLifecycle()
+    val customHeightFromPool by tabPool.customViewportHeight.collectAsStateWithLifecycle()
     var viewportWidthText by remember(customWidthFromPool) {
         mutableStateOf(if (customWidthFromPool > 0) customWidthFromPool.toString() else "")
     }

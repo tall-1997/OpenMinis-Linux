@@ -1,4 +1,4 @@
-package com.openminis.app.providers
+package com.openminis.app.documentsprovider
 
 import android.database.Cursor
 import android.database.MatrixCursor
@@ -26,7 +26,7 @@ import java.io.FileNotFoundException
  * pre-existing in-flight edits this commit can't touch — once that file
  * gets its own cleanup commit, add:
  * ```xml
- * <provider android:name=".providers.MinisDocumentsProvider"
+ * <provider android:name=".documentsprovider.MinisDocumentsProvider"
  *     android:authorities="com.openminis.minis.documents"
  *     android:exported="true"
  *     android:grantUriPermissions="true"

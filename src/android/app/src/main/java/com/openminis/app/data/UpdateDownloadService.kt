@@ -12,7 +12,6 @@ import android.os.Build
 import android.os.IBinder
 import android.text.format.Formatter
 import androidx.core.app.NotificationCompat
-import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.openminis.app.R
 import com.openminis.app.logging.AppLogger

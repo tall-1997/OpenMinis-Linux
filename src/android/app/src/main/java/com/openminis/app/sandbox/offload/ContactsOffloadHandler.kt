@@ -10,8 +10,6 @@ import com.openminis.app.offload.OffloadPermissionManager
 import com.openminis.app.sandbox.NativeOffloadHandler
 import com.openminis.app.sandbox.NativeOffloadRequest
 import com.openminis.app.sandbox.NativeOffloadResult
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -87,6 +85,14 @@ class ContactsOffloadHandler(private val context: Context) : NativeOffloadHandle
      * error result describing why we gave up. When [needsWrite] is true the
      * permission set additionally includes WRITE_CONTACTS — required by the
      * `delete` subcommand.
+     *
+     * The shared skeleton (runBlocking on the offload worker, bounded by
+     * [OffloadPermissionManager.INTERACTIVE_BUDGET_MS] so an unanswered
+     * prompt can't hold the guest's read() forever) lives in
+     * [OffloadInteractivePermission.ensureInteractive]; only the contacts-
+     * specific permission set, copy and log labels sit here. The timeout
+     * envelope keeps this handler's older `permission_timeout` literal and
+     * inline budget — deliberately not unified with the generic `timeout`.
      */
     private fun ensurePermission(needsWrite: Boolean = false, args: OffloadArgs): NativeOffloadResult? {
         if (hasPermission(needsWrite)) return null
@@ -96,64 +102,32 @@ class ContactsOffloadHandler(private val context: Context) : NativeOffloadHandle
             listOf(Manifest.permission.READ_CONTACTS)
         }
         AppLogger.warning(TAG, "${perms.joinToString("+")} not granted — routing through permission flow")
-        // [T-android-offload-hang] Bounded on purpose: this runs on an offload
-        // worker thread while the guest blocks in read(). The dialog + settings
-        // gate chain below is sized for a user watching the screen (120s + 120s);
-        // with no foreground UI it used to hold the thread — and the caller —
-        // for ~4 minutes and then leave the caller hanging forever, because the
-        // guest's own `timeout` cannot cancel a reply that has not been sent yet.
-        val result = runBlocking {
-            withTimeoutOrNull(OffloadPermissionManager.INTERACTIVE_BUDGET_MS) {
-                var r = OffloadPermissionManager.requestAndroidPermission(perms)
-                if (r == OffloadPermissionManager.AndroidPermissionResult.DENIED &&
-                    OffloadPermissionManager.pollForPermissionGrant({ hasPermission(needsWrite) })
-                ) {
-                    AppLogger.info(TAG, "Contacts permission granted during post-DENY poll")
-                    r = OffloadPermissionManager.AndroidPermissionResult.GRANTED
-                }
-                if (r == OffloadPermissionManager.AndroidPermissionResult.DENIED) {
-                    r = OffloadPermissionManager.requestSettingsGate(
-                        OffloadPermissionManager.SettingsGateRequest(
-                            id = if (needsWrite) "CONTACTS_RW" else Manifest.permission.READ_CONTACTS,
-                            title = "Contacts permission needed",
-                            message = if (needsWrite) {
-                                "Minis needs read + write contacts permission to delete entries. Open Settings to allow it."
-                            } else {
-                                "Minis needs contacts permission to read your address book. Open Settings to allow it."
-                            },
-                            settingsAction = android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                            requiresPackageUri = true,
-                            positiveLabel = "Open Settings",
-                        ),
-                        check = { hasPermission(needsWrite) },
-                    )
-                }
-                r
-            }
-        } ?: OffloadPermissionManager.AndroidPermissionResult.TIMEOUT
-        return when (result) {
-            OffloadPermissionManager.AndroidPermissionResult.GRANTED -> null
-            OffloadPermissionManager.AndroidPermissionResult.DENIED -> NativeOffloadResult(
-                77,
-                OffloadOutput.formatBody(
-                    JSONObject().put("error", "permission_denied")
-                        .put("message", "The user declined the contacts permission.")
-                        .toString(),
-                    args,
-                ) + "\n",
-            )
-            OffloadPermissionManager.AndroidPermissionResult.TIMEOUT -> NativeOffloadResult(
-                77,
-                OffloadOutput.formatBody(
-                    JSONObject().put("error", "permission_timeout")
-                        .put("message", "Timed out waiting for the user to grant the contacts permission " +
-                            "(budget ${OffloadPermissionManager.INTERACTIVE_BUDGET_MS / 1000}s). No work was done. " +
-                            "Ask the user to approve the prompt in the app, then retry.")
-                        .toString(),
-                    args,
-                ) + "\n",
-            )
-        }
+        return OffloadInteractivePermission.ensureInteractive(
+            logTag = TAG,
+            permissions = perms,
+            satisfied = { hasPermission(needsWrite) },
+            gate = OffloadPermissionManager.SettingsGateRequest(
+                id = if (needsWrite) "CONTACTS_RW" else Manifest.permission.READ_CONTACTS,
+                title = "Contacts permission needed",
+                message = if (needsWrite) {
+                    "Minis needs read + write contacts permission to delete entries. Open Settings to allow it."
+                } else {
+                    "Minis needs contacts permission to read your address book. Open Settings to allow it."
+                },
+                settingsAction = android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                requiresPackageUri = true,
+                positiveLabel = "Open Settings",
+            ),
+            pollGrantedLog = "Contacts permission granted during post-DENY poll",
+            copy = OffloadInteractivePermission.DenialCopy(
+                deniedMessage = "The user declined the contacts permission.",
+                timeoutError = OffloadInteractivePermission.ERROR_PERMISSION_TIMEOUT,
+                timeoutMessage = "Timed out waiting for the user to grant the contacts permission " +
+                    "(budget ${OffloadPermissionManager.INTERACTIVE_BUDGET_MS / 1000}s). No work was done. " +
+                    "Ask the user to approve the prompt in the app, then retry.",
+            ),
+            args = args,
+        )
     }
 
     private fun doList(args: List<String>, parsedArgs: OffloadArgs): NativeOffloadResult {

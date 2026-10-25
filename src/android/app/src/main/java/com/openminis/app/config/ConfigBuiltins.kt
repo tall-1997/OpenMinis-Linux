@@ -1,6 +1,7 @@
 package com.openminis.app.config
 
 import android.content.Context
+import android.os.Looper
 import com.openminis.app.config.collections.EnvVarsCollection
 import com.openminis.app.service.DynamicIslandSupport
 import com.openminis.app.config.collections.GroupsCollection
@@ -8,11 +9,7 @@ import com.openminis.app.config.collections.ModelsCollection
 import com.openminis.app.config.collections.ProvidersCollection
 import com.openminis.app.config.fields.ClosureField
 import com.openminis.app.config.fields.PrefsBoolField
-import com.openminis.app.config.fields.PrefsDoubleField
-import com.openminis.app.config.fields.PrefsEnumField
 import com.openminis.app.config.fields.PrefsIntCodedEnumField
-import com.openminis.app.config.fields.PrefsIntField
-import com.openminis.app.config.fields.PrefsLongField
 import com.openminis.app.config.fields.PrefsStringField
 import com.openminis.app.config.fields.ReadOnlyField
 import com.openminis.app.data.repository.ChatRepository
@@ -158,6 +155,7 @@ internal object ConfigBuiltins {
                 risk = ConfigRisk.NORMAL,
                 revertable = true,
                 reader = {
+                    assertNotMainThread()
                     val sid = ChatViewModelStore.activeSessionId
                     if (sid == null) ConfigValue.Null
                     else {
@@ -170,10 +168,8 @@ internal object ConfigBuiltins {
                     }
                 },
                 writer = { v ->
-                    val token = (v as? ConfigValue.Str)?.value
-                        ?: throw ConfigError.TypeMismatch("string")
-                    val level = thinkingLevelFromToken(token)
-                        ?: throw ConfigError.InvalidValue("Unknown thinking level: $token")
+                    val token = (v as? ConfigValue.Str)?.value ?: throw ConfigError.TypeMismatch("string")
+                    val level = thinkingLevelFromToken(token) ?: throw ConfigError.InvalidValue("Unknown thinking level: $token")
                     val sid = ChatViewModelStore.activeSessionId
                         ?: throw ConfigError.InvalidValue("No active session — open a chat first")
                     runBlocking { chatRepo.dao.updateThinkingOverride(sid, level.name) }
@@ -189,6 +185,7 @@ internal object ConfigBuiltins {
                 risk = ConfigRisk.SENSITIVE,
                 revertable = true,
                 reader = {
+                    assertNotMainThread()
                     val sid = ChatViewModelStore.activeSessionId
                     if (sid == null) ConfigValue.Str("")
                     else {
@@ -197,8 +194,7 @@ internal object ConfigBuiltins {
                     }
                 },
                 writer = { v ->
-                    val s = (v as? ConfigValue.Str)?.value
-                        ?: throw ConfigError.TypeMismatch("string")
+                    val s = (v as? ConfigValue.Str)?.value ?: throw ConfigError.TypeMismatch("string")
                     val sid = ChatViewModelStore.activeSessionId
                         ?: throw ConfigError.InvalidValue("No active session — open a chat first")
                     if (s.isEmpty()) {
@@ -349,7 +345,7 @@ internal object ConfigBuiltins {
         // live here, not in `minis_settings`. Hoisted above the registrations
         // so every field can bind to the same store the UI reads.
         val appearancePrefs = context.getSharedPreferences(
-            com.openminis.app.ui.settings.PREF_APPEARANCE,
+            com.openminis.app.config.PREF_APPEARANCE,
             Context.MODE_PRIVATE,
         )
         r.register(
@@ -581,8 +577,7 @@ internal object ConfigBuiltins {
                     ConfigValue.Bool(com.openminis.app.logging.AppLogger.isEnabled(context))
                 },
                 writer = { v ->
-                    val b = (v as? ConfigValue.Bool)?.value
-                        ?: throw ConfigError.TypeMismatch("bool")
+                    val b = (v as? ConfigValue.Bool)?.value ?: throw ConfigError.TypeMismatch("bool")
                     com.openminis.app.logging.AppLogger.setEnabled(context, b)
                 },
             )
@@ -710,8 +705,7 @@ internal object ConfigBuiltins {
                 revertable = true,
                 reader = { ConfigValue.Bool(com.openminis.app.data.EnvVarPrivacyStore.isEnabled) },
                 writer = { v ->
-                    val b = (v as? ConfigValue.Bool)?.value
-                        ?: throw ConfigError.TypeMismatch("bool")
+                    val b = (v as? ConfigValue.Bool)?.value ?: throw ConfigError.TypeMismatch("bool")
                     com.openminis.app.data.EnvVarPrivacyStore.setEnabled(b)
                 },
             )
@@ -1214,4 +1208,6 @@ internal object ConfigBuiltins {
             )
         )
     }
+
+    private fun assertNotMainThread() = check(Looper.myLooper() != Looper.getMainLooper()) { "config reader must not run on main thread; would re-enter Room" }
 }

@@ -6,6 +6,7 @@ import android.provider.OpenableColumns
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMMessage
 import com.openminis.app.logging.AppLogger
+import com.openminis.app.tools.AtomicFileWrite
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -13,6 +14,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.IOException
 import java.io.InputStream
 import java.util.UUID
 
@@ -506,16 +508,15 @@ object PersonaPromptLibrary {
      */
     fun writeSessionOverride(context: Context, sessionId: String, body: String) {
         val file = sessionPersonaFile(context, sessionId)
-        file.parentFile?.mkdirs()
         if (body.isBlank()) {
             file.delete()
             return
         }
-        val tmp = File(file.parentFile, "${file.name}.tmp")
-        tmp.writeText(body)
-        if (!tmp.renameTo(file)) {
-            file.writeText(body)
-            tmp.delete()
+        // AtomicFileWrite adds a per-path lock, short-write detection and post-write
+        // verify; copy-over covers the old direct-writeText fallback, null throws the
+        // same IOException.
+        if (AtomicFileWrite.write(file, body, temp = File(file.parentFile, "${file.name}.tmp")) == null) {
+            throw IOException("session override write failed for ${file.name}")
         }
     }
 
@@ -815,12 +816,10 @@ object PersonaPromptLibrary {
     }
 
     private fun atomicWrite(target: File, text: String) {
-        target.parentFile?.mkdirs()
-        val tmp = File(target.parentFile, "${target.name}.tmp")
-        tmp.writeText(text, Charsets.UTF_8)
-        if (!tmp.renameTo(target)) {
-            target.writeText(text, Charsets.UTF_8)
-            tmp.delete()
+        // AtomicFileWrite: copy-over covers the old rename-failed direct-writeText
+        // fallback; null (both failed) throws the same IOException, callers unaffected.
+        if (AtomicFileWrite.write(target, text, temp = File(target.parentFile, "${target.name}.tmp")) == null) {
+            throw IOException("persona write failed for ${target.name}")
         }
     }
 

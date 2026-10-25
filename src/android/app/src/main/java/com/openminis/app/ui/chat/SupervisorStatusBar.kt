@@ -31,7 +31,7 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -72,7 +72,7 @@ internal fun SupervisorStatusBar(
     onResume: () -> Unit = {},
     onDiscard: () -> Unit = {},
 ) {
-    val state by SupervisorUiHost.uiState.collectAsState()
+    val state by SupervisorUiHost.uiState.collectAsStateWithLifecycle()
     val mine = state?.takeIf { it.sessionId == sessionId } ?: return
     var showSheet by remember { mutableStateOf(false) }
 

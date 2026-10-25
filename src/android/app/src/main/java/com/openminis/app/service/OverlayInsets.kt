@@ -1,7 +1,6 @@
 package com.openminis.app.service
 
 import android.content.Context
-import com.openminis.app.data.repository.BackgroundSettingsRepository
 
 /**
  * 悬浮胶囊的安全区计算，从 ToolOverlayController 抽出以控制该文件行数。

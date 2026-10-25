@@ -2,8 +2,6 @@ package com.openminis.app.offload
 
 import android.content.Context
 import android.os.Build
-import org.json.JSONArray
-import org.json.JSONObject
 
 /**
  * Health data bridge using Android Health Connect API (Android 14+).
