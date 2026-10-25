@@ -22,22 +22,12 @@ import java.io.FileNotFoundException
  *   - `shared/` accepts new subitems and in-place edits
  *   - root itself is read-only (can't create a new top-level folder)
  *
- * **Manifest registration is not yet wired.** AndroidManifest.xml has
- * pre-existing in-flight edits this commit can't touch — once that file
- * gets its own cleanup commit, add:
- * ```xml
- * <provider android:name=".documentsprovider.MinisDocumentsProvider"
- *     android:authorities="com.openminis.minis.documents"
- *     android:exported="true"
- *     android:grantUriPermissions="true"
- *     android:permission="android.permission.MANAGE_DOCUMENTS">
- *   <intent-filter>
- *     <action android:name="android.content.action.DOCUMENTS_PROVIDER" />
- *   </intent-filter>
- * </provider>
- * ```
- * Until then this class compiles cleanly but is unreachable by the
- * Files app.
+ * Registered in AndroidManifest.xml ([T-android-documents-provider]):
+ * exported only to the system DocumentsUI (android:permission
+ * MANAGE_DOCUMENTS) and SAF's grantUriPermissions covers the picker flow.
+ * The authority stays `com.openminis.minis.documents` per the class
+ * constant — note it is not applicationId-derived, so coexistence with an
+ * upstream build that ships the same authority would collide.
  */
 class MinisDocumentsProvider : DocumentsProvider() {
 

@@ -112,6 +112,8 @@ android-su status
 
 SAF 目录绑定在 `/var/minis/mounts/<name>/`。若有「所有文件访问」：`/sdcard`、`/storage/emulated/0`、`/var/minis/mounts/sdcard`。
 
+系统「文件」App 里还能看到一个 **Minis Ultra** 存储根：`memory/`（全局记忆：SOUL.md、LEARNED.md、人格卡）和 `skills/` 只读，`shared/` 可读写（`skills/`、`shared/`、`mcp-servers/` 会绑定进沙箱共享给所有会话）。存储根根目录本身不可新建子目录。
+
 ## 为何首次编译可能缺 Go / rclone.aar
 
 `src/android/app/libs/rclone.aar` 是 gomobile 产物（约 15MB），已 gitignore，**不是**编译 APK 的硬依赖。
