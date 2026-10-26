@@ -1921,24 +1921,22 @@ internal suspend fun ChatViewModel.runAgentLoop(
         // ---- Phase 3: assemble resultParts in emission order ----
         val resultParts = mutableListOf<AgentContentPart>()
         for ((id, name, _) in toolCalls) {
-            plan.refusedParts[id]?.let { refused ->
-                resultParts.add(refused)
-                continue
-            }
-            execution.executedParts[id]?.let { executed ->
-                resultParts.add(executed)
-                continue
-            }
-            if (SubAgentKind.isSpawnTool(name)) {
-                // A spawn call whose peer result never landed (fan-out
-                // interrupted) still needs a tool_result so the
-                // tool_use/tool_result pairing stays balanced.
-                resultParts.add(AgentContentPart.ToolResult(
-                    id = id, name = name,
-                    content = "Error: this spawn call's result is missing — the wave was " +
-                        "collected without a report for this call. Re-issue the dispatch.",
-                    isError = true,
-                ))
+            val refused = plan.refusedParts[id]
+            val executed = execution.executedParts[id]
+            when {
+                refused != null -> resultParts.add(refused)
+                executed != null -> resultParts.add(executed)
+                SubAgentKind.isSpawnTool(name) -> {
+                    // A spawn call whose peer result never landed (fan-out
+                    // interrupted) still needs a tool_result so the
+                    // tool_use/tool_result pairing stays balanced.
+                    resultParts.add(AgentContentPart.ToolResult(
+                        id = id, name = name,
+                        content = "Error: this spawn call's result is missing — the wave was " +
+                            "collected without a report for this call. Re-issue the dispatch.",
+                        isError = true,
+                    ))
+                }
             }
         }
 
