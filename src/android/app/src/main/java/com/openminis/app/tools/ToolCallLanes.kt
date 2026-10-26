@@ -48,8 +48,7 @@ internal object ToolCallLanes {
     private val CONCURRENT_TOOLS = setOf(
         FileReadTool.NAME,                    // "file_read"
         ListDirTool.NAME,                     // "list_dir"
-        GrepTool.NAME,                        // "grep"
-        GrepSourceTool.NAME,                  // "grep_source"
+        GrepTool.NAME,                        // "grep" (grep_source is an alias, resolved to canonical before lane assignment)
         GlobTool.NAME,                        // "glob"
         WebFetchTool.NAME,                    // "web_fetch"
         WebSearchTool.NAME,                   // "web_search"
@@ -62,7 +61,6 @@ internal object ToolCallLanes {
         OcrTool.NAME,                         // "ocr_image"
         ScreenTimeTool.NAME,                  // "get_screen_time"
         "memory_get",                         // memoryGetDefinition name (aliases resolve to canonical before lane assignment)
-        CheckAgentTool.NAME,                  // "check_agent"
         SessionLookupTool.SEARCH,             // "search_sessions"
         SessionLookupTool.READ,               // "read_session"
         CodeGraphTool.NAME,                   // "code_graph"
