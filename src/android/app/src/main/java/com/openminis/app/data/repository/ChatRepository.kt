@@ -263,9 +263,7 @@ class ChatRepository(
      * read at a time and discarded after shrinking. The stored row is unchanged.
      */
     suspend fun hydrateDisplayRows(rows: List<MessageEntity>): List<MessageEntity> {
-        if (rows.none { DisplayParts.needsHydration(it.bodyRef, it.bodyBytes, it.partsJson) }) {
-            return rows
-        }
+        if (rows.none { DisplayParts.needsHydration(it.bodyRef, it.bodyBytes, it.partsJson) }) return rows
         val store = filesDir?.let { BodyStore(File(it, "bodies")) }
         return rows.map { row ->
             if (!DisplayParts.needsHydration(row.bodyRef, row.bodyBytes, row.partsJson)) {
@@ -361,14 +359,16 @@ class ChatRepository(
         headChars: Int = 800,
         limit: Int = 32,
         newest: Boolean = false,
-    ): List<com.openminis.app.data.db.MessageHeadRow> = if (newest) {
-        dao.loadMessageHeadsByRoleNewest(sessionId, role, headChars, limit)
-    } else {
-        dao.loadMessageHeadsByRole(sessionId, role, headChars, limit)
-    }
+    ): List<com.openminis.app.data.db.MessageHeadRow> =
+        if (newest) dao.loadMessageHeadsByRoleNewest(sessionId, role, headChars, limit)
+        else dao.loadMessageHeadsByRole(sessionId, role, headChars, limit)
 
     /** All persisted token_usage JSON strings for a session (one per LLM call). */
     suspend fun sessionTokenUsages(sessionId: String): List<String> = dao.tokenUsages(sessionId)
+
+    /** DB row id → raw token_usage JSON, one entry per assistant turn that reported usage. */
+    suspend fun sessionMessageUsageJsons(sessionId: String): Map<String, String> =
+        dao.messageUsages(sessionId).associate { it.id to it.tokenUsage }
 
     /**
      * [T-android-session-paused-badge-hardkill] Session ids whose agent loop was

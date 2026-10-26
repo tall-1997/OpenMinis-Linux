@@ -249,27 +249,63 @@ object ScheduledAgentRunner {
                         AppLogger.warning(TAG, "task ${task.id}: no provider — abort")
                         return null
                     }
-                val title = task.label.ifBlank { "Scheduled task" }
-                val memoryOn = com.openminis.app.data.MemoryGlobalPrefs.isGlobalEnabled(app)
-                val session = app.chatRepository.createSession(
-                    modelId = seedModelId,
-                    title = title,
-                    memoryEnabled = memoryOn,
-                )
-                app.chatRepository.dao.updateSource(session.id, "scheduled")
-
-                // Write a model_binding when the task carried one OR when we
-                // fell back to defaultPrimaryGroupId. Pinned modelId (no
-                // binding) leaves modelBinding null so the chat layer treats
-                // it as a hard-pinned entry, matching what the user picked.
                 val bindingToWrite: String? = explicitBinding
                     ?: defaultGroupId?.let { """{"type":"group","groupId":"$it"}""" }
-                if (bindingToWrite != null) {
-                    app.chatRepository.updateSessionBinding(session.id, bindingToWrite, seedModelId)
-                }
-                session.id
+                return persistNewSessionRow(app.chatRepository, app, task, seedModelId, bindingToWrite).id
             }
         }
+    }
+
+    /**
+     * [T-scheduled-new-session-permission] Create the session row for a
+     * NewSession fire and write through everything the task pinned:
+     *   - tool-gate permission mode → `permission_mode` column ("YOYO" or
+     *     "ASK", same tokens ChatViewModel.setSessionPermissionMode writes —
+     *     null on the task normalizes to ASK, so pre-feature tasks keep the
+     *     app-default gate),
+     *   - model binding (pre-existing behaviour),
+     *   - session group ("folder") → filed via [ChatRepository.setFolderForSessions],
+     *     the same path the chat screen's "New Chat in Group" uses, so the
+     *     SessionWorkspace owner map and the on-disk project dirs are
+     *     provisioned identically. A folder dissolved after the task was
+     *     saved degrades to unfiled instead of writing a ghost folder_id.
+     *
+     * Internal and repo-parameterized so the Robolectric suite can drive the
+     * exact persistence path against an in-memory Room DB without a MinisApp.
+     */
+    internal suspend fun persistNewSessionRow(
+        repo: com.openminis.app.data.repository.ChatRepository,
+        context: Context,
+        task: ScheduledTask,
+        seedModelId: String,
+        bindingToWrite: String?,
+    ): com.openminis.app.data.db.ChatSessionEntity {
+        val title = task.label.ifBlank { "Scheduled task" }
+        val memoryOn = com.openminis.app.data.MemoryGlobalPrefs.isGlobalEnabled(context)
+        val session = repo.createSession(
+            modelId = seedModelId,
+            title = title,
+            memoryEnabled = memoryOn,
+            permissionMode = task.newSessionPermissionToken(),
+        )
+        repo.dao.updateSource(session.id, "scheduled")
+        if (bindingToWrite != null) {
+            repo.updateSessionBinding(session.id, bindingToWrite, seedModelId)
+        }
+        if (task.newSessionFolderId != null) {
+            val folderId = task.resolvedNewSessionFolderId(
+                repo.listFolders().map { it.id }.toSet(),
+            )
+            if (folderId != null) {
+                repo.setFolderForSessions(folderId, listOf(session.id))
+            } else {
+                AppLogger.warning(
+                    TAG,
+                    "task ${task.id}: folder ${task.newSessionFolderId} gone — session left unfiled",
+                )
+            }
+        }
+        return session
     }
 
     // Mirrors ChatViewModel.restoreFromBinding's JSON shape. Robust against

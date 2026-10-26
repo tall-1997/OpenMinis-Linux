@@ -636,6 +636,12 @@
     <string name="appearance_show_chat_title">Ipakita ang pamagat ng chat</string>
     <string name="appearance_show_chat_title_subtitle">Magpakita ng nakadikit na title pill habang nagsi-scroll</string>
     <string name="appearance_show_chat_title_footer">Ipakita ang pamagat ng kasalukuyang session bilang lumulutang na pill sa itaas ng chat habang sinusuri mo ang history.</string>
+    <string name="appearance_message_usage_title">Paggamit ng token sa ilalim ng mga sagot</string>
+    <string name="appearance_message_usage_subtitle">Ipapakita ang input/output token at cache hit sa ilalim ng bawat sagot</string>
+    <string name="appearance_context_glow_title">Glow kapag halos puno na ang context</string>
+    <string name="appearance_context_glow_subtitle">Umiikot na glow sa gilid ng input box kapag lumalapit sa limit ang context</string>
+    <string name="chat_usage_footer_tokens">↑ %1$s ↓ %2$s</string>
+    <string name="chat_usage_footer_cache">cache %1$d%%</string>
     <string name="chat_title_pill_session_default">Walang pamagat</string>
     <string name="appearance_section_grouping">Pag-grupo</string>
     <string name="appearance_auto_grouping">Awtomatikong Pag-grupo</string>
@@ -1739,6 +1745,14 @@
     <string name="scheduled_task_runs_title">Mga talaan ng pagtakbo</string>
     <string name="scheduled_task_runs_empty">Wala pang pagtakbo. Hindi pa tumatakbo ang gawaing ito — lalabas dito ang mga talaan pagkatapos nito.</string>
     <string name="scheduled_task_runs_open_session">Buksan ang session</string>
+    <!-- [T-scheduled-new-session-permission / T-scheduled-new-session-folder / T-scheduled-card-status-line] -->
+<string name="scheduled_task_runs_count">%1$d na pagtakbo</string>
+<string name="scheduled_task_next_fire">Susunod %1$s</string>
+<string name="scheduled_task_state_ended">Tapos na</string>
+<string name="scheduled_task_state_paused">Naka-pause</string>
+<string name="scheduled_task_field_permission">Permiso ng bagong chat</string>
+<string name="scheduled_task_field_workspace">Workspace</string>
+<string name="scheduled_task_no_folders">Wala pang workspace. Gumawa muna sa listahan ng session.</string>
     <string name="image_action_copy">Kopyahin</string>
     <string name="image_action_share">Ibahagi</string>
     <string name="image_action_save">I-save</string>

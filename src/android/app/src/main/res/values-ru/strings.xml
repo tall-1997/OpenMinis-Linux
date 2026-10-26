@@ -638,6 +638,12 @@
     <string name="appearance_show_chat_title">Показывать название чата</string>
     <string name="appearance_show_chat_title_subtitle">Показывать закреплённую плашку с названием при прокрутке</string>
     <string name="appearance_show_chat_title_footer">Отображать название текущей сессии в виде плавающей плашки вверху чата при прокрутке истории.</string>
+    <string name="appearance_message_usage_title">Расход токенов под ответами</string>
+    <string name="appearance_message_usage_subtitle">Показывает токены ввода/вывода и попадания кэша под каждым ответом</string>
+    <string name="appearance_context_glow_title">Свечение при почти полном контексте</string>
+    <string name="appearance_context_glow_subtitle">Край поля ввода светится вращающимся бегунком, когда контекст близок к лимиту</string>
+    <string name="chat_usage_footer_tokens">↑ %1$s ↓ %2$s</string>
+    <string name="chat_usage_footer_cache">кэш %1$d%%</string>
     <string name="chat_title_pill_session_default">Без названия</string>
     <string name="appearance_section_grouping">Группировка</string>
     <string name="appearance_auto_grouping">Автогруппировка</string>
@@ -1747,6 +1753,14 @@
     <string name="scheduled_task_runs_title">Записи о запусках</string>
     <string name="scheduled_task_runs_empty">Запусков пока нет. Эта задача ещё не срабатывала — запуски появятся здесь после первого срабатывания.</string>
     <string name="scheduled_task_runs_open_session">Открыть сессию</string>
+    <!-- [T-scheduled-new-session-permission / T-scheduled-new-session-folder / T-scheduled-card-status-line] -->
+<string name="scheduled_task_runs_count">Запусков: %1$d</string>
+<string name="scheduled_task_next_fire">Следующий %1$s</string>
+<string name="scheduled_task_state_ended">Завершена</string>
+<string name="scheduled_task_state_paused">Приостановлена</string>
+<string name="scheduled_task_field_permission">Разрешения нового чата</string>
+<string name="scheduled_task_field_workspace">Рабочая область</string>
+<string name="scheduled_task_no_folders">Рабочих областей пока нет. Сначала создайте одну в списке сессий.</string>
     <string name="image_action_copy">Копировать</string>
     <string name="image_action_share">Поделиться</string>
     <string name="image_action_save">Сохранить</string>

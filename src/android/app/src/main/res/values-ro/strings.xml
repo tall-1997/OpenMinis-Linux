@@ -637,6 +637,12 @@
     <string name="appearance_show_chat_title">Afișează titlul conversației</string>
     <string name="appearance_show_chat_title_subtitle">Arată o etichetă fixă cu titlul în timpul derulării</string>
     <string name="appearance_show_chat_title_footer">Afișează titlul sesiunii curente ca etichetă plutitoare în partea de sus a conversației, în timp ce derulezi istoricul.</string>
+    <string name="appearance_message_usage_title">Utilizarea tokenurilor sub răspunsuri</string>
+    <string name="appearance_message_usage_subtitle">Afișează tokenii de intrare/ieșire și rata de cache sub fiecare răspuns</string>
+    <string name="appearance_context_glow_title">Strălucire când contextul este aproape plin</string>
+    <string name="appearance_context_glow_subtitle">Marginea câmpului de introducere strălucește rotativ când contextul se apropie de limită</string>
+    <string name="chat_usage_footer_tokens">↑ %1$s ↓ %2$s</string>
+    <string name="chat_usage_footer_cache">cache %1$d%%</string>
     <string name="chat_title_pill_session_default">Fără titlu</string>
     <string name="appearance_section_grouping">Grupare</string>
     <string name="appearance_auto_grouping">Grupare automată</string>
@@ -1743,6 +1749,14 @@
     <string name="scheduled_task_runs_title">Istoricul rulărilor</string>
     <string name="scheduled_task_runs_empty">Nicio rulare încă. Această sarcină nu s-a declanșat niciodată — înregistrările vor apărea aici după aceea.</string>
     <string name="scheduled_task_runs_open_session">Deschide sesiunea</string>
+    <!-- [T-scheduled-new-session-permission / T-scheduled-new-session-folder / T-scheduled-card-status-line] -->
+<string name="scheduled_task_runs_count">Rulări: %1$d</string>
+<string name="scheduled_task_next_fire">Următoare %1$s</string>
+<string name="scheduled_task_state_ended">Finalizată</string>
+<string name="scheduled_task_state_paused">În pauză</string>
+<string name="scheduled_task_field_permission">Permisiunea chatului nou</string>
+<string name="scheduled_task_field_workspace">Spațiu de lucru</string>
+<string name="scheduled_task_no_folders">Niciun spațiu de lucru încă. Creează unul mai întâi din lista de sesiuni.</string>
     <string name="image_action_copy">Copiază</string>
     <string name="image_action_share">Partajează</string>
     <string name="image_action_save">Salvează</string>

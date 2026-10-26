@@ -2,8 +2,10 @@ package com.openminis.app.ui.chat
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.SideEffect
@@ -13,7 +15,10 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import com.openminis.app.R
@@ -52,6 +57,10 @@ internal fun ChatFlatItemRow(
     onOpenTerminalWithCommand: (String) -> Unit,
     onToggleProcessCard: (String) -> Unit,
     selectionController: SelectionController,
+    // [T-android-message-usage-footer] Flat row key → usage for the LAST row
+    // of each assistant reply that has persisted token_usage (see
+    // computeUsageFooterRows). Empty map = feature off / nothing parsed.
+    usageFooterRows: Map<String, MessageUsageStats> = emptyMap(),
 ) {
     val context = LocalContext.current
                         val isNewestItem = item == flatItems.lastOrNull()
@@ -72,7 +81,15 @@ internal fun ChatFlatItemRow(
                             ),
                             label = "searchFocusHighlight",
                         )
-                        Box(
+                        // [T-android-message-usage-footer] Resolved before the
+                        // wrapper: compacted-history rows (rowAlpha < 1f) stay
+                        // quiet — usage belongs to the live reading surface.
+                        val usageFooterStats =
+                            if (rowAlpha < 1f) null else usageFooterRows[item.key]
+                        // Single-child Box → Column (layout-equivalent here) so
+                        // the usage footer stacks BELOW the row content while
+                        // sharing the search-focus background and alpha.
+                        Column(
                             modifier = Modifier
                                 .padding(top = rhythmGap)
                                 .alpha(rowAlpha)
@@ -415,5 +432,38 @@ internal fun ChatFlatItemRow(
                                 }
                             }
                         }
-                        } // Box (alpha wrapper)
+                        // [T-android-message-usage-footer] Small secondary
+                        // line under the reply's last row: prompt/output
+                        // tokens plus the cache hit rate when the provider
+                        // reported one. Rendered inside the same wrapper so
+                        // row alpha and the search-focus highlight cover it.
+                        if (usageFooterStats != null && usageFooterStats.hasData) {
+                            MessageUsageFooterLine(stats = usageFooterStats)
+                        }
+                        } // Column (alpha wrapper)
+}
+
+/**
+ * [T-android-message-usage-footer] The small secondary line under an
+ * assistant reply: `↑ 1.2k ↓ 340 · cache 87%`. The cache segment is omitted
+ * when the provider reported no cache counters, and tokens/s is never shown
+ * — no stream duration is persisted, so the ratio cannot be derived.
+ */
+@Composable
+private fun MessageUsageFooterLine(stats: MessageUsageStats) {
+    val tokensPart = stringResource(
+        R.string.chat_usage_footer_tokens,
+        formatUsageTokenCount(stats.inputTokens),
+        formatUsageTokenCount(stats.outputTokens),
+    )
+    val cachePart = if (stats.hasCacheData) {
+        stringResource(R.string.chat_usage_footer_cache, (stats.cacheHitRatio * 100).toInt())
+    } else null
+    Text(
+        text = if (cachePart != null) "$tokensPart · $cachePart" else tokensPart,
+        fontSize = 11.sp,
+        lineHeight = 14.sp,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 6.dp, top = 3.dp),
+    )
 }

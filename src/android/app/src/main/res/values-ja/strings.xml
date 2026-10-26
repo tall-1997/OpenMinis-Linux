@@ -636,6 +636,12 @@
     <string name="appearance_show_chat_title">チャットのタイトルを表示</string>
     <string name="appearance_show_chat_title_subtitle">スクロール中もタイトルのピルを固定表示します</string>
     <string name="appearance_show_chat_title_footer">履歴をスクロールしている間、現在のセッションのタイトルをチャット上部にフローティングのピルとして表示します。</string>
+    <string name="appearance_message_usage_title">返信の下にトークン使用量を表示</string>
+    <string name="appearance_message_usage_subtitle">各返信の下に入力/出力トークンとキャッシュ命中率を表示します</string>
+    <string name="appearance_context_glow_title">コンテキストがほぼ満杯のときのグロー</string>
+    <string name="appearance_context_glow_subtitle">コンテキストが上限に近づくと入力欄の縁が回転して光ります</string>
+    <string name="chat_usage_footer_tokens">↑ %1$s ↓ %2$s</string>
+    <string name="chat_usage_footer_cache">キャッシュ %1$d%%</string>
     <string name="chat_title_pill_session_default">無題</string>
     <string name="appearance_section_grouping">グループ分け</string>
     <string name="appearance_auto_grouping">自動グループ分け</string>
@@ -1736,6 +1742,14 @@
     <string name="scheduled_task_runs_title">実行履歴</string>
     <string name="scheduled_task_runs_empty">実行履歴はまだありません。このタスクは一度も実行されていません。実行されるとここに表示されます。</string>
     <string name="scheduled_task_runs_open_session">セッションを開く</string>
+    <!-- [T-scheduled-new-session-permission / T-scheduled-new-session-folder / T-scheduled-card-status-line] -->
+<string name="scheduled_task_runs_count">%1$d 回実行</string>
+<string name="scheduled_task_next_fire">次回 %1$s</string>
+<string name="scheduled_task_state_ended">終了</string>
+<string name="scheduled_task_state_paused">一時停止中</string>
+<string name="scheduled_task_field_permission">新規チャットの権限</string>
+<string name="scheduled_task_field_workspace">ワークスペース</string>
+<string name="scheduled_task_no_folders">ワークスペースがまだありません。セッションリストで先に作成してください。</string>
     <string name="image_action_copy">コピー</string>
     <string name="image_action_share">共有</string>
     <string name="image_action_save">保存</string>

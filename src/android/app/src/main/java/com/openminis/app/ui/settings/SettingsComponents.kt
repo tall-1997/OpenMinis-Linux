@@ -62,8 +62,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.openminis.app.R
-import com.openminis.app.ui.theme.LocalMonetDynamic
-import com.openminis.app.ui.theme.monetAccentTiles
+import com.openminis.app.ui.theme.monetIconTileColor
+import com.openminis.app.ui.theme.monetIconTileContentColor
 import com.openminis.app.ui.theme.m3Icon
 import com.openminis.app.i18n.uppercaseForDisplay
 
@@ -313,25 +313,14 @@ fun SettingsRow(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (icon != null) {
-                // [T-android-monet-dynamic-color] Accent tiles follow the
+                // [T-android-dynamic-accent-icons] Accent tiles follow the
                 // wallpaper as a primaryContainer chip with its tuned icon
                 // color — the hardcoded White glyph would wash out on a
-                // dark-mode pastel. Destructive red / neutral gray tiles stay
-                // static (they are not in monetAccentTiles).
-                val chipFollowsWallpaper =
-                    LocalMonetDynamic.current && iconColor in monetAccentTiles
-                val chipBg =
-                    if (chipFollowsWallpaper) {
-                        MaterialTheme.colorScheme.primaryContainer
-                    } else {
-                        iconColor
-                    }
-                val chipFg =
-                    if (chipFollowsWallpaper) {
-                        MaterialTheme.colorScheme.onPrimaryContainer
-                    } else {
-                        Color.White
-                    }
+                // dark-mode pastel. Resolution lives in AccentTokens.kt;
+                // destructive red / neutral gray tiles stay static (they are
+                // not in monetAccentTiles).
+                val chipBg = monetIconTileColor(iconColor)
+                val chipFg = monetIconTileContentColor(iconColor)
                 Box(
                     modifier = Modifier
                         .size(30.dp)

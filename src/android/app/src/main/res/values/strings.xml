@@ -977,6 +977,12 @@
     <string name="appearance_show_chat_title">Show chat title</string>
     <string name="appearance_show_chat_title_subtitle">Show a sticky title pill while scrolling</string>
     <string name="appearance_show_chat_title_footer">Display the current session title as a floating pill at the top of the chat while scrolling through history.</string>
+    <string name="appearance_message_usage_title">Token usage under replies</string>
+    <string name="appearance_message_usage_subtitle">Show input/output tokens and cache hit rate under each reply</string>
+    <string name="appearance_context_glow_title">Glow when context is nearly full</string>
+    <string name="appearance_context_glow_subtitle">A rotating glow traces the composer edge as context approaches the limit</string>
+    <string name="chat_usage_footer_tokens">↑ %1$s ↓ %2$s</string>
+    <string name="chat_usage_footer_cache">cache %1$d%%</string>
     <string name="chat_title_pill_session_default">Untitled</string>
     <string name="appearance_section_grouping">Grouping</string>
     <string name="appearance_auto_grouping">Auto-Grouping</string>
@@ -2330,6 +2336,14 @@
     <string name="scheduled_task_runs_title">Run records</string>
     <string name="scheduled_task_runs_empty">No runs yet. This task hasn\'t fired — runs will appear here after it does.</string>
     <string name="scheduled_task_runs_open_session">Open session</string>
+    <!-- [T-scheduled-new-session-permission / T-scheduled-new-session-folder / T-scheduled-card-status-line] -->
+<string name="scheduled_task_runs_count">%1$d runs</string>
+<string name="scheduled_task_next_fire">Next %1$s</string>
+<string name="scheduled_task_state_ended">Finished</string>
+<string name="scheduled_task_state_paused">Paused</string>
+<string name="scheduled_task_field_permission">New chat permission</string>
+<string name="scheduled_task_field_workspace">Workspace</string>
+<string name="scheduled_task_no_folders">No workspaces yet. Create one in the session list first.</string>
     <string name="image_action_copy">Copy</string>
     <string name="image_action_share">Share</string>
     <string name="image_action_save">Save</string>

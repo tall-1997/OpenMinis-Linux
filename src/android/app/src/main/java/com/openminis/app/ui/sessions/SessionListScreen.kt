@@ -170,6 +170,7 @@ import com.openminis.app.ui.theme.ChatColors
 import com.openminis.app.ui.theme.minisFabColor
 import com.openminis.app.ui.theme.minisFabContentColor
 import com.openminis.app.ui.theme.m3Icon
+import com.openminis.app.ui.theme.monetIconTint
 import com.openminis.app.data.repository.ChatRepository
 import com.openminis.app.data.repository.ProviderRepository
 import kotlin.math.roundToInt
@@ -183,7 +184,6 @@ import java.util.Calendar
 import java.util.Date
 import java.util.concurrent.TimeUnit
 
-// FAB color — use shared theme values
 
 private data class CategoryStyle(val icon: ImageVector, val color: Color)
 
@@ -2085,7 +2085,7 @@ private fun groupGlyphPath(side: Float): Path = Path().apply {
  */
 @Composable
 private fun FolderComposedIcon(category: String?, diameter: Dp = 44.dp) {
-    val tint = categoryStyle(category).color
+    val tint = monetIconTint(categoryStyle(category).color) // [T-android-dynamic-accent-icons]
     Box(
         modifier = Modifier
             .size(diameter)
@@ -2223,7 +2223,7 @@ private fun FolderCard(
                 // would leave the user guessing which row it refers to.
                 if (block.isCollapsed && block.anyActive) {
                     SpinningRing(
-                        color = categoryStyle(block.firstCategory).color,
+                        color = monetIconTint(categoryStyle(block.firstCategory).color),
                         modifier = Modifier
                             .size(42.dp)
                             .align(Alignment.Center),
@@ -2644,7 +2644,7 @@ private fun SessionRow(
                 modifier = Modifier
                     .size(44.dp)
                     .background(
-                        color = style.color.copy(alpha = 0.18f),
+                        color = monetIconTint(style.color).copy(alpha = 0.18f),
                         shape = CircleShape,
                     ),
                 contentAlignment = Alignment.Center,
@@ -2652,7 +2652,7 @@ private fun SessionRow(
                 Icon(
                     imageVector = style.icon,
                     contentDescription = null,
-                    tint = style.color,
+                    tint = monetIconTint(style.color),
                     modifier = Modifier.size(20.dp),
                 )
             }
@@ -2664,7 +2664,7 @@ private fun SessionRow(
                     contentAlignment = Alignment.Center,
                 ) {
                     SpinningRing(
-                        color = style.color,
+                        color = monetIconTint(style.color),
                         modifier = Modifier.size(42.dp),
                     )
                 }
@@ -3124,7 +3124,7 @@ internal fun SessionEditSheet(
                         modifier = Modifier
                             .clip(RoundedCornerShape(10.dp))
                             .background(
-                                if (isSelected) style.color.copy(alpha = 0.2f)
+                                if (isSelected) monetIconTint(style.color).copy(alpha = 0.2f)
                                 else MaterialTheme.colorScheme.surfaceContainerHigh
                             )
                             .clickable {
@@ -3137,14 +3137,14 @@ internal fun SessionEditSheet(
                             Icon(
                                 imageVector = style.icon,
                                 contentDescription = null,
-                                tint = style.color,
+                                tint = monetIconTint(style.color),
                                 modifier = Modifier.size(20.dp),
                             )
                             Spacer(Modifier.height(4.dp))
                             Text(
                                 cat,
                                 fontSize = 11.sp,
-                                color = if (isSelected) style.color
+                                color = if (isSelected) monetIconTint(style.color)
                                 else MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
                             )

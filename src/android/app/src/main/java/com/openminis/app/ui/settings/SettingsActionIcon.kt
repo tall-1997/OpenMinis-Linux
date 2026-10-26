@@ -12,6 +12,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.openminis.app.ui.theme.m3Icon
+import com.openminis.app.ui.theme.monetIconTileColor
+import com.openminis.app.ui.theme.monetIconTileContentColor
 
 /**
  * [T-android-skill-icon-circular] A colored circular badge with a white glyph
@@ -32,16 +34,20 @@ internal fun SettingsActionIcon(
     icon: ImageVector,
     iconColor: Color,
 ) {
+    // [T-android-dynamic-accent-icons] Same tile contract as SettingsScreen's
+    // row icon — resolve through the shared AccentTokens bridge so the two
+    // surfaces restyle together (static iOS color + White glyph when dynamic
+    // color is off, wallpaper chip when on).
     Box(
         modifier = Modifier
             .size(30.dp)
-            .background(color = iconColor, shape = CircleShape),
+            .background(color = monetIconTileColor(iconColor), shape = CircleShape),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
             imageVector = m3Icon(icon),
             contentDescription = null,
-            tint = Color.White,
+            tint = monetIconTileContentColor(iconColor),
             modifier = Modifier.size(16.dp),
         )
     }

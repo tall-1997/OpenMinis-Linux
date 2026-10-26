@@ -135,7 +135,46 @@ data class ScheduledTask(
     val runHistory: List<ScheduledRun> = emptyList(),
     val intervalMinutes: Long = 0,
     val fireAtMs: Long? = null,
+    // [T-scheduled-new-session-permission] Only meaningful when targetMode is
+    // NewSession: the tool-gate mode written onto the freshly created session
+    // row. Stored as the session-persistence token ("YOYO" | "ASK") that
+    // ChatViewModel.setSessionPermissionMode writes; null = app default ASK,
+    // which keeps pre-feature JSON rows loading unchanged. Normalized through
+    // [com.openminis.app.security.PermissionMode.sessionDefault] (YOYO →
+    // ALLOW_ALL, everything else → ASK) so an unknown token can never widen
+    // the gate.
+    val newSessionPermissionMode: String? = null,
+    // [T-scheduled-new-session-folder] Only meaningful when targetMode is
+    // NewSession: the session group ("folder") the created chat is filed
+    // into. null = unfiled (main list) — matches a session the user starts
+    // from the FAB without a group. Validated against the live folder set at
+    // fire time (see [resolvedNewSessionFolderId]); a dissolved group
+    // degrades to unfiled instead of filing into a ghost row.
+    val newSessionFolderId: String? = null,
 ) {
+
+    /**
+     * [T-scheduled-new-session-permission] Token to persist on the new
+     * session's `permission_mode` column: "YOYO" (ALLOW_ALL) or "ASK".
+     * null/blank/unknown on [newSessionPermissionMode] all normalize to ASK —
+     * same rule [com.openminis.app.security.PermissionMode.sessionDefault]
+     * applies when a chat restores its row, so a task can never grant a
+     * wider gate than the chat layer itself would.
+     */
+    fun newSessionPermissionToken(): String =
+        if (com.openminis.app.security.PermissionMode
+                .sessionDefault(newSessionPermissionMode)
+            == com.openminis.app.security.PermissionMode.ALLOW_ALL
+        ) "YOYO" else "ASK"
+
+    /**
+     * [T-scheduled-new-session-folder] Folder id to file the new session
+     * into, or null when the task has none or the stored folder no longer
+     * exists (deleted after the task was saved) — filing into a ghost id
+     * would strand the chat in a group the list cannot render.
+     */
+    fun resolvedNewSessionFolderId(existingFolderIds: Set<String>): String? =
+        newSessionFolderId?.takeIf { it in existingFolderIds }
 
     /**
      * Wall-clock ms of the next firing time for this task, taking
@@ -241,6 +280,8 @@ data class ScheduledTask(
         }
         if (intervalMinutes > 0L) put("intervalMinutes", intervalMinutes)
         if (fireAtMs != null) put("fireAtMs", fireAtMs)
+        if (newSessionPermissionMode != null) put("newSessionPermissionMode", newSessionPermissionMode)
+        if (newSessionFolderId != null) put("newSessionFolderId", newSessionFolderId)
     }
 
     companion object {
@@ -279,6 +320,10 @@ data class ScheduledTask(
             } ?: emptyList(),
             intervalMinutes = o.optLong("intervalMinutes", 0L),
             fireAtMs = if (o.has("fireAtMs")) o.optLong("fireAtMs") else null,
+            newSessionPermissionMode =
+                if (o.has("newSessionPermissionMode")) o.optString("newSessionPermissionMode", null) else null,
+            newSessionFolderId =
+                if (o.has("newSessionFolderId")) o.optString("newSessionFolderId", null) else null,
         )
     }
 }

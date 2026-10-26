@@ -3,8 +3,10 @@ package com.openminis.app.tools
 import android.content.Context
 import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.model.AgentToolParam
+import com.openminis.app.sandbox.ExecutionCoordinator
 import com.openminis.app.scheduled.CronScheduler
 import com.openminis.app.scheduled.ScheduledRepeatMode
+import com.openminis.app.scheduled.ScheduledTargetMode
 import com.openminis.app.scheduled.ScheduledTask
 import com.openminis.app.scheduled.ScheduledTaskManager
 import org.json.JSONArray
@@ -15,6 +17,14 @@ import java.util.UUID
 /**
  * Agent-facing cron wrapper over [ScheduledTaskManager] (AlarmManager).
  *
+ * [T-android-subagent-attribution] Tasks are recorded against the OWNER chat
+ * ([ExecutionCoordinator.ownerSessionId] normalizes a sub-agent lane id to
+ * its parent): create stores the caller's chat as the task's
+ * [ScheduledTargetMode.AppendToSession] target, so when a task fires its
+ * prompt lands in — and its run records plus completion notification link
+ * back to — the chat that scheduled it, instead of spawning an un-attributed
+ * new chat. Use minis-scheduled for explicit new-session / rerun targeting.
+ *
  * Adapted from XINCODE-Public CronJobTool
  * (GPL-3.0-or-later, https://github.com/kusesad-1122/XINCODE-Public).
  */
@@ -24,7 +34,9 @@ object CronJobTool {
     fun definition(): AgentToolDefinition = AgentToolDefinition(
         name = NAME,
         description = "Create, list, or remove AlarmManager scheduled tasks that run an agent prompt. " +
-            "Prefer this for delay/interval schedules (30m, 2h, every 2h). Clock-of-day HH:MM tasks " +
+            "Prefer this for delay/interval schedules (30m, 2h, every 2h). A created task fires as a " +
+            "follow-up in the chat that scheduled it, so results come back to that conversation. " +
+            "Clock-of-day HH:MM tasks " +
             "can also be managed via minis-scheduled. Schedules: '30m'/'2h'/'1d' (once) or " +
             "'every 30m'/'every 2h'/'every 1d' (repeating).",
         parameters = mapOf(
@@ -49,7 +61,7 @@ object CronJobTool {
         propertyOrdering = listOf("tool_title", "action", "name", "schedule", "prompt", "id"),
     )
 
-    fun execute(argsJson: String, context: Context): ToolExecutionResult {
+    fun execute(argsJson: String, sessionId: String, context: Context): ToolExecutionResult {
         val args = try {
             JSONObject(argsJson)
         } catch (_: Exception) {
@@ -57,9 +69,13 @@ object CronJobTool {
         }
         val action = args.optString("action").trim().lowercase()
         val manager = ScheduledTaskManager(context)
+        // [T-android-subagent-attribution] A lane dispatches tools with its
+        // parent chat's session, and headless callers may hand a raw lane id —
+        // normalize once so every recorded target is the owner chat.
+        val owner = ExecutionCoordinator.ownerSessionId(sessionId.trim())
         return when (action) {
             "list" -> listJobs(manager)
-            "create" -> createJob(manager, args)
+            "create" -> createJob(manager, args, owner)
             "remove" -> removeJob(manager, args)
             else -> ToolExecutionResult("Error: action must be create, list, or remove", false)
         }
@@ -79,6 +95,9 @@ object CronJobTool {
                     if (t.fireAtMs != null) put("fireAtMs", t.fireAtMs)
                     put("nextTriggerMs", t.nextTriggerMs() ?: JSONObject.NULL)
                     put("prompt", t.prompt.take(200))
+                    // [T-android-subagent-attribution] Surface where a fire
+                    // lands so the model (and the user) can see the owning chat.
+                    t.targetMode.sessionIdOrNull?.let { put("target_session", it) }
                 },
             )
         }
@@ -88,7 +107,11 @@ object CronJobTool {
         )
     }
 
-    private fun createJob(manager: ScheduledTaskManager, args: JSONObject): ToolExecutionResult {
+    private fun createJob(
+        manager: ScheduledTaskManager,
+        args: JSONObject,
+        ownerSessionId: String,
+    ): ToolExecutionResult {
         val name = args.optString("name").trim()
         val schedule = args.optString("schedule").trim()
         val prompt = args.optString("prompt").trim()
@@ -109,6 +132,15 @@ object CronJobTool {
             timeOfDayMinute = cal.get(Calendar.MINUTE),
             repeatMode = if (interval) ScheduledRepeatMode.INTERVAL else ScheduledRepeatMode.ONCE,
             prompt = prompt,
+            // [T-android-subagent-attribution] Attribute the task to the
+            // calling chat: fires append there and run records / notification
+            // deep links point at it. Blank owner (no chat context, e.g. a
+            // debug harness) keeps the legacy fresh-chat behavior.
+            targetMode = if (ownerSessionId.isBlank()) {
+                ScheduledTargetMode.NewSession
+            } else {
+                ScheduledTargetMode.AppendToSession(ownerSessionId)
+            },
             intervalMinutes = parsed.intervalMinutes,
             fireAtMs = fireAt,
             createdAt = now,

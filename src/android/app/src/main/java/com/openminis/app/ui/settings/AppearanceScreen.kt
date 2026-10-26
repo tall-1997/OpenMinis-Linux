@@ -126,6 +126,13 @@ const val DEFAULT_FOLD_AI_PROCESS = true
 // the keyboard), so hiding it can never strand the user in voice mode.
 const val KEY_SHOW_MIC_BUTTON = "chat.showMicButton"
 const val DEFAULT_SHOW_MIC_BUTTON = false
+// [T-android-message-usage-footer] Small token-usage line under each reply
+// (↑ in ↓ out · cache %). Default ON; ChatScreen reads the same key in its
+// appearance-prefs block.
+const val KEY_SHOW_MESSAGE_TOKEN_USAGE = "chat.showMessageTokenUsage"  // Boolean, default true
+// [T-android-composer-context-glow] Rotating composer-edge glow while the
+// session's context usage approaches the model window. Default ON.
+const val KEY_COMPOSER_CONTEXT_GLOW = "chat.composerContextGlow"  // Boolean, default true
 // Material You wallpaper dynamic color. Default OFF: the app's identity is the
 // iOS-parity palette with measured contrast, so wallpaper tinting is opt-in.
 const val KEY_DYNAMIC_COLOR = "chat.dynamicColor"  // Boolean, default false
@@ -148,25 +155,20 @@ const val KEY_FONT_APP_BASE = "font_app_base"      // Int scale level -2..3
 /** True when Enter (without Shift) should send the message. iOS calls this
  *  `returnKeyBehavior == 1`. Default 0 = Enter inserts a newline (matches
  *  iOS shipping default + most desktop chat clients). */
-fun returnKeySendsMessage(context: Context): Boolean =
-    getAppearancePrefs(context).getInt(KEY_RETURN_KEY_BEHAVIOR, 0) == 1
+fun returnKeySendsMessage(context: Context): Boolean = getAppearancePrefs(context).getInt(KEY_RETURN_KEY_BEHAVIOR, 0) == 1
 
-fun keepScreenAwakeEnabled(context: Context): Boolean =
-    getAppearancePrefs(context).getBoolean(KEY_KEEP_SCREEN_AWAKE, false)
+fun keepScreenAwakeEnabled(context: Context): Boolean = getAppearancePrefs(context).getBoolean(KEY_KEEP_SCREEN_AWAKE, false)
 
 /** [T-android-auto-grouping] Default ON — see [KEY_AUTO_GROUPING]. */
-fun autoGroupingEnabled(context: Context): Boolean =
-    getAppearancePrefs(context).getBoolean(KEY_AUTO_GROUPING, true)
+fun autoGroupingEnabled(context: Context): Boolean = getAppearancePrefs(context).getBoolean(KEY_AUTO_GROUPING, true)
 
 /** Default ON — pill shows up on scroll for everyone unless explicitly disabled. */
-fun showChatTitleEnabled(context: Context): Boolean =
-    getAppearancePrefs(context).getBoolean(KEY_SHOW_CHAT_TITLE, true)
+fun showChatTitleEnabled(context: Context): Boolean = getAppearancePrefs(context).getBoolean(KEY_SHOW_CHAT_TITLE, true)
 
 /** [T-thinking-auto-expand-toggle] Default ON = historical behavior: a new
  *  streaming thinking block opens expanded. Off = it stays collapsed until the
  *  user taps it. */
-fun autoExpandThinkingEnabled(context: Context): Boolean =
-    getAppearancePrefs(context).getBoolean(KEY_AUTO_EXPAND_THINKING, true)
+fun autoExpandThinkingEnabled(context: Context): Boolean = getAppearancePrefs(context).getBoolean(KEY_AUTO_EXPAND_THINKING, true)
 
 /** Font scale levels matching iOS: XS(-2) Small(-1) Default(0) Medium(1) Large(2) XL(3) */
 /**
@@ -287,6 +289,8 @@ fun AppearanceScreen(
     var showCompletedToolCards by remember { mutableStateOf(prefs.getBoolean(KEY_SHOW_COMPLETED_TOOL_CARDS, false)) }
     var showSubAgentBar by remember { mutableStateOf(prefs.getBoolean(KEY_SHOW_SUBAGENT_BAR, DEFAULT_SHOW_SUB_AGENT_BAR)) }
     var showMicButton by remember { mutableStateOf(prefs.getBoolean(KEY_SHOW_MIC_BUTTON, DEFAULT_SHOW_MIC_BUTTON)) }
+    var showMessageUsage by remember { mutableStateOf(prefs.getBoolean(KEY_SHOW_MESSAGE_TOKEN_USAGE, true)) }
+    var composerContextGlow by remember { mutableStateOf(prefs.getBoolean(KEY_COMPOSER_CONTEXT_GLOW, true)) }
     var autoFocusAfterReply by remember { mutableStateOf(prefs.getBoolean(KEY_AUTO_FOCUS_AFTER_REPLY, true)) }
     var autoExpandThinking by remember { mutableStateOf(prefs.getBoolean(KEY_AUTO_EXPAND_THINKING, true)) }
     var foldAiProcess by remember { mutableStateOf(prefs.getBoolean(KEY_FOLD_AI_PROCESS, DEFAULT_FOLD_AI_PROCESS)) }
@@ -423,19 +427,11 @@ fun AppearanceScreen(
                         prefs.edit().putInt(KEY_RETURN_KEY_BEHAVIOR, row.value).apply()
                     },
                     leading = {
-                        if (idx == 0) {
-                            androidx.compose.material3.Icon(
-                                m3Icon(Icons.AutoMirrored.Outlined.KeyboardReturn),
-                                contentDescription = null,
-                                tint = tilePurple,
-                            )
-                        } else {
-                            androidx.compose.material3.Icon(
-                                m3Icon(Icons.AutoMirrored.Outlined.Send),
-                                contentDescription = null,
-                                tint = tileGreen,
-                            )
-                        }
+                        androidx.compose.material3.Icon(
+                            m3Icon(if (idx == 0) Icons.AutoMirrored.Outlined.KeyboardReturn else Icons.AutoMirrored.Outlined.Send),
+                            contentDescription = null,
+                            tint = monetIconTint(if (idx == 0) tilePurple else tileGreen), // [T-android-dynamic-accent-icons]
+                        )
                     },
                     showDivider = idx < returnRows.size - 1,
                 )
@@ -477,7 +473,7 @@ fun AppearanceScreen(
                 onCheckedChange = {
                     highRefresh = it
                     com.openminis.app.ui.HighRefreshRate.setEnabled(context, it)
-                    (context as? android.app.Activity)?.let { com.openminis.app.ui.HighRefreshRate.apply(it) }
+                    (context as? android.app.Activity)?.let { a -> com.openminis.app.ui.HighRefreshRate.apply(a) }
                 },
                 showDivider = false,
             )
@@ -533,6 +529,32 @@ fun AppearanceScreen(
                 onCheckedChange = {
                     showMicButton = it
                     prefs.edit().putBoolean(KEY_SHOW_MIC_BUTTON, it).apply()
+                },
+                showDivider = true,
+            )
+            // [T-android-message-usage-footer] Per-reply token usage line.
+            SettingsSwitchRow(
+                icon = Icons.Outlined.Bolt,
+                iconColor = tileTeal,
+                title = stringResource(R.string.appearance_message_usage_title),
+                subtitle = stringResource(R.string.appearance_message_usage_subtitle),
+                checked = showMessageUsage,
+                onCheckedChange = {
+                    showMessageUsage = it
+                    prefs.edit().putBoolean(KEY_SHOW_MESSAGE_TOKEN_USAGE, it).apply()
+                },
+            )
+            // [T-android-composer-context-glow] Composer edge glow near the
+            // context cap. Same group, adjacent to the usage toggle.
+            SettingsSwitchRow(
+                icon = Icons.Outlined.LightMode,
+                iconColor = tileTeal,
+                title = stringResource(R.string.appearance_context_glow_title),
+                subtitle = stringResource(R.string.appearance_context_glow_subtitle),
+                checked = composerContextGlow,
+                onCheckedChange = {
+                    composerContextGlow = it
+                    prefs.edit().putBoolean(KEY_COMPOSER_CONTEXT_GLOW, it).apply()
                 },
                 showDivider = false,
             )
@@ -710,27 +732,11 @@ fun AppearanceScreen(
             header = stringResource(R.string.appearance_section_app_icon),
             footer = stringResource(R.string.appearance_app_icon_footer),
         ) {
-            data class IconOption(
-                val variant: AppIconRepository.Variant,
-                val titleRes: Int,
-                val mipmapRes: Int,
-            )
+            data class IconOption(val variant: AppIconRepository.Variant, val titleRes: Int, val mipmapRes: Int)
             val iconOptions = listOf(
-                IconOption(
-                    AppIconRepository.Variant.Auto,
-                    R.string.appearance_app_icon_auto,
-                    R.mipmap.ic_launcher,
-                ),
-                IconOption(
-                    AppIconRepository.Variant.ClassicLight,
-                    R.string.appearance_app_icon_light,
-                    R.mipmap.ic_launcher_classic_light,
-                ),
-                IconOption(
-                    AppIconRepository.Variant.ClassicDark,
-                    R.string.appearance_app_icon_dark,
-                    R.mipmap.ic_launcher_classic_dark,
-                ),
+                IconOption(AppIconRepository.Variant.Auto, R.string.appearance_app_icon_auto, R.mipmap.ic_launcher),
+                IconOption(AppIconRepository.Variant.ClassicLight, R.string.appearance_app_icon_light, R.mipmap.ic_launcher_classic_light),
+                IconOption(AppIconRepository.Variant.ClassicDark, R.string.appearance_app_icon_dark, R.mipmap.ic_launcher_classic_dark),
             )
             // [T-android-app-icon-tile-max-width] Cap each tile and centre the
             // row.
@@ -747,13 +753,8 @@ fun AppearanceScreen(
             // well under the cap, so widthIn is inert there and the layout is
             // byte-identical.
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(
-                    12.dp,
-                    Alignment.CenterHorizontally,
-                ),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
             ) {
                 for (option in iconOptions) {
                     val isSelected = selectedAppIcon == option.variant
@@ -761,20 +762,14 @@ fun AppearanceScreen(
                         // painterResource() can't decode adaptive-icon
                         // XML drawables (mipmap-anydpi-v26), so rasterize
                         // the drawable into a Bitmap first.
-                        val drawable = ResourcesCompat.getDrawable(
-                            context.resources,
-                            option.mipmapRes,
-                            context.theme,
-                        )
+                        val drawable = ResourcesCompat.getDrawable(context.resources, option.mipmapRes, context.theme)
                         if (drawable != null) {
-                            BitmapPainter(
-                                drawable.toBitmap(width = 192, height = 192).asImageBitmap()
-                            )
+                            BitmapPainter(drawable.toBitmap(width = 192, height = 192).asImageBitmap())
                         } else {
                             BitmapPainter(
                                 android.graphics.Bitmap
                                     .createBitmap(1, 1, android.graphics.Bitmap.Config.ARGB_8888)
-                                    .asImageBitmap()
+                                    .asImageBitmap(),
                             )
                         }
                     }

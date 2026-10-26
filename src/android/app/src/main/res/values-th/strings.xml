@@ -636,6 +636,12 @@
     <string name="appearance_show_chat_title">แสดงชื่อแชท</string>
     <string name="appearance_show_chat_title_subtitle">แสดงป้ายชื่อแบบติดหนึบขณะเลื่อนดู</string>
     <string name="appearance_show_chat_title_footer">แสดงชื่อเซสชันปัจจุบันเป็นป้ายลอยที่ด้านบนของแชทขณะที่คุณเลื่อนดูประวัติ</string>
+    <string name="appearance_message_usage_title">การใช้ token ใต้คำตอบ</string>
+    <string name="appearance_message_usage_subtitle">แสดง token เข้า/ออกและอัตราการเข้าถึงแคชใต้ทุกคำตอบ</string>
+    <string name="appearance_context_glow_title">แสงเรืองเมื่อบริบทเกือบเต็ม</string>
+    <string name="appearance_context_glow_subtitle">ขอบช่องพิมพ์ข้อความเรืองแสงหมุนรอบเมื่อบริบทใกล้ถึงขีดจำกัด</string>
+    <string name="chat_usage_footer_tokens">↑ %1$s ↓ %2$s</string>
+    <string name="chat_usage_footer_cache">แคช %1$d%%</string>
     <string name="chat_title_pill_session_default">ไม่มีชื่อ</string>
     <string name="appearance_section_grouping">การจัดกลุ่ม</string>
     <string name="appearance_auto_grouping">จัดกลุ่มอัตโนมัติ</string>
@@ -1739,6 +1745,14 @@
     <string name="scheduled_task_runs_title">ระเบียนการทำงาน</string>
     <string name="scheduled_task_runs_empty">ยังไม่มีการทำงาน งานนี้ยังไม่เคยเริ่มทำงาน — ระเบียนจะปรากฏที่นี่หลังจากนั้น</string>
     <string name="scheduled_task_runs_open_session">เปิดเซสชัน</string>
+    <!-- [T-scheduled-new-session-permission / T-scheduled-new-session-folder / T-scheduled-card-status-line] -->
+<string name="scheduled_task_runs_count">รันแล้ว %1$d ครั้ง</string>
+<string name="scheduled_task_next_fire">ครั้งต่อไป %1$s</string>
+<string name="scheduled_task_state_ended">เสร็จสิ้น</string>
+<string name="scheduled_task_state_paused">หยุดชั่วคราว</string>
+<string name="scheduled_task_field_permission">สิทธิ์ของแชทใหม่</string>
+<string name="scheduled_task_field_workspace">พื้นที่ทำงาน</string>
+<string name="scheduled_task_no_folders">ยังไม่มีพื้นที่ทำงาน สร้างในรายการเซสชันก่อน</string>
     <string name="image_action_copy">คัดลอก</string>
     <string name="image_action_share">แชร์</string>
     <string name="image_action_save">บันทึก</string>

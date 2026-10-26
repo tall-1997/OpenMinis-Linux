@@ -638,6 +638,12 @@
     <string name="appearance_show_chat_title">Pokaż tytuł czatu</string>
     <string name="appearance_show_chat_title_subtitle">Pokazuj przypiętą plakietkę z tytułem podczas przewijania</string>
     <string name="appearance_show_chat_title_footer">Wyświetla tytuł bieżącej sesji jako pływającą plakietkę u góry czatu podczas przewijania historii.</string>
+    <string name="appearance_message_usage_title">Zużycie tokenów pod odpowiedziami</string>
+    <string name="appearance_message_usage_subtitle">Pokazuje tokeny wejścia/wyjścia i trafienia cache pod każdą odpowiedzią</string>
+    <string name="appearance_context_glow_title">Poświata, gdy kontekst jest prawie pełny</string>
+    <string name="appearance_context_glow_subtitle">Krawędź pola wprowadzania świeci obracającym się blaskiem, gdy kontekst zbliża się do limitu</string>
+    <string name="chat_usage_footer_tokens">↑ %1$s ↓ %2$s</string>
+    <string name="chat_usage_footer_cache">cache %1$d%%</string>
     <string name="chat_title_pill_session_default">Bez tytułu</string>
     <string name="appearance_section_grouping">Grupowanie</string>
     <string name="appearance_auto_grouping">Automatyczne grupowanie</string>
@@ -1747,6 +1753,14 @@
     <string name="scheduled_task_runs_title">Rejestr uruchomień</string>
     <string name="scheduled_task_runs_empty">Brak uruchomień. To zadanie jeszcze się nie uruchomiło — wpisy pojawią się tutaj później.</string>
     <string name="scheduled_task_runs_open_session">Otwórz sesję</string>
+    <!-- [T-scheduled-new-session-permission / T-scheduled-new-session-folder / T-scheduled-card-status-line] -->
+<string name="scheduled_task_runs_count">Uruchomienia: %1$d</string>
+<string name="scheduled_task_next_fire">Następne %1$s</string>
+<string name="scheduled_task_state_ended">Zakończone</string>
+<string name="scheduled_task_state_paused">Wstrzymane</string>
+<string name="scheduled_task_field_permission">Uprawnienia nowego czatu</string>
+<string name="scheduled_task_field_workspace">Obszar roboczy</string>
+<string name="scheduled_task_no_folders">Brak obszarów roboczych. Utwórz najpierw jeden na liście sesji.</string>
     <string name="image_action_copy">Kopiuj</string>
     <string name="image_action_share">Udostępnij</string>
     <string name="image_action_save">Zapisz</string>

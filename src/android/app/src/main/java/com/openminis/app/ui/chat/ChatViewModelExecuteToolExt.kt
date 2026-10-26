@@ -194,7 +194,10 @@ internal suspend fun ChatViewModel.executeTool(
             )
             ToolExecutionResult(out, true, toolTitle = "translate_text")
         }
-        CronJobTool.NAME -> CronJobTool.execute(argsJson, context)
+        // [T-android-subagent-attribution] Pass the dispatching chat (a lane's
+        // parent) so tasks the model schedules are recorded against the owner
+        // session instead of firing into un-attributed fresh chats.
+        CronJobTool.NAME -> CronJobTool.execute(argsJson, activeSessionId, context)
         com.openminis.app.tools.JobTools.NAME ->
             com.openminis.app.tools.JobTools.execute(argsJson, activeSessionId, context)
         com.openminis.app.tools.TerminalTools.NAME ->
