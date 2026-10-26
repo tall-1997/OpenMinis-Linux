@@ -43,6 +43,22 @@ object ToolLimitPrefs {
     const val MAX_MAIN_MAX_TURNS = 1_000
     const val MAIN_TURNS_STEP = 10
 
+    // [T-parallel-tool-calls] How many CONCURRENT-lane tool calls (reads)
+    // may overlap within one tool turn. Barriers (shell/writes/spawns) are
+    // unaffected — they chain in emission order regardless of this value.
+    // Floor 1 keeps a misconfigured device from serializing reads back to
+    // the old behaviour; ceiling 8 matches commandConcurrency's ceiling so
+    // the read lane can never out-grow the shell lane's own budget.
+    const val DEFAULT_TOOL_CALL_CONCURRENCY = 4
+    const val MIN_TOOL_CALL_CONCURRENCY = 1
+    const val MAX_TOOL_CALL_CONCURRENCY = 8
+
+    fun toolCallConcurrency(): Int = clampToolCallConcurrency(
+        prefs?.getInt("toolCallConcurrency", DEFAULT_TOOL_CALL_CONCURRENCY) ?: DEFAULT_TOOL_CALL_CONCURRENCY,
+    )
+    fun setToolCallConcurrency(value: Int) = put("toolCallConcurrency", clampToolCallConcurrency(value))
+    private fun clampToolCallConcurrency(value: Int): Int = value.coerceIn(MIN_TOOL_CALL_CONCURRENCY, MAX_TOOL_CALL_CONCURRENCY)
+
     fun idleShellCount(): Int = (prefs?.getInt("idleShellCount", 2) ?: 2).coerceIn(0, 8)
     fun idleShellMinutes(): Int = (prefs?.getInt("idleShellMinutes", 3) ?: 3).coerceIn(1, 30)
     fun setIdleShellCount(value: Int) = put("idleShellCount", value.coerceIn(0, 8))
