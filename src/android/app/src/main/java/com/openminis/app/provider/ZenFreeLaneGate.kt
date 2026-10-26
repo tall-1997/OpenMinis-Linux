@@ -90,6 +90,9 @@ internal object ZenFreeLaneGate : Interceptor {
      * back null and is sent as-is. Query strings are preserved.
      */
     fun rewriteUrl(url: HttpUrl): HttpUrl? {
+        // The narrow-scope invariant lives here, not only in appliesTo: a
+        // non-Zen host that happens to carry a /zen/v1/ path is never retargeted.
+        if (!ZenEndpoint.isZenHost(url.toString())) return null
         val path = url.encodedPath
         if (!path.startsWith("/zen/v1/")) return null
         return url.newBuilder()
@@ -114,12 +117,36 @@ internal object ZenFreeLaneGate : Interceptor {
         val tools = json.optJSONArray("tools") ?: JSONArray().also { json.put("tools", it) }
         var injected = 0
         for (name in GATE_NAMES) {
-            val index = indexOfTool(tools, name)
-            val existing = if (index >= 0) tools.optJSONObject(index) else null
-            if (isSatisfied(existing, name)) continue
-            if (index >= 0) tools.remove(index)
-            tools.put(verbatimTool(name))
-            injected++
+            // Exactly one verbatim entry per gate name survives: a satisfied
+            // entry is kept, every other same-named declaration — near-miss or
+            // duplicate — is removed, and a verbatim one is appended only when
+            // none survived. The gate reads the whole tools array; a leftover
+            // second declaration of a gate name is as fatal as a near-miss.
+            var keptVerbatim = false
+            var removedSameNamed = false
+            var i = 0
+            while (i < tools.length()) {
+                val entry = tools.optJSONObject(i)
+                if (entry?.optJSONObject("function")?.optString("name") == name) {
+                    if (!keptVerbatim && isSatisfied(entry, name)) {
+                        keptVerbatim = true
+                        i++
+                    } else {
+                        tools.remove(i)
+                        removedSameNamed = true
+                    }
+                } else {
+                    i++
+                }
+            }
+            if (!keptVerbatim) {
+                tools.put(verbatimTool(name))
+                injected++
+            } else if (removedSameNamed) {
+                // A near-miss was replaced by the surviving verbatim entry, so
+                // the gate tool in the array is hollow — the notice must fire.
+                injected++
+            }
         }
 
         // 3. `tool_choice: "none"` is a 403 on the v2 gate, and it would also
@@ -132,14 +159,6 @@ internal object ZenFreeLaneGate : Interceptor {
         // 4. Tell the model which of its tools are hollow.
         if (injected > 0) appendNotice(json)
         return json
-    }
-
-    private fun indexOfTool(tools: JSONArray, name: String): Int {
-        for (i in 0 until tools.length()) {
-            val entry = tools.optJSONObject(i) ?: continue
-            if (entry.optJSONObject("function")?.optString("name") == name) return i
-        }
-        return -1
     }
 
     /**
