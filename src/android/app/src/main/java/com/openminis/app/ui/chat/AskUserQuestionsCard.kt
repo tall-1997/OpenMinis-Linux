@@ -90,8 +90,12 @@ fun AskUserQuestionsCard(
                                 if (q.multiSelect) {
                                     if (on) selected[i].remove(opt.label) else selected[i].add(opt.label)
                                 } else {
+                                    // Single-select chips toggle: tapping the already-selected
+                                    // option clears it (the user may have picked the wrong one and
+                                    // must be able to back out without submitting). Submit stays
+                                    // disabled until every question has an answer again.
                                     selected[i].clear()
-                                    selected[i].add(opt.label)
+                                    if (!on) selected[i].add(opt.label)
                                 }
                             },
                             label = { Text(opt.label, color = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface) },
