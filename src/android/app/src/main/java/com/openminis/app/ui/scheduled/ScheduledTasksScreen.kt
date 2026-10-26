@@ -52,6 +52,7 @@ import com.openminis.app.ui.settings.SettingsSwitch
 import com.openminis.app.R
 import com.openminis.app.scheduled.ScheduledRepeatMode
 import com.openminis.app.scheduled.ScheduledTask
+import com.openminis.app.scheduled.viewState
 import com.openminis.app.util.IsoTime
 
 /**
@@ -234,6 +235,19 @@ private fun ScheduledTaskRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                // [T-scheduled-card-status-line] Run count + next fire, and a
+                // terminal badge (finished / paused) instead of the old empty
+                // next segment once a task stops having an occurrence.
+                statusLine(task)?.let {
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = it,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
             Spacer(Modifier.width(8.dp))
             SettingsSwitch(checked = task.enabled, onCheckedChange = onToggle)
@@ -271,6 +285,11 @@ private fun ScheduledTaskRow(
     }
 }
 
+/**
+ * First card line: repeat pattern + time. The repeat words stay hardcoded
+ * (pre-existing, mirrored by the editor's own labels) — the status line below
+ * carries the localized run-count / next-fire / terminal state.
+ */
 internal fun formatScheduleSummary(task: ScheduledTask): String {
     val time = "%02d:%02d".format(task.timeOfDayHour, task.timeOfDayMinute)
     val repeat = when (task.repeatMode) {
@@ -291,10 +310,34 @@ internal fun formatScheduleSummary(task: ScheduledTask): String {
             }
         }
     }
-    val next = task.nextTriggerMs()?.let {
-        " · next ${IsoTime.formatPattern(it, "MMM d HH:mm")}"
-    } ?: ""
-    return "$repeat $time$next"
+    return "$repeat $time"
+}
+
+/**
+ * [T-scheduled-card-status-line] Second card line: how many times the task
+ * has run, when it fires next — or a terminal badge when it won't again
+ * (ONCE fired out / end date passed) or the user paused it. Never empty,
+ * so a finished task no longer renders a bare schedule with a missing tail.
+ */
+@Composable
+internal fun statusLine(task: ScheduledTask): String {
+    val s = task.viewState()
+    val parts = buildList {
+        if (s.runCount > 0) {
+            add(stringResource(R.string.scheduled_task_runs_count, s.runCount))
+        }
+        when {
+            s.nextFireMs != null -> add(
+                stringResource(
+                    R.string.scheduled_task_next_fire,
+                    IsoTime.formatPattern(s.nextFireMs, "MMM d HH:mm"),
+                ),
+            )
+            s.ended -> add(stringResource(R.string.scheduled_task_state_ended))
+            s.paused -> add(stringResource(R.string.scheduled_task_state_paused))
+        }
+    }
+    return parts.joinToString(" · ")
 }
 
 private fun dowShort(dow: Int): String = when (dow) {

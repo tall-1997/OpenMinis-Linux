@@ -636,6 +636,12 @@
     <string name="appearance_show_chat_title">Sohbet başlığını göster</string>
     <string name="appearance_show_chat_title_subtitle">Kaydırırken sabit bir başlık rozeti göster</string>
     <string name="appearance_show_chat_title_footer">Geçmişte gezinirken geçerli oturum başlığını sohbetin üstünde yüzen bir rozet olarak gösterir.</string>
+    <string name="appearance_message_usage_title">Yanıtların altında token kullanımı</string>
+    <string name="appearance_message_usage_subtitle">Her yanıtın altında giriş/çıkış tokenlarını ve önbellek isabet oranını gösterir</string>
+    <string name="appearance_context_glow_title">Bağlam neredeyse dolduğunda parıltı</string>
+    <string name="appearance_context_glow_subtitle">Bağlam sınıra yaklaşırken giriş kutusunun kenarı dönen bir ışıkla parlar</string>
+    <string name="chat_usage_footer_tokens">↑ %1$s ↓ %2$s</string>
+    <string name="chat_usage_footer_cache">önbellek %1$d%%</string>
     <string name="chat_title_pill_session_default">Başlıksız</string>
     <string name="appearance_section_grouping">Gruplama</string>
     <string name="appearance_auto_grouping">Otomatik Gruplama</string>
@@ -1739,6 +1745,14 @@
     <string name="scheduled_task_runs_title">Çalıştırma kayıtları</string>
     <string name="scheduled_task_runs_empty">Henüz çalıştırma yok. Bu görev henüz tetiklenmedi — kayıtlar tetiklendikten sonra burada görünür.</string>
     <string name="scheduled_task_runs_open_session">Oturumu aç</string>
+    <!-- [T-scheduled-new-session-permission / T-scheduled-new-session-folder / T-scheduled-card-status-line] -->
+<string name="scheduled_task_runs_count">%1$d çalıştırma</string>
+<string name="scheduled_task_next_fire">Sonraki %1$s</string>
+<string name="scheduled_task_state_ended">Tamamlandı</string>
+<string name="scheduled_task_state_paused">Duraklatıldı</string>
+<string name="scheduled_task_field_permission">Yeni sohbet izni</string>
+<string name="scheduled_task_field_workspace">Çalışma alanı</string>
+<string name="scheduled_task_no_folders">Henüz çalışma alanı yok. Önce oturum listesinden oluşturun.</string>
     <string name="image_action_copy">Kopyala</string>
     <string name="image_action_share">Paylaş</string>
     <string name="image_action_save">Kaydet</string>

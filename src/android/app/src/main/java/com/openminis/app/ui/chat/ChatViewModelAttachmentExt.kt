@@ -472,3 +472,14 @@ internal fun ChatViewModel.buildUserPartsJson(
     attachedFilesXml?.let { parts.add("""{"type":"text","value":${escapeJson(it)}}""") }
     return parts.joinToString(prefix = "[", postfix = "]", separator = ",")
 }
+
+/**
+ * [T-android-paste-queued-bubble] Painted content for a sent message whose
+ * `[Pasted#N]` markers were folded out to disk as mediaRefs: remove every
+ * consumed marker literal (exact-match on the canonical `[Pasted#N]` form,
+ * so neighbouring text and other ids are untouched) and trim the leftover
+ * gutter. Hand-typed markers for ids that were never folded stay verbatim —
+ * the caller only ever passes ids whose mediaRef exists. Pure — JVM-tested.
+ */
+internal fun stripConsumedPasteMarkers(text: String, consumedIds: Set<Int>): String =
+    consumedIds.fold(text) { acc, id -> acc.replace(PastedText.placeholderFor(id), "") }.trim()

@@ -14,6 +14,62 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/**
+ * [T-android-entry-pin-tail-starve] Pure decision core for the session-entry
+ * pin's tail wait (JVM-tested in SessionEntryScrollTest).
+ *
+ * Why this exists: ChatScreen's entry pin waits
+ * `viewModel.sessionTailReady.first { it }` after calling
+ * [ChatViewModel.ensureSessionTailLoaded]. But `ensureSessionTailLoaded`
+ * DEFERS whenever a turn is streaming and no tail-attach job is running — it
+ * sets `_sessionTailReady = false`, parks `tailAttachQueued = true` and owns
+ * nothing; the queued flag is only consumed at the next agent-loop boundary.
+ * A pure text/thinking generation persists no rows until it ends, so nothing
+ * flips the flag and the entry pin stayed suspended for the WHOLE generation.
+ * Re-entering such a session left the viewport on the retained mid-history
+ * LazyListState (the persisted ChatViewModelStore VM) — the reported
+ * "进入长会话后停留位置不是最新消息".
+ *
+ * Timing of the other writers, verified while reading the history:
+ *  - `refreshHistoryEdges` sets `_sessionTailReady = true` only when the
+ *    painted window has no newer gap (after == 0);
+ *  - the stream-end collector (`init`'s `_isStreaming.collect`) drains the
+ *    queued attach and converges the flag AFTER the turn ends — too late for
+ *    an entry that happened mid-turn;
+ *  - `notePersistedUiRow` only fires on row persistence (tool boundaries),
+ *    never during a text/thinking stretch.
+ *
+ * Policy:
+ *  - tail already ready → no wait;
+ *  - streaming entry WITHOUT a newer gap → no wait: during a live turn the
+ *    painted window IS the tail by construction (the stream appends rows and
+ *    notePersistedUiRow extends the newest cursor), so pinning to the newest
+ *    edge now is correct and the streaming-follow glide keeps it glued;
+ *  - everything else (gap drain converging on IO) → wait for the flag, but
+ *    BOUNDED, so a slow database can never park the pin. Pinning after the
+ *    bound is safe: rows join at the newest end (index 0 under
+ *    reverseLayout), and the same bounded-pinned behaviour a live send gets
+ *    applies afterwards.
+ */
+internal object SessionEntryScroll {
+    /** Upper bound on the entry pin's wait for a converging tail attach. */
+    const val TAIL_ATTACH_WAIT_BOUND_MS = 3_000L
+
+    /**
+     * How long the entry pin may wait for `sessionTailReady` before pinning
+     * to the newest edge anyway. 0 = pin immediately (skip the wait).
+     */
+    fun entryPinWaitBoundMs(
+        tailReady: Boolean,
+        isStreaming: Boolean,
+        hasNewerMessages: Boolean,
+    ): Long = when {
+        tailReady -> 0L
+        isStreaming && !hasNewerMessages -> 0L
+        else -> TAIL_ATTACH_WAIT_BOUND_MS
+    }
+}
+
 internal fun ChatViewModel.loadSession() {
     // [T-android-resume-banner-race] Snapshot the resume epoch at load
     // start. loadSession's interrupted-tail re-detection sets

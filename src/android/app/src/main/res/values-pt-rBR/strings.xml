@@ -636,6 +636,12 @@
     <string name="appearance_show_chat_title">Mostrar o título da conversa</string>
     <string name="appearance_show_chat_title_subtitle">Mostra uma etiqueta fixa com o título ao rolar</string>
     <string name="appearance_show_chat_title_footer">Exibe o título da sessão atual como uma etiqueta flutuante no topo da conversa enquanto você percorre o histórico.</string>
+    <string name="appearance_message_usage_title">Uso de tokens abaixo das respostas</string>
+    <string name="appearance_message_usage_subtitle">Mostra tokens de entrada/saída e acerto de cache abaixo de cada resposta</string>
+    <string name="appearance_context_glow_title">Brilho com contexto quase cheio</string>
+    <string name="appearance_context_glow_subtitle">A borda da caixa de entrada brilha em rotação quando o contexto se aproxima do limite</string>
+    <string name="chat_usage_footer_tokens">↑ %1$s ↓ %2$s</string>
+    <string name="chat_usage_footer_cache">cache %1$d%%</string>
     <string name="chat_title_pill_session_default">Sem título</string>
     <string name="appearance_section_grouping">Agrupamento</string>
     <string name="appearance_auto_grouping">Agrupamento automático</string>
@@ -1739,6 +1745,14 @@
     <string name="scheduled_task_runs_title">Histórico de execuções</string>
     <string name="scheduled_task_runs_empty">Nenhuma execução ainda. Esta tarefa nunca disparou — os registros aparecem aqui depois disso.</string>
     <string name="scheduled_task_runs_open_session">Abrir sessão</string>
+    <!-- [T-scheduled-new-session-permission / T-scheduled-new-session-folder / T-scheduled-card-status-line] -->
+<string name="scheduled_task_runs_count">%1$d execuções</string>
+<string name="scheduled_task_next_fire">Próxima execução %1$s</string>
+<string name="scheduled_task_state_ended">Concluída</string>
+<string name="scheduled_task_state_paused">Pausada</string>
+<string name="scheduled_task_field_permission">Permissão do novo chat</string>
+<string name="scheduled_task_field_workspace">Espaço de trabalho</string>
+<string name="scheduled_task_no_folders">Nenhum espaço de trabalho ainda. Crie um na lista de sessões primeiro.</string>
     <string name="image_action_copy">Copiar</string>
     <string name="image_action_share">Compartilhar</string>
     <string name="image_action_save">Salvar</string>

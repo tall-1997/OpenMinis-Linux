@@ -74,6 +74,8 @@ import com.openminis.app.R
 import com.openminis.app.ui.components.openExternalUrl
 import com.openminis.app.i18n.uppercaseForDisplay
 import com.openminis.app.ui.theme.m3Icon
+import com.openminis.app.ui.theme.monetIconTileColor
+import com.openminis.app.ui.theme.monetIconTileContentColor
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -609,11 +611,14 @@ private fun SettingsItem(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             // Colored circle icon (matching iOS settings style)
+            // [T-android-dynamic-accent-icons] Tile + glyph resolve through the
+            // shared AccentTokens bridge: wallpaper chip in dynamic mode, the
+            // hardcoded iOS color + White glyph otherwise.
             Box(
                 modifier = Modifier
                     .size(30.dp)
                     .background(
-                        color = iconColor,
+                        color = monetIconTileColor(iconColor),
                         shape = CircleShape,
                     ),
                 contentAlignment = Alignment.Center,
@@ -621,7 +626,7 @@ private fun SettingsItem(
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = Color.White,
+                    tint = monetIconTileContentColor(iconColor),
                     modifier = Modifier.size(16.dp),
                 )
             }

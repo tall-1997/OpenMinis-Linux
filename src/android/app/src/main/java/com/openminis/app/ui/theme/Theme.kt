@@ -152,27 +152,8 @@ val LocalUseRoundedIcons = compositionLocalOf { false }
 // scheme roles without re-deriving the gate themselves.
 val LocalMonetDynamic = compositionLocalOf { false }
 
-// iOS-parity tile hues that follow the wallpaper when dynamic color is on.
-// Red (destructive) and systemGray (neutral/informational) deliberately stay
-// static: their hue IS the message.
-internal val monetAccentTiles = setOf(
-    Color(0xFF007AFF), // iOS systemBlue
-    Color(0xFF34C759), // iOS systemGreen
-    Color(0xFFFF9500), // iOS systemOrange
-    Color(0xFF5856D6), // iOS indigo
-    Color(0xFFAF52DE), // iOS purple
-    Color(0xFF30B0C7), // iOS teal
-    Color(0xFF5AC8FA), // iOS light teal
-)
-
-/** Tint for plain (chip-less) icons: wallpaper accent in dynamic mode. */
-@Composable
-fun monetIconTint(static: Color): Color =
-    if (LocalMonetDynamic.current && static in monetAccentTiles) {
-        MaterialTheme.colorScheme.primary
-    } else {
-        static
-    }
+// The accent bridge that consumes this gate (monetAccentTiles, monetIconTint,
+// monetIconTileColor/ContentColor) lives in AccentTokens.kt.
 
 // Apple-style shape system — rounded, friendly, iOS-like
 // M3 Expressive 在动态取色时替换（见 MinisShapesM3）

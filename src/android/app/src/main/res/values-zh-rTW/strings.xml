@@ -689,6 +689,12 @@
     <string name="appearance_show_chat_title">顯示對話標題</string>
     <string name="appearance_show_chat_title_subtitle">捲動時顯示固定的標題膠囊</string>
     <string name="appearance_show_chat_title_footer">在瀏覽歷史訊息時，於對話上方以浮動膠囊顯示目前工作階段的標題。</string>
+    <string name="appearance_message_usage_title">回覆下方顯示 Token 用量</string>
+    <string name="appearance_message_usage_subtitle">在每則回覆下方顯示輸入/輸出 Token 與快取命中率</string>
+    <string name="appearance_context_glow_title">上下文將滿時輸入框發光</string>
+    <string name="appearance_context_glow_subtitle">上下文接近上限時輸入框邊緣跑馬燈式發光</string>
+    <string name="chat_usage_footer_tokens">↑ %1$s ↓ %2$s</string>
+    <string name="chat_usage_footer_cache">快取 %1$d%%</string>
     <string name="chat_title_pill_session_default">未命名</string>
     <string name="appearance_section_grouping">分組</string>
     <string name="appearance_auto_grouping">自動分組</string>
@@ -1816,6 +1822,14 @@
     <string name="scheduled_task_runs_title">執行紀錄</string>
     <string name="scheduled_task_runs_empty">尚無執行紀錄。這項工作還沒被觸發過——觸發之後就會顯示在這裡。</string>
     <string name="scheduled_task_runs_open_session">開啟工作階段</string>
+    <!-- [T-scheduled-new-session-permission / T-scheduled-new-session-folder / T-scheduled-card-status-line] -->
+<string name="scheduled_task_runs_count">已執行 %1$d 次</string>
+<string name="scheduled_task_next_fire">下次 %1$s</string>
+<string name="scheduled_task_state_ended">已結束</string>
+<string name="scheduled_task_state_paused">已暫停</string>
+<string name="scheduled_task_field_permission">新對話權限</string>
+<string name="scheduled_task_field_workspace">工作區</string>
+<string name="scheduled_task_no_folders">尚無工作區，請先在工作階段列表建立。</string>
     <string name="image_action_copy">複製</string>
     <string name="image_action_share">分享</string>
     <string name="image_action_save">儲存</string>

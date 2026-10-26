@@ -16,6 +16,7 @@ import com.openminis.app.offload.OffloadPermissionManager
 import com.openminis.app.sandbox.NativeOffloadHandler
 import com.openminis.app.sandbox.NativeOffloadRequest
 import com.openminis.app.sandbox.NativeOffloadResult
+import com.openminis.app.sandbox.PRootKernel
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -68,7 +69,7 @@ class PhotosOffloadHandler(private val context: Context) : NativeOffloadHandler 
                 "albums" -> handleAlbums(args)
                 "album" -> handleAlbum(args)
                 "export" -> handleExport(args, request.sessionId)
-                "import", "save" -> handleImport(args)
+                "import", "save" -> handleImport(args, request.sessionId)
                 "create-album" -> handleCreateAlbum(args)
                 "favorite" -> handleFavorite(args)
                 "delete" -> handleDelete(args)
@@ -458,15 +459,11 @@ class PhotosOffloadHandler(private val context: Context) : NativeOffloadHandler 
             }
             if (srcUri != null) break
         }
-        val src = srcUri ?: return NativeOffloadResult(
-            1,
-            OffloadOutput.formatBody(
-                JSONObject().put("error", "not_found").put("id", id)
-                    .put("message", "No asset with id=$id (already deleted, or not visible to this app).")
-                    .toString(),
-                args,
-            ) + "\n",
-        )
+        val src = srcUri ?: return NativeOffloadResult(1, OffloadOutput.formatBody(
+            JSONObject().put("error", "not_found").put("id", id)
+                .put("message", "No asset with id=$id (already deleted, or not visible to this app).")
+                .toString(), args,
+        ) + "\n")
 
         // [GH#139] Session-scoped when we know the caller's chat, so the export
         // lands in the dir PRoot bind-mounts at /var/minis/offloads for THIS
@@ -574,8 +571,15 @@ class PhotosOffloadHandler(private val context: Context) : NativeOffloadHandler 
      * Copy a host-filesystem file into MediaStore. Mirrors apple-photos
      * import. --album-name creates the bucket implicitly via RELATIVE_PATH
      * (Android API 29+) — there's no "create empty album" API.
+     *
+     * [T-android-subagent-attribution] A sandbox `--path` (/var/minis/...,
+     * e.g. a picture minis-model-use just wrote) exists host-side only under
+     * the CALLING session's workspace tree, so when the raw path misses we
+     * resolve it session-scoped via [PRootKernel.resolveSessionHostPath] —
+     * the same owner-normalizing resolver export uses, so a sub-agent lane
+     * imports its parent chat's files and never another session's.
      */
-    private fun handleImport(args: OffloadArgs): NativeOffloadResult {
+    private fun handleImport(args: OffloadArgs, sessionId: String?): NativeOffloadResult {
         // [T-photos-positional-path] Accept `import <file>` as well as
         // `import --path <file>`, matching apple-photos (iOS 048d2d9f). The
         // file is this subcommand's only natural argument, so the bare form is
@@ -587,17 +591,17 @@ class PhotosOffloadHandler(private val context: Context) : NativeOffloadHandler 
                 2,
                 "android-photos import: a file path is required (positional or --path <file>)\n",
             )
-        val src = File(path)
-        if (!src.exists() || !src.isFile) {
-            return NativeOffloadResult(
-                1,
-                OffloadOutput.formatBody(
-                    JSONObject().put("error", "no_file").put("path", path)
-                        .put("message", "Source file does not exist or is not a regular file.")
-                        .toString(),
-                    args,
-                ) + "\n",
-            )
+        // [T-android-subagent-attribution] Raw host path first (/sdcard/...),
+        // then the owner-normalizing session resolver for /var/minis paths.
+        val sessionSrc = if (sessionId.isNullOrBlank()) null
+        else PRootKernel.resolveSessionHostPath(sessionId, path, context)
+        val src = File(path).takeIf { it.isFile } ?: sessionSrc?.takeIf { it.isFile }
+        if (src == null) {
+            return NativeOffloadResult(1, OffloadOutput.formatBody(
+                JSONObject().put("error", "no_file").put("path", path)
+                    .put("message", "Source file does not exist or is not a regular file.")
+                    .toString(), args,
+            ) + "\n")
         }
         val albumName = args.get("album-name")
         val ext = src.extension.lowercase()
@@ -630,13 +634,10 @@ class PhotosOffloadHandler(private val context: Context) : NativeOffloadHandler 
         }
         return try {
             val uri = context.contentResolver.insert(collection, values)
-                ?: return NativeOffloadResult(
-                    1,
-                    OffloadOutput.formatBody(
-                        JSONObject().put("error", "insert_failed").put("message", "ContentResolver.insert returned null").toString(),
-                        args,
-                    ) + "\n",
-                )
+                ?: return NativeOffloadResult(1, OffloadOutput.formatBody(
+                    JSONObject().put("error", "insert_failed").put("message", "ContentResolver.insert returned null").toString(),
+                    args,
+                ) + "\n")
             val written = context.contentResolver.openOutputStream(uri)?.use { os ->
                 FileInputStream(src).use { input ->
                     var n = 0L
@@ -654,9 +655,7 @@ class PhotosOffloadHandler(private val context: Context) : NativeOffloadHandler 
             }
             val newId = ContentUris.parseId(uri)
             AppLogger.info(TAG, "import: path='${src.name}' id=$newId bytes=$written album='$albumName'")
-            val data = JSONObject()
-                .put("id", newId)
-                .put("name", src.name)
+            val data = JSONObject().put("id", newId).put("name", src.name)
                 .put("media_type", if (isVideo) "video" else "photo")
                 .put("size_bytes", written)
                 .put("mime_type", mime)

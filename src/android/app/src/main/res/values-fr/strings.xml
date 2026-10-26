@@ -636,6 +636,12 @@
     <string name="appearance_show_chat_title">Afficher le titre du chat</string>
     <string name="appearance_show_chat_title_subtitle">Afficher une pastille de titre fixe pendant le défilement</string>
     <string name="appearance_show_chat_title_footer">Affiche le titre de la session en cours sous forme de pastille flottante en haut du chat pendant que vous parcourez l\'historique.</string>
+    <string name="appearance_message_usage_title">Consommation de jetons sous les réponses</string>
+    <string name="appearance_message_usage_subtitle">Affiche les jetons d\'entrée/sortie et le taux de cache sous chaque réponse</string>
+    <string name="appearance_context_glow_title">Lueur quand le contexte est presque plein</string>
+    <string name="appearance_context_glow_subtitle">Le bord du champ de saisie s\'illumine en rotation quand le contexte approche la limite</string>
+    <string name="chat_usage_footer_tokens">↑ %1$s ↓ %2$s</string>
+    <string name="chat_usage_footer_cache">cache %1$d%%</string>
     <string name="chat_title_pill_session_default">Sans titre</string>
     <string name="appearance_section_grouping">Regroupement</string>
     <string name="appearance_auto_grouping">Regroupement automatique</string>
@@ -1739,6 +1745,14 @@
     <string name="scheduled_task_runs_title">Exécutions</string>
     <string name="scheduled_task_runs_empty">Aucune exécution pour l\'instant. Cette tâche ne s\'est pas encore déclenchée — les exécutions apparaîtront ici ensuite.</string>
     <string name="scheduled_task_runs_open_session">Ouvrir la session</string>
+    <!-- [T-scheduled-new-session-permission / T-scheduled-new-session-folder / T-scheduled-card-status-line] -->
+<string name="scheduled_task_runs_count">%1$d exécutions</string>
+<string name="scheduled_task_next_fire">Prochaine exécution %1$s</string>
+<string name="scheduled_task_state_ended">Terminée</string>
+<string name="scheduled_task_state_paused">En pause</string>
+<string name="scheduled_task_field_permission">Autorisation du nouveau chat</string>
+<string name="scheduled_task_field_workspace">Espace de travail</string>
+<string name="scheduled_task_no_folders">Aucun espace de travail pour l’instant. Créez-en un dans la liste des sessions.</string>
     <string name="image_action_copy">Copier</string>
     <string name="image_action_share">Partager</string>
     <string name="image_action_save">Enregistrer</string>

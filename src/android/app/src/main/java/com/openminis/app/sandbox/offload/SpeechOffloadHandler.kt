@@ -69,7 +69,7 @@ class SpeechOffloadHandler(private val context: Context) : NativeOffloadHandler 
             when (val sub = args.positional[0]) {
                 "status" -> cmdStatus(args)
                 "languages" -> cmdLanguages(args)
-                "transcribe", "listen" -> cmdTranscribe(args)
+                "transcribe", "listen" -> cmdTranscribe(args, request.sessionId)
                 else -> NativeOffloadResult(2, "android-speech: unknown subcommand '$sub'\n$HELP")
             }
         } catch (e: Throwable) {
@@ -95,7 +95,7 @@ class SpeechOffloadHandler(private val context: Context) : NativeOffloadHandler 
         return NativeOffloadResult(0, OffloadOutput.formatBody(body, args) + "\n")
     }
 
-    private fun cmdTranscribe(args: OffloadArgs): NativeOffloadResult {
+    private fun cmdTranscribe(args: OffloadArgs, sessionId: String?): NativeOffloadResult {
         val available = try { SpeechRecognizer.isRecognitionAvailable(context) } catch (_: Throwable) { false }
         if (!available) {
             val body = JSONObject()
@@ -120,7 +120,7 @@ class SpeechOffloadHandler(private val context: Context) : NativeOffloadHandler 
             // SpeechRecognizer doesn't accept arbitrary audio file inputs
             // on the platforms we ship to. Reported path is what the
             // future implementation would consume.
-            val resolved = resolveSourcePath(source)
+            val resolved = resolveSourcePath(source, sessionId)
             val exists = resolved?.exists() == true
             AppLogger.warning(
                 TAG,
@@ -221,17 +221,25 @@ class SpeechOffloadHandler(private val context: Context) : NativeOffloadHandler 
     }
 
     /**
-     * Resolve a `/var/minis/...`-style Linux path to a host File via
-     * [PRootKernel]'s global bind-mount table. Per-session paths
-     * (attachments / offloads / workspace / browser) work as long as the
-     * owning session is the most-recent shell to boot — last-writer-wins
-     * per the kernel's documentation.
+     * Resolve a `/var/minis/...`-style Linux path to a host File.
+     *
+     * [T-android-subagent-attribution] With a caller session (chat shells
+     * always forward one via MINIS_CHAT_SESSION_ID), prefer the session-scoped
+     * resolver: it maps the path into the CALLER's own workspace tree and
+     * normalizes a sub-agent lane to its parent chat, instead of consulting
+     * the global last-writer-wins bind table whose entry points at whichever
+     * session booted a shell most recently. Fall back to the global table and
+     * then the raw path for session-less callers or paths the session jail
+     * does not own.
      */
-    private fun resolveSourcePath(source: String): File? {
+    private fun resolveSourcePath(source: String, sessionId: String?): File? {
         val trimmed = source.trim()
         if (trimmed.isEmpty()) return null
         return try {
             if (trimmed.startsWith("/")) {
+                if (!sessionId.isNullOrBlank()) {
+                    PRootKernel.resolveSessionHostPath(sessionId, trimmed, context)?.let { return it }
+                }
                 PRootKernel.resolveHostPath(trimmed) ?: File(trimmed)
             } else {
                 File(trimmed)

@@ -120,6 +120,23 @@ class ScheduledTaskManager(private val context: Context) {
             registerAlarm(updated)
             return
         }
+        // [T-scheduled-end-window-autodisable] ScheduledTask's active-window
+        // contract says repeating tasks "auto-disable once the end date has
+        // fully passed" — but this branch used to just call registerAlarm,
+        // whose nextTriggerMs()==null path logs "no next trigger" and gives
+        // up. The row stayed enabled=true forever: toggle on, no alarm, and
+        // the list card showed the schedule with an empty next segment.
+        // Disable in-place (same shape as the ONCE branch) so the row and
+        // the card agree that the task is finished. Also covers a CUSTOM
+        // task whose day set drained to empty.
+        if (t.nextTriggerMs() == null) {
+            AppLogger.info(
+                TAG,
+                "task ${t.id}: no future slot (end of active window) — disabling",
+            )
+            store.upsert(t.copy(enabled = false))
+            return
+        }
         registerAlarm(t)
     }
 

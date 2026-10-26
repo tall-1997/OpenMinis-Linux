@@ -1,6 +1,5 @@
 package com.openminis.app.ui.scheduled
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,22 +9,17 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -40,7 +34,6 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TimeInput
 import com.openminis.app.ui.components.MinisCenterTopBar
-import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -55,7 +48,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openminis.app.R
@@ -63,11 +55,11 @@ import com.openminis.app.ui.components.MinisButton
 import com.openminis.app.ui.components.MinisOutlinedButton
 import com.openminis.app.ui.components.MinisTextButton
 import com.openminis.app.scheduled.ScheduledRepeatMode
+import com.openminis.app.scheduled.ScheduledRun
 import com.openminis.app.scheduled.ScheduledTargetMode
 import com.openminis.app.scheduled.ScheduledTask
 import kotlinx.coroutines.launch
 import java.util.Calendar
-import com.openminis.app.util.IsoTime
 
 /**
  * [T-android-scheduled-tasks-design / T-android-scheduled-tasks-full]
@@ -76,10 +68,11 @@ import com.openminis.app.util.IsoTime
  * Mirrors the iOS Shortcuts option set: target mode (new session / follow-up
  * an existing chat / re-run a chat from a chosen message), optional model
  * override, time (compact input), repeat, and an optional start/end date
- * window.
+ * window. NEW tasks additionally pick the created chat's tool-gate
+ * permission mode ([T-scheduled-new-session-permission]) and the workspace
+ * group it is filed into ([T-scheduled-new-session-folder]); the pickers and
+ * the task assembler live in [ScheduledTaskEditorParts].
  */
-private enum class TargetKind { NEW, FOLLOW_UP, RERUN }
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ScheduledTaskEditScreen(
@@ -121,9 +114,30 @@ fun ScheduledTaskEditScreen(
     var modelDisplay by remember { mutableStateOf<String?>(null) }
     var startDateMs by remember { mutableStateOf<Long?>(null) }
     var endDateMs by remember { mutableStateOf<Long?>(null) }
+    // [T-scheduled-new-session-permission] true = YOYO (ALLOW_ALL) on the
+    // created chat; false = ASK (the app default).
+    var newSessionPermYoyo by remember { mutableStateOf(false) }
+    // [T-scheduled-new-session-folder] Workspace the created chat is filed
+    // into. null = unfiled (main list).
+    var newSessionFolderId by remember { mutableStateOf<String?>(null) }
+    var folderDisplay by remember { mutableStateOf<String?>(null) }
+    // [T-scheduled-edit-echo] Fields that must survive an edit round-trip.
+    var runHistory by remember { mutableStateOf<List<ScheduledRun>>(emptyList()) }
+    var intervalMinutes by remember { mutableStateOf(0L) }
+    var fireAtMs by remember { mutableStateOf<Long?>(null) }
 
     LaunchedEffect(taskId) {
-        if (taskId == null) { loaded = true; return@LaunchedEffect }
+        if (taskId == null) {
+            // [T-scheduled-new-session-folder] Default a brand-new task to
+            // the shared default workspace (else the first group); editing an
+            // existing task keeps its stored choice so a saved null stays
+            // unfiled instead of being silently re-filed.
+            vm.defaultNewTaskFolder()?.let {
+                newSessionFolderId = it.id; folderDisplay = it.name
+            }
+            loaded = true
+            return@LaunchedEffect
+        }
         val existing = vm.get(taskId) ?: run { onBack(); return@LaunchedEffect }
         label = existing.label
         prompt = existing.prompt
@@ -138,6 +152,11 @@ fun ScheduledTaskEditScreen(
         lastResultSessionId = existing.lastResultSessionId
         startDateMs = existing.startDateMs
         endDateMs = existing.endDateMs
+        runHistory = existing.runHistory
+        intervalMinutes = existing.intervalMinutes
+        fireAtMs = existing.fireAtMs
+        newSessionPermYoyo = existing.newSessionPermissionToken() == "YOYO"
+        newSessionFolderId = existing.newSessionFolderId
         when (val m = existing.targetMode) {
             ScheduledTargetMode.NewSession -> targetKind = TargetKind.NEW
             is ScheduledTargetMode.AppendToSession -> {
@@ -171,6 +190,20 @@ fun ScheduledTaskEditScreen(
         targetSessionId?.let { sid ->
             targetSessionTitle = vm.listSessions().firstOrNull { it.id == sid }?.title
         }
+        // [T-scheduled-edit-echo] The RERUN picker row used to fall back to
+        // the "Choose a message…" placeholder on reopen even though a
+        // message was saved — resolve the preview so the row shows it.
+        // (Locals: delegated state can't smart-cast to non-null.)
+        val sid = targetSessionId
+        val mid = targetMessageId
+        if (targetKind == TargetKind.RERUN && sid != null && mid != null) {
+            targetMessagePreview = vm.listUserMessages(sid).firstOrNull { it.id == mid }?.preview
+        }
+        // Workspace display name; a dissolved group leaves null → the row
+        // shows the unfiled placeholder and the runner degrades to unfiled.
+        newSessionFolderId?.let { fid ->
+            folderDisplay = vm.listFolders().firstOrNull { it.id == fid }?.name
+        }
         loaded = true
     }
 
@@ -181,6 +214,7 @@ fun ScheduledTaskEditScreen(
         repeatMode = repeatMode, customDays = customDays, enabled = enabled,
         createdAt = createdAt, lastFiredAt = lastFiredAt,
         lastResultPreview = lastResultPreview, lastResultSessionId = lastResultSessionId,
+        runHistory = runHistory, intervalMinutes = intervalMinutes, fireAtMs = fireAtMs,
         targetKind = targetKind, targetSessionId = targetSessionId,
         targetMessageId = targetMessageId,
         modelBinding = modelBinding,
@@ -188,6 +222,8 @@ fun ScheduledTaskEditScreen(
             vm.listModels().firstOrNull { it.entryId == eid }?.modelId
         },
         startDateMs = startDateMs, endDateMs = endDateMs,
+        newSessionPermissionMode = if (newSessionPermYoyo) "YOYO" else "ASK",
+        newSessionFolderId = newSessionFolderId,
     )
 
     // re-run replays the chosen message, so prompt isn't required there.
@@ -255,6 +291,11 @@ fun ScheduledTaskEditScreen(
             onPickModel = { binding, display -> modelBinding = binding; modelDisplay = display },
             startDateMs = startDateMs, onStartDateChange = { startDateMs = it },
             endDateMs = endDateMs, onEndDateChange = { endDateMs = it },
+            newSessionPermYoyo = newSessionPermYoyo,
+            onNewSessionPermChange = { newSessionPermYoyo = it },
+            newSessionFolderId = newSessionFolderId,
+            newSessionFolderName = folderDisplay,
+            onPickFolder = { id, name -> newSessionFolderId = id; folderDisplay = name },
             vm = vm,
             isNew = isNew,
             canRunNow = canRunNow,
@@ -353,6 +394,9 @@ private fun EditFormBody(
     modelDisplay: String?, onPickModel: (binding: String?, display: String?) -> Unit,
     startDateMs: Long?, onStartDateChange: (Long?) -> Unit,
     endDateMs: Long?, onEndDateChange: (Long?) -> Unit,
+    newSessionPermYoyo: Boolean, onNewSessionPermChange: (Boolean) -> Unit,
+    newSessionFolderId: String?, newSessionFolderName: String?,
+    onPickFolder: (id: String?, name: String?) -> Unit,
     vm: ScheduledTasksViewModel,
     isNew: Boolean,
     canRunNow: Boolean,
@@ -369,6 +413,7 @@ private fun EditFormBody(
     var showSessionPicker by remember { mutableStateOf(false) }
     var showMessagePicker by remember { mutableStateOf(false) }
     var showModelPicker by remember { mutableStateOf(false) }
+    var showFolderPicker by remember { mutableStateOf(false) }
     var showStartPicker by remember { mutableStateOf(false) }
     var showEndPicker by remember { mutableStateOf(false) }
 
@@ -422,6 +467,47 @@ private fun EditFormBody(
                         ?: stringResource(R.string.scheduled_task_pick_message),
                     enabled = targetSessionId != null,
                     onClick = { if (targetSessionId != null) showMessagePicker = true },
+                )
+            }
+        }
+
+        // ── New-chat extras: tool gate + workspace ([T-scheduled-new-session-
+        //    permission] / [T-scheduled-new-session-folder]) ──
+        if (targetKind == TargetKind.NEW) {
+            Column {
+                SectionLabel(stringResource(R.string.scheduled_task_field_permission))
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = !newSessionPermYoyo,
+                        onClick = { onNewSessionPermChange(false) },
+                        label = {
+                            Text(
+                                stringResource(R.string.chat_menu_perm_ask),
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                            )
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
+                    FilterChip(
+                        selected = newSessionPermYoyo,
+                        onClick = { onNewSessionPermChange(true) },
+                        label = {
+                            Text(
+                                stringResource(R.string.chat_menu_perm_yoyo),
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                            )
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                PickerRow(
+                    title = stringResource(R.string.scheduled_task_field_workspace),
+                    value = newSessionFolderName ?: stringResource(R.string.group_none),
+                    onClick = { showFolderPicker = true },
                 )
             }
         }
@@ -562,6 +648,15 @@ private fun EditFormBody(
             onPickMessage(id, preview); showMessagePicker = false
         }
     }
+    if (showFolderPicker) {
+        WorkspacePickerDialog(
+            vm = vm,
+            currentId = newSessionFolderId,
+            onDismiss = { showFolderPicker = false },
+        ) { id, name ->
+            onPickFolder(id, name); showFolderPicker = false
+        }
+    }
     // [T-android-scheduled-lateinit-crash-156] `vm.providerRepository` is null
     // when the Application is half-built (safe-mode / aborted onCreate); the
     // editor is reachable in exactly that state via a scheduled-task
@@ -647,212 +742,4 @@ private fun EditFormBody(
             onEndDateChange(it); showEndPicker = false
         }
     }
-}
-
-@Composable
-private fun SectionLabel(text: String) {
-    Text(text, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
-}
-
-@Composable
-private fun PickerRow(
-    title: String,
-    value: String,
-    enabled: Boolean = true,
-    onClick: () -> Unit,
-    onClear: (() -> Unit)? = null,
-) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = {},
-        readOnly = true,
-        enabled = false,
-        label = { Text(title) },
-        trailingIcon = if (onClear != null) {
-            {
-                IconButton(onClick = onClear) {
-                    Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(0.dp))
-                    Text("✕", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-        } else null,
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier),
-    )
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun SessionPickerDialog(
-    vm: ScheduledTasksViewModel,
-    onDismiss: () -> Unit,
-    onPick: (id: String, title: String) -> Unit,
-) {
-    var sessions by remember { mutableStateOf<List<ScheduledTasksViewModel.SessionOption>?>(null) }
-    LaunchedEffect(Unit) { sessions = vm.listSessions() }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.scheduled_task_pick_session)) },
-        text = {
-            val list = sessions
-            if (list == null) {
-                Box(Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
-                }
-            } else if (list.isEmpty()) {
-                Text(stringResource(R.string.scheduled_task_no_sessions))
-            } else {
-                LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
-                    items(list, key = { it.id }) { s ->
-                        Column(
-                            Modifier.fillMaxWidth().clickable { onPick(s.id, s.title) }
-                                .padding(vertical = 10.dp),
-                        ) {
-                            Text(s.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {},
-        dismissButton = { MinisTextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
-    )
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun MessagePickerDialog(
-    vm: ScheduledTasksViewModel,
-    sessionId: String,
-    onDismiss: () -> Unit,
-    onPick: (id: String, preview: String) -> Unit,
-) {
-    var messages by remember { mutableStateOf<List<ScheduledTasksViewModel.MessageOption>?>(null) }
-    LaunchedEffect(sessionId) { messages = vm.listUserMessages(sessionId) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.scheduled_task_pick_message)) },
-        text = {
-            val list = messages
-            if (list == null) {
-                Box(Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
-                }
-            } else if (list.isEmpty()) {
-                Text(stringResource(R.string.scheduled_task_no_messages_in_session))
-            } else {
-                LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
-                    items(list, key = { it.id }) { m ->
-                        Column(
-                            Modifier.fillMaxWidth().clickable { onPick(m.id, m.preview) }
-                                .padding(vertical = 10.dp),
-                        ) {
-                            Text(m.preview, maxLines = 2, overflow = TextOverflow.Ellipsis, fontSize = 14.sp)
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {},
-        dismissButton = { MinisTextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
-    )
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun DateDialog(initialMs: Long?, onDismiss: () -> Unit, onPick: (Long) -> Unit) {
-    val state = rememberDatePickerState(initialSelectedDateMillis = initialMs)
-    DatePickerDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            MinisTextButton(onClick = {
-                state.selectedDateMillis?.let { onPick(startOfLocalDay(it)) }
-            }) { Text(stringResource(R.string.ok)) }
-        },
-        dismissButton = { MinisTextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
-    ) {
-        DatePicker(state = state)
-    }
-}
-
-/** DatePicker hands back a UTC-midnight ms; convert to local start-of-day. */
-private fun startOfLocalDay(utcMidnightMs: Long): Long {
-    // The picker's value is UTC midnight of the picked calendar day. Re-anchor
-    // to the local time zone's start-of-day so the active-window comparison in
-    // ScheduledTask.nextTriggerMs (which works in local time) matches.
-    val utc = Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC")).apply {
-        timeInMillis = utcMidnightMs
-    }
-    return Calendar.getInstance().apply {
-        clear()
-        set(utc.get(Calendar.YEAR), utc.get(Calendar.MONTH), utc.get(Calendar.DAY_OF_MONTH), 0, 0, 0)
-    }.timeInMillis
-}
-
-private fun dateLabel(ms: Long): String =
-    IsoTime.formatPattern(ms, "MMM d")
-
-@Suppress("LongParameterList")
-private fun buildTask(
-    id: String?,
-    label: String,
-    prompt: String,
-    hour: Int,
-    minute: Int,
-    repeatMode: ScheduledRepeatMode,
-    customDays: Set<Int>,
-    enabled: Boolean,
-    createdAt: Long,
-    lastFiredAt: Long?,
-    lastResultPreview: String?,
-    lastResultSessionId: String?,
-    targetKind: TargetKind,
-    targetSessionId: String?,
-    targetMessageId: String?,
-    modelBinding: String?,
-    modelEntryIdLookup: (String) -> String?,
-    startDateMs: Long?,
-    endDateMs: Long?,
-): ScheduledTask {
-    val targetMode = when (targetKind) {
-        TargetKind.NEW -> ScheduledTargetMode.NewSession
-        TargetKind.FOLLOW_UP -> targetSessionId?.let { ScheduledTargetMode.AppendToSession(it) }
-            ?: ScheduledTargetMode.NewSession
-        TargetKind.RERUN ->
-            if (targetSessionId != null && targetMessageId != null)
-                ScheduledTargetMode.RerunMessage(targetSessionId, targetMessageId)
-            else ScheduledTargetMode.NewSession
-    }
-    // For backcompat: if the binding pins to a specific entry, also fill in
-    // legacy modelId so older code paths (and any external readers) still
-    // resolve the same concrete model. Group bindings leave modelId null —
-    // they resolve to a member entry at run time.
-    val derivedModelId: String? = modelBinding?.let { json ->
-        runCatching {
-            val o = org.json.JSONObject(json)
-            if (o.optString("type") == "entry") {
-                o.optString("entryId").takeIf { it.isNotEmpty() }?.let(modelEntryIdLookup)
-            } else null
-        }.getOrNull()
-    }
-    return ScheduledTask(
-        id = id ?: java.util.UUID.randomUUID().toString(),
-        label = label.trim(),
-        timeOfDayHour = hour,
-        timeOfDayMinute = minute,
-        repeatMode = repeatMode,
-        customDays = if (repeatMode == ScheduledRepeatMode.CUSTOM) customDays else emptySet(),
-        prompt = prompt.trim(),
-        targetMode = targetMode,
-        modelId = derivedModelId,
-        modelBinding = modelBinding,
-        enabled = enabled,
-        createdAt = createdAt,
-        startDateMs = startDateMs,
-        endDateMs = endDateMs,
-        lastFiredAt = lastFiredAt,
-        lastResultPreview = lastResultPreview,
-        lastResultSessionId = lastResultSessionId,
-    )
 }

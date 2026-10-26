@@ -641,6 +641,12 @@
     <string name="appearance_show_chat_title">Tampilkan judul obrolan</string>
     <string name="appearance_show_chat_title_subtitle">Tampilkan pil judul yang menempel saat menggulir</string>
     <string name="appearance_show_chat_title_footer">Tampilkan judul sesi saat ini sebagai pil mengambang di bagian atas obrolan ketika Anda menggulir riwayat.</string>
+    <string name="appearance_message_usage_title">Pemakaian token di bawah balasan</string>
+    <string name="appearance_message_usage_subtitle">Tampilkan token masuk/keluar dan hit cache di bawah setiap balasan</string>
+    <string name="appearance_context_glow_title">Cahaya saat konteks hampir penuh</string>
+    <string name="appearance_context_glow_subtitle">Tepi kotak input berpendar berputar saat konteks mendekati batas</string>
+    <string name="chat_usage_footer_tokens">↑ %1$s ↓ %2$s</string>
+    <string name="chat_usage_footer_cache">cache %1$d%%</string>
     <string name="chat_title_pill_session_default">Tanpa judul</string>
     <string name="appearance_section_grouping">Pengelompokan</string>
     <string name="appearance_auto_grouping">Pengelompokan Otomatis</string>
@@ -1744,6 +1750,14 @@
     <string name="scheduled_task_runs_title">Catatan proses</string>
     <string name="scheduled_task_runs_empty">Belum ada proses. Tugas ini belum pernah berjalan — catatannya akan muncul di sini setelah berjalan.</string>
     <string name="scheduled_task_runs_open_session">Buka sesi</string>
+    <!-- [T-scheduled-new-session-permission / T-scheduled-new-session-folder / T-scheduled-card-status-line] -->
+<string name="scheduled_task_runs_count">%1$d eksekusi</string>
+<string name="scheduled_task_next_fire">Berikutnya %1$s</string>
+<string name="scheduled_task_state_ended">Selesai</string>
+<string name="scheduled_task_state_paused">Dijeda</string>
+<string name="scheduled_task_field_permission">Izin obrolan baru</string>
+<string name="scheduled_task_field_workspace">Ruang kerja</string>
+<string name="scheduled_task_no_folders">Belum ada ruang kerja. Buat satu di daftar sesi terlebih dahulu.</string>
     <string name="image_action_copy">Salin</string>
     <string name="image_action_share">Bagikan</string>
     <string name="image_action_save">Simpan</string>

@@ -52,6 +52,7 @@ import com.openminis.app.ui.components.SectionTextField
 import kotlinx.coroutines.launch
 import com.openminis.app.ui.components.MinisTextButton
 import com.openminis.app.ui.theme.m3Icon
+import com.openminis.app.ui.theme.monetIconTint
 
 /**
  * Detail/edit screen for a single mounted folder. Mirrors iOS
@@ -190,7 +191,7 @@ fun MountDetailScreen(
             Spacer(Modifier.height(20.dp))
             ActionRow(
                 icon = Icons.Outlined.Folder,
-                tint = Color(0xFF007AFF),
+                tint = monetIconTint(Color(0xFF007AFF)), // [T-android-dynamic-accent-icons]
                 label = stringResource(R.string.mount_detail_browse_files),
                 onClick = onBrowseFiles,
             )

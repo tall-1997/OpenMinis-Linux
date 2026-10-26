@@ -636,6 +636,12 @@
     <string name="appearance_show_chat_title">Chat-Titel anzeigen</string>
     <string name="appearance_show_chat_title_subtitle">Beim Scrollen eine fixierte Titelpille einblenden</string>
     <string name="appearance_show_chat_title_footer">Zeigt den Titel der aktuellen Sitzung beim Blättern durch den Verlauf als schwebende Pille am oberen Rand des Chats an.</string>
+    <string name="appearance_message_usage_title">Token-Statistik unter Antworten</string>
+    <string name="appearance_message_usage_subtitle">Zeigt Eingabe-/Ausgabe-Token und Cache-Trefferquote unter jeder Antwort</string>
+    <string name="appearance_context_glow_title">Leuchten bei fast vollem Kontext</string>
+    <string name="appearance_context_glow_subtitle">Der Rand des Eingabefelds leuchtet rotierend, wenn der Kontext sich dem Limit nähert</string>
+    <string name="chat_usage_footer_tokens">↑ %1$s ↓ %2$s</string>
+    <string name="chat_usage_footer_cache">Cache %1$d%%</string>
     <string name="chat_title_pill_session_default">Ohne Titel</string>
     <string name="appearance_section_grouping">Gruppierung</string>
     <string name="appearance_auto_grouping">Automatische Gruppierung</string>
@@ -1739,6 +1745,14 @@
     <string name="scheduled_task_runs_title">Ausführungen</string>
     <string name="scheduled_task_runs_empty">Noch keine Ausführungen. Diese Aufgabe wurde noch nicht ausgelöst — danach erscheinen die Ausführungen hier.</string>
     <string name="scheduled_task_runs_open_session">Sitzung öffnen</string>
+    <!-- [T-scheduled-new-session-permission / T-scheduled-new-session-folder / T-scheduled-card-status-line] -->
+<string name="scheduled_task_runs_count">%1$d Ausführungen</string>
+<string name="scheduled_task_next_fire">Nächster Lauf %1$s</string>
+<string name="scheduled_task_state_ended">Beendet</string>
+<string name="scheduled_task_state_paused">Pausiert</string>
+<string name="scheduled_task_field_permission">Berechtigung für neue Chats</string>
+<string name="scheduled_task_field_workspace">Arbeitsbereich</string>
+<string name="scheduled_task_no_folders">Noch keine Arbeitsbereiche. Erstelle zuerst einen in der Sitzungsliste.</string>
     <string name="image_action_copy">Kopieren</string>
     <string name="image_action_share">Teilen</string>
     <string name="image_action_save">Speichern</string>

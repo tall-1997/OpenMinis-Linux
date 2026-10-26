@@ -68,6 +68,9 @@ class ScheduledTasksViewModel(private val appContext: Context) : ViewModel() {
     /** A selectable model entry for the optional model override. */
     data class ModelOption(val entryId: String, val modelId: String, val displayName: String, val providerLabel: String)
 
+    /** A session group ("workspace") option for the NewSession folder picker. */
+    data class FolderOption(val id: String, val name: String)
+
     suspend fun listSessions(limit: Int = 100): List<SessionOption> = withContext(Dispatchers.IO) {
         if (!ready()) return@withContext emptyList()
         app.chatRepository.querySessionsMeta(
@@ -123,6 +126,31 @@ class ScheduledTasksViewModel(private val appContext: Context) : ViewModel() {
                 providerLabel = instance.label.ifEmpty { entry.model.provider },
             )
         }
+    }
+
+    /**
+     * [T-scheduled-new-session-folder] Session groups for the NewSession
+     * workspace picker, newest-touched first (listFolders' ordering).
+     */
+    suspend fun listFolders(): List<FolderOption> = withContext(Dispatchers.IO) {
+        if (!ready()) return@withContext emptyList()
+        app.chatRepository.listFolders().map { FolderOption(it.id, it.name) }
+    }
+
+    /**
+     * [T-scheduled-new-session-folder] Preselection for a NEW task: the
+     * shared default workspace ("default-workspace",
+     * [com.openminis.app.data.db.FolderEntity.DEFAULT_ID] — referenced
+     * fully-qualified because ui sources don't import data.db types), else
+     * the first group, mirroring SessionListViewModel's resolveWorkspaceFolderId
+     * (default → first). null when the user has no groups — the picker then
+     * offers the unfiled option plus a create-first hint.
+     */
+    suspend fun defaultNewTaskFolder(): FolderOption? = withContext(Dispatchers.IO) {
+        if (!ready()) return@withContext null
+        val folders = app.chatRepository.listFolders()
+        (folders.firstOrNull { it.id == com.openminis.app.data.db.FolderEntity.DEFAULT_ID }
+            ?: folders.firstOrNull())?.let { FolderOption(it.id, it.name) }
     }
 
     private fun extractPreview(partsJson: String): String {

@@ -898,6 +898,12 @@
     <string name="appearance_show_chat_title">显示会话标题</string>
     <string name="appearance_show_chat_title_subtitle">滚动时显示当前会话标题</string>
     <string name="appearance_show_chat_title_footer">滚动浏览历史消息时，在聊天顶部以悬浮胶囊形式显示当前会话标题。</string>
+    <string name="appearance_message_usage_title">回复下方显示 Token 用量</string>
+    <string name="appearance_message_usage_subtitle">在每条回复下方显示输入/输出 Token 与缓存命中率</string>
+    <string name="appearance_context_glow_title">上下文将满时输入框发光</string>
+    <string name="appearance_context_glow_subtitle">上下文接近上限时输入框边缘跑马灯式发光</string>
+    <string name="chat_usage_footer_tokens">↑ %1$s ↓ %2$s</string>
+    <string name="chat_usage_footer_cache">缓存 %1$d%%</string>
     <string name="chat_title_pill_session_default">未命名会话</string>
     <string name="appearance_section_grouping">分组</string>
     <string name="appearance_auto_grouping">自动归类</string>
@@ -2147,6 +2153,14 @@
     <string name="scheduled_task_runs_title">运行记录</string>
     <string name="scheduled_task_runs_empty">还没有运行记录。该任务尚未触发 —— 触发后运行记录会显示在这里。</string>
     <string name="scheduled_task_runs_open_session">打开会话</string>
+    <!-- [T-scheduled-new-session-permission / T-scheduled-new-session-folder / T-scheduled-card-status-line] -->
+<string name="scheduled_task_runs_count">已运行 %1$d 次</string>
+<string name="scheduled_task_next_fire">下次 %1$s</string>
+<string name="scheduled_task_state_ended">已结束</string>
+<string name="scheduled_task_state_paused">已暂停</string>
+<string name="scheduled_task_field_permission">新会话权限</string>
+<string name="scheduled_task_field_workspace">工作区</string>
+<string name="scheduled_task_no_folders">暂无工作区，请先在会话列表创建。</string>
     <string name="image_action_copy">复制</string>
     <string name="image_action_share">分享</string>
     <string name="image_action_save">保存</string>

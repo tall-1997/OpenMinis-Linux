@@ -73,6 +73,7 @@ import com.openminis.app.ui.components.DialogTextField
 import kotlinx.coroutines.launch
 import com.openminis.app.i18n.uppercaseForDisplay
 import com.openminis.app.ui.theme.m3Icon
+import com.openminis.app.ui.theme.monetIconTint
 
 /**
  * Settings → Mount External Folders. Mirrors iOS MountedFoldersSettingsView.
@@ -522,7 +523,7 @@ private fun MountRow(
         Icon(
             imageVector = m3Icon(Icons.Outlined.Folder),
             contentDescription = null,
-            tint = Color(0xFF007AFF),
+            tint = monetIconTint(Color(0xFF007AFF)), // [T-android-dynamic-accent-icons]
             modifier = Modifier.size(28.dp),
         )
         Spacer(Modifier.width(12.dp))

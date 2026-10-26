@@ -147,13 +147,24 @@ internal suspend fun ChatViewModel.injectQueuedPromptsAsNewTurn(
         // (c) — append the queued user bubble + the new assistant
         // placeholder. Mirrors sendMessage's user-bubble append shape so
         // attachments / images / file chips render the same.
+        //
+        // [T-android-paste-queued-bubble] The persisted row folds each
+        // `[Pasted#N]` marker into its own `Pasted#N.txt` mediaRef, so the
+        // painted content must not keep the literal marker: the paste
+        // renders as the SAME tappable file chip a fresh send gets, and
+        // tapping it opens FilePreviewScreen (the FILE_PREVIEW route) with
+        // the full text from disk. The pre-fix bubble showed the literal
+        // marker with no chip and no way to view what was pasted.
+        val queuedBubbleText = queuedPaste?.let { p ->
+            stripConsumedPasteMarkers(userText, p.consumedIds)
+        } ?: userText
         val queuedUserMsg = ChatMessage(
             id = userEntity.id,
             role = "user",
-            content = userText,
+            content = queuedBubbleText,
             imageUris = prepared.imageUris,
-            attachmentNames = prepared.attachmentNames,
-            attachmentUris = prepared.nonImageUris,
+            attachmentNames = prepared.attachmentNames + (queuedPaste?.uiNames ?: emptyList()),
+            attachmentUris = prepared.nonImageUris + (queuedPaste?.uiUris ?: emptyList()),
             sourceDbIds = listOf(userEntity.id),
         )
         val nextAssistantMsg = ChatMessage(

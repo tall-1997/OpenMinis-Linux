@@ -13,26 +13,18 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -53,7 +45,6 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.openminis.app.R
@@ -107,8 +98,13 @@ private fun trimZero(scaled: Double): String =
  *   ACTIVE goals into requests, so a completed row never steers turns. The
  *   exited row is pinned by its `id@updatedAt` key and does not come back
  *   on unrelated version bumps; any new or changed goal row shows again.
- * - **Plan board** — the agent_plan todo list, exactly as #134 shipped it:
- *   rows carry status glyph + title only, an emptied board lingers and
+ * - **Plan board** — the agent_plan todo list, restyled in
+ *   [T-android-planboard-restyle] onto the chat family's own language
+ *   (PlanBoardStyle.kt): it boots COLLAPSED to a one-line summary
+ *   ("2/5 · current step") that keeps the progress visible, and the
+ *   expand/collapse affordance sits at the BOTTOM center — the shared sheet
+ *   drag pill + direction chevron, reachable one-handed above the composer.
+ *   Rows carry status glyph + title only; an emptied board lingers and
  *   eases out, a fully-done board holds green then clears the store itself.
  *
  * Both segments share one card shell (Surface + 16dp corner +
@@ -339,126 +335,7 @@ private fun GoalHeaderRow(goal: SessionGoalEntity, onClick: () -> Unit) {
     }
 }
 
-@Composable
-private fun PlanBoardBody(
-    board: List<AgentPlanStore.Plan>,
-    done: Int,
-    total: Int,
-    allDone: Boolean,
-    expanded: Boolean,
-    onToggle: () -> Unit,
-) {
-    val current = board.firstOrNull { it.status == "active" }
-        ?: board.firstOrNull { it.status != "done" }
-    val headerTitle = if (allDone) {
-        stringResource(R.string.plan_board_all_done)
-    } else {
-        current?.title.orEmpty()
-    }
-    Column {
-        Row(
-            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable(
-                role = Role.Button,
-                onClickLabel = stringResource(R.string.cd_plan_board_toggle),
-            ) { onToggle() },
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                imageVector = m3Icon(Icons.Default.CheckCircle),
-                contentDescription = null,
-                tint = if (allDone) ToolCheckColor else MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(18.dp),
-            )
-            Spacer(Modifier.width(10.dp))
-            Text(
-                text = headerTitle,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text = "$done/$total",
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = if (allDone) ToolCheckColor else MaterialTheme.colorScheme.primary,
-            )
-            Spacer(Modifier.width(6.dp))
-            Icon(
-                imageVector = if (expanded) {
-                    m3Icon(Icons.Default.KeyboardArrowUp)
-                } else {
-                    m3Icon(Icons.Default.KeyboardArrowDown)
-                },
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(18.dp),
-            )
-        }
-        Spacer(Modifier.height(8.dp))
-        LinearProgressIndicator(
-            progress = { done.toFloat() / total },
-            modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
-            color = if (allDone) ToolCheckColor else MaterialTheme.colorScheme.primary,
-            trackColor = MaterialTheme.colorScheme.surfaceVariant,
-        )
-        if (expanded) {
-            Spacer(Modifier.height(10.dp))
-            Column(
-                Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()),
-            ) {
-                board.forEach { PlanBoardRow(it) }
-            }
-        }
-    }
-}
-
-/** One board item: status glyph + title (strikethrough when done). */
-@Composable
-private fun PlanBoardRow(plan: AgentPlanStore.Plan) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        when (plan.status) {
-            "done" -> Icon(
-                imageVector = m3Icon(Icons.Default.CheckCircle),
-                contentDescription = null,
-                tint = ToolCheckColor,
-                modifier = Modifier.size(16.dp),
-            )
-            "active" -> CircularProgressIndicator(
-                modifier = Modifier.size(16.dp),
-                strokeWidth = 2.dp,
-            )
-            "failed" -> Icon(
-                imageVector = m3Icon(Icons.Default.Error),
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.error,
-                modifier = Modifier.size(16.dp),
-            )
-            else -> Icon(
-                imageVector = Icons.Default.RadioButtonUnchecked,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(16.dp),
-            )
-        }
-        Spacer(Modifier.width(10.dp))
-        Text(
-            text = plan.title,
-            style = MaterialTheme.typography.bodySmall,
-            fontWeight = if (plan.status == "active") FontWeight.SemiBold else FontWeight.Medium,
-            textDecoration = if (plan.status == "done") TextDecoration.LineThrough else null,
-            color = if (plan.status == "done") {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            } else {
-                MaterialTheme.colorScheme.onSurface
-            },
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
-}
+// [T-android-planboard-restyle] PlanBoardBody / PlanBoardRow and the
+// collapsed-summary + bottom-toggle visuals moved verbatim-plus-restyle to
+// PlanBoardStyle.kt; this file keeps the state, presence and linger drivers
+// (unchanged) and the goal header segment.

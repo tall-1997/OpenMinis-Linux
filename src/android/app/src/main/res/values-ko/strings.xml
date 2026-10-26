@@ -636,6 +636,12 @@
     <string name="appearance_show_chat_title">채팅 제목 표시</string>
     <string name="appearance_show_chat_title_subtitle">스크롤하는 동안 제목 알약을 고정해서 표시합니다</string>
     <string name="appearance_show_chat_title_footer">지난 대화를 스크롤하는 동안 현재 세션의 제목을 채팅 상단에 떠 있는 알약 형태로 표시합니다.</string>
+    <string name="appearance_message_usage_title">답변 아래 토큰 사용량</string>
+    <string name="appearance_message_usage_subtitle">각 답변 아래에 입력/출력 토큰과 캐시 적중률을 표시합니다</string>
+    <string name="appearance_context_glow_title">컨텍스트가 거의 찰 때 발광</string>
+    <string name="appearance_context_glow_subtitle">컨텍스트가 한도에 가까워지면 입력창 가장자리가 회전하며 빛납니다</string>
+    <string name="chat_usage_footer_tokens">↑ %1$s ↓ %2$s</string>
+    <string name="chat_usage_footer_cache">캐시 %1$d%%</string>
     <string name="chat_title_pill_session_default">제목 없음</string>
     <string name="appearance_section_grouping">그룹 분류</string>
     <string name="appearance_auto_grouping">자동 그룹 분류</string>
@@ -1736,6 +1742,14 @@
     <string name="scheduled_task_runs_title">실행 기록</string>
     <string name="scheduled_task_runs_empty">실행 기록이 아직 없습니다. 이 작업은 한 번도 실행되지 않았으며, 실행되면 여기에 표시됩니다.</string>
     <string name="scheduled_task_runs_open_session">세션 열기</string>
+    <!-- [T-scheduled-new-session-permission / T-scheduled-new-session-folder / T-scheduled-card-status-line] -->
+<string name="scheduled_task_runs_count">%1$d회 실행</string>
+<string name="scheduled_task_next_fire">다음 %1$s</string>
+<string name="scheduled_task_state_ended">완료됨</string>
+<string name="scheduled_task_state_paused">일시중지됨</string>
+<string name="scheduled_task_field_permission">새 채팅 권한</string>
+<string name="scheduled_task_field_workspace">작업 공간</string>
+<string name="scheduled_task_no_folders">작업 공간이 아직 없습니다. 세션 목록에서 먼저 만들어 주세요.</string>
     <string name="image_action_copy">복사</string>
     <string name="image_action_share">공유</string>
     <string name="image_action_save">저장</string>
