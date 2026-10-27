@@ -1,5 +1,6 @@
 package com.openminis.app.ui.chat
 
+import com.openminis.app.service.outputTokensPerSecond
 import org.json.JSONObject
 
 /**
@@ -21,15 +22,18 @@ import org.json.JSONObject
  *    hit ratio is read / that total — the same denominator the Usage page's
  *    [T-cache-hit-rate] row uses.
  *
- * Speed (tokens/s) is deliberately NOT modelled: no stream duration is
- * recorded anywhere in the persistence path (blocks carry per-tool
- * durations only), so the ratio cannot be derived from existing fields.
+ * Speed (tokens/s) is derived from `streamDurationMs` — the streamed-text
+ * wall clock persisted alongside the counters since [T-android-usage-tok-s]
+ * (first→last text delta of the persisted window; tool-call gaps inside the
+ * window make the figure conservative). Absent on rows written before the
+ * field existed, or when the window was too short to be meaningful.
  */
 internal data class MessageUsageStats(
     val inputTokens: Int,
     val outputTokens: Int,
     val cacheReadTokens: Int,
     val cacheCreationTokens: Int,
+    val streamDurationMs: Long? = null,
 ) {
     val promptTotalTokens: Int get() = inputTokens + cacheReadTokens + cacheCreationTokens
 
@@ -44,11 +48,20 @@ internal data class MessageUsageStats(
         get() = if (promptTotalTokens <= 0) 0f
         else cacheReadTokens.toFloat() / promptTotalTokens.toFloat()
 
+    /** Output speed for the footer; null when the window is missing/too short. */
+    val outputTokensPerSecond: Int?
+        get() = streamDurationMs?.let { outputTokensPerSecond(outputTokens, it) }
+
     operator fun plus(other: MessageUsageStats): MessageUsageStats = MessageUsageStats(
         inputTokens = inputTokens + other.inputTokens,
         outputTokens = outputTokens + other.outputTokens,
         cacheReadTokens = cacheReadTokens + other.cacheReadTokens,
         cacheCreationTokens = cacheCreationTokens + other.cacheCreationTokens,
+        // Sum only when every merged row carried a window — one missing window
+        // would otherwise divide summed tokens by a partial duration.
+        streamDurationMs = if (streamDurationMs != null && other.streamDurationMs != null) {
+            streamDurationMs + other.streamDurationMs
+        } else null,
     )
 
     companion object {
@@ -67,6 +80,7 @@ internal data class MessageUsageStats(
                     outputTokens = obj.optInt("outputTokens", 0),
                     cacheReadTokens = obj.optInt("cacheReadTokens", 0),
                     cacheCreationTokens = obj.optInt("cacheCreationTokens", 0),
+                    streamDurationMs = obj.optLong("streamDurationMs", 0L).takeIf { it > 0L },
                 )
             } catch (_: Exception) {
                 null
