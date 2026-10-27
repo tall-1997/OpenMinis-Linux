@@ -355,6 +355,12 @@ fun ChatScreen(
         }
     }
     val messages by viewModel.uiMessages.collectAsStateWithLifecycle()
+    // [T-android-entry-pin-before-compose] How many flattened tail rows are
+    // actually composed right now. The flatten runs off the main thread and
+    // publishes into this one place, so the session-entry pin (declared far
+    // above the flatten) can wait for a real tail row instead of scrolling
+    // against a header-only list. 0 = nothing composed yet.
+    var composedTailRows by remember(sessionId) { mutableIntStateOf(0) }
     val hasOlderMessages by viewModel.hasOlderMessages.collectAsStateWithLifecycle()
     val hasNewerMessages by viewModel.hasNewerMessages.collectAsStateWithLifecycle()
     val isLoadingHistory by viewModel.isLoadingHistory.collectAsStateWithLifecycle()
@@ -1170,10 +1176,8 @@ fun ChatScreen(
 
     // A session-scoped ViewModel can keep streaming while its screen is
     // disposed. On re-entry the retained LazyListState may point into history;
-    // opening a session is an explicit request to show its latest output,
-    // whether the previous run is still streaming or already finished. Wait
-    // for the DB tail and flatten publish before pinning, otherwise a long
-    // session can land on a restored middle anchor.
+    // opening a session asks for its latest output, streaming or finished, so
+    // wait for the tail before pinning or a long session lands mid-history.
     LaunchedEffect(sessionId, sessionLoaded) {
         if (!sessionLoaded || entryPinRequested) return@LaunchedEffect
         entryPinRequested = true
@@ -1182,25 +1186,16 @@ fun ChatScreen(
         scrollController.invalidate("session-switch")
         scrollPolicy.pin()
         viewModel.ensureSessionTailLoaded()
-        // The initial tail load and any queued tail attach are asynchronous.
-        // Waiting for the newest-edge flag here is what keeps long sessions
-        // from landing on a mid-history restored viewport before this pin.
-        // [T-android-entry-pin-tail-starve] The wait is now POLICY-BOUND
-        // (SessionEntryScroll): ensureSessionTailLoaded DEFERS while a turn
-        // is streaming — flag stays false with no owner — so the old
-        // unconditional wait parked this pin for the whole generation and a
-        // re-entered session sat on the retained mid-history viewport.
-        withTimeoutOrNull(
-            SessionEntryScroll.entryPinWaitBoundMs(
-                tailReady = viewModel.sessionTailReady.value,
-                isStreaming = viewModel.isStreaming.value,
-                hasNewerMessages = viewModel.hasNewerMessages.value,
-            ),
-        ) { viewModel.sessionTailReady.first { it } }
-        withFrameNanos { }
-        tracedScrollToItem("SESSION-REENTRY/tail", 0, 0)
-        kotlinx.coroutines.delay(100)
-        tracedScrollToItem("SESSION-REENTRY/tail-settle", 0, 0)
+        // [T-android-entry-pin-tail-starve] The wait is policy-bound and lives
+        // in pinSessionEntryToNewest: the tail flag means the data is loaded,
+        // not that the rows are laid out, so it waits for entryPinReady.
+        pinSessionEntryToNewest(
+            viewModel,
+            tailItemCount = { composedTailRows },
+            tailLoading = { isLoadingHistory },
+            listState = listState,
+            scrollToItem = tracedScrollToItem,
+        )
     }
 
     LaunchedEffect(hasNewerMessages, pinRealLatest) {
@@ -2325,6 +2320,11 @@ fun ChatScreen(
                     mutableStateOf<List<FlatChatItem>>(emptyList())
                 }
                 var flatItemsVersion by remember(sessionId) { mutableLongStateOf(0L) }
+                // [T-android-entry-pin-before-compose] Publish the composed
+                // tail size to the entry pin, which waits on it. Same value
+                // the list below actually renders, so the pin and the list
+                // can never disagree about whether a tail row exists.
+                SideEffect { composedTailRows = flatItems.size }
 
                 // [T-android-message-usage-footer] Flat row key → usage for
                 // the LAST row of each non-streaming assistant reply that has

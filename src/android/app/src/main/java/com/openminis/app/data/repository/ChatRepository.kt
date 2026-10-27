@@ -363,6 +363,18 @@ class ChatRepository(
         if (newest) dao.loadMessageHeadsByRoleNewest(sessionId, role, headChars, limit)
         else dao.loadMessageHeadsByRole(sessionId, role, headChars, limit)
 
+    /**
+     * [T-android-rerun-picker-preview] Plain-text previews for the re-run
+     * message picker, newest first. Reads the `preview` column rather than a
+     * bounded head of parts_json — see [com.openminis.app.data.db.ChatSearchDao.loadMessagePreviewsByRoleNewest].
+     */
+    suspend fun loadMessagePreviewsByRoleNewest(
+        sessionId: String,
+        role: String,
+        limit: Int = 500,
+    ): List<com.openminis.app.data.db.MessagePickerRow> =
+        searchDao().loadMessagePreviewsByRoleNewest(sessionId, role, limit)
+
     /** All persisted token_usage JSON strings for a session (one per LLM call). */
     suspend fun sessionTokenUsages(sessionId: String): List<String> = dao.tokenUsages(sessionId)
 
@@ -383,7 +395,7 @@ class ChatRepository(
         val tails = runCatching { dao.lastMessageTailPerSession() }.getOrElse { emptyList() }
         val result = HashSet<String>()
         for (row in tails) {
-            if (isInterruptedTail(row.role, row.partsJson)) result.add(row.sessionId)
+            if (matchesInterruptedTail(row.role, row.partsJson)) result.add(row.sessionId)
         }
         return result
     }
@@ -395,29 +407,11 @@ class ChatRepository(
      *   - role USER + ALL parts are tool_result (tools ran, next model call never
      *     fired), OR the single synthetic "Continue" reminder text part, OR
      *   - role ASSISTANT + any tool_use part (model asked for tools that never ran)
-     * Part type discriminator is the JSON "type" field — the @SerialName values
-     * from [com.openminis.app.data.model.ContentPart]: "toolUse" / "toolResult"
-     * / "text" (camelCase, NOT snake_case); text payload is the "value" field.
+     * The predicate itself lives in [isInterruptedTail] so this file stays
+     * under its line ceiling; the match is unchanged.
      */
-    private fun isInterruptedTail(role: String, partsJson: String): Boolean {
-        val arr = runCatching { org.json.JSONArray(partsJson) }.getOrNull() ?: return false
-        val types = ArrayList<String>(arr.length())
-        for (i in 0 until arr.length()) {
-            arr.optJSONObject(i)?.let { types.add(it.optString("type")) }
-        }
-        return when (role.uppercase()) {
-            "USER" -> {
-                val allToolResults = types.isNotEmpty() && types.all { it == "toolResult" }
-                val isContinueReminder = arr.length() == 1 &&
-                    arr.optJSONObject(0)?.takeIf { it.optString("type") == "text" }
-                        ?.optString("value")
-                        ?.contains("The user stopped the previous response") == true
-                allToolResults || isContinueReminder
-            }
-            "ASSISTANT" -> types.any { it == "toolUse" }
-            else -> false
-        }
-    }
+    private fun matchesInterruptedTail(role: String, partsJson: String): Boolean =
+        isInterruptedTail(role, partsJson)
 
     suspend fun updateSessionTitle(id: String, title: String) {
         dao.updateSessionTitle(id, title, System.currentTimeMillis())
