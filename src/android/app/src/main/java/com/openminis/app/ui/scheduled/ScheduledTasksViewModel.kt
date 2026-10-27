@@ -82,14 +82,15 @@ class ScheduledTasksViewModel(private val appContext: Context) : ViewModel() {
 
     suspend fun listUserMessages(sessionId: String): List<MessageOption> = withContext(Dispatchers.IO) {
         if (!ready()) return@withContext emptyList()
-        app.chatRepository.loadMessageHeadsByRole(
+        // [T-android-rerun-picker-preview] The preview column, not an 800-char
+        // head of parts_json: a long user turn's JSON head is system-reminder
+        // markup that ends mid-token, and the picker showed that raw fragment.
+        app.chatRepository.loadMessagePreviewsByRoleNewest(
             sessionId = sessionId,
             role = "user",
-            headChars = 800,
             limit = 500,
-            newest = true,
         ).asReversed().map {
-            MessageOption(it.id, extractPreview(it.headText.orEmpty()), it.createdAt)
+            MessageOption(it.id, displayPreview(it.preview), it.createdAt)
         }
     }
 
@@ -153,18 +154,15 @@ class ScheduledTasksViewModel(private val appContext: Context) : ViewModel() {
             ?: folders.firstOrNull())?.let { FolderOption(it.id, it.name) }
     }
 
-    private fun extractPreview(partsJson: String): String {
-        val text = runCatching {
-            val arr = org.json.JSONArray(partsJson)
-            val sb = StringBuilder()
-            for (i in 0 until arr.length()) {
-                val o = arr.optJSONObject(i) ?: continue
-                if (o.optString("type") == "text") sb.append(o.optString("value", ""))
-            }
-            sb.toString()
-        }.getOrNull() ?: ""
-        return text.trim().replace('\n', ' ').take(80).ifBlank { "(empty)" }
-    }
+    /**
+     * [T-android-rerun-picker-preview] Turn the stored preview into the one
+     * line the picker shows. The column already holds plain text (written by
+     * [com.openminis.app.data.repository.ChatRepository.extractTextPreview]),
+     * so this only collapses whitespace and caps the length — it never parses
+     * JSON, which is exactly what broke on truncated heads.
+     */
+    internal fun displayPreview(stored: String?): String =
+        stored.orEmpty().trim().replace(Regex("\\s+"), " ").take(80).ifBlank { "(empty)" }
 
     private val _runNowState = MutableStateFlow<RunNowState?>(null)
     val runNowState: StateFlow<RunNowState?> = _runNowState.asStateFlow()

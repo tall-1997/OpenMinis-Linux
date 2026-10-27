@@ -57,7 +57,39 @@ interface ChatSearchDao {
         radius: Int,
         windowChars: Int,
     ): List<MessageSnippetRow>
+
+    /**
+     * [T-android-rerun-picker-preview] The re-run message picker shows a
+     * human-readable snippet of each user turn. It reads the `preview` column
+     * (clean plain text, capped at 8KB at insert time) instead of a
+     * `substr(parts_json, …)` head: a long user message carries a large
+     * system-reminder block before its text part, and an 800-char head of the
+     * raw JSON ends mid-token, so the picker rendered broken JSON rather than
+     * the message. `preview` is already the text the session list shows.
+     *
+     * Lives here rather than on [ChatDao]: same table, same reason this file
+     * exists — the hot CRUD interface is at its architecture-policy ceiling.
+     */
+    @Query("""
+        SELECT id, preview, created_at
+        FROM messages
+        WHERE session_id = :sessionId AND role = :role
+        ORDER BY sort_order DESC, created_at DESC
+        LIMIT :limit
+    """)
+    suspend fun loadMessagePreviewsByRoleNewest(
+        sessionId: String,
+        role: String,
+        limit: Int,
+    ): List<MessagePickerRow>
 }
+
+/** One user turn as the re-run picker shows it. */
+data class MessagePickerRow(
+    val id: String,
+    val preview: String?,
+    @ColumnInfo(name = "created_at") val createdAt: Long,
+)
 
 /** One snippet per session for search results. */
 data class MessageSnippetRow(

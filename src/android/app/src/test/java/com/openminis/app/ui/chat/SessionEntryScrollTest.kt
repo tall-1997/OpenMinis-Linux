@@ -48,6 +48,49 @@ class SessionEntryScrollTest {
         assertEquals(SessionEntryScroll.TAIL_ATTACH_WAIT_BOUND_MS, boundNoGap)
     }
 
+    // [T-android-entry-pin-before-compose] The pin must not run until a tail
+    // row is composed. scrollToItem(0) against a header-only list resolves
+    // there, and the tail rows that join afterwards displace the viewport
+    // into mid-history — the "进入输出中的长会话停在历史中间" report.
+
+    @Test
+    fun `pin waits while no tail row is composed`() {
+        assertEquals(false, SessionEntryScroll.entryPinReady(0, tailLoading = false, listItemCount = 0, firstVisibleIndex = 0))
+    }
+
+    @Test
+    fun `pin waits while the tail attach is still appending`() {
+        // Pinning between chunks lands on whichever row is newest at that
+        // instant; the next chunk then shoves it into history.
+        assertEquals(false, SessionEntryScroll.entryPinReady(40, tailLoading = true, listItemCount = 41, firstVisibleIndex = 0))
+    }
+
+    @Test
+    fun `pin waits while the composed rows are not laid out yet`() {
+        // A row can be counted a frame before the lazy list measures it.
+        // Scrolling in that frame resolves against an empty list and is a
+        // no-op, so the pin has to wait for the layout too.
+        assertEquals(false, SessionEntryScroll.entryPinReady(12, tailLoading = false, listItemCount = 0, firstVisibleIndex = 0))
+    }
+
+    @Test
+    fun `pin waits while the layout still shows the retained head`() {
+        // The tail rows are measured and the item count has flipped, but the
+        // layout pass that placed them is not yet the one a scroll resolves
+        // against: the viewport is still parked on the retained head. Under
+        // reverseLayout the tail rows join at the newest edge (index 0) and
+        // push that parked viewport into mid-history, so the pin must wait
+        // until the completed layout shows the newest row.
+        assertEquals(false, SessionEntryScroll.entryPinReady(40, tailLoading = false, listItemCount = 41, firstVisibleIndex = 40))
+        assertEquals(false, SessionEntryScroll.entryPinReady(40, tailLoading = false, listItemCount = 41, firstVisibleIndex = 1))
+    }
+
+    @Test
+    fun `pin runs once the completed layout shows the newest row`() {
+        assertEquals(true, SessionEntryScroll.entryPinReady(1, tailLoading = false, listItemCount = 2, firstVisibleIndex = 0))
+        assertEquals(true, SessionEntryScroll.entryPinReady(400, tailLoading = false, listItemCount = 401, firstVisibleIndex = 0))
+    }
+
     @Test
     fun `the bound is finite and generous to chunked IO`() {
         // A zero or tiny bound would reintroduce the pre-fix behaviour of
