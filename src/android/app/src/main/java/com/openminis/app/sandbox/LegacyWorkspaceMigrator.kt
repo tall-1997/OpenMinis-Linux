@@ -4,6 +4,8 @@ import android.content.Context
 import com.openminis.app.R
 import com.openminis.app.data.repository.ChatRepository
 import com.openminis.app.data.repository.MemoryDiaryMigrator
+import com.openminis.app.data.repository.ensureDefaultWorkspace
+import com.openminis.app.data.repository.setFolderIfUnfiled
 import com.openminis.app.logging.AppLogger
 import java.io.File
 

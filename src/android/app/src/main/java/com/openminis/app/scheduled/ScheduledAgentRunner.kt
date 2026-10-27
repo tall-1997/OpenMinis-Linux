@@ -9,6 +9,8 @@ import com.openminis.app.MinisApp
 import com.openminis.app.R
 import com.openminis.app.debug.HeadlessChatRunner
 import com.openminis.app.logging.AppLogger
+import com.openminis.app.data.repository.listFolders
+import com.openminis.app.data.repository.setFolderForSessions
 import com.openminis.app.service.AgentForegroundService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
