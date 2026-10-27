@@ -56,13 +56,10 @@ internal suspend fun ChatViewModel.runAgentLoop(
     // epoch, so a tail that outlives its replacement drops the raise instead
     // of re-showing the resume banner over the fresh turn.
     val loopResumeEpoch = snapshotResumeEpoch()
-    // [T-android-model-switch-next-request] Snapshot the model-selection
-    // epoch too: this run's fallback writeback (persisting the fallback
-    // model onto the VM) may only land while this snapshot is still
-    // current. A user switching models mid-run bumps the epoch, so the
-    // writeback drops and the user's choice takes effect on the NEXT
-    // request instead of being clobbered by the loop's tail.
-    val loopModelEpoch = snapshotModelSelectionEpoch()
+    // [T-android-model-switch-midrun-adopt] Epoch this run last acted on.
+    // var: resolveModelSwitch reassigns it when a mid-run pick is adopted,
+    // so the fallback writeback below may still persist the ADOPTED model.
+    var loopModelEpoch = snapshotModelSelectionEpoch()
     AppLogger.info(ChatViewModel.TAG_STREAM, "runAgentLoop ENTER provider=${provider.javaClass.simpleName} historySize=${agentHistory.size}")
     // [T-generation-run] 每轮生成落账：崩溃后可定位半截流归属哪个会话/模型。
     // 成功时 finish(DONE)；失败路径不落 FINISH，留 RUNNING 由
@@ -186,9 +183,13 @@ internal suspend fun ChatViewModel.runAgentLoop(
         len < 128_000 -> 1_500L
         else          -> 2_000L
     }
-    // Fallback state — mirrors iOS streamWithGroupFallback
+    // Fallback state — mirrors iOS streamWithGroupFallback.
+    // [T-android-model-switch-midrun-adopt] Both are reassigned at the top of
+    // every request when the user picked a different model since the previous
+    // one started: the run keeps going, and the next request uses the new
+    // model with the fallback chain rebuilt for it.
     var currentProvider = provider
-    val remainingFallbacks = fallbackProviders.toMutableList()
+    var remainingFallbacks = fallbackProviders.toMutableList()
     val fallbackReasons = mutableListOf<String>()
 
     // Accumulate tool inputs across all turns (so persist includes all, not just current turn)
@@ -581,46 +582,8 @@ internal suspend fun ChatViewModel.runAgentLoop(
         val toolReplayGuard = com.openminis.app.provider.ToolReplayGuard()
         val replayRenamedIds = mutableSetOf<String>()
 
-        // [T-dedupe-toolcallid 03fbcbfd] Per-turn dedupe of tool_call_id.
-        // Some upstream OpenAI-compatible gateways occasionally emit
-        // multiple parallel tool_calls with the SAME id but different
-        // name/args. Sending both back unchanged trips the receiver's
-        // uniqueness check (HTTP 400 "duplicate tool_call_id"). Mirror
-        // the iOS fix: the FIRST occurrence keeps the raw id, second
-        // becomes "<id>-2", third "<id>-3", etc.
-        //
-        // Three pieces of state because Android routes ToolInputDelta
-        // by chunk.id (iOS routes by name) and OpenAI emits ALL completes
-        // together after finish_reason — so we can't drop the
-        // "currently in-flight" map by the time completes arrive.
-        //
-        //   dedupeStartCounts    raw id → # ToolUseStart events seen
-        //   dedupeCompleteCounts raw id → # ToolCallComplete events seen
-        //   inFlightRenamedId    raw id → renamed id of the tool currently
-        //                        streaming deltas (overwritten on each start)
-        //
-        // Start/complete ordering match: OpenAI streams emit tools in
-        // `index` order at finish_reason, mirroring start order.
-        val dedupeStartCounts = mutableMapOf<String, Int>()
-        val dedupeCompleteCounts = mutableMapOf<String, Int>()
-        val inFlightRenamedId = mutableMapOf<String, String>()
-        fun dedupeToolStartId(raw: String): String {
-            val n = (dedupeStartCounts[raw] ?: 0) + 1
-            dedupeStartCounts[raw] = n
-            val renamed = if (n == 1) raw else "$raw-$n"
-            if (n > 1) {
-                AppLogger.warning(ChatViewModel.TAG_STREAM, "[ToolDedupe] duplicate tool_call id on stream start: '$raw' #$n -> renamed '$renamed'")
-            }
-            inFlightRenamedId[raw] = renamed
-            return renamed
-        }
-        fun dedupeToolInputId(raw: String): String =
-            inFlightRenamedId[raw] ?: raw
-        fun dedupeToolCompleteId(raw: String): String {
-            val n = (dedupeCompleteCounts[raw] ?: 0) + 1
-            dedupeCompleteCounts[raw] = n
-            return if (n == 1) raw else "$raw-$n"
-        }
+        // [T-dedupe-toolcallid 03fbcbfd] See ToolCallIdDedupe.
+        val toolCallIdDedupe = ToolCallIdDedupe()
 
         // Stream the response — with auto-retry on transient errors, then fallback.
         // callbackFlow wraps throws into CancellationException(cause=LLMError),
@@ -645,6 +608,13 @@ internal suspend fun ChatViewModel.runAgentLoop(
             throw QueuedPromptInterrupt()
         }
         while (!collectDone) {
+            // [T-android-model-switch-midrun-adopt] See resolveModelSwitch.
+            resolveModelSwitch(loopModelEpoch, currentProvider)?.let { adopted ->
+                currentProvider = adopted.provider
+                remainingFallbacks = adopted.fallbacks.toMutableList()
+                retryAttempt = 0
+                loopModelEpoch = adopted.epoch
+            }
             try {
                 // [T-android-enhanced-cache] Stamp the per-turn Enhanced
                 // Cache flag onto the active provider here — the single
@@ -870,7 +840,7 @@ internal suspend fun ChatViewModel.runAgentLoop(
                     // renamed value drives the AssistantBlock.id used by
                     // ToolCallComplete / ToolInputDelta lookups and ends
                     // up as the persisted tool_call_id on the next request.
-                    val toolUseId = dedupeToolStartId(chunk.id)
+                    val toolUseId = toolCallIdDedupe.startId(chunk.id)
                     android.util.Log.d("ToolChain[VM]", "[turn=$turn] ToolUseStart id=$toolUseId name=${chunk.name}")
                     // Mark thinking block as done when tool use starts
                     val thinkIdx = allToolBlocks.indexOfFirst { it.kind == "thinking" && it.id == "thinking_$turn" }
@@ -938,7 +908,7 @@ internal suspend fun ChatViewModel.runAgentLoop(
                     // [T-dedupe-toolcallid] Translate to the currently-in-flight
                     // renamed id so the per-tool ring + block lookup match
                     // the block that ToolUseStart created.
-                    val toolInputId = dedupeToolInputId(chunk.id)
+                    val toolInputId = toolCallIdDedupe.inputId(chunk.id)
                     val deltaLen = chunk.accumulated.length
                     if (com.openminis.app.text.BoundedText.shouldLogLengthStride(deltaLen)) {
                         android.util.Log.d("ToolChain[VM]", "[turn=$turn] ToolInputDelta id=$toolInputId len=$deltaLen")
@@ -1017,7 +987,7 @@ internal suspend fun ChatViewModel.runAgentLoop(
                     // persisted tool_calls list, the block lookup, and
                     // the downstream tool-result join all key on the
                     // same value (matches the rename applied at start).
-                    val toolCompleteId = dedupeToolCompleteId(chunk.id)
+                    val toolCompleteId = toolCallIdDedupe.completeId(chunk.id)
                     if (isReplayedComplete) {
                         replayRenamedIds += toolCompleteId
                         AppLogger.warning(ChatViewModel.TAG_STREAM, "[ToolReplay] duplicate ToolCallComplete raw=${chunk.id} renamed=$toolCompleteId name=${chunk.name} — will refuse at dispatch, no re-execution")
@@ -1305,8 +1275,11 @@ internal suspend fun ChatViewModel.runAgentLoop(
                     }
                     // Compaction failed — fall through to fallback / throw.
                 }
-                if (abandonIfModelSwitched(loopModelEpoch)) { loopExitedNormally = true; break }
-                val maxRetries = effectiveMaxRetries()                // 429 with another group member: switch endpoints instead of
+                // [T-android-model-switch-midrun-adopt] No abandon here: the
+                // adoption at the top of the loop already moved onto the
+                // user's pick, so this retry goes out on it.
+                val maxRetries = effectiveMaxRetries()
+                // 429 with another group member: switch endpoints instead of
                 // hammering the same key through 1/2/4/8/16s (inside a typical
                 // 60s relay window). Same-provider retries remain for network
                 // / 5xx, and for 429 when this is the last candidate — at most once.
@@ -1451,20 +1424,19 @@ internal suspend fun ChatViewModel.runAgentLoop(
                     Log.i(ChatViewModel.TAG, "🔀 $reason on ${currentProvider.model.displayName}, switching to ${next.model.displayName} (realModelChange=$isRealModelChange)")
                     currentProvider = next
                     retryAttempt = 0
-                    // [T-android-model-switch-next-request] Gate the VM
-                    // writeback on the model-selection epoch: the run itself
-                    // keeps executing on `next` (snapshot semantics — the
-                    // fallback was resolved inside THIS run), but if the user
-                    // picked a different model mid-run, their selection stays
-                    // on the VM and the next request uses it. The old code
-                    // wrote unconditionally, silently clobbering the picker.
+                    // [T-android-model-switch-midrun-adopt] The run stays on
+                    // `next` for the rest of THIS request, but persisting it
+                    // when the user picked another model mid-stream would
+                    // clobber that pick and leave the adoption at the top of
+                    // the loop with nothing to adopt. The old code wrote
+                    // unconditionally.
                     if (ModelSwitchGate.mayWriteBack(loopModelEpoch, snapshotModelSelectionEpoch())) {
                         persistFallbackModelSelection(next, nextCandidate.entryId, isRealModelChange)
                     } else {
                         Log.i(
                             ChatViewModel.TAG,
                             "[ModelSwitch] user changed model mid-run (epoch $loopModelEpoch -> ${snapshotModelSelectionEpoch()}); " +
-                                "skipping fallback writeback, user's selection takes effect next request",
+                                "skipping fallback writeback so the next request adopts the user's selection",
                         )
                     }
                     val infoText = fallbackReasons.joinToString("\n") + "\n🔄 Switched to ${currentProvider.model.displayName}"
