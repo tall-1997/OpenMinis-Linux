@@ -2426,12 +2426,10 @@ class ChatViewModel(
     }
 
     internal fun effectiveAutoCompact(): Boolean =
-        activeOverrides()?.autoCompactEnabled
-            ?: com.openminis.app.data.AutoCompactPrefs.isEnabled()
+        activeOverrides()?.autoCompactEnabled ?: com.openminis.app.data.AutoCompactPrefs.isEnabled()
 
     internal fun effectiveCompactPercent(): Int =
-        (activeOverrides()?.compactThresholdPercent
-            ?: com.openminis.app.data.AutoCompactPrefs.thresholdPercent())
+        (activeOverrides()?.compactThresholdPercent ?: com.openminis.app.data.AutoCompactPrefs.thresholdPercent())
             .coerceIn(50, 95)
 
     internal fun effectiveMaxRetries(): Int =
@@ -3586,16 +3584,14 @@ class ChatViewModel(
     /** Model group ID from long-press FAB, encoded in the draft session ID.
      *  substringBefore strips the folder marker in case both are present. */
     internal val initialGroupId: String? =
-        sessionId.substringAfter("__grp__", "").substringBefore("__fld__")
-            .takeIf { it.isNotEmpty() }
+        sessionId.substringAfter("__grp__", "").substringBefore("__fld__").takeIf { it.isNotEmpty() }
 
     /** Session-group (folder) id from the folder card's "New Chat in Group"
      *  menu item, encoded in the draft id. Filed at draft promotion — the
      *  folder_id row can only exist once the session does (iOS defers the
      *  same way via pendingFolderDraft). */
     internal val initialFolderId: String? =
-        sessionId.substringAfter("__fld__", "").substringBefore("__grp__")
-            .takeIf { it.isNotEmpty() }
+        sessionId.substringAfter("__fld__", "").substringBefore("__grp__").takeIf { it.isNotEmpty() }
 
     private var unsubscribeSafeMode: (() -> Unit)? = null
     private var preserveShellOnClear = false
@@ -5293,7 +5289,7 @@ class ChatViewModel(
         uiMessageId: String? = run.assistantMessageId,
     ): String? = run.withPersistencePermit {
         kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
-            persistAssistantTurn(parts, usage, reasoningContent, toolBlockMeta).also { id ->
+            persistAssistantTurn(parts, usage, reasoningContent, toolBlockMeta, streamDurationMs = run.streamRate.takeDurationMs()).also { id ->
                 if (id != null) {
                     withContext(Dispatchers.Main.immediate) { notePersistedUiRow(uiMessageId, id) }
                     if (assistantText != null) run.markAssistantTurnPersisted(assistantText)
@@ -5325,11 +5321,15 @@ class ChatViewModel(
         usage: LLMUsage?,
         reasoningContent: String? = null,
         toolBlockMeta: Map<String, AssistantBlock> = emptyMap(),
+        // [T-android-usage-tok-s] Streamed-text wall clock (first→last delta of
+        // this persisted window) for the footer's tok/s readout; null = no text.
+        streamDurationMs: Long? = null,
     ): String? {
         if (parts.isEmpty()) return null
         val partsJson = buildAssistantPartsJson(parts, toolBlockMeta)
         val tokenJson = usage?.let {
-            """{"inputTokens":${it.inputTokens},"outputTokens":${it.outputTokens},"cacheCreationTokens":${it.cacheCreationInputTokens ?: 0},"cacheReadTokens":${it.cacheReadInputTokens ?: 0},"latestContextTokens":${it.latestContextTokens}}"""
+            val durSuffix = streamDurationMs?.let { d -> ",\"streamDurationMs\":$d" } ?: ""
+            """{"inputTokens":${it.inputTokens},"outputTokens":${it.outputTokens},"cacheCreationTokens":${it.cacheCreationInputTokens ?: 0},"cacheReadTokens":${it.cacheReadInputTokens ?: 0},"latestContextTokens":${it.latestContextTokens}$durSuffix}"""
         }
         val entity = chatRepository.appendMessage(
             realSessionId.ifEmpty { sessionId }, "assistant", partsJson, tokenJson,

@@ -741,6 +741,7 @@ internal suspend fun ChatViewModel.runAgentLoop(
                     // T307: append-only on the StringBuilder; the snapshot the
                     // overlay reads is taken by `messageTextSnapshot()`.
                     turnTextSb.append(strippedDelta)
+                    activeRun?.streamRate?.onTextDelta() // [T-android-usage-tok-s]
                     activeRun?.updateAssistantText(messageTextSnapshot())
                     // Append to the trailing text block — or open a new one if the last
                     // block isn't a text block (i.e. a tool call or thinking was in between).
@@ -1049,9 +1050,8 @@ internal suspend fun ChatViewModel.runAgentLoop(
                         val inputTotal = chunk.usage.inputTokens + (chunk.usage.cacheReadInputTokens ?: 0) + 
                             (chunk.usage.cacheCreationInputTokens ?: 0)
                         if (inputTotal > 0) {
-                            _lastCacheHitRate.value = 
-                                ((chunk.usage.cacheReadInputTokens ?: 0).toDouble() / inputTotal)
-                                    .coerceIn(0.0, 1.0)
+                            _lastCacheHitRate.value =
+                                ((chunk.usage.cacheReadInputTokens ?: 0).toDouble() / inputTotal).coerceIn(0.0, 1.0)
                         }
                     }
                 }
@@ -1538,7 +1538,7 @@ internal suspend fun ChatViewModel.runAgentLoop(
         // ThinkingDelta concatenation only when no blob arrived; in that case
         // an empty buffer becomes null (no field to round-trip).
         val turnReasoningContent: String? = turnReasoningBlob
-            ?: turnThinking.toString().takeIf { it.isNotEmpty() }
+            ?: turnThinking.toString().takeIf { it.isNotEmpty() } // fallback: no blob arrived
 
         appendBoundedHistory(LLMMessage(
             role = LLMMessage.Role.ASSISTANT,

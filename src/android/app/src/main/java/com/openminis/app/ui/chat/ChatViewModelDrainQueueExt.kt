@@ -108,6 +108,20 @@ internal suspend fun ChatViewModel.drainQueuedPrompts(
         }
         withContext(Dispatchers.Main.immediate) {
             notePersistedUiRow(queuedUiId, persistedUser.id)
+            // [T-android-paste-queued-bubble] The persisted row folds each
+            // [Pasted#N] marker into its own Pasted#N.txt mediaRef, so the
+            // live queued bubble must drop the literal marker and carry the
+            // same tappable file chips a fresh send gets — tapping opens
+            // FilePreviewScreen with the full text from disk, no reload needed.
+            if (drainPaste != null && queuedUiId != null) {
+                _messages.value = _messages.value.map { msg ->
+                    if (msg.id == queuedUiId) msg.copy(
+                        content = stripConsumedPasteMarkers(msg.content, drainPaste.consumedIds),
+                        attachmentNames = msg.attachmentNames + drainPaste.uiNames,
+                        attachmentUris = msg.attachmentUris + drainPaste.uiUris,
+                    ) else msg
+                }
+            }
         }
 
         appendBoundedHistory(LLMMessage(

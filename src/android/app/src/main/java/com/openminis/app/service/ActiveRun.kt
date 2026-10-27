@@ -21,6 +21,9 @@ class ActiveRun internal constructor(
     internal val generation: Long,
     ownerSessionIds: Set<String> = setOf(registrySessionId),
 ) {
+    /** Streamed-text wall-clock window for the per-reply tok/s footer. [T-android-usage-tok-s] */
+    val streamRate = StreamRateTracker()
+
     @Volatile
     var coroutine: Job? = null
         private set

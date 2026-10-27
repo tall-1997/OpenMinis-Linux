@@ -71,6 +71,30 @@ class MessageUsageFooterTest {
     }
 
     @Test
+    fun `parses stream duration and merges only complete windows`() {
+        val parsed = MessageUsageStats.fromJson(
+            """{"inputTokens":100,"outputTokens":90,"cacheCreationTokens":0,"cacheReadTokens":0,"streamDurationMs":2000}""",
+        )!!
+        assertEquals(2000L, parsed.streamDurationMs)
+        assertEquals(45, parsed.outputTokensPerSecond)
+
+        // Old rows have no duration -> no tok/s.
+        assertNull(MessageUsageStats.fromJson("""{"inputTokens":1,"outputTokens":1}""")!!.streamDurationMs)
+        assertNull(MessageUsageStats.fromJson("""{"inputTokens":1,"outputTokens":1,"streamDurationMs":0}""")!!.streamDurationMs)
+
+        // One merged row without a window suppresses the merged speed.
+        val merged = parsed.plus(MessageUsageStats(10, 5, 0, 0))
+        assertEquals(95, merged.outputTokens)
+        assertNull(merged.streamDurationMs)
+        assertNull(merged.outputTokensPerSecond)
+
+        // Both rows carrying windows sum them (tok/s recomputes at render).
+        val both = parsed.plus(MessageUsageStats(10, 50, 0, 0, streamDurationMs = 500L))
+        assertEquals(2500L, both.streamDurationMs)
+        assertEquals(56, both.outputTokensPerSecond)
+    }
+
+    @Test
     fun `merging nothing yields null`() {
         assertNull(mergeMessageUsageStats(emptyList()))
         assertNull(mergeMessageUsageRows(listOf<String?>(null, "garbage")))

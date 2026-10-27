@@ -445,9 +445,9 @@ internal fun ChatFlatItemRow(
 
 /**
  * [T-android-message-usage-footer] The small secondary line under an
- * assistant reply: `↑ 1.2k ↓ 340 · cache 87%`. The cache segment is omitted
- * when the provider reported no cache counters, and tokens/s is never shown
- * — no stream duration is persisted, so the ratio cannot be derived.
+ * assistant reply: `↑ 1.2k ↓ 340 · cache 87% · 45 tok/s`. The cache segment
+ * is omitted when the provider reported no cache counters; tok/s is omitted
+ * when the turn's streamed-text window was too short to be meaningful.
  */
 @Composable
 private fun MessageUsageFooterLine(stats: MessageUsageStats) {
@@ -459,8 +459,10 @@ private fun MessageUsageFooterLine(stats: MessageUsageStats) {
     val cachePart = if (stats.hasCacheData) {
         stringResource(R.string.chat_usage_footer_cache, (stats.cacheHitRatio * 100).toInt())
     } else null
+    val speedPart = stats.outputTokensPerSecond?.let { "$it tok/s" }
+    val parts = listOfNotNull(tokensPart, cachePart, speedPart)
     Text(
-        text = if (cachePart != null) "$tokensPart · $cachePart" else tokensPart,
+        text = parts.joinToString(" · "),
         fontSize = 11.sp,
         lineHeight = 14.sp,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
