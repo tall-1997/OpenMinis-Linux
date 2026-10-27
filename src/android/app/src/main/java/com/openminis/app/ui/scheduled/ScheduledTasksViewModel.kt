@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.openminis.app.data.repository.displayMessagePreview
 import com.openminis.app.data.repository.listFolders
 
 /**
@@ -91,7 +92,7 @@ class ScheduledTasksViewModel(private val appContext: Context) : ViewModel() {
             role = "user",
             limit = 500,
         ).asReversed().map {
-            MessageOption(it.id, displayPreview(it.preview), it.createdAt)
+            MessageOption(it.id, displayMessagePreview(it.preview), it.createdAt)
         }
     }
 
@@ -154,16 +155,6 @@ class ScheduledTasksViewModel(private val appContext: Context) : ViewModel() {
         (folders.firstOrNull { it.id == com.openminis.app.data.db.FolderEntity.DEFAULT_ID }
             ?: folders.firstOrNull())?.let { FolderOption(it.id, it.name) }
     }
-
-    /**
-     * [T-android-rerun-picker-preview] Turn the stored preview into the one
-     * line the picker shows. The column already holds plain text (written by
-     * [com.openminis.app.data.repository.ChatRepository.extractTextPreview]),
-     * so this only collapses whitespace and caps the length — it never parses
-     * JSON, which is exactly what broke on truncated heads.
-     */
-    internal fun displayPreview(stored: String?): String =
-        stored.orEmpty().trim().replace(Regex("\\s+"), " ").take(80).ifBlank { "(empty)" }
 
     private val _runNowState = MutableStateFlow<RunNowState?>(null)
     val runNowState: StateFlow<RunNowState?> = _runNowState.asStateFlow()

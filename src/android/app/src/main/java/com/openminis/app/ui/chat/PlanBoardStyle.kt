@@ -10,11 +10,13 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -245,6 +247,15 @@ internal fun PlanBoardBody(
                     .graphicsLayer { rotationZ = chevronRotation },
             )
         }
+        // [T-plan-board-progress] The fraction, drawn rather than only counted.
+        // The earlier restyle dropped the bar because the "3/5" already states
+        // the number; in use the count alone does not read as progress. It
+        // takes no row of its own — it rides under the summary, inset to the
+        // text origin so it reads as part of that line.
+        PlanBoardProgress(
+            fraction = if (total == 0) 0f else done.toFloat() / total,
+            color = accent,
+        )
     }
 }
 
@@ -256,6 +267,26 @@ internal fun PlanBoardBody(
  */
 internal val planCardHairline: Color
     @Composable get() = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+
+/** 2dp track under the summary row. Empty until the first step lands. */
+@Composable
+private fun PlanBoardProgress(fraction: Float, color: Color) {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .padding(start = 26.dp, end = 26.dp, bottom = 6.dp)
+            .height(2.dp)
+            .clip(RoundedCornerShape(1.dp))
+            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)),
+    ) {
+        Box(
+            Modifier
+                .fillMaxWidth(fraction.coerceIn(0f, 1f))
+                .height(2.dp)
+                .background(color),
+        )
+    }
+}
 
 /** One board item: status glyph + title (strikethrough when done). */
 @Composable

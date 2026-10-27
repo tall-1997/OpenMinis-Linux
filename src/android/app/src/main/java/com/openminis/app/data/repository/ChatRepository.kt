@@ -725,7 +725,7 @@ class ChatRepository(
                         modelDisplayName = v.modelDisplayName,
                         bodyRef = v.bodyRef,
                         bodySha = v.bodySha,
-                        preview = storedParts.take(ResourceLimits.PREVIEW_BYTES),
+                        preview = messagePreviewCell(storedParts),
                         // UTF-8 size of the stored cell, same definition as
                         // storeBody. Offloaded rows report 0 rather than the
                         // stub's size: message_versions snapshots the row's
@@ -1257,7 +1257,7 @@ class ChatRepository(
 
     private fun storeBody(partsJson: String, requireOffload: Boolean = false): StoredBody {
         val bytes = partsJson.toByteArray(Charsets.UTF_8)
-        val preview = partsJson.take(ResourceLimits.PREVIEW_BYTES)
+        val preview = messagePreviewCell(partsJson)
         if (bytes.size <= ResourceLimits.INLINE_BODY_BYTES) {
             return StoredBody(partsJson, bytes.size.toLong(), null, null, preview)
         }
