@@ -6,10 +6,10 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
- * [T-android-planboard-restyle] Pure logic behind the plan board's collapsed
- * summary bar: which step the summary names, and the "2/5 · title" text the
- * bar renders (PlanBoardStyle.kt). Presentation is Compose; these two are the
- * testable seams.
+ * [T-android-planboard-restyle] [T-plan-card-visual-redesign] Pure logic behind
+ * the plan board's collapsed summary row: which step the summary names, and
+ * the "2/5 · title" text the row renders (PlanBoardStyle.kt). Presentation is
+ * Compose; these two are the testable seams.
  */
 class PlanBoardStyleTest {
 

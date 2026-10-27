@@ -13,15 +13,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -53,7 +49,6 @@ import com.openminis.app.data.db.SessionGoalEntity
 import com.openminis.app.goal.GoalManager
 import com.openminis.app.goal.GoalSheetSignal
 import com.openminis.app.tools.AgentPlanStore
-import com.openminis.app.ui.theme.m3Icon
 import kotlinx.coroutines.delay
 
 /**
@@ -99,19 +94,21 @@ private fun trimZero(scaled: Double): String =
  *   exited row is pinned by its `id@updatedAt` key and does not come back
  *   on unrelated version bumps; any new or changed goal row shows again.
  * - **Plan board** — the agent_plan todo list, restyled in
- *   [T-android-planboard-restyle] onto the chat family's own language
- *   (PlanBoardStyle.kt): it boots COLLAPSED to a one-line summary
- *   ("2/5 · current step") that keeps the progress visible, and the
- *   expand/collapse affordance sits at the BOTTOM center — the shared sheet
- *   drag pill + direction chevron, reachable one-handed above the composer.
- *   Rows carry status glyph + title only; an emptied board lingers and
- *   eases out, a fully-done board holds green then clears the store itself.
+ *   [T-plan-card-visual-redesign] onto the app's own language
+ *   (PlanBoardStyle.kt, PlanBoardIcons.kt): it boots COLLAPSED to a one-line
+ *   summary ("2/5 · current step") whose trailing chevron — and the whole
+ *   >=44dp row — toggles the list (swipe up/down still works), so the board
+ *   costs one text line when idle instead of a summary line plus a progress
+ *   bar plus a full-width toggle strip. Rows carry status glyph + title only;
+ *   an emptied board lingers and eases out, a fully-done board holds green
+ *   then clears the store itself.
  *
  * Both segments share one card shell (Surface + 16dp corner +
  * surfaceContainer fill + outlineVariant hairline — the app's card
- * language) separated by a hairline when both are present. Renders NOTHING
- * when idle; a corrupt board file or a failed goal read degrade to a
- * hidden segment, not a crashed composer. Reloads are driven by
+ * language) separated by a thinned hairline ([planCardHairline]) when both
+ * are present, so the outer border stays the strongest line on the surface.
+ * Renders NOTHING when idle; a corrupt board file or a failed goal read
+ * degrade to a hidden segment, not a crashed composer. Reloads are driven by
  * [AgentPlanStore.version] and [GoalManager.version] — the same signals the
  * writers bump — so status flips appear on the very next frame.
  */
@@ -235,7 +232,7 @@ internal fun PlanGoalCard(viewModel: ChatViewModel, modifier: Modifier = Modifie
                 if (headerVisible && boardVisible) {
                     HorizontalDivider(
                         modifier = Modifier.padding(vertical = 4.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant,
+                        color = planCardHairline,
                     )
                 }
                 AnimatedVisibility(
@@ -266,10 +263,14 @@ internal fun PlanGoalCard(viewModel: ChatViewModel, modifier: Modifier = Modifie
 @Composable
 private fun GoalHeaderRow(goal: SessionGoalEntity, onClick: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable(
-            role = Role.Button,
-            onClickLabel = stringResource(R.string.cd_goal_header),
-        ) { onClick() },
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 44.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(
+                role = Role.Button,
+                onClickLabel = stringResource(R.string.cd_goal_header),
+            ) { onClick() },
         verticalAlignment = Alignment.CenterVertically,
     ) {
         val statusDescription = when (goal.status) {
@@ -282,35 +283,35 @@ private fun GoalHeaderRow(goal: SessionGoalEntity, onClick: () -> Unit) {
         }
         when (goal.status) {
             GoalStatus.ACTIVE -> CircularProgressIndicator(
-                modifier = Modifier.size(18.dp),
-                strokeWidth = 2.dp,
+                modifier = Modifier.size(17.dp),
+                strokeWidth = 1.8.dp,
             )
             GoalStatus.COMPLETE -> Icon(
-                imageVector = m3Icon(Icons.Default.CheckCircle),
+                imageVector = PlanBoardGlyphs.CheckCircle,
                 contentDescription = statusDescription,
                 tint = ToolCheckColor,
-                modifier = Modifier.size(18.dp),
+                modifier = Modifier.size(17.dp),
             )
             GoalStatus.PAUSED -> Icon(
-                imageVector = m3Icon(Icons.Default.Pause),
+                imageVector = PlanBoardGlyphs.Pause,
                 contentDescription = statusDescription,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(18.dp),
+                modifier = Modifier.size(17.dp),
             )
             GoalStatus.BLOCKED -> Icon(
-                imageVector = m3Icon(Icons.Default.Error),
+                imageVector = PlanBoardGlyphs.XCircle,
                 contentDescription = statusDescription,
                 tint = MaterialTheme.colorScheme.error,
-                modifier = Modifier.size(18.dp),
+                modifier = Modifier.size(17.dp),
             )
             GoalStatus.BUDGET_LIMITED -> Icon(
-                imageVector = m3Icon(Icons.Default.Warning),
+                imageVector = PlanBoardGlyphs.AlertCircle,
                 contentDescription = statusDescription,
                 tint = MaterialTheme.colorScheme.error,
-                modifier = Modifier.size(18.dp),
+                modifier = Modifier.size(17.dp),
             )
         }
-        Spacer(Modifier.width(10.dp))
+        Spacer(Modifier.width(9.dp))
         Text(
             text = goal.objective,
             style = MaterialTheme.typography.bodyMedium,
@@ -335,7 +336,7 @@ private fun GoalHeaderRow(goal: SessionGoalEntity, onClick: () -> Unit) {
     }
 }
 
-// [T-android-planboard-restyle] PlanBoardBody / PlanBoardRow and the
-// collapsed-summary + bottom-toggle visuals moved verbatim-plus-restyle to
-// PlanBoardStyle.kt; this file keeps the state, presence and linger drivers
-// (unchanged) and the goal header segment.
+// [T-plan-card-visual-redesign] PlanBoardBody / PlanBoardRow and the
+// collapsed-summary visuals moved verbatim-plus-restyle to PlanBoardStyle.kt
+// and PlanBoardIcons.kt; this file keeps the state, presence and linger
+// drivers (unchanged) and the goal header segment.
