@@ -15,20 +15,27 @@ import java.util.UUID
  * under its line ceiling. Code says Folder, UI says Group — see FolderEntity
  * for why. [T-android-session-grouping] Ported from iOS ChatStore's Folders
  * section.
+ *
+ * These stay MEMBER functions of [ChatRepository] (a Kotlin class may span
+ * several files) rather than extension functions: every caller invokes them
+ * as `repo.listFolders()` and an extension would be invisible without an
+ * import at each call site. The split exists only to keep the line count
+ * down, so it must not change how the functions are reached.
  */
+class ChatRepository {
 
-fun ChatRepository.observeFolders(): Flow<List<FolderEntity>> = dao.observeFolders()
+fun observeFolders(): Flow<List<FolderEntity>> = dao.observeFolders()
 
-suspend fun ChatRepository.listFolders(): List<FolderEntity> = dao.listFolders()
+suspend fun listFolders(): List<FolderEntity> = dao.listFolders()
 
-suspend fun ChatRepository.getFolder(id: String): FolderEntity? = dao.getFolder(id)
+suspend fun getFolder(id: String): FolderEntity? = dao.getFolder(id)
 
 /**
  * Create a group. The description is trimmed and capped at
  * [FolderEntity.DESC_MAX_CHARS]; blank collapses to null so "no
  * description" is one value rather than two.
  */
-suspend fun ChatRepository.createFolder(
+suspend fun createFolder(
     name: String,
     description: String? = null,
     origin: String = FolderEntity.ORIGIN_MANUAL,
@@ -47,7 +54,7 @@ suspend fun ChatRepository.createFolder(
     return folder
 }
 
-suspend fun ChatRepository.ensureDefaultWorkspace(name: String): FolderEntity {
+suspend fun ensureDefaultWorkspace(name: String): FolderEntity {
     dao.getFolder(FolderEntity.DEFAULT_ID)?.let { return it }
     val now = System.currentTimeMillis()
     val folder = FolderEntity(
@@ -62,7 +69,7 @@ suspend fun ChatRepository.ensureDefaultWorkspace(name: String): FolderEntity {
     return folder
 }
 
-suspend fun ChatRepository.warmupWorkspaceOwners() {
+suspend fun warmupWorkspaceOwners() {
     // [T-android-startup-splash-hang] Two-column projection over FILED
     // sessions only, replacing `SELECT * FROM sessions ORDER BY updated_at
     // DESC` + full entity hydration. See SessionFolderId for why unfiled
@@ -84,7 +91,7 @@ suspend fun ChatRepository.warmupWorkspaceOwners() {
  * copies of the shared subdirs (the 1.36.14 partial-filing leftover), move
  * those copies into the project. Idempotent; unfiled sessions are skipped.
  */
-suspend fun ChatRepository.reconcileWorkspaceFiles() {
+suspend fun reconcileWorkspaceFiles() {
     val dir = filesDir ?: return
     val sessions = dao.listSessions()
     withContext(Dispatchers.IO) {
@@ -108,7 +115,7 @@ suspend fun ChatRepository.reconcileWorkspaceFiles() {
  *   dialog) must therefore seed the field from the current value, or they
  *   will wipe descriptions they never meant to touch.
  */
-suspend fun ChatRepository.renameFolder(id: String, name: String, description: String? = null) {
+suspend fun renameFolder(id: String, name: String, description: String? = null) {
     val trimmed = name.trim()
     if (trimmed.isEmpty()) return
     dao.renameFolder(
@@ -120,7 +127,7 @@ suspend fun ChatRepository.renameFolder(id: String, name: String, description: S
 }
 
 /** @return the new pinned state. Bumps `updated_at` so the edit is stamped. */
-suspend fun ChatRepository.toggleFolderPin(id: String): Boolean {
+suspend fun toggleFolderPin(id: String): Boolean {
     val current = dao.getFolder(id) ?: return false
     val nowPinned = current.pinnedAt == null
     val now = System.currentTimeMillis()
@@ -139,7 +146,7 @@ suspend fun ChatRepository.toggleFolderPin(id: String): Boolean {
  *
  * @return ids of the sessions that became ungrouped.
  */
-suspend fun ChatRepository.dissolveFolder(id: String): List<String> {
+suspend fun dissolveFolder(id: String): List<String> {
     val memberIds = dao.sessionIdsInFolder(id)
     dao.clearFolderForSessions(id)
     dao.deleteFolder(id)
@@ -151,7 +158,7 @@ suspend fun ChatRepository.dissolveFolder(id: String): List<String> {
     return memberIds
 }
 
-suspend fun ChatRepository.sessionIdsInFolder(folderId: String): List<String> =
+suspend fun sessionIdsInFolder(folderId: String): List<String> =
     dao.sessionIdsInFolder(folderId)
 
 /**
@@ -160,7 +167,7 @@ suspend fun ChatRepository.sessionIdsInFolder(folderId: String): List<String> =
  * Writes only `folder_id`, never `updated_at` — filing is organizational
  * and must not re-sort the session list.
  */
-suspend fun ChatRepository.setFolderForSessions(folderId: String?, sessionIds: List<String>) {
+suspend fun setFolderForSessions(folderId: String?, sessionIds: List<String>) {
     if (sessionIds.isEmpty()) return
     val leavingProject = if (folderId == null) {
         sessionIds.associateWith { SessionWorkspace.folderIdFor(it) }
@@ -197,7 +204,7 @@ suspend fun ChatRepository.setFolderForSessions(folderId: String?, sessionIds: L
  *
  * @return true if this call actually filed the session.
  */
-suspend fun ChatRepository.setFolderIfUnfiled(folderId: String, sessionId: String): Boolean {
+suspend fun setFolderIfUnfiled(folderId: String, sessionId: String): Boolean {
     val n = dao.setSessionFolderIfUnfiled(sessionId, folderId)
     if (n > 0) {
         SessionWorkspace.rememberFolder(sessionId, folderId)
@@ -262,10 +269,12 @@ private suspend fun copyBackAndMaybeDropProjects(
  * construction (names are not unique); returns the most recently updated
  * match, which is what [listFolders]' ordering already puts first.
  */
-suspend fun ChatRepository.findFolderByName(name: String): FolderEntity? {
+suspend fun findFolderByName(name: String): FolderEntity? {
     val needle = name.trim().lowercase()
     if (needle.isEmpty()) return null
     return dao.listFolders().firstOrNull { it.name.trim().lowercase() == needle }
 }
 
-private const val FOLDER_TAG = "ChatRepository"
+private val FOLDER_TAG = "ChatRepository"
+
+}
