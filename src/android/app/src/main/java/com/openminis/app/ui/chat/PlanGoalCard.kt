@@ -206,13 +206,16 @@ internal fun PlanGoalCard(viewModel: ChatViewModel, modifier: Modifier = Modifie
         exit = fadeOut(tween(EXIT_ANIM_MS)) + shrinkVertically(tween(EXIT_ANIM_MS)),
     ) {
         Surface(
-            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+            modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
             shape = RoundedCornerShape(16.dp),
             color = MaterialTheme.colorScheme.surfaceContainer,
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         ) {
+            // 2dp vertical: the rows already carry the iOS 44dp touch height,
+            // so card padding on top of it was pure height. The card now reads
+            // as an inset-grouped table — rows run to the card's inner edge.
             Column(
-                Modifier.padding(horizontal = 14.dp, vertical = 12.dp).animateContentSize(),
+                Modifier.padding(horizontal = 14.dp, vertical = 2.dp).animateContentSize(),
             ) {
                 AnimatedVisibility(
                     visible = headerVisible,
@@ -231,7 +234,7 @@ internal fun PlanGoalCard(viewModel: ChatViewModel, modifier: Modifier = Modifie
                 }
                 if (headerVisible && boardVisible) {
                     HorizontalDivider(
-                        modifier = Modifier.padding(vertical = 4.dp),
+                        modifier = Modifier.padding(vertical = 2.dp),
                         color = planCardHairline,
                     )
                 }

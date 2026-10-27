@@ -1,8 +1,13 @@
 package com.openminis.app.ui.chat
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Box
@@ -57,6 +62,11 @@ import com.openminis.app.tools.AgentPlanStore
  *   the target: a >=44dp iOS-sized hit area that expands and collapses from
  *   the same place. Swipe still works: up expands, down collapses. Nothing is
  *   lost but ~30dp of dead chrome.
+ * - **The list opens upward.** The card is anchored to the composer, so the
+ *   rows render ABOVE the summary row: expanding grows the card into the
+ *   transcript while the toggle stays under the thumb that pressed it, which
+ *   is what one-handed use needs. The old order (rows below the summary)
+ *   slid the toggle up out of reach on every expand.
  * - **No progress bar.** "3/5" already states progress exactly; a 4dp M3
  *   LinearProgressIndicator under it repeated the number in a heavier visual
  *   weight than the row it described, and read as an underline on the title.
@@ -71,12 +81,14 @@ import com.openminis.app.tools.AgentPlanStore
  *   outlines instead of Material filled discs, drawn at a weight that reads
  *   like a line of UI text. The old CheckCircle/Error/RadioButtonUnchecked
  *   trio mixed a solid disc, a heavy circle and a thin ring in one column.
- * - **Row rhythm.** Rows are 30dp with a hairline rule between the summary and
+ * - **Row rhythm.** Rows are 28dp with a hairline rule between the summary and
  *   the list, so the expanded card reads as one grouped list instead of text
  *   stacked under a bar.
  */
 
 /** The step the summary names: the active one, else the first unfinished. */
+private const val BOARD_CONTENT_ANIM_MS = 180
+
 internal fun planBoardCurrentStep(board: List<AgentPlanStore.Plan>): AgentPlanStore.Plan? =
     board.firstOrNull { it.status == "active" }
         ?: board.firstOrNull { it.status != "done" }
@@ -119,6 +131,42 @@ internal fun PlanBoardBody(
         label = "planChevronRotation",
     )
     Column {
+        // The list sits ABOVE the summary row, not below it: the card is
+        // anchored to the composer, so growing upward keeps the toggle the
+        // thumb just pressed exactly where it was and never buries the rows
+        // under the home gesture. Rows slide out from behind the summary
+        // (expandFrom = Bottom) so the direction is legible.
+        AnimatedVisibility(
+            visible = expanded,
+            enter = fadeIn(tween(BOARD_CONTENT_ANIM_MS)) +
+                expandVertically(
+                    animationSpec = tween(BOARD_CONTENT_ANIM_MS),
+                    expandFrom = Alignment.Bottom,
+                ),
+            exit = fadeOut(tween(BOARD_CONTENT_ANIM_MS)) +
+                shrinkVertically(
+                    animationSpec = tween(BOARD_CONTENT_ANIM_MS),
+                    shrinkTowards = Alignment.Bottom,
+                ),
+        ) {
+            Column {
+                Column(
+                    Modifier
+                        // Shorter than the old 360dp: the list now pushes the
+                        // card up into the transcript, so it is capped lower to
+                        // keep the last messages in view.
+                        .heightIn(max = 300.dp)
+                        .verticalScroll(rememberScrollState()),
+                ) {
+                    board.forEach { PlanBoardRow(it) }
+                }
+                HorizontalDivider(
+                    modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
+                    thickness = 1.dp,
+                    color = planCardHairline,
+                )
+            }
+        }
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -197,18 +245,6 @@ internal fun PlanBoardBody(
                     .graphicsLayer { rotationZ = chevronRotation },
             )
         }
-        if (expanded) {
-            HorizontalDivider(
-                modifier = Modifier.padding(top = 2.dp, bottom = 6.dp),
-                thickness = 1.dp,
-                color = planCardHairline,
-            )
-            Column(
-                Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()),
-            ) {
-                board.forEach { PlanBoardRow(it) }
-            }
-        }
     }
 }
 
@@ -229,8 +265,7 @@ private fun PlanBoardRow(plan: AgentPlanStore.Plan) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 30.dp)
-            .padding(vertical = 1.dp),
+            .heightIn(min = 28.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // Fixed 14dp slot so every title starts on the same x no matter which
