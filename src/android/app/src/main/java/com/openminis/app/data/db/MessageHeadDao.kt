@@ -72,25 +72,4 @@ interface MessageHeadDao {
         headChars: Int,
         limit: Int,
     ): List<MessageHeadRow>
-
-    /**
-     * [T-android-rerun-picker-raw-json] The re-run picker labels every user
-     * message, and a `substr(parts_json, …)` head of a large row is a
-     * truncated JSON document that no longer parses — the picker then shows
-     * the raw fragment. `preview` is the bounded plain-text projection kept
-     * for exactly this (≤ 8 KB, see ChatRepository.previewFor), read in FULL:
-     * truncating it recreates the fragment whenever the text part is not first.
-     */
-    @Query("""
-        SELECT id, role, created_at, preview AS head_text
-        FROM messages
-        WHERE session_id = :sessionId AND role = :role
-        ORDER BY sort_order DESC, created_at DESC
-        LIMIT :limit
-    """)
-    suspend fun loadMessagePreviewsByRoleNewest(
-        sessionId: String,
-        role: String,
-        limit: Int,
-    ): List<MessageHeadRow>
 }

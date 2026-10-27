@@ -50,6 +50,13 @@ import kotlinx.coroutines.withContext
  *    bound is safe: rows join at the newest end (index 0 under
  *    reverseLayout), and the same bounded-pinned behaviour a live send gets
  *    applies afterwards.
+ *
+ * [T-android-entry-pin-before-compose] The bound above only decides when the
+ * DATA is ready. The pin itself still has to wait for the tail ROW to be
+ * composed: `scrollToItem(0)` issued while the flattened list holds only the
+ * header (or a stale retained layout) resolves against that short list, and
+ * the tail rows that join afterwards shift the viewport onto mid-history —
+ * the reported "进入输出中的长会话停在历史中间". [entryPinReady] is that gate.
  */
 internal object SessionEntryScroll {
     /** Upper bound on the entry pin's wait for a converging tail attach. */
@@ -68,6 +75,39 @@ internal object SessionEntryScroll {
         isStreaming && !hasNewerMessages -> 0L
         else -> TAIL_ATTACH_WAIT_BOUND_MS
     }
+
+    /**
+     * Whether the newest-edge pin may run now.
+     *
+     * `tailItemCount` is the number of flattened rows that belong to the
+     * session tail (everything except the synthetic header). Zero means the
+     * tail has not been composed yet, so a `scrollToItem(0)` would land on
+     * the header and be displaced the moment the real rows arrive.
+     * `tailLoading` means a tail-attach is still appending rows; pinning in
+     * the middle of that append is the same displacement one chunk later.
+     * `listItemCount` is what the lazy list has actually laid out. A row can
+     * be composed and counted a frame before the list measures it, and
+     * scrolling in that frame resolves against an empty list and is a no-op.
+     * `firstVisibleIndex` is the index the last COMPLETED layout pass parked
+     * the viewport on (LazyListLayoutInfo, read through the list state). It
+     * is the piece the item count cannot express: the count flips the moment
+     * the tail rows are measured, but a scroll issued in that same snapshot
+     * is requested against the layout that just finished — the one that still
+     * had only the retained head rows. Under reverseLayout the tail rows then
+     * join at the newest edge (index 0) and push that parked viewport
+     * `tailItemCount` rows into the history, which is the "进入输出中的长会话
+     * 停在历史中间" report. The pin may run only once the newest row is the
+     * one the completed layout is showing.
+     *
+     * All four must be clear. The caller bounds the wait, so a tail that
+     * never arrives still pins rather than parking the entry forever.
+     */
+    fun entryPinReady(
+        tailItemCount: Int,
+        tailLoading: Boolean,
+        listItemCount: Int,
+        firstVisibleIndex: Int,
+    ): Boolean = tailItemCount > 0 && !tailLoading && listItemCount > 0 && firstVisibleIndex == 0
 }
 
 internal fun ChatViewModel.loadSession() {
