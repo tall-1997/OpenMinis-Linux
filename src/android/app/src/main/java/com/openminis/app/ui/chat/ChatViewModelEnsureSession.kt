@@ -1,5 +1,7 @@
 package com.openminis.app.ui.chat
 
+import com.openminis.app.data.repository.setFolderForSessions
+
 /** Ensure the session exists in the database. Called before first message. */
 internal suspend fun ChatViewModel.ensureSession(): String {
     if (realSessionId.isNotEmpty()) return realSessionId

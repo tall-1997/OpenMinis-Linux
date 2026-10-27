@@ -21,8 +21,7 @@ import com.openminis.app.data.db.AppDatabase
 import com.openminis.app.data.db.DatabaseVersionGuard
 import com.openminis.app.data.repository.BackgroundSettingsRepository
 import com.openminis.app.data.repository.MultiAgentSettingsRepository
-import com.openminis.app.data.repository.ChatRepository
-import com.openminis.app.data.repository.EnvVarRepository
+import com.openminis.app.data.repository.*
 import com.openminis.app.data.MountedFoldersStore
 import com.openminis.app.data.repository.MemoryRepository
 import com.openminis.app.data.repository.ProviderRepository

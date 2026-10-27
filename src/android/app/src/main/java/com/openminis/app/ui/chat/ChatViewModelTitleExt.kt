@@ -3,6 +3,9 @@ package com.openminis.app.ui.chat
 import android.util.Log
 import androidx.lifecycle.viewModelScope
 import com.openminis.app.data.model.LLMMessage
+import com.openminis.app.data.repository.findFolderByName
+import com.openminis.app.data.repository.listFolders
+import com.openminis.app.data.repository.setFolderIfUnfiled
 import com.openminis.app.data.model.ModelEntry
 import com.openminis.app.data.model.ThinkingLevel
 import com.openminis.app.logging.AppLogger
