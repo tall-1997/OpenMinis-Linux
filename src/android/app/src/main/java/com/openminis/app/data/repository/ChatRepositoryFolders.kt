@@ -223,7 +223,7 @@ suspend fun ChatRepository.setFolderIfUnfiled(folderId: String, sessionId: Strin
  * means the private subdir already had files, so deleting the project
  * would throw away the shared copy.
  */
-private suspend fun copyBackAndMaybeDropProjects(
+private suspend fun ChatRepository.copyBackAndMaybeDropProjects(
     filesDir: File,
     leavingProject: Map<String, String>,
 ) {
