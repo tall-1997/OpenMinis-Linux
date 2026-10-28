@@ -28,6 +28,8 @@ import com.openminis.app.plugins.builtin.BuiltinPluginCatalog
 import com.openminis.app.plugins.builtin.BuiltinPluginInstaller
 import com.openminis.app.plugins.builtin.BuiltinPluginStore
 import com.openminis.app.plugins.builtin.GatewayServiceManager
+import com.openminis.app.plugins.builtin.NativeGatewayInstaller
+import com.openminis.app.plugins.builtin.NativeGatewayService
 import com.openminis.app.provider.BuiltinFreeLanes
 
 /**
@@ -36,17 +38,20 @@ import com.openminis.app.provider.BuiltinFreeLanes
  * assets), live install progress, and once installed a service switch plus,
  * for gateways with a web panel, a panel button.
  *
- * The install runs in the installer's own scope ([BuiltinPluginInstaller.installAsync])
- * so leaving the screen does not cancel it; the card re-reads the store on
- * return. On success the section seeds the provider row right away
- * ([ProviderRepository.restoreBuiltInFreeLaneAndRefresh]) — the user should
- * not have to hunt for the add-provider screen after an install the app just
- * finished.
+ * The install runs in the installer's own scope
+ * ([BuiltinPluginInstaller.installAsync], or [NativeGatewayInstaller] for
+ * native plugins) so leaving the screen does not cancel it; the card
+ * re-reads the store on return. On success the section seeds the provider
+ * row right away ([ProviderRepository.restoreBuiltInFreeLaneAndRefresh]) —
+ * the user should not have to hunt for the add-provider screen after an
+ * install the app just finished.
  *
- * The service switch is driven by [GatewayServiceManager.statuses] only —
- * no optimistic toggling: STARTING/STOPPING render as a disabled switch
- * with a small spinner, and the flip happens when the health probe (or the
- * pidfile kill) actually confirms it.
+ * The service switch is driven by the service statuses only — no
+ * optimistic toggling: STARTING/STOPPING render as a disabled switch with
+ * a small spinner, and the flip happens when the health probe (or the
+ * pidfile kill / TERM) actually confirms it. Guest plugins report through
+ * [GatewayServiceManager], native ones through [NativeGatewayService] —
+ * both expose the same status shape, so the card code is identical.
  */
 @Composable
 fun BuiltinPluginsSection(
@@ -54,7 +59,8 @@ fun BuiltinPluginsSection(
 ) {
     val context = LocalContext.current
     val states by BuiltinPluginStore.states.collectAsStateWithLifecycle()
-    val services by GatewayServiceManager.statuses.collectAsStateWithLifecycle()
+    val guestServices by GatewayServiceManager.statuses.collectAsStateWithLifecycle()
+    val nativeServices by NativeGatewayService.statuses.collectAsStateWithLifecycle()
     val busy by BuiltinPluginInstaller.busy.collectAsStateWithLifecycle()
 
     // Crash recovery, same discipline as the dev-suite section: a row stuck
@@ -70,7 +76,11 @@ fun BuiltinPluginsSection(
     ) {
         BuiltinPluginCatalog.ALL.forEachIndexed { index, d ->
             val state = states[d.id] ?: BuiltinPluginStore.PluginState(d.id)
-            val service = services[d.id] ?: GatewayServiceManager.ServiceStatus(d.id)
+            val service = if (d.isNative) {
+                nativeServices[d.id] ?: GatewayServiceManager.ServiceStatus(d.id)
+            } else {
+                guestServices[d.id] ?: GatewayServiceManager.ServiceStatus(d.id)
+            }
             val running = service.state == GatewayServiceManager.ServiceState.RUNNING
             val transitioning = service.state == GatewayServiceManager.ServiceState.STARTING ||
                 service.state == GatewayServiceManager.ServiceState.STOPPING
@@ -124,7 +134,11 @@ fun BuiltinPluginsSection(
                                 Switch(
                                     checked = running,
                                     onCheckedChange = { target ->
-                                        GatewayServiceManager.toggle(d, target)
+                                        if (d.isNative) {
+                                            NativeGatewayService.toggle(context, d, target)
+                                        } else {
+                                            GatewayServiceManager.toggle(d, target)
+                                        }
                                     },
                                     enabled = !transitioning,
                                 )
@@ -142,14 +156,24 @@ private fun install(
     d: BuiltinPluginCatalog.Descriptor,
     providerRepository: ProviderRepository?,
 ) {
-    BuiltinPluginInstaller.installAsync(context, d) { ok ->
-        if (ok) {
-            // Seed the provider row the moment the install lands — the lane
-            // entry is ALL-generic, so this works for every builtin plugin.
-            val lane = BuiltinFreeLanes.ALL.firstOrNull { it.lane.id == d.laneId }
-            if (lane != null) providerRepository?.restoreBuiltInFreeLaneAndRefresh(lane)
-        }
+    val onResult: (Boolean) -> Unit = { ok ->
+        if (ok) seedLane(d, providerRepository)
     }
+    if (d.isNative) {
+        NativeGatewayInstaller.installAsync(context, d, onResult)
+    } else {
+        BuiltinPluginInstaller.installAsync(context, d, onResult)
+    }
+}
+
+private fun seedLane(
+    d: BuiltinPluginCatalog.Descriptor,
+    providerRepository: ProviderRepository?,
+) {
+    // Seed the provider row the moment the install lands — the lane
+    // entry is ALL-generic, so this works for every builtin plugin.
+    val lane = BuiltinFreeLanes.ALL.firstOrNull { it.lane.id == d.laneId }
+    if (lane != null) providerRepository?.restoreBuiltInFreeLaneAndRefresh(lane)
 }
 
 private fun openPanel(context: android.content.Context, d: BuiltinPluginCatalog.Descriptor) {

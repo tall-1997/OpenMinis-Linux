@@ -6,14 +6,17 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * [T-builtin-plugins] Pure-command contract tests for the gateway service
- * manager. The python mirror (sim_gateway_service.py) runs the same
- * commands for real in the guest against an installed payload; these pin
- * the shapes the guest service depends on:
+ * [T-builtin-plugins] Pure-command contract tests for the guest gateway
+ * service manager. The python mirror (sim_gateway_service.py) runs the
+ * same commands for real in the guest against an installed payload; these
+ * pin the shapes the guest service depends on:
  *  - startCommand mkdir-guards the log/pid redirect, nohup-detaches the
  *    launcher, and writes the pid the stop command reads back
  *  - stopCommand is pidfile-kill + install-root-scoped pkill sweep, and
  *    idempotent (`true` tail) — a dead gateway is a success
+ *
+ * Native plugins never reach this manager — NativeGatewayServiceTest pins
+ * their host-process contract instead.
  *
  * The sweep pattern uses the bracket trick (`[t]ool/bin` for
  * `tool/bin`): the command string itself rides in the wrapper shell's
@@ -25,7 +28,6 @@ import org.junit.Test
 class GatewayServiceManagerTest {
 
     private val ofm = BuiltinPluginCatalog.ALL.first()
-    private val a2a = BuiltinPluginCatalog.ALL.first { it.id == "a2a" }
 
     // --- startCommand ------------------------------------------------------
 
@@ -44,12 +46,6 @@ class GatewayServiceManagerTest {
         assertTrue(cmd.contains("echo $! > /var/minis/shared/builtin-plugins/ofm/data/gateway.pid"))
     }
 
-    @Test fun `startCommand targets the a2a launcher and port-scoped data dir`() {
-        val cmd = GatewayServiceManager.startCommand(a2a)
-        assertTrue(cmd.contains("nohup /var/minis/shared/builtin-plugins/a2a/tool/bin/a2a-gateway"))
-        assertTrue(cmd.contains("/var/minis/shared/builtin-plugins/a2a/data/gateway.pid"))
-    }
-
     // --- stopCommand -------------------------------------------------------
 
     @Test fun `stopCommand kills the pidfile pid then sweeps the install root`() {
@@ -63,15 +59,16 @@ class GatewayServiceManagerTest {
 
     @Test fun `stopCommand is idempotent`() {
         // A dead gateway must be a success, not an error the card surfaces.
-        assertTrue(GatewayServiceManager.stopCommand(a2a).endsWith("true"))
+        assertTrue(GatewayServiceManager.stopCommand(ofm).endsWith("true"))
     }
 
     @Test fun `stopCommand sweep is scoped to the plugin root`() {
         // The pkill pattern is the bracketed launcher dir under the plugin
         // root — never a bare id that could match unrelated processes,
         // never a literal path that matches the stop command's own wrapper.
-        val cmd = GatewayServiceManager.stopCommand(a2a)
-        assertTrue(cmd.contains("pkill -f \"/var/minis/shared/builtin-plugins/a2a/[t]ool/bin/\""))
+        // ofm is the only guest gateway; a2a went native.
+        val cmd = GatewayServiceManager.stopCommand(ofm)
+        assertTrue(cmd.contains("pkill -f \"/var/minis/shared/builtin-plugins/ofm/[t]ool/bin/\""))
         assertEquals(1, Regex("pkill -f").findAll(cmd).count())
     }
 

@@ -102,8 +102,8 @@ internal object BuiltinFreeLanes {
         label = Agent2ApiFreeLane.DISPLAY_NAME,
         // Same loopback, same no-auth shape as the OFM lane.
         apiKey = "",
-        // Same rule as the OFM lane: the row is dead weight until the a2a
-        // payload is installed and the gateway started from the market card.
+        // Same rule as the OFM lane: the row is dead weight until the native
+        // binary is deployed and the gateway started from the market card.
         seedOnBootstrap = false,
     )
 

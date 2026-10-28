@@ -24,6 +24,19 @@ class BuiltinPluginInstallerTest {
     private val ofm = BuiltinPluginCatalog.ALL.first()
     private val a2a = BuiltinPluginCatalog.ALL.first { it.id == "a2a" }
 
+    // --- native routing ---------------------------------------------------
+
+    @Test fun `native plugins never enter the guest pipeline`() {
+        assertTrue(a2a.isNative)
+        // The guest entry point refuses a native descriptor before any
+        // guest work starts. The gate is pure — no Context needed, so the
+        // JVM test pins the contract without Robolectric.
+        val thrown = runCatching {
+            BuiltinPluginInstaller.requireGuestPlugin(a2a)
+        }
+        assertTrue(thrown.exceptionOrNull() is IllegalArgumentException)
+    }
+
     // --- nodeMajorOf -----------------------------------------------------
 
     @Test fun `nodeMajorOf parses v22 style`() {
@@ -79,21 +92,11 @@ class BuiltinPluginInstallerTest {
         }
     }
 
-    @Test fun `installCommand applies the a2a env contract`() {
-        val cmd = BuiltinPluginInstaller.installCommand(a2a, "payload-3.0.8.zip")
-        assertTrue(cmd.contains("unzip -o -q /var/minis/shared/builtin-plugins/a2a/payload-3.0.8.zip"))
-        assertTrue(cmd.contains("A2A_TOOL_DIR='/var/minis/shared/builtin-plugins/a2a/tool'"))
-    }
-
     // --- verifyCommand -----------------------------------------------------
 
     @Test fun `verifyCommand runs upstream verify under the payload's env`() {
         val cmd = BuiltinPluginInstaller.verifyCommand(ofm)
         assertTrue(cmd.contains("sh /var/minis/shared/builtin-plugins/ofm/payload/scripts/verify.sh"))
         assertTrue(cmd.contains("OFM_TOOL_DIR='/var/minis/shared/builtin-plugins/ofm/tool'"))
-
-        val a2aCmd = BuiltinPluginInstaller.verifyCommand(a2a)
-        assertTrue(a2aCmd.contains("sh /var/minis/shared/builtin-plugins/a2a/payload/scripts/verify.sh"))
-        assertTrue(a2aCmd.contains("A2A_TOOL_DIR='/var/minis/shared/builtin-plugins/a2a/tool'"))
     }
 }
