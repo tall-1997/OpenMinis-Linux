@@ -215,8 +215,18 @@ jobs:
           export CC_aarch64_linux_android="${TOOLCHAIN}/aarch64-linux-android26-clang"
           export AR_aarch64_linux_android="${TOOLCHAIN}/llvm-ar"
           cargo build --release --locked -p agent2api-server --target aarch64-linux-android
+          # Upstream .cargo/config.toml redirects the build dir to the repo
+          # root target/ (target-dir = "../../target" from src-tauri/), so
+          # the artifact lives at Agent2API/target/… — not src-tauri/target/….
+          # Resolve it via cargo metadata instead of hardcoding either path.
+          A2A_BIN="$(dirname "$(cargo locate-project --workspace --message-format plain)")"
+          A2A_BIN="$(cd "${A2A_BIN}" && cargo metadata --format-version 1 --no-deps \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["target_directory"])')"
+          A2A_BIN="${A2A_BIN}/aarch64-linux-android/release/agent2api-server"
+          echo "a2a binary at: ${A2A_BIN}"
+          test -s "${A2A_BIN}"
           mkdir -p "${GITHUB_WORKSPACE}/native-artifacts/jniLibs/arm64-v8a"
-          cp target/aarch64-linux-android/release/agent2api-server \
+          cp "${A2A_BIN}" \
              "${GITHUB_WORKSPACE}/native-artifacts/jniLibs/arm64-v8a/liba2a.so"
 
       - name: Restore LLVM libunwind sources
