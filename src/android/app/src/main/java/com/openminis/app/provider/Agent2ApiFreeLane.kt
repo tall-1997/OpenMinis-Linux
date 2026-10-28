@@ -2,9 +2,9 @@ package com.openminis.app.provider
 
 /**
  * The Agent2API local gateway lane: a multi-provider OpenAI-compatible proxy
- * running inside the PRoot sandbox (`http://127.0.0.1:18901/v1`), installed
- * from the APK's a2a builtin-plugin payload (a self-contained Rust binary
- * that also serves the account-management web panel on the same port).
+ * running as a host app process (`http://127.0.0.1:18901/v1`), shipped as
+ * the APK's own native `liba2a.so` (see `plugins/builtin/`) and serving the
+ * account-management web panel on the same port.
  *
  * All lane semantics are shared with every other loopback gateway — see
  * [LoopbackGatewayLane]; this object is the identity (lane id, port 18901,

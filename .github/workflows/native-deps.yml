@@ -18,6 +18,15 @@ env:
   GO_VERSION: "1.26.8"
   GO_SHA256: "d0f743b33e8d8945e6b1f432edd15785c70507121d6e2a723b21285eddf8b57b"
   GOMOBILE_VERSION: "v0.0.0-20260908204917-8b95e45f8d3e"
+  # agent2api-server (the a2a native gateway) is cross-compiled from the
+  # upstream tag, not vendored into this repo. A2A_SHA pins the exact commit
+  # the tag pointed at when this was written; a moved tag fails the build
+  # loudly instead of silently shipping a different binary.
+  A2A_TAG: "v3.0.8"
+  A2A_SHA: "68d0a4e4bfd8dc5a1daa296c61e0cc0b10a871da"  # Upstream's declared MSRV (rust-version in Cargo.toml) — the oldest
+  # toolchain the workspace is guaranteed to build on, and therefore the
+  # most reproducible pin. Bump deliberately, never by accident.
+  RUST_VERSION: "1.88.0"
 
 jobs:
   build-native-deps:
@@ -158,6 +167,55 @@ jobs:
           retry gomobile init
           retry bash deps/build_rclone_android.sh
 
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          # Sources only. The target dir is deliberately NOT cached — it is
+          # multi-GB for this dependency tree and the artifact quota is
+          # already under pressure (SDK + Gradle + Go caches ≈ 9.3 GB). A
+          # cold link of ~400 crates is minutes; re-downloading them from
+          # crates.io on flaky network is the actual pain point.
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-registry-${{ runner.os }}-${{ env.A2A_TAG }}-${{ env.A2A_SHA }}
+          restore-keys: |
+            cargo-registry-${{ runner.os }}-${{ env.A2A_TAG }}-
+
+      - name: Build agent2api-server for Android (liba2a.so)
+        env:
+          ANDROID_NDK_HOME: /usr/local/lib/android/sdk/ndk/${{ env.ANDROID_NDK }}
+        run: |
+          set -euo pipefail
+          # Pin the toolchain: the runner image's rustc floats, and the
+          # binary must be byte-stable per tag. CARGO_HOME is forced so the
+          # registry cache path is deterministic no matter where the image
+          # keeps its own cargo.
+          export CARGO_HOME="${HOME}/.cargo"
+          export PATH="${CARGO_HOME}/bin:${PATH}"
+          if [ ! -x "${CARGO_HOME}/bin/rustup" ]; then
+            curl -fsSL --retry 5 --retry-delay 2 --retry-all-errors \
+              https://sh.rustup.rs | sh -s -- -y --no-modify-path --profile minimal
+          fi
+          rustup toolchain install "${RUST_VERSION}" --profile minimal
+          rustup default "${RUST_VERSION}"
+          rustup target add aarch64-linux-android
+          git clone --depth 1 --branch "${A2A_TAG}" https://github.com/aimod-cc/Agent2API "${RUNNER_TEMP}/Agent2API"
+          test "$(git -C "${RUNNER_TEMP}/Agent2API" rev-parse HEAD)" = "${A2A_SHA}" \
+            || { echo "tag ${A2A_TAG} moved: expected ${A2A_SHA}, got $(git -C ${RUNNER_TEMP}/Agent2API rev-parse HEAD)"; exit 1; }
+          cd "${RUNNER_TEMP}/Agent2API/desktop-tauri/src-tauri"
+          # NDK r29 per-API clang wrappers: minSdk 26 → android26 flavor.
+          # The wrapper embeds the sysroot and the -l flags, so no
+          # standalone-sysroot plumbing is needed.
+          TOOLCHAIN="${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="${TOOLCHAIN}/aarch64-linux-android26-clang"
+          export CC_aarch64_linux_android="${TOOLCHAIN}/aarch64-linux-android26-clang"
+          export AR_aarch64_linux_android="${TOOLCHAIN}/llvm-ar"
+          cargo build --release --locked -p agent2api-server --target aarch64-linux-android
+          mkdir -p "${GITHUB_WORKSPACE}/native-artifacts/jniLibs/arm64-v8a"
+          cp target/aarch64-linux-android/release/agent2api-server \
+             "${GITHUB_WORKSPACE}/native-artifacts/jniLibs/arm64-v8a/liba2a.so"
+
       - name: Restore LLVM libunwind sources
         uses: actions/cache@v4
         with:
@@ -181,6 +239,13 @@ jobs:
           cp deps/build/rclone/rclone.aar native-artifacts/libs/
           find /usr/local/lib/android/sdk/ndk/${ANDROID_NDK}/toolchains/llvm/prebuilt -path '*sysroot/usr/lib/aarch64-linux-android/libunwind.a' -print -quit | xargs -I{} cp {} native-artifacts/libunwind.a
           test -s native-artifacts/libunwind.a
+          # The a2a gateway binary was staged by the build step above. The
+          # arch check is not decoration: upstream's own Dockerfile documents
+          # a build recipe that once silently produced an x86_64 binary, and
+          # a wrong-arch .so only explodes on device at first launch.
+          test -s native-artifacts/jniLibs/arm64-v8a/liba2a.so
+          file native-artifacts/jniLibs/arm64-v8a/liba2a.so
+          file native-artifacts/jniLibs/arm64-v8a/liba2a.so | grep -F "ARM aarch64" >/dev/null
       - uses: actions/upload-artifact@v4
         with:
           name: native-deps-${{ github.sha }}

@@ -23,15 +23,27 @@ class BuiltinPluginCatalogTest {
             assertTrue("version", d.version.isNotBlank())
             assertTrue("payloadAsset", d.payloadAsset.startsWith("builtin_plugins/"))
             assertTrue("payloadAsset is a zip", d.payloadAsset.endsWith(".zip"))
-            assertTrue("installScript is relative", !d.installScript.startsWith("/"))
-            // 0 is legal and means "self-contained runtime, skip the node
-            // gate" (the a2a Rust binary); Node runtimes pin their real floor.
-            assertTrue("nodeMinMajor", d.nodeMinMajor >= 0)
             assertTrue("servicePort", d.servicePort in 1..65535)
             assertTrue("serviceHealthPath starts with /", d.serviceHealthPath.startsWith("/"))
             assertTrue("laneId", d.laneId.isNotBlank())
-            assertTrue("envPrefix is shell-safe", d.envPrefix.matches(Regex("[A-Z0-9_]+")))
-            assertTrue("launcher is a bare name", d.launcher.matches(Regex("[a-z0-9-]+")))
+            if (d.isNative) {
+                // Native contract: APK binary + upstream env prefix; the
+                // guest fields stay null and are never consumed.
+                assertTrue("nativeBinary is a lib name", d.nativeBinary!!.matches(Regex("lib[a-z0-9-]+\\.so")))
+                assertTrue("nativeEnvPrefix is shell-safe", d.nativeEnvPrefix!!.matches(Regex("[A-Z0-9_]+")))
+                assertEquals(null, d.installScript)
+                assertEquals(null, d.envPrefix)
+                assertEquals(null, d.launcher)
+            } else {
+                assertTrue("installScript is relative", !d.installScript!!.startsWith("/"))
+                // 0 is legal and means "self-contained runtime, skip the node
+                // gate"; Node runtimes pin their real floor.
+                assertTrue("nodeMinMajor", d.nodeMinMajor >= 0)
+                assertTrue("envPrefix is shell-safe", d.envPrefix!!.matches(Regex("[A-Z0-9_]+")))
+                assertTrue("launcher is a bare name", d.launcher!!.matches(Regex("[a-z0-9-]+")))
+                assertEquals(null, d.nativeBinary)
+                assertEquals(null, d.nativeEnvPrefix)
+            }
         }
     }
 
@@ -51,14 +63,16 @@ class BuiltinPluginCatalogTest {
     }
 
     @Test
-    fun `a2a descriptor matches the lane contract`() {
+    fun `a2a descriptor matches the native lane contract`() {
         val a2a = BuiltinPluginCatalog.byId("a2a")!!
         assertEquals("a2a lane id", "a2a", a2a.laneId)
         assertEquals(18901, a2a.servicePort)
         assertEquals("/health", a2a.serviceHealthPath)
-        // Self-contained Rust binary — no Node anywhere.
+        // Native: the APK's own bionic binary, no guest, no Node, no launcher.
+        assertTrue(a2a.isNative)
+        assertEquals("liba2a.so", a2a.nativeBinary)
+        assertEquals("AGENT2API", a2a.nativeEnvPrefix)
         assertEquals(0, a2a.nodeMinMajor)
-        assertEquals("a2a-gateway", a2a.launcher)
         assertEquals("/", a2a.panelPath)
     }
 
@@ -97,18 +111,17 @@ class BuiltinPluginCatalogTest {
     }
 
     @Test
-    fun `install env carries each payload's own prefix contract`() {
+    fun `install env carries each guest payload's own prefix contract`() {
         val ofm = BuiltinPluginCatalog.byId("ofm")!!
         val env = BuiltinPluginCatalog.installEnv(ofm)
         assertEquals(BuiltinPluginCatalog.payloadDir("ofm"), env["OFM_PLUGIN_PAYLOAD"])
         assertEquals(BuiltinPluginCatalog.toolDir("ofm"), env["OFM_TOOL_DIR"])
         assertEquals(BuiltinPluginCatalog.dataDir("ofm"), env["OFM_TOOL_DATA"])
 
+        // Native plugins run no guest install script — empty env, not a
+        // crash, so the guest pipeline can never be entered by accident.
         val a2a = BuiltinPluginCatalog.byId("a2a")!!
-        val a2aEnv = BuiltinPluginCatalog.installEnv(a2a)
-        assertEquals(BuiltinPluginCatalog.payloadDir("a2a"), a2aEnv["A2A_PLUGIN_PAYLOAD"])
-        assertEquals(BuiltinPluginCatalog.toolDir("a2a"), a2aEnv["A2A_TOOL_DIR"])
-        assertEquals(BuiltinPluginCatalog.dataDir("a2a"), a2aEnv["A2A_TOOL_DATA"])
+        assertEquals(emptyMap<String, String>(), BuiltinPluginCatalog.installEnv(a2a))
     }
 
     @Test

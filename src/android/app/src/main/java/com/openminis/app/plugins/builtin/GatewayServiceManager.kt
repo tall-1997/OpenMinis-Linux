@@ -51,6 +51,13 @@ object GatewayServiceManager {
 
     /** Fire-and-forget toggle the UI calls; survives leaving the screen. */
     fun toggle(d: BuiltinPluginCatalog.Descriptor, target: Boolean) {
+        if (d.isNative) {
+            // Native plugins are host processes — the guest manager must
+            // never be handed one (its commands dereference the guest-only
+            // launcher field, which is null for natives).
+            AppLogger.warning(TAG, "toggle: ${d.id} is native — not a guest service")
+            return
+        }
         scope.launch {
             if (target) start(d) else stop(d)
         }
@@ -84,6 +91,7 @@ object GatewayServiceManager {
      * even runs. Pure — the test pins the exact string.
      */
     internal fun startCommand(d: BuiltinPluginCatalog.Descriptor): String {
+        require(!d.isNative) { "${d.id} is native — NativeGatewayService owns it" }
         val root = BuiltinPluginCatalog.installRoot(d.id)
         val launcher = "${BuiltinPluginCatalog.toolDir(d.id)}/bin/${d.launcher}"
         return "mkdir -p $root/data; " +
@@ -105,6 +113,7 @@ object GatewayServiceManager {
      * to surface. Pure.
      */
     internal fun stopCommand(d: BuiltinPluginCatalog.Descriptor): String {
+        require(!d.isNative) { "${d.id} is native — NativeGatewayService owns it" }
         val root = BuiltinPluginCatalog.installRoot(d.id)
         return "kill \"$(cat $root/data/gateway.pid 2>/dev/null)\" 2>/dev/null; " +
             "pkill -f \"$root/[t]ool/bin/\" 2>/dev/null; true"

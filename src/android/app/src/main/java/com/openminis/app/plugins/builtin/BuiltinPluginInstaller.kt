@@ -15,7 +15,10 @@ import java.io.File
 import java.io.IOException
 
 /**
- * [T-builtin-plugins] Installs a builtin plugin's payload into the guest.
+ * [T-builtin-plugins] Installs a **guest** builtin plugin's payload into
+ * the sandbox. Native plugins ([BuiltinPluginCatalog.Descriptor.isNative])
+ * never reach this file — [NativeGatewayInstaller] deploys their panel
+ * bundle on the host and [NativeGatewayService] runs the APK's own binary.
  *
  * The flow is four guest-visible stages, each a pure command-builder plus
  * a thin executor:
@@ -30,8 +33,8 @@ import java.io.IOException
  *     binaries into /usr/local/bin — the first path the upstream launcher's
  *     own pick_node() checks, so every later start finds it without PATH
  *     games. No apt, no lock contention with dev-suite installs.
- *     Self-contained runtimes (`nodeMinMajor == 0`, e.g. the a2a Rust
- *     binary) skip the gate entirely.
+ *     Self-contained guest runtimes (`nodeMinMajor == 0`) skip the gate
+ *     entirely.
  *  3. **run upstream install.sh** — verbatim, with the payload's own
  *     `<PREFIX>_*` env contract from [BuiltinPluginCatalog.installEnv].
  *     It lays the runtime down in tool/ and writes the launcher.
@@ -140,6 +143,7 @@ object BuiltinPluginInstaller {
         d: BuiltinPluginCatalog.Descriptor,
         stagedZipName: String,
     ): String {
+        require(!d.isNative) { "${d.id} is native — NativeGatewayInstaller owns it" }
         val env = BuiltinPluginCatalog.installEnv(d)
         val envPrefix = env.entries.joinToString(" ") { (k, v) -> "$k='$v'" }
         val root = BuiltinPluginCatalog.installRoot(d.id)
@@ -159,6 +163,7 @@ object BuiltinPluginInstaller {
 
     /** Guest command running the upstream verify script. Pure. */
     internal fun verifyCommand(d: BuiltinPluginCatalog.Descriptor): String {
+        require(!d.isNative) { "${d.id} is native — NativeGatewayInstaller owns it" }
         val env = BuiltinPluginCatalog.installEnv(d)
         val envPrefix = env.entries.joinToString(" ") { (k, v) -> "$k='$v'" }
         val root = BuiltinPluginCatalog.installRoot(d.id)
@@ -166,17 +171,30 @@ object BuiltinPluginInstaller {
     }
 
     /**
+     * Guest-pipeline gate, called first by both entry points: a native
+     * descriptor never enters the guest install — the UI routes those to
+     * [NativeGatewayInstaller] instead. Pure, so the contract test pins
+     * it without a Context.
+     */
+    fun requireGuestPlugin(d: BuiltinPluginCatalog.Descriptor) {
+        require(!d.isNative) { "${d.id} is native — NativeGatewayInstaller owns it" }
+    }
+
+    /**
      * Fire-and-forget install the market card calls: runs in the object's
      * own scope so leaving the screen does not cancel a multi-minute
      * install (same discipline as the dev-suite assembler). The callback
      * (invoked on the scope's dispatcher) lets the card seed the provider
-     * row the moment the install lands.
+     * row the moment the install lands. Native plugins are refused here —
+     * they never touch the guest; the UI routes them to
+     * [NativeGatewayInstaller] instead.
      */
     fun installAsync(
         context: Context,
         d: BuiltinPluginCatalog.Descriptor,
         onResult: (Boolean) -> Unit = {},
     ) {
+        requireGuestPlugin(d)
         scope.launch { onResult(install(context, d)) }
     }
 
@@ -188,6 +206,7 @@ object BuiltinPluginInstaller {
      */
     suspend fun install(context: Context, d: BuiltinPluginCatalog.Descriptor): Boolean =
         installMutex.withLock {
+            requireGuestPlugin(d)
             _busy.value = true
             try {
                 BuiltinPluginStore.update(
