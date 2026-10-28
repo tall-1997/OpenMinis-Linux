@@ -2702,9 +2702,8 @@ private fun SessionRow(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            // During an active search, prefer the matched message snippet
-            // (content hit) over the generic lastMessage preview. Falls back
-            // to lastMessage when match was title-only (snippet is null).
+            // Active search: prefer the matched snippet (content hit) over
+            // the generic lastMessage; title-only matches fall back (null).
             if (searchQuery.isNotBlank() && searchSnippet != null) {
                 Text(
                     text = highlightedAnnotatedString(searchSnippet, searchQuery),
@@ -2715,7 +2714,8 @@ private fun SessionRow(
                 )
             } else {
                 Text(
-                    text = session.lastMessage ?: stringResource(R.string.sessionlist_no_messages),
+                    text = lastMessageForDisplay(session.lastMessage)
+                        ?: stringResource(R.string.sessionlist_no_messages),
                     fontSize = 14.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,

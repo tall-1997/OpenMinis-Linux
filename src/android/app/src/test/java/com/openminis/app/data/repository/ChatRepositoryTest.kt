@@ -70,4 +70,29 @@ class ChatRepositoryTest {
         org.junit.Assert.assertTrue(preview!!.length <= 100)
         org.junit.Assert.assertTrue(preview.startsWith("Hello world"))
     }
+
+    // [T-android-preview-reminder-leak] The first text part of a user turn is
+    // often a system-reminder; cleaned to blank it must not hide the real
+    // text part behind it.
+    @Test
+    fun `extractTextPreview skips a text part that cleans to blank`() {
+        val json = """[{"type":"text","value":"<system-reminder>task tracker: step 1 done</system-reminder>"},{"type":"text","value":"修复登录页崩溃"}]"""
+        assertEquals("修复登录页崩溃", ChatRepository.extractTextPreview(json))
+    }
+
+    @Test
+    fun `extractTextPreview returns null for a reminder-only turn`() {
+        val json = """[{"type":"text","value":"<system-reminder>task tracker: step 1 done</system-reminder>"}]"""
+        org.junit.Assert.assertNull(ChatRepository.extractTextPreview(json))
+    }
+
+    @Test
+    fun `extractTextPreview strips a reminder longer than the clean cap`() {
+        val longReminder = "<system-reminder>" + "y".repeat(600) + "</system-reminder>"
+        val json = """[{"type":"text","value":"$longReminder"},{"type":"text","value":"真实消息"}]"""
+        val preview = ChatRepository.extractTextPreview(json)
+        org.junit.Assert.assertNotNull(preview)
+        org.junit.Assert.assertFalse(preview!!.contains("y"))
+        assertEquals("真实消息", preview)
+    }
 }

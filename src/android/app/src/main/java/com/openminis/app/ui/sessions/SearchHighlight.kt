@@ -8,6 +8,18 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 
 /**
+ * [T-android-preview-reminder-leak] Legacy rows written by the old preview
+ * pipeline can hold a *blank* `last_message` (a reminder-only first text
+ * part that cleaned to ""). `?:` only catches null, so a blank cell rendered
+ * as an empty summary line on the session list. Normalizing blank → null
+ * at the display edge keeps every consumer on the absent-path.
+ *
+ * Takes the raw string, not the entity, so this file stays free of the
+ * data.db import the architecture policy forbids for new ui/ debt.
+ */
+internal fun lastMessageForDisplay(raw: String?): String? = raw?.ifBlank { null }
+
+/**
  * Build an [AnnotatedString] that highlights every case-insensitive
  * occurrence of [query] inside [text] with the theme's tertiaryContainer
  * background. Blank query returns the plain string with no spans.

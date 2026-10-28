@@ -47,8 +47,16 @@ internal fun displayMessagePreview(stored: String?): String {
     // than showing that JSON, recompute the text from it — the same function
     // that produced the tail. It returns null only when the head holds no
     // summarisable part, and then the raw head is all there is to show.
+    // [T-android-preview-reminder-leak] A tail the old buggy writer stored as
+    // blank (reminder-only first text part) is recomputed the same way instead
+    // of collapsing to "(empty)" while a real text part sits in the head.
     val human = if (PREVIEW_SENTINEL in cell) {
-        cell.substringAfter(PREVIEW_SENTINEL)
+        val tail = cell.substringAfter(PREVIEW_SENTINEL)
+        if (tail.isNotBlank()) {
+            tail
+        } else {
+            ChatRepository.extractTextPreview(cell.substringBefore(PREVIEW_SENTINEL)) ?: tail
+        }
     } else {
         ChatRepository.extractTextPreview(cell) ?: cell
     }
