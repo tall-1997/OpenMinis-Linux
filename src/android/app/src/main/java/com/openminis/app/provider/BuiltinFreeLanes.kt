@@ -25,6 +25,15 @@ internal data class BuiltinFreeLane(
      * `usableApiKey` returns "" rather than null for it.
      */
     val apiKey: String,
+    /**
+     * False when the instance must NOT appear on first launch — when the lane
+     * only works after an explicit user action (installing a local plugin).
+     * Auto-seeding such a lane would show a provider row whose every refresh
+     * fails until the user finds the plugin market. The explicit channels
+     * (add-provider preset, recovery row, post-install restore) still seed it,
+     * because those are the user asking for it.
+     */
+    val seedOnBootstrap: Boolean = true,
 ) {
     val baseURL: String get() = lane.defaultBaseURL
 
@@ -73,7 +82,20 @@ internal object BuiltinFreeLanes {
         apiKey = "",
     )
 
-    val ALL: List<BuiltinFreeLane> = listOf(ZEN, KILO)
+    val OFM = BuiltinFreeLane(
+        lane = LocalGatewayFreeLane,
+        // Same no-`-free`-suffix rule as Kilo's id.
+        instanceId = "builtin-ofm-gateway",
+        label = LocalGatewayFreeLane.DISPLAY_NAME,
+        // The local gateway binds loopback only and serves no auth challenge,
+        // so no credential is written for this lane.
+        apiKey = "",
+        // Seeded by the plugin installer instead of first launch: the row is
+        // dead weight until the gateway payload is installed and running.
+        seedOnBootstrap = false,
+    )
+
+    val ALL: List<BuiltinFreeLane> = listOf(ZEN, KILO, OFM)
 
     fun byInstanceId(instanceId: String): BuiltinFreeLane? =
         ALL.firstOrNull { it.instanceId == instanceId }
