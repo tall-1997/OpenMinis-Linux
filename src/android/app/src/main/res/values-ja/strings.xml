@@ -1836,6 +1836,12 @@
     <string name="dev_suite_step_failed">ステップが失敗しました（exit %1$d）：%2$s</string>
     <string name="dev_suite_probe_failed">インストールは完了しましたが、準備完了チェックを通りませんでした — %1$s</string>
     <string name="dev_suite_interrupted">インストールが中断されました</string>
+    <string name="builtin_plugin_ofm_name">無料モデルゲートウェイ (ローカル)</string>
+    <string name="builtin_plugin_ofm_summary">ローカルの OpenAI 互換ゲートウェイ · 20 以上の最先端モデル、登録不要・キー不要 · ループバックのみ</string>
+    <string name="builtin_plugin_interrupted">インストールが中断されました</string>
+    <string name="builtin_plugin_stage_payload">ペイロードを準備中…</string>
+    <string name="builtin_plugin_stage_node">Node ランタイムを確認中…</string>
+    <string name="builtin_plugin_ready">準備完了</string>
     <string name="dev_suite_no_space">ストレージが不足しています：約 %1$d GB 必要、利用可能 %2$d GB</string>
     <string name="dev_suite_skipped_dep">スキップしました：%1$s のインストールに失敗</string>
     <string name="dev_suite_uninstall_failed">アンインストールに失敗しました（exit %1$d）</string>

@@ -1847,6 +1847,12 @@
     <string name="dev_suite_step_failed">Шаг завершился с ошибкой (exit %1$d): %2$s</string>
     <string name="dev_suite_probe_failed">Установка завершена, но проверка готовности не пройдена — %1$s</string>
     <string name="dev_suite_interrupted">Установка прервана</string>
+    <string name="builtin_plugin_ofm_name">Шлюз бесплатных моделей (локальный)</string>
+    <string name="builtin_plugin_ofm_summary">Локальный OpenAI-совместимый шлюз · более 20 передовых моделей, без аккаунта и ключа · только loopback</string>
+    <string name="builtin_plugin_interrupted">Установка прервана</string>
+    <string name="builtin_plugin_stage_payload">Подготовка пакета…</string>
+    <string name="builtin_plugin_stage_node">Проверка среды выполнения Node…</string>
+    <string name="builtin_plugin_ready">Готово</string>
     <string name="dev_suite_no_space">Недостаточно памяти: требуется около %1$d ГБ, доступно %2$d ГБ</string>
     <string name="dev_suite_skipped_dep">Пропущено: %1$s не установлен</string>
     <string name="dev_suite_uninstall_failed">Сбой удаления (exit %1$d)</string>

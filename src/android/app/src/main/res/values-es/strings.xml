@@ -1839,6 +1839,12 @@
     <string name="dev_suite_step_failed">Paso fallido (exit %1$d): %2$s</string>
     <string name="dev_suite_probe_failed">La instalación terminó pero la comprobación de disponibilidad no pasó — %1$s</string>
     <string name="dev_suite_interrupted">Instalación interrumpida</string>
+    <string name="builtin_plugin_ofm_name">Pasarela de modelos gratis (local)</string>
+    <string name="builtin_plugin_ofm_summary">Pasarela local compatible con OpenAI · más de 20 modelos frontera, sin cuenta ni clave · solo loopback</string>
+    <string name="builtin_plugin_interrupted">Instalación interrumpida</string>
+    <string name="builtin_plugin_stage_payload">Preparando el paquete…</string>
+    <string name="builtin_plugin_stage_node">Comprobando el runtime de Node…</string>
+    <string name="builtin_plugin_ready">Listo</string>
     <string name="dev_suite_no_space">Almacenamiento insuficiente: se necesitan unos %1$d GB, hay %2$d GB libres</string>
     <string name="dev_suite_skipped_dep">Omitido: %1$s no se instaló</string>
     <string name="dev_suite_uninstall_failed">Desinstalación fallida (exit %1$d)</string>

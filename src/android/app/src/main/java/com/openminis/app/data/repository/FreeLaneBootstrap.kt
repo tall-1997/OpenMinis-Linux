@@ -57,6 +57,7 @@ internal object FreeLaneBootstrap {
     ): List<BuiltinFreeLane> {
         val seeded = mutableListOf<BuiltinFreeLane>()
         for (builtin in BuiltinFreeLanes.ALL) {
+            if (!builtin.seedOnBootstrap) continue
             if (config.instances.any { belongsTo(builtin, it, apiKeyOf(it.id)) }) continue
             if (InstanceRemoval.wasRemovedByUser(config, builtin.instanceId)) continue
             config.instances.add(builtin.instance(labelFor(config, builtin)))
