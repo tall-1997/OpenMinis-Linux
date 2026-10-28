@@ -23,10 +23,13 @@ env:
   # the tag pointed at when this was written; a moved tag fails the build
   # loudly instead of silently shipping a different binary.
   A2A_TAG: "v3.0.8"
-  A2A_SHA: "68d0a4e4bfd8dc5a1daa296c61e0cc0b10a871da"  # Upstream's declared MSRV (rust-version in Cargo.toml) — the oldest
-  # toolchain the workspace is guaranteed to build on, and therefore the
-  # most reproducible pin. Bump deliberately, never by accident.
-  RUST_VERSION: "1.88.0"
+  A2A_SHA: "68d0a4e4bfd8dc5a1daa296c61e0cc0b10a871da"
+  # NOT upstream's declared rust-version (1.88): their own Cargo.lock pins
+  # aes 0.9.3, which refuses to build on anything older than 1.89 — the
+  # upstream Cargo.toml comment even warns about this trap. 1.89.0 is the
+  # oldest toolchain their lock actually resolves on; pinned exactly for
+  # byte-stable binaries. Bump deliberately, never by accident.
+  RUST_VERSION: "1.89.0"
 
 jobs:
   build-native-deps:
