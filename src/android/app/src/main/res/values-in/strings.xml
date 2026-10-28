@@ -1842,6 +1842,9 @@
     <string name="dev_suite_step_failed">Langkah gagal (exit %1$d): %2$s</string>
     <string name="dev_suite_probe_failed">Instalasi selesai tetapi pemeriksaan kesiapan tidak lulus — %1$s</string>
     <string name="dev_suite_interrupted">Instalasi terputus</string>
+    <string name="builtin_plugin_ofm_name">Gerbang Model Gratis (lokal)</string>
+    <string name="builtin_plugin_ofm_summary">Gerbang lokal kompatibel OpenAI · 20+ model frontier, tanpa akun, tanpa kunci · hanya loopback</string>
+    <string name="builtin_plugin_interrupted">Pemasangan terputus</string>
     <string name="dev_suite_no_space">Penyimpanan tidak cukup: butuh sekitar %1$d GB, tersedia %2$d GB</string>
     <string name="dev_suite_skipped_dep">Dilewati: %1$s gagal dipasang</string>
     <string name="dev_suite_uninstall_failed">Gagal melepas (exit %1$d)</string>

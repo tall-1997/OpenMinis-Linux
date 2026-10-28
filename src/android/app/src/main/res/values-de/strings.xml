@@ -1839,6 +1839,9 @@
     <string name="dev_suite_step_failed">Schritt fehlgeschlagen (exit %1$d): %2$s</string>
     <string name="dev_suite_probe_failed">Installation abgeschlossen, aber die Bereitstellungsprüfung wurde nicht bestanden — %1$s</string>
     <string name="dev_suite_interrupted">Installation unterbrochen</string>
+    <string name="builtin_plugin_ofm_name">Kostenloses Modell-Gateway (lokal)</string>
+    <string name="builtin_plugin_ofm_summary">Lokales OpenAI-kompatibles Gateway · 20+ Frontier-Modelle, ohne Konto, ohne Key · nur Loopback</string>
+    <string name="builtin_plugin_interrupted">Installation unterbrochen</string>
     <string name="dev_suite_no_space">Zu wenig Speicherplatz: etwa %1$d GB erforderlich, %2$d GB frei</string>
     <string name="dev_suite_skipped_dep">Übersprungen: %1$s wurde nicht installiert</string>
     <string name="dev_suite_uninstall_failed">Deinstallation fehlgeschlagen (exit %1$d)</string>
