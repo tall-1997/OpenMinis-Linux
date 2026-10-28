@@ -88,26 +88,53 @@ internal object SessionEntryScroll {
      * `listItemCount` is what the lazy list has actually laid out. A row can
      * be composed and counted a frame before the list measures it, and
      * scrolling in that frame resolves against an empty list and is a no-op.
-     * `firstVisibleIndex` is the index the last COMPLETED layout pass parked
-     * the viewport on (LazyListLayoutInfo, read through the list state). It
-     * is the piece the item count cannot express: the count flips the moment
-     * the tail rows are measured, but a scroll issued in that same snapshot
-     * is requested against the layout that just finished — the one that still
-     * had only the retained head rows. Under reverseLayout the tail rows then
-     * join at the newest edge (index 0) and push that parked viewport
-     * `tailItemCount` rows into the history, which is the "进入输出中的长会话
-     * 停在历史中间" report. The pin may run only once the newest row is the
-     * one the completed layout is showing.
      *
-     * All four must be clear. The caller bounds the wait, so a tail that
+     * All three must be clear. The caller bounds the wait, so a tail that
      * never arrives still pins rather than parking the entry forever.
+     *
+     * [T-android-entry-pin-self-block] Deliberately NO `firstVisibleIndex`
+     * condition — an earlier revision required the completed layout to
+     * already show the newest row, and that requirement is what kept the
+     * reported "点击进入正在长会话时停留的位置不是最新消息位置" alive after
+     * #162. Two timing facts, verified against compose-foundation 1.9.1
+     * (`LazyListScrollPosition.updateFromMeasureResult` +
+     * `LazyLayoutItemProviderKt.findIndexByKey` bytecode):
+     *
+     *  1. During entry NOTHING issues a scroll to index 0 before the pin:
+     *     the streaming glide requires firstVisible(0,0) already true, the
+     *     trailing-row pin needs a tool/typing row, the reserve pin needs a
+     *     reserve change. So `firstVisibleIndex == 0` can only be produced
+     *     by the pin itself — the gate waited on its own effect, and the
+     *     bounded wait expired with the viewport wherever the RETAINED
+     *     anchor left it.
+     *  2. What the retained anchor does during entry is RESTORE, not settle:
+     *     the LazyListState is hoisted on the session VM and survives screen
+     *     disposal, while `flatItems` is a composition-scoped `remember` that
+     *     restarts EMPTY. The first measure therefore runs against a
+     *     near-empty list (the `__load_older__` pill is the only item on a
+     *     long session), coerces the retained mid-history index to 0 and
+     *     stores `lastKnownFirstItemKey = "__load_older__"`; the first
+     *     flatItems publish key-follows that key to the END of the DSL item
+     *     order — the visual TOP under reverseLayout — and the viewport
+     *     lands on the oldest loaded rows instead of the newest. The pin's
+     *     own `scrollToItem(0, 0)` is the only corrector, and it is
+     *     deterministic: `snapToItemIndexInternal(forceRemeasure = true)`
+     *     calls `requestPositionAndForgetLastKnownKey` (the stale key is
+     *     FORGOTTEN, so the key-follow cannot re-assert) and remeasures
+     *     synchronously from index 0 against the CURRENT provider — it
+     *     cannot resolve against the stale layout the old gate feared.
+     *
+     * `firstVisibleIndex` stays in the signature because SessionEntryPin's
+     * snapshotFlow body still reads it (that read keeps the flow subscribed
+     * to layout passes) — it is simply no longer part of the decision.
      */
+    @Suppress("UNUSED_PARAMETER")
     fun entryPinReady(
         tailItemCount: Int,
         tailLoading: Boolean,
         listItemCount: Int,
         firstVisibleIndex: Int,
-    ): Boolean = tailItemCount > 0 && !tailLoading && listItemCount > 0 && firstVisibleIndex == 0
+    ): Boolean = tailItemCount > 0 && !tailLoading && listItemCount > 0
 }
 
 internal fun ChatViewModel.loadSession() {

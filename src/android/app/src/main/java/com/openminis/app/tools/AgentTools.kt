@@ -107,6 +107,10 @@ object AgentTools {
         add(TerminalTools.definition())
         // [T-android-present-tool] Deliverable cards. Long-tail.
         add(PresentTool.definition())
+        // [T-android-vscreen] Virtual display agent screen. Long-tail like ssh
+        // / background_job: no prompt fragment announces it, find_tools
+        // ("virtual screen") discovers it. Needs Shizuku for drive actions.
+        add(VirtualScreenTool.definition())
         if (memoryEnabled) {
             add(memoryWriteDefinition())
             add(memoryGetDefinition())
