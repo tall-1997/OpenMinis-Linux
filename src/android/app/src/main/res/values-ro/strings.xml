@@ -1847,6 +1847,13 @@
     <string name="builtin_plugin_stage_payload">Se pregătește pachetul…</string>
     <string name="builtin_plugin_stage_node">Se verifică runtime-ul Node…</string>
     <string name="builtin_plugin_ready">Gata</string>
+    <string name="builtin_plugin_section_header">Gateway-uri integrate</string>
+    <string name="builtin_plugin_section_footer">Pachete offline livrate în aplicație. Instalează, apoi activează comutatorul pentru a rula gateway-ul ca serviciu local — ascultă doar pe loopback.</string>
+    <string name="builtin_plugin_a2a_name">Gateway Agent2API (local)</string>
+    <string name="builtin_plugin_a2a_summary">Proxy local compatibil OpenAI cu mai mulți furnizori · adaugă conturi în panoul web · doar loopback</string>
+    <string name="builtin_plugin_install">Instalează</string>
+    <string name="builtin_plugin_retry">Reîncearcă</string>
+    <string name="builtin_plugin_open_panel">Panou</string>
     <string name="dev_suite_no_space">Spațiu insuficient: sunt necesari aproximativ %1$d GB, disponibil %2$d GB</string>
     <string name="dev_suite_skipped_dep">Omis: %1$s nu a fost instalat</string>
     <string name="dev_suite_uninstall_failed">Dezinstalarea a eșuat (exit %1$d)</string>

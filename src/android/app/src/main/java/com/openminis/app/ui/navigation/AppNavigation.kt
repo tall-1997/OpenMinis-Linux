@@ -1353,10 +1353,10 @@ fun AppNavigation(
                 )
             }
         }
-
         composable(Routes.PLUGIN_MARKET) {
             com.openminis.app.ui.settings.PluginMarketScreen(
                 mcpRepository = mcpRepository,
+                providerRepository = providerRepository,
                 onBack = { navController.safePopBackStack() },
             )
         }

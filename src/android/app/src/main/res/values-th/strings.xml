@@ -1843,6 +1843,13 @@
     <string name="builtin_plugin_stage_payload">กำลังเตรียมแพ็กเกจ…</string>
     <string name="builtin_plugin_stage_node">กำลังตรวจสอบรันไทม์ Node…</string>
     <string name="builtin_plugin_ready">พร้อม</string>
+    <string name="builtin_plugin_section_header">เกตเวย์ในตัว</string>
+    <string name="builtin_plugin_section_footer">แพ็กเกจออฟไลน์ที่มาพร้อมแอป ติดตั้งแล้วเปิดสวิตช์เพื่อรันเกตเวย์เป็นบริการภายในเครื่อง — รับฟังเฉพาะ loopback</string>
+    <string name="builtin_plugin_a2a_name">เกตเวย์ Agent2API (ภายในเครื่อง)</string>
+    <string name="builtin_plugin_a2a_summary">พร็อกซีภายในเครื่องที่รองรับ OpenAI หลายผู้ให้บริการ · เพิ่มบัญชีในแผงเว็บ · loopback เท่านั้น</string>
+    <string name="builtin_plugin_install">ติดตั้ง</string>
+    <string name="builtin_plugin_retry">ลองอีกครั้ง</string>
+    <string name="builtin_plugin_open_panel">แผงควบคุม</string>
     <string name="dev_suite_no_space">พื้นที่เก็บข้อมูลไม่พอ: ต้องใช้ประมาณ %1$d GB ว่างอยู่ %2$d GB</string>
     <string name="dev_suite_skipped_dep">ข้าม: %1$s ติดตั้งไม่สำเร็จ</string>
     <string name="dev_suite_uninstall_failed">ถอนการติดตั้งไม่สำเร็จ (exit %1$d)</string>

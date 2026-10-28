@@ -1848,6 +1848,13 @@
     <string name="builtin_plugin_stage_payload">Menyiapkan paket…</string>
     <string name="builtin_plugin_stage_node">Memeriksa runtime Node…</string>
     <string name="builtin_plugin_ready">Siap</string>
+    <string name="builtin_plugin_section_header">Gateway bawaan</string>
+    <string name="builtin_plugin_section_footer">Payload offline yang dibundel dalam aplikasi. Instal, lalu nyalakan sakelar untuk menjalankan gateway sebagai layanan lokal — hanya mendengarkan di loopback.</string>
+    <string name="builtin_plugin_a2a_name">Gateway Agent2API (lokal)</string>
+    <string name="builtin_plugin_a2a_summary">Proxy lokal kompatibel OpenAI multi-penyedia · tambahkan akun di panel webnya · hanya loopback</string>
+    <string name="builtin_plugin_install">Instal</string>
+    <string name="builtin_plugin_retry">Coba lagi</string>
+    <string name="builtin_plugin_open_panel">Panel</string>
     <string name="dev_suite_no_space">Penyimpanan tidak cukup: butuh sekitar %1$d GB, tersedia %2$d GB</string>
     <string name="dev_suite_skipped_dep">Dilewati: %1$s gagal dipasang</string>
     <string name="dev_suite_uninstall_failed">Gagal melepas (exit %1$d)</string>

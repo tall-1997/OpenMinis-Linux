@@ -1845,6 +1845,13 @@
     <string name="builtin_plugin_stage_payload">Preparando el paquete…</string>
     <string name="builtin_plugin_stage_node">Comprobando el runtime de Node…</string>
     <string name="builtin_plugin_ready">Listo</string>
+    <string name="builtin_plugin_section_header">Pasarelas integradas</string>
+    <string name="builtin_plugin_section_footer">Paquetes sin conexión incluidos en la app. Instala y activa el interruptor para ejecutar la pasarela como servicio local — solo escucha en loopback.</string>
+    <string name="builtin_plugin_a2a_name">Pasarela Agent2API (local)</string>
+    <string name="builtin_plugin_a2a_summary">Proxy local compatible con OpenAI multioperador · añade cuentas en su panel web · solo loopback</string>
+    <string name="builtin_plugin_install">Instalar</string>
+    <string name="builtin_plugin_retry">Reintentar</string>
+    <string name="builtin_plugin_open_panel">Panel</string>
     <string name="dev_suite_no_space">Almacenamiento insuficiente: se necesitan unos %1$d GB, hay %2$d GB libres</string>
     <string name="dev_suite_skipped_dep">Omitido: %1$s no se instaló</string>
     <string name="dev_suite_uninstall_failed">Desinstalación fallida (exit %1$d)</string>

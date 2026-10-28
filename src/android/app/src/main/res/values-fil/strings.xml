@@ -1843,6 +1843,13 @@
     <string name="builtin_plugin_stage_payload">Inihahanda ang payload…</string>
     <string name="builtin_plugin_stage_node">Sinusuri ang Node runtime…</string>
     <string name="builtin_plugin_ready">Handa na</string>
+    <string name="builtin_plugin_section_header">Built-in na gateway</string>
+    <string name="builtin_plugin_section_footer">Offline na package na kasama sa app. I-install, pagkatapos i-on ang switch para patakbuhin ang gateway bilang lokal na serbisyo — loopback lang ang pinakikinig.</string>
+    <string name="builtin_plugin_a2a_name">Agent2API Gateway (lokal)</string>
+    <string name="builtin_plugin_a2a_summary">Lokal na OpenAI-compatible na multi-provider proxy · magdagdag ng mga account sa web panel nito · loopback lang</string>
+    <string name="builtin_plugin_install">I-install</string>
+    <string name="builtin_plugin_retry">Subukan muli</string>
+    <string name="builtin_plugin_open_panel">Panel</string>
     <string name="dev_suite_no_space">Kulang ang storage: kailangan mga %1$d GB, available %2$d GB</string>
     <string name="dev_suite_skipped_dep">Laktawan: hindi na-install ang %1$s</string>
     <string name="dev_suite_uninstall_failed">Nabigo ang pag-aalis (exit %1$d)</string>

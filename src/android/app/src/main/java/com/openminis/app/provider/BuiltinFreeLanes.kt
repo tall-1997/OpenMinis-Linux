@@ -95,7 +95,19 @@ internal object BuiltinFreeLanes {
         seedOnBootstrap = false,
     )
 
-    val ALL: List<BuiltinFreeLane> = listOf(ZEN, KILO, OFM)
+    val A2A = BuiltinFreeLane(
+        lane = Agent2ApiFreeLane,
+        // Same no-`-free`-suffix rule as Kilo's id.
+        instanceId = "builtin-a2a-gateway",
+        label = Agent2ApiFreeLane.DISPLAY_NAME,
+        // Same loopback, same no-auth shape as the OFM lane.
+        apiKey = "",
+        // Same rule as the OFM lane: the row is dead weight until the a2a
+        // payload is installed and the gateway started from the market card.
+        seedOnBootstrap = false,
+    )
+
+    val ALL: List<BuiltinFreeLane> = listOf(ZEN, KILO, OFM, A2A)
 
     fun byInstanceId(instanceId: String): BuiltinFreeLane? =
         ALL.firstOrNull { it.instanceId == instanceId }

@@ -7,6 +7,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -21,16 +22,19 @@ import java.io.IOException
  *
  *  1. **stage payload** — copy the APK asset zip onto the shared volume
  *     (host-side plain file copy; the guest cannot read APK assets).
- *  2. **node gate** — the OFM runtime embeds undici, which needs Node 22+
+ *  2. **node gate** (runtimes that need Node — `nodeMinMajor > 0`) — the
+ *     OFM runtime embeds undici, which needs Node 22+
  *     (worker_threads.markAsUncloneable). The guest's apt node is 18, so
  *     when the probe comes back short we unpack a pinned arm64 Node 22
  *     tarball from npmmirror into /usr/local/lib/node-v22 and symlink the
  *     binaries into /usr/local/bin — the first path the upstream launcher's
  *     own pick_node() checks, so every later start finds it without PATH
  *     games. No apt, no lock contention with dev-suite installs.
- *  3. **run upstream install.sh** — verbatim, with the OFM_* env contract
- *     from [BuiltinPluginCatalog.installEnv]. It lays the runtime down in
- *     tool/ and writes the ofm-gateway launcher.
+ *     Self-contained runtimes (`nodeMinMajor == 0`, e.g. the a2a Rust
+ *     binary) skip the gate entirely.
+ *  3. **run upstream install.sh** — verbatim, with the payload's own
+ *     `<PREFIX>_*` env contract from [BuiltinPluginCatalog.installEnv].
+ *     It lays the runtime down in tool/ and writes the launcher.
  *  4. **verify** — upstream verify.sh; its first stdout line is the payload
  *     version, which we record in the store.
  *
@@ -128,9 +132,9 @@ object BuiltinPluginInstaller {
 
     /**
      * Guest command that unpacks the staged zip into payload/ and runs the
-     * upstream install script with the OFM_* contract. The env is applied
-     * with `env` so the values survive the coordinator's shell wrapping.
-     * Pure.
+     * upstream install script with the payload's own `<PREFIX>_*` contract.
+     * The env is applied with `env` so the values survive the coordinator's
+     * shell wrapping. Pure.
      */
     internal fun installCommand(
         d: BuiltinPluginCatalog.Descriptor,
@@ -140,12 +144,14 @@ object BuiltinPluginInstaller {
         val envPrefix = env.entries.joinToString(" ") { (k, v) -> "$k='$v'" }
         val root = BuiltinPluginCatalog.installRoot(d.id)
         // The zip's top level is manifest.json + payload/ — unzip straight
-        // into the install root so payload/ lands where OFM_PLUGIN_PAYLOAD
-        // (installRoot/payload) already points.
+        // into the install root so payload/ lands where the env contract
+        // (installRoot/payload) already points. -o: reinstall must overwrite
+        // without the interactive replace prompt (no tty on that path, so
+        // the prompt would read EOF and abort the unzip mid-archive).
         return """
             set -e
             rm -rf $root/payload
-            unzip -q $root/$stagedZipName -d $root
+            unzip -o -q $root/$stagedZipName -d $root
             test -f $root/payload/scripts/${d.installScript} || { echo "payload missing scripts/${d.installScript}" >&2; exit 6; }
             env $envPrefix /bin/sh $root/payload/scripts/${d.installScript}
         """.trimIndent()
@@ -157,6 +163,21 @@ object BuiltinPluginInstaller {
         val envPrefix = env.entries.joinToString(" ") { (k, v) -> "$k='$v'" }
         val root = BuiltinPluginCatalog.installRoot(d.id)
         return "env $envPrefix /bin/sh $root/payload/scripts/verify.sh"
+    }
+
+    /**
+     * Fire-and-forget install the market card calls: runs in the object's
+     * own scope so leaving the screen does not cancel a multi-minute
+     * install (same discipline as the dev-suite assembler). The callback
+     * (invoked on the scope's dispatcher) lets the card seed the provider
+     * row the moment the install lands.
+     */
+    fun installAsync(
+        context: Context,
+        d: BuiltinPluginCatalog.Descriptor,
+        onResult: (Boolean) -> Unit = {},
+    ) {
+        scope.launch { onResult(install(context, d)) }
     }
 
     /**
@@ -175,19 +196,23 @@ object BuiltinPluginInstaller {
                 )
                 val zip = withContext(Dispatchers.IO) { stagePayloadZip(context, d) }
 
-                BuiltinPluginStore.update(
-                    context, d.id, BuiltinPluginStore.Status.INSTALLING,
-                    progressLine = context.getString(R.string.builtin_plugin_stage_node),
-                )
-                val nodeResult = run(ensureNodeCommand(d.nodeMinMajor)) { line ->
+                // Self-contained runtimes need no Node — running the gate
+                // would download a Node the payload never uses.
+                if (d.nodeMinMajor > 0) {
                     BuiltinPluginStore.update(
                         context, d.id, BuiltinPluginStore.Status.INSTALLING,
-                        progressLine = line.take(120),
+                        progressLine = context.getString(R.string.builtin_plugin_stage_node),
                     )
-                }
-                if (nodeResult.exitCode != 0) {
-                    fail(context, d, "node gate", nodeResult.outputTail)
-                    return false
+                    val nodeResult = run(ensureNodeCommand(d.nodeMinMajor)) { line ->
+                        BuiltinPluginStore.update(
+                            context, d.id, BuiltinPluginStore.Status.INSTALLING,
+                            progressLine = line.take(120),
+                        )
+                    }
+                    if (nodeResult.exitCode != 0) {
+                        fail(context, d, "node gate", nodeResult.outputTail)
+                        return false
+                    }
                 }
 
                 val installResult = run(installCommand(d, zip.name)) { line ->

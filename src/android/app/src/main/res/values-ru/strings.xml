@@ -1853,6 +1853,13 @@
     <string name="builtin_plugin_stage_payload">Подготовка пакета…</string>
     <string name="builtin_plugin_stage_node">Проверка среды выполнения Node…</string>
     <string name="builtin_plugin_ready">Готово</string>
+    <string name="builtin_plugin_section_header">Встроенные шлюзы</string>
+    <string name="builtin_plugin_section_footer">Офлайн-пакеты, поставляемые в приложении. Установите и включите переключатель — шлюз заработает как локальная служба, слушая только loopback.</string>
+    <string name="builtin_plugin_a2a_name">Шлюз Agent2API (локальный)</string>
+    <string name="builtin_plugin_a2a_summary">Локальный OpenAI-совместимый мультипровайдерный прокси · добавляйте аккаунты в веб-панели · только loopback</string>
+    <string name="builtin_plugin_install">Установить</string>
+    <string name="builtin_plugin_retry">Повторить</string>
+    <string name="builtin_plugin_open_panel">Панель</string>
     <string name="dev_suite_no_space">Недостаточно памяти: требуется около %1$d ГБ, доступно %2$d ГБ</string>
     <string name="dev_suite_skipped_dep">Пропущено: %1$s не установлен</string>
     <string name="dev_suite_uninstall_failed">Сбой удаления (exit %1$d)</string>

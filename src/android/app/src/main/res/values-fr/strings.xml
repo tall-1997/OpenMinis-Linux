@@ -1845,6 +1845,13 @@
     <string name="builtin_plugin_stage_payload">Préparation du paquet…</string>
     <string name="builtin_plugin_stage_node">Vérification du runtime Node…</string>
     <string name="builtin_plugin_ready">Prêt</string>
+    <string name="builtin_plugin_section_header">Passerelles intégrées</string>
+    <string name="builtin_plugin_section_footer">Charges hors ligne fournies dans l\'app. Installez, puis activez l\'interrupteur pour exécuter la passerelle comme service local — elle n\'écoute que sur loopback.</string>
+    <string name="builtin_plugin_a2a_name">Passerelle Agent2API (locale)</string>
+    <string name="builtin_plugin_a2a_summary">Proxy local compatible OpenAI multi-fournisseurs · ajoutez des comptes dans son panneau web · loopback uniquement</string>
+    <string name="builtin_plugin_install">Installer</string>
+    <string name="builtin_plugin_retry">Réessayer</string>
+    <string name="builtin_plugin_open_panel">Panneau</string>
     <string name="dev_suite_no_space">Stockage insuffisant : environ %1$d GB nécessaires, %2$d GB disponibles</string>
     <string name="dev_suite_skipped_dep">Ignoré : %1$s n\'a pas été installé</string>
     <string name="dev_suite_uninstall_failed">Échec de la désinstallation (exit %1$d)</string>

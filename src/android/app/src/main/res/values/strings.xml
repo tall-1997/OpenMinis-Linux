@@ -313,6 +313,13 @@
     <string name="builtin_plugin_stage_payload">Staging payload…</string>
     <string name="builtin_plugin_stage_node">Checking Node runtime…</string>
     <string name="builtin_plugin_ready">Ready</string>
+    <string name="builtin_plugin_section_header">Built-in gateways</string>
+    <string name="builtin_plugin_section_footer">Offline payloads shipped in the app. Install, then flip the switch to run the gateway as a local service — it listens on loopback only.</string>
+    <string name="builtin_plugin_a2a_name">Agent2API Gateway (local)</string>
+    <string name="builtin_plugin_a2a_summary">Local multi-provider OpenAI-compatible proxy · add upstream accounts in its web panel · loopback only</string>
+    <string name="builtin_plugin_install">Install</string>
+    <string name="builtin_plugin_retry">Retry</string>
+    <string name="builtin_plugin_open_panel">Panel</string>
     <string name="dev_suite_no_space">Not enough storage: about %1$d GB needed, %2$d GB free</string>
     <string name="dev_suite_skipped_dep">Skipped: %1$s did not install</string>
     <string name="dev_suite_uninstall_failed">Uninstall failed (exit %1$d)</string>

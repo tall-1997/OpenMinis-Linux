@@ -15,12 +15,14 @@ import org.junit.Test
  *    short, from the npmmirror tarball, into /usr/local (first candidate
  *    of the upstream launcher's pick_node)
  *  - installCommand unzips the staged zip, guards the install script, and
- *    applies the OFM_* env with `env` so it survives shell wrapping
+ *    applies the payload's own `<PREFIX>_*` env with `env` so it survives
+ *    shell wrapping
  *  - verifyCommand runs upstream verify.sh under the same env
  */
 class BuiltinPluginInstallerTest {
 
     private val ofm = BuiltinPluginCatalog.ALL.first()
+    private val a2a = BuiltinPluginCatalog.ALL.first { it.id == "a2a" }
 
     // --- nodeMajorOf -----------------------------------------------------
 
@@ -58,7 +60,8 @@ class BuiltinPluginInstallerTest {
 
     @Test fun `installCommand unzips staged zip into install root`() {
         val cmd = BuiltinPluginInstaller.installCommand(ofm, "payload-2.3.0.zip")
-        assertTrue(cmd.contains("unzip -q /var/minis/shared/builtin-plugins/ofm/payload-2.3.0.zip"))
+        // -o: reinstall overwrites without the interactive replace prompt.
+        assertTrue(cmd.contains("unzip -o -q /var/minis/shared/builtin-plugins/ofm/payload-2.3.0.zip"))
         assertTrue(cmd.contains("-d /var/minis/shared/builtin-plugins/ofm"))
     }
 
@@ -68,7 +71,7 @@ class BuiltinPluginInstallerTest {
         assertTrue(cmd.contains("exit 6"))
     }
 
-    @Test fun `installCommand applies the OFM env contract`() {
+    @Test fun `installCommand applies the payload's own env contract`() {
         val cmd = BuiltinPluginInstaller.installCommand(ofm, "payload-2.3.0.zip")
         val env = BuiltinPluginCatalog.installEnv(ofm)
         for ((k, v) in env) {
@@ -76,11 +79,21 @@ class BuiltinPluginInstallerTest {
         }
     }
 
+    @Test fun `installCommand applies the a2a env contract`() {
+        val cmd = BuiltinPluginInstaller.installCommand(a2a, "payload-3.0.8.zip")
+        assertTrue(cmd.contains("unzip -o -q /var/minis/shared/builtin-plugins/a2a/payload-3.0.8.zip"))
+        assertTrue(cmd.contains("A2A_TOOL_DIR='/var/minis/shared/builtin-plugins/a2a/tool'"))
+    }
+
     // --- verifyCommand -----------------------------------------------------
 
-    @Test fun `verifyCommand runs upstream verify under OFM env`() {
+    @Test fun `verifyCommand runs upstream verify under the payload's env`() {
         val cmd = BuiltinPluginInstaller.verifyCommand(ofm)
         assertTrue(cmd.contains("sh /var/minis/shared/builtin-plugins/ofm/payload/scripts/verify.sh"))
         assertTrue(cmd.contains("OFM_TOOL_DIR='/var/minis/shared/builtin-plugins/ofm/tool'"))
+
+        val a2aCmd = BuiltinPluginInstaller.verifyCommand(a2a)
+        assertTrue(a2aCmd.contains("sh /var/minis/shared/builtin-plugins/a2a/payload/scripts/verify.sh"))
+        assertTrue(a2aCmd.contains("A2A_TOOL_DIR='/var/minis/shared/builtin-plugins/a2a/tool'"))
     }
 }

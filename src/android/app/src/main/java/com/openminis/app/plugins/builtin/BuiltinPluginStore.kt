@@ -1,6 +1,7 @@
 package com.openminis.app.plugins.builtin
 
 import android.content.Context
+import com.openminis.app.R
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -103,10 +104,11 @@ object BuiltinPluginStore {
      * Crash recovery: INSTALLING at launch means the process died
      * mid-install. Mark FAILED so the card offers a retry.
      */
-    fun recoverInterrupted(context: Context, reason: String): List<String> {
+    fun recoverInterrupted(context: Context): List<String> {
         val interrupted = snapshot(context).values
             .filter { it.status == Status.INSTALLING }
             .map { it.pluginId }
+        val reason = context.getString(R.string.builtin_plugin_interrupted)
         interrupted.forEach { update(context, it, Status.FAILED, diagnosis = reason) }
         return interrupted
     }

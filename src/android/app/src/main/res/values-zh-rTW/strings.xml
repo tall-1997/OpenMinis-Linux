@@ -1934,6 +1934,13 @@
     <string name="builtin_plugin_stage_payload">正在準備安裝包…</string>
     <string name="builtin_plugin_stage_node">正在檢查 Node 執行環境…</string>
     <string name="builtin_plugin_ready">就緒</string>
+    <string name="builtin_plugin_section_header">內建閘道</string>
+    <string name="builtin_plugin_section_footer">應用內建的離線安裝包。安裝後開啟開關，閘道將作為本機服務運行 — 僅監聽回環位址。</string>
+    <string name="builtin_plugin_a2a_name">Agent2API 閘道 (本機)</string>
+    <string name="builtin_plugin_a2a_summary">本機多渠道 OpenAI 相容代理 · 在其網頁面板中新增上游帳號 · 僅監聽回環</string>
+    <string name="builtin_plugin_install">安裝</string>
+    <string name="builtin_plugin_retry">重試</string>
+    <string name="builtin_plugin_open_panel">面板</string>
     <string name="dev_suite_no_space">儲存空間不足：需要約 %1$d GB，可用 %2$d GB</string>
     <string name="dev_suite_skipped_dep">已跳過：%1$s 未安裝成功</string>
     <string name="dev_suite_uninstall_failed">解除安裝失敗（exit %1$d）</string>

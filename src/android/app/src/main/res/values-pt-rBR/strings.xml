@@ -1843,6 +1843,13 @@
     <string name="builtin_plugin_stage_payload">Preparando o pacote…</string>
     <string name="builtin_plugin_stage_node">Verificando o runtime do Node…</string>
     <string name="builtin_plugin_ready">Pronto</string>
+    <string name="builtin_plugin_section_header">Gateways integrados</string>
+    <string name="builtin_plugin_section_footer">Pacotes offline incluídos no app. Instale e ative o interruptor para executar o gateway como serviço local — ele escuta apenas em loopback.</string>
+    <string name="builtin_plugin_a2a_name">Gateway Agent2API (local)</string>
+    <string name="builtin_plugin_a2a_summary">Proxy local compatível com OpenAI multioperadora · adicione contas no painel web · somente loopback</string>
+    <string name="builtin_plugin_install">Instalar</string>
+    <string name="builtin_plugin_retry">Repetir</string>
+    <string name="builtin_plugin_open_panel">Painel</string>
     <string name="dev_suite_no_space">Armazenamento insuficiente: são necessários cerca de %1$d GB, %2$d GB disponíveis</string>
     <string name="dev_suite_skipped_dep">Ignorado: %1$s não foi instalado</string>
     <string name="dev_suite_uninstall_failed">Falha ao desinstalar (exit %1$d)</string>
