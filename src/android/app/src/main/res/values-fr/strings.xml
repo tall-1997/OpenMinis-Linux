@@ -1842,6 +1842,9 @@
     <string name="builtin_plugin_ofm_name">Passerelle de modèles gratuits (locale)</string>
     <string name="builtin_plugin_ofm_summary">Passerelle locale compatible OpenAI · plus de 20 modèles de pointe, sans compte ni clé · boucle locale uniquement</string>
     <string name="builtin_plugin_interrupted">Installation interrompue</string>
+    <string name="builtin_plugin_stage_payload">Préparation du paquet…</string>
+    <string name="builtin_plugin_stage_node">Vérification du runtime Node…</string>
+    <string name="builtin_plugin_ready">Prêt</string>
     <string name="dev_suite_no_space">Stockage insuffisant : environ %1$d GB nécessaires, %2$d GB disponibles</string>
     <string name="dev_suite_skipped_dep">Ignoré : %1$s n\'a pas été installé</string>
     <string name="dev_suite_uninstall_failed">Échec de la désinstallation (exit %1$d)</string>

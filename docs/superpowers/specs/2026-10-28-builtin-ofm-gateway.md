@@ -1,17 +1,17 @@
 # 内置免费模型网关（Builtin OFM Gateway）规格
 
 日期：2026-10-28
-上游：github.com/Ebony-Vinyl/dsh-our-free-model v2.3.0（MIT，太墟移植版 payload 9.3MB / 130 文件）
+上游：github.com/Ebony-Vinyl/dsh-our-free-model v2.3.0（MIT，内置移植 payload 9.3MB / 130 文件）
 
 ## 起因
 
-用户拿到太墟版「Our Free Model」插件（本地 OpenAI 兼容网关，20+ 免费前沿模型，免注册免 Key），
+用户拿到「Our Free Model」插件 payload（本地 OpenAI 兼容网关，20+ 免费前沿模型，免注册免 Key），
 希望 OpenMinis-Linux 原生集成同能力。现状缺口：
 
 1. OpenMinis 没有任何「内置插件」机制——dev-suite 是 apt/脚本配方，不承载自包含二进制运行集；
 2. 免费通道只有 Zen / Kilo 两条远端 lane（BuiltinFreeLanes.ALL），没有本地网关 lane；
 3. 沙箱 Node 是 apt 18.19，而网关运行集内嵌 undici 依赖 Node 22+（worker_threads.markAsUncloneable）；
-4. 网关是前台阻塞进程（太墟宿主托管），OpenMinis 的 ExecutionCoordinator 命令有墙钟上限，不能前台持有。
+4. 网关是前台阻塞进程（宿主托管），OpenMinis 的 ExecutionCoordinator 命令有墙钟上限，不能前台持有。
 
 ## 方案
 
@@ -20,13 +20,13 @@
 新增 `plugins/builtin/` 包，四个文件各司其职：
 
 - **BuiltinPluginCatalog**：内置插件描述符。字段：id、nameRes、summaryRes、version、payloadAsset
-  （APK assets 内 zip 路径）、installScript（payload 内相对路径）、env（注入安装脚本的 TAIXU_* 契约）、
+  （APK assets 内 zip 路径）、installScript（payload 内相对路径）、env（注入安装脚本的 OFM_* 契约）、
   nodeMinMajor、servicePort、serviceHealthPath、laneId。加第二个内置插件 = 加一个条目。
 - **BuiltinPluginInstaller**：assets zip 解压到 `/var/minis/shared/builtin-plugins/<id>/payload/`，
   Node 版本门（候选路径扫主版本，全 < 22 时走 nodesource 22 安装，apt 锁协议与 DevSuiteInstaller 相同），
-  然后在专用沙箱会话里执行 install 脚本（env 契约：TAIXU_PLUGIN_PAYLOAD / TAIXU_TOOL_DIR / TAIXU_TOOL_DATA
+  然后在专用沙箱会话里执行 install 脚本（env 契约：OFM_PLUGIN_PAYLOAD / OFM_TOOL_DIR / OFM_TOOL_DATA
   全部指向 `/var/minis/shared/builtin-plugins/<id>/` 下的子目录）。安装脚本本身是上游 payload 的一部分，
-  原样保留（含其 /opt/taixu 软链步骤——在 OpenMinis guest 无害）。
+  原样保留。
 - **BuiltinPluginStore**：SharedPreferences 状态机（NOT_INSTALLED / INSTALLING / INSTALLED / FAILED +
   版本号 + 失败诊断行），模式对齐 DevSuiteStore。
 - **GatewayServiceManager**：服务生命周期。start = 在专用会话

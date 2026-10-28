@@ -1931,6 +1931,9 @@
     <string name="builtin_plugin_ofm_name">免費模型閘道 (本機)</string>
     <string name="builtin_plugin_ofm_summary">本機 OpenAI 相容閘道 · 20+ 前沿模型，免註冊免金鑰 · 僅監聽回環</string>
     <string name="builtin_plugin_interrupted">安裝被中斷</string>
+    <string name="builtin_plugin_stage_payload">正在準備安裝包…</string>
+    <string name="builtin_plugin_stage_node">正在檢查 Node 執行環境…</string>
+    <string name="builtin_plugin_ready">就緒</string>
     <string name="dev_suite_no_space">儲存空間不足：需要約 %1$d GB，可用 %2$d GB</string>
     <string name="dev_suite_skipped_dep">已跳過：%1$s 未安裝成功</string>
     <string name="dev_suite_uninstall_failed">解除安裝失敗（exit %1$d）</string>

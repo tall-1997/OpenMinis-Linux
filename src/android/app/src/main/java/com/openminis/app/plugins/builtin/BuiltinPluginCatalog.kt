@@ -47,7 +47,7 @@ object BuiltinPluginCatalog {
     /**
      * The local Our-Free-Model gateway: an OpenAI-compatible loopback proxy
      * over upstream free channels. Port 18900 and the OFM_* env names are
-     * the upstream payload's contract, not ours to choose.
+     * the payload's install contract.
      */
     private val OFM = Descriptor(
         id = "ofm",
@@ -75,9 +75,8 @@ object BuiltinPluginCatalog {
     fun dataDir(id: String): String = "${installRoot(id)}/data"
 
     /**
-     * Env for the install script: the OFM_* contract (upstream names,
-     * upstream semantics — payload dir, tool dir, data dir) plus PATH so
-     * node/npm resolve inside the sandbox session.
+     * Env for the install script: the OFM_* contract (payload dir, tool dir,
+     * data dir) plus PATH so node/npm resolve inside the sandbox session.
      */
     fun installEnv(d: Descriptor): Map<String, String> = mapOf(
         "OFM_PLUGIN_PAYLOAD" to payloadDir(d.id),

@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 把太墟版 Our Free Model 网关作为 OpenMinis 第一个「内置插件」原生集成：APK 内置 payload、通用安装器、本地服务生命周期管理、第三条 BuiltinFreeLane、插件市场管理卡片。
+**Goal:** 把 Our Free Model 网关 payload作为 OpenMinis 第一个「内置插件」原生集成：APK 内置 payload、通用安装器、本地服务生命周期管理、第三条 BuiltinFreeLane、插件市场管理卡片。
 
 **Architecture:** 通用内置插件层（catalog/installer/store）承载任何自包含运行集；网关服务经 ExecutionCoordinator nohup 后台化，Android 侧 OkHttp 健康检查；Provider 注册走既有 BuiltinFreeLanes 插槽，FreeLaneBootstrap 零改动。
 
-**Tech Stack:** Kotlin + Compose（SettingsSection 既有组件）、OkHttp 4.12、SharedPreferences、shell（TAIXU_* env 契约）、python 镜像验证。
+**Tech Stack:** Kotlin + Compose（SettingsSection 既有组件）、OkHttp 4.12、SharedPreferences、shell（OFM_* env 契约）、python 镜像验证。
 
 **Spec:** docs/superpowers/specs/2026-10-28-builtin-ofm-gateway.md
 
@@ -48,7 +48,7 @@
 ## Task 3: BuiltinPluginInstaller + payload 资产
 
 - [ ] zip 打包 payload → assets/builtin_plugins/ofm-runtime.zip（原样，不改上游脚本）
-- [ ] 写 BuiltinPluginInstallerTest（解压目标路径、TAIXU_* env 构造、node 门判定纯函数）
+- [ ] 写 BuiltinPluginInstallerTest（解压目标路径、OFM_* env 构造、node 门判定纯函数）
 - [ ] 实现 BuiltinPluginInstaller.kt（assets 解压 + node 门 + nodesource 22 + install 执行 + probe）
 - [ ] python 镜像 sim_installer.py（node 门分支：有 22 / 只有 18 / 无 node）
 - [ ] 门禁 + 提交

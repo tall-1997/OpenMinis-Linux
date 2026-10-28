@@ -1840,6 +1840,9 @@
     <string name="builtin_plugin_ofm_name">Gateway de modelos grátis (local)</string>
     <string name="builtin_plugin_ofm_summary">Gateway local compatível com OpenAI · mais de 20 modelos de ponta, sem conta, sem chave · somente loopback</string>
     <string name="builtin_plugin_interrupted">Instalação interrompida</string>
+    <string name="builtin_plugin_stage_payload">Preparando o pacote…</string>
+    <string name="builtin_plugin_stage_node">Verificando o runtime do Node…</string>
+    <string name="builtin_plugin_ready">Pronto</string>
     <string name="dev_suite_no_space">Armazenamento insuficiente: são necessários cerca de %1$d GB, %2$d GB disponíveis</string>
     <string name="dev_suite_skipped_dep">Ignorado: %1$s não foi instalado</string>
     <string name="dev_suite_uninstall_failed">Falha ao desinstalar (exit %1$d)</string>

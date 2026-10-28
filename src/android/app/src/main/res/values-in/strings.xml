@@ -1845,6 +1845,9 @@
     <string name="builtin_plugin_ofm_name">Gerbang Model Gratis (lokal)</string>
     <string name="builtin_plugin_ofm_summary">Gerbang lokal kompatibel OpenAI · 20+ model frontier, tanpa akun, tanpa kunci · hanya loopback</string>
     <string name="builtin_plugin_interrupted">Pemasangan terputus</string>
+    <string name="builtin_plugin_stage_payload">Menyiapkan paket…</string>
+    <string name="builtin_plugin_stage_node">Memeriksa runtime Node…</string>
+    <string name="builtin_plugin_ready">Siap</string>
     <string name="dev_suite_no_space">Penyimpanan tidak cukup: butuh sekitar %1$d GB, tersedia %2$d GB</string>
     <string name="dev_suite_skipped_dep">Dilewati: %1$s gagal dipasang</string>
     <string name="dev_suite_uninstall_failed">Gagal melepas (exit %1$d)</string>

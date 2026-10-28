@@ -1840,6 +1840,9 @@
     <string name="builtin_plugin_ofm_name">Gerbang Model Percuma (setempat)</string>
     <string name="builtin_plugin_ofm_summary">Gerbang setempat serasi OpenAI · 20+ model frontier, tanpa akaun, tanpa kunci · loopback sahaja</string>
     <string name="builtin_plugin_interrupted">Pemasangan terganggu</string>
+    <string name="builtin_plugin_stage_payload">Menyediakan pakej…</string>
+    <string name="builtin_plugin_stage_node">Menyemak runtime Node…</string>
+    <string name="builtin_plugin_ready">Sedia</string>
     <string name="dev_suite_no_space">Ruang simpanan tidak cukup: perlu kira-kira %1$d GB, tersedia %2$d GB</string>
     <string name="dev_suite_skipped_dep">Dilangkau: %1$s gagal dipasang</string>
     <string name="dev_suite_uninstall_failed">Nyahpasang gagal (exit %1$d)</string>

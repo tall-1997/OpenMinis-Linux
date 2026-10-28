@@ -1842,6 +1842,9 @@
     <string name="builtin_plugin_ofm_name">Kostenloses Modell-Gateway (lokal)</string>
     <string name="builtin_plugin_ofm_summary">Lokales OpenAI-kompatibles Gateway · 20+ Frontier-Modelle, ohne Konto, ohne Key · nur Loopback</string>
     <string name="builtin_plugin_interrupted">Installation unterbrochen</string>
+    <string name="builtin_plugin_stage_payload">Payload wird vorbereitet…</string>
+    <string name="builtin_plugin_stage_node">Node-Laufzeit wird geprüft…</string>
+    <string name="builtin_plugin_ready">Bereit</string>
     <string name="dev_suite_no_space">Zu wenig Speicherplatz: etwa %1$d GB erforderlich, %2$d GB frei</string>
     <string name="dev_suite_skipped_dep">Übersprungen: %1$s wurde nicht installiert</string>
     <string name="dev_suite_uninstall_failed">Deinstallation fehlgeschlagen (exit %1$d)</string>

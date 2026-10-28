@@ -310,6 +310,9 @@
     <string name="builtin_plugin_ofm_name">Free Model Gateway (local)</string>
     <string name="builtin_plugin_ofm_summary">Local OpenAI-compatible gateway · 20+ frontier models, no account, no key · loopback only</string>
     <string name="builtin_plugin_interrupted">Install was interrupted</string>
+    <string name="builtin_plugin_stage_payload">Staging payload…</string>
+    <string name="builtin_plugin_stage_node">Checking Node runtime…</string>
+    <string name="builtin_plugin_ready">Ready</string>
     <string name="dev_suite_no_space">Not enough storage: about %1$d GB needed, %2$d GB free</string>
     <string name="dev_suite_skipped_dep">Skipped: %1$s did not install</string>
     <string name="dev_suite_uninstall_failed">Uninstall failed (exit %1$d)</string>

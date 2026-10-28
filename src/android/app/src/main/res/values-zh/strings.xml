@@ -275,6 +275,9 @@
     <string name="builtin_plugin_ofm_name">免费模型网关 (本地)</string>
     <string name="builtin_plugin_ofm_summary">本地 OpenAI 兼容网关 · 20+ 前沿模型，免注册免 Key · 仅监听回环</string>
     <string name="builtin_plugin_interrupted">安装被中断</string>
+    <string name="builtin_plugin_stage_payload">正在准备安装包…</string>
+    <string name="builtin_plugin_stage_node">正在检查 Node 运行时…</string>
+    <string name="builtin_plugin_ready">就绪</string>
     <string name="dev_suite_no_space">存储空间不足：需要约 %1$d GB，可用 %2$d GB</string>
     <string name="dev_suite_skipped_dep">已跳过：%1$s 未安装成功</string>
     <string name="dev_suite_uninstall_failed">卸载失败（exit %1$d）</string>

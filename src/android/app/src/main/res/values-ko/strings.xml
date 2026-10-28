@@ -1839,6 +1839,9 @@
     <string name="builtin_plugin_ofm_name">무료 모델 게이트웨이 (로컬)</string>
     <string name="builtin_plugin_ofm_summary">로컬 OpenAI 호환 게이트웨이 · 20개 이상의 프론티어 모델, 계정·키 불필요 · 루프백 전용</string>
     <string name="builtin_plugin_interrupted">설치가 중단되었습니다</string>
+    <string name="builtin_plugin_stage_payload">페이로드 준비 중…</string>
+    <string name="builtin_plugin_stage_node">Node 런타임 확인 중…</string>
+    <string name="builtin_plugin_ready">준비됨</string>
     <string name="dev_suite_no_space">저장 공간 부족: 약 %1$d GB 필요, 사용 가능 %2$d GB</string>
     <string name="dev_suite_skipped_dep">건너뜀: %1$s 설치 실패</string>
     <string name="dev_suite_uninstall_failed">제거 실패 (exit %1$d)</string>

@@ -1840,6 +1840,9 @@
     <string name="builtin_plugin_ofm_name">Free Model Gateway (lokal)</string>
     <string name="builtin_plugin_ofm_summary">Lokal na OpenAI-compatible na gateway · 20+ frontier na modelo, walang account, walang key · loopback lang</string>
     <string name="builtin_plugin_interrupted">Naputol ang pag-install</string>
+    <string name="builtin_plugin_stage_payload">Inihahanda ang payload…</string>
+    <string name="builtin_plugin_stage_node">Sinusuri ang Node runtime…</string>
+    <string name="builtin_plugin_ready">Handa na</string>
     <string name="dev_suite_no_space">Kulang ang storage: kailangan mga %1$d GB, available %2$d GB</string>
     <string name="dev_suite_skipped_dep">Laktawan: hindi na-install ang %1$s</string>
     <string name="dev_suite_uninstall_failed">Nabigo ang pag-aalis (exit %1$d)</string>

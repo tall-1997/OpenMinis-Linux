@@ -1840,6 +1840,9 @@
     <string name="builtin_plugin_ofm_name">เกตเวย์โมเดลฟรี (ในเครื่อง)</string>
     <string name="builtin_plugin_ofm_summary">เกตเวย์ในเครื่องที่เข้ากันได้กับ OpenAI · โมเดลล้ำ 20+ รุ่น ไม่ต้องสมัคร ไม่ต้องใช้คีย์ · ฟังเฉพาะ loopback</string>
     <string name="builtin_plugin_interrupted">การติดตั้งถูกขัดจังหวะ</string>
+    <string name="builtin_plugin_stage_payload">กำลังเตรียมแพ็กเกจ…</string>
+    <string name="builtin_plugin_stage_node">กำลังตรวจสอบรันไทม์ Node…</string>
+    <string name="builtin_plugin_ready">พร้อม</string>
     <string name="dev_suite_no_space">พื้นที่เก็บข้อมูลไม่พอ: ต้องใช้ประมาณ %1$d GB ว่างอยู่ %2$d GB</string>
     <string name="dev_suite_skipped_dep">ข้าม: %1$s ติดตั้งไม่สำเร็จ</string>
     <string name="dev_suite_uninstall_failed">ถอนการติดตั้งไม่สำเร็จ (exit %1$d)</string>
