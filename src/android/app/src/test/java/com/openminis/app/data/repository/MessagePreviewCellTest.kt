@@ -61,4 +61,40 @@ class MessagePreviewCellTest {
         val legacy = """[{"type":"toolResult","value":{"output":"ok"}}]"""
         assertEquals(legacy, shown(legacy))
     }
+
+    // [T-android-preview-reminder-leak] A user turn opens with a
+    // system-reminder text part; the real text sits behind it.
+    @Test
+    fun `a reminder-first user turn shows the real text`() {
+        val parts = """[{"type":"text","value":"<system-reminder>task tracker: step 1 done</system-reminder>"},{"type":"text","value":"修复登录页崩溃"}]"""
+        val cell = messagePreviewCell(parts)
+        assertEquals("修复登录页崩溃", shown(cell))
+    }
+
+    @Test
+    fun `a legacy reminder-first cell shows the real text`() {
+        val legacy = """[{"type":"text","value":"<system-reminder>task tracker: step 1 done</system-reminder>"},{"type":"text","value":"修复登录页崩溃"}]"""
+        assertEquals("修复登录页崩溃", shown(legacy))
+    }
+
+    @Test
+    fun `a reminder longer than the clean cap is still stripped`() {
+        val longReminder = "<system-reminder>" + "x".repeat(600) + "</system-reminder>"
+        val parts = """[{"type":"text","value":"$longReminder"},{"type":"text","value":"真实消息"}]"""
+        val cell = messagePreviewCell(parts)
+        val shownText = shown(cell)
+        assertFalse(shownText.contains("x"))
+        assertFalse(shownText.contains("system-reminder"))
+        assertEquals("真实消息", shownText)
+    }
+
+    @Test
+    fun `a blank tail written by the old writer is recomputed`() {
+        // The pre-fix writer stored a blank tail when the first text part
+        // cleaned to empty. The picker must recover the real text from the
+        // raw head instead of collapsing to "(empty)".
+        val parts = """[{"type":"text","value":"<system-reminder>task tracker: step 1 done</system-reminder>"},{"type":"text","value":"修复登录页崩溃"}]"""
+        val buggyCell = parts + PREVIEW_SENTINEL + ""
+        assertEquals("修复登录页崩溃", shown(buggyCell))
+    }
 }

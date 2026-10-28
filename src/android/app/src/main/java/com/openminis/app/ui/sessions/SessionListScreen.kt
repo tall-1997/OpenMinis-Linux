@@ -2714,8 +2714,14 @@ private fun SessionRow(
                     overflow = TextOverflow.Ellipsis,
                 )
             } else {
+                // [T-android-preview-reminder-leak] Legacy rows written by the
+                // old preview path can hold a blank last_message (reminder-only
+                // first text part cleaned to ""). `?:` only catches null, so a
+                // blank cell rendered as an empty summary line on the main
+                // list. Treat blank as absent.
                 Text(
-                    text = session.lastMessage ?: stringResource(R.string.sessionlist_no_messages),
+                    text = session.lastMessage?.ifBlank { null }
+                        ?: stringResource(R.string.sessionlist_no_messages),
                     fontSize = 14.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,

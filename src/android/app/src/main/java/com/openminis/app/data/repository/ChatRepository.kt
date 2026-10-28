@@ -1332,8 +1332,16 @@ class ChatRepository(
         private const val PREVIEW_CLEAN_CHARS = 400
 
         private fun cleanPreview(raw: String): String {
-            val src = if (raw.length <= PREVIEW_CLEAN_CHARS) raw else raw.take(PREVIEW_CLEAN_CHARS)
-            return stripSystemReminders(src)
+            // [T-android-preview-reminder-leak] Strip reminders on the FULL
+            // text before capping: a reminder longer than PREVIEW_CLEAN_CHARS
+            // lost its closing tag under the old cap-first order, the strip
+            // regex missed, and raw <system-reminder> markup leaked into the
+            // session-list and picker previews. The contains() guard keeps the
+            // large-body property the cap was added for — bodies without the
+            // opening tag never touch the regex.
+            val stripped = if (raw.contains("<system-reminder>")) stripSystemReminders(raw) else raw
+            val src = if (stripped.length <= PREVIEW_CLEAN_CHARS) stripped else stripped.take(PREVIEW_CLEAN_CHARS)
+            return src
                 .replace(Regex("[\r\n]+"), " ")      // newlines → space
                 .replace(Regex("#{1,6}\\s"), "")      // headings: ## Title → Title
                 // [T-android-preview-underscore-eaten] `_{1,3}` stripped EVERY
@@ -1447,7 +1455,16 @@ class ChatRepository(
                     if (type == "text") {
                         val text = obj.optString("value", "")
                         if (text.isNotBlank()) {
-                            return cleanPreview(text)
+                            // [T-android-preview-reminder-leak] A user turn
+                            // opens with a system-reminder text part; after
+                            // cleaning it is blank. Returning that blank hid
+                            // the real text part behind it — the session list
+                            // showed an empty line and the re-run picker
+                            // showed "(empty)". Skip blanks, keep scanning.
+                            val cleaned = cleanPreview(text)
+                            if (cleaned.isNotBlank()) {
+                                return cleaned
+                            }
                         }
                     } else if (type == "mediaRef") {
                         hasMedia = true
