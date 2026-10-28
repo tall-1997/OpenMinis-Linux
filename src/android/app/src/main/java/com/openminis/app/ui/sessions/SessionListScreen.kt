@@ -2702,9 +2702,8 @@ private fun SessionRow(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            // During an active search, prefer the matched message snippet
-            // (content hit) over the generic lastMessage preview. Falls back
-            // to lastMessage when match was title-only (snippet is null).
+            // Active search: prefer the matched snippet (content hit) over
+            // the generic lastMessage; title-only matches fall back (null).
             if (searchQuery.isNotBlank() && searchSnippet != null) {
                 Text(
                     text = highlightedAnnotatedString(searchSnippet, searchQuery),
@@ -2714,13 +2713,8 @@ private fun SessionRow(
                     overflow = TextOverflow.Ellipsis,
                 )
             } else {
-                // [T-android-preview-reminder-leak] Legacy rows written by the
-                // old preview path can hold a blank last_message (reminder-only
-                // first text part cleaned to ""). `?:` only catches null, so a
-                // blank cell rendered as an empty summary line on the main
-                // list. Treat blank as absent.
                 Text(
-                    text = session.lastMessage?.ifBlank { null }
+                    text = lastMessageForDisplay(session.lastMessage)
                         ?: stringResource(R.string.sessionlist_no_messages),
                     fontSize = 14.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
