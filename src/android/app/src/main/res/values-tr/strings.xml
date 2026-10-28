@@ -1843,6 +1843,13 @@
     <string name="builtin_plugin_stage_payload">Paket hazırlanıyor…</string>
     <string name="builtin_plugin_stage_node">Node çalışma ortamı denetleniyor…</string>
     <string name="builtin_plugin_ready">Hazır</string>
+    <string name="builtin_plugin_section_header">Yerleşik ağ geçitleri</string>
+    <string name="builtin_plugin_section_footer">Uygulamayla gelen çevrimdışı paketler. Kurun, sonra anahtarı açın — ağ geçidi yerel hizmet olarak çalışır ve yalnızca loopback dinler.</string>
+    <string name="builtin_plugin_a2a_name">Agent2API Ağ Geçidi (yerel)</string>
+    <string name="builtin_plugin_a2a_summary">Çok sağlayıcılı OpenAI uyumlu yerel proxy · hesapları web panelinden ekleyin · yalnızca loopback</string>
+    <string name="builtin_plugin_install">Yükle</string>
+    <string name="builtin_plugin_retry">Yeniden dene</string>
+    <string name="builtin_plugin_open_panel">Panel</string>
     <string name="dev_suite_no_space">Depolama yetersiz: yaklaşık %1$d GB gerekli, %2$d GB boş</string>
     <string name="dev_suite_skipped_dep">Atlandı: %1$s kurulamadı</string>
     <string name="dev_suite_uninstall_failed">Kaldırma başarısız (exit %1$d)</string>

@@ -1845,6 +1845,13 @@
     <string name="builtin_plugin_stage_payload">Payload wird vorbereitet…</string>
     <string name="builtin_plugin_stage_node">Node-Laufzeit wird geprüft…</string>
     <string name="builtin_plugin_ready">Bereit</string>
+    <string name="builtin_plugin_section_header">Integrierte Gateways</string>
+    <string name="builtin_plugin_section_footer">Offline-Pakete, die mit der App ausgeliefert werden. Installieren und den Schalter umlegen — das Gateway läuft dann als lokaler Dienst und lauscht nur auf Loopback.</string>
+    <string name="builtin_plugin_a2a_name">Agent2API-Gateway (lokal)</string>
+    <string name="builtin_plugin_a2a_summary">Lokaler Multi-Provider-Proxy, OpenAI-kompatibel · Konten im Webpanel hinzufügen · nur Loopback</string>
+    <string name="builtin_plugin_install">Installieren</string>
+    <string name="builtin_plugin_retry">Erneut versuchen</string>
+    <string name="builtin_plugin_open_panel">Panel</string>
     <string name="dev_suite_no_space">Zu wenig Speicherplatz: etwa %1$d GB erforderlich, %2$d GB frei</string>
     <string name="dev_suite_skipped_dep">Übersprungen: %1$s wurde nicht installiert</string>
     <string name="dev_suite_uninstall_failed">Deinstallation fehlgeschlagen (exit %1$d)</string>

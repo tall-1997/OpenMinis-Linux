@@ -7,8 +7,9 @@ import org.junit.Test
 
 /**
  * Contract tests for the builtin-plugin catalog: descriptor completeness, the
- * on-disk layout every builtin plugin shares, and the OFM_* env contract the
- * upstream install script consumes. Pure functions — no Context, no disk.
+ * on-disk layout every builtin plugin shares, and the `<PREFIX>_*` env
+ * contract each payload's install script consumes. Pure functions — no
+ * Context, no disk.
  */
 class BuiltinPluginCatalogTest {
 
@@ -23,10 +24,14 @@ class BuiltinPluginCatalogTest {
             assertTrue("payloadAsset", d.payloadAsset.startsWith("builtin_plugins/"))
             assertTrue("payloadAsset is a zip", d.payloadAsset.endsWith(".zip"))
             assertTrue("installScript is relative", !d.installScript.startsWith("/"))
-            assertTrue("nodeMinMajor", d.nodeMinMajor > 0)
+            // 0 is legal and means "self-contained runtime, skip the node
+            // gate" (the a2a Rust binary); Node runtimes pin their real floor.
+            assertTrue("nodeMinMajor", d.nodeMinMajor >= 0)
             assertTrue("servicePort", d.servicePort in 1..65535)
             assertTrue("serviceHealthPath starts with /", d.serviceHealthPath.startsWith("/"))
             assertTrue("laneId", d.laneId.isNotBlank())
+            assertTrue("envPrefix is shell-safe", d.envPrefix.matches(Regex("[A-Z0-9_]+")))
+            assertTrue("launcher is a bare name", d.launcher.matches(Regex("[a-z0-9-]+")))
         }
     }
 
@@ -43,6 +48,24 @@ class BuiltinPluginCatalogTest {
         assertEquals(18900, ofm.servicePort)
         assertEquals("/v1/models", ofm.serviceHealthPath)
         assertEquals(22, ofm.nodeMinMajor)
+    }
+
+    @Test
+    fun `a2a descriptor matches the lane contract`() {
+        val a2a = BuiltinPluginCatalog.byId("a2a")!!
+        assertEquals("a2a lane id", "a2a", a2a.laneId)
+        assertEquals(18901, a2a.servicePort)
+        assertEquals("/health", a2a.serviceHealthPath)
+        // Self-contained Rust binary — no Node anywhere.
+        assertEquals(0, a2a.nodeMinMajor)
+        assertEquals("a2a-gateway", a2a.launcher)
+        assertEquals("/", a2a.panelPath)
+    }
+
+    @Test
+    fun `ports are unique so two gateways never squat each other`() {
+        val ports = BuiltinPluginCatalog.ALL.map { it.servicePort }
+        assertEquals(ports.size, ports.toSet().size)
     }
 
     @Test
@@ -74,12 +97,18 @@ class BuiltinPluginCatalogTest {
     }
 
     @Test
-    fun `install env carries the OFM contract pointing at the layout`() {
+    fun `install env carries each payload's own prefix contract`() {
         val ofm = BuiltinPluginCatalog.byId("ofm")!!
         val env = BuiltinPluginCatalog.installEnv(ofm)
         assertEquals(BuiltinPluginCatalog.payloadDir("ofm"), env["OFM_PLUGIN_PAYLOAD"])
         assertEquals(BuiltinPluginCatalog.toolDir("ofm"), env["OFM_TOOL_DIR"])
         assertEquals(BuiltinPluginCatalog.dataDir("ofm"), env["OFM_TOOL_DATA"])
+
+        val a2a = BuiltinPluginCatalog.byId("a2a")!!
+        val a2aEnv = BuiltinPluginCatalog.installEnv(a2a)
+        assertEquals(BuiltinPluginCatalog.payloadDir("a2a"), a2aEnv["A2A_PLUGIN_PAYLOAD"])
+        assertEquals(BuiltinPluginCatalog.toolDir("a2a"), a2aEnv["A2A_TOOL_DIR"])
+        assertEquals(BuiltinPluginCatalog.dataDir("a2a"), a2aEnv["A2A_TOOL_DATA"])
     }
 
     @Test
@@ -96,6 +125,19 @@ class BuiltinPluginCatalogTest {
         assertEquals(
             "http://127.0.0.1:18900/v1/models",
             BuiltinPluginCatalog.healthUrl(ofm),
+        )
+        assertEquals(
+            "http://127.0.0.1:18901/health",
+            BuiltinPluginCatalog.healthUrl(BuiltinPluginCatalog.byId("a2a")!!),
+        )
+    }
+
+    @Test
+    fun `panel url is null for panel-less plugins and derived otherwise`() {
+        assertEquals(null, BuiltinPluginCatalog.panelUrl(BuiltinPluginCatalog.byId("ofm")!!))
+        assertEquals(
+            "http://127.0.0.1:18901/",
+            BuiltinPluginCatalog.panelUrl(BuiltinPluginCatalog.byId("a2a")!!),
         )
     }
 }

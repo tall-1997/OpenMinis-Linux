@@ -1851,6 +1851,13 @@
     <string name="builtin_plugin_stage_payload">Przygotowywanie pakietu…</string>
     <string name="builtin_plugin_stage_node">Sprawdzanie środowiska Node…</string>
     <string name="builtin_plugin_ready">Gotowe</string>
+    <string name="builtin_plugin_section_header">Bramy wbudowane</string>
+    <string name="builtin_plugin_section_footer">Pakiety offline dostarczane w aplikacji. Zainstaluj, a potem włącz przełącznik, aby uruchomić bramę jako usługę lokalną — nasłuchuje tylko na loopback.</string>
+    <string name="builtin_plugin_a2a_name">Brama Agent2API (lokalna)</string>
+    <string name="builtin_plugin_a2a_summary">Lokalny proxy zgodny z OpenAI dla wielu dostawców · dodaj konta w panelu internetowym · tylko loopback</string>
+    <string name="builtin_plugin_install">Zainstaluj</string>
+    <string name="builtin_plugin_retry">Ponów</string>
+    <string name="builtin_plugin_open_panel">Panel</string>
     <string name="dev_suite_no_space">Za mało miejsca: potrzeba około %1$d GB, dostępnych %2$d GB</string>
     <string name="dev_suite_skipped_dep">Pominięto: %1$s nie zostało zainstalowane</string>
     <string name="dev_suite_uninstall_failed">Odinstalowanie nie powiodło się (exit %1$d)</string>

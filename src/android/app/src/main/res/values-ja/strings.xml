@@ -1842,6 +1842,13 @@
     <string name="builtin_plugin_stage_payload">ペイロードを準備中…</string>
     <string name="builtin_plugin_stage_node">Node ランタイムを確認中…</string>
     <string name="builtin_plugin_ready">準備完了</string>
+    <string name="builtin_plugin_section_header">内蔵ゲートウェイ</string>
+    <string name="builtin_plugin_section_footer">アプリ同梱のオフラインパッケージ。インストール後、スイッチをオンにするとゲートウェイがローカルサービスとして動作します — ループバックのみで待ち受けます。</string>
+    <string name="builtin_plugin_a2a_name">Agent2API ゲートウェイ (ローカル)</string>
+    <string name="builtin_plugin_a2a_summary">ローカルのマルチプロバイダー対応 OpenAI 互換プロキシ · 上流アカウントはウェブパネルで追加 · ループバックのみ</string>
+    <string name="builtin_plugin_install">インストール</string>
+    <string name="builtin_plugin_retry">再試行</string>
+    <string name="builtin_plugin_open_panel">パネル</string>
     <string name="dev_suite_no_space">ストレージが不足しています：約 %1$d GB 必要、利用可能 %2$d GB</string>
     <string name="dev_suite_skipped_dep">スキップしました：%1$s のインストールに失敗</string>
     <string name="dev_suite_uninstall_failed">アンインストールに失敗しました（exit %1$d）</string>

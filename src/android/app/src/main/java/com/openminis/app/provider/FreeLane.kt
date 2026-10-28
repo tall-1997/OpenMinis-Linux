@@ -126,11 +126,12 @@ internal object FreeLanes {
     const val ZEN_ID = "zen"
     const val KILO_ID = "kilo"
     const val OFM_ID = "ofm"
+    const val A2A_ID = "a2a"
 
     /** Known lane scopes, used to tell a scoped health key from a legacy flat one. */
-    val LANE_IDS: Set<String> = setOf(ZEN_ID, KILO_ID, OFM_ID)
+    val LANE_IDS: Set<String> = setOf(ZEN_ID, KILO_ID, OFM_ID, A2A_ID)
 
-    val all: List<FreeLane> = listOf(ZenFreeLane, KiloFreeLane, LocalGatewayFreeLane)
+    val all: List<FreeLane> = listOf(ZenFreeLane, KiloFreeLane, LocalGatewayFreeLane, Agent2ApiFreeLane)
 
     /** The built-in lane for this instance, or null when the instance is the user's. */
     fun forEndpoint(baseURL: String?, apiKey: String?): FreeLane? =
