@@ -68,7 +68,14 @@ class SecurityGateImpl : SecurityGate {
 
     private val auditTrail = CopyOnWriteArrayList<AuditEntry>()
 
-    /** [T-audit-trail-bounded] Newest-wins cap on the in-memory trail. */
+    /**
+     * [T-audit-trail-bounded] Newest-wins cap on the in-memory trail. Long
+     * sessions append one entry per decision; without a bound the
+     * hash-chained list grew for the life of the process. Trim to the newest
+     * window — the chain restarts from the surviving head, which is fine: the
+     * trail is a review aid, not a tamper-proof ledger. (Consolidated here;
+     * audit / verifyAuditChain / tamperDecision used to repeat this verbatim.)
+     */
     private val AUDIT_TRAIL_MAX = 500
 
     companion object {
@@ -148,10 +155,11 @@ class SecurityGateImpl : SecurityGate {
             "agent_plan", "cronjob", "invoke_skill", "skill_manage", "ask_reasoning",
             "memory_write", "memory_get", "ask_user_question",
             -> GateCommand(name, toolArgs, Capability.SYSTEM, Reversibility.REVERSIBLE, "会话协调工具")
-            // [T-android-jobs-registry] start/kill = sandbox execution; list/output = reads.
-            "background_job" -> classifyJob(name, toolArgs)
-            // [T-android-agent-terminal] agent PTYs share the PRoot trust domain.
-            "agent_terminal" -> classifyTerminal(name, toolArgs)
+        // [T-android-jobs-registry] start/kill = sandbox execution; list/output = reads.
+        "background_job" -> classifyJob(name, toolArgs)
+        // [T-android-agent-terminal] agent PTYs share the PRoot trust domain.
+        "agent_terminal" -> classifyTerminal(name, toolArgs)
+        "virtual_screen" -> VirtualScreenGatePolicy.classify(name, toolArgs) // [T-android-vscreen]
             // [T-android-present-tool] copies a deliverable into app-owned shared/.
             "present_file" -> GateCommand(name, toolArgs, Capability.FS, Reversibility.REVERSIBLE, "Copies a deliverable into the app-owned shared folder")
             else -> GateCommand(name, toolArgs, Capability.UNKNOWN, Reversibility.IRREVERSIBLE, "未知工具类型，默认不可逆")
@@ -316,7 +324,9 @@ class SecurityGateImpl : SecurityGate {
                 // [T-android-jobs-registry] job start/kill and [T-android-agent-terminal]
                 // PTY open/send/signal are execution; their FS reads stay readable.
                 (cmd.toolName == "background_job" && cmd.capability != Capability.FS) ||
-                (cmd.toolName == "agent_terminal" && cmd.capability != Capability.FS)
+                (cmd.toolName == "agent_terminal" && cmd.capability != Capability.FS) ||
+                // [T-android-vscreen] list/screenshot (SCREEN) stay readable; driving is SYSTEM.
+                (cmd.toolName == "virtual_screen" && cmd.capability != Capability.SCREEN)
             ) {
                 return Decision.Denied("只读/计划模式禁止写与执行")
             }
@@ -460,11 +470,12 @@ class SecurityGateImpl : SecurityGate {
         if (cmd.toolName in READ_ONLY_TOOLS && !(cmd.toolName == "browser_use" && cmd.reversibility == Reversibility.IRREVERSIBLE)) return true
         if (cmd.toolName in COORDINATOR_TOOLS) return true
         if (cmd.toolName in SHELL_TOOLS) return isSafeReadOnlyCommand(command)
-        // [T-android-jobs-registry] job list/output and [T-android-agent-terminal]
-        // read/list are pure bookkeeping reads; the mutating actions ask normally.
-        if (cmd.toolName == "background_job" && cmd.capability == Capability.FS) return true
-        if (cmd.toolName == "agent_terminal" && cmd.capability == Capability.FS) return true
-        return false
+    // [T-android-jobs-registry] job list/output and [T-android-agent-terminal]
+    // read/list are pure bookkeeping reads; the mutating actions ask normally.
+    if (cmd.toolName == "background_job" && cmd.capability == Capability.FS) return true
+    if (cmd.toolName == "agent_terminal" && cmd.capability == Capability.FS) return true
+    if (cmd.toolName == "virtual_screen" && cmd.capability == Capability.SCREEN) return true // [T-android-vscreen]
+    return false
     }
 
     override fun preview(cmd: GateCommand): String {
@@ -488,11 +499,7 @@ class SecurityGateImpl : SecurityGate {
             is Decision.Denied -> "Denied: ${decision.reason}"
         }
         synchronized(auditTrail) {
-            // [T-audit-trail-bounded] Long sessions append one entry per
-            // decision; without a bound the hash-chained list grew for the
-            // life of the process. Trim to the newest window — the chain
-            // restarts from the surviving head, which is fine: the trail is
-            // a review aid, not a tamper-proof ledger.
+            // [T-audit-trail-bounded] rationale lives on AUDIT_TRAIL_MAX.
             val prev = auditTrail.lastOrNull()?.hash ?: ""
             val ts = System.currentTimeMillis()
             val hash = computeAuditHash(prev, ts, cmd.toolName, cmd.toolArgs, ds, result)
@@ -517,11 +524,7 @@ class SecurityGateImpl : SecurityGate {
 
     override fun verifyAuditChain(): AuditChainVerification {
         synchronized(auditTrail) {
-            // [T-audit-trail-bounded] Long sessions append one entry per
-            // decision; without a bound the hash-chained list grew for the
-            // life of the process. Trim to the newest window — the chain
-            // restarts from the surviving head, which is fine: the trail is
-            // a review aid, not a tamper-proof ledger.
+            // [T-audit-trail-bounded] rationale lives on AUDIT_TRAIL_MAX.
             var prev = ""
             for ((i, e) in auditTrail.withIndex()) {
                 if (e.prevHash != prev) return AuditChainVerification(ok = false, brokenAt = i)
@@ -536,11 +539,7 @@ class SecurityGateImpl : SecurityGate {
     /** Test helper: mutate payload without recomputing hash. */
     fun tamperDecision(index: Int, newDecision: String) {
         synchronized(auditTrail) {
-            // [T-audit-trail-bounded] Long sessions append one entry per
-            // decision; without a bound the hash-chained list grew for the
-            // life of the process. Trim to the newest window — the chain
-            // restarts from the surviving head, which is fine: the trail is
-            // a review aid, not a tamper-proof ledger.
+            // [T-audit-trail-bounded] rationale lives on AUDIT_TRAIL_MAX.
             val e = auditTrail[index]
             auditTrail[index] = e.copy(decision = newDecision)
         }

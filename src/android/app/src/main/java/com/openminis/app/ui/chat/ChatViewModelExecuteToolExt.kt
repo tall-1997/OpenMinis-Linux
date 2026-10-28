@@ -87,6 +87,12 @@ internal suspend fun ChatViewModel.executeTool(
         // [T-ui-action] GUI Agent 的手：tap/type/swipe/scroll/back/open_app/open_url。
         com.openminis.app.tools.UiActionTool.NAME ->
             com.openminis.app.tools.UiActionTool.execute(argsJson)
+        // [T-android-vscreen] Agent-owned virtual displays: the target app is
+        // started on a VirtualDisplay so reads/taps/typing never steal the
+        // user's physical screen and no Accessibility permission is needed
+        // (driving goes through the Shizuku shell instead).
+        com.openminis.app.tools.VirtualScreenTool.NAME ->
+            com.openminis.app.tools.VirtualScreenTool.execute(argsJson, activeSessionId, context)
         // [T-ui-skill-wired] ui_skill was REGISTERED in AgentTools (and its
         // description even tells the model to prefer it over manual
         // ui_read+ui_action) but had NO dispatch branch here — every call
