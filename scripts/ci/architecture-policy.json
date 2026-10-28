@@ -97,7 +97,7 @@
     "src/android/app/src/main/java/com/openminis/app/config/ConfigBuiltins.kt": 1213,
     "src/android/app/src/main/java/com/openminis/app/crash/CrashFrequencyDetector.kt": 916,
     "src/android/app/src/main/java/com/openminis/app/data/db/ChatDao.kt": 829,
-    "src/android/app/src/main/java/com/openminis/app/data/repository/ChatRepository.kt": 1550,
+    "src/android/app/src/main/java/com/openminis/app/data/repository/ChatRepository.kt": 1412,
     "src/android/app/src/main/java/com/openminis/app/data/repository/MemoryRepository.kt": 831,
     "src/android/app/src/main/java/com/openminis/app/data/repository/ProviderRepository.kt": 1542,
     "src/android/app/src/main/java/com/openminis/app/data/repository/SkillRepository.kt": 2326,
