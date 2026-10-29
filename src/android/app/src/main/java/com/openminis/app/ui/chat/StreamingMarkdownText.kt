@@ -630,15 +630,19 @@ internal fun isBlockquoteLine(trimmed: String): Boolean {
 }
 
 /**
- * Split a paragraph's raw text at inline `![alt](url)` occurrences, extracting
- * video/audio references into standalone MdBlock.Video/Audio blocks. Image
- * references stay inline (Compose doesn't render inline bitmap attachments in
- * text here, but the `[alt]` link fallback is acceptable for images).
+ * Split a paragraph's raw text at inline `![alt](url)` occurrences, promoting
+ * each media reference — video, audio, AND image — to a standalone block.
  *
- * Why: LLMs very commonly emit `"Here's the video: ![robot](minis://attachments/x.mp4)"`
+ * [T-inline-image-blue-link] Images used to stay inline and rendered as a
+ * blue `[alt]` link (the inline parser has no bitmap slot). Promoting them
+ * to [MdBlock.Image] here routes them through the block renderer's full
+ * image card: Coil decode, tap-to-gallery, broken-image placeholder, decode
+ * size cap. Same shape as video/audio, which already did this.
+ *
+ * Why: LLMs very commonly emit `"Here's the chart: ![x](minis://workspace/x.png)"`
  * on a single line alongside explanatory text. Without this split, the line
- * becomes one Paragraph and the video markdown is rendered as just a blue
- * `[alt]` link — no preview card, no tap-to-play.
+ * becomes one Paragraph and the image markdown renders as just a blue
+ * `[alt]` link — no card, no preview, no tap.
  */
 internal fun splitParagraphOnInlineMedia(text: String): List<MdBlock> {
     if (text.length > BoundedText.MAX_ICU_INPUT_CHARS) {
@@ -647,27 +651,10 @@ internal fun splitParagraphOnInlineMedia(text: String): List<MdBlock> {
     val matches = inlineMediaRegex.findAll(text).toList()
     if (matches.isEmpty()) return listOf(MdBlock.Paragraph(text))
 
-    // Pre-check: only split when at least one match is a media (video/audio)
-    // that we can render as a card. Plain image-extension matches stay inline.
-    val hasMediaExt = matches.any { m ->
-        val url = m.groupValues[2]
-        val lastSeg = url.substringAfterLast('/')
-        val decoded = runCatching { java.net.URLDecoder.decode(lastSeg, "UTF-8") }.getOrDefault(lastSeg)
-        val ext = decoded.substringAfterLast('.', "").lowercase()
-        ext in nativeVideoExts || ext in nativeAudioExts
-    }
-    if (!hasMediaExt) return listOf(MdBlock.Paragraph(text))
-
     val result = mutableListOf<MdBlock>()
     var cursor = 0
     for (m in matches) {
         val url = m.groupValues[2]
-        val lastSeg = url.substringAfterLast('/')
-        val decoded = runCatching { java.net.URLDecoder.decode(lastSeg, "UTF-8") }.getOrDefault(lastSeg)
-        val ext = decoded.substringAfterLast('.', "").lowercase()
-        val isMedia = ext in nativeVideoExts || ext in nativeAudioExts
-        if (!isMedia) continue
-
         val preceding = text.substring(cursor, m.range.first).trim('\n', ' ', '\t')
         if (preceding.isNotBlank()) result.add(MdBlock.Paragraph(preceding))
         val alt = m.groupValues[1]
