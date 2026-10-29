@@ -152,14 +152,41 @@ class A2aViewStateTest {
     }
 
     @Test
-    fun nonHttpSchemesAndLookalikePortsAreConfined() {
+    fun systemSchemesDispatchExternally() {
+        // tel:/mailto:/intent:/market:/office-raccoon: are links to OTHER
+        // apps, not pages — the panel hands them to the system so they
+        // reach their handlers instead of dying inside the WebView.
+        assertEquals(
+            A2aPanelNavAction.EXTERNAL_SCHEME,
+            A2aPanelNav.resolve("tel:+15551234567", "http://127.0.0.1:3065/"),
+        )
+        assertEquals(
+            A2aPanelNavAction.EXTERNAL_SCHEME,
+            A2aPanelNav.resolve("mailto:hi@example.com", "http://127.0.0.1:3065/"),
+        )
+        assertEquals(
+            A2aPanelNavAction.EXTERNAL_SCHEME,
+            A2aPanelNav.resolve("intent://scan/#Intent;scheme=zxing;end", "http://127.0.0.1:3065/"),
+        )
+        assertEquals(
+            A2aPanelNavAction.EXTERNAL_SCHEME,
+            A2aPanelNav.resolve("market://details?id=com.example", "http://127.0.0.1:3065/"),
+        )
+        assertEquals(
+            A2aPanelNavAction.EXTERNAL_SCHEME,
+            A2aPanelNav.resolve("office-raccoon://login/callback?code=x", "http://127.0.0.1:3065/"),
+        )
+    }
+
+    @Test
+    fun javascriptAndFileStayConfined() {
         assertEquals(
             A2aPanelNavAction.CONFINED,
             A2aPanelNav.resolve("javascript:alert(1)", "http://127.0.0.1:3065/"),
         )
         assertEquals(
             A2aPanelNavAction.CONFINED,
-            A2aPanelNav.resolve("tel:+15551234567", "http://127.0.0.1:3065/"),
+            A2aPanelNav.resolve("file:///data/local/tmp/x.html", "http://127.0.0.1:3065/"),
         )
     }
 

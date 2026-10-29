@@ -1859,6 +1859,10 @@
     <string name="a2a_panel_not_installed">ゲートウェイをインストールするとウェブパネルが開きます。</string>
     <string name="a2a_panel_needs_start">ゲートウェイを起動するとウェブパネルが開きます。</string>
     <string name="a2a_panel_load_failed">パネルを読み込めませんでした。</string>
+    <string name="a2a_panel_page_title">Agent2API パネル</string>
+    <string name="a2a_login_window_title">ログイン</string>
+    <string name="a2a_close">閉じる</string>
+    <string name="a2a_open_in_browser">ブラウザで開く</string>
     <string name="dev_suite_no_space">ストレージが不足しています：約 %1$d GB 必要、利用可能 %2$d GB</string>
     <string name="dev_suite_skipped_dep">スキップしました：%1$s のインストールに失敗</string>
     <string name="dev_suite_uninstall_failed">アンインストールに失敗しました（exit %1$d）</string>

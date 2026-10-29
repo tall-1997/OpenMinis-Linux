@@ -1860,6 +1860,10 @@
     <string name="a2a_panel_not_installed">Web panelini açmak için ağ geçidini yükleyin.</string>
     <string name="a2a_panel_needs_start">Web panelini açmak için ağ geçidini başlatın.</string>
     <string name="a2a_panel_load_failed">Panel yüklenemedi.</string>
+    <string name="a2a_panel_page_title">Agent2API Paneli</string>
+    <string name="a2a_login_window_title">Oturum aç</string>
+    <string name="a2a_close">Kapat</string>
+    <string name="a2a_open_in_browser">Tarayıcıda aç</string>
     <string name="dev_suite_no_space">Depolama yetersiz: yaklaşık %1$d GB gerekli, %2$d GB boş</string>
     <string name="dev_suite_skipped_dep">Atlandı: %1$s kurulamadı</string>
     <string name="dev_suite_uninstall_failed">Kaldırma başarısız (exit %1$d)</string>

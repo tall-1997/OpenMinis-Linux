@@ -1864,6 +1864,10 @@
     <string name="a2a_panel_not_installed">Instalează gateway-ul pentru a-i deschide panoul web.</string>
     <string name="a2a_panel_needs_start">Pornește gateway-ul pentru a-i deschide panoul web.</string>
     <string name="a2a_panel_load_failed">Panoul nu s-a putut încărca.</string>
+    <string name="a2a_panel_page_title">Panou Agent2API</string>
+    <string name="a2a_login_window_title">Conectare</string>
+    <string name="a2a_close">Închide</string>
+    <string name="a2a_open_in_browser">Deschide în browser</string>
     <string name="dev_suite_no_space">Spațiu insuficient: sunt necesari aproximativ %1$d GB, disponibil %2$d GB</string>
     <string name="dev_suite_skipped_dep">Omis: %1$s nu a fost instalat</string>
     <string name="dev_suite_uninstall_failed">Dezinstalarea a eșuat (exit %1$d)</string>

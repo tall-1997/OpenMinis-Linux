@@ -295,6 +295,10 @@
     <string name="a2a_panel_not_installed">安装网关后即可打开网页面板。</string>
     <string name="a2a_panel_needs_start">启动网关后即可打开网页面板。</string>
     <string name="a2a_panel_load_failed">面板加载失败。</string>
+    <string name="a2a_panel_page_title">Agent2API 面板</string>
+    <string name="a2a_login_window_title">登录</string>
+    <string name="a2a_close">关闭</string>
+    <string name="a2a_open_in_browser">在浏览器打开</string>
     <string name="dev_suite_no_space">存储空间不足：需要约 %1$d GB，可用 %2$d GB</string>
     <string name="dev_suite_skipped_dep">已跳过：%1$s 未安装成功</string>
     <string name="dev_suite_uninstall_failed">卸载失败（exit %1$d）</string>

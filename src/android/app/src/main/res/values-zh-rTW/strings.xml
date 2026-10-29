@@ -1951,6 +1951,10 @@
     <string name="a2a_panel_not_installed">安裝閘道後即可開啟網路面板。</string>
     <string name="a2a_panel_needs_start">啟動閘道後即可開啟網路面板。</string>
     <string name="a2a_panel_load_failed">面板載入失敗。</string>
+    <string name="a2a_panel_page_title">Agent2API 面板</string>
+    <string name="a2a_login_window_title">登入</string>
+    <string name="a2a_close">關閉</string>
+    <string name="a2a_open_in_browser">在瀏覽器中開啟</string>
     <string name="dev_suite_no_space">儲存空間不足：需要約 %1$d GB，可用 %2$d GB</string>
     <string name="dev_suite_skipped_dep">已跳過：%1$s 未安裝成功</string>
     <string name="dev_suite_uninstall_failed">解除安裝失敗（exit %1$d）</string>

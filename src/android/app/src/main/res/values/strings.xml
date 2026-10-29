@@ -330,6 +330,10 @@
     <string name="a2a_panel_not_installed">Install the gateway to open its web panel.</string>
     <string name="a2a_panel_needs_start">Start the gateway to open its web panel.</string>
     <string name="a2a_panel_load_failed">Panel failed to load.</string>
+    <string name="a2a_panel_page_title">Agent2API Panel</string>
+    <string name="a2a_login_window_title">Sign in</string>
+    <string name="a2a_close">Close</string>
+    <string name="a2a_open_in_browser">Open in browser</string>
     <string name="dev_suite_no_space">Not enough storage: about %1$d GB needed, %2$d GB free</string>
     <string name="dev_suite_skipped_dep">Skipped: %1$s did not install</string>
     <string name="dev_suite_uninstall_failed">Uninstall failed (exit %1$d)</string>

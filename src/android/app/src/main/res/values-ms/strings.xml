@@ -1860,6 +1860,10 @@
     <string name="a2a_panel_not_installed">Pasang gateway untuk membuka panel webnya.</string>
     <string name="a2a_panel_needs_start">Jalankan gateway untuk membuka panel webnya.</string>
     <string name="a2a_panel_load_failed">Panel gagal dimuatkan.</string>
+    <string name="a2a_panel_page_title">Panel Agent2API</string>
+    <string name="a2a_login_window_title">Log masuk</string>
+    <string name="a2a_close">Tutup</string>
+    <string name="a2a_open_in_browser">Buka dalam pelayar</string>
     <string name="dev_suite_no_space">Ruang simpanan tidak cukup: perlu kira-kira %1$d GB, tersedia %2$d GB</string>
     <string name="dev_suite_skipped_dep">Dilangkau: %1$s gagal dipasang</string>
     <string name="dev_suite_uninstall_failed">Nyahpasang gagal (exit %1$d)</string>
