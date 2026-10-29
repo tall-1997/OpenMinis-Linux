@@ -4,32 +4,27 @@ import com.openminis.app.R
 
 /**
  * Catalog of builtin plugins — runtime payloads the app ships in its assets
- * and deploys on demand. Two kinds share one descriptor shape:
+ * and deploys on demand. Guest plugins unpack into the PRoot sandbox and run
+ * there (Node runtimes, shell installers). The on-disk layout under
+ * [installRoot] is:
+ * ```
+ * /var/minis/shared/builtin-plugins/<id>/
+ *   payload/   unpacked asset zip, upstream scripts untouched
+ *   tool/      the runtime the install script lays down (node_modules, bins)
+ *   data/      service state: logs, generated keys, anything the gateway writes
+ * ```
+ * `shared/` deliberately: host-visible, inspectable, survives an app-data
+ * clear, and the same place dev-suite offline payloads live.
  *
- *  - **Guest** plugins unpack into the PRoot sandbox and run there
- *    (Node runtimes, shell installers). The on-disk layout under
- *    [installRoot] is:
- *    ```
- *    /var/minis/shared/builtin-plugins/<id>/
- *      payload/   unpacked asset zip, upstream scripts untouched
- *      tool/      the runtime the install script lays down (node_modules, bins)
- *      data/      service state: logs, generated keys, anything the gateway writes
- *    ```
- *    `shared/` deliberately: host-visible, inspectable, survives an app-data
- *    clear, and the same place dev-suite offline payloads live.
- *
- *  - **Native** plugins ship a bionic binary inside the APK
- *    ([Descriptor.nativeBinary] in nativeLibraryDir) and run as a host app
- *    process — no guest, no Node, no PRoot. Their asset zip is the web-panel
- *    bundle, deployed to the app-private home [nativeHomeDir]:
- *    ```
- *    <filesDir>/builtin-plugins/<id>/
- *      ui/        panel bundle (index.html + assets)
- *      data/      gateway state: SQLite, logs, generated keys
- *    ```
- *    Private, not shared: the native process runs as the app's own uid, so
- *    it needs no shared volume, and app-private storage keeps gateway
- *    credentials out of every other sandbox session's reach.
+ * (Native plugins used to live here too — the a2a gateway shipped a bionic
+ * binary and ran as a host app process. It has since left the catalog for
+ * its own package, `com.openminis.app.a2a` ([com.openminis.app.a2a.A2aGateway]):
+ * the engine ([com.openminis.app.a2a.A2aInstaller],
+ * [com.openminis.app.a2a.A2aGatewayProcess]) moved with it and the lane
+ * layer stayed. The descriptor keeps the guest/native discrimination
+ * ([Descriptor.isNative] and the two native fields below it) so a future
+ * native plugin could return through the same door, and the guest install
+ * pipeline keeps refusing one; no current descriptor is native.)
  *
  * A descriptor is pure data plus the layout contract every builtin plugin
  * shares, so adding a plugin is adding one entry here (plus its asset zip
@@ -45,18 +40,14 @@ object BuiltinPluginCatalog {
         val summaryRes: Int,
         /** Upstream payload version, shown in the market card. */
         val version: String,
-        /**
-         * Zip inside APK assets. For guest plugins this is the runtime
-         * payload the installer unpacks into the guest; for native plugins
-         * it is the web-panel bundle deployed to the app's private dir.
-         */
+        /** Zip inside APK assets: the runtime payload the installer unpacks into the guest. */
         val payloadAsset: String,
-        /** Install entry inside the payload, relative to payload/. Guest only. */
+        /** Install entry inside the payload, relative to payload/. */
         val installScript: String?,
         /**
          * Minimum Node major the runtime needs (undici wants 22), or 0 when
          * the runtime is self-contained and needs no Node at all — the
-         * installer then skips the node gate entirely. Guest only.
+         * installer then skips the node gate entirely.
          */
         val nodeMinMajor: Int,
         /** Loopback port the installed service serves. */
@@ -67,32 +58,29 @@ object BuiltinPluginCatalog {
         val laneId: String,
         /**
          * Prefix of the payload's install-script env contract — each payload
-         * names its own variables (`OFM_TOOL_DIR`, `A2A_TOOL_DIR`), so the
-         * prefix travels with the descriptor instead of living in the
-         * installer. Guest only.
+         * names its own variables (`OFM_TOOL_DIR`), so the prefix travels
+         * with the descriptor instead of living in the installer.
          */
         val envPrefix: String?,
         /**
          * Executable the install script lays down at tool/bin/ for the host
          * to launch (foreground; the host backgrounds it with nohup).
-         * Guest only.
          */
         val launcher: String?,
-        /** Web panel path on the service port, or null when the plugin serves no panel. */
-        val panelPath: String?,
         /**
-         * Name of the bionic binary in the APK's nativeLibraryDir when this
-         * plugin runs as a host process (e.g. `liba2a.so` — Android package
-         * extraction only unpacks `lib*.so`, hence the extension), or null
-         * when the plugin runs inside the guest. Native plugins skip the
-         * guest installer entirely: the binary ships in the APK and the
-         * "install" is a host-side panel-bundle deployment.
+         * Name of a bionic binary in the APK's nativeLibraryDir for a plugin
+         * that runs as a host process (Android package extraction only
+         * unpacks `lib*.so`, hence the extension), or null when the plugin
+         * runs inside the guest. No current descriptor is native — the a2a
+         * gateway was the one, and it left the catalog for
+         * `com.openminis.app.a2a`. The field stays so a future native plugin
+         * could return through the same door and the guest pipeline's
+         * refusal of one keeps compiling.
          */
         val nativeBinary: String? = null,
         /**
-         * Prefix of the upstream binary's own runtime env contract for a
-         * native plugin (e.g. `AGENT2API` → `AGENT2API_HOST`,
-         * `AGENT2API_PROXY_PORT`, …). Null for guest plugins.
+         * Prefix of a native plugin's upstream binary env contract. Null for
+         * guest plugins — same dormant-for-now note as [nativeBinary].
          */
         val nativeEnvPrefix: String? = null,
     ) {
@@ -118,38 +106,9 @@ object BuiltinPluginCatalog {
         laneId = "ofm",
         envPrefix = "OFM",
         launcher = "ofm-gateway",
-        panelPath = null,
     )
 
-    /**
-     * The local Agent2API gateway (github.com/aimod-cc/Agent2API, MIT): a
-     * Rust binary serving an OpenAI-compatible proxy plus a web panel on
-     * the same loopback port. Runs as a **host process**: CI cross-compiles
-     * the upstream server for Android bionic (aarch64-linux-android) and the
-     * APK ships it as `liba2a.so` in nativeLibraryDir — no guest, no Node,
-     * no PRoot overhead. The payload asset is the panel bundle; "install"
-     * deploys it to the app's private dir. Accounts are added in the panel;
-     * the models listing is empty until one is.
-     */
-    private val A2A = Descriptor(
-        id = "a2a",
-        nameRes = R.string.builtin_plugin_a2a_name,
-        summaryRes = R.string.builtin_plugin_a2a_summary,
-        version = "3.0.8",
-        payloadAsset = "builtin_plugins/a2a-ui.zip",
-        installScript = null,
-        nodeMinMajor = 0,
-        servicePort = 18901,
-        serviceHealthPath = "/health",
-        laneId = "a2a",
-        envPrefix = null,
-        launcher = null,
-        panelPath = "/",
-        nativeBinary = "liba2a.so",
-        nativeEnvPrefix = "AGENT2API",
-    )
-
-    val ALL: List<Descriptor> = listOf(OFM, A2A)
+    val ALL: List<Descriptor> = listOf(OFM)
 
     fun byId(id: String): Descriptor? = ALL.firstOrNull { it.id == id }
 
@@ -164,8 +123,7 @@ object BuiltinPluginCatalog {
     /**
      * Env for the install script: the payload's own `<PREFIX>_*` contract
      * (payload dir, tool dir, data dir — see [Descriptor.envPrefix]) plus
-     * PATH so node/npm resolve inside the sandbox session. Guest plugins
-     * only; native plugins never run a guest install script.
+     * PATH so node/npm resolve inside the sandbox session.
      */
     fun installEnv(d: Descriptor): Map<String, String> {
         val prefix = d.envPrefix ?: return emptyMap()
@@ -177,44 +135,7 @@ object BuiltinPluginCatalog {
         )
     }
 
-    /**
-     * Host-side home for a native plugin's runtime state: the app's private
-     * `builtin-plugins/<id>/` carrying `ui/` (deployed panel bundle) and
-     * `data/` (gateway state: SQLite, logs, generated keys). Private, not
-     * shared: the native process runs as the app's own uid, so it needs no
-     * shared volume, and app-private storage keeps gateway credentials out
-     * of every other sandbox session's reach.
-     */
-    fun nativeHomeDir(filesDir: String, id: String): String =
-        "$filesDir/builtin-plugins/$id"
-
-    /**
-     * Host-process env for a native plugin: the upstream binary's own
-     * `<NATIVE_ENV_PREFIX>_*` runtime contract, pointed at the private home.
-     * `ALLOW_NO_KEY` mirrors the guest launcher's stance — loopback only,
-     * the app itself is the only client. HOME/TMPDIR give the bionic process
-     * writable scratch inside the private dir (bionic has no /tmp, and a
-     * null HOME breaks SQLite temp files).
-     */
-    fun nativeEnv(d: Descriptor, filesDir: String): Map<String, String> {
-        val prefix = requireNotNull(d.nativeEnvPrefix) { "native env prefix for ${d.id}" }
-        val home = nativeHomeDir(filesDir, d.id)
-        return mapOf(
-            "${prefix}_HOST" to "127.0.0.1",
-            "${prefix}_PROXY_PORT" to d.servicePort.toString(),
-            "${prefix}_PROXY_HOME" to "$home/data",
-            "${prefix}_UI_DIR" to "$home/ui",
-            "${prefix}_ALLOW_NO_KEY" to "1",
-            "HOME" to "$home/data",
-            "TMPDIR" to "$home/data/tmp",
-        )
-    }
-
     /** Loopback health URL — the service binds 127.0.0.1 only. */
     fun healthUrl(d: Descriptor): String =
         "http://127.0.0.1:${d.servicePort}${d.serviceHealthPath}"
-
-    /** Loopback panel URL, or null when the plugin serves no panel. */
-    fun panelUrl(d: Descriptor): String? =
-        d.panelPath?.let { "http://127.0.0.1:${d.servicePort}$it" }
 }

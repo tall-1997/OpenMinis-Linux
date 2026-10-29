@@ -1849,6 +1849,16 @@
     <string name="builtin_plugin_install">설치</string>
     <string name="builtin_plugin_retry">재시도</string>
     <string name="builtin_plugin_open_panel">패널</string>
+
+    <!-- [T-android-a2a-native] a2a gateway management page -->
+<string name="a2a_desktop_bridge_footer">패널의 일부 작업(계정 가져오기/내보내기, 로그 내보내기, 전체 DB 백업)은 엔진의 데스크톱 브리지를 사용하므로 이 기기에서는 사용할 수 없습니다. 계정은 패널에서 추가하며 SQLite 데이터는 앱 전용 폴더에 저장됩니다.</string>
+<string name="a2a_panel_isolated_hint">앱 내 분리된 세션에서 실행됩니다. 여기서의 로그인은 기기 브라우저와 격리되어 여러 계정이 충돌하지 않습니다.</string>
+    <string name="a2a_start_gateway">게이트웨이 실행</string>
+    <string name="a2a_status_running">실행 중</string>
+    <string name="a2a_panel_address">패널 주소</string>
+    <string name="a2a_panel_not_installed">게이트웨이를 설치하면 웹 패널이 열립니다.</string>
+    <string name="a2a_panel_needs_start">게이트웨이를 시작하면 웹 패널이 열립니다.</string>
+    <string name="a2a_panel_load_failed">패널을 로드하지 못했습니다.</string>
     <string name="dev_suite_no_space">저장 공간 부족: 약 %1$d GB 필요, 사용 가능 %2$d GB</string>
     <string name="dev_suite_skipped_dep">건너뜀: %1$s 설치 실패</string>
     <string name="dev_suite_uninstall_failed">제거 실패 (exit %1$d)</string>

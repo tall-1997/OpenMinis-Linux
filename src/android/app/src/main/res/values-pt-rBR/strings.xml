@@ -1850,6 +1850,16 @@
     <string name="builtin_plugin_install">Instalar</string>
     <string name="builtin_plugin_retry">Repetir</string>
     <string name="builtin_plugin_open_panel">Painel</string>
+
+    <!-- [T-android-a2a-native] a2a gateway management page -->
+<string name="a2a_desktop_bridge_footer">Algumas ações do painel (importar/exportar contas, exportar logs, backup completo do BD) usam a ponte de desktop do mecanismo e não estão disponíveis neste dispositivo. As contas são adicionadas no painel; os dados SQLite ficam na pasta privada do app.</string>
+<string name="a2a_panel_isolated_hint">Funciona em uma sessão isolada dentro do app: os logins aqui ficam separados do navegador do dispositivo, várias contas nunca conflitam.</string>
+    <string name="a2a_start_gateway">Iniciar gateway</string>
+    <string name="a2a_status_running">Em execução</string>
+    <string name="a2a_panel_address">Endereço do painel</string>
+    <string name="a2a_panel_not_installed">Instale o gateway para abrir o painel da web.</string>
+    <string name="a2a_panel_needs_start">Inicie o gateway para abrir o painel da web.</string>
+    <string name="a2a_panel_load_failed">Falha ao carregar o painel.</string>
     <string name="dev_suite_no_space">Armazenamento insuficiente: são necessários cerca de %1$d GB, %2$d GB disponíveis</string>
     <string name="dev_suite_skipped_dep">Ignorado: %1$s não foi instalado</string>
     <string name="dev_suite_uninstall_failed">Falha ao desinstalar (exit %1$d)</string>

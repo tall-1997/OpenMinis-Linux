@@ -45,6 +45,7 @@ import com.openminis.app.ui.settings.BackgroundSettingsScreen
 import com.openminis.app.ui.settings.AddModelsToGroupScreen
 import com.openminis.app.ui.settings.ShadowVoiceDetailScreen
 import com.openminis.app.ui.settings.AddProviderScreen
+import com.openminis.app.ui.settings.A2aScreen
 import com.openminis.app.ui.settings.ModelEntryDetailScreen
 import com.openminis.app.ui.settings.ModelGroupDetailScreen
 import com.openminis.app.ui.settings.ModelGroupsScreen
@@ -89,6 +90,10 @@ import com.openminis.app.ui.onboarding.OnboardingModelSelectionScreen
 private val EmphasizedDecelerate = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1.0f)
 private val EmphasizedAccelerate = CubicBezierEasing(0.3f, 0.0f, 0.8f, 0.15f)
 
+// [T-android-a2a-native] Route for the a2a gateway's first-class management
+// page. Routes.kt sits outside this task's edit scope; the literal travels
+// with the wiring until it graduates there.
+private const val A2A_ROUTE = "settings/a2a"
 
 /**
  * One resolver for the two "browse a remote's backups" destinations
@@ -191,12 +196,9 @@ fun AppNavigation(
                 )
                 navController.safeNavigate(Routes.ENV_VARS)
             }
-            // T183: any settings screen reachable by route string. The
-            // parser already resolved the path → route mapping so we
-            // just navigate.
-            is DeepLinkAction.OpenSettingsScreen -> {
-                navController.safeNavigate(initialDeepLink.route)
-            }
+            // T183: any settings screen reachable by route string; the
+            // parser already resolved the path → route mapping.
+            is DeepLinkAction.OpenSettingsScreen -> navController.safeNavigate(initialDeepLink.route)
             is DeepLinkAction.OpenPermissionSettings -> {
                 navController.safeNavigate(Routes.PERMISSIONS)
             }
@@ -388,16 +390,10 @@ fun AppNavigation(
         }
     }
 
-    // Pinned-shortcut cold start: when launched via
-     // `minis://session/<id>/<resource-path>`, set the pending HTML
-     // preview synchronously and start NavHost directly at the matching
-     // chat so ChatScreen's LaunchedEffect consumes the pending state on
-     // first composition — no sessions-list flash, no launch-session
-     // preference detour.
-    // App-icon quick action cold start: mount NavHost directly at a fresh
-    // draft chat, seeding the pending action so ChatScreen consumes it on
-    // its first LaunchedEffect tick. Mirrors the htmlShortcut path —
-    // avoids a sessions-list flash and a duplicate back-stack entry.
+    // Pinned-shortcut / quick-action cold start: start NavHost directly at
+    // the matching chat so ChatScreen's LaunchedEffect consumes the pending
+    // state on first composition — no sessions-list flash, no launch-session
+    // preference detour, no duplicate back-stack entry.
     //
     // [T-android-deeplink-reseed] Both seeds used to run in the COMPOSITION
     // BODY. DeepLinkCoordinator's pending slots are one-shot — consume*() puts
@@ -413,15 +409,11 @@ fun AppNavigation(
         val htmlShortcut = initialDeepLink as? DeepLinkAction.OpenHtmlPreview
         val quickActionStart: String? = when (initialDeepLink) {
             is DeepLinkAction.NewVoiceChat -> {
-                DeepLinkCoordinator.setPendingChatAction(
-                    DeepLinkCoordinator.ChatAction.START_VOICE,
-                )
+                DeepLinkCoordinator.setPendingChatAction(DeepLinkCoordinator.ChatAction.START_VOICE)
                 Routes.chat("__new__${java.util.UUID.randomUUID()}")
             }
             is DeepLinkAction.NewCameraChat -> {
-                DeepLinkCoordinator.setPendingChatAction(
-                    DeepLinkCoordinator.ChatAction.OPEN_CAMERA,
-                )
+                DeepLinkCoordinator.setPendingChatAction(DeepLinkCoordinator.ChatAction.OPEN_CAMERA)
                 Routes.chat("__new__${java.util.UUID.randomUUID()}")
             }
             is DeepLinkAction.NewChat -> Routes.chat("__new__${java.util.UUID.randomUUID()}")
@@ -566,7 +558,14 @@ fun AppNavigation(
                 onAboutClick = { navController.safeNavigate(Routes.ABOUT) },
                 onMountedFoldersClick = { navController.safeNavigate(Routes.MOUNTED_FOLDERS) },
                 onSharedFoldersClick = { navController.safeNavigate(Routes.SHARED_FOLDERS) },
+                onA2aClick = { navController.safeNavigate(A2A_ROUTE) },
             )
+        }
+
+        // [T-android-a2a-native] Agent2API gateway management page:
+        // status card, start/stop, and the in-app panel view.
+        composable(A2A_ROUTE) {
+            A2aScreen(onBack = { navController.safePopBackStack() })
         }
 
         composable(Routes.BACKUP) {

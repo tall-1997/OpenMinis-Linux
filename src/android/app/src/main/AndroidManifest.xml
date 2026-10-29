@@ -647,5 +647,20 @@
             </intent-filter>
         </provider>
 
+        <!-- [T-android-a2a-native] The a2a panel runs in its own process:
+             Android's WebView cookie jar / localStorage / caches are
+             per-process, so provider web logins inside the panel are fully
+             isolated from the main process (agent browser, webapp
+             shortcuts) and from the device browser — accounts never
+             cross-contaminate, and a panel crash cannot take down the
+             chat. The panel itself stays stateless (loads from the
+             gateway's loopback port). -->
+        <activity
+            android:name=".ui.settings.A2aPanelActivity"
+            android:process=":a2a"
+            android:exported="false"
+            android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
+            android:theme="@style/Theme.Minis" />
+
     </application>
 </manifest>

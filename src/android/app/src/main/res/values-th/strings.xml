@@ -1850,6 +1850,16 @@
     <string name="builtin_plugin_install">ติดตั้ง</string>
     <string name="builtin_plugin_retry">ลองอีกครั้ง</string>
     <string name="builtin_plugin_open_panel">แผงควบคุม</string>
+
+    <!-- [T-android-a2a-native] a2a gateway management page -->
+<string name="a2a_desktop_bridge_footer">การทำงานบางอย่างของแผง (นำเข้า/ส่งออกบัญชี ส่งออก log สำรองฐานข้อมูลทั้งหมด) ใช้สะพานเดสก์ท็อปของเอนจิน จึงไม่พร้อมใช้บนอุปกรณ์นี้ เพิ่มบัญชีในแผงได้ โดยข้อมูล SQLite อยู่ในโฟลเดอร์ส่วนตัวของแอป</string>
+<string name="a2a_panel_isolated_hint">ทำงานในเซสชันแยกภายในแอป: การเข้าสู่ระบบที่นี่แยกจากเบราว์เซอร์ของอุปกรณ์ หลายบัญชีไม่ขัดแย้งกัน</string>
+    <string name="a2a_start_gateway">เริ่มเกตเวย์</string>
+    <string name="a2a_status_running">กำลังทำงาน</string>
+    <string name="a2a_panel_address">ที่อยู่แผงควบคุม</string>
+    <string name="a2a_panel_not_installed">ติดตั้งเกตเวย์เพื่อเปิดแผงควบคุมเว็บ</string>
+    <string name="a2a_panel_needs_start">เริ่มเกตเวย์เพื่อเปิดแผงควบคุมเว็บ</string>
+    <string name="a2a_panel_load_failed">โหลดแผงควบคุมไม่สำเร็จ</string>
     <string name="dev_suite_no_space">พื้นที่เก็บข้อมูลไม่พอ: ต้องใช้ประมาณ %1$d GB ว่างอยู่ %2$d GB</string>
     <string name="dev_suite_skipped_dep">ข้าม: %1$s ติดตั้งไม่สำเร็จ</string>
     <string name="dev_suite_uninstall_failed">ถอนการติดตั้งไม่สำเร็จ (exit %1$d)</string>

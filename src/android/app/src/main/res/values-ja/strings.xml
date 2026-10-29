@@ -1849,6 +1849,16 @@
     <string name="builtin_plugin_install">インストール</string>
     <string name="builtin_plugin_retry">再試行</string>
     <string name="builtin_plugin_open_panel">パネル</string>
+
+    <!-- [T-android-a2a-native] a2a gateway management page -->
+<string name="a2a_desktop_bridge_footer">パネルの一部操作（アカウントのインポート/エクスポート、ログのエクスポート、DB全体バックアップ）はエンジンのデスクトップブリッジを使用するため、この端末では利用できません。アカウントはパネル内で追加でき、SQLiteデータはアプリ専用フォルダに保存されます。</string>
+<string name="a2a_panel_isolated_hint">アプリ内の分離されたセッションで動作します。ここでのログインは端末のブラウザから分離され、複数アカウントが競合しません。</string>
+    <string name="a2a_start_gateway">ゲートウェイを起動</string>
+    <string name="a2a_status_running">実行中</string>
+    <string name="a2a_panel_address">パネルのアドレス</string>
+    <string name="a2a_panel_not_installed">ゲートウェイをインストールするとウェブパネルが開きます。</string>
+    <string name="a2a_panel_needs_start">ゲートウェイを起動するとウェブパネルが開きます。</string>
+    <string name="a2a_panel_load_failed">パネルを読み込めませんでした。</string>
     <string name="dev_suite_no_space">ストレージが不足しています：約 %1$d GB 必要、利用可能 %2$d GB</string>
     <string name="dev_suite_skipped_dep">スキップしました：%1$s のインストールに失敗</string>
     <string name="dev_suite_uninstall_failed">アンインストールに失敗しました（exit %1$d）</string>

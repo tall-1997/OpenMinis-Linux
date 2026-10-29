@@ -1,6 +1,7 @@
 package com.openminis.app.plugins.builtin
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -10,6 +11,11 @@ import org.junit.Test
  * on-disk layout every builtin plugin shares, and the `<PREFIX>_*` env
  * contract each payload's install script consumes. Pure functions — no
  * Context, no disk.
+ *
+ * The catalog is guest-only now: the a2a gateway left it for
+ * `com.openminis.app.a2a` (A2aGateway), so every descriptor runs inside the
+ * PRoot sandbox and no descriptor serves a web panel. The native descriptor
+ * fields stay dormant for a future native plugin (see the catalog's KDoc).
  */
 class BuiltinPluginCatalogTest {
 
@@ -26,24 +32,16 @@ class BuiltinPluginCatalogTest {
             assertTrue("servicePort", d.servicePort in 1..65535)
             assertTrue("serviceHealthPath starts with /", d.serviceHealthPath.startsWith("/"))
             assertTrue("laneId", d.laneId.isNotBlank())
-            if (d.isNative) {
-                // Native contract: APK binary + upstream env prefix; the
-                // guest fields stay null and are never consumed.
-                assertTrue("nativeBinary is a lib name", d.nativeBinary!!.matches(Regex("lib[a-z0-9-]+\\.so")))
-                assertTrue("nativeEnvPrefix is shell-safe", d.nativeEnvPrefix!!.matches(Regex("[A-Z0-9_]+")))
-                assertEquals(null, d.installScript)
-                assertEquals(null, d.envPrefix)
-                assertEquals(null, d.launcher)
-            } else {
-                assertTrue("installScript is relative", !d.installScript!!.startsWith("/"))
-                // 0 is legal and means "self-contained runtime, skip the node
-                // gate"; Node runtimes pin their real floor.
-                assertTrue("nodeMinMajor", d.nodeMinMajor >= 0)
-                assertTrue("envPrefix is shell-safe", d.envPrefix!!.matches(Regex("[A-Z0-9_]+")))
-                assertTrue("launcher is a bare name", d.launcher!!.matches(Regex("[a-z0-9-]+")))
-                assertEquals(null, d.nativeBinary)
-                assertEquals(null, d.nativeEnvPrefix)
-            }
+            assertTrue("installScript is relative", !d.installScript!!.startsWith("/"))
+            // 0 is legal and means "self-contained runtime, skip the node
+            // gate"; Node runtimes pin their real floor.
+            assertTrue("nodeMinMajor", d.nodeMinMajor >= 0)
+            assertTrue("envPrefix is shell-safe", d.envPrefix!!.matches(Regex("[A-Z0-9_]+")))
+            assertTrue("launcher is a bare name", d.launcher!!.matches(Regex("[a-z0-9-]+")))
+            // The catalog is guest-only after a2a left for com.openminis.app.a2a.
+            assertFalse("no native descriptors in the catalog", d.isNative)
+            assertEquals(null, d.nativeBinary)
+            assertEquals(null, d.nativeEnvPrefix)
         }
     }
 
@@ -63,20 +61,6 @@ class BuiltinPluginCatalogTest {
     }
 
     @Test
-    fun `a2a descriptor matches the native lane contract`() {
-        val a2a = BuiltinPluginCatalog.byId("a2a")!!
-        assertEquals("a2a lane id", "a2a", a2a.laneId)
-        assertEquals(18901, a2a.servicePort)
-        assertEquals("/health", a2a.serviceHealthPath)
-        // Native: the APK's own bionic binary, no guest, no Node, no launcher.
-        assertTrue(a2a.isNative)
-        assertEquals("liba2a.so", a2a.nativeBinary)
-        assertEquals("AGENT2API", a2a.nativeEnvPrefix)
-        assertEquals(0, a2a.nodeMinMajor)
-        assertEquals("/", a2a.panelPath)
-    }
-
-    @Test
     fun `ports are unique so two gateways never squat each other`() {
         val ports = BuiltinPluginCatalog.ALL.map { it.servicePort }
         assertEquals(ports.size, ports.toSet().size)
@@ -85,6 +69,11 @@ class BuiltinPluginCatalogTest {
     @Test
     fun `byId unknown returns null`() {
         assertEquals(null, BuiltinPluginCatalog.byId("no-such-plugin"))
+    }
+
+    @Test
+    fun `byId a2a is gone — the gateway lives in the a2a package now`() {
+        assertEquals(null, BuiltinPluginCatalog.byId("a2a"))
     }
 
     @Test
@@ -117,11 +106,6 @@ class BuiltinPluginCatalogTest {
         assertEquals(BuiltinPluginCatalog.payloadDir("ofm"), env["OFM_PLUGIN_PAYLOAD"])
         assertEquals(BuiltinPluginCatalog.toolDir("ofm"), env["OFM_TOOL_DIR"])
         assertEquals(BuiltinPluginCatalog.dataDir("ofm"), env["OFM_TOOL_DATA"])
-
-        // Native plugins run no guest install script — empty env, not a
-        // crash, so the guest pipeline can never be entered by accident.
-        val a2a = BuiltinPluginCatalog.byId("a2a")!!
-        assertEquals(emptyMap<String, String>(), BuiltinPluginCatalog.installEnv(a2a))
     }
 
     @Test
@@ -138,19 +122,6 @@ class BuiltinPluginCatalogTest {
         assertEquals(
             "http://127.0.0.1:18900/v1/models",
             BuiltinPluginCatalog.healthUrl(ofm),
-        )
-        assertEquals(
-            "http://127.0.0.1:18901/health",
-            BuiltinPluginCatalog.healthUrl(BuiltinPluginCatalog.byId("a2a")!!),
-        )
-    }
-
-    @Test
-    fun `panel url is null for panel-less plugins and derived otherwise`() {
-        assertEquals(null, BuiltinPluginCatalog.panelUrl(BuiltinPluginCatalog.byId("ofm")!!))
-        assertEquals(
-            "http://127.0.0.1:18901/",
-            BuiltinPluginCatalog.panelUrl(BuiltinPluginCatalog.byId("a2a")!!),
         )
     }
 }

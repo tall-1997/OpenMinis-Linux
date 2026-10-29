@@ -203,9 +203,9 @@ class MinisApp : Application(), ImageLoaderFactory {
      * source as [isAppForeground] (started/stopped balanced count) —
      * just exposed as a StateFlow for collectors.
      */
-    // Initial true: prevents overlay flash before first Activity onStart emits foreground=true
-    // (T-overlay-startup-flash). ActivityLifecycleCallbacks below will flip to the real value
-    // on the next lifecycle tick.
+    // Initial true: prevents overlay flash before first Activity onStart emits
+    // foreground=true (T-overlay-startup-flash). ActivityLifecycleCallbacks below
+    // will flip to the real value on the next lifecycle tick.
     private val _isAppForegroundFlow = kotlinx.coroutines.flow.MutableStateFlow(true)
     val isAppForegroundFlow: kotlinx.coroutines.flow.StateFlow<Boolean>
         get() = _isAppForegroundFlow
@@ -228,12 +228,12 @@ class MinisApp : Application(), ImageLoaderFactory {
 
     override fun attachBaseContext(base: Context) {
         super.attachBaseContext(base)
-        // T283: install ACRA before any app-level singleton runs so a crash
-        // anywhere from onCreate forward is captured. CrashFileSender
-        // (registered via META-INF/services/org.acra.sender.ReportSenderFactory)
-        // writes filesDir/logs/crash-<stamp>.log — same dir + .log extension
-        // that AppLogger.listLogFiles already filters for, so reports surface
-        // in LogManagementScreen with no extra UI.
+        // T283: install ACRA before any app-level singleton runs so a crash anywhere
+        // from onCreate forward is captured. CrashFileSender (registered via
+        // META-INF/services/org.acra.sender.ReportSenderFactory) writes
+        // filesDir/logs/crash-<stamp>.log — same dir + .log extension that
+        // AppLogger.listLogFiles filters for, so reports surface in LogManagementScreen
+        // with no extra UI.
         ACRA.init(
             this,
             CoreConfigurationBuilder()
@@ -257,27 +257,23 @@ class MinisApp : Application(), ImageLoaderFactory {
         super.onCreate()
 
         // T287-followup: ACRA spawns a separate reporter process named
-        // "<package>:acra" (declared by the library's manifest) to send
-        // the crash report after the main process dies. Application
-        // subclasses run in EVERY process of the package, so without
-        // this early-return the :acra process would also try to bind
-        // the abstract socket / boot the database / register offload
-        // handlers — racing the next main-process spawn for resources
-        // it doesn't need. Symptom: main process gets EADDRINUSE on
-        // LocalServerSocket and stays in a permanent restart loop on
-        // the splash screen. Skip everything except ACRA.init (already
-        // done in attachBaseContext, which is what makes the :acra
-        // process do its job).
+        // "<package>:acra" (declared by the library's manifest) to send the crash
+        // report after the main process dies. Application subclasses run in EVERY
+        // process of the package, so without this early-return the :acra process
+        // would also try to bind the abstract socket / boot the database / register
+        // offload handlers — racing the next main-process spawn for resources it
+        // doesn't need. Symptom: main process gets EADDRINUSE on LocalServerSocket and
+        // stays in a permanent restart loop on the splash screen. Skip everything except
+        // ACRA.init (already done in attachBaseContext, which makes the :acra process work).
         if (ACRA.isACRASenderServiceProcess()) {
             Log.i("MinisApp", "skipping app init in :acra reporter process")
             return
         }
 
-        // T-android-safemode-lateinit-crash: hand AppLogger a Context before
-        // any early-return below can skip AppLogger.init(). This costs
-        // nothing (no I/O, no prefs, no capture) and is what lets the in-app
-        // log/crash list still find filesDir/logs on a safe-mode launch —
-        // the exact launch where the user is trying to read the crash files.
+        // T-android-safemode-lateinit-crash: hand AppLogger a Context before any
+        // early-return below can skip AppLogger.init(). Costs nothing (no I/O,
+        // prefs or capture) and lets the in-app log/crash list still find filesDir/logs
+        // on a safe-mode launch — the launch where the user reads the crash files.
         AppLogger.primeContext(this)
 
         com.openminis.app.crash.LaunchPhaseProbes.startLaunchScan(this, appCoroutineScopes.io)
@@ -634,8 +630,7 @@ class MinisApp : Application(), ImageLoaderFactory {
         HostEventHooks.init(this)
         AppGraph.installExecutionEnvVarRepository(envVarRepository)
 
-        // Privacy Mode store + redactor wiring (repo handoff via AppGraph).
-        // Mirrors iOS EnvVarPrivacyStore.init.
+        // Privacy Mode store + redactor wiring (repo handoff via AppGraph; mirrors iOS).
         com.openminis.app.data.EnvVarPrivacyStore.init(this)
         AppGraph.installRedactorEnvVarRepository(envVarRepository)
 
@@ -644,6 +639,11 @@ class MinisApp : Application(), ImageLoaderFactory {
         // ConnectivityManager callback so shells inside the sandbox see fresh
         // DNS servers after Wi-Fi ↔ cellular swaps or VPN toggles.
         networkMonitor.start(this)
+
+        // [T-android-a2a-native] Gateway-owned scheduled tasks (sign-ins, cron) only
+        // run while the gateway serves — cold-boot restore when the user left it
+        // enabled (adopts a serving orphan too). Off main; failure → lastError.
+        kotlin.concurrent.thread(name = "a2a-autostart") { runCatching { com.openminis.app.a2a.A2aGateway.maybeAutoStart(this@MinisApp) } }
 
         // Register global /var/minis/{memory,skills,shared} bind mounts up-front
         // so direct file I/O tools (file_read) resolve these paths even before

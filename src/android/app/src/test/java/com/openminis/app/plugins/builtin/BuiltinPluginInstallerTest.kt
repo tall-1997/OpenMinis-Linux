@@ -22,17 +22,38 @@ import org.junit.Test
 class BuiltinPluginInstallerTest {
 
     private val ofm = BuiltinPluginCatalog.ALL.first()
-    private val a2a = BuiltinPluginCatalog.ALL.first { it.id == "a2a" }
+
+    /**
+     * The a2a descriptor left the catalog for com.openminis.app.a2a — a
+     * synthetic native descriptor stands in for the routing guard, so a
+     * future native plugin is still refused before any guest work starts.
+     */
+    private val syntheticNative = BuiltinPluginCatalog.Descriptor(
+        id = "fake-native",
+        nameRes = 0,
+        summaryRes = 0,
+        version = "0.0.0",
+        payloadAsset = "builtin_plugins/fake-native.zip",
+        installScript = null,
+        nodeMinMajor = 0,
+        servicePort = 1,
+        serviceHealthPath = "/health",
+        laneId = "fake-native",
+        envPrefix = null,
+        launcher = null,
+        nativeBinary = "libfake-native.so",
+        nativeEnvPrefix = "FAKE_NATIVE",
+    )
 
     // --- native routing ---------------------------------------------------
 
     @Test fun `native plugins never enter the guest pipeline`() {
-        assertTrue(a2a.isNative)
+        assertTrue(syntheticNative.isNative)
         // The guest entry point refuses a native descriptor before any
         // guest work starts. The gate is pure — no Context needed, so the
         // JVM test pins the contract without Robolectric.
         val thrown = runCatching {
-            BuiltinPluginInstaller.requireGuestPlugin(a2a)
+            BuiltinPluginInstaller.requireGuestPlugin(syntheticNative)
         }
         assertTrue(thrown.exceptionOrNull() is IllegalArgumentException)
     }

@@ -1850,6 +1850,16 @@
     <string name="builtin_plugin_install">Yükle</string>
     <string name="builtin_plugin_retry">Yeniden dene</string>
     <string name="builtin_plugin_open_panel">Panel</string>
+
+    <!-- [T-android-a2a-native] a2a gateway management page -->
+<string name="a2a_desktop_bridge_footer">Bazı panel işlemleri (hesap içeri/dışarı aktarma, günlük dışa aktarma, tam DB yedekleme) motorun masaüstü köprüsünü kullanır ve bu cihazda kullanılamaz. Hesaplar panelde eklenir; SQLite verileri uygulamanın özel veri klasöründedir.</string>
+<string name="a2a_panel_isolated_hint">Uygulama içinde yalıtılmış bir oturumda çalışır: buradaki oturum açma işlemleri cihaz tarayıcısından ayrıdır, birden çok hesap asla çakışmaz.</string>
+    <string name="a2a_start_gateway">Ağ geçidini başlat</string>
+    <string name="a2a_status_running">Çalışıyor</string>
+    <string name="a2a_panel_address">Panel adresi</string>
+    <string name="a2a_panel_not_installed">Web panelini açmak için ağ geçidini yükleyin.</string>
+    <string name="a2a_panel_needs_start">Web panelini açmak için ağ geçidini başlatın.</string>
+    <string name="a2a_panel_load_failed">Panel yüklenemedi.</string>
     <string name="dev_suite_no_space">Depolama yetersiz: yaklaşık %1$d GB gerekli, %2$d GB boş</string>
     <string name="dev_suite_skipped_dep">Atlandı: %1$s kurulamadı</string>
     <string name="dev_suite_uninstall_failed">Kaldırma başarısız (exit %1$d)</string>
