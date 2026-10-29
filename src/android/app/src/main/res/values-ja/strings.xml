@@ -1852,6 +1852,8 @@
 
     <!-- [T-android-a2a-native] a2a gateway management page -->
 <string name="a2a_desktop_bridge_footer">パネルの一部操作（アカウントのインポート/エクスポート、ログのエクスポート、DB全体バックアップ）はエンジンのデスクトップブリッジを使用するため、この端末では利用できません。アカウントはパネル内で追加でき、SQLiteデータはアプリ専用フォルダに保存されます。</string>
+<string name="a2a_incognito_login_title">シークレットログイン</string>
+<string name="a2a_incognito_login_subtitle">各ログインウィンドウはクリーンなプロバイダーセッションで開始され、パネル自身のログインは影響を受けません。</string>
 <string name="a2a_panel_isolated_hint">アプリ内の分離されたセッションで動作します。ここでのログインは端末のブラウザから分離され、複数アカウントが競合しません。</string>
     <string name="a2a_start_gateway">ゲートウェイを起動</string>
     <string name="a2a_status_running">実行中</string>

@@ -37,13 +37,15 @@ import com.openminis.app.ui.theme.m3Icon
 /**
  * Full-screen host for the a2a gateway's local web panel.
  *
- * Runs in the `:a2a` process (declared in the manifest): Android's WebView
- * cookie jar, localStorage and caches are per-process, so everything the
- * panel does — including provider web logins — is fully isolated from this
- * app's main process (agent browser, webapp shortcuts) and from the device's
- * browser. Accounts never cross-contaminate, and a panel crash cannot take
- * down the chat. The panel itself is stateless: it loads from the gateway's
- * loopback port and renders there.
+ * Runs in the `:a2a` process (declared in the manifest) AND — on API 28+ —
+ * calls [WebView.setDataDirectorySuffix] before creating any WebView, so the
+ * panel's cookie jar, localStorage and caches live in a directory of their
+ * own. That is what makes the isolation real: without the suffix every
+ * process of the package shares one WebView data directory, and panel logins
+ * would leak into (and pick up stale state from) the agent browser. With it,
+ * accounts never cross-contaminate and a panel crash cannot take down the
+ * chat. The panel itself is stateless: it loads from the gateway's loopback
+ * port and renders there.
  *
  * [T-android-a2a-login-popup] provider logins complete inside a full-screen
  * in-app login window ([A2aLoginWindowOverlay]): the gateway's web shim
@@ -51,6 +53,11 @@ import com.openminis.app.ui.theme.m3Icon
  * poll-wait/close flow drives it to completion — the reason the panel works
  * in-app at all (in a phone browser the popup becomes a background tab with
  * throttled timers and the 5-minute poll window misses).
+ *
+ * [T-android-a2a-incognito] "Incognito login" (default ON, carried in the
+ * intent — the :a2a process must not re-read SharedPreferences per window):
+ * every login window starts from a cleared jar, so a second account of the
+ * same provider is never silently pre-authenticated as the first.
  *
  * Chrome: a slim iOS-style top bar (Close, panel title, open-in-browser)
  * and a layered BackHandler — open login window first, then panel history,
@@ -64,8 +71,16 @@ class A2aPanelActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Must run before any WebView is created in this process (one-shot
+        // per process). API 28+ only — on 26/27 the panel shares the default
+        // data directory with the main process; login isolation then relies
+        // on the per-window cookie clearing alone.
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+            runCatching { WebView.setDataDirectorySuffix("a2a") }
+        }
         val port = intent.getIntExtra(EXTRA_PORT, 0).takeIf { it > 0 }
             ?: error("A2aPanelActivity requires a port")
+        val incognitoLogin = intent.getBooleanExtra(EXTRA_INCOGNITO_LOGIN, true)
         val baseUrl = "http://127.0.0.1:$port/"
         // Column's content lambda is a ColumnScope receiver — a bare `this`
         // inside it is the scope, not this Activity. Capture the context
@@ -130,6 +145,7 @@ class A2aPanelActivity : ComponentActivity() {
                         },
                         modifier = Modifier.fillMaxSize(),
                         popupHost = popupHost,
+                        incognitoLogin = incognitoLogin,
                     )
                 }
             }
@@ -147,6 +163,7 @@ class A2aPanelActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_PORT = "a2a.port"
+        const val EXTRA_INCOGNITO_LOGIN = "a2a.incognito_login"
         private const val UPSTREAM_HOME = "https://github.com/aimod-cc/Agent2API"
     }
 }

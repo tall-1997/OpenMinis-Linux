@@ -68,6 +68,7 @@ object A2aGateway {
      */
     private const val PREFS = "a2a_gateway"
     private const val KEY_ENABLED = "enabled"
+    private const val KEY_INCOGNITO_LOGIN = "incognito_login"
 
     private val _status = MutableStateFlow(A2aStatus())
     val status: StateFlow<A2aStatus> = _status.asStateFlow()
@@ -104,6 +105,21 @@ object A2aGateway {
 
     internal fun writeEnabled(context: Context, value: Boolean) {
         prefs(context).edit().putBoolean(KEY_ENABLED, value).apply()
+    }
+
+    /**
+     * Incognito login (default ON) — [T-android-a2a-incognito]: every provider
+     * login window starts from a clean cookie jar, so adding a second account
+     * of the same provider never gets silently pre-authenticated as the
+     * first. Read once when the panel activity launches and carried in the
+     * intent (SharedPreferences has no cross-process invalidation, so the
+     * :a2a process must not re-read it per window).
+     */
+    fun isIncognitoLogin(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_INCOGNITO_LOGIN, true)
+
+    fun setIncognitoLogin(context: Context, value: Boolean) {
+        prefs(context).edit().putBoolean(KEY_INCOGNITO_LOGIN, value).apply()
     }
 
     private fun prefs(context: Context) =

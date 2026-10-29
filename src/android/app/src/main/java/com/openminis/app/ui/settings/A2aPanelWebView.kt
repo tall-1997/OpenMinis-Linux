@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.openminis.app.R
+import com.openminis.app.a2a.A2aLoginCookies
 import com.openminis.app.browser.WebViewEngine
 import com.openminis.app.ui.theme.m3Icon
 
@@ -78,6 +79,7 @@ fun A2aPanelWebView(
     modifier: Modifier = Modifier,
     reloadToken: Int = 0,
     popupHost: A2aPopupHostState,
+    incognitoLogin: Boolean = true,
 ) {
     var loadFailed by remember(baseUrl, reloadToken) { mutableStateOf(false) }
     var loadStarted by remember(baseUrl, reloadToken) { mutableStateOf(false) }
@@ -107,6 +109,10 @@ fun A2aPanelWebView(
                     settings.setSupportMultipleWindows(true)
                     @Suppress("DEPRECATION")
                     settings.javaScriptCanOpenWindowsAutomatically = true
+                    // [T-android-a2a-login-capture] Several providers' login
+                    // pages run their SSO inside third-party frames; WebView
+                    // ships with third-party cookies OFF.
+                    android.webkit.CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
                     WebViewEngine.applyCompat(this)
                     webViewClient = object : WebViewClient() {
                         override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
@@ -160,6 +166,15 @@ fun A2aPanelWebView(
                             // through lets the shim's own link fallback run
                             // instead of opening an orphan window.
                             if (resultMsg == null || view == null) return false
+                            // [T-android-a2a-incognito] Incognito login: the
+                            // window starts with the PROVIDER origins' cookies
+                            // expired (loopback — the panel's own session — is
+                            // never touched), so a second account of the same
+                            // provider is never silently pre-authenticated as
+                            // the first while the panel admin stays logged in.
+                            if (incognitoLogin) {
+                                A2aLoginCookies.clearProviderCookies(context)
+                            }
                             val popup = createA2aLoginWebView(context, popupHost, onExternalLink)
                             // WebViewTransport() takes no arguments — the
                             // only ctor param is the implicit outer WebView;

@@ -1863,6 +1863,8 @@
 
     <!-- [T-android-a2a-native] a2a gateway management page -->
 <string name="a2a_desktop_bridge_footer">Некоторые действия панели (импорт/экспорт аккаунтов, экспорт журналов, полная копия БД) используют настольный мост движка и недоступны на этом устройстве. Аккаунты добавляются в панели; данные SQLite находятся в приватной папке приложения.</string>
+<string name="a2a_incognito_login_title">Приватный вход</string>
+<string name="a2a_incognito_login_subtitle">Каждое окно входа начинается с чистой сессии провайдера; вход в саму панель не затрагивается.</string>
 <string name="a2a_panel_isolated_hint">Работает в изолированной сессии внутри приложения: входы здесь отделены от браузера устройства, несколько аккаунтов никогда не конфликтуют.</string>
     <string name="a2a_start_gateway">Запустить шлюз</string>
     <string name="a2a_status_running">Запущен</string>

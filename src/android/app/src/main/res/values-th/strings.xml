@@ -1853,6 +1853,8 @@
 
     <!-- [T-android-a2a-native] a2a gateway management page -->
 <string name="a2a_desktop_bridge_footer">การทำงานบางอย่างของแผง (นำเข้า/ส่งออกบัญชี ส่งออก log สำรองฐานข้อมูลทั้งหมด) ใช้สะพานเดสก์ท็อปของเอนจิน จึงไม่พร้อมใช้บนอุปกรณ์นี้ เพิ่มบัญชีในแผงได้ โดยข้อมูล SQLite อยู่ในโฟลเดอร์ส่วนตัวของแอป</string>
+<string name="a2a_incognito_login_title">เข้าสู่ระบบแบบไม่ระบุตัวตน</string>
+<string name="a2a_incognito_login_subtitle">หน้าต่างเข้าสู่ระบบเริ่มด้วยเซสชันของผู้ให้บริการที่สะอาด การเข้าสู่ระบบของแผงเองไม่ได้รับผลกระทบ</string>
 <string name="a2a_panel_isolated_hint">ทำงานในเซสชันแยกภายในแอป: การเข้าสู่ระบบที่นี่แยกจากเบราว์เซอร์ของอุปกรณ์ หลายบัญชีไม่ขัดแย้งกัน</string>
     <string name="a2a_start_gateway">เริ่มเกตเวย์</string>
     <string name="a2a_status_running">กำลังทำงาน</string>
