@@ -188,6 +188,15 @@ internal fun createA2aLoginWebView(
         )
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
+        // [T-android-a2a-login-capture] Provider OAuth/SSO frequently runs in
+        // third-party frames — WebView ships with third-party cookies OFF.
+        android.webkit.CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+        // Google's OAuth policy refuses embedded webviews by the `; wv`
+        // marker in the default UA ("disallowed_useragent"); strip just that
+        // token so the page still sees an honest Android Chrome UA.
+        runCatching {
+            settings.userAgentString = settings.userAgentString.replace("; wv", "")
+        }
         WebViewEngine.applyCompat(this)
     }
     val state = host.open(webView)
@@ -195,6 +204,20 @@ internal fun createA2aLoginWebView(
         override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
             state.loadStarted = true
             state.loadFailed = false
+            // [T-android-a2a-incognito] Remember the provider origins this
+            // login touched, so the NEXT login window starts with exactly
+            // those cookies expired (loopback is excluded inside).
+            com.openminis.app.a2a.A2aLoginCookies.rememberOrigin(context, url)
+            // [T-android-a2a-login-capture] Login-window diagnostics: host and
+            // scheme only (the query string can carry codes/tokens), so a
+            // stuck capture can be traced from the in-app log viewer.
+            url?.let { u ->
+                val parsed = runCatching { java.net.URI(u) }.getOrNull()
+                com.openminis.app.logging.AppLogger.info(
+                    "A2aLogin",
+                    "login window load: ${parsed?.scheme}://${parsed?.host}",
+                )
+            }
         }
 
         override fun onReceivedError(

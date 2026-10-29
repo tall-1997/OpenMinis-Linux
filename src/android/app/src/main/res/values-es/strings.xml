@@ -1855,6 +1855,8 @@
 
     <!-- [T-android-a2a-native] a2a gateway management page -->
 <string name="a2a_desktop_bridge_footer">Algunas acciones del panel (importar/exportar cuentas, exportar registros, copia de BD completa) usan el puente de escritorio del motor y no están disponibles en este dispositivo. Las cuentas se añaden en el panel; los datos SQLite viven en la carpeta privada de la app.</string>
+<string name="a2a_incognito_login_title">Inicio de sesión de incógnito</string>
+<string name="a2a_incognito_login_subtitle">Cada ventana de inicio empieza con una sesión limpia del proveedor; el inicio de sesión del panel no se toca.</string>
 <string name="a2a_panel_isolated_hint">Se ejecuta en una sesión aislada dentro de la app: los inicios de sesión aquí están separados del navegador del dispositivo, varias cuentas nunca entran en conflicto.</string>
     <string name="a2a_start_gateway">Iniciar gateway</string>
     <string name="a2a_status_running">En ejecución</string>

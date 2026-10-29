@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.outlined.CloudUpload
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Lan
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material.icons.outlined.Stop
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -84,6 +85,9 @@ fun A2aScreen(
     var tab by remember { mutableStateOf(A2aTab.MANAGE) }
     var installing by remember { mutableStateOf(false) }
     var installFailed by remember { mutableStateOf(false) }
+    // [T-android-a2a-incognito] Read once here and carried in the launch
+    // intent — the :a2a process must not re-read SharedPreferences.
+    var incognitoLogin by remember { mutableStateOf(A2aGateway.isIncognitoLogin(context)) }
     val scope = rememberCoroutineScope()
 
     val viewState = a2aViewState(status, installing)
@@ -153,6 +157,11 @@ fun A2aScreen(
                     viewState = viewState,
                     installing = installing,
                     installFailed = installFailed,
+                    incognitoLogin = incognitoLogin,
+                    onIncognitoChange = { enabled ->
+                        incognitoLogin = enabled
+                        A2aGateway.setIncognitoLogin(context, enabled)
+                    },
                     onToggleRunning = { turnOn ->
                         if (turnOn) {
                             // Flipping the switch on a not-yet-deployed
@@ -182,6 +191,7 @@ fun A2aScreen(
                 )
                 A2aTab.PANEL -> A2aPanelBody(
                     viewState = viewState,
+                    incognitoLogin = incognitoLogin,
                     onStartGateway = {
                         scope.launch(Dispatchers.IO) {
                             if (!A2aGateway.isInstalled(context)) {
@@ -202,6 +212,8 @@ private fun A2aManageBody(
     viewState: A2aViewState,
     installing: Boolean,
     installFailed: Boolean,
+    incognitoLogin: Boolean,
+    onIncognitoChange: (Boolean) -> Unit,
     onToggleRunning: (Boolean) -> Unit,
     onInstall: () -> Unit,
 ) {
@@ -289,6 +301,18 @@ private fun A2aManageBody(
                     onCheckedChange = onToggleRunning,
                     icon = Icons.Outlined.CloudUpload,
                     iconColor = Color(0xFF34C759),
+                    showDivider = true,
+                )
+                // [T-android-a2a-incognito] Each login window starts from a
+                // cleared jar: adding a second account of the same provider
+                // never reuses the first one's session.
+                SettingsSwitchRow(
+                    title = stringResource(R.string.a2a_incognito_login_title),
+                    subtitle = stringResource(R.string.a2a_incognito_login_subtitle),
+                    checked = incognitoLogin,
+                    onCheckedChange = onIncognitoChange,
+                    icon = Icons.Outlined.VisibilityOff,
+                    iconColor = Color(0xFF8E8E93),
                     showDivider = false,
                 )
             }
@@ -300,6 +324,7 @@ private fun A2aManageBody(
 @Composable
 private fun A2aPanelBody(
     viewState: A2aViewState,
+    incognitoLogin: Boolean,
     onStartGateway: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -368,7 +393,8 @@ private fun A2aPanelBody(
                 MinisTextButton(onClick = {
                     context.startActivity(
                         Intent(context, A2aPanelActivity::class.java)
-                            .putExtra(A2aPanelActivity.EXTRA_PORT, viewState.port ?: 0),
+                            .putExtra(A2aPanelActivity.EXTRA_PORT, viewState.port ?: 0)
+                            .putExtra(A2aPanelActivity.EXTRA_INCOGNITO_LOGIN, incognitoLogin),
                     )
                 }) {
                     Text(

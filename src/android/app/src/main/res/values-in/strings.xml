@@ -1858,6 +1858,8 @@
 
     <!-- [T-android-a2a-native] a2a gateway management page -->
 <string name="a2a_desktop_bridge_footer">Beberapa aksi panel (impor/ekspor akun, ekspor log, cadangan DB penuh) memakai jembatan desktop engine dan tidak tersedia di perangkat ini. Akun ditambahkan di panel; data SQLite ada di folder data privat aplikasi.</string>
+<string name="a2a_incognito_login_title">Login inkognito</string>
+<string name="a2a_incognito_login_subtitle">Setiap jendela login dimulai dengan sesi penyedia yang bersih; login panel itu sendiri tidak tersentuh.</string>
 <string name="a2a_panel_isolated_hint">Berjalan dalam sesi terisolasi di dalam aplikasi: login di sini terpisah dari browser perangkat, beberapa akun tidak akan bentrok.</string>
     <string name="a2a_start_gateway">Jalankan gateway</string>
     <string name="a2a_status_running">Berjalan</string>
