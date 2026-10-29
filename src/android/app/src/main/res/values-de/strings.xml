@@ -1862,6 +1862,10 @@
     <string name="a2a_panel_not_installed">Installiere das Gateway, um sein Web-Panel zu öffnen.</string>
     <string name="a2a_panel_needs_start">Starte das Gateway, um sein Web-Panel zu öffnen.</string>
     <string name="a2a_panel_load_failed">Panel konnte nicht geladen werden.</string>
+    <string name="a2a_panel_page_title">Agent2API-Panel</string>
+    <string name="a2a_login_window_title">Anmelden</string>
+    <string name="a2a_close">Schließen</string>
+    <string name="a2a_open_in_browser">Im Browser öffnen</string>
     <string name="dev_suite_no_space">Zu wenig Speicherplatz: etwa %1$d GB erforderlich, %2$d GB frei</string>
     <string name="dev_suite_skipped_dep">Übersprungen: %1$s wurde nicht installiert</string>
     <string name="dev_suite_uninstall_failed">Deinstallation fehlgeschlagen (exit %1$d)</string>

@@ -1860,6 +1860,10 @@
     <string name="a2a_panel_not_installed">ติดตั้งเกตเวย์เพื่อเปิดแผงควบคุมเว็บ</string>
     <string name="a2a_panel_needs_start">เริ่มเกตเวย์เพื่อเปิดแผงควบคุมเว็บ</string>
     <string name="a2a_panel_load_failed">โหลดแผงควบคุมไม่สำเร็จ</string>
+    <string name="a2a_panel_page_title">แผงควบคุม Agent2API</string>
+    <string name="a2a_login_window_title">ลงชื่อเข้าใช้</string>
+    <string name="a2a_close">ปิด</string>
+    <string name="a2a_open_in_browser">เปิดในเบราว์เซอร์</string>
     <string name="dev_suite_no_space">พื้นที่เก็บข้อมูลไม่พอ: ต้องใช้ประมาณ %1$d GB ว่างอยู่ %2$d GB</string>
     <string name="dev_suite_skipped_dep">ข้าม: %1$s ติดตั้งไม่สำเร็จ</string>
     <string name="dev_suite_uninstall_failed">ถอนการติดตั้งไม่สำเร็จ (exit %1$d)</string>

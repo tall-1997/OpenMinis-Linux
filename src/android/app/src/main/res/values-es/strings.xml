@@ -1862,6 +1862,10 @@
     <string name="a2a_panel_not_installed">Instala el gateway para abrir su panel web.</string>
     <string name="a2a_panel_needs_start">Inicia el gateway para abrir su panel web.</string>
     <string name="a2a_panel_load_failed">No se pudo cargar el panel.</string>
+    <string name="a2a_panel_page_title">Panel de Agent2API</string>
+    <string name="a2a_login_window_title">Iniciar sesión</string>
+    <string name="a2a_close">Cerrar</string>
+    <string name="a2a_open_in_browser">Abrir en el navegador</string>
     <string name="dev_suite_no_space">Almacenamiento insuficiente: se necesitan unos %1$d GB, hay %2$d GB libres</string>
     <string name="dev_suite_skipped_dep">Omitido: %1$s no se instaló</string>
     <string name="dev_suite_uninstall_failed">Desinstalación fallida (exit %1$d)</string>

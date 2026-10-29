@@ -156,6 +156,15 @@
             <action android:name="android.intent.action.SENDTO" />
             <data android:scheme="mailto" />
         </intent>
+        <!-- [T-android-a2a-login-popup] office-raccoon: Office-family apps
+             advertise their account-login callback (the login window fires
+             this custom scheme when the system-side auth completes). The
+             queries entry keeps resolveActivity honest on Android 11+ so the
+             panel's external-scheme dispatch actually finds the handler. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="office-raccoon" />
+        </intent>
     </queries>
 
     <!-- [T-android-tablet-split] enableOnBackInvokedCallback (on <application>):

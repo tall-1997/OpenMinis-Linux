@@ -1860,6 +1860,10 @@
     <string name="a2a_panel_not_installed">I-install ang gateway para buksan ang web panel nito.</string>
     <string name="a2a_panel_needs_start">I-start ang gateway para buksan ang web panel nito.</string>
     <string name="a2a_panel_load_failed">Hindi na-load ang panel.</string>
+    <string name="a2a_panel_page_title">Panel ng Agent2API</string>
+    <string name="a2a_login_window_title">Mag-sign in</string>
+    <string name="a2a_close">Isara</string>
+    <string name="a2a_open_in_browser">Buksan sa browser</string>
     <string name="dev_suite_no_space">Kulang ang storage: kailangan mga %1$d GB, available %2$d GB</string>
     <string name="dev_suite_skipped_dep">Laktawan: hindi na-install ang %1$s</string>
     <string name="dev_suite_uninstall_failed">Nabigo ang pag-aalis (exit %1$d)</string>

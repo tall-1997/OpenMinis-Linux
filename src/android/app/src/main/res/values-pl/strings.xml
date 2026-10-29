@@ -1868,6 +1868,10 @@
     <string name="a2a_panel_not_installed">Zainstaluj bramkę, aby otworzyć jej panel sieciowy.</string>
     <string name="a2a_panel_needs_start">Uruchom bramkę, aby otworzyć jej panel sieciowy.</string>
     <string name="a2a_panel_load_failed">Nie udało się załadować panelu.</string>
+    <string name="a2a_panel_page_title">Panel Agent2API</string>
+    <string name="a2a_login_window_title">Zaloguj się</string>
+    <string name="a2a_close">Zamknij</string>
+    <string name="a2a_open_in_browser">Otwórz w przeglądarce</string>
     <string name="dev_suite_no_space">Za mało miejsca: potrzeba około %1$d GB, dostępnych %2$d GB</string>
     <string name="dev_suite_skipped_dep">Pominięto: %1$s nie zostało zainstalowane</string>
     <string name="dev_suite_uninstall_failed">Odinstalowanie nie powiodło się (exit %1$d)</string>

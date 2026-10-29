@@ -1859,6 +1859,10 @@
     <string name="a2a_panel_not_installed">게이트웨이를 설치하면 웹 패널이 열립니다.</string>
     <string name="a2a_panel_needs_start">게이트웨이를 시작하면 웹 패널이 열립니다.</string>
     <string name="a2a_panel_load_failed">패널을 로드하지 못했습니다.</string>
+    <string name="a2a_panel_page_title">Agent2API 패널</string>
+    <string name="a2a_login_window_title">로그인</string>
+    <string name="a2a_close">닫기</string>
+    <string name="a2a_open_in_browser">브라우저에서 열기</string>
     <string name="dev_suite_no_space">저장 공간 부족: 약 %1$d GB 필요, 사용 가능 %2$d GB</string>
     <string name="dev_suite_skipped_dep">건너뜀: %1$s 설치 실패</string>
     <string name="dev_suite_uninstall_failed">제거 실패 (exit %1$d)</string>

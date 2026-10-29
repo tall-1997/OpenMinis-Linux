@@ -2,6 +2,7 @@ package com.openminis.app.ui.settings
 
 import android.annotation.SuppressLint
 import android.graphics.Bitmap
+import android.os.Message
 import android.view.ViewGroup
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
@@ -31,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.openminis.app.R
 import com.openminis.app.browser.WebViewEngine
 import com.openminis.app.ui.theme.m3Icon
@@ -45,12 +47,19 @@ import com.openminis.app.ui.theme.m3Icon
  *  - JS + DOM storage on (the panel is a bundled SPA backed by
  *    localStorage), WebViewEngine.applyCompat keeps the engine current
  *    with the repo's shared WebView recipe.
- *  - Navigation confinement: the embedded view IS the panel's in-app
- *    browser — every top-frame http/https load happens in place, so the
- *    panel's own flows (adding an account, its web-login hop to a
- *    provider's page, an upstream docs link) complete inside this app and
- *    never leave it. Non-http(s) schemes (a `javascript:`/`tel:`/custom
- *    scheme) and non-main-frame (iframe/subframe) loads never navigate.
+ *  - Navigation policy ([A2aPanelNav]): the embedded view IS the panel's
+ *    in-app browser — every top-frame http/https load happens in place, so
+ *    the panel's own flows (adding an account, its web-login hop to a
+ *    provider's page, an upstream docs link) complete inside this app.
+ *    System/custom schemes (tel:/mailto:/intent:/office-raccoon:) dispatch
+ *    to the system via [onExternalLink]; `javascript:`/`file:` and
+ *    non-main-frame loads are confined and never navigate.
+ *  - Login windows ([T-android-a2a-login-popup]): the gateway's web shim
+ *    opens `window.open` during provider logins; multi-window support
+ *    routes each to an in-app full-screen login window
+ *    ([A2aLoginWindowOverlay]) hosted on [popupHost], completing the login
+ *    without any browser tab — the shim's desktop embedded-window flow,
+ *    in-app.
  *  - Load-state ladder: Loading → (Loaded | Error). The gateway process
  *    may be starting while this view is already composed, so the first
  *    connection attempt legitimately fails with ERR_CONNECTION_REFUSED;
@@ -68,6 +77,7 @@ fun A2aPanelWebView(
     onExternalLink: (String) -> Unit,
     modifier: Modifier = Modifier,
     reloadToken: Int = 0,
+    popupHost: A2aPopupHostState,
 ) {
     var loadFailed by remember(baseUrl, reloadToken) { mutableStateOf(false) }
     var loadStarted by remember(baseUrl, reloadToken) { mutableStateOf(false) }
@@ -77,6 +87,7 @@ fun A2aPanelWebView(
     // fresh loadUrl against the (now up) gateway.
     var retryCount by remember(baseUrl, reloadToken) { mutableStateOf(0) }
     val loadKey = reloadToken * 1_000 + retryCount
+    val popups by popupHost.popups.collectAsStateWithLifecycle()
 
     Box(modifier = modifier) {
         AndroidView(
@@ -88,6 +99,14 @@ fun A2aPanelWebView(
                     )
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true
+                    // [T-android-a2a-login-popup] The gateway's web shim
+                    // runs its provider logins through window.open — the
+                    // multi-window support routes those to in-app login
+                    // windows (see webChromeClient below) instead of the
+                    // shim's browser-tab fallback.
+                    settings.setSupportMultipleWindows(true)
+                    @Suppress("DEPRECATION")
+                    settings.javaScriptCanOpenWindowsAutomatically = true
                     WebViewEngine.applyCompat(this)
                     webViewClient = object : WebViewClient() {
                         override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
@@ -116,16 +135,49 @@ fun A2aPanelWebView(
                                 // Top-frame http/https: load in place — the
                                 // embedded view is the panel's in-app browser.
                                 A2aPanelNavAction.LOAD_IN_PLACE -> false
-                                // Non-http(s) schemes and subframe loads:
-                                // confined, nothing opens.
-                                A2aPanelNavAction.CONFINED -> {
+                                // tel:/mailto:/intent:/office-raccoon:… — hand
+                                // to the system so the panel never dead-ends
+                                // on ERR_UNKNOWN_URL_SCHEME.
+                                A2aPanelNavAction.EXTERNAL_SCHEME -> {
                                     onExternalLink(url)
                                     true
                                 }
+                                // javascript:/file:/subframe loads: confined,
+                                // nothing opens.
+                                A2aPanelNavAction.CONFINED -> true
                             }
                         }
                     }
-                    webChromeClient = WebChromeClient()
+                    webChromeClient = object : WebChromeClient() {
+                        override fun onCreateWindow(
+                            view: WebView?,
+                            isDialog: Boolean,
+                            isUserGesture: Boolean,
+                            resultMsg: Message?,
+                        ): Boolean {
+                            // Without a result message the WebView cannot
+                            // hand the window handle back to JS; falling
+                            // through lets the shim's own link fallback run
+                            // instead of opening an orphan window.
+                            if (resultMsg == null || view == null) return false
+                            val popup = createA2aLoginWebView(context, popupHost, onExternalLink)
+                            // WebViewTransport() takes no arguments — the
+                            // only ctor param is the implicit outer WebView;
+                            // the popped window is handed over via setWebView.
+                            val transport = view.WebViewTransport()
+                            transport.webView = popup
+                            resultMsg.obj = transport
+                            resultMsg.sendToTarget()
+                            return true
+                        }
+
+                        override fun onCloseWindow(window: WebView?) {
+                            // popup.close() runs in the PANEL's JS context,
+                            // so the panel WebView's chrome client receives
+                            // it — idempotent with the popup's own handler.
+                            popupHost.closeFor(window)
+                        }
+                    }
                     onWebViewReady(this)
                 }
             },
@@ -180,15 +232,33 @@ fun A2aPanelWebView(
                 }
             }
         }
+
+        // Login popups render above everything, in z-order — the newest
+        // window is on top.
+        popups.forEach { popup ->
+            A2aLoginWindowOverlay(
+                popup = popup,
+                onClose = { popupHost.close(popup.id) },
+                onExternalLink = onExternalLink,
+            )
+        }
     }
 }
 
 /** Where a panel navigation request goes. */
 internal enum class A2aPanelNavAction {
-    /** Top-frame http/https — load in place; the panel never leaves the app. */
+    /** Top-frame http(s)/about — load in place; the panel never leaves the app. */
     LOAD_IN_PLACE,
 
-    /** Non-http(s) scheme or non-main-frame load — confined, nothing opens. */
+    /**
+     * A system/custom scheme (`tel:`, `mailto:`, `intent:`, `market:`,
+     * `office-raccoon:` and friends) the WebView cannot load — the screen
+     * hands it to the system ([onExternalLink]); the panel never dead-ends
+     * on `ERR_UNKNOWN_URL_SCHEME`.
+     */
+    EXTERNAL_SCHEME,
+
+    /** `javascript:`/`file:`/subframe/unparseable — confined, nothing opens. */
     CONFINED,
 }
 
@@ -201,22 +271,29 @@ internal object A2aPanelNav {
     /**
      * Classify one navigation request.
      *
-     * Every top-frame http/https URL loads in place — the embedded WebView
-     * is the panel session's in-app browser, so the panel's own flows
+     * Every top-frame http(s) URL loads in place — the embedded WebView is
+     * the panel session's in-app browser, so the panel's own flows
      * (provider web logins, docs links) complete here and never hand off to
-     * anything outside the app. The scheme check first: a `javascript:` or
-     * custom-scheme URL must never navigate. Subframe (iframe/subresource)
-     * loads are confined regardless of origin. A null/blank URL falls
-     * closed.
+     * anything outside the app. System/custom schemes dispatch externally
+     * (they are links to *other* apps, not pages: the panel's `tel:` /
+     * `mailto:` / `intent:` / Office-callback links must reach their
+     * handlers instead of dying inside the WebView). The hard-safety set
+     * stays confined: `javascript:` (script injection surface), `file:`
+     * (content-uri permission surface), subframe loads regardless of
+     * origin, and anything unparseable falls closed.
      */
     fun resolve(url: String?, baseUrl: String?, isMainFrame: Boolean = true): A2aPanelNavAction {
         if (!isMainFrame) return A2aPanelNavAction.CONFINED
-        val target = runCatching { java.net.URI(url?.trim() ?: "").parseServerAuthority() }.getOrNull()
+        if (url.isNullOrBlank()) return A2aPanelNavAction.CONFINED
+        // A scheme-only pass: URI.parseServerAuthority would reject hosts
+        // that are perfectly fine for external dispatch (intent://#Intent;…),
+        // and about:blank is not server-authority shaped either.
+        val scheme = runCatching { java.net.URI(url.trim()).scheme }.getOrNull()?.lowercase()
             ?: return A2aPanelNavAction.CONFINED
-        val scheme = target.scheme?.lowercase()
-        // An unparseable or scheme-less target (a relative oddity like
-        // "not a url \") is not a web page — confined, like tel:/javascript:.
-        if (scheme != "http" && scheme != "https") return A2aPanelNavAction.CONFINED
-        return A2aPanelNavAction.LOAD_IN_PLACE
+        return when (scheme) {
+            "http", "https", "about" -> A2aPanelNavAction.LOAD_IN_PLACE
+            "javascript", "file" -> A2aPanelNavAction.CONFINED
+            else -> A2aPanelNavAction.EXTERNAL_SCHEME
+        }
     }
 }
