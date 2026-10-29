@@ -1857,6 +1857,9 @@
 <string name="a2a_desktop_bridge_footer">Einige Panel-Aktionen (Konto-Import/Export, Log-Export, Voll-DB-Backup) nutzen die Desktop-Brücke des Engines und sind auf diesem Gerät nicht verfügbar. Konten werden im Panel hinzugefügt; SQLite-Daten liegen im app-privaten Datenordner.</string>
 <string name="a2a_incognito_login_title">Inkognito-Anmeldung</string>
 <string name="a2a_incognito_login_subtitle">Jedes Anmeldefenster startet mit einer sauberen Anbieter-Sitzung; die Anmeldung des Panels selbst bleibt unberührt.</string>
+<string name="a2a_view_gateway_log">Gateway-Protokoll</string>
+<string name="a2a_log_filter_login">Nur Anmeldung / Sicherheit</string>
+<string name="a2a_log_empty">Noch keine Protokollzeilen.</string>
 <string name="a2a_panel_isolated_hint">Läuft in einer isolierten In-App-Sitzung: Anmeldungen hier sind vom Gerätebrowser getrennt – mehrere Konten geraten nie in Konflikt.</string>
     <string name="a2a_start_gateway">Gateway starten</string>
     <string name="a2a_status_running">Läuft</string>

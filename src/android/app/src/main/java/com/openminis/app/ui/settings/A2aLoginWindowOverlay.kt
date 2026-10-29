@@ -28,6 +28,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -68,6 +72,10 @@ internal fun A2aLoginWindowOverlay(
     onClose: () -> Unit,
     onExternalLink: (String) -> Unit,
 ) {
+    var showLog by remember { mutableStateOf(false) }
+    if (showLog) {
+        A2aGatewayLogDialog(onDismiss = { showLog = false })
+    }
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background,
@@ -105,8 +113,16 @@ internal fun A2aLoginWindowOverlay(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                // Balances the close button so the title stays centered.
-                Spacer(Modifier.width(64.dp))
+                // [T-android-a2a-login-capture] The engine's [Login] log is the
+                // only place a stuck capture explains itself — surface it here,
+                // right where the login is happening.
+                MinisTextButton(onClick = { showLog = true }) {
+                    Text(
+                        stringResource(R.string.a2a_view_gateway_log),
+                        fontWeight = FontWeight.Medium,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
             }
             Box(
                 modifier = Modifier

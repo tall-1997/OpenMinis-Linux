@@ -290,6 +290,9 @@
 <string name="a2a_desktop_bridge_footer">面板中的部分操作（账号导入/导出、日志导出、整库备份）依赖引擎的桌面桥，本设备上不可用。账号可在面板内直接添加；SQLite 数据保存在应用私有数据目录中。</string>
 <string name="a2a_incognito_login_title">无痕登录</string>
 <string name="a2a_incognito_login_subtitle">每个登录窗口从干净的提供商会话开始；面板自身的登录不受影响。</string>
+<string name="a2a_view_gateway_log">网关日志</string>
+<string name="a2a_log_filter_login">只看登录 / 安全</string>
+<string name="a2a_log_empty">暂无日志。</string>
 <string name="a2a_panel_isolated_hint">在应用内的隔离会话中运行：此处登录与设备浏览器相互隔离，多账户互不冲突。</string>
     <string name="a2a_start_gateway">启动网关</string>
     <string name="a2a_status_running">运行中</string>

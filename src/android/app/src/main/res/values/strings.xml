@@ -325,6 +325,9 @@
 <string name="a2a_desktop_bridge_footer">Some panel actions (account import/export, log export, full-DB backup) use the engine\'s desktop bridge and are unavailable on this device. Accounts are added in the panel; SQLite data lives in the app-private data folder.</string>
 <string name="a2a_incognito_login_title">Incognito login</string>
 <string name="a2a_incognito_login_subtitle">Each login window starts with a clean provider session; the panel\'s own login is untouched.</string>
+<string name="a2a_view_gateway_log">Gateway log</string>
+<string name="a2a_log_filter_login">Login / security only</string>
+<string name="a2a_log_empty">No log lines yet.</string>
 <string name="a2a_panel_isolated_hint">Runs in a sandboxed in-app session: logins here are isolated from the device browser, so multiple accounts never conflict.</string>
     <string name="a2a_start_gateway">Start gateway</string>
     <string name="a2a_status_running">Running</string>
