@@ -1,4 +1,4 @@
-package com.openminis.app.plugins.builtin
+package com.openminis.app.a2a
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
@@ -11,26 +11,24 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * [T-builtin-plugins] Pure-function contract tests for the native gateway
- * service. The host process is not runnable in a JVM unit test, so these pin
- * the shapes the launch contract depends on:
+ * Pure-function contract tests for the gateway process manager, moved with
+ * the engine from `plugins/builtin/NativeGatewayServiceTest` — the host
+ * process is not runnable in a JVM unit test, so these pin the shapes the
+ * launch contract depends on:
  *  - launchArgv is exactly one element — the APK's own binary from
  *    nativeLibraryDir, no shell, no wrapper, no CLI args (the upstream
  *    binary parses none; even `--help` boots the server)
- *  - the native env carries the home layout the binary expects
+ *  - the launch env carries the home layout the binary expects
  *  - orphanPids scans /proc by argv[0] — the stop path's orphan sweep
  *
  * Robolectric supplies the [Context]: launchArgv resolves the binary out of
  * `applicationInfo.nativeLibraryDir`, which a bare JVM `Context` cannot
- * provide (the earlier hand-rolled FakeContext never compiled). The field is
- * pointed at a fixed fake path so the assertion pins the argv shape, not
- * whatever directory the host runner happens to use.
+ * provide. The field is pointed at a fixed fake path so the assertion pins
+ * the argv shape, not whatever directory the host runner happens to use.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = android.app.Application::class)
-class NativeGatewayServiceTest {
-
-    private val a2a = BuiltinPluginCatalog.ALL.first { it.id == "a2a" }
+class A2aGatewayProcessTest {
 
     private lateinit var context: Context
 
@@ -41,25 +39,27 @@ class NativeGatewayServiceTest {
     }
 
     @Test fun `launchArgv is the bare nativeLibraryDir binary`() {
-        val argv = NativeGatewayService.launchArgv(context, a2a)
-        assertEquals(listOf("/fake/nativeDir/liba2a.so"), argv)
+        val argv = A2aGatewayProcess.launchArgv(context)
+        // Separator-agnostic: File.pathSeparator-free joining via File() on
+        // Windows produces backslashes.
+        assertEquals("/fake/nativeDir/liba2a.so", argv.single().replace("\\", "/"))
     }
 
-    @Test fun `native env carries home data and tmp`() {
-        val env = BuiltinPluginCatalog.nativeEnv(a2a, "/data/files")
+    @Test fun `launch env carries home data and tmp`() {
+        val env = A2aGatewayProcess.launchEnv("/data/files")
         assertEquals("127.0.0.1", env["AGENT2API_HOST"])
         assertEquals("18901", env["AGENT2API_PROXY_PORT"])
-        assertEquals("/data/files/builtin-plugins/a2a/data", env["AGENT2API_PROXY_HOME"])
-        assertEquals("/data/files/builtin-plugins/a2a/ui", env["AGENT2API_UI_DIR"])
+        assertEquals("/data/files/builtin-plugins/a2a/data", env["AGENT2API_PROXY_HOME"]!!.replace("\\", "/"))
+        assertEquals("/data/files/builtin-plugins/a2a/ui", env["AGENT2API_UI_DIR"]!!.replace("\\", "/"))
         assertEquals("1", env["AGENT2API_ALLOW_NO_KEY"])
-        assertEquals("/data/files/builtin-plugins/a2a/data", env["HOME"])
-        assertEquals("/data/files/builtin-plugins/a2a/data/tmp", env["TMPDIR"])
+        assertEquals("/data/files/builtin-plugins/a2a/data", env["HOME"]!!.replace("\\", "/"))
+        assertEquals("/data/files/builtin-plugins/a2a/data/tmp", env["TMPDIR"]!!.replace("\\", "/"))
     }
 
-    @Test fun `native home dir is filesDir-scoped`() {
+    @Test fun `home dir is filesDir-scoped`() {
         assertEquals(
             "/data/files/builtin-plugins/a2a",
-            BuiltinPluginCatalog.nativeHomeDir("/data/files", "a2a"),
+            A2aGatewayProcess.homeDir("/data/files").path.replace("\\", "/"),
         )
     }
 
@@ -71,7 +71,11 @@ class NativeGatewayServiceTest {
      * foreign processes (empty result, not a wrong pid).
      */
     @Test fun `orphanPids finds nothing on a host without our binary`() {
-        val pids = NativeGatewayService.orphanPids(context, a2a)
+        val pids = A2aGatewayProcess.orphanPids(context)
         assertTrue("expected no matches, got $pids", pids.isEmpty())
+    }
+
+    @Test fun `health url pins the lane port and path`() {
+        assertEquals("http://127.0.0.1:18901/health", A2aGatewayProcess.healthUrl())
     }
 }

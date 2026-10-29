@@ -1855,6 +1855,16 @@
     <string name="builtin_plugin_install">Instal</string>
     <string name="builtin_plugin_retry">Coba lagi</string>
     <string name="builtin_plugin_open_panel">Panel</string>
+
+    <!-- [T-android-a2a-native] a2a gateway management page -->
+<string name="a2a_desktop_bridge_footer">Beberapa aksi panel (impor/ekspor akun, ekspor log, cadangan DB penuh) memakai jembatan desktop engine dan tidak tersedia di perangkat ini. Akun ditambahkan di panel; data SQLite ada di folder data privat aplikasi.</string>
+<string name="a2a_panel_isolated_hint">Berjalan dalam sesi terisolasi di dalam aplikasi: login di sini terpisah dari browser perangkat, beberapa akun tidak akan bentrok.</string>
+    <string name="a2a_start_gateway">Jalankan gateway</string>
+    <string name="a2a_status_running">Berjalan</string>
+    <string name="a2a_panel_address">Alamat panel</string>
+    <string name="a2a_panel_not_installed">Pasang gateway untuk membuka panel webnya.</string>
+    <string name="a2a_panel_needs_start">Jalankan gateway untuk membuka panel webnya.</string>
+    <string name="a2a_panel_load_failed">Panel gagal dimuat.</string>
     <string name="dev_suite_no_space">Penyimpanan tidak cukup: butuh sekitar %1$d GB, tersedia %2$d GB</string>
     <string name="dev_suite_skipped_dep">Dilewati: %1$s gagal dipasang</string>
     <string name="dev_suite_uninstall_failed">Gagal melepas (exit %1$d)</string>

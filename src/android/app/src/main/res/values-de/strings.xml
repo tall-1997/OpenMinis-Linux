@@ -1852,6 +1852,16 @@
     <string name="builtin_plugin_install">Installieren</string>
     <string name="builtin_plugin_retry">Erneut versuchen</string>
     <string name="builtin_plugin_open_panel">Panel</string>
+
+    <!-- [T-android-a2a-native] a2a gateway management page -->
+<string name="a2a_desktop_bridge_footer">Einige Panel-Aktionen (Konto-Import/Export, Log-Export, Voll-DB-Backup) nutzen die Desktop-Brücke des Engines und sind auf diesem Gerät nicht verfügbar. Konten werden im Panel hinzugefügt; SQLite-Daten liegen im app-privaten Datenordner.</string>
+<string name="a2a_panel_isolated_hint">Läuft in einer isolierten In-App-Sitzung: Anmeldungen hier sind vom Gerätebrowser getrennt – mehrere Konten geraten nie in Konflikt.</string>
+    <string name="a2a_start_gateway">Gateway starten</string>
+    <string name="a2a_status_running">Läuft</string>
+    <string name="a2a_panel_address">Panel-Adresse</string>
+    <string name="a2a_panel_not_installed">Installiere das Gateway, um sein Web-Panel zu öffnen.</string>
+    <string name="a2a_panel_needs_start">Starte das Gateway, um sein Web-Panel zu öffnen.</string>
+    <string name="a2a_panel_load_failed">Panel konnte nicht geladen werden.</string>
     <string name="dev_suite_no_space">Zu wenig Speicherplatz: etwa %1$d GB erforderlich, %2$d GB frei</string>
     <string name="dev_suite_skipped_dep">Übersprungen: %1$s wurde nicht installiert</string>
     <string name="dev_suite_uninstall_failed">Deinstallation fehlgeschlagen (exit %1$d)</string>

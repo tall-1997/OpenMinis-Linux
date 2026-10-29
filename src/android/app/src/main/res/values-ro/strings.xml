@@ -1854,6 +1854,16 @@
     <string name="builtin_plugin_install">Instalează</string>
     <string name="builtin_plugin_retry">Reîncearcă</string>
     <string name="builtin_plugin_open_panel">Panou</string>
+
+    <!-- [T-android-a2a-native] a2a gateway management page -->
+<string name="a2a_desktop_bridge_footer">Unele acțiuni din panou (import/export conturi, export jurnale, backup complet DB) folosesc puntea desktop a motorului și nu sunt disponibile pe acest dispozitiv. Conturile se adaugă în panou; datele SQLite se află în folderul privat al aplicației.</string>
+<string name="a2a_panel_isolated_hint">Rulează într-o sesiune izolată în aplicație: autentificările de aici sunt separate de browserul dispozitivului, mai multe conturi nu intră niciodată în conflict.</string>
+    <string name="a2a_start_gateway">Pornește gateway-ul</string>
+    <string name="a2a_status_running">În execuție</string>
+    <string name="a2a_panel_address">Adresa panoului</string>
+    <string name="a2a_panel_not_installed">Instalează gateway-ul pentru a-i deschide panoul web.</string>
+    <string name="a2a_panel_needs_start">Pornește gateway-ul pentru a-i deschide panoul web.</string>
+    <string name="a2a_panel_load_failed">Panoul nu s-a putut încărca.</string>
     <string name="dev_suite_no_space">Spațiu insuficient: sunt necesari aproximativ %1$d GB, disponibil %2$d GB</string>
     <string name="dev_suite_skipped_dep">Omis: %1$s nu a fost instalat</string>
     <string name="dev_suite_uninstall_failed">Dezinstalarea a eșuat (exit %1$d)</string>

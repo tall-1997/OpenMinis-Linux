@@ -66,7 +66,8 @@ class GatewayServiceManagerTest {
         // The pkill pattern is the bracketed launcher dir under the plugin
         // root — never a bare id that could match unrelated processes,
         // never a literal path that matches the stop command's own wrapper.
-        // ofm is the only guest gateway; a2a went native.
+        // ofm is the only guest gateway; a2a left the catalog for
+        // com.openminis.app.a2a.
         val cmd = GatewayServiceManager.stopCommand(ofm)
         assertTrue(cmd.contains("pkill -f \"/var/minis/shared/builtin-plugins/ofm/[t]ool/bin/\""))
         assertEquals(1, Regex("pkill -f").findAll(cmd).count())

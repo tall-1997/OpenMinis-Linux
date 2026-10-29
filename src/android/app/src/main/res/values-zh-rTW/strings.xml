@@ -1941,6 +1941,16 @@
     <string name="builtin_plugin_install">安裝</string>
     <string name="builtin_plugin_retry">重試</string>
     <string name="builtin_plugin_open_panel">面板</string>
+
+    <!-- [T-android-a2a-native] a2a gateway management page -->
+<string name="a2a_desktop_bridge_footer">面板中的部分操作（帳號匯入/匯出、日誌匯出、整庫備份）依賴引擎的桌面橋接，本裝置上不可用。帳號可在面板內直接新增；SQLite 資料保存在應用程式私有資料目錄中。</string>
+<string name="a2a_panel_isolated_hint">在應用程式內的隔離工作階段中執行：此處登入與裝置瀏覽器相互隔離，多帳戶互不衝突。</string>
+    <string name="a2a_start_gateway">啟動閘道</string>
+    <string name="a2a_status_running">執行中</string>
+    <string name="a2a_panel_address">面板位址</string>
+    <string name="a2a_panel_not_installed">安裝閘道後即可開啟網路面板。</string>
+    <string name="a2a_panel_needs_start">啟動閘道後即可開啟網路面板。</string>
+    <string name="a2a_panel_load_failed">面板載入失敗。</string>
     <string name="dev_suite_no_space">儲存空間不足：需要約 %1$d GB，可用 %2$d GB</string>
     <string name="dev_suite_skipped_dep">已跳過：%1$s 未安裝成功</string>
     <string name="dev_suite_uninstall_failed">解除安裝失敗（exit %1$d）</string>

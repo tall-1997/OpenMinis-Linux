@@ -36,6 +36,7 @@ import androidx.compose.material.icons.outlined.FolderShared
 import androidx.compose.material.icons.outlined.FrontHand
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Inventory2
+import androidx.compose.material.icons.outlined.Lan
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Palette
@@ -94,6 +95,10 @@ fun SettingsScreen(
     // Memory. Default no-op for callers that haven't wired the route yet.
     onMcpClick: () -> Unit = {},
     onPluginMarketClick: () -> Unit = {},
+    // [T-android-a2a-native] Agent2API gateway management page —
+    // first-class entry (dedicated icon + screen, in-app panel).
+    // Default no-op for callers that haven't wired the route yet.
+    onA2aClick: () -> Unit = {},
     // [T-soul-md] Soul settings page lives between Skills and Memory in the
     // Agent Runtime section; default no-op for callers that haven't wired
     // the route yet.
@@ -153,6 +158,17 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_model_groups),
                     subtitle = stringResource(R.string.settings_model_groups_subtitle),
                     onClick = onModelGroupsClick,
+                )
+                // [T-android-a2a-native] First-class entry for the local
+                // Agent2API gateway. Lan (registered in the M3Icons
+                // filled/outlined table) reads as a local network endpoint;
+                // the row routes to the dedicated A2aScreen.
+                SettingsItem(
+                    icon = Icons.Outlined.Lan,
+                    iconColor = Color(0xFF007AFF),
+                    title = stringResource(R.string.builtin_plugin_a2a_name),
+                    subtitle = stringResource(R.string.builtin_plugin_a2a_summary),
+                    onClick = onA2aClick,
                 )
                 SettingsItem(
                     icon = Icons.Outlined.BarChart,

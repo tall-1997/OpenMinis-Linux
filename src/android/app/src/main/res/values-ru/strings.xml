@@ -1860,6 +1860,16 @@
     <string name="builtin_plugin_install">Установить</string>
     <string name="builtin_plugin_retry">Повторить</string>
     <string name="builtin_plugin_open_panel">Панель</string>
+
+    <!-- [T-android-a2a-native] a2a gateway management page -->
+<string name="a2a_desktop_bridge_footer">Некоторые действия панели (импорт/экспорт аккаунтов, экспорт журналов, полная копия БД) используют настольный мост движка и недоступны на этом устройстве. Аккаунты добавляются в панели; данные SQLite находятся в приватной папке приложения.</string>
+<string name="a2a_panel_isolated_hint">Работает в изолированной сессии внутри приложения: входы здесь отделены от браузера устройства, несколько аккаунтов никогда не конфликтуют.</string>
+    <string name="a2a_start_gateway">Запустить шлюз</string>
+    <string name="a2a_status_running">Запущен</string>
+    <string name="a2a_panel_address">Адрес панели</string>
+    <string name="a2a_panel_not_installed">Установите шлюз, чтобы открыть его веб-панель.</string>
+    <string name="a2a_panel_needs_start">Запустите шлюз, чтобы открыть его веб-панель.</string>
+    <string name="a2a_panel_load_failed">Не удалось загрузить панель.</string>
     <string name="dev_suite_no_space">Недостаточно памяти: требуется около %1$d ГБ, доступно %2$d ГБ</string>
     <string name="dev_suite_skipped_dep">Пропущено: %1$s не установлен</string>
     <string name="dev_suite_uninstall_failed">Сбой удаления (exit %1$d)</string>

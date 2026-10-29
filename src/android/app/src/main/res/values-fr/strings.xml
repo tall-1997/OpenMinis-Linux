@@ -1852,6 +1852,16 @@
     <string name="builtin_plugin_install">Installer</string>
     <string name="builtin_plugin_retry">Réessayer</string>
     <string name="builtin_plugin_open_panel">Panneau</string>
+
+    <!-- [T-android-a2a-native] a2a gateway management page -->
+<string name="a2a_desktop_bridge_footer">Certaines actions du panneau (import/export de comptes, export des journaux, sauvegarde complète) utilisent le pont bureau du moteur et sont indisponibles sur cet appareil. Les comptes s\'ajoutent dans le panneau ; les données SQLite résident dans le dossier privé de l\'app.</string>
+<string name="a2a_panel_isolated_hint">S\'exécute dans une session isolée dans l\'app : les connexions ici sont séparées du navigateur de l\'appareil, plusieurs comptes n\'entrent jamais en conflit.</string>
+    <string name="a2a_start_gateway">Démarrer la passerelle</string>
+    <string name="a2a_status_running">En cours d\'exécution</string>
+    <string name="a2a_panel_address">Adresse du panneau</string>
+    <string name="a2a_panel_not_installed">Installez la passerelle pour ouvrir son panneau web.</string>
+    <string name="a2a_panel_needs_start">Démarrez la passerelle pour ouvrir son panneau web.</string>
+    <string name="a2a_panel_load_failed">Échec du chargement du panneau.</string>
     <string name="dev_suite_no_space">Stockage insuffisant : environ %1$d GB nécessaires, %2$d GB disponibles</string>
     <string name="dev_suite_skipped_dep">Ignoré : %1$s n\'a pas été installé</string>
     <string name="dev_suite_uninstall_failed">Échec de la désinstallation (exit %1$d)</string>

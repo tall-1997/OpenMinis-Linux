@@ -1858,6 +1858,16 @@
     <string name="builtin_plugin_install">Zainstaluj</string>
     <string name="builtin_plugin_retry">Ponów</string>
     <string name="builtin_plugin_open_panel">Panel</string>
+
+    <!-- [T-android-a2a-native] a2a gateway management page -->
+<string name="a2a_desktop_bridge_footer">Niektóre akcje panelu (import/eksport kont, eksport logów, pełna kopia DB) korzystają z mostka desktopowego silnika i nie są dostępne na tym urządzeniu. Konta dodaje się w panelu; dane SQLite znajdują się w prywatnym folderze danych aplikacji.</string>
+<string name="a2a_panel_isolated_hint">Działa w wydzielonej sesji w aplikacji: logowania są odseparowane od przeglądarki urządzenia, wiele kont nigdy nie wchodzi w konflikt.</string>
+    <string name="a2a_start_gateway">Uruchom bramkę</string>
+    <string name="a2a_status_running">Działa</string>
+    <string name="a2a_panel_address">Adres panelu</string>
+    <string name="a2a_panel_not_installed">Zainstaluj bramkę, aby otworzyć jej panel sieciowy.</string>
+    <string name="a2a_panel_needs_start">Uruchom bramkę, aby otworzyć jej panel sieciowy.</string>
+    <string name="a2a_panel_load_failed">Nie udało się załadować panelu.</string>
     <string name="dev_suite_no_space">Za mało miejsca: potrzeba około %1$d GB, dostępnych %2$d GB</string>
     <string name="dev_suite_skipped_dep">Pominięto: %1$s nie zostało zainstalowane</string>
     <string name="dev_suite_uninstall_failed">Odinstalowanie nie powiodło się (exit %1$d)</string>

@@ -4,10 +4,11 @@ import com.openminis.app.logging.AppLogger
 
 /**
  * Shared semantics of a loopback gateway lane — an OpenAI-compatible proxy
- * bound to 127.0.0.1, shipped with the APK and managed by the app (see
- * `plugins/builtin/`). Guest plugins run inside the PRoot sandbox; native
- * plugins run as host app processes — the lane does not care which, because
- * from the app's side both are just a loopback port it owns.
+ * bound to 127.0.0.1, shipped with the APK and managed by the app (the guest
+ * payloads in `plugins/builtin/`, the a2a gateway in `a2a/`). Guest plugins
+ * run inside the PRoot sandbox; a2a runs as a host app process — the lane
+ * does not care which, because from the app's side both are just a loopback
+ * port it owns.
  *
  * Everything about these lanes is inverted relative to Zen and Kilo, and the
  * inversion is the same for every one of them, so it lives here once:
