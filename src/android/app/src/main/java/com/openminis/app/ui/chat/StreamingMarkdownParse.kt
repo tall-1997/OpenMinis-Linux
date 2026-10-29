@@ -317,11 +317,11 @@ internal suspend fun parseMarkdownBlocks(content: String, depth: Int = 0): List<
                 }
                 val text = paraLines.joinToString("\n")
                 if (text.isNotBlank()) {
-                    // Split out inline media (`![alt](url)` that's a .mp4/.mp3/etc)
-                    // so videos/audio that the LLM emits adjacent to text still
-                    // get their dedicated preview card. Image extensions stay
-                    // inline (rendered as `[alt]` link) since Compose's inline
-                    // text-image attachment path isn't implemented here.
+                    // Split out inline media (`![alt](url)` — video, audio, AND
+                    // image) so media the LLM emits adjacent to text still gets
+                    // its dedicated preview card. Images used to stay inline and
+                    // render as a blue `[alt]` link; they now promote to
+                    // standalone MdBlock.Image blocks (T-inline-image-blue-link).
                     //
                     // T208-4 part 3: after the media split, run a second pass
                     // that promotes "wide" inline math (matrices, multi-row

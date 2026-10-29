@@ -31,7 +31,10 @@ internal fun parseInline(text: String, colors: MdColors): AnnotatedString {
                 text[i] == '\\' && i + 1 < text.length -> {
                     append(text[i + 1]); i += 2
                 }
-                // Image: ![alt](url) — render as [alt] link
+                // Image: ![alt](url) — [alt] link fallback. Only reachable for
+                // paragraphs the splitter guard rejected (over the ICU window);
+                // normal inline images are promoted to MdBlock.Image blocks at
+                // parse time (splitParagraphOnInlineMedia).
                 text.startsWith("![", i) -> {
                     val cb = text.indexOf(']', i + 2)
                     if (cb != -1 && cb + 1 < text.length && text[cb + 1] == '(') {
