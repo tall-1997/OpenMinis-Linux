@@ -1854,6 +1854,9 @@
 <string name="a2a_desktop_bridge_footer">패널의 일부 작업(계정 가져오기/내보내기, 로그 내보내기, 전체 DB 백업)은 엔진의 데스크톱 브리지를 사용하므로 이 기기에서는 사용할 수 없습니다. 계정은 패널에서 추가하며 SQLite 데이터는 앱 전용 폴더에 저장됩니다.</string>
 <string name="a2a_incognito_login_title">시크릿 로그인</string>
 <string name="a2a_incognito_login_subtitle">각 로그인 창은 공급자의 깨끗한 세션으로 시작되며, 패널 자체의 로그인은 건드리지 않습니다.</string>
+<string name="a2a_view_gateway_log">게이트웨이 로그</string>
+<string name="a2a_log_filter_login">로그인 / 보안만</string>
+<string name="a2a_log_empty">아직 로그가 없습니다.</string>
 <string name="a2a_panel_isolated_hint">앱 내 분리된 세션에서 실행됩니다. 여기서의 로그인은 기기 브라우저와 격리되어 여러 계정이 충돌하지 않습니다.</string>
     <string name="a2a_start_gateway">게이트웨이 실행</string>
     <string name="a2a_status_running">실행 중</string>

@@ -1855,6 +1855,9 @@
 <string name="a2a_desktop_bridge_footer">Ang ilang aksyon ng panel (account import/export, log export, full-DB backup) ay gumagamit ng desktop bridge ng engine at hindi available sa device na ito. Ang mga account ay idinaragdag sa panel; ang SQLite data ay nasa app-private na data folder.</string>
 <string name="a2a_incognito_login_title">Incognito na pag-login</string>
 <string name="a2a_incognito_login_subtitle">Bawat login window ay nagsisimula sa malinis na session ng provider; hindi ginagalaw ang login ng panel mismo.</string>
+<string name="a2a_view_gateway_log">Gateway log</string>
+<string name="a2a_log_filter_login">Login / security lang</string>
+<string name="a2a_log_empty">Wala pang log lines.</string>
 <string name="a2a_panel_isolated_hint">Tumatakbo sa nakabalot na session sa loob ng app: nahiwalay ang mga login dito mula sa browser ng device, hindi nagkakasalungat ang maramihang account.</string>
     <string name="a2a_start_gateway">I-start ang gateway</string>
     <string name="a2a_status_running">Tumatakbo</string>

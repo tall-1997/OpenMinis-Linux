@@ -122,6 +122,14 @@ object A2aGateway {
         prefs(context).edit().putBoolean(KEY_INCOGNITO_LOGIN, value).apply()
     }
 
+    /**
+     * The engine's stdout log (login state machine, security, session). Read
+     * by the in-app log viewer in both processes; app-private, same uid.
+     * [T-android-a2a-login-capture]
+     */
+    fun gatewayLogFile(context: Context): java.io.File =
+        java.io.File(A2aGatewayProcess.homeDir(context.filesDir.path), "data/gateway.log")
+
     private fun prefs(context: Context) =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 

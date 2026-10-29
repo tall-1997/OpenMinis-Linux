@@ -1855,6 +1855,9 @@
 <string name="a2a_desktop_bridge_footer">Sesetengah tindakan panel (import/eksport akaun, eksport log, sandaran DB penuh) menggunakan jambatan desktop enjin dan tidak tersedia pada peranti ini. Akaun ditambah dalam panel; data SQLite berada dalam folder data peribadi apl.</string>
 <string name="a2a_incognito_login_title">Log masuk inkognito</string>
 <string name="a2a_incognito_login_subtitle">Setiap tetingkap log masuk bermula dengan sesi pembekal yang bersih; log masuk panel itu sendiri tidak disentuh.</string>
+<string name="a2a_view_gateway_log">Log gateway</string>
+<string name="a2a_log_filter_login">Log masuk / keselamatan sahaja</string>
+<string name="a2a_log_empty">Belum ada baris log.</string>
 <string name="a2a_panel_isolated_hint">Berjalan dalam sesi terpencil dalam apl: log masuk di sini diasingkan daripada pelayar peranti, beberapa akaun tidak akan bercanggah.</string>
     <string name="a2a_start_gateway">Jalankan gateway</string>
     <string name="a2a_status_running">Sedang berjalan</string>

@@ -1855,6 +1855,9 @@
 <string name="a2a_desktop_bridge_footer">Algumas ações do painel (importar/exportar contas, exportar logs, backup completo do BD) usam a ponte de desktop do mecanismo e não estão disponíveis neste dispositivo. As contas são adicionadas no painel; os dados SQLite ficam na pasta privada do app.</string>
 <string name="a2a_incognito_login_title">Login anônimo</string>
 <string name="a2a_incognito_login_subtitle">Cada janela de login começa com uma sessão limpa do provedor; o login do próprio painel não é afetado.</string>
+<string name="a2a_view_gateway_log">Log do gateway</string>
+<string name="a2a_log_filter_login">Somente login / segurança</string>
+<string name="a2a_log_empty">Ainda sem linhas de log.</string>
 <string name="a2a_panel_isolated_hint">Funciona em uma sessão isolada dentro do app: os logins aqui ficam separados do navegador do dispositivo, várias contas nunca conflitam.</string>
     <string name="a2a_start_gateway">Iniciar gateway</string>
     <string name="a2a_status_running">Em execução</string>

@@ -1863,6 +1863,9 @@
 <string name="a2a_desktop_bridge_footer">Niektóre akcje panelu (import/eksport kont, eksport logów, pełna kopia DB) korzystają z mostka desktopowego silnika i nie są dostępne na tym urządzeniu. Konta dodaje się w panelu; dane SQLite znajdują się w prywatnym folderze danych aplikacji.</string>
 <string name="a2a_incognito_login_title">Logowanie incognito</string>
 <string name="a2a_incognito_login_subtitle">Każde okno logowania zaczyna od czystej sesji dostawcy; logowanie samego panelu pozostaje nietknięte.</string>
+<string name="a2a_view_gateway_log">Dziennik bramy</string>
+<string name="a2a_log_filter_login">Tylko logowanie / bezpieczeństwo</string>
+<string name="a2a_log_empty">Brak wpisów dziennika.</string>
 <string name="a2a_panel_isolated_hint">Działa w wydzielonej sesji w aplikacji: logowania są odseparowane od przeglądarki urządzenia, wiele kont nigdy nie wchodzi w konflikt.</string>
     <string name="a2a_start_gateway">Uruchom bramkę</string>
     <string name="a2a_status_running">Działa</string>

@@ -1855,6 +1855,9 @@
 <string name="a2a_desktop_bridge_footer">Bazı panel işlemleri (hesap içeri/dışarı aktarma, günlük dışa aktarma, tam DB yedekleme) motorun masaüstü köprüsünü kullanır ve bu cihazda kullanılamaz. Hesaplar panelde eklenir; SQLite verileri uygulamanın özel veri klasöründedir.</string>
 <string name="a2a_incognito_login_title">Gizli oturum açma</string>
 <string name="a2a_incognito_login_subtitle">Her giriş penceresi temiz bir sağlayıcı oturumuyla başlar; panelin kendi oturumu etkilenmez.</string>
+<string name="a2a_view_gateway_log">Ağ geçidi günlüğü</string>
+<string name="a2a_log_filter_login">Yalnızca oturum açma / güvenlik</string>
+<string name="a2a_log_empty">Henüz günlük satırı yok.</string>
 <string name="a2a_panel_isolated_hint">Uygulama içinde yalıtılmış bir oturumda çalışır: buradaki oturum açma işlemleri cihaz tarayıcısından ayrıdır, birden çok hesap asla çakışmaz.</string>
     <string name="a2a_start_gateway">Ağ geçidini başlat</string>
     <string name="a2a_status_running">Çalışıyor</string>

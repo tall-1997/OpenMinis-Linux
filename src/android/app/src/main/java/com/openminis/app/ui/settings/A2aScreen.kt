@@ -17,6 +17,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.outlined.CloudUpload
+import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Lan
 import androidx.compose.material.icons.outlined.VisibilityOff
@@ -217,6 +218,7 @@ private fun A2aManageBody(
     onToggleRunning: (Boolean) -> Unit,
     onInstall: () -> Unit,
 ) {
+    var showLog by remember { mutableStateOf(false) }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -303,7 +305,7 @@ private fun A2aManageBody(
                     iconColor = Color(0xFF34C759),
                     showDivider = true,
                 )
-                // [T-android-a2a-incognito] Each login window starts from a
+                // [T-android-a2a-login-capture] Each login window starts from a
                 // cleared jar: adding a second account of the same provider
                 // never reuses the first one's session.
                 SettingsSwitchRow(
@@ -313,10 +315,21 @@ private fun A2aManageBody(
                     onCheckedChange = onIncognitoChange,
                     icon = Icons.Outlined.VisibilityOff,
                     iconColor = Color(0xFF8E8E93),
+                    showDivider = true,
+                )
+                // The engine's own log — the only place a failed login state
+                // machine explains itself.
+                SettingsRow(
+                    title = stringResource(R.string.a2a_view_gateway_log),
+                    onClick = { showLog = true },
+                    icon = Icons.Outlined.Description,
                     showDivider = false,
                 )
             }
         }
+    }
+    if (showLog) {
+        A2aGatewayLogDialog(onDismiss = { showLog = false })
     }
 }
 
