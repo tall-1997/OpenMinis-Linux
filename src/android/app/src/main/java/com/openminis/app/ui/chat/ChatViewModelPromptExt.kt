@@ -430,13 +430,15 @@ internal fun ChatViewModel.taskAnchorFragment(): String? = TaskAnchor.fragment(
  * throws on a corrupt board (by design, so the tool surfaces it); the prompt
  * path degrades to no fragment instead of bricking the request.
  *
- * An EMPTY board falls back to [com.openminis.app.tools.PlanBoardGuidance]:
- * announcing nothing is exactly how a board never gets created.
+ * An EMPTY board degrades to no fragment: the "create one" contract now
+ * lives in the agent_plan tool description, which ships in the tool schema
+ * every turn regardless of board state - the same channel desktop task tools
+ * use - so the announcement can no longer vanish exactly when the board is
+ * missing.
  */
 internal fun ChatViewModel.planFragment(): String? = runCatching {
     val plans = com.openminis.app.tools.AgentPlanStore.list(activeSessionId, context)
     com.openminis.app.tools.AgentPlanStore.boardSnapshotPrompt(plans)
-        ?: com.openminis.app.tools.PlanBoardGuidance.fragment(plans.isEmpty())
 }.getOrNull()
 
 internal fun assembleDynamicTail(

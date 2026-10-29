@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import org.json.JSONArray
 import org.json.JSONObject
 
 /**
@@ -194,11 +195,10 @@ object AgentPlanStore {
 
     fun add(sessionId: String, context: Context?, title: String, description: String = "", status: String = "pending", id: String? = null): Plan {
         require(title.isNotBlank()) { "title is required" }
-        require(status in STATUSES) { "status must be pending, active, done, or failed" }
         return lock(sessionId).withLock {
             val plans = loadLocked(sessionId, context)
             require(plans.size < MAX_PLANS) { "plan list is full" }
-            val p = Plan(id = id?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString(), title = title.trim(), description = description.trim(), status = status, position = plans.size)
+            val p = Plan(id = id?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString(), title = title.trim(), description = description.trim(), status = normalizeStatus(status), position = plans.size)
             saveLocked(sessionId, context, plans + p)
             p
         }
@@ -206,11 +206,10 @@ object AgentPlanStore {
 
     fun update(sessionId: String, context: Context?, id: String, title: String? = null, description: String? = null, status: String? = null, position: Int? = null): Plan? = lock(sessionId).withLock {
         val plans = loadLocked(sessionId, context)
-        val index = plans.indexOfFirst { it.id == id }
+        val index = resolveIndex(plans, id)
         if (index < 0) return@withLock null
-        if (status != null) require(status in STATUSES) { "status must be pending, active, done, or failed" }
         val old = plans[index]
-        val next = old.copy(title = title?.trim()?.takeIf { it.isNotEmpty() } ?: old.title, description = description ?: old.description, status = status ?: old.status, position = position ?: old.position, updatedAt = System.currentTimeMillis())
+        val next = old.copy(title = title?.trim()?.takeIf { it.isNotEmpty() } ?: old.title, description = description ?: old.description, status = status?.let { normalizeStatus(it) } ?: old.status, position = position ?: old.position, updatedAt = System.currentTimeMillis())
         val out = plans.toMutableList().also { it[index] = next }
         saveLocked(sessionId, context, out)
         next
@@ -218,14 +217,99 @@ object AgentPlanStore {
 
     fun remove(sessionId: String, context: Context?, id: String): Boolean = lock(sessionId).withLock {
         val plans = loadLocked(sessionId, context)
-        val out = plans.filterNot { it.id == id }.mapIndexed { i, p -> p.copy(position = i) }
-        if (out.size == plans.size) return@withLock false
+        val index = resolveIndex(plans, id)
+        if (index < 0) return@withLock false
+        val out = plans.filterIndexed { i, _ -> i != index }.mapIndexed { i, p -> p.copy(position = i) }
         saveLocked(sessionId, context, out)
         true
     }
 
     fun clear(sessionId: String, context: Context?) = lock(sessionId).withLock {
         saveLocked(sessionId, context, emptyList())
+    }
+
+    /**
+     * [T-plan-status-aliases] Status used to be validated with `require(status
+     * in STATUSES)` — one ecosystem's wording (completed / in_progress / …)
+     * and the call threw, the model dropped the update, and the item stayed
+     * stuck. Fold every common alias into the four canonical states; anything
+     * unrecognized degrades to pending instead of failing the call.
+     */
+    internal fun normalizeStatus(raw: String?): String {
+        val r = raw?.trim()?.lowercase() ?: return "pending"
+        return when {
+            r in DONE_ALIASES -> "done"
+            r in ACTIVE_ALIASES -> "active"
+            r in FAILED_ALIASES -> "failed"
+            else -> "pending"
+        }
+    }
+
+    /**
+     * [T-plan-target-resolution] update/remove used to demand the exact UUID
+     * printed by a previous render. A mistranscribed or half-remembered UUID
+     * bounced with "plan item not found", the model stopped advancing the
+     * board, and done items never got checked off. Resolution now runs a
+     * ladder: exact id → 1-based number (the index the snapshot prints) →
+     * unique exact title → unique title prefix → unique title substring.
+     * Unknown or ambiguous → -1 (the caller reports it with the live board).
+     */
+    fun resolveIndex(plans: List<Plan>, ref: String): Int {
+        val r = ref.trim()
+        if (r.isEmpty()) return -1
+        plans.indexOfFirst { it.id == r }.takeIf { it >= 0 }?.let { return it }
+        r.toIntOrNull()?.let { n -> if (n in 1..plans.size) return n - 1 }
+        uniqueMatch(plans) { it.title.trim().equals(r, ignoreCase = true) }?.let { return it }
+        uniqueMatch(plans) { it.title.trim().startsWith(r, ignoreCase = true) }?.let { return it }
+        uniqueMatch(plans) { it.title.contains(r, ignoreCase = true) }?.let { return it }
+        return -1
+    }
+
+    private fun uniqueMatch(plans: List<Plan>, match: (Plan) -> Boolean): Int? {
+        var hit = -1
+        for ((i, p) in plans.withIndex()) {
+            if (!match(p)) continue
+            if (hit >= 0) return null // ambiguous
+            hit = i
+        }
+        return hit.takeIf { it >= 0 }
+    }
+
+    /**
+     * [T-plan-board-replace] The desktop task tools (opencode todowrite,
+     * Claude Code TodoWrite) are full-list REPLACE operations — no ids, one
+     * call rebuilds the board, so "mark it done" never depends on remembering
+     * a UUID. This is the same contract: [incoming] becomes the entire board
+     * in the given order. A provided id is reused when it names an existing
+     * item (stable identity across replaces); duplicate ids are rejected;
+     * an empty list clears the board.
+     */
+    fun replace(sessionId: String, context: Context?, incoming: List<PlanInput>): List<Plan> = lock(sessionId).withLock {
+        require(incoming.size <= MAX_PLANS) { "plan list is full" }
+        val existing = loadLocked(sessionId, context)
+        val seenIds = mutableSetOf<String>()
+        val now = System.currentTimeMillis()
+        val built = incoming.mapIndexed { i, item ->
+            val title = item.title.trim()
+            require(title.isNotEmpty()) { "title is required" }
+            val status = normalizeStatus(item.status)
+            val id = item.id.trim().takeIf { it.isNotEmpty() }?.also { raw ->
+                require(seenIds.add(raw)) { "duplicate plan id $raw" }
+            } ?: UUID.randomUUID().toString()
+            val old = existing.firstOrNull { it.id == id }
+            val changed = old == null || old.title != title || old.description != item.description.trim() || old.status != status
+            Plan(
+                id = id,
+                title = title,
+                description = item.description.trim(),
+                status = status,
+                position = i,
+                createdAt = old?.createdAt ?: now,
+                updatedAt = if (changed) now else old.updatedAt,
+            )
+        }
+        saveLocked(sessionId, context, built)
+        built
     }
 
     /**
@@ -277,12 +361,12 @@ object AgentPlanStore {
         if (plans.isEmpty()) return null
         // A finished board has nothing to advance: announcing it would tell the
         // model to keep pushing items that already landed, and the card is on
-        // its way out. PlanBoardGuidance stays quiet here too - "create one"
-        // would be wrong while the finished board is still on screen.
+        // its way out. The empty-board "create one" contract lives in the
+        // agent_plan tool description, which is in the schema every turn.
         if (plans.all { it.status == "done" }) return null
         return buildString {
             append("<plan_board>\n")
-            append("Current plan board (advance items with agent_plan; the user sees it live):\n")
+            append("Current plan board. Advance it with agent_plan — target an item by its number (update id=\"2\", status=\"done\"), by its title, or rebuild the whole board with op=replace; the user sees it live:\n")
             plans.forEachIndexed { i, p ->
                 append("${i + 1}. [${p.status}] ${p.title}")
                 if (p.description.isNotBlank()) append(" — ${p.description}")
@@ -292,7 +376,17 @@ object AgentPlanStore {
         }
     }
 
-    private val STATUSES = setOf("pending", "active", "done", "failed")
+    private val DONE_ALIASES = setOf("done", "completed", "complete", "finished")
+    private val ACTIVE_ALIASES = setOf("active", "in_progress", "inprogress", "in-progress", "doing")
+    private val FAILED_ALIASES = setOf("failed", "error", "cancelled", "canceled", "blocked")
+
+    /** One replacement row for [replace]: ids are optional, status aliases fold in. */
+    data class PlanInput(
+        val id: String = "",
+        val title: String,
+        val description: String = "",
+        val status: String = "pending",
+    )
 }
 
 object AgentPlanTool {
@@ -300,18 +394,39 @@ object AgentPlanTool {
 
     fun definition(): AgentToolDefinition = AgentToolDefinition(
         name = NAME,
-        description = "Maintain an independent task list for this chat. Each item has its own id and status; no hidden cursor or auto-advance. Operations: add, update, remove, list, clear.",
+        description = "Maintain the working plan for this chat, shown to the user live above the composer. " +
+            "The board is a full-list REPLACE on every change: use op=replace with the complete list of items " +
+            "(ids are optional — reuse an item's id to keep it stable, omit it to mint one). " +
+            "Create the board when the work spans 3+ steps or several tool rounds, one item per deliverable step; " +
+            "flip the item you are on to active, and to done the moment it lands - in the turn the work happens. " +
+            "update/remove need no ids either: target an item by its 1-based number from the snapshot, its exact " +
+            "title, or a unique title prefix. Skip the board for single-shot answers and one-command lookups.",
         parameters = mapOf(
             "tool_title" to AgentToolParam("string", "A concise 5-10 word summary shown to the user."),
-            "op" to AgentToolParam("string", "add, update, remove, list, or clear.", enumValues = listOf("add", "update", "remove", "list", "clear")),
-            "id" to AgentToolParam("string", "Plan item id for update/remove."),
+            "op" to AgentToolParam("string", "add, update, remove, list, clear, or replace.", enumValues = listOf("add", "update", "remove", "list", "clear", "replace")),
+            "id" to AgentToolParam("string", "Plan item id for update/remove. You can also pass its 1-based number (shown in the snapshot), its exact title, or a unique title prefix."),
             "title" to AgentToolParam("string", "Task title."),
             "description" to AgentToolParam("string", "Optional task details."),
-            "status" to AgentToolParam("string", "pending, active, done, or failed.", enumValues = listOf("pending", "active", "done", "failed")),
+            "status" to AgentToolParam("string", "pending, active, done, or failed. Aliases like completed / in_progress / cancelled are accepted and normalized.", enumValues = listOf("pending", "active", "done", "failed")),
             "position" to AgentToolParam("integer", "Optional display position."),
+            "plans" to AgentToolParam(
+                "array",
+                "Full list for op=replace: it becomes the entire board, in this order. Empty list clears the board.",
+                items = AgentToolParam(
+                    "object",
+                    "One board item.",
+                    properties = mapOf(
+                        "title" to AgentToolParam("string", "Task title."),
+                        "description" to AgentToolParam("string", "Optional task details."),
+                        "status" to AgentToolParam("string", "pending, active, done, or failed (aliases accepted).", enumValues = listOf("pending", "active", "done", "failed")),
+                        "id" to AgentToolParam("string", "Optional: reuse a previous item's id to keep it stable."),
+                    ),
+                    required = listOf("title"),
+                ),
+            ),
         ),
         required = listOf("tool_title", "op"),
-        propertyOrdering = listOf("tool_title", "op", "id", "title", "description", "status", "position"),
+        propertyOrdering = listOf("tool_title", "op", "id", "title", "description", "status", "position", "plans"),
     )
 
     fun execute(argsJson: String, sessionId: String = "__default__", context: Context? = null): ToolExecutionResult {
@@ -325,11 +440,28 @@ object AgentPlanTool {
                     ToolExecutionResult("Added ${p.id}: ${AgentPlanStore.render(sessionId, context)}", true, toolTitle = toolTitle)
                 }
                 "update" -> {
-                    val p = AgentPlanStore.update(sessionId, context, args.optString("id"), args.optString("title").takeIf { it.isNotBlank() }, if (args.has("description")) args.optString("description") else null, args.optString("status").takeIf { it.isNotBlank() }, if (args.has("position")) args.optInt("position") else null) ?: return ToolExecutionResult("Error: plan item not found", false, toolTitle = toolTitle)
+                    val ref = args.optString("id")
+                    val p = AgentPlanStore.update(sessionId, context, ref, args.optString("title").takeIf { it.isNotBlank() }, if (args.has("description")) args.optString("description") else null, args.optString("status").takeIf { it.isNotBlank() }, if (args.has("position")) args.optInt("position") else null)
+                        ?: return ToolExecutionResult("Error: plan item not found for \"$ref\". Current board: ${AgentPlanStore.render(sessionId, context)}", false, toolTitle = toolTitle)
                     ToolExecutionResult("Updated ${p.id}: ${AgentPlanStore.render(sessionId, context)}", true, toolTitle = toolTitle)
                 }
-                "remove" -> if (AgentPlanStore.remove(sessionId, context, args.optString("id"))) ToolExecutionResult(AgentPlanStore.render(sessionId, context), true, toolTitle = toolTitle) else ToolExecutionResult("Error: plan item not found", false, toolTitle = toolTitle)
+                "remove" -> {
+                    val ref = args.optString("id")
+                    if (AgentPlanStore.remove(sessionId, context, ref)) ToolExecutionResult(AgentPlanStore.render(sessionId, context), true, toolTitle = toolTitle)
+                    else ToolExecutionResult("Error: plan item not found for \"$ref\". Current board: ${AgentPlanStore.render(sessionId, context)}", false, toolTitle = toolTitle)
+                }
                 "clear" -> { AgentPlanStore.clear(sessionId, context); ToolExecutionResult("(plan list cleared)", true, toolTitle = toolTitle) }
+                "replace" -> {
+                    val plansArg = args.optJSONArray("plans") ?: runCatching { JSONArray(args.optString("plans")) }.getOrNull()
+                        ?: return ToolExecutionResult("Error agent_plan: plans must be a JSON array", false, toolTitle = toolTitle)
+                    val items = mutableListOf<AgentPlanStore.PlanInput>()
+                    for (i in 0 until plansArg.length()) {
+                        val e = plansArg.optJSONObject(i) ?: continue
+                        items += AgentPlanStore.PlanInput(id = e.optString("id"), title = e.optString("title"), description = e.optString("description"), status = e.optString("status", "pending"))
+                    }
+                    AgentPlanStore.replace(sessionId, context, items)
+                    ToolExecutionResult(AgentPlanStore.render(sessionId, context), true, toolTitle = toolTitle)
+                }
                 else -> ToolExecutionResult(AgentPlanStore.render(sessionId, context), true, toolTitle = toolTitle)
             }
         } catch (e: Exception) {

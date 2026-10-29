@@ -50,8 +50,16 @@ class AgentPlanToolTest {
     }
 
     @Test
-    fun addRejectsBadStatus() {
-        try { AgentPlanStore.add(sidA, null, "x", status = "bogus"); assertFalse(true) } catch (_: Exception) {}
+    fun addNormalizesStatusAliases() {
+        // [T-plan-status-aliases] A status word from another ecosystem used
+        // to throw and stall the board. Aliases fold into the four canonical
+        // states; anything unrecognized degrades to pending.
+        AgentPlanStore.clear(sidA, null)
+        assertEquals("done", AgentPlanStore.add(sidA, null, "a", status = "completed").status)
+        assertEquals("active", AgentPlanStore.add(sidA, null, "b", status = "in_progress").status)
+        assertEquals("failed", AgentPlanStore.add(sidA, null, "c", status = "cancelled").status)
+        assertEquals("pending", AgentPlanStore.add(sidA, null, "d", status = "bogus").status)
+        assertEquals("pending", AgentPlanStore.add(sidA, null, "e").status)
     }
 
     // ── session isolation ──
@@ -84,6 +92,69 @@ class AgentPlanToolTest {
     fun updateOnMissingIdReturnsNull() {
         val u = AgentPlanStore.update(sidA, null, "nope", title = "x")
         assertNull(u)
+    }
+
+    // ── [T-plan-target-resolution] update/remove resolve number / title / id ──
+
+    @Test
+    fun updateResolvesByOneBasedNumber() {
+        AgentPlanStore.clear(sidA, null)
+        AgentPlanStore.add(sidA, null, "first")
+        AgentPlanStore.add(sidA, null, "second")
+        val u = AgentPlanStore.update(sidA, null, "2", status = "done")
+        assertNotNull(u)
+        assertEquals("second", u!!.title)
+        assertEquals("done", AgentPlanStore.list(sidA, null)[1].status)
+        assertEquals("pending", AgentPlanStore.list(sidA, null)[0].status)
+    }
+
+    @Test
+    fun removeResolvesByNumberAndShiftsPositions() {
+        AgentPlanStore.clear(sidA, null)
+        AgentPlanStore.add(sidA, null, "first")
+        AgentPlanStore.add(sidA, null, "second")
+        AgentPlanStore.add(sidA, null, "third")
+        assertTrue(AgentPlanStore.remove(sidA, null, "2"))
+        assertEquals(listOf("first", "third"), AgentPlanStore.list(sidA, null).map { it.title })
+        assertEquals(listOf(0, 1), AgentPlanStore.list(sidA, null).map { it.position })
+    }
+
+    @Test
+    fun updateResolvesByExactTitleAndUniquePrefix() {
+        AgentPlanStore.clear(sidA, null)
+        AgentPlanStore.add(sidA, null, "alpha-one")
+        AgentPlanStore.add(sidA, null, "beta-two")
+        val byTitle = AgentPlanStore.update(sidA, null, "beta-two", status = "active")
+        assertNotNull(byTitle)
+        assertEquals("active", byTitle!!.status)
+        // Case-insensitive unique prefix also lands on the right row.
+        val byPrefix = AgentPlanStore.update(sidA, null, "ALPHA", status = "done")
+        assertNotNull(byPrefix)
+        assertEquals("alpha-one", byPrefix!!.title)
+        assertEquals("done", byPrefix.status)
+    }
+
+    @Test
+    fun resolutionRefusesAmbiguousTargetsInsteadOfHittingTheWrongRow() {
+        AgentPlanStore.clear(sidA, null)
+        AgentPlanStore.add(sidA, null, "alpha-x")
+        AgentPlanStore.add(sidA, null, "alpha-y")
+        // "alpha" is a prefix of two rows: must be ambiguous, never a silent
+        // hit on the first match (the old silent-wrong-row failure mode).
+        assertNull(AgentPlanStore.update(sidA, null, "alpha", status = "done"))
+        assertNull(AgentPlanStore.update(sidA, null, "alpha-z"))
+        // The exact number ladder still works alongside titles that look numeric.
+        AgentPlanStore.add(sidA, null, "1")
+        assertNotNull(AgentPlanStore.update(sidA, null, "2", status = "done"))
+    }
+
+    @Test
+    fun updateNormalizesStatusAliases() {
+        AgentPlanStore.clear(sidA, null)
+        val p = AgentPlanStore.add(sidA, null, "one")
+        val u = AgentPlanStore.update(sidA, null, p.id, status = "completed")
+        assertEquals("done", u!!.status)
+        assertEquals("active", AgentPlanStore.update(sidA, null, p.title, status = "in_progress")!!.status)
     }
 
     // ── remove & clear ──
@@ -220,9 +291,25 @@ class AgentPlanToolTest {
         val d = AgentPlanTool.definition()
         assertEquals("agent_plan", d.name)
         val ops = d.parameters["op"]!!.enumValues
-        assertTrue("only independent-list ops", ops!!.toSet() == setOf("add", "update", "remove", "list", "clear"))
+        assertTrue("only independent-list ops", ops!!.toSet() == setOf("add", "update", "remove", "list", "clear", "replace"))
         assertFalse("no cursor-based ops", ops.contains("advance"))
         assertFalse("no legacy ops", ops.contains("set"))
+        // replace carries a typed array schema (not a free-text blob): the
+        // provider formats it as a proper JSON array for the model.
+        val plans = d.parameters["plans"]!!
+        assertEquals("array", plans.type)
+        assertEquals("object", plans.items!!.type)
+        assertTrue("title is required on each row", plans.items!!.required!!.contains("title"))
+        assertNotNull(plans.items!!.properties!!["status"])
+    }
+
+    @Test
+    fun theDescriptionCarriesTheReplaceAndTriggerContract() {
+        val description = AgentPlanTool.definition().description
+        assertTrue(description, description.contains("full-list REPLACE"))
+        assertTrue(description, description.contains("3+ steps"))
+        assertTrue(description, description.contains("op=replace"))
+        assertTrue(description, description.contains("ids are optional"))
     }
 
     @Test
@@ -254,6 +341,132 @@ class AgentPlanToolTest {
         val r = AgentPlanTool.execute("""{"op":"remove","id":"${p.id}"}""", sidA, null)
         assertTrue(r.success)
         assertEquals(0, AgentPlanStore.list(sidA, null).size)
+    }
+
+    // ── [T-plan-board-replace] full-list replace ──
+
+    @Test
+    fun replaceBuildsTheBoardInOneCall() {
+        AgentPlanStore.clear(sidA, null)
+        val built = AgentPlanStore.replace(sidA, null, listOf(
+            AgentPlanStore.PlanInput(title = "recon"),
+            AgentPlanStore.PlanInput(title = "implement"),
+            AgentPlanStore.PlanInput(title = "ship", status = "active"),
+        ))
+        assertEquals(3, built.size)
+        assertEquals(listOf("recon", "implement", "ship"), built.map { it.title })
+        assertEquals(listOf(0, 1, 2), built.map { it.position })
+        assertEquals("active", AgentPlanStore.list(sidA, null)[2].status)
+    }
+
+    @Test
+    fun replaceRewritesTheWholeBoardIncludingStatusFlips() {
+        AgentPlanStore.clear(sidA, null)
+        val first = AgentPlanStore.add(sidA, null, "a")
+        val second = AgentPlanStore.add(sidA, null, "b")
+        // One call: flip a done, keep b, drop nothing by re-listing both, and
+        // reorder them. Reused ids stay stable, new rows mint ids.
+        val rebuilt = AgentPlanStore.replace(sidA, null, listOf(
+            AgentPlanStore.PlanInput(id = second.id, title = "b", status = "active"),
+            AgentPlanStore.PlanInput(id = first.id, title = "a", status = "done"),
+            AgentPlanStore.PlanInput(title = "c"),
+        ))
+        assertEquals(3, rebuilt.size)
+        assertEquals(listOf("b", "a", "c"), rebuilt.map { it.title })
+        assertEquals(listOf("active", "done", "pending"), rebuilt.map { it.status })
+        // id reuse keeps identity (and createdAt) across replaces.
+        assertEquals(second.createdAt, rebuilt[0].createdAt)
+        assertEquals(first.id, rebuilt[1].id)
+        assertFalse("new rows mint a fresh id", rebuilt[2].id == first.id || rebuilt[2].id == second.id)
+    }
+
+    @Test
+    fun replaceEmptyListClearsTheBoard() {
+        AgentPlanStore.clear(sidA, null)
+        AgentPlanStore.add(sidA, null, "one")
+        assertEquals(1, AgentPlanStore.list(sidA, null).size)
+        AgentPlanStore.replace(sidA, null, emptyList())
+        assertEquals(0, AgentPlanStore.list(sidA, null).size)
+    }
+
+    @Test
+    fun replaceRejectsBlankTitleAndDuplicateIds() {
+        AgentPlanStore.clear(sidA, null)
+        try {
+            AgentPlanStore.replace(sidA, null, listOf(AgentPlanStore.PlanInput(title = "  ")))
+            org.junit.Assert.fail("blank title must throw")
+        } catch (_: Exception) {}
+        val id = "shared-id"
+        try {
+            AgentPlanStore.replace(sidA, null, listOf(
+                AgentPlanStore.PlanInput(id = id, title = "x"),
+                AgentPlanStore.PlanInput(id = id, title = "y"),
+            ))
+            org.junit.Assert.fail("duplicate ids must throw")
+        } catch (_: Exception) {}
+    }
+
+    @Test
+    fun replaceNormalizesStatusAliases() {
+        AgentPlanStore.clear(sidA, null)
+        val built = AgentPlanStore.replace(sidA, null, listOf(
+            AgentPlanStore.PlanInput(title = "a", status = "completed"),
+            AgentPlanStore.PlanInput(title = "b", status = "in_progress"),
+        ))
+        assertEquals(listOf("done", "active"), built.map { it.status })
+    }
+
+    @Test
+    fun executeReplaceBuildsBoardFromTypedArray() {
+        AgentPlanStore.clear(sidA, null)
+        val result = AgentPlanTool.execute(
+            """{"op":"replace","plans":[{"title":"one"},{"title":"two","status":"done"}]}""",
+            sidA,
+            null,
+        )
+        assertTrue(result.output, result.success)
+        assertEquals(2, AgentPlanStore.list(sidA, null).size)
+        assertEquals("done", AgentPlanStore.list(sidA, null)[1].status)
+        assertTrue(result.output, result.output.contains("two"))
+    }
+
+    @Test
+    fun executeReplaceAcceptsPlansAsJsonStringFallback() {
+        AgentPlanStore.clear(sidA, null)
+        // Raw string: each \" below is ONE backslash on the wire, so the
+        // outer JSONObject decodes plans to the string [{"title":"flat"}],
+        // which the inner JSONArray then parses. Two backslashes (\\") would
+        // end the plans string early and break the outer parse.
+        val result = AgentPlanTool.execute(
+            """{"op":"replace","plans":"[{\"title\":\"flat\"}]"}""",
+            sidA,
+            null,
+        )
+        assertTrue(result.output, result.success)
+        assertEquals("flat", AgentPlanStore.list(sidA, null).single().title)
+    }
+
+    @Test
+    fun executeReplaceWithoutPlansReportsError() {
+        val result = AgentPlanTool.execute("""{"op":"replace"}""", sidA, null)
+        assertFalse(result.success)
+        assertTrue(result.output, result.output.contains("plans"))
+    }
+
+    @Test
+    fun executeUpdateByNumberSucceedsAndMissReportsTheLiveBoard() {
+        AgentPlanStore.clear(sidA, null)
+        AgentPlanTool.execute("""{"op":"replace","plans":[{"title":"one"},{"title":"two"}]}""", sidA, null)
+        // The snapshot prints 1-based numbers: targeting by number needs no id.
+        val byNumber = AgentPlanTool.execute("""{"op":"update","id":"2","status":"done"}""", sidA, null)
+        assertTrue(byNumber.output, byNumber.success)
+        assertEquals("done", AgentPlanStore.list(sidA, null)[1].status)
+        // A miss names the ref AND prints the live board so the model can
+        // self-correct instead of silently dropping the advance.
+        val miss = AgentPlanTool.execute("""{"op":"update","id":"nope","status":"done"}""", sidA, null)
+        assertFalse(miss.success)
+        assertTrue(miss.output, miss.output.contains("nope"))
+        assertTrue(miss.output, miss.output.contains("two"))
     }
 
     // ── [T-plan-store-silent-loss] persistence failure must be loud ──

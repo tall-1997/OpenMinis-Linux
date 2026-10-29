@@ -109,25 +109,35 @@ class AgentPlanBoardLifecycleTest {
     // ── the prompt always says something true ──
 
     @Test
-    fun exactlyOneOfSnapshotOrGuidanceSpeaks() {
-        assertAnnounced(AgentPlanStore.list(sid, null), empty = true)
+    fun thePromptNeverAnnouncesAFinishedOrEmptyBoard() {
+        // Empty: no snapshot fragment. The board's absence is still covered —
+        // the agent_plan tool description carries the "create it when the work
+        // spans 3+ steps" contract and ships in the schema every turn, so the
+        // announcement channel moved from a prompt fragment into the schema
+        // where it can no longer vanish exactly when the board is missing.
+        assertNull(AgentPlanStore.boardSnapshotPrompt(AgentPlanStore.list(sid, null)))
         val p = AgentPlanStore.add(sid, null, "one")
-        assertAnnounced(AgentPlanStore.list(sid, null), empty = false)
+        assertNotNull(AgentPlanStore.boardSnapshotPrompt(AgentPlanStore.list(sid, null)))
         AgentPlanStore.update(sid, null, p.id, status = "done")
-        // Finished: neither speaks. The snapshot would announce work that
-        // already landed, and "create a board" is wrong while the card is
-        // still holding its green state.
-        val finished = AgentPlanStore.list(sid, null)
-        assertNull(AgentPlanStore.boardSnapshotPrompt(finished))
-        assertNull(PlanBoardGuidance.fragment(finished.isEmpty()))
+        // Finished: the snapshot would announce work that already landed,
+        // while the card is still holding its green state.
+        assertNull(AgentPlanStore.boardSnapshotPrompt(AgentPlanStore.list(sid, null)))
     }
 
     @Test
-    fun theGuidanceNamesTheToolAndTheTrigger() {
-        val guidance = PlanBoardGuidance.fragment(boardEmpty = true)
-        assertNotNull(guidance)
-        assertTrue(guidance!!.contains("agent_plan"))
-        assertTrue(guidance.contains("<plan_board>"))
+    fun theToolDescriptionCarriesTheWhenToCreateContract() {
+        val description = AgentPlanTool.definition().description
+        assertTrue(description, description.contains("agent_plan") || description.contains("plan"))
+        assertTrue(description, description.contains("3+ steps"))
+        assertTrue(description, description.contains("flip the item you are on to active"))
+        assertTrue(description, description.contains("op=replace"))
+    }
+
+    @Test
+    fun theToolDescriptionNamesTheReplaceContract() {
+        val description = AgentPlanTool.definition().description
+        assertTrue(description, description.contains("full-list REPLACE"))
+        assertTrue(description, description.contains("ids are optional"))
     }
 
     @Test
@@ -136,16 +146,14 @@ class AgentPlanBoardLifecycleTest {
         assertTrue(text, text.contains("no board yet"))
     }
 
-    private fun assertAnnounced(plans: List<AgentPlanStore.Plan>, empty: Boolean) {
-        val snapshot = AgentPlanStore.boardSnapshotPrompt(plans)
-        val guidance = PlanBoardGuidance.fragment(plans.isEmpty())
-        if (empty) {
-            assertNull("an empty board has no snapshot", snapshot)
-            assertNotNull("an empty board must still be announced", guidance)
-        } else {
-            assertNotNull("open work carries the snapshot", snapshot)
-            assertNull("a board with items needs no guidance", guidance)
-        }
+    @Test
+    fun theSnapshotTeachesNumberTargeting() {
+        AgentPlanStore.add(sid, null, "one")
+        AgentPlanStore.add(sid, null, "two")
+        val snapshot = AgentPlanStore.boardSnapshotPrompt(AgentPlanStore.list(sid, null))
+        assertNotNull(snapshot)
+        assertTrue(snapshot!!, snapshot.contains("update id=\"2\""))
+        assertTrue(snapshot, snapshot.contains("op=replace"))
     }
 
     private companion object {
