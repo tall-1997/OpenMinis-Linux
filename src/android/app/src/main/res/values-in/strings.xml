@@ -1872,6 +1872,9 @@
     <string name="a2a_panel_load_failed">Panel gagal dimuat.</string>
     <string name="a2a_panel_page_title">Panel Agent2API</string>
     <string name="a2a_login_window_title">Masuk</string>
+    <string name="a2a_login_address_title">Alamat saat ini</string>
+    <string name="a2a_login_address_hint">Jika halaman ini tidak dapat dibuka (misalnya callback ke port loopback lokal), proses masuk mungkin sudah selesai. Salin alamat ini dan tempelkan ke kolom callback di panel.</string>
+    <string name="a2a_login_copy_address">Salin alamat</string>
     <string name="a2a_close">Tutup</string>
     <string name="a2a_open_in_browser">Buka di browser</string>
     <string name="dev_suite_no_space">Penyimpanan tidak cukup: butuh sekitar %1$d GB, tersedia %2$d GB</string>

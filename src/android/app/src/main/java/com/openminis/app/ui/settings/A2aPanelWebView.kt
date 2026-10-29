@@ -34,6 +34,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.openminis.app.R
+import com.openminis.app.a2a.A2aGateway
+import com.openminis.app.a2a.A2aLoginCallback
 import com.openminis.app.a2a.A2aLoginCookies
 import com.openminis.app.browser.WebViewEngine
 import com.openminis.app.ui.theme.m3Icon
@@ -90,6 +92,13 @@ fun A2aPanelWebView(
     var retryCount by remember(baseUrl, reloadToken) { mutableStateOf(0) }
     val loadKey = reloadToken * 1_000 + retryCount
     val popups by popupHost.popups.collectAsStateWithLifecycle()
+    // Loopback port the gateway listens on — login-window callbacks that the
+    // shell has to deliver are rewritten onto it (see A2aLoginCallback).
+    val gatewayPort = remember(baseUrl) {
+        runCatching { java.net.URI(baseUrl).port }.getOrNull()
+            ?.takeIf { it > 0 }
+            ?: A2aGateway.PORT
+    }
 
     Box(modifier = modifier) {
         AndroidView(
@@ -136,7 +145,18 @@ fun A2aPanelWebView(
                             request: WebResourceRequest?,
                         ): Boolean {
                             val url = request?.url?.toString() ?: return false
-                            val action = A2aPanelNav.resolve(url, baseUrl, isMainFrame = request.isForMainFrame)
+                            // [T-android-a2a-login-capture] A shell-delivered
+                            // callback that reaches the panel (rather than a
+                            // login window) still has to end at the gateway;
+                            // see A2aLoginCallback. Runs before the policy so
+                            // it never leaves the app.
+                            if (request?.isForMainFrame == true) {
+                                A2aLoginCallback.rewrite(url, gatewayPort)?.let { rewritten ->
+                                    view?.loadUrl(rewritten)
+                                    return true
+                                }
+                            }
+                            val action = A2aPanelNav.resolve(url, baseUrl, isMainFrame = request?.isForMainFrame == true)
                             return when (action) {
                                 // Top-frame http/https: load in place — the
                                 // embedded view is the panel's in-app browser.
@@ -175,7 +195,12 @@ fun A2aPanelWebView(
                             if (incognitoLogin) {
                                 A2aLoginCookies.clearProviderCookies(context)
                             }
-                            val popup = createA2aLoginWebView(context, popupHost, onExternalLink)
+                            val popup = createA2aLoginWebView(
+                                context,
+                                popupHost,
+                                onExternalLink,
+                                gatewayPort,
+                            )
                             // WebViewTransport() takes no arguments — the
                             // only ctor param is the implicit outer WebView;
                             // the popped window is handed over via setWebView.
@@ -296,6 +321,10 @@ internal object A2aPanelNav {
      * stays confined: `javascript:` (script injection surface), `file:`
      * (content-uri permission surface), subframe loads regardless of
      * origin, and anything unparseable falls closed.
+     *
+     * Login callbacks are pre-empted before this policy runs: the two
+     * shapes only a shell can deliver are rewritten onto the gateway by
+     * [com.openminis.app.a2a.A2aLoginCallback], so they never reach here.
      */
     fun resolve(url: String?, baseUrl: String?, isMainFrame: Boolean = true): A2aPanelNavAction {
         if (!isMainFrame) return A2aPanelNavAction.CONFINED

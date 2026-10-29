@@ -1871,6 +1871,9 @@
     <string name="a2a_panel_load_failed">Panoul nu s-a putut încărca.</string>
     <string name="a2a_panel_page_title">Panou Agent2API</string>
     <string name="a2a_login_window_title">Conectare</string>
+    <string name="a2a_login_address_title">Adresa curentă</string>
+    <string name="a2a_login_address_hint">Dacă această pagină nu se poate deschide (de exemplu, un callback către un port de buclă locală), autentificarea s-ar putea să fi fost finalizată. Copiază această adresă și lipește-o în câmpul de callback al panoului.</string>
+    <string name="a2a_login_copy_address">Copiază adresa</string>
     <string name="a2a_close">Închide</string>
     <string name="a2a_open_in_browser">Deschide în browser</string>
     <string name="dev_suite_no_space">Spațiu insuficient: sunt necesari aproximativ %1$d GB, disponibil %2$d GB</string>

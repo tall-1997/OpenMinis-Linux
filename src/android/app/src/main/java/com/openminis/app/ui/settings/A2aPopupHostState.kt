@@ -2,6 +2,9 @@ package com.openminis.app.ui.settings
 
 import android.webkit.WebChromeClient
 import android.webkit.WebView
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import java.util.UUID
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -89,8 +92,20 @@ class A2aPopupWindowState(
     val initialUrl: String,
 ) {
     val id: String = UUID.randomUUID().toString()
-    var title: String? = null
-    var progress: Int = 0
-    var loadStarted: Boolean = false
-    var loadFailed: Boolean = false
+
+    // Compose snapshot state, not plain vars: the overlay reads these while
+    // composing, so a write from a WebView callback must invalidate the
+    // composition. Plain fields left the chrome bar frozen on its first
+    // frame (spinner never cleared, no error page, no address to copy).
+    var title: String? by mutableStateOf(null)
+    var progress: Int by mutableStateOf(0)
+    var loadStarted: Boolean by mutableStateOf(false)
+    var loadFailed: Boolean by mutableStateOf(false)
+
+    /**
+     * Where the window currently is. Shown (and copyable) from the chrome
+     * bar: a callback the WebView cannot reach must still be pasteable into
+     * the panel's callback prompt.
+     */
+    var url: String? by mutableStateOf(initialUrl)
 }

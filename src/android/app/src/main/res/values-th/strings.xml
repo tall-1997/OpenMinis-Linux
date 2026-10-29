@@ -1867,6 +1867,9 @@
     <string name="a2a_panel_load_failed">โหลดแผงควบคุมไม่สำเร็จ</string>
     <string name="a2a_panel_page_title">แผงควบคุม Agent2API</string>
     <string name="a2a_login_window_title">ลงชื่อเข้าใช้</string>
+    <string name="a2a_login_address_title">ที่อยู่ปัจจุบัน</string>
+    <string name="a2a_login_address_hint">หากหน้านี้เปิดไม่ได้ (เช่น การเรียกกลับไปยังพอร์ต loopback ภายในเครื่อง) การลงชื่อเข้าอาจเสร็จสมบูรณ์แล้ว คัดลอกที่อยู่นี้แล้ววางในช่อง callback ของแผงควบคุม</string>
+    <string name="a2a_login_copy_address">คัดลอกที่อยู่</string>
     <string name="a2a_close">ปิด</string>
     <string name="a2a_open_in_browser">เปิดในเบราว์เซอร์</string>
     <string name="dev_suite_no_space">พื้นที่เก็บข้อมูลไม่พอ: ต้องใช้ประมาณ %1$d GB ว่างอยู่ %2$d GB</string>

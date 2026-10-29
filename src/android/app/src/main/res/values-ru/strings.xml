@@ -1877,6 +1877,9 @@
     <string name="a2a_panel_load_failed">Не удалось загрузить панель.</string>
     <string name="a2a_panel_page_title">Панель Agent2API</string>
     <string name="a2a_login_window_title">Войти</string>
+    <string name="a2a_login_address_title">Текущий адрес</string>
+    <string name="a2a_login_address_hint">Если эта страница не открывается (например, обратный вызов направлен на локальный порт), вход мог уже завершиться. Скопируйте этот адрес и вставьте его в поле обратного вызова на панели.</string>
+    <string name="a2a_login_copy_address">Копировать адрес</string>
     <string name="a2a_close">Закрыть</string>
     <string name="a2a_open_in_browser">Открыть в браузере</string>
     <string name="dev_suite_no_space">Недостаточно памяти: требуется около %1$d ГБ, доступно %2$d ГБ</string>

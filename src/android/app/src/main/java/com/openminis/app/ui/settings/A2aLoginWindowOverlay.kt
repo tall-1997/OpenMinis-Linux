@@ -17,12 +17,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.Link
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -34,14 +37,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.openminis.app.R
+import com.openminis.app.a2a.A2aLoginCallback
 import com.openminis.app.browser.WebViewEngine
+import com.openminis.app.logging.AppLogger
 import com.openminis.app.ui.components.MinisTextButton
 import com.openminis.app.ui.theme.m3Icon
 
@@ -58,7 +66,10 @@ import com.openminis.app.ui.theme.m3Icon
  * progress). Its navigation policy is the panel's own
  * ([A2aPanelNav]): http(s) loads in place — the auth page AND the
  * gateway's loopback callback must both load — custom/system schemes
- * dispatch externally, `javascript:`/`file:` stay confined.
+ * dispatch externally, `javascript:`/`file:` stay confined. Callbacks this
+ * device cannot open are pre-empted ([A2aLoginCallback]) and handed to the
+ * gateway; the address they ended on stays copyable for the panel's
+ * manual-callback prompt.
  *
  * One subtlety: the host (A2aPopupHostState) publishes the window the
  * moment `window.open` arrives, so the overlay's AndroidView mounts a
@@ -73,8 +84,50 @@ internal fun A2aLoginWindowOverlay(
     onExternalLink: (String) -> Unit,
 ) {
     var showLog by remember { mutableStateOf(false) }
+    var showAddress by remember { mutableStateOf(false) }
+    val clipboard = LocalClipboardManager.current
     if (showLog) {
         A2aGatewayLogDialog(onDismiss = { showLog = false })
+    }
+    if (showAddress) {
+        val address = popup.url.orEmpty()
+        AlertDialog(
+            onDismissRequest = { showAddress = false },
+            title = { Text(stringResource(R.string.a2a_login_address_title)) },
+            text = {
+                Column {
+                    Text(
+                        text = address,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    // [T-android-a2a-login-capture] When the auth page ends
+                    // on an address this device cannot open (a loopback port
+                    // only the provider's local listener would serve), the
+                    // login may still be complete: the panel's callback
+                    // prompt accepts exactly this string.
+                    Text(
+                        text = stringResource(R.string.a2a_login_address_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            },
+            confirmButton = {
+                MinisTextButton(onClick = {
+                    clipboard.setText(AnnotatedString(address))
+                    showAddress = false
+                }) {
+                    Text(stringResource(R.string.common_copy))
+                }
+            },
+            dismissButton = {
+                MinisTextButton(onClick = { showAddress = false }) {
+                    Text(stringResource(R.string.a2a_close))
+                }
+            },
+        )
     }
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -115,12 +168,27 @@ internal fun A2aLoginWindowOverlay(
                 )
                 // [T-android-a2a-login-capture] The engine's [Login] log is the
                 // only place a stuck capture explains itself — surface it here,
-                // right where the login is happening.
-                MinisTextButton(onClick = { showLog = true }) {
-                    Text(
-                        stringResource(R.string.a2a_view_gateway_log),
-                        fontWeight = FontWeight.Medium,
-                        style = MaterialTheme.typography.bodyMedium,
+                // right where the login is happening. The address is the other
+                // half: a callback this device cannot open is still pasteable.
+                IconButton(
+                    onClick = { showLog = true },
+                    modifier = Modifier.size(36.dp),
+                ) {
+                    Icon(
+                        imageVector = m3Icon(Icons.Outlined.Description),
+                        contentDescription = stringResource(R.string.a2a_view_gateway_log),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                IconButton(
+                    onClick = { showAddress = true },
+                    enabled = !popup.url.isNullOrBlank(),
+                    modifier = Modifier.size(36.dp),
+                ) {
+                    Icon(
+                        imageVector = m3Icon(Icons.Outlined.Link),
+                        contentDescription = stringResource(R.string.a2a_login_address_title),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
@@ -177,6 +245,24 @@ internal fun A2aLoginWindowOverlay(
                             }) {
                                 Text(stringResource(R.string.builtin_plugin_retry))
                             }
+                            val address = popup.url
+                            if (!address.isNullOrBlank()) {
+                                Spacer(Modifier.height(8.dp))
+                                Text(
+                                    text = address,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center,
+                                    maxLines = 3,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.padding(horizontal = 24.dp),
+                                )
+                                MinisTextButton(
+                                    onClick = { clipboard.setText(AnnotatedString(address)) },
+                                ) {
+                                    Text(stringResource(R.string.a2a_login_copy_address))
+                                }
+                            }
                         }
                     }
                 }
@@ -196,6 +282,7 @@ internal fun createA2aLoginWebView(
     context: Context,
     host: A2aPopupHostState,
     onExternalLink: (String) -> Unit,
+    gatewayPort: Int,
 ): WebView {
     val webView = WebView(context).apply {
         layoutParams = ViewGroup.LayoutParams(
@@ -204,6 +291,14 @@ internal fun createA2aLoginWebView(
         )
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
+        // [T-android-a2a-login-capture] Some provider pages deliver the
+        // callback through a nested `window.open` instead of a location
+        // change (upstream login.rs: with no window the code is silently
+        // dropped). Hosting child windows keeps that path alive; each child
+        // gets the same callback-rewriting client.
+        settings.setSupportMultipleWindows(true)
+        @Suppress("DEPRECATION")
+        settings.javaScriptCanOpenWindowsAutomatically = true
         // [T-android-a2a-login-capture] Provider OAuth/SSO frequently runs in
         // third-party frames — WebView ships with third-party cookies OFF.
         android.webkit.CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
@@ -220,6 +315,7 @@ internal fun createA2aLoginWebView(
         override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
             state.loadStarted = true
             state.loadFailed = false
+            state.url = url
             // [T-android-a2a-incognito] Remember the provider origins this
             // login touched, so the NEXT login window starts with exactly
             // those cookies expired (loopback is excluded inside).
@@ -236,6 +332,12 @@ internal fun createA2aLoginWebView(
             }
         }
 
+        override fun doUpdateVisitedHistory(view: WebView?, url: String?, isReload: Boolean) {
+            // SPA-driven logins use pushState between redirects; the copyable
+            // address must follow the page, not just full loads.
+            if (!url.isNullOrBlank()) state.url = url
+        }
+
         override fun onReceivedError(
             view: WebView?,
             request: WebResourceRequest?,
@@ -249,6 +351,22 @@ internal fun createA2aLoginWebView(
             request: WebResourceRequest?,
         ): Boolean {
             val url = request?.url?.toString() ?: return false
+            // [T-android-a2a-login-capture] Callbacks only this shell can
+            // deliver (raccoon's custom scheme, AutoClaw's registered
+            // ports) go to the gateway instead of the system / a refused
+            // connection — upstream login.rs does the same rewrite.
+            if (request.isForMainFrame) {
+                val rewritten = A2aLoginCallback.rewrite(url, gatewayPort)
+                if (rewritten != null) {
+                    val parsed = runCatching { java.net.URI(url) }.getOrNull()
+                    AppLogger.info(
+                        "A2aLogin",
+                        "callback handed to gateway: ${parsed?.scheme}://${parsed?.host}",
+                    )
+                    view?.loadUrl(rewritten)
+                    return true
+                }
+            }
             return when (A2aPanelNav.resolve(url, baseUrl = null, isMainFrame = request.isForMainFrame)) {
                 // The auth page, its redirects and the gateway's loopback
                 // callback all load here — the login must complete inside
@@ -269,6 +387,24 @@ internal fun createA2aLoginWebView(
 
         override fun onReceivedTitle(view: WebView?, title: String?) {
             state.title = title
+        }
+
+        override fun onCreateWindow(
+            view: WebView?,
+            isDialog: Boolean,
+            isUserGesture: Boolean,
+            resultMsg: android.os.Message?,
+        ): Boolean {
+            // Nested window.open from a login page (see the multi-window
+            // note above): host it as another login window so its callback
+            // is not dropped. Falls through when no handle can be returned.
+            if (resultMsg == null || view == null) return false
+            val child = createA2aLoginWebView(context, host, onExternalLink, gatewayPort)
+            val transport = view.WebViewTransport()
+            transport.webView = child
+            resultMsg.obj = transport
+            resultMsg.sendToTarget()
+            return true
         }
 
         override fun onCloseWindow(window: WebView?) {

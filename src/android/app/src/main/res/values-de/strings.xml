@@ -1869,6 +1869,9 @@
     <string name="a2a_panel_load_failed">Panel konnte nicht geladen werden.</string>
     <string name="a2a_panel_page_title">Agent2API-Panel</string>
     <string name="a2a_login_window_title">Anmelden</string>
+    <string name="a2a_login_address_title">Aktuelle Adresse</string>
+    <string name="a2a_login_address_hint">Falls sich diese Seite nicht öffnen lässt (z. B. ein Callback auf einen Loopback-Port), kann die Anmeldung trotzdem abgeschlossen sein. Kopieren Sie diese Adresse und fügen Sie sie in das Callback-Feld des Panels ein.</string>
+    <string name="a2a_login_copy_address">Adresse kopieren</string>
     <string name="a2a_close">Schließen</string>
     <string name="a2a_open_in_browser">Im Browser öffnen</string>
     <string name="dev_suite_no_space">Zu wenig Speicherplatz: etwa %1$d GB erforderlich, %2$d GB frei</string>
