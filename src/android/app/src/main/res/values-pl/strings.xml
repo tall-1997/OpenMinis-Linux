@@ -1875,6 +1875,9 @@
     <string name="a2a_panel_load_failed">Nie udało się załadować panelu.</string>
     <string name="a2a_panel_page_title">Panel Agent2API</string>
     <string name="a2a_login_window_title">Zaloguj się</string>
+    <string name="a2a_login_address_title">Bieżący adres</string>
+    <string name="a2a_login_address_hint">Jeśli tej strony nie można otworzyć (np. wywołanie zwrotne wskazuje lokalny port pętli zwrotnej), logowanie mogło już się udać. Skopiuj ten adres i wklej go w polu wywołania zwrotnego w panelu.</string>
+    <string name="a2a_login_copy_address">Kopiuj adres</string>
     <string name="a2a_close">Zamknij</string>
     <string name="a2a_open_in_browser">Otwórz w przeglądarce</string>
     <string name="dev_suite_no_space">Za mało miejsca: potrzeba około %1$d GB, dostępnych %2$d GB</string>

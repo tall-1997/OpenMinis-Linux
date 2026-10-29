@@ -1866,6 +1866,9 @@
     <string name="a2a_panel_load_failed">パネルを読み込めませんでした。</string>
     <string name="a2a_panel_page_title">Agent2API パネル</string>
     <string name="a2a_login_window_title">ログイン</string>
+    <string name="a2a_login_address_title">現在のアドレス</string>
+    <string name="a2a_login_address_hint">このページを開けない場合（コールバックがローカルループバックポートを指している場合など）、サインインは完了している可能性があります。このアドレスをコピーして、パネルのコールバック入力欄に貼り付けてください。</string>
+    <string name="a2a_login_copy_address">アドレスをコピー</string>
     <string name="a2a_close">閉じる</string>
     <string name="a2a_open_in_browser">ブラウザで開く</string>
     <string name="dev_suite_no_space">ストレージが不足しています：約 %1$d GB 必要、利用可能 %2$d GB</string>

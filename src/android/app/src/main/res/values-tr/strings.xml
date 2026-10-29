@@ -1867,6 +1867,9 @@
     <string name="a2a_panel_load_failed">Panel yüklenemedi.</string>
     <string name="a2a_panel_page_title">Agent2API Paneli</string>
     <string name="a2a_login_window_title">Oturum aç</string>
+    <string name="a2a_login_address_title">Geçerli adres</string>
+    <string name="a2a_login_address_hint">Bu sayfa açılamıyorsa (örneğin geri çağrı yerel bir geri döngü bağlantı noktasını gösteriyorsa), oturum açma yine de tamamlanmış olabilir. Bu adresi kopyalayıp panelin geri çağrı alanına yapıştırın.</string>
+    <string name="a2a_login_copy_address">Adresi kopyala</string>
     <string name="a2a_close">Kapat</string>
     <string name="a2a_open_in_browser">Tarayıcıda aç</string>
     <string name="dev_suite_no_space">Depolama yetersiz: yaklaşık %1$d GB gerekli, %2$d GB boş</string>

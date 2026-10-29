@@ -1869,6 +1869,9 @@
     <string name="a2a_panel_load_failed">Échec du chargement du panneau.</string>
     <string name="a2a_panel_page_title">Panneau Agent2API</string>
     <string name="a2a_login_window_title">Se connecter</string>
+    <string name="a2a_login_address_title">Adresse actuelle</string>
+    <string name="a2a_login_address_hint">Si cette page ne peut pas s\'ouvrir (par exemple un rappel vers un port de bouclage local), la connexion a peut-être déjà abouti. Copiez cette adresse et collez-la dans le champ de rappel du panneau.</string>
+    <string name="a2a_login_copy_address">Copier l\'adresse</string>
     <string name="a2a_close">Fermer</string>
     <string name="a2a_open_in_browser">Ouvrir dans le navigateur</string>
     <string name="dev_suite_no_space">Stockage insuffisant : environ %1$d GB nécessaires, %2$d GB disponibles</string>

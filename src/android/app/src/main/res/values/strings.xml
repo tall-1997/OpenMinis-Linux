@@ -337,6 +337,9 @@
     <string name="a2a_panel_load_failed">Panel failed to load.</string>
     <string name="a2a_panel_page_title">Agent2API Panel</string>
     <string name="a2a_login_window_title">Sign in</string>
+    <string name="a2a_login_address_title">Current address</string>
+    <string name="a2a_login_address_hint">If this page cannot open (for example a callback aimed at a loopback port), the sign-in may still have completed. Copy this address and paste it into the panel\'s callback prompt.</string>
+    <string name="a2a_login_copy_address">Copy address</string>
     <string name="a2a_close">Close</string>
     <string name="a2a_open_in_browser">Open in browser</string>
     <string name="dev_suite_no_space">Not enough storage: about %1$d GB needed, %2$d GB free</string>

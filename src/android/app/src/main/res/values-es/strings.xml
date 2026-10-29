@@ -1869,6 +1869,9 @@
     <string name="a2a_panel_load_failed">No se pudo cargar el panel.</string>
     <string name="a2a_panel_page_title">Panel de Agent2API</string>
     <string name="a2a_login_window_title">Iniciar sesión</string>
+    <string name="a2a_login_address_title">Dirección actual</string>
+    <string name="a2a_login_address_hint">Si esta página no se puede abrir (por ejemplo, una devolución de llamada dirigida a un puerto de bucle local), es posible que el inicio de sesión ya se haya completado. Copia esta dirección y pégala en el campo de devolución de llamada del panel.</string>
+    <string name="a2a_login_copy_address">Copiar dirección</string>
     <string name="a2a_close">Cerrar</string>
     <string name="a2a_open_in_browser">Abrir en el navegador</string>
     <string name="dev_suite_no_space">Almacenamiento insuficiente: se necesitan unos %1$d GB, hay %2$d GB libres</string>

@@ -36,6 +36,9 @@ class A2aPopupHostStateTest {
         val popups = host.popups.value
         assertEquals(1, popups.size)
         assertEquals("https://example.com/oauth", state.initialUrl)
+        // The copyable address starts where the shim opened the window and
+        // follows every load (onPageStarted / doUpdateVisitedHistory).
+        assertEquals("https://example.com/oauth", state.url)
         assertEquals(0, state.progress)
         assertFalse(state.loadStarted)
         assertFalse(state.loadFailed)

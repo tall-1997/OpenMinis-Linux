@@ -1867,6 +1867,9 @@
     <string name="a2a_panel_load_failed">Hindi na-load ang panel.</string>
     <string name="a2a_panel_page_title">Panel ng Agent2API</string>
     <string name="a2a_login_window_title">Mag-sign in</string>
+    <string name="a2a_login_address_title">Kasalukuyang address</string>
+    <string name="a2a_login_address_hint">Kung hindi mabuksan ang page na ito (halimbawa, callback patungo sa local loopback port), maaaring natapos na ang pag-sign in. Kopyahin ang address na ito at i-paste sa callback field ng panel.</string>
+    <string name="a2a_login_copy_address">Kopyahin ang address</string>
     <string name="a2a_close">Isara</string>
     <string name="a2a_open_in_browser">Buksan sa browser</string>
     <string name="dev_suite_no_space">Kulang ang storage: kailangan mga %1$d GB, available %2$d GB</string>
