@@ -1849,6 +1849,7 @@
     <string name="dev_suite_interrupted">Установка прервана</string>
     <string name="builtin_plugin_ofm_name">Шлюз бесплатных моделей (локальный)</string>
     <string name="builtin_plugin_ofm_summary">Локальный OpenAI-совместимый шлюз · более 20 передовых моделей, без аккаунта и ключа · только loopback</string>
+    <string name="local_gateway_install_failed">Не удалось установить</string>
     <string name="builtin_plugin_interrupted">Установка прервана</string>
     <string name="builtin_plugin_stage_payload">Подготовка пакета…</string>
     <string name="builtin_plugin_stage_node">Проверка среды выполнения Node…</string>

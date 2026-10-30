@@ -1841,6 +1841,7 @@
     <string name="dev_suite_interrupted">Instalación interrumpida</string>
     <string name="builtin_plugin_ofm_name">Pasarela de modelos gratis (local)</string>
     <string name="builtin_plugin_ofm_summary">Pasarela local compatible con OpenAI · más de 20 modelos frontera, sin cuenta ni clave · solo loopback</string>
+    <string name="local_gateway_install_failed">Error de instalación</string>
     <string name="builtin_plugin_interrupted">Instalación interrumpida</string>
     <string name="builtin_plugin_stage_payload">Preparando el paquete…</string>
     <string name="builtin_plugin_stage_node">Comprobando el runtime de Node…</string>

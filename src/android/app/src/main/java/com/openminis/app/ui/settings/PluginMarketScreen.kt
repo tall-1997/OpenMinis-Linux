@@ -25,7 +25,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.openminis.app.R
 import com.openminis.app.data.repository.MCPRepository
-import com.openminis.app.data.repository.ProviderRepository
 import com.openminis.app.plugins.LocalToolPluginStore
 import com.openminis.app.plugins.OnlinePluginStore
 import com.openminis.app.plugins.PluginRegistry
@@ -35,7 +34,6 @@ import kotlinx.coroutines.withContext
 @Composable
 fun PluginMarketScreen(
     mcpRepository: MCPRepository?,
-    providerRepository: ProviderRepository? = null,
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -101,9 +99,10 @@ fun PluginMarketScreen(
             onPendingInstallConsumed = { pendingSuiteId = null },
         )
 
-        // [T-builtin-plugins] Gateway payloads shipped in the APK: install
-        // offline from assets, then run as managed loopback services.
-        BuiltinPluginsSection(providerRepository = providerRepository)
+        // [T-builtin-gateway-native] Builtin gateways are app infrastructure,
+        // not market listings: the local model gateway lives in Settings
+        // (LocalGatewayScreen) beside the provider row it seeds, and the a2a
+        // gateway in its own entry. Nothing gateway-shaped renders here.
 
         SettingsSection(
             header = stringResource(R.string.plugin_market_section_online),

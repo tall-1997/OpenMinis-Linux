@@ -84,4 +84,31 @@ class GatewayServiceManagerTest {
         val pattern = Regex("pkill -f \"([^\"]+)\"").find(cmd)!!.groupValues[1]
         assertFalse(Regex(pattern).containsMatchIn(cmd))
     }
+
+    // -- [T-builtin-gateway-native] the settings page's cold-start probe -----
+
+    /**
+     * The probe must measure, never act: `kill -0` sends no signal, so reading
+     * "is it running?" can never be the thing that stops it.
+     */
+    @Test fun `aliveCommand asks the kernel about the pidfile pid without signalling`() {
+        val cmd = GatewayServiceManager.aliveCommand(ofm)
+        assertTrue(
+            cmd.contains(
+                "kill -0 \"$(cat /var/minis/shared/builtin-plugins/ofm/data/gateway.pid 2>/dev/null)\"",
+            ),
+        )
+        assertFalse(cmd.contains("-TERM"))
+        assertFalse(cmd.contains("-KILL"))
+    }
+
+    /**
+     * A marker on stdout, not an exit code: the coordinator's exit code is for
+     * the wrapper shell, and `kill` failing inside a compound command would
+     * otherwise read as a successful command that says nothing.
+     */
+    @Test fun `aliveCommand answers with a marker`() {
+        val cmd = GatewayServiceManager.aliveCommand(ofm)
+        assertTrue(cmd.endsWith("&& echo alive"))
+    }
 }

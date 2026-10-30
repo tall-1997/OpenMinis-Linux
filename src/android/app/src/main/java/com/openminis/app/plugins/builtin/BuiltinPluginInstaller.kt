@@ -2,6 +2,7 @@ package com.openminis.app.plugins.builtin
 
 import android.content.Context
 import com.openminis.app.R
+import com.openminis.app.logging.AppLogger
 import com.openminis.app.sandbox.SessionWorkspace
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -54,6 +55,7 @@ object BuiltinPluginInstaller {
     private const val NODE_MIRROR = "https://cdn.npmmirror.com/binaries/node"
 
     private const val SESSION_ID = "builtin-plugin-installer"
+    private const val TAG = "BuiltinPluginInstaller"
     private const val INSTALL_TIMEOUT_MS = 20 * 60_000L
 
     private val scope = kotlinx.coroutines.CoroutineScope(
@@ -275,9 +277,14 @@ object BuiltinPluginInstaller {
         stage: String,
         tail: String,
     ) {
+        // [T-builtin-failure-diagnosis] The raw tail (dump included) still goes
+        // to the log — it is diagnostic gold there and noise on screen.
+        AppLogger.warning(TAG, "install ${d.id} failed at $stage: ${tail.ifBlank { "<no usable output>" }}")
         BuiltinPluginStore.update(
             context, d.id, BuiltinPluginStore.Status.FAILED,
-            diagnosis = "$stage: ${tail.take(200)}",
+            // A stage with no usable cause would render as "node gate: " — an
+            // empty diagnosis lets the page say "install was interrupted".
+            diagnosis = if (tail.isBlank()) "" else "$stage: $tail",
         )
     }
 
@@ -291,6 +298,6 @@ object BuiltinPluginInstaller {
             lineCallback = onLine,
         )
         val lines = result.output.lines().filter { it.isNotBlank() }
-        return Result(result.exitCode, lines, lines.takeLast(8).joinToString(" / "))
+        return Result(result.exitCode, lines, FailureOutput.summarize(lines))
     }
 }

@@ -139,7 +139,11 @@ object BuiltinPluginStore {
             pluginId = pluginId,
             status = status,
             version = parts.getOrNull(1).orEmpty(),
-            diagnosis = parts.getOrNull(2).orEmpty(),
+            // [T-builtin-failure-diagnosis] Rows persisted before the filter
+            // existed may hold nothing but a PRoot talloc dump; a dump is not
+            // a reason, so it is dropped and the card shows the generic
+            // "install was interrupted" label instead.
+            diagnosis = FailureOutput.sanitizeStoredDiagnosis(parts.getOrNull(2).orEmpty()),
             progressLine = "",
             updatedAtMs = parts.getOrNull(3)?.toLongOrNull() ?: 0L,
         )

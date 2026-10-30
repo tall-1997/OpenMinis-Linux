@@ -1839,6 +1839,7 @@
     <string name="dev_suite_interrupted">การติดตั้งถูกขัดจังหวะ</string>
     <string name="builtin_plugin_ofm_name">เกตเวย์โมเดลฟรี (ในเครื่อง)</string>
     <string name="builtin_plugin_ofm_summary">เกตเวย์ในเครื่องที่เข้ากันได้กับ OpenAI · โมเดลล้ำ 20+ รุ่น ไม่ต้องสมัคร ไม่ต้องใช้คีย์ · ฟังเฉพาะ loopback</string>
+    <string name="local_gateway_install_failed">ติดตั้งไม่สำเร็จ</string>
     <string name="builtin_plugin_interrupted">การติดตั้งถูกขัดจังหวะ</string>
     <string name="builtin_plugin_stage_payload">กำลังเตรียมแพ็กเกจ…</string>
     <string name="builtin_plugin_stage_node">กำลังตรวจสอบรันไทม์ Node…</string>

@@ -99,6 +99,12 @@ object Routes {
     const val MCP_TOOLS = "mcp_tools/{serverId}"
     fun mcpTools(serverId: String) = "mcp_tools/${android.net.Uri.encode(serverId)}"
     const val PLUGIN_MARKET = "plugin_market"
+    // [T-builtin-gateway-native] Agent gateways are app infrastructure (the
+    // payload ships in the APK, the service runs on loopback), so each has a
+    // settings page instead of a market row. A2A's literal is load-bearing:
+    // preview-build deep links from before the move still point at it.
+    const val A2A = "settings/a2a"
+    const val LOCAL_GATEWAY = "settings/local_gateway"
     /** [T-soul-md] SOUL.md editor. */
     const val SOUL = "soul"
     const val EVOLUTION = "evolution"

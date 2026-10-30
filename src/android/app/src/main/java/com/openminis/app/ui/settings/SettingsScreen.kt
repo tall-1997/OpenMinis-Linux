@@ -23,6 +23,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.BatteryFull
+import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.Description
@@ -99,6 +100,9 @@ fun SettingsScreen(
     // first-class entry (dedicated icon + screen, in-app panel).
     // Default no-op for callers that haven't wired the route yet.
     onA2aClick: () -> Unit = {},
+    // [T-builtin-gateway-native] Local model gateway page — same first-class
+    // treatment: install state, loopback address and run switch in one place.
+    onLocalGatewayClick: () -> Unit = {},
     // [T-soul-md] Soul settings page lives between Skills and Memory in the
     // Agent Runtime section; default no-op for callers that haven't wired
     // the route yet.
@@ -169,6 +173,16 @@ fun SettingsScreen(
                     title = stringResource(R.string.builtin_plugin_a2a_name),
                     subtitle = stringResource(R.string.builtin_plugin_a2a_summary),
                     onClick = onA2aClick,
+                )
+                // [T-builtin-gateway-native] The local model gateway gets the
+                // same first-class entry: payload shipped in the APK, run as a
+                // loopback service, nothing for the user to browse in a market.
+                SettingsItem(
+                    icon = Icons.Outlined.Bolt,
+                    iconColor = Color(0xFFFF9500),
+                    title = stringResource(R.string.builtin_plugin_ofm_name),
+                    subtitle = stringResource(R.string.builtin_plugin_ofm_summary),
+                    onClick = onLocalGatewayClick,
                 )
                 SettingsItem(
                     icon = Icons.Outlined.BarChart,

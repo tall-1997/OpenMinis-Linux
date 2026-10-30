@@ -1839,6 +1839,7 @@
     <string name="dev_suite_interrupted">Naantala ang pag-install</string>
     <string name="builtin_plugin_ofm_name">Free Model Gateway (lokal)</string>
     <string name="builtin_plugin_ofm_summary">Lokal na OpenAI-compatible na gateway · 20+ frontier na modelo, walang account, walang key · loopback lang</string>
+    <string name="local_gateway_install_failed">Nabigo ang pag-install</string>
     <string name="builtin_plugin_interrupted">Naputol ang pag-install</string>
     <string name="builtin_plugin_stage_payload">Inihahanda ang payload…</string>
     <string name="builtin_plugin_stage_node">Sinusuri ang Node runtime…</string>
