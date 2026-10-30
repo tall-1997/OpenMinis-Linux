@@ -30,6 +30,15 @@
 
 Test-only dependencies: JUnit 4.13.2 (**EPL-1.0**), MockWebServer 4.12.0 (**Apache-2.0**), kotlinx-coroutines-test 1.9.0 (**Apache-2.0**), org.json 20231013 (**Public Domain / JSON License**).
 
+## Bundled gateway — a2a / Agent2API
+
+a2a 功能随包分发上游 Agent2API 的 web 面板与网关二进制；源码不 vendor 进本仓库，CI 按 `v3.0.8`（commit `68d0a4e4`）拉取构建，tag 漂移会直接失败。
+
+| Component | Version / Source | License | Notes |
+|---|---|---|---|
+| [Agent2API](https://github.com/aimod-cc/Agent2API) web UI | `v3.0.8` | **MIT** | `app/src/main/assets/builtin_plugins/a2a-ui.zip`，首次启用时解到 app 私有目录 |
+| Agent2API gateway (`agent2api-server`) | `v3.0.8` | **MIT** | CI 交叉编译为 `jniLibs/arm64-v8a/liba2a.so`，由 app 进程托管运行（不进 PRoot） |
+
 ## Bundled web/UI assets
 
 | Asset | Location | License |
@@ -40,6 +49,7 @@ Test-only dependencies: JUnit 4.13.2 (**EPL-1.0**), MockWebServer 4.12.0 (**Apac
 ## Removed / historical
 
 - **swift-markdown-ui** (MIT) — formerly vendored under `deps/swift-markdown-ui`; no longer referenced by the Xcode project or imported by any source file, and is not part of the open-source tree.
+- **dsh-our-free-model (OFM) 内置网关** (MIT) — 2.0.70 及更早版本以 `assets/builtin_plugins/ofm-runtime.zip` 随包分发并在运行时拉取 Node；2.0.80 起连同内置插件层整体移除，安装包不再包含该 payload，也不再下载 Node。
 
 ## Adapted Kotlin (not vendored as a module)
 
