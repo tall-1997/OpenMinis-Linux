@@ -40,6 +40,7 @@ import com.openminis.app.a2a.A2aGateway
 import com.openminis.app.a2a.A2aLoginCallback
 import com.openminis.app.a2a.A2aLoginCookies
 import com.openminis.app.a2a.A2aLoginProfiles
+import com.openminis.app.a2a.A2aPanelMobileShell
 import com.openminis.app.browser.WebViewEngine
 import com.openminis.app.ui.theme.m3Icon
 import kotlinx.coroutines.Dispatchers
@@ -164,6 +165,21 @@ fun A2aPanelWebView(
                             if (A2aLoginProfiles.isRoundActive()) {
                                 A2aLoginCookies.rememberOrigin(context, url)
                             }
+                        }
+
+                        /**
+                         * [T-android-a2a-mobile] The panel ships a phone layout
+                         * (`css/mobile.css` + `mobile-columns.js`) that its own
+                         * `index.html` never references, so a phone gets the
+                         * desktop grid: a 68px sidebar rail and a table whose
+                         * inline `min-width` (1313px) hides four fifths of every
+                         * row behind a horizontal scroll. Wiring it in on each
+                         * document load is additive and idempotent — see
+                         * [A2aPanelMobileShell].
+                         */
+                        override fun onPageFinished(view: WebView?, url: String?) {
+                            super.onPageFinished(view, url)
+                            A2aPanelMobileShell.applyTo(view)
                         }
 
                         override fun onReceivedError(
