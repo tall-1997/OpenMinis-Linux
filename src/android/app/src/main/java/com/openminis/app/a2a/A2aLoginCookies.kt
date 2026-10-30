@@ -3,6 +3,7 @@ package com.openminis.app.a2a
 import android.content.Context
 import android.webkit.CookieManager
 import android.webkit.WebStorage
+import com.openminis.app.logging.AppLogger
 import java.net.URI
 
 /**
@@ -24,7 +25,9 @@ import java.net.URI
  *
  * Cookie paths other than `/` (rare on auth cookies) may survive the sweep;
  * they are re-cleared on the next login attempt anyway, and the auth cookies
- * this guards are root-path scoped.
+ * this guards are root-path scoped. Domain scopes are handled: the sweep
+ * expires the host-only cookie AND every parent `Domain` the cookie could
+ * have been set with ([cookieDomains]).
  *
  * This is the FALLBACK path. On platforms whose WebView supports multiple
  * profiles ([A2aLoginProfiles]) each login round gets its own throwaway
@@ -34,6 +37,7 @@ import java.net.URI
  */
 object A2aLoginCookies {
 
+    private const val TAG = "A2aLoginCookies"
     private const val PREFS = "a2a_login_cookies"
     private const val KEY_ORIGINS = "origins"
 
@@ -74,22 +78,68 @@ object A2aLoginCookies {
 
     /**
      * Expire every remembered provider origin's cookies. Called right before
-     * a login window is created when incognito login is on. Loopback is
-     * excluded by construction (never remembered).
+     * a login window is created when incognito login is on — and again once
+     * the round's windows close — so the next account never inherits the
+     * previous one's session. Loopback is excluded by construction (never
+     * remembered).
      */
     fun clearProviderCookies(context: Context) {
         val origins = rememberedOrigins(context)
         if (origins.isEmpty()) return
         val cookieManager = CookieManager.getInstance()
-        for (origin in origins) {
-            for (url in listOf("$origin/", "$origin")) {
-                val names = cookieNames(cookieManager.getCookie(url))
-                for (name in names) {
-                    cookieManager.setCookie(url, "$name=; Max-Age=0; Path=/")
+        for (origin in origins) expireOrigin(cookieManager, origin)
+        cookieManager.flush()
+        AppLogger.info(TAG, "login cookie sweep: ${origins.size} origin(s)")
+    }
+
+    /**
+     * Expire one origin's cookies across every scope the cookie may carry.
+     *
+     * `getCookie` reports names and values only — never the `Domain`
+     * attribute — and `Set-Cookie` without `Domain` only kills a HOST-ONLY
+     * cookie. Provider SSO cookies are typically domain cookies
+     * (`.huaweicloud.com`), so a host-only expiry left them intact and the
+     * next login round came back pre-authenticated as the previous account
+     * even though the sweep "ran". Expiring the whole label chain
+     * ([cookieDomains]) closes that hole.
+     */
+    internal fun expireOrigin(cookieManager: CookieManager, origin: String) {
+        val host = runCatching { URI(origin).host }.getOrNull() ?: return
+        val domains = cookieDomains(host)
+        for (url in listOf("$origin/", origin)) {
+            for (name in cookieNames(cookieManager.getCookie(url))) {
+                for (domain in domains) {
+                    cookieManager.setCookie(url, expiryHeader(name, domain))
                 }
             }
         }
-        cookieManager.flush()
+    }
+
+    /**
+     * `Domain` values to expire for [host], widest last: `null` (host-only),
+     * then `.host` and each parent scope that still has two or more labels.
+     * The public suffix itself (`.com`, and a suffix-only `.co.uk`) is never
+     * emitted — the browser would reject it anyway.
+     *
+     * IP literals and single-label hosts have no domain scope: host-only.
+     */
+    internal fun cookieDomains(host: String?): List<String?> {
+        val h = host?.trim()?.lowercase()?.removePrefix("[")?.removeSuffix("]") ?: return listOf(null)
+        val ipLike = h.isEmpty() || h.contains(':') || h.all { it.isDigit() || it == '.' }
+        if (ipLike) return listOf(null)
+        val labels = h.split('.')
+        if (labels.size < 2 || labels.any { it.isEmpty() }) return listOf(null)
+        val domains = mutableListOf<String?>(null)
+        for (i in 0 until labels.size - 1) {
+            domains += "." + labels.subList(i, labels.size).joinToString(".")
+        }
+        return domains
+    }
+
+    /** `Set-Cookie` value that deletes [name] in the given scope. */
+    internal fun expiryHeader(name: String, domain: String?): String = buildString {
+        append(name).append("=; Max-Age=0; Path=/")
+        if (domain != null) append("; Domain=").append(domain)
     }
 
     /**

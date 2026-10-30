@@ -33,7 +33,9 @@ import com.openminis.app.logging.AppLogger
  * (WebView 115+). When absent, [currentOrBegin] returns null and the caller
  * falls back to [A2aLoginCookies]' cookie sweep
  * ([A2aLoginCookies.clearProviderCookies] /
- * [A2aLoginCookies.clearProviderStorage]).
+ * [A2aLoginCookies.clearProviderStorage]). The same fallback covers a
+ * platform that accepts a binding without applying it: [attach] reads the
+ * profile back and reports the mismatch.
  *
  * What this is NOT: canvas/WebGL/font fingerprint randomization. No public
  * WebView API can vary those, and spoofing the UA alone would contradict
@@ -75,17 +77,40 @@ object A2aLoginProfiles {
 
     /**
      * Bind [webView] to [profile] before it loads anything. Returns false
-     * when no profile was supplied or the platform refused the binding —
-     * callers only use the result for logging; the login still works in the
-     * default profile.
+     * when no profile was supplied or the platform refused the binding.
+     *
+     * The refusal is not always loud: on some WebView builds `setProfile`
+     * returns normally while the view stays on the default profile, which is
+     * how a "throwaway" login round could still inherit the previous
+     * account's cookies. The profile is therefore read back after binding
+     * ([bindingMatches]) and a mismatch is treated as "not isolated" — the
+     * caller then leans on the cookie sweep instead of trusting the jar.
      */
     fun attach(webView: WebView, profile: Profile?): Boolean {
         if (profile == null) return false
         // The compat surface binds by profile NAME, not by Profile instance.
-        return runCatching { WebViewCompat.setProfile(webView, profile.name); true }
-            .onFailure { AppLogger.warning(TAG, "profile attach failed: ${it.message}") }
-            .getOrDefault(false)
+        val name = profile.name
+        val bound = runCatching {
+            WebViewCompat.setProfile(webView, name)
+            bindingMatches(name, WebViewCompat.getProfile(webView).name)
+        }.getOrElse {
+            AppLogger.warning(TAG, "profile attach failed: ${it.message}")
+            false
+        }
+        if (bound) {
+            AppLogger.info(TAG, "login window bound to a throwaway profile")
+        } else {
+            AppLogger.warning(TAG, "profile not applied; login window stays on the default profile")
+        }
+        return bound
     }
+
+    /** Read-back check for [attach]: a name mismatch means the default profile. */
+    internal fun bindingMatches(expected: String?, actual: String?): Boolean =
+        !expected.isNullOrBlank() && expected == actual
+
+    /** True while a login round owns a profile (a login window is on the board). */
+    fun isRoundActive(): Boolean = synchronized(lock) { active != null }
 
     /**
      * Finish the round: forget the profile and delete it (cookies, storage,
