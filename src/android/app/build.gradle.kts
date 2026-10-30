@@ -100,8 +100,8 @@ android {
         applicationId = "com.openminis.linux"
         minSdk = 26
         targetSdk = 35
-        versionCode = 270
-        versionName = "2.0.70"
+        versionCode = 280
+        versionName = "2.0.80"
 
         // [T-build-provenance] versionCode alone could not identify a build:
         // it stayed 220 across 11 commits, so "which commit is this APK?" was
