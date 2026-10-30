@@ -27,6 +27,11 @@
          T-android-fgs-timeout-crash) cannot bite a service that stops itself
          the moment the download leaves the running state. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- [T-android-automation-rules] RuleMonitorService keeps broadcast
+         receivers alive only while conditional-trigger automation rules are
+         enabled; specialUse because no stock type covers "listen for system
+         broadcasts". The subtype property documents it for Play review. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <!-- T50: PARTIAL_WAKE_LOCK held by AgentForegroundService while sessions
          are streaming so Doze + OEM CPU throttling don't stall long shell
          tools after screen-off. -->
@@ -54,6 +59,24 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.WRITE_CALENDAR" />
+    <!-- [T-android-device-tools] Comms tool group: reads are runtime-gated in
+         DevicePermission; the manifest entries only make the request possible. -->
+    <uses-permission android:name="android.permission.READ_SMS" />
+    <uses-permission android:name="android.permission.SEND_SMS" />
+    <uses-permission android:name="android.permission.READ_CALL_LOG" />
+    <!-- [T-android-automation-rules] Bluetooth trigger rules match the device
+         name; without the grant the service degrades to name-less matching.
+         The legacy BLUETOOTH pair covers API 30 and below. -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <!-- [T-android-device-tools] dnd_set needs notification-policy access
+         (user grants it once in Settings → Do Not Disturb access). -->
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
+    <!-- [T-android-device-tools] brightness_set writes Settings.System;
+         the WRITE_SETTINGS special access is granted from Settings →
+         Modify system settings, checked per call in DevicePermission. -->
+    <uses-permission android:name="android.permission.WRITE_SETTINGS" tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />
@@ -564,6 +587,30 @@
         <receiver
             android:name=".scheduled.ScheduledTaskAlarmReceiver"
             android:exported="false" />
+
+        <!-- [T-android-automation-rules] Conditional-trigger automation: the
+             alarm/BOOT handoff receiver (same protected-broadcast policy as
+             AlarmReceiver above — exported=false still receives
+             BOOT_COMPLETED / MY_PACKAGE_REPLACED) and the monitor service
+             that only runs while non-time rules are enabled. -->
+        <receiver
+            android:name=".automation.AutomationRuleReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.openminis.app.automation.FIRE" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <service
+            android:name=".automation.RuleMonitorService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Conditional-trigger automation monitor: keeps broadcast receivers for Wi-Fi/Bluetooth/power/battery/screen events alive while automation rules are enabled." />
+        </service>
 
         <receiver
             android:name=".widget.MinisChatWidgetProvider"

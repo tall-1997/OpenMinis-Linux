@@ -23,6 +23,7 @@
     "src/android/app/src/main/java/com/openminis/app/agent/MessageTransformers.kt": 16,
     "src/android/app/src/main/java/com/openminis/app/agent/SoulStore.kt": 1,
     "src/android/app/src/main/java/com/openminis/app/config/ConfigBuiltins.kt": 3,
+    "src/android/app/src/main/java/com/openminis/app/guard/OutwardPacing.kt": 8,
     "src/android/app/src/main/java/com/openminis/app/data/CapabilityRouter.kt": 6,
     "src/android/app/src/main/java/com/openminis/app/data/PlanDiscussionTrigger.kt": 2,
     "src/android/app/src/main/java/com/openminis/app/data/display/DisplayParts.kt": 1,

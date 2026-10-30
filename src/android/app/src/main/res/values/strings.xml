@@ -2839,4 +2839,66 @@
     <string name="settings_supervisor_max_turns_footer">The supervisor instructs, the worker executes, the supervisor reviews. Worker turns are force-closed at the limit to bound runaway sessions.</string>
     <!-- [T-android-present-tool] Hint on the present deliverable card: where the archived copy lives in the system Files app. -->
     <string name="present_card_shared_hint">Also available in the system Files app under Minis Ultra › shared.</string>
+
+    <!-- [T-android-automation-rules] Automation page: timers + conditional-trigger rules -->
+    <string name="automation_title">Automation</string>
+    <string name="automation_tab_timers">Timers</string>
+    <string name="automation_tab_rules">Rules</string>
+    <string name="automation_monitor_notification">Watching for automation triggers</string>
+    <string name="automation_rules_empty">No rules yet. Tap + to run a prompt automatically when something happens — a time, Wi-Fi, power, a notification and more.</string>
+    <string name="automation_rule_new">New rule</string>
+    <string name="automation_rule_edit_title">Edit rule</string>
+    <string name="automation_rule_enabled">Enabled</string>
+    <string name="automation_rule_field_name">Name</string>
+    <string name="automation_rule_field_trigger">Trigger</string>
+    <string name="automation_rule_field_time">Time (HH:mm)</string>
+    <string name="automation_rule_field_every_minutes">Every (minutes)</string>
+    <string name="automation_rule_field_once_at">Once at (yyyy-MM-dd HH:mm)</string>
+    <string name="automation_rule_field_ssid">Wi-Fi name (optional)</string>
+    <string name="automation_rule_field_bt_device">Device name (optional)</string>
+    <string name="automation_rule_field_battery_percent">Battery percent</string>
+    <string name="automation_rule_field_package">App package (optional)</string>
+    <string name="automation_rule_field_keyword">Keyword (optional)</string>
+    <string name="automation_rule_field_conditions">Conditions (all must hold)</string>
+    <string name="automation_rule_field_time_range">Time range</string>
+    <string name="automation_rule_field_days">Days of week</string>
+    <string name="automation_rule_field_battery_at_least">Battery at least (%)</string>
+    <string name="automation_rule_field_charging">Charging condition</string>
+    <string name="automation_rule_field_prompt">Prompt</string>
+    <string name="automation_rule_field_prompt_hint">What should the assistant do when the rule fires?</string>
+    <string name="automation_rule_field_allowed_tools">Allowed tools (optional)</string>
+    <string name="automation_rule_field_allowed_tools_hint">Comma-separated tool names the unattended run may use</string>
+    <string name="automation_rule_action_agent_note">Fires an unattended chat and posts a notification when it finishes.</string>
+    <string name="automation_rule_save">Save</string>
+    <string name="automation_rule_invalid_title">Cannot save rule</string>
+    <string name="automation_rule_missing_fields">Name and prompt are required.</string>
+    <string name="automation_rule_delete">Delete</string>
+    <string name="automation_rule_delete_title">Delete rule?</string>
+    <string name="automation_rule_delete_body">Remove \"%1$s\"? Its run history will be deleted too.</string>
+    <string name="automation_rule_menu_edit">Edit</string>
+    <string name="automation_rule_menu_runs">Run records</string>
+    <string name="automation_rule_last_run">Last %1$s</string>
+    <string name="automation_rule_runs_title">Rule run records</string>
+    <string name="automation_rule_runs_empty">No runs yet. This rule hasn\'t fired.</string>
+    <string name="automation_rule_runs_open_session">Open session</string>
+    <string name="automation_rule_trigger_daily">At a time</string>
+    <string name="automation_rule_trigger_interval">Every N minutes</string>
+    <string name="automation_rule_trigger_once">One-shot at</string>
+    <string name="automation_rule_trigger_wifi">Wi-Fi connected</string>
+    <string name="automation_rule_trigger_bluetooth">Bluetooth connected</string>
+    <string name="automation_rule_trigger_power">Power connected</string>
+    <string name="automation_rule_trigger_battery_low">Battery low</string>
+    <string name="automation_rule_trigger_screen_on">Screen on</string>
+    <string name="automation_rule_trigger_screen_off">Screen off</string>
+    <string name="automation_rule_trigger_unlock">Screen unlocked</string>
+    <string name="automation_rule_trigger_notification">Notification received</string>
+    <string name="automation_rule_trigger_app_opened">App opened</string>
+    <string name="automation_day_mon">Mon</string>
+    <string name="automation_day_tue">Tue</string>
+    <string name="automation_day_wed">Wed</string>
+    <string name="automation_day_thu">Thu</string>
+    <string name="automation_day_fri">Fri</string>
+    <string name="automation_day_sat">Sat</string>
+    <string name="automation_day_sun">Sun</string>
+
 </resources>

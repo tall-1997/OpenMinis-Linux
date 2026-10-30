@@ -93,6 +93,18 @@ object AgentTools {
         add(SessionLookupTool.readDefinition())
         add(AskUserQuestion.definition())
         add(CronJobTool.definition())
+        // [T-android-automation-rules] Conditional-trigger rules (Wi-Fi /
+        // power / screen / notification / app-opened, plus the time family).
+        // Long-tail like cron's siblings: no prompt fragment names them,
+        // find_tools("automation"/"rule") discovers them. The create tool's
+        // description carries the trigger vocabulary so the discovery query
+        // matches.
+        com.openminis.app.automation.AutomationRuleTools.definitions().forEach { add(it) }
+        // [T-android-device-tools] Structured device tools (system settings,
+        // apps, notifications, comms, media, clipboard, location). Long-tail:
+        // descriptions carry the capability keywords (wifi, volume, sms,
+        // clipboard, …), find_tools surfaces them on demand.
+        com.openminis.app.device.DeviceTools.definitions().forEach { add(it) }
         // [T-ssh-backend] Remote SSH exec/SFTP. Unconditional — the backend
         // needs no repository wiring (hosts live in the encrypted
         // SshConfigStore; empty state self-documents via list_hosts). Kept

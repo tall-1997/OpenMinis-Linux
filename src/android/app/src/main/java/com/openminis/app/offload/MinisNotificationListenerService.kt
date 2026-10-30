@@ -38,6 +38,15 @@ class MinisNotificationListenerService : NotificationListenerService() {
         // hides our own posts from android-notification list.
         val key = postKey(sbn.packageName, sbn.id)
         postedLatches.remove(key)?.countDown()
+        // [T-android-automation-rules] Notification-triggered rules listen on
+        // this same stream; the funnel filters by package/keyword itself.
+        runCatching {
+            com.openminis.app.automation.AutomationEvents.notificationPosted(
+                sbn.packageName,
+                sbn.notification.extras.getCharSequence(android.app.Notification.EXTRA_TITLE)?.toString().orEmpty(),
+                sbn.notification.extras.getCharSequence(android.app.Notification.EXTRA_TEXT)?.toString().orEmpty(),
+            )
+        }
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {}

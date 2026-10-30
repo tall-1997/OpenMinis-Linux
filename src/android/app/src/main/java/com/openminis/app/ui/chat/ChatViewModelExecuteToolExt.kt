@@ -14,6 +14,22 @@ import com.openminis.app.tools.ToolOutputPolicy
 import com.openminis.app.security.SecurityGateHolder
 import org.json.JSONObject
 
+// [T-android-action-guard] Screen-side tools the loop guard owns: repeats,
+// outward pacing, refusal ladders. The structured device tools join them —
+// same economics: repeated taps, outward sends, failure streaks.
+private val GUARD_ELIGIBLE_TOOLS = setOf(
+    com.openminis.app.tools.UiActionTool.NAME,
+    com.openminis.app.tools.UiReadTool.NAME,
+    com.openminis.app.tools.VirtualScreenTool.NAME,
+)
+
+private fun guardEligible(canonical: String): Boolean =
+    canonical in GUARD_ELIGIBLE_TOOLS ||
+        com.openminis.app.device.DeviceTools.handles(canonical)
+
+/** Last ui_read output hash per session — the "screen unchanged" detector. */
+private val uiReadFingerprints = java.util.concurrent.ConcurrentHashMap<String, Int>()
+
 internal suspend fun ChatViewModel.executeTool(
     name: String,
     argsJson: String,
@@ -37,6 +53,50 @@ internal suspend fun ChatViewModel.executeTool(
     if (gated != null) return gated
     val toolTitle = try { JSONObject(argsJson).optString("tool_title", canonical) } catch (_: Exception) { canonical }
 
+    // [T-android-action-guard] Loop/refusal guard for screen-side tools
+    // (ui_read / ui_action / virtual screen): the Repeat ladder can refuse
+    // before the tool runs, OutwardPacing sleeps inside beforeCall (never
+    // double-sleep), and the ladder reminders come back attached to the
+    // result below. A refused call returns here — afterCall is NOT invoked
+    // (the guard's stopped state makes it a no-op anyway).
+    val guardVerdict = if (guardEligible(canonical)) {
+        com.openminis.app.guard.ActionGuard.beforeCall(activeSessionId, canonical, argsJson)
+    } else null
+    if (guardVerdict is com.openminis.app.guard.GuardVerdict.Refuse) {
+        return ToolExecutionResult(
+            guardVerdict.reason,
+            false,
+            errorCode = com.openminis.app.tools.ToolErrorCode.EXECUTION_FAILED,
+            recoveryHint = "Stop retrying this action; report the situation to the user instead.",
+            toolTitle = toolTitle,
+        )
+    }
+
+    // [T-android-automation-rules] Conditional-trigger rules the agent can
+    // create and manage. Early return (not a when branch): the dispatch when
+    // matches on the tool-name subject, and `handles(...)` is a predicate.
+    // The execute surface answers a JSON envelope whose `ok` decides success
+    // so the evolution failure hook sees real data.
+    if (com.openminis.app.automation.AutomationRuleTools.handles(canonical)) {
+        val out = com.openminis.app.automation.AutomationRuleTools.execute(
+            canonical, argsJson, activeSessionId ?: "", context,
+        )
+        val ok = runCatching { JSONObject(out).optBoolean("ok", false) }.getOrDefault(false)
+        return ToolExecutionResult(out, ok, toolTitle = toolTitle)
+    }
+
+    // [T-android-device-tools] Structured device tools (system settings,
+    // apps, notifications, comms, media, clipboard, location). Results are
+    // model-readable text; "Error:"-prefixed output is the failure contract
+    // (DevicePermission.missingError and friends) so the evolution failure
+    // hook sees real failures.
+    if (com.openminis.app.device.DeviceTools.handles(canonical)) {
+        val out = com.openminis.app.device.DeviceTools.execute(
+            canonical, argsJson, activeSessionId, context,
+        )
+        return ToolExecutionResult(out, !out.startsWith("Error:"), toolTitle = toolTitle)
+    }
+
     // [T-find-tools] On-demand tool discovery: resolve the query against the
     // full registry and enable matches for subsequent turns in this session.
     if (canonical == com.openminis.app.tools.FindTools.NAME) {
@@ -55,7 +115,7 @@ internal suspend fun ChatViewModel.executeTool(
         return findAndEnableTools(query, limit)
     }
 
-    val result = when (canonical) {
+    var result = when (canonical) {
         FileReadTool.NAME -> {
             val result = FileReadTool.execute(argsJson, activeSessionId, context)
             // Record skill usage when SKILL.md under /var/minis/skills/<id>/ is read.
@@ -280,6 +340,32 @@ internal suspend fun ChatViewModel.executeTool(
                 )
             }
         }
+    }
+    // [T-android-action-guard] Record the outcome and attach the ladder
+    // reminders (3/6, 3/6/9, 5/8, 2/4) to what the model sees. For reads,
+    // "unchanged" is an output fingerprint match with the previous read in
+    // this session — ui_read's dump is deterministic for an unchanged screen.
+    // Action no-effect detection is not wired here yet: the read-again step
+    // of the GUI loop feeds the Reread ladder, and the Repeat/Failure
+    // ladders cover identical re-taps and errors.
+    if (guardVerdict != null) {
+        val unchanged = canonical == com.openminis.app.tools.UiReadTool.NAME && run {
+            val key = activeSessionId ?: ""
+            uiReadFingerprints.put(key, result.output.hashCode()) == result.output.hashCode()
+        }
+        val reminder = com.openminis.app.guard.ActionGuard.afterCall(
+            activeSessionId, canonical, argsJson,
+            ok = result.success, unchanged = unchanged,
+        )
+        val waitNotice = (guardVerdict as? com.openminis.app.guard.GuardVerdict.Wait)?.notice
+        val suffix = listOfNotNull(
+            (guardVerdict as? com.openminis.app.guard.GuardVerdict.ProceedWithNotice)?.notice,
+            reminder,
+        ).joinToString("\n")
+        var output = result.output
+        if (waitNotice != null) output = "$waitNotice\n$output"
+        if (suffix.isNotEmpty()) output = "$output\n$suffix"
+        result = result.copy(output = output)
     }
     if (!result.success) {
         com.openminis.app.evolution.EvolutionHooks.onToolFailure(

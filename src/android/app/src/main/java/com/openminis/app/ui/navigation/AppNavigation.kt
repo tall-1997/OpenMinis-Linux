@@ -89,51 +89,6 @@ import com.openminis.app.ui.onboarding.OnboardingModelSelectionScreen
 private val EmphasizedDecelerate = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1.0f)
 private val EmphasizedAccelerate = CubicBezierEasing(0.3f, 0.0f, 0.8f, 0.15f)
 
-/**
- * One resolver for the two "browse a remote's backups" destinations
- * (BACKUP_DESTINATION_BROWSE and RESTORE_BROWSE), which held byte-identical
- * load-and-pop plumbing apart from where their ViewModel was scoped and what
- * they rendered.
- *
- * [T-android-sessionlist-prefs-io] Resolving a remote is the FIRST plain +
- * Encrypted SharedPreferences load of the process and it used to sit in a
- * `remember {}` in the composition body. Now: sane first-frame default (render
- * nothing), the read on Dispatchers.IO, and a pop when the destination has
- * since been removed.
- */
-@Composable
-private fun RcloneRemoteBrowseDestination(
-    remoteName: String,
-    navController: NavHostController,
-    content: @Composable (
-        remote: com.openminis.app.backup.remote.RcloneRemoteStore.Remote,
-    ) -> Unit,
-) {
-    val ctx = LocalContext.current
-    var remote by remember(remoteName) {
-        mutableStateOf<com.openminis.app.backup.remote.RcloneRemoteStore.Remote?>(null)
-    }
-    var loaded by remember(remoteName) { mutableStateOf(false) }
-    LaunchedEffect(remoteName) {
-        remote = withContext(Dispatchers.IO) {
-            runCatching {
-                com.openminis.app.backup.remote.RcloneRemoteStore(ctx.applicationContext)
-                    .remote(remoteName)
-            }.getOrNull()
-        }
-        loaded = true
-    }
-    val resolved = remote
-    if (loaded) {
-        if (resolved == null) {
-            // The destination was removed since the record was written.
-            LaunchedEffect(remoteName) { navController.safePopBackStack() }
-        } else {
-            content(resolved)
-        }
-    }
-}
-
 @Composable
 fun AppNavigation(
     chatRepository: ChatRepository,
@@ -1509,6 +1464,9 @@ fun AppNavigation(
         }
 
         // [T-android-scheduled-tasks-design] Scheduled tasks list + editor.
+        // [T-android-automation-rules] The screen is the Automation hub now:
+        // Timers tab (legacy cron flow) + Rules tab (conditional triggers),
+        // with rule editor / run-records destinations below.
         composable(Routes.SCHEDULED_TASKS) {
             com.openminis.app.ui.scheduled.ScheduledTasksScreen(
                 onBack = { navController.safePopBackStack() },
@@ -1521,8 +1479,16 @@ fun AppNavigation(
                 onOpenSession = { sessionId ->
                     navController.safeNavigate(Routes.chat(sessionId))
                 },
+                onEditRule = { ruleId ->
+                    navController.safeNavigate(automationRuleEdit(ruleId))
+                },
+                onViewRuleRuns = { ruleId ->
+                    navController.safeNavigate("automation_rules/runs/$ruleId")
+                },
             )
         }
+        // [T-android-automation-rules] Rule editor + per-rule run records.
+        automationRuleEntries(navController)
         // [T-android-scheduled-tasks-run-records] per-task run records.
         composable(
             route = Routes.SCHEDULED_TASK_RUNS,
