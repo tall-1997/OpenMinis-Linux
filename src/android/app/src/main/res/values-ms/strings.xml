@@ -1837,15 +1837,7 @@
     <string name="dev_suite_step_failed">Langkah gagal (exit %1$d): %2$s</string>
     <string name="dev_suite_probe_failed">Pemasangan selesai tetapi pemeriksaan sedia tidak lulus — %1$s</string>
     <string name="dev_suite_interrupted">Pemasangan terganggu</string>
-    <string name="builtin_plugin_ofm_name">Gerbang Model Percuma (setempat)</string>
-    <string name="builtin_plugin_ofm_summary">Gerbang setempat serasi OpenAI · 20+ model frontier, tanpa akaun, tanpa kunci · loopback sahaja</string>
     <string name="local_gateway_install_failed">Pemasangan gagal</string>
-    <string name="builtin_plugin_interrupted">Pemasangan terganggu</string>
-    <string name="builtin_plugin_stage_payload">Menyediakan pakej…</string>
-    <string name="builtin_plugin_stage_node">Menyemak runtime Node…</string>
-    <string name="builtin_plugin_ready">Sedia</string>
-    <string name="builtin_plugin_section_header">Gateway terbina dalam</string>
-    <string name="builtin_plugin_section_footer">Muat turun luar talian yang disertakan dalam apl. Pasang, kemudian hidupkan suis untuk menjalankan gateway sebagai perkhidmatan tempatan — ia hanya mendengar di loopback.</string>
     <string name="builtin_plugin_a2a_name">Gateway Agent2API (tempatan)</string>
     <string name="builtin_plugin_a2a_summary">Proksi tempatan serasi OpenAI pelbagai penyedia · tambah akaun huluan di panel webnya · loopback sahaja</string>
     <string name="builtin_plugin_install">Pasang</string>

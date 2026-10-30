@@ -1847,15 +1847,7 @@
     <string name="dev_suite_step_failed">Шаг завершился с ошибкой (exit %1$d): %2$s</string>
     <string name="dev_suite_probe_failed">Установка завершена, но проверка готовности не пройдена — %1$s</string>
     <string name="dev_suite_interrupted">Установка прервана</string>
-    <string name="builtin_plugin_ofm_name">Шлюз бесплатных моделей (локальный)</string>
-    <string name="builtin_plugin_ofm_summary">Локальный OpenAI-совместимый шлюз · более 20 передовых моделей, без аккаунта и ключа · только loopback</string>
     <string name="local_gateway_install_failed">Не удалось установить</string>
-    <string name="builtin_plugin_interrupted">Установка прервана</string>
-    <string name="builtin_plugin_stage_payload">Подготовка пакета…</string>
-    <string name="builtin_plugin_stage_node">Проверка среды выполнения Node…</string>
-    <string name="builtin_plugin_ready">Готово</string>
-    <string name="builtin_plugin_section_header">Встроенные шлюзы</string>
-    <string name="builtin_plugin_section_footer">Офлайн-пакеты, поставляемые в приложении. Установите и включите переключатель — шлюз заработает как локальная служба, слушая только loopback.</string>
     <string name="builtin_plugin_a2a_name">Шлюз Agent2API (локальный)</string>
     <string name="builtin_plugin_a2a_summary">Локальный OpenAI-совместимый мультипровайдерный прокси · добавляйте аккаунты в веб-панели · только loopback</string>
     <string name="builtin_plugin_install">Установить</string>

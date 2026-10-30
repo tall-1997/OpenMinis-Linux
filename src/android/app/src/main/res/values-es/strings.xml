@@ -1839,15 +1839,7 @@
     <string name="dev_suite_step_failed">Paso fallido (exit %1$d): %2$s</string>
     <string name="dev_suite_probe_failed">La instalación terminó pero la comprobación de disponibilidad no pasó — %1$s</string>
     <string name="dev_suite_interrupted">Instalación interrumpida</string>
-    <string name="builtin_plugin_ofm_name">Pasarela de modelos gratis (local)</string>
-    <string name="builtin_plugin_ofm_summary">Pasarela local compatible con OpenAI · más de 20 modelos frontera, sin cuenta ni clave · solo loopback</string>
     <string name="local_gateway_install_failed">Error de instalación</string>
-    <string name="builtin_plugin_interrupted">Instalación interrumpida</string>
-    <string name="builtin_plugin_stage_payload">Preparando el paquete…</string>
-    <string name="builtin_plugin_stage_node">Comprobando el runtime de Node…</string>
-    <string name="builtin_plugin_ready">Listo</string>
-    <string name="builtin_plugin_section_header">Pasarelas integradas</string>
-    <string name="builtin_plugin_section_footer">Paquetes sin conexión incluidos en la app. Instala y activa el interruptor para ejecutar la pasarela como servicio local — solo escucha en loopback.</string>
     <string name="builtin_plugin_a2a_name">Pasarela Agent2API (local)</string>
     <string name="builtin_plugin_a2a_summary">Proxy local compatible con OpenAI multioperador · añade cuentas en su panel web · solo loopback</string>
     <string name="builtin_plugin_install">Instalar</string>

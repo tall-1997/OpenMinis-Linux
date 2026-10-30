@@ -1836,15 +1836,7 @@
     <string name="dev_suite_step_failed">ステップが失敗しました（exit %1$d）：%2$s</string>
     <string name="dev_suite_probe_failed">インストールは完了しましたが、準備完了チェックを通りませんでした — %1$s</string>
     <string name="dev_suite_interrupted">インストールが中断されました</string>
-    <string name="builtin_plugin_ofm_name">無料モデルゲートウェイ (ローカル)</string>
-    <string name="builtin_plugin_ofm_summary">ローカルの OpenAI 互換ゲートウェイ · 20 以上の最先端モデル、登録不要・キー不要 · ループバックのみ</string>
     <string name="local_gateway_install_failed">インストールに失敗しました</string>
-    <string name="builtin_plugin_interrupted">インストールが中断されました</string>
-    <string name="builtin_plugin_stage_payload">ペイロードを準備中…</string>
-    <string name="builtin_plugin_stage_node">Node ランタイムを確認中…</string>
-    <string name="builtin_plugin_ready">準備完了</string>
-    <string name="builtin_plugin_section_header">内蔵ゲートウェイ</string>
-    <string name="builtin_plugin_section_footer">アプリ同梱のオフラインパッケージ。インストール後、スイッチをオンにするとゲートウェイがローカルサービスとして動作します — ループバックのみで待ち受けます。</string>
     <string name="builtin_plugin_a2a_name">Agent2API ゲートウェイ (ローカル)</string>
     <string name="builtin_plugin_a2a_summary">ローカルのマルチプロバイダー対応 OpenAI 互換プロキシ · 上流アカウントはウェブパネルで追加 · ループバックのみ</string>
     <string name="builtin_plugin_install">インストール</string>

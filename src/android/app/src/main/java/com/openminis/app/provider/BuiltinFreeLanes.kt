@@ -27,11 +27,12 @@ internal data class BuiltinFreeLane(
     val apiKey: String,
     /**
      * False when the instance must NOT appear on first launch — when the lane
-     * only works after an explicit user action (installing a local plugin).
-     * Auto-seeding such a lane would show a provider row whose every refresh
-     * fails until the user finds the plugin market. The explicit channels
-     * (add-provider preset, recovery row, post-install restore) still seed it,
-     * because those are the user asking for it.
+     * only works after an explicit user action (e.g. starting the a2a gateway
+     * from its settings entry, which auto-seeds on first run). Auto-seeding
+     * such a lane would show a provider row whose every refresh fails until
+     * the user takes that action. The explicit channels (add-provider
+     * preset, recovery row, post-install restore) still seed it, because
+     * those are the user asking for it.
      */
     val seedOnBootstrap: Boolean = true,
 ) {
@@ -82,34 +83,21 @@ internal object BuiltinFreeLanes {
         apiKey = "",
     )
 
-    val OFM = BuiltinFreeLane(
-        lane = LocalGatewayFreeLane,
-        // Same no-`-free`-suffix rule as Kilo's id.
-        instanceId = "builtin-ofm-gateway",
-        label = LocalGatewayFreeLane.DISPLAY_NAME,
-        // The local gateway binds loopback only and serves no auth challenge,
-        // so no credential is written for this lane.
-        apiKey = "",
-        // Seeded by the plugin installer instead of first launch: the row is
-        // dead weight until the gateway payload is installed and running.
-        seedOnBootstrap = false,
-    )
-
     val A2A = BuiltinFreeLane(
         lane = Agent2ApiFreeLane,
         // Same no-`-free`-suffix rule as Kilo's id.
         instanceId = "builtin-a2a-gateway",
         label = Agent2ApiFreeLane.DISPLAY_NAME,
-        // Same loopback, same no-auth shape as the OFM lane.
+        // Loopback only and no auth challenge, so no credential is written.
         apiKey = "",
-        // Same rule as the OFM lane: the row is dead weight until the a2a
-        // gateway is installed and started from its own settings entry
+        // The row is dead weight until the a2a gateway is installed and
+        // started from its own settings entry
         // (com.openminis.app.a2a.A2aGateway — a first-class feature now,
         // not a market row).
         seedOnBootstrap = false,
     )
 
-    val ALL: List<BuiltinFreeLane> = listOf(ZEN, KILO, OFM, A2A)
+    val ALL: List<BuiltinFreeLane> = listOf(ZEN, KILO, A2A)
 
     fun byInstanceId(instanceId: String): BuiltinFreeLane? =
         ALL.firstOrNull { it.instanceId == instanceId }

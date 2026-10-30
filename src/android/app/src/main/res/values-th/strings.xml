@@ -1837,15 +1837,7 @@
     <string name="dev_suite_step_failed">ขั้นตอนล้มเหลว (exit %1$d): %2$s</string>
     <string name="dev_suite_probe_failed">ติดตั้งเสร็จแล้วแต่ผ่านการตรวจสอบความพร้อมไม่สำเร็จ — %1$s</string>
     <string name="dev_suite_interrupted">การติดตั้งถูกขัดจังหวะ</string>
-    <string name="builtin_plugin_ofm_name">เกตเวย์โมเดลฟรี (ในเครื่อง)</string>
-    <string name="builtin_plugin_ofm_summary">เกตเวย์ในเครื่องที่เข้ากันได้กับ OpenAI · โมเดลล้ำ 20+ รุ่น ไม่ต้องสมัคร ไม่ต้องใช้คีย์ · ฟังเฉพาะ loopback</string>
     <string name="local_gateway_install_failed">ติดตั้งไม่สำเร็จ</string>
-    <string name="builtin_plugin_interrupted">การติดตั้งถูกขัดจังหวะ</string>
-    <string name="builtin_plugin_stage_payload">กำลังเตรียมแพ็กเกจ…</string>
-    <string name="builtin_plugin_stage_node">กำลังตรวจสอบรันไทม์ Node…</string>
-    <string name="builtin_plugin_ready">พร้อม</string>
-    <string name="builtin_plugin_section_header">เกตเวย์ในตัว</string>
-    <string name="builtin_plugin_section_footer">แพ็กเกจออฟไลน์ที่มาพร้อมแอป ติดตั้งแล้วเปิดสวิตช์เพื่อรันเกตเวย์เป็นบริการภายในเครื่อง — รับฟังเฉพาะ loopback</string>
     <string name="builtin_plugin_a2a_name">เกตเวย์ Agent2API (ภายในเครื่อง)</string>
     <string name="builtin_plugin_a2a_summary">พร็อกซีภายในเครื่องที่รองรับ OpenAI หลายผู้ให้บริการ · เพิ่มบัญชีในแผงเว็บ · loopback เท่านั้น</string>
     <string name="builtin_plugin_install">ติดตั้ง</string>

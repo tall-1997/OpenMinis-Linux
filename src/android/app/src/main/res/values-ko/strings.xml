@@ -1836,15 +1836,7 @@
     <string name="dev_suite_step_failed">단계 실패 (exit %1$d): %2$s</string>
     <string name="dev_suite_probe_failed">설치는 완료되었으나 준비 확인을 통과하지 못했습니다 — %1$s</string>
     <string name="dev_suite_interrupted">설치가 중단되었습니다</string>
-    <string name="builtin_plugin_ofm_name">무료 모델 게이트웨이 (로컬)</string>
-    <string name="builtin_plugin_ofm_summary">로컬 OpenAI 호환 게이트웨이 · 20개 이상의 프론티어 모델, 계정·키 불필요 · 루프백 전용</string>
     <string name="local_gateway_install_failed">설치 실패</string>
-    <string name="builtin_plugin_interrupted">설치가 중단되었습니다</string>
-    <string name="builtin_plugin_stage_payload">페이로드 준비 중…</string>
-    <string name="builtin_plugin_stage_node">Node 런타임 확인 중…</string>
-    <string name="builtin_plugin_ready">준비됨</string>
-    <string name="builtin_plugin_section_header">내장 게이트웨이</string>
-    <string name="builtin_plugin_section_footer">앱에 포함된 오프라인 설치 패키지. 설치 후 스위치를 켜면 게이트웨이가 로컬 서비스로 실행됩니다 — 루프백만 수신합니다.</string>
     <string name="builtin_plugin_a2a_name">Agent2API 게이트웨이 (로컬)</string>
     <string name="builtin_plugin_a2a_summary">로컬 멀티 프로바이더 OpenAI 호환 프록시 · 웹 패널에서 업스트림 계정 추가 · 루프백 전용</string>
     <string name="builtin_plugin_install">설치</string>

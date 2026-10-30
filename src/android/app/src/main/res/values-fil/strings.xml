@@ -1837,15 +1837,7 @@
     <string name="dev_suite_step_failed">Nabigo ang hakbang (exit %1$d): %2$s</string>
     <string name="dev_suite_probe_failed">Tapos na ang pag-install ngunit hindi pumasa sa pagsusulit ng pagkahanda — %1$s</string>
     <string name="dev_suite_interrupted">Naantala ang pag-install</string>
-    <string name="builtin_plugin_ofm_name">Free Model Gateway (lokal)</string>
-    <string name="builtin_plugin_ofm_summary">Lokal na OpenAI-compatible na gateway · 20+ frontier na modelo, walang account, walang key · loopback lang</string>
     <string name="local_gateway_install_failed">Nabigo ang pag-install</string>
-    <string name="builtin_plugin_interrupted">Naputol ang pag-install</string>
-    <string name="builtin_plugin_stage_payload">Inihahanda ang payload…</string>
-    <string name="builtin_plugin_stage_node">Sinusuri ang Node runtime…</string>
-    <string name="builtin_plugin_ready">Handa na</string>
-    <string name="builtin_plugin_section_header">Built-in na gateway</string>
-    <string name="builtin_plugin_section_footer">Offline na package na kasama sa app. I-install, pagkatapos i-on ang switch para patakbuhin ang gateway bilang lokal na serbisyo — loopback lang ang pinakikinig.</string>
     <string name="builtin_plugin_a2a_name">Agent2API Gateway (lokal)</string>
     <string name="builtin_plugin_a2a_summary">Lokal na OpenAI-compatible na multi-provider proxy · magdagdag ng mga account sa web panel nito · loopback lang</string>
     <string name="builtin_plugin_install">I-install</string>

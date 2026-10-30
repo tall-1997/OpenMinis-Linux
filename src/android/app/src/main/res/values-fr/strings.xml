@@ -1839,15 +1839,7 @@
     <string name="dev_suite_step_failed">Étape en échec (exit %1$d) : %2$s</string>
     <string name="dev_suite_probe_failed">Installation terminée mais le test de préparation n\'a pas passé — %1$s</string>
     <string name="dev_suite_interrupted">Installation interrompue</string>
-    <string name="builtin_plugin_ofm_name">Passerelle de modèles gratuits (locale)</string>
-    <string name="builtin_plugin_ofm_summary">Passerelle locale compatible OpenAI · plus de 20 modèles de pointe, sans compte ni clé · boucle locale uniquement</string>
     <string name="local_gateway_install_failed">Échec de l\'installation</string>
-    <string name="builtin_plugin_interrupted">Installation interrompue</string>
-    <string name="builtin_plugin_stage_payload">Préparation du paquet…</string>
-    <string name="builtin_plugin_stage_node">Vérification du runtime Node…</string>
-    <string name="builtin_plugin_ready">Prêt</string>
-    <string name="builtin_plugin_section_header">Passerelles intégrées</string>
-    <string name="builtin_plugin_section_footer">Charges hors ligne fournies dans l\'app. Installez, puis activez l\'interrupteur pour exécuter la passerelle comme service local — elle n\'écoute que sur loopback.</string>
     <string name="builtin_plugin_a2a_name">Passerelle Agent2API (locale)</string>
     <string name="builtin_plugin_a2a_summary">Proxy local compatible OpenAI multi-fournisseurs · ajoutez des comptes dans son panneau web · loopback uniquement</string>
     <string name="builtin_plugin_install">Installer</string>

@@ -42,11 +42,11 @@ internal abstract class LoopbackGatewayLane(
     laneId: String,
     /** The port this lane's gateway binds on 127.0.0.1. */
     val port: Int,
-    /** Instance id prefix the config layer seeds, e.g. "ofm-gateway". */
+    /** Instance id prefix the config layer seeds, e.g. "a2a-gateway". */
     val providerId: String,
     /** Label shown on the seeded provider row. */
     val displayName: String,
-    /** Short label for skeleton models rebuilt from cache, e.g. "OFM". */
+    /** Short label for skeleton models rebuilt from cache, e.g. "A2A". */
     providerLabel: String,
 ) : FreeLane {
     private val tag = javaClass.simpleName
