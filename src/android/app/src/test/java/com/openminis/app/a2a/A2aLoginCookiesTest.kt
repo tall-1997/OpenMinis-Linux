@@ -49,4 +49,35 @@ class A2aLoginCookiesTest {
     fun `duplicate cookie names collapse`() {
         assertEquals(listOf("dup"), A2aLoginCookies.cookieNames("dup=1; dup=2"))
     }
+
+    /**
+     * [T-android-a2a-incognito] `getCookie` never reports the `Domain`
+     * attribute, so expiry has to cover the label chain — otherwise a
+     * `.provider.com` SSO cookie survives a host-only expiry and the next
+     * login round starts pre-authenticated as the previous account.
+     */
+    @Test
+    fun `expiry covers host-only and every parent domain scope`() {
+        assertEquals(
+            listOf(null, ".auth.huaweicloud.com", ".huaweicloud.com"),
+            A2aLoginCookies.cookieDomains("auth.huaweicloud.com"),
+        )
+        assertEquals(listOf(null, ".huaweicloud.com"), A2aLoginCookies.cookieDomains("HuaweiCloud.com"))
+        // A public suffix is never a valid Domain attribute.
+        assertEquals(listOf(null), A2aLoginCookies.cookieDomains("com"))
+        // IP literals / single labels have no domain scope at all.
+        assertEquals(listOf(null), A2aLoginCookies.cookieDomains("127.0.0.1"))
+        assertEquals(listOf(null), A2aLoginCookies.cookieDomains("::1"))
+        assertEquals(listOf(null), A2aLoginCookies.cookieDomains("localhost"))
+        assertEquals(listOf(null), A2aLoginCookies.cookieDomains(null))
+    }
+
+    @Test
+    fun `expiry header drops the cookie in the requested scope`() {
+        assertEquals("a2a_session=; Max-Age=0; Path=/", A2aLoginCookies.expiryHeader("a2a_session", null))
+        assertEquals(
+            "a2a_session=; Max-Age=0; Path=/; Domain=.huaweicloud.com",
+            A2aLoginCookies.expiryHeader("a2a_session", ".huaweicloud.com"),
+        )
+    }
 }

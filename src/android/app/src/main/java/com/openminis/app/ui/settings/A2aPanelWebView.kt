@@ -30,6 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -41,6 +42,8 @@ import com.openminis.app.a2a.A2aLoginCookies
 import com.openminis.app.a2a.A2aLoginProfiles
 import com.openminis.app.browser.WebViewEngine
 import com.openminis.app.ui.theme.m3Icon
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * In-app WebView hosting the a2a gateway's local web panel.
@@ -93,6 +96,7 @@ fun A2aPanelWebView(
     // fresh loadUrl against the (now up) gateway.
     var retryCount by remember(baseUrl, reloadToken) { mutableStateOf(0) }
     val loadKey = reloadToken * 1_000 + retryCount
+    val context = LocalContext.current
     val popups by popupHost.popups.collectAsStateWithLifecycle()
     // Loopback port the gateway listens on — login-window callbacks that the
     // shell has to deliver are rewritten onto it (see A2aLoginCallback).
@@ -113,6 +117,16 @@ fun A2aPanelWebView(
         } else if (hadLoginWindow) {
             hadLoginWindow = false
             A2aLoginProfiles.endRound()
+            // [T-android-a2a-incognito] The round takes its provider state
+            // with it: profile-bound logins leave nothing behind, and a round
+            // that ran on the default profile (unsupported or silently
+            // refused binding) is swept here instead of at the next login, so
+            // a stale session can never answer the next round's redirect.
+            // Off the UI thread: setCookie is a synchronous binder round trip.
+            withContext(Dispatchers.IO) {
+                A2aLoginCookies.clearProviderCookies(context)
+                A2aLoginCookies.clearProviderStorage(context)
+            }
         }
     }
 
@@ -142,6 +156,14 @@ fun A2aPanelWebView(
                     webViewClient = object : WebViewClient() {
                         override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                             loadStarted = true
+                            // [T-android-a2a-incognito] While a login round is
+                            // open this view is part of it — the shim's link
+                            // fallback completes the login right here — so its
+                            // provider origins are tracked for the round-end
+                            // sweep.
+                            if (A2aLoginProfiles.isRoundActive()) {
+                                A2aLoginCookies.rememberOrigin(context, url)
+                            }
                         }
 
                         override fun onReceivedError(
@@ -212,11 +234,12 @@ fun A2aPanelWebView(
                             // touched either way.
                             val loginProfile =
                                 if (incognitoLogin) A2aLoginProfiles.currentOrBegin() else null
-                            if (incognitoLogin && loginProfile == null) {
-                                // No MULTI_PROFILE on this WebView: fall back
-                                // to expiring provider cookies before the
-                                // window opens (and sweeping storage once the
-                                // login lands, see createA2aLoginWebView).
+                            if (incognitoLogin) {
+                                // [T-android-a2a-incognito] Unconditional: the
+                                // profile is the strong boundary, but this round
+                                // must not start pre-authenticated even when the
+                                // platform can't provide one (or accepts the
+                                // binding without applying it).
                                 A2aLoginCookies.clearProviderCookies(context)
                             }
                             val popup = createA2aLoginWebView(
