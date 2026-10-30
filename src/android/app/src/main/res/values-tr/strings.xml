@@ -1854,7 +1854,7 @@
     <!-- [T-android-a2a-native] a2a gateway management page -->
 <string name="a2a_desktop_bridge_footer">Bazı panel işlemleri (hesap içeri/dışarı aktarma, günlük dışa aktarma, tam DB yedekleme) motorun masaüstü köprüsünü kullanır ve bu cihazda kullanılamaz. Hesaplar panelde eklenir; SQLite verileri uygulamanın özel veri klasöründedir.</string>
 <string name="a2a_incognito_login_title">Gizli oturum açma</string>
-<string name="a2a_incognito_login_subtitle">Her giriş penceresi temiz bir sağlayıcı oturumuyla başlar; panelin kendi oturumu etkilenmez.</string>
+<string name="a2a_incognito_login_subtitle">Her oturum açma, pencere kapandığında çerezleri, depolamayı ve önbelleği silinen geçici bir tarayıcı profilinde çalışır. Panelin kendi oturumu etkilenmez.</string>
 <string name="a2a_view_gateway_log">Ağ geçidi günlüğü</string>
 <string name="a2a_log_filter_login">Yalnızca oturum açma / güvenlik</string>
 <string name="a2a_log_empty">Henüz günlük satırı yok.</string>
@@ -1862,7 +1862,7 @@
     <string name="a2a_start_gateway">Ağ geçidini başlat</string>
     <string name="a2a_status_running">Çalışıyor</string>
     <string name="a2a_panel_address">Panel adresi</string>
-    <string name="a2a_panel_not_installed">Web panelini açmak için ağ geçidini yükleyin.</string>
+    <string name="a2a_panel_not_installed">Ağ geçidi henüz kurulmadı — paneli açtığınızda otomatik olarak kurulur.</string>
     <string name="a2a_panel_needs_start">Web panelini açmak için ağ geçidini başlatın.</string>
     <string name="a2a_panel_load_failed">Panel yüklenemedi.</string>
     <string name="a2a_panel_page_title">Agent2API Paneli</string>
@@ -1870,6 +1870,8 @@
     <string name="a2a_login_address_title">Geçerli adres</string>
     <string name="a2a_login_address_hint">Bu sayfa açılamıyorsa (örneğin geri çağrı yerel bir geri döngü bağlantı noktasını gösteriyorsa), oturum açma yine de tamamlanmış olabilir. Bu adresi kopyalayıp panelin geri çağrı alanına yapıştırın.</string>
     <string name="a2a_login_copy_address">Adresi kopyala</string>
+    <string name="a2a_panel_starting">Ağ geçidi başlatılıyor…</string>
+    <string name="a2a_open_panel_and_start">Başlat ve paneli aç</string>
     <string name="a2a_close">Kapat</string>
     <string name="a2a_open_in_browser">Tarayıcıda aç</string>
     <string name="dev_suite_no_space">Depolama yetersiz: yaklaşık %1$d GB gerekli, %2$d GB boş</string>

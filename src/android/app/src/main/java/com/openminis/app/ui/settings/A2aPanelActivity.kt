@@ -6,21 +6,31 @@ import android.webkit.WebView
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.outlined.OpenInBrowser
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -29,10 +39,15 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.openminis.app.R
+import com.openminis.app.a2a.A2aGateway
+import com.openminis.app.a2a.A2aLoginProfiles
+import com.openminis.app.logging.AppLogger
 import com.openminis.app.ui.browser.BrowserExternalSchemeHandler
 import com.openminis.app.ui.browser.BrowserExternalSchemeHandler.Origin
 import com.openminis.app.ui.components.MinisTextButton
 import com.openminis.app.ui.theme.m3Icon
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * Full-screen host for the a2a gateway's local web panel.
@@ -56,8 +71,12 @@ import com.openminis.app.ui.theme.m3Icon
  *
  * [T-android-a2a-incognito] "Incognito login" (default ON, carried in the
  * intent — the :a2a process must not re-read SharedPreferences per window):
- * every login window starts from a cleared jar, so a second account of the
- * same provider is never silently pre-authenticated as the first.
+ * a login round runs in its own throwaway WebView profile — cookies, DOM
+ * storage, IndexedDB, service workers and cache — which is deleted when its
+ * windows close, so a second account of the same provider can never be
+ * pre-authenticated as the first and nothing from the round survives it.
+ * Devices whose WebView lacks MULTI_PROFILE fall back to expiring provider
+ * cookies plus dropping their web storage.
  *
  * Chrome: a slim iOS-style top bar (Close, panel title, open-in-browser)
  * and a layered BackHandler — open login window first, then panel history,
@@ -78,16 +97,44 @@ class A2aPanelActivity : ComponentActivity() {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
             runCatching { WebView.setDataDirectorySuffix("a2a") }
         }
-        val port = intent.getIntExtra(EXTRA_PORT, 0).takeIf { it > 0 }
-            ?: error("A2aPanelActivity requires a port")
+        // Never crash on a missing/garbled extra: the port is a gateway
+        // constant, and a crash here would look like the panel "exiting".
+        val port = intent.getIntExtra(EXTRA_PORT, A2aGateway.PORT)
+            .takeIf { it > 0 }
+            ?: A2aGateway.PORT
         val incognitoLogin = intent.getBooleanExtra(EXTRA_INCOGNITO_LOGIN, true)
         val baseUrl = "http://127.0.0.1:$port/"
+        AppLogger.info(TAG, "panel opened (port=$port, incognito=$incognitoLogin)")
         // Column's content lambda is a ColumnScope receiver — a bare `this`
         // inside it is the scope, not this Activity. Capture the context
         // once so external-scheme dispatch receives a real Context.
         val activityContext = this
         setContent {
             val popupHost = remember { A2aPopupHostState() }
+            // [T-android-a2a-panel-cold-start] Opening the panel must not
+            // depend on a status snapshot or on the user tapping the start
+            // switch first: the gateway may still be booting after a cold
+            // app start (auto-start runs off-main). This screen starts /
+            // waits for it itself and only then mounts the WebView, so the
+            // first tap lands inside the panel instead of on a connection
+            // error.
+            var boot by remember { mutableStateOf(PanelBoot.CHECKING) }
+            var bootError by remember { mutableStateOf<String?>(null) }
+            var bootAttempt by remember { mutableIntStateOf(0) }
+            LaunchedEffect(bootAttempt) {
+                boot = PanelBoot.CHECKING
+                bootError = null
+                val error = withContext(Dispatchers.IO) {
+                    if (A2aGateway.panelUrl() != null) return@withContext null
+                    AppLogger.info(TAG, "gateway not serving — starting it for the panel")
+                    A2aGateway.start(activityContext)
+                    val status = A2aGateway.status.value
+                    if (status.running) null else status.lastError ?: "gateway did not answer"
+                }
+                bootError = error
+                boot = if (error == null) PanelBoot.READY else PanelBoot.FAILED
+                if (error != null) AppLogger.warning(TAG, "panel boot failed: $error")
+            }
             Surface(modifier = Modifier.fillMaxSize()) {
                 Column(modifier = Modifier.fillMaxSize()) {
                     Row(
@@ -133,20 +180,31 @@ class A2aPanelActivity : ComponentActivity() {
                             )
                         }
                     }
-                    A2aPanelWebView(
-                        baseUrl = baseUrl,
-                        onWebViewReady = { webView = it },
-                        onExternalLink = { url ->
-                            // tel:/mailto:/intent:/office-raccoon:… from the
-                            // panel or a login window: the user (or the
-                            // login flow) opened that link on purpose — hand
-                            // it to the system handler.
-                            BrowserExternalSchemeHandler.handle(activityContext, url, Origin.USER_INITIATED)
-                        },
-                        modifier = Modifier.fillMaxSize(),
-                        popupHost = popupHost,
-                        incognitoLogin = incognitoLogin,
-                    )
+                    when (boot) {
+                        PanelBoot.CHECKING -> PanelBootState(
+                            title = stringResource(R.string.a2a_panel_starting),
+                            showProgress = true,
+                        )
+                        PanelBoot.FAILED -> PanelBootState(
+                            title = stringResource(R.string.a2a_panel_load_failed),
+                            reason = bootError,
+                            onRetry = { bootAttempt++ },
+                        )
+                        PanelBoot.READY -> A2aPanelWebView(
+                            baseUrl = baseUrl,
+                            onWebViewReady = { webView = it },
+                            onExternalLink = { url ->
+                                // tel:/mailto:/intent:/office-raccoon:… from the
+                                // panel or a login window: the user (or the
+                                // login flow) opened that link on purpose — hand
+                                // it to the system handler.
+                                BrowserExternalSchemeHandler.handle(activityContext, url, Origin.USER_INITIATED)
+                            },
+                            modifier = Modifier.fillMaxSize(),
+                            popupHost = popupHost,
+                            incognitoLogin = incognitoLogin,
+                        )
+                    }
                 }
             }
             BackHandler {
@@ -161,9 +219,78 @@ class A2aPanelActivity : ComponentActivity() {
         }
     }
 
+    override fun onDestroy() {
+        // Safety net: a round whose windows never closed (process teardown,
+        // activity killed) must not leave its throwaway profile behind.
+        A2aLoginProfiles.endRound()
+        AppLogger.info(TAG, "panel closed")
+        super.onDestroy()
+    }
+
     companion object {
         const val EXTRA_PORT = "a2a.port"
         const val EXTRA_INCOGNITO_LOGIN = "a2a.incognito_login"
+        private const val TAG = "A2aPanel"
         private const val UPSTREAM_HOME = "https://github.com/aimod-cc/Agent2API"
+    }
+}
+
+/** Boot gate for the panel activity: the WebView mounts only when the gateway answers. */
+private enum class PanelBoot { CHECKING, READY, FAILED }
+
+@Composable
+private fun PanelBootState(
+    title: String,
+    reason: String? = null,
+    showProgress: Boolean = false,
+    onRetry: (() -> Unit)? = null,
+) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(horizontal = 32.dp),
+        ) {
+            if (showProgress) {
+                CircularProgressIndicator()
+                Spacer(Modifier.height(16.dp))
+            } else {
+                Icon(
+                    imageVector = m3Icon(Icons.Filled.CloudOff),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(32.dp),
+                )
+                Spacer(Modifier.height(12.dp))
+            }
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+            if (!reason.isNullOrBlank()) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = reason,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (onRetry != null) {
+                Spacer(Modifier.height(16.dp))
+                MinisTextButton(onClick = onRetry) {
+                    Text(
+                        stringResource(R.string.builtin_plugin_retry),
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                }
+            }
+        }
     }
 }

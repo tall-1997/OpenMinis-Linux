@@ -1854,7 +1854,7 @@
     <!-- [T-android-a2a-native] a2a gateway management page -->
 <string name="a2a_desktop_bridge_footer">การทำงานบางอย่างของแผง (นำเข้า/ส่งออกบัญชี ส่งออก log สำรองฐานข้อมูลทั้งหมด) ใช้สะพานเดสก์ท็อปของเอนจิน จึงไม่พร้อมใช้บนอุปกรณ์นี้ เพิ่มบัญชีในแผงได้ โดยข้อมูล SQLite อยู่ในโฟลเดอร์ส่วนตัวของแอป</string>
 <string name="a2a_incognito_login_title">เข้าสู่ระบบแบบไม่ระบุตัวตน</string>
-<string name="a2a_incognito_login_subtitle">หน้าต่างเข้าสู่ระบบเริ่มด้วยเซสชันของผู้ให้บริการที่สะอาด การเข้าสู่ระบบของแผงเองไม่ได้รับผลกระทบ</string>
+<string name="a2a_incognito_login_subtitle">การลงชื่อเข้าแต่ละครั้งทำงานในโปรไฟล์เบราว์เซอร์ชั่วคราว ซึ่งคุกกี้ พื้นที่จัดเก็บ และแคชจะถูกล้างเมื่อปิดหน้าต่าง การลงชื่อเข้าใช้ของแผงควบคุมไม่ได้รับผลกระทบ</string>
 <string name="a2a_view_gateway_log">บันทึกเกตเวย์</string>
 <string name="a2a_log_filter_login">เฉพาะเข้าสู่ระบบ / ความปลอดภัย</string>
 <string name="a2a_log_empty">ยังไม่มีบรรทัดบันทึก</string>
@@ -1862,7 +1862,7 @@
     <string name="a2a_start_gateway">เริ่มเกตเวย์</string>
     <string name="a2a_status_running">กำลังทำงาน</string>
     <string name="a2a_panel_address">ที่อยู่แผงควบคุม</string>
-    <string name="a2a_panel_not_installed">ติดตั้งเกตเวย์เพื่อเปิดแผงควบคุมเว็บ</string>
+    <string name="a2a_panel_not_installed">เกตเวย์ยังไม่ได้ติดตั้ง — การเปิดแผงควบคุมจะติดตั้งให้อัตโนมัติ</string>
     <string name="a2a_panel_needs_start">เริ่มเกตเวย์เพื่อเปิดแผงควบคุมเว็บ</string>
     <string name="a2a_panel_load_failed">โหลดแผงควบคุมไม่สำเร็จ</string>
     <string name="a2a_panel_page_title">แผงควบคุม Agent2API</string>
@@ -1870,6 +1870,8 @@
     <string name="a2a_login_address_title">ที่อยู่ปัจจุบัน</string>
     <string name="a2a_login_address_hint">หากหน้านี้เปิดไม่ได้ (เช่น การเรียกกลับไปยังพอร์ต loopback ภายในเครื่อง) การลงชื่อเข้าอาจเสร็จสมบูรณ์แล้ว คัดลอกที่อยู่นี้แล้ววางในช่อง callback ของแผงควบคุม</string>
     <string name="a2a_login_copy_address">คัดลอกที่อยู่</string>
+    <string name="a2a_panel_starting">กำลังเริ่มเกตเวย์…</string>
+    <string name="a2a_open_panel_and_start">เริ่มและเปิดแผงควบคุม</string>
     <string name="a2a_close">ปิด</string>
     <string name="a2a_open_in_browser">เปิดในเบราว์เซอร์</string>
     <string name="dev_suite_no_space">พื้นที่เก็บข้อมูลไม่พอ: ต้องใช้ประมาณ %1$d GB ว่างอยู่ %2$d GB</string>

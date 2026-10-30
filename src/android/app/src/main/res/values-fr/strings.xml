@@ -1856,7 +1856,7 @@
     <!-- [T-android-a2a-native] a2a gateway management page -->
 <string name="a2a_desktop_bridge_footer">Certaines actions du panneau (import/export de comptes, export des journaux, sauvegarde complète) utilisent le pont bureau du moteur et sont indisponibles sur cet appareil. Les comptes s\'ajoutent dans le panneau ; les données SQLite résident dans le dossier privé de l\'app.</string>
 <string name="a2a_incognito_login_title">Connexion incognito</string>
-<string name="a2a_incognito_login_subtitle">Chaque fenêtre de connexion démarre avec une session fournisseur propre ; la connexion du panneau elle-même n\'est pas touchée.</string>
+<string name="a2a_incognito_login_subtitle">Chaque connexion s\'exécute dans un profil de navigateur jetable : cookies, stockage et cache sont effacés à la fermeture de la fenêtre. La session du panneau n\'est pas touchée.</string>
 <string name="a2a_view_gateway_log">Journal de la passerelle</string>
 <string name="a2a_log_filter_login">Connexion / sécurité uniquement</string>
 <string name="a2a_log_empty">Aucune ligne de journal pour l\'instant.</string>
@@ -1864,7 +1864,7 @@
     <string name="a2a_start_gateway">Démarrer la passerelle</string>
     <string name="a2a_status_running">En cours d\'exécution</string>
     <string name="a2a_panel_address">Adresse du panneau</string>
-    <string name="a2a_panel_not_installed">Installez la passerelle pour ouvrir son panneau web.</string>
+    <string name="a2a_panel_not_installed">La passerelle n\'est pas encore déployée : l\'ouverture du panneau l\'installe automatiquement.</string>
     <string name="a2a_panel_needs_start">Démarrez la passerelle pour ouvrir son panneau web.</string>
     <string name="a2a_panel_load_failed">Échec du chargement du panneau.</string>
     <string name="a2a_panel_page_title">Panneau Agent2API</string>
@@ -1872,6 +1872,8 @@
     <string name="a2a_login_address_title">Adresse actuelle</string>
     <string name="a2a_login_address_hint">Si cette page ne peut pas s\'ouvrir (par exemple un rappel vers un port de bouclage local), la connexion a peut-être déjà abouti. Copiez cette adresse et collez-la dans le champ de rappel du panneau.</string>
     <string name="a2a_login_copy_address">Copier l\'adresse</string>
+    <string name="a2a_panel_starting">Démarrage de la passerelle…</string>
+    <string name="a2a_open_panel_and_start">Démarrer et ouvrir le panneau</string>
     <string name="a2a_close">Fermer</string>
     <string name="a2a_open_in_browser">Ouvrir dans le navigateur</string>
     <string name="dev_suite_no_space">Stockage insuffisant : environ %1$d GB nécessaires, %2$d GB disponibles</string>

@@ -1945,7 +1945,7 @@
     <!-- [T-android-a2a-native] a2a gateway management page -->
 <string name="a2a_desktop_bridge_footer">面板中的部分操作（帳號匯入/匯出、日誌匯出、整庫備份）依賴引擎的桌面橋接，本裝置上不可用。帳號可在面板內直接新增；SQLite 資料保存在應用程式私有資料目錄中。</string>
 <string name="a2a_incognito_login_title">無痕登入</string>
-<string name="a2a_incognito_login_subtitle">每個登入視窗從乾淨的供應商工作階段開始；面板自身的登入不受影響。</string>
+<string name="a2a_incognito_login_subtitle">每次登入都在獨立的臨時瀏覽器設定檔中進行，登入視窗關閉後立即清除其 Cookie、儲存與快取；面板本身的登入不受影響。</string>
 <string name="a2a_view_gateway_log">閘道日誌</string>
 <string name="a2a_log_filter_login">只看登入 / 安全</string>
 <string name="a2a_log_empty">尚無日誌。</string>
@@ -1953,7 +1953,7 @@
     <string name="a2a_start_gateway">啟動閘道</string>
     <string name="a2a_status_running">執行中</string>
     <string name="a2a_panel_address">面板位址</string>
-    <string name="a2a_panel_not_installed">安裝閘道後即可開啟網路面板。</string>
+    <string name="a2a_panel_not_installed">閘道尚未部署——開啟面板時會自動完成部署。</string>
     <string name="a2a_panel_needs_start">啟動閘道後即可開啟網路面板。</string>
     <string name="a2a_panel_load_failed">面板載入失敗。</string>
     <string name="a2a_panel_page_title">Agent2API 面板</string>
@@ -1961,6 +1961,8 @@
     <string name="a2a_login_address_title">目前位址</string>
     <string name="a2a_login_address_hint">如果此頁面無法開啟（例如回呼指向本機回環埠），登入可能已完成。請複製此位址，貼到面板的回呼輸入框中即可。</string>
     <string name="a2a_login_copy_address">複製位址</string>
+    <string name="a2a_panel_starting">正在啟動閘道…</string>
+    <string name="a2a_open_panel_and_start">啟動並開啟面板</string>
     <string name="a2a_close">關閉</string>
     <string name="a2a_open_in_browser">在瀏覽器中開啟</string>
     <string name="dev_suite_no_space">儲存空間不足：需要約 %1$d GB，可用 %2$d GB</string>

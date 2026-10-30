@@ -1854,7 +1854,7 @@
     <!-- [T-android-a2a-native] a2a gateway management page -->
 <string name="a2a_desktop_bridge_footer">Algumas ações do painel (importar/exportar contas, exportar logs, backup completo do BD) usam a ponte de desktop do mecanismo e não estão disponíveis neste dispositivo. As contas são adicionadas no painel; os dados SQLite ficam na pasta privada do app.</string>
 <string name="a2a_incognito_login_title">Login anônimo</string>
-<string name="a2a_incognito_login_subtitle">Cada janela de login começa com uma sessão limpa do provedor; o login do próprio painel não é afetado.</string>
+<string name="a2a_incognito_login_subtitle">Cada login roda em um perfil de navegador descartável: cookies, armazenamento e cache são apagados ao fechar a janela. O login do painel não é afetado.</string>
 <string name="a2a_view_gateway_log">Log do gateway</string>
 <string name="a2a_log_filter_login">Somente login / segurança</string>
 <string name="a2a_log_empty">Ainda sem linhas de log.</string>
@@ -1862,7 +1862,7 @@
     <string name="a2a_start_gateway">Iniciar gateway</string>
     <string name="a2a_status_running">Em execução</string>
     <string name="a2a_panel_address">Endereço do painel</string>
-    <string name="a2a_panel_not_installed">Instale o gateway para abrir o painel da web.</string>
+    <string name="a2a_panel_not_installed">O gateway ainda não foi implantado — abrir o painel o instala automaticamente.</string>
     <string name="a2a_panel_needs_start">Inicie o gateway para abrir o painel da web.</string>
     <string name="a2a_panel_load_failed">Falha ao carregar o painel.</string>
     <string name="a2a_panel_page_title">Painel do Agent2API</string>
@@ -1870,6 +1870,8 @@
     <string name="a2a_login_address_title">Endereço atual</string>
     <string name="a2a_login_address_hint">Se esta página não abrir (por exemplo, um callback para uma porta de loopback), o login pode já ter sido concluído. Copie este endereço e cole no campo de callback do painel.</string>
     <string name="a2a_login_copy_address">Copiar endereço</string>
+    <string name="a2a_panel_starting">Iniciando o gateway…</string>
+    <string name="a2a_open_panel_and_start">Iniciar e abrir o painel</string>
     <string name="a2a_close">Fechar</string>
     <string name="a2a_open_in_browser">Abrir no navegador</string>
     <string name="dev_suite_no_space">Armazenamento insuficiente: são necessários cerca de %1$d GB, %2$d GB disponíveis</string>

@@ -1859,7 +1859,7 @@
     <!-- [T-android-a2a-native] a2a gateway management page -->
 <string name="a2a_desktop_bridge_footer">Beberapa aksi panel (impor/ekspor akun, ekspor log, cadangan DB penuh) memakai jembatan desktop engine dan tidak tersedia di perangkat ini. Akun ditambahkan di panel; data SQLite ada di folder data privat aplikasi.</string>
 <string name="a2a_incognito_login_title">Login inkognito</string>
-<string name="a2a_incognito_login_subtitle">Setiap jendela login dimulai dengan sesi penyedia yang bersih; login panel itu sendiri tidak tersentuh.</string>
+<string name="a2a_incognito_login_subtitle">Setiap login berjalan di profil browser sementara — cookie, penyimpanan, dan cache dihapus saat jendela login ditutup. Login panel sendiri tidak terpengaruh.</string>
 <string name="a2a_view_gateway_log">Log gateway</string>
 <string name="a2a_log_filter_login">Hanya login / keamanan</string>
 <string name="a2a_log_empty">Belum ada baris log.</string>
@@ -1867,7 +1867,7 @@
     <string name="a2a_start_gateway">Jalankan gateway</string>
     <string name="a2a_status_running">Berjalan</string>
     <string name="a2a_panel_address">Alamat panel</string>
-    <string name="a2a_panel_not_installed">Pasang gateway untuk membuka panel webnya.</string>
+    <string name="a2a_panel_not_installed">Gateway belum dipasang — membuka panel akan memasangnya secara otomatis.</string>
     <string name="a2a_panel_needs_start">Jalankan gateway untuk membuka panel webnya.</string>
     <string name="a2a_panel_load_failed">Panel gagal dimuat.</string>
     <string name="a2a_panel_page_title">Panel Agent2API</string>
@@ -1875,6 +1875,8 @@
     <string name="a2a_login_address_title">Alamat saat ini</string>
     <string name="a2a_login_address_hint">Jika halaman ini tidak dapat dibuka (misalnya callback ke port loopback lokal), proses masuk mungkin sudah selesai. Salin alamat ini dan tempelkan ke kolom callback di panel.</string>
     <string name="a2a_login_copy_address">Salin alamat</string>
+    <string name="a2a_panel_starting">Memulai gateway…</string>
+    <string name="a2a_open_panel_and_start">Mulai dan buka panel</string>
     <string name="a2a_close">Tutup</string>
     <string name="a2a_open_in_browser">Buka di browser</string>
     <string name="dev_suite_no_space">Penyimpanan tidak cukup: butuh sekitar %1$d GB, tersedia %2$d GB</string>

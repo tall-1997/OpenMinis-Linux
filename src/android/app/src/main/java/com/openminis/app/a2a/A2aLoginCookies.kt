@@ -2,6 +2,7 @@ package com.openminis.app.a2a
 
 import android.content.Context
 import android.webkit.CookieManager
+import android.webkit.WebStorage
 import java.net.URI
 
 /**
@@ -24,6 +25,12 @@ import java.net.URI
  * Cookie paths other than `/` (rare on auth cookies) may survive the sweep;
  * they are re-cleared on the next login attempt anyway, and the auth cookies
  * this guards are root-path scoped.
+ *
+ * This is the FALLBACK path. On platforms whose WebView supports multiple
+ * profiles ([A2aLoginProfiles]) each login round gets its own throwaway
+ * profile instead, which also covers localStorage/IndexedDB/service
+ * workers/cache — the surfaces a cookie sweep cannot reach, and the reason
+ * a "cleared" jar could still restore the previous account.
  */
 object A2aLoginCookies {
 
@@ -71,8 +78,7 @@ object A2aLoginCookies {
      * excluded by construction (never remembered).
      */
     fun clearProviderCookies(context: Context) {
-        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val origins = prefs.getStringSet(KEY_ORIGINS, emptySet()).orEmpty()
+        val origins = rememberedOrigins(context)
         if (origins.isEmpty()) return
         val cookieManager = CookieManager.getInstance()
         for (origin in origins) {
@@ -85,4 +91,37 @@ object A2aLoginCookies {
         }
         cookieManager.flush()
     }
+
+    /**
+     * Drop the remembered provider origins' web storage (localStorage,
+     * IndexedDB, WebSQL). Cookies alone are not isolation: many SPAs restore
+     * a session from storage after the cookie jar is cleared, which is how a
+     * "fresh" login can still come back as the previous account. Called when
+     * a login round completes (status page reached) and on the next round's
+     * start, both on the fallback path only — profiles cover this surface
+     * wholesale.
+     *
+     * `WebStorage.deleteOrigin` is API 29+; on older devices only the cookie
+     * sweep applies. Loopback (the panel's own origin) is never touched.
+     */
+    fun clearProviderStorage(context: Context) {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.Q) return
+        val origins = rememberedOrigins(context)
+        if (origins.isEmpty()) return
+        val storage = runCatching { WebStorage.getInstance() }.getOrNull() ?: return
+        for (origin in origins) {
+            // WebStorage names an origin `scheme://host[:port]`; default
+            // ports are usually omitted but a site can record them
+            // explicitly, so both spellings are attempted (a wrong one is a
+            // harmless no-op).
+            runCatching { storage.deleteOrigin(origin) }
+            val withPort = origin + if (origin.startsWith("https://")) ":443" else ":80"
+            runCatching { storage.deleteOrigin(withPort) }
+        }
+    }
+
+    private fun rememberedOrigins(context: Context): Set<String> =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getStringSet(KEY_ORIGINS, emptySet())
+            .orEmpty()
 }

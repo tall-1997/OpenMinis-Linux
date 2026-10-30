@@ -1,7 +1,9 @@
 package com.openminis.app.a2a
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -79,5 +81,38 @@ class A2aLoginCallbackTest {
         assertNull(A2aLoginCallback.rewrite("", port))
         assertNull(A2aLoginCallback.rewrite("tel:+10000000000", port))
         assertNull(A2aLoginCallback.rewrite("http://127.0.0.1:18432/auth/callback-zai", 0))
+    }
+
+    @Test
+    fun `gateway callback landings are recognized`() {
+        // Every shape a login round can land on: the generic callback, the
+        // public raccoon/catpaw routes and the AutoClaw rewrites.
+        assertTrue(A2aLoginCallback.isCaptureCallback("http://127.0.0.1:$port/callback?code=c", port))
+        assertTrue(
+            A2aLoginCallback.isCaptureCallback(
+                "http://127.0.0.1:$port/api/session/login/raccoon-callback?state=s&code=c",
+                port,
+            ),
+        )
+        assertTrue(
+            A2aLoginCallback.isCaptureCallback(
+                "http://127.0.0.1:$port/auth/callback-google?code=c",
+                port,
+            ),
+        )
+        assertTrue(A2aLoginCallback.isCaptureCallback("http://localhost:$port/oauth-callback", port))
+    }
+
+    @Test
+    fun `non-callback pages are not mistaken for a capture`() {
+        // The panel itself, its login gate, provider pages and other ports.
+        assertFalse(A2aLoginCallback.isCaptureCallback("http://127.0.0.1:$port/", port))
+        assertFalse(A2aLoginCallback.isCaptureCallback("http://127.0.0.1:$port/login", port))
+        assertFalse(
+            A2aLoginCallback.isCaptureCallback("https://provider.example/callback?code=c", port),
+        )
+        assertFalse(A2aLoginCallback.isCaptureCallback("http://127.0.0.1:1455/callback", port))
+        assertFalse(A2aLoginCallback.isCaptureCallback("office-raccoon://auth/callback?state=s", port))
+        assertFalse(A2aLoginCallback.isCaptureCallback(null, port))
     }
 }

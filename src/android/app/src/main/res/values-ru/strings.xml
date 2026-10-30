@@ -1864,7 +1864,7 @@
     <!-- [T-android-a2a-native] a2a gateway management page -->
 <string name="a2a_desktop_bridge_footer">Некоторые действия панели (импорт/экспорт аккаунтов, экспорт журналов, полная копия БД) используют настольный мост движка и недоступны на этом устройстве. Аккаунты добавляются в панели; данные SQLite находятся в приватной папке приложения.</string>
 <string name="a2a_incognito_login_title">Приватный вход</string>
-<string name="a2a_incognito_login_subtitle">Каждое окно входа начинается с чистой сессии провайдера; вход в саму панель не затрагивается.</string>
+<string name="a2a_incognito_login_subtitle">Каждый вход выполняется во временном профиле браузера: cookie, хранилище и кеш удаляются при закрытии окна. Сеанс панели не затрагивается.</string>
 <string name="a2a_view_gateway_log">Журнал шлюза</string>
 <string name="a2a_log_filter_login">Только вход / безопасность</string>
 <string name="a2a_log_empty">Записей пока нет.</string>
@@ -1872,7 +1872,7 @@
     <string name="a2a_start_gateway">Запустить шлюз</string>
     <string name="a2a_status_running">Запущен</string>
     <string name="a2a_panel_address">Адрес панели</string>
-    <string name="a2a_panel_not_installed">Установите шлюз, чтобы открыть его веб-панель.</string>
+    <string name="a2a_panel_not_installed">Шлюз ещё не развёрнут — при открытии панели он будет установлен автоматически.</string>
     <string name="a2a_panel_needs_start">Запустите шлюз, чтобы открыть его веб-панель.</string>
     <string name="a2a_panel_load_failed">Не удалось загрузить панель.</string>
     <string name="a2a_panel_page_title">Панель Agent2API</string>
@@ -1880,6 +1880,8 @@
     <string name="a2a_login_address_title">Текущий адрес</string>
     <string name="a2a_login_address_hint">Если эта страница не открывается (например, обратный вызов направлен на локальный порт), вход мог уже завершиться. Скопируйте этот адрес и вставьте его в поле обратного вызова на панели.</string>
     <string name="a2a_login_copy_address">Копировать адрес</string>
+    <string name="a2a_panel_starting">Запуск шлюза…</string>
+    <string name="a2a_open_panel_and_start">Запустить и открыть панель</string>
     <string name="a2a_close">Закрыть</string>
     <string name="a2a_open_in_browser">Открыть в браузере</string>
     <string name="dev_suite_no_space">Недостаточно памяти: требуется около %1$d ГБ, доступно %2$d ГБ</string>

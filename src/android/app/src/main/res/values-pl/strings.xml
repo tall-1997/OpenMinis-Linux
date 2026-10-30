@@ -1862,7 +1862,7 @@
     <!-- [T-android-a2a-native] a2a gateway management page -->
 <string name="a2a_desktop_bridge_footer">Niektóre akcje panelu (import/eksport kont, eksport logów, pełna kopia DB) korzystają z mostka desktopowego silnika i nie są dostępne na tym urządzeniu. Konta dodaje się w panelu; dane SQLite znajdują się w prywatnym folderze danych aplikacji.</string>
 <string name="a2a_incognito_login_title">Logowanie incognito</string>
-<string name="a2a_incognito_login_subtitle">Każde okno logowania zaczyna od czystej sesji dostawcy; logowanie samego panelu pozostaje nietknięte.</string>
+<string name="a2a_incognito_login_subtitle">Każde logowanie działa w jednorazowym profilu przeglądarki — pliki cookie, pamięć i cache są usuwane po zamknięciu okna. Logowanie panelu pozostaje nietknięte.</string>
 <string name="a2a_view_gateway_log">Dziennik bramy</string>
 <string name="a2a_log_filter_login">Tylko logowanie / bezpieczeństwo</string>
 <string name="a2a_log_empty">Brak wpisów dziennika.</string>
@@ -1870,7 +1870,7 @@
     <string name="a2a_start_gateway">Uruchom bramkę</string>
     <string name="a2a_status_running">Działa</string>
     <string name="a2a_panel_address">Adres panelu</string>
-    <string name="a2a_panel_not_installed">Zainstaluj bramkę, aby otworzyć jej panel sieciowy.</string>
+    <string name="a2a_panel_not_installed">Brama nie jest jeszcze wdrożona — otwarcie panelu zainstaluje ją automatycznie.</string>
     <string name="a2a_panel_needs_start">Uruchom bramkę, aby otworzyć jej panel sieciowy.</string>
     <string name="a2a_panel_load_failed">Nie udało się załadować panelu.</string>
     <string name="a2a_panel_page_title">Panel Agent2API</string>
@@ -1878,6 +1878,8 @@
     <string name="a2a_login_address_title">Bieżący adres</string>
     <string name="a2a_login_address_hint">Jeśli tej strony nie można otworzyć (np. wywołanie zwrotne wskazuje lokalny port pętli zwrotnej), logowanie mogło już się udać. Skopiuj ten adres i wklej go w polu wywołania zwrotnego w panelu.</string>
     <string name="a2a_login_copy_address">Kopiuj adres</string>
+    <string name="a2a_panel_starting">Uruchamianie bramy…</string>
+    <string name="a2a_open_panel_and_start">Uruchom i otwórz panel</string>
     <string name="a2a_close">Zamknij</string>
     <string name="a2a_open_in_browser">Otwórz w przeglądarce</string>
     <string name="dev_suite_no_space">Za mało miejsca: potrzeba około %1$d GB, dostępnych %2$d GB</string>
