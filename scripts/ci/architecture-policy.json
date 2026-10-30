@@ -135,7 +135,7 @@
     "src/android/app/src/main/java/com/openminis/app/ui/chat/voice/InlineVoiceInputPanel.kt": 922,
     "src/android/app/src/main/java/com/openminis/app/ui/markdown/MarkdownParser.kt": 888,
     "src/android/app/src/main/java/com/openminis/app/ui/markdown/MarkdownText.kt": 1067,
-    "src/android/app/src/main/java/com/openminis/app/ui/navigation/AppNavigation.kt": 1592,
+    "src/android/app/src/main/java/com/openminis/app/ui/navigation/AppNavigation.kt": 1583,
     "src/android/app/src/main/java/com/openminis/app/ui/navigation/ChatSplitScaffold.kt": 969,
     "src/android/app/src/main/java/com/openminis/app/ui/sandbox/FilePreviewScreen.kt": 1271,
     "src/android/app/src/main/java/com/openminis/app/ui/sandbox/MirrorSettingsScreen.kt": 863,

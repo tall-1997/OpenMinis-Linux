@@ -274,6 +274,7 @@
     <string name="dev_suite_interrupted">安装被中断</string>
     <string name="builtin_plugin_ofm_name">免费模型网关 (本地)</string>
     <string name="builtin_plugin_ofm_summary">本地 OpenAI 兼容网关 · 20+ 前沿模型，免注册免 Key · 仅监听回环</string>
+    <string name="local_gateway_install_failed">安装失败</string>
     <string name="builtin_plugin_interrupted">安装被中断</string>
     <string name="builtin_plugin_stage_payload">正在准备安装包…</string>
     <string name="builtin_plugin_stage_node">正在检查 Node 运行时…</string>

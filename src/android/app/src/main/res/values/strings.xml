@@ -309,6 +309,7 @@
     <string name="dev_suite_interrupted">Install was interrupted</string>
     <string name="builtin_plugin_ofm_name">Free Model Gateway (local)</string>
     <string name="builtin_plugin_ofm_summary">Local OpenAI-compatible gateway · 20+ frontier models, no account, no key · loopback only</string>
+    <string name="local_gateway_install_failed">Install failed</string>
     <string name="builtin_plugin_interrupted">Install was interrupted</string>
     <string name="builtin_plugin_stage_payload">Staging payload…</string>
     <string name="builtin_plugin_stage_node">Checking Node runtime…</string>

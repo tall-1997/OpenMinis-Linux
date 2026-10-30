@@ -45,7 +45,6 @@ import com.openminis.app.ui.settings.BackgroundSettingsScreen
 import com.openminis.app.ui.settings.AddModelsToGroupScreen
 import com.openminis.app.ui.settings.ShadowVoiceDetailScreen
 import com.openminis.app.ui.settings.AddProviderScreen
-import com.openminis.app.ui.settings.A2aScreen
 import com.openminis.app.ui.settings.ModelEntryDetailScreen
 import com.openminis.app.ui.settings.ModelGroupDetailScreen
 import com.openminis.app.ui.settings.ModelGroupsScreen
@@ -89,11 +88,6 @@ import com.openminis.app.ui.onboarding.OnboardingModelSelectionScreen
 // Source: m3.material.io/styles/motion/easing-and-duration/tokens-specs
 private val EmphasizedDecelerate = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1.0f)
 private val EmphasizedAccelerate = CubicBezierEasing(0.3f, 0.0f, 0.8f, 0.15f)
-
-// [T-android-a2a-native] Route for the a2a gateway's first-class management
-// page. Routes.kt sits outside this task's edit scope; the literal travels
-// with the wiring until it graduates there.
-private const val A2A_ROUTE = "settings/a2a"
 
 /**
  * One resolver for the two "browse a remote's backups" destinations
@@ -558,15 +552,13 @@ fun AppNavigation(
                 onAboutClick = { navController.safeNavigate(Routes.ABOUT) },
                 onMountedFoldersClick = { navController.safeNavigate(Routes.MOUNTED_FOLDERS) },
                 onSharedFoldersClick = { navController.safeNavigate(Routes.SHARED_FOLDERS) },
-                onA2aClick = { navController.safeNavigate(A2A_ROUTE) },
+                onA2aClick = { navController.safeNavigate(Routes.A2A) },
+                onLocalGatewayClick = { navController.safeNavigate(Routes.LOCAL_GATEWAY) },
             )
         }
 
-        // [T-android-a2a-native] Agent2API gateway management page:
-        // status card, start/stop, and the in-app panel view.
-        composable(A2A_ROUTE) {
-            A2aScreen(onBack = { navController.safePopBackStack() })
-        }
+        // [T-android-a2a-native] The two agent gateways (see GatewayRoutes.kt).
+        gatewayRoutes(navController, providerRepository)
 
         composable(Routes.BACKUP) {
             com.openminis.app.ui.settings.backup.BackupAndRestoreScreen(
@@ -1355,7 +1347,6 @@ fun AppNavigation(
         composable(Routes.PLUGIN_MARKET) {
             com.openminis.app.ui.settings.PluginMarketScreen(
                 mcpRepository = mcpRepository,
-                providerRepository = providerRepository,
                 onBack = { navController.safePopBackStack() },
             )
         }

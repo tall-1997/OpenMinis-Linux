@@ -1838,6 +1838,7 @@
     <string name="dev_suite_interrupted">インストールが中断されました</string>
     <string name="builtin_plugin_ofm_name">無料モデルゲートウェイ (ローカル)</string>
     <string name="builtin_plugin_ofm_summary">ローカルの OpenAI 互換ゲートウェイ · 20 以上の最先端モデル、登録不要・キー不要 · ループバックのみ</string>
+    <string name="local_gateway_install_failed">インストールに失敗しました</string>
     <string name="builtin_plugin_interrupted">インストールが中断されました</string>
     <string name="builtin_plugin_stage_payload">ペイロードを準備中…</string>
     <string name="builtin_plugin_stage_node">Node ランタイムを確認中…</string>

@@ -1844,6 +1844,7 @@
     <string name="dev_suite_interrupted">Instalasi terputus</string>
     <string name="builtin_plugin_ofm_name">Gerbang Model Gratis (lokal)</string>
     <string name="builtin_plugin_ofm_summary">Gerbang lokal kompatibel OpenAI · 20+ model frontier, tanpa akun, tanpa kunci · hanya loopback</string>
+    <string name="local_gateway_install_failed">Instalasi gagal</string>
     <string name="builtin_plugin_interrupted">Pemasangan terputus</string>
     <string name="builtin_plugin_stage_payload">Menyiapkan paket…</string>
     <string name="builtin_plugin_stage_node">Memeriksa runtime Node…</string>

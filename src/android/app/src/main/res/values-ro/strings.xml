@@ -1843,6 +1843,7 @@
     <string name="dev_suite_interrupted">Instalare întreruptă</string>
     <string name="builtin_plugin_ofm_name">Gateway de modele gratuite (local)</string>
     <string name="builtin_plugin_ofm_summary">Gateway local compatibil OpenAI · peste 20 de modele de frontieră, fără cont, fără cheie · doar loopback</string>
+    <string name="local_gateway_install_failed">Instalarea a eșuat</string>
     <string name="builtin_plugin_interrupted">Instalare întreruptă</string>
     <string name="builtin_plugin_stage_payload">Se pregătește pachetul…</string>
     <string name="builtin_plugin_stage_node">Se verifică runtime-ul Node…</string>

@@ -1839,6 +1839,7 @@
     <string name="dev_suite_interrupted">Instalação interrompida</string>
     <string name="builtin_plugin_ofm_name">Gateway de modelos grátis (local)</string>
     <string name="builtin_plugin_ofm_summary">Gateway local compatível com OpenAI · mais de 20 modelos de ponta, sem conta, sem chave · somente loopback</string>
+    <string name="local_gateway_install_failed">Falha na instalação</string>
     <string name="builtin_plugin_interrupted">Instalação interrompida</string>
     <string name="builtin_plugin_stage_payload">Preparando o pacote…</string>
     <string name="builtin_plugin_stage_node">Verificando o runtime do Node…</string>

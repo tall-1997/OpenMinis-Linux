@@ -93,7 +93,7 @@ object BuiltinPluginCatalog {
      * over upstream free channels. Port 18900 and the OFM_* env names are
      * the payload's install contract.
      */
-    private val OFM = Descriptor(
+    val OFM = Descriptor(
         id = "ofm",
         nameRes = R.string.builtin_plugin_ofm_name,
         summaryRes = R.string.builtin_plugin_ofm_summary,

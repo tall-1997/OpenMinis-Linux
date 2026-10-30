@@ -28,9 +28,17 @@ import kotlinx.coroutines.withContext
  */
 object GatewayServiceManager {
     private const val TAG = "GatewayServiceManager"
-
     private const val SESSION_ID = "builtin-gateway-service"
     private const val CMD_TIMEOUT_MS = 30_000L
+
+    /** Bound on the start path's bind wait (nohup returns before the port is up). */
+    private const val HEALTH_TIMEOUT_MS = 20_000L
+
+    /** Bound on the settings page's cold-start probe — no user gesture is waiting. */
+    private const val PROBE_TIMEOUT_MS = 3_000L
+
+    /** Emitted by [aliveCommand] when `kill -0` finds the pid alive. */
+    private const val ALIVE_MARKER = "alive"
 
     enum class ServiceState { STOPPED, STARTING, RUNNING, STOPPING }
 
@@ -169,13 +177,64 @@ object GatewayServiceManager {
     }
 
     /**
+     * [T-builtin-gateway-native] Cold-start truth for the settings page.
+     *
+     * [BuiltinPluginStore] records that a payload is on disk; it says nothing
+     * about whether the process survived the last app restart. Without a
+     * probe the switch reads STOPPED while the gateway is happily serving —
+     * and flipping it "on" would start a second copy on the same port (the
+     * pidfile gets overwritten, the first process is orphaned).
+     *
+     * One short health probe, plus the pidfile on the negative path: a
+     * loopback HTTP request cannot tell "process gone" from "process alive
+     * but slow", and declaring a serving gateway stopped is exactly the bug
+     * this exists to prevent. STARTING/STOPPING are left alone — a toggle
+     * already in flight owns the state.
+     */
+    suspend fun refresh(d: BuiltinPluginCatalog.Descriptor) = lockFor(d.id).withLock {
+        if (d.isNative) return@withLock
+        val current = _statuses.value[d.id]?.state
+        if (current == ServiceState.STARTING || current == ServiceState.STOPPING) return@withLock
+        val healthy = waitForHealth(d, PROBE_TIMEOUT_MS)
+        val alive = healthy || isProcessAlive(d)
+        setStatus(
+            d.id,
+            if (alive) ServiceState.RUNNING else ServiceState.STOPPED,
+            if (healthy) BuiltinPluginCatalog.healthUrl(d) else "",
+        )
+    }
+
+    /**
+     * Guest command that reports whether the pidfile from [startCommand] is
+     * still running. `kill -0` sends no signal — it only asks the kernel. The
+     * `&& echo` makes the answer a string instead of an exit code that the
+     * coordinator would have to be trusted to keep. Pure.
+     */
+    internal fun aliveCommand(d: BuiltinPluginCatalog.Descriptor): String {
+        val pidfile = "${BuiltinPluginCatalog.installRoot(d.id)}/data/gateway.pid"
+        return "kill -0 \"\$(cat $pidfile 2>/dev/null)\" 2>/dev/null && echo alive"
+    }
+
+    private suspend fun isProcessAlive(d: BuiltinPluginCatalog.Descriptor): Boolean {
+        val result = com.openminis.app.sandbox.ExecutionCoordinator.execute(
+            sessionId = SESSION_ID,
+            command = aliveCommand(d),
+            timeout = CMD_TIMEOUT_MS,
+        )
+        return result.output.contains(ALIVE_MARKER)
+    }
+
+    /**
      * Host-side health poll on the loopback port. Retries for a few seconds
      * because the gateway needs a moment to bind after nohup returns.
      */
-    private suspend fun waitForHealth(d: BuiltinPluginCatalog.Descriptor): Boolean =
+    private suspend fun waitForHealth(
+        d: BuiltinPluginCatalog.Descriptor,
+        timeoutMs: Long = HEALTH_TIMEOUT_MS,
+    ): Boolean =
         withContext(Dispatchers.IO) {
             val url = BuiltinPluginCatalog.healthUrl(d)
-            val deadline = System.currentTimeMillis() + 20_000L
+            val deadline = System.currentTimeMillis() + timeoutMs
             while (System.currentTimeMillis() < deadline) {
                 try {
                     val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
