@@ -553,12 +553,11 @@ fun AppNavigation(
                 onMountedFoldersClick = { navController.safeNavigate(Routes.MOUNTED_FOLDERS) },
                 onSharedFoldersClick = { navController.safeNavigate(Routes.SHARED_FOLDERS) },
                 onA2aClick = { navController.safeNavigate(Routes.A2A) },
-                onLocalGatewayClick = { navController.safeNavigate(Routes.LOCAL_GATEWAY) },
             )
         }
 
         // [T-android-a2a-native] The two agent gateways (see GatewayRoutes.kt).
-        gatewayRoutes(navController, providerRepository)
+        gatewayRoutes(navController)
 
         composable(Routes.BACKUP) {
             com.openminis.app.ui.settings.backup.BackupAndRestoreScreen(

@@ -238,9 +238,8 @@ object A2aGatewayProcess {
     }
 
     /**
-     * Loopback health poll with the same cadence the guest
-     * [com.openminis.app.plugins.builtin.GatewayServiceManager] uses: the
-     * gateway needs a moment to bind after the process spawns.
+     * Loopback health poll: the gateway needs a moment to bind after the
+     * process spawns.
      */
     private fun waitForHealth(): Boolean {
         val deadline = System.currentTimeMillis() + HEALTH_WAIT_MS

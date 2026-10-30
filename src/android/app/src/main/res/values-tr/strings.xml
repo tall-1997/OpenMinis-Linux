@@ -1837,15 +1837,7 @@
     <string name="dev_suite_step_failed">Adım başarısız (exit %1$d): %2$s</string>
     <string name="dev_suite_probe_failed">Kurulum bitti ancak hazırlık denemesi geçilemedi — %1$s</string>
     <string name="dev_suite_interrupted">Kurulum yarıda kesildi</string>
-    <string name="builtin_plugin_ofm_name">Ücretsiz Model Ağ Geçidi (yerel)</string>
-    <string name="builtin_plugin_ofm_summary">Yerel OpenAI uyumlu ağ geçidi · 20+ uç model, hesapsız, anahtarsız · yalnızca geri döngü</string>
     <string name="local_gateway_install_failed">Kurulum başarısız</string>
-    <string name="builtin_plugin_interrupted">Yükleme kesildi</string>
-    <string name="builtin_plugin_stage_payload">Paket hazırlanıyor…</string>
-    <string name="builtin_plugin_stage_node">Node çalışma ortamı denetleniyor…</string>
-    <string name="builtin_plugin_ready">Hazır</string>
-    <string name="builtin_plugin_section_header">Yerleşik ağ geçitleri</string>
-    <string name="builtin_plugin_section_footer">Uygulamayla gelen çevrimdışı paketler. Kurun, sonra anahtarı açın — ağ geçidi yerel hizmet olarak çalışır ve yalnızca loopback dinler.</string>
     <string name="builtin_plugin_a2a_name">Agent2API Ağ Geçidi (yerel)</string>
     <string name="builtin_plugin_a2a_summary">Çok sağlayıcılı OpenAI uyumlu yerel proxy · hesapları web panelinden ekleyin · yalnızca loopback</string>
     <string name="builtin_plugin_install">Yükle</string>

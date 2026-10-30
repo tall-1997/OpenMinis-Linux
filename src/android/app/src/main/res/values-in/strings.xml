@@ -1842,15 +1842,7 @@
     <string name="dev_suite_step_failed">Langkah gagal (exit %1$d): %2$s</string>
     <string name="dev_suite_probe_failed">Instalasi selesai tetapi pemeriksaan kesiapan tidak lulus — %1$s</string>
     <string name="dev_suite_interrupted">Instalasi terputus</string>
-    <string name="builtin_plugin_ofm_name">Gerbang Model Gratis (lokal)</string>
-    <string name="builtin_plugin_ofm_summary">Gerbang lokal kompatibel OpenAI · 20+ model frontier, tanpa akun, tanpa kunci · hanya loopback</string>
     <string name="local_gateway_install_failed">Instalasi gagal</string>
-    <string name="builtin_plugin_interrupted">Pemasangan terputus</string>
-    <string name="builtin_plugin_stage_payload">Menyiapkan paket…</string>
-    <string name="builtin_plugin_stage_node">Memeriksa runtime Node…</string>
-    <string name="builtin_plugin_ready">Siap</string>
-    <string name="builtin_plugin_section_header">Gateway bawaan</string>
-    <string name="builtin_plugin_section_footer">Payload offline yang dibundel dalam aplikasi. Instal, lalu nyalakan sakelar untuk menjalankan gateway sebagai layanan lokal — hanya mendengarkan di loopback.</string>
     <string name="builtin_plugin_a2a_name">Gateway Agent2API (lokal)</string>
     <string name="builtin_plugin_a2a_summary">Proxy lokal kompatibel OpenAI multi-penyedia · tambahkan akun di panel webnya · hanya loopback</string>
     <string name="builtin_plugin_install">Instal</string>

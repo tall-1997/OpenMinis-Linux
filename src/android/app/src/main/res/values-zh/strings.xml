@@ -272,15 +272,7 @@
     <string name="dev_suite_step_failed">步骤失败（exit %1$d）：%2$s</string>
     <string name="dev_suite_probe_failed">安装完成但探针未通过 — %1$s</string>
     <string name="dev_suite_interrupted">安装被中断</string>
-    <string name="builtin_plugin_ofm_name">免费模型网关 (本地)</string>
-    <string name="builtin_plugin_ofm_summary">本地 OpenAI 兼容网关 · 20+ 前沿模型，免注册免 Key · 仅监听回环</string>
     <string name="local_gateway_install_failed">安装失败</string>
-    <string name="builtin_plugin_interrupted">安装被中断</string>
-    <string name="builtin_plugin_stage_payload">正在准备安装包…</string>
-    <string name="builtin_plugin_stage_node">正在检查 Node 运行时…</string>
-    <string name="builtin_plugin_ready">就绪</string>
-    <string name="builtin_plugin_section_header">内置网关</string>
-    <string name="builtin_plugin_section_footer">应用内置的离线安装包。安装后打开开关，网关将作为本地服务运行 — 仅监听回环地址。</string>
     <string name="builtin_plugin_a2a_name">Agent2API 网关 (本地)</string>
     <string name="builtin_plugin_a2a_summary">本地多渠道 OpenAI 兼容代理 · 在其网页面板中添加上游账号 · 仅监听回环</string>
     <string name="builtin_plugin_install">安装</string>

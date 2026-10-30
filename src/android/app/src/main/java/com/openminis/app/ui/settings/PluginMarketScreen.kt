@@ -100,9 +100,8 @@ fun PluginMarketScreen(
         )
 
         // [T-builtin-gateway-native] Builtin gateways are app infrastructure,
-        // not market listings: the local model gateway lives in Settings
-        // (LocalGatewayScreen) beside the provider row it seeds, and the a2a
-        // gateway in its own entry. Nothing gateway-shaped renders here.
+        // not market listings: the a2a gateway lives in Settings under its
+        // own entry. Nothing gateway-shaped renders here.
 
         SettingsSection(
             header = stringResource(R.string.plugin_market_section_online),

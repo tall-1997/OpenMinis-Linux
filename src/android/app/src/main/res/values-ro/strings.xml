@@ -1841,15 +1841,7 @@
     <string name="dev_suite_step_failed">Pas eșuat (exit %1$d): %2$s</string>
     <string name="dev_suite_probe_failed">Instalarea s-a încheiat, dar testul de pregătire nu a trecut — %1$s</string>
     <string name="dev_suite_interrupted">Instalare întreruptă</string>
-    <string name="builtin_plugin_ofm_name">Gateway de modele gratuite (local)</string>
-    <string name="builtin_plugin_ofm_summary">Gateway local compatibil OpenAI · peste 20 de modele de frontieră, fără cont, fără cheie · doar loopback</string>
     <string name="local_gateway_install_failed">Instalarea a eșuat</string>
-    <string name="builtin_plugin_interrupted">Instalare întreruptă</string>
-    <string name="builtin_plugin_stage_payload">Se pregătește pachetul…</string>
-    <string name="builtin_plugin_stage_node">Se verifică runtime-ul Node…</string>
-    <string name="builtin_plugin_ready">Gata</string>
-    <string name="builtin_plugin_section_header">Gateway-uri integrate</string>
-    <string name="builtin_plugin_section_footer">Pachete offline livrate în aplicație. Instalează, apoi activează comutatorul pentru a rula gateway-ul ca serviciu local — ascultă doar pe loopback.</string>
     <string name="builtin_plugin_a2a_name">Gateway Agent2API (local)</string>
     <string name="builtin_plugin_a2a_summary">Proxy local compatibil OpenAI cu mai mulți furnizori · adaugă conturi în panoul web · doar loopback</string>
     <string name="builtin_plugin_install">Instalează</string>

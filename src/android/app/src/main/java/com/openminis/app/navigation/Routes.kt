@@ -104,7 +104,6 @@ object Routes {
     // settings page instead of a market row. A2A's literal is load-bearing:
     // preview-build deep links from before the move still point at it.
     const val A2A = "settings/a2a"
-    const val LOCAL_GATEWAY = "settings/local_gateway"
     /** [T-soul-md] SOUL.md editor. */
     const val SOUL = "soul"
     const val EVOLUTION = "evolution"

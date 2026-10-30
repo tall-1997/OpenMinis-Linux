@@ -307,15 +307,7 @@
     <string name="dev_suite_step_failed">Step failed (exit %1$d): %2$s</string>
     <string name="dev_suite_probe_failed">Install finished but the readiness probe did not pass — %1$s</string>
     <string name="dev_suite_interrupted">Install was interrupted</string>
-    <string name="builtin_plugin_ofm_name">Free Model Gateway (local)</string>
-    <string name="builtin_plugin_ofm_summary">Local OpenAI-compatible gateway · 20+ frontier models, no account, no key · loopback only</string>
     <string name="local_gateway_install_failed">Install failed</string>
-    <string name="builtin_plugin_interrupted">Install was interrupted</string>
-    <string name="builtin_plugin_stage_payload">Staging payload…</string>
-    <string name="builtin_plugin_stage_node">Checking Node runtime…</string>
-    <string name="builtin_plugin_ready">Ready</string>
-    <string name="builtin_plugin_section_header">Built-in gateways</string>
-    <string name="builtin_plugin_section_footer">Offline payloads shipped in the app. Install, then flip the switch to run the gateway as a local service — it listens on loopback only.</string>
     <string name="builtin_plugin_a2a_name">Agent2API Gateway (local)</string>
     <string name="builtin_plugin_a2a_summary">Local multi-provider OpenAI-compatible proxy · add upstream accounts in its web panel · loopback only</string>
     <string name="builtin_plugin_install">Install</string>
