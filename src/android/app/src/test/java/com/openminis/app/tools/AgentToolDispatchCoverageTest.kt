@@ -74,6 +74,27 @@ class AgentToolDispatchCoverageTest {
                 .find(text)?.groupValues?.get(1) ?: continue
             names.add(value)
         }
+
+        // 3) 注册表委托分支：`DeviceTools.handles(canonical)` /
+        //    `AutomationRuleTools.handles(canonical)` 这类谓词早返回一次性
+        //    分发整个子注册表。分发文件里出现该引用，就视为其注册表暴露的
+        //    全部工具名已分发（子注册表自身的 schema/锁步由各自的单测守）；
+        //    若有人删掉这条早返回，对应全部名字集体失配，这里同样先红。
+        for ((fqcn, entry) in REGISTRY_DELEGATES) {
+            if (dispatch.contains("$fqcn.handles(")) {
+                names.addAll(entry())
+            }
+        }
         return names
+    }
+
+    private companion object {
+        /** 谓词委托的子注册表：全限定名 → 其暴露的工具名。 */
+        private val REGISTRY_DELEGATES: List<Pair<String, () -> List<String>>> = listOf(
+            "com.openminis.app.device.DeviceTools" to
+                { com.openminis.app.device.DeviceTools.definitions().map { it.name } },
+            "com.openminis.app.automation.AutomationRuleTools" to
+                { com.openminis.app.automation.AutomationRuleTools.definitions().map { it.name } },
+        )
     }
 }

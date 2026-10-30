@@ -21,8 +21,10 @@ import com.openminis.app.data.db.CodeEdgeEntity
         CodeEdgeEntity::class,
         SessionGoalEntity::class,
         MessageVersionEntity::class,
+        com.openminis.app.automation.AutomationRuleEntity::class,
+        com.openminis.app.automation.AutomationRunEntity::class,
     ],
-    version = 22, // keep DatabaseVersionGuard.CODE_DB_VERSION in lockstep
+    version = 23, // keep DatabaseVersionGuard.CODE_DB_VERSION in lockstep
     // [T-android-downgrade-compat] Kept ON so MigrationTestHelper and CI can
     // validate migrations against the committed schema json. Note the honest
     // scope: src/android/app/schemas/…AppDatabase/ currently holds 12, 14, 15,
@@ -40,6 +42,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun codeIndexDao(): CodeIndexDao
     abstract fun goalDao(): GoalDao
     abstract fun messageVersionDao(): MessageVersionDao
+    abstract fun automationRuleDao(): com.openminis.app.automation.AutomationRuleDao
 
     companion object {
         @Volatile
@@ -566,6 +569,59 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * [T-android-automation-rules] automation_rules + automation_runs for
+         * the conditional-trigger automation engine. Pure additive — no
+         * existing entity is modified and no data is rewritten.
+         *
+         * The spec column is a validated JSON blob ([com.openminis.app.automation.RuleSpec]),
+         * so future trigger kinds do not need another migration. The runs
+         * index serves both the per-rule newest-first history and the
+         * rolling-24h rate-limit COUNT (rule_id, fired_at).
+         */
+        val MIGRATION_22_23 = object : Migration(22, 23) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """CREATE TABLE IF NOT EXISTS `automation_rules` (
+                        `id` TEXT NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `spec_json` TEXT NOT NULL,
+                        `enabled` INTEGER NOT NULL,
+                        `created_at` INTEGER NOT NULL,
+                        `updated_at` INTEGER NOT NULL,
+                        `last_fired_at` INTEGER,
+                        PRIMARY KEY(`id`)
+                    )""".trimIndent()
+                )
+                db.execSQL(
+                    """CREATE TABLE IF NOT EXISTS `automation_runs` (
+                        `run_id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `rule_id` TEXT NOT NULL,
+                        `fired_at` INTEGER NOT NULL,
+                        `outcome` TEXT NOT NULL,
+                        `session_id` TEXT,
+                        `preview` TEXT
+                    )""".trimIndent()
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_automation_runs_rule_id_fired_at` " +
+                        "ON `automation_runs` (`rule_id`, `fired_at`)"
+                )
+            }
+        }
+
+        /**
+         * Downgrade 23 → 22. Intentionally a no-op: both automation tables
+         * stay on disk so a version round-trip keeps rules and run history
+         * (the same policy as the code-index and session_goals downgrades).
+         * The older build simply ignores the extra tables.
+         */
+        val MIGRATION_23_22 = object : Migration(23, 22) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Keep the tables. Older builds ignore extra tables.
+            }
+        }
+
         val MIGRATION_16_17 = object : Migration(16, 17) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.addColumnIfMissing("sessions", "permission_mode", "TEXT")
@@ -676,6 +732,7 @@ abstract class AppDatabase : RoomDatabase() {
                         MIGRATION_19_20, MIGRATION_20_19,
                         MIGRATION_20_21, MIGRATION_21_20,
                         MIGRATION_21_22, MIGRATION_22_21,
+                        MIGRATION_22_23, MIGRATION_23_22,
                     )
                     .build()
                     .also { INSTANCE = it }

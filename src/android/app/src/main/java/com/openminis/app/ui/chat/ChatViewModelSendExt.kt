@@ -240,6 +240,11 @@ internal fun ChatViewModel.sendMessage(
         // Ensure session exists in DB (creates on first message for draft sessions)
         val activeSessionId = ensureSession()
 
+        // [T-android-action-guard] A new user turn clears this session's loop
+        // guard state — repeat/no-effect/re-read/failure ladders and pacing
+        // all restart from zero when the user speaks again.
+        com.openminis.app.guard.ActionGuard.onUserTurn(activeSessionId)
+
         if (editingId != null && !truncateBeforeEdit(editingId)) {
             // [T-anchor-lookup-fail-closed] The truncation anchor could not be
             // read, so the rows this edit would replace are still live in the

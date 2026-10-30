@@ -62,6 +62,10 @@ import com.openminis.app.util.IsoTime
  * Long-press opens a menu: Edit / Run records / Delete (with confirm).
  * The row no longer shows a result preview — execution history lives in
  * the Run records screen.
+ *
+ * [T-android-automation-rules] The page is now the "Automation" hub with two
+ * tabs: Timers (the original cron list + editor flow, unchanged) and Rules
+ * (conditional-trigger automation rules from the automation package).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -70,6 +74,8 @@ fun ScheduledTasksScreen(
     onEditTask: (taskId: String?) -> Unit,
     onViewRuns: (taskId: String) -> Unit,
     onOpenSession: (sessionId: String) -> Unit,
+    onEditRule: (ruleId: String?) -> Unit = {},
+    onViewRuleRuns: (ruleId: String) -> Unit = {},
 ) {
     val context = LocalContext.current
     val vm: ScheduledTasksViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
@@ -77,13 +83,15 @@ fun ScheduledTasksScreen(
     )
     val tasks by vm.tasks.collectAsStateWithLifecycle()
     var pendingDelete by remember { mutableStateOf<ScheduledTask?>(null) }
+    // [T-android-automation-rules] 0 = Timers (legacy list), 1 = Rules.
+    var tab by remember { mutableStateOf(0) }
 
     Scaffold(
         topBar = {
             MinisCenterTopBar(
                 title = {
                     Text(
-                        stringResource(R.string.scheduled_tasks_title),
+                        stringResource(R.string.automation_title),
                         fontWeight = FontWeight.Bold,
                         fontSize = 20.sp,
                     )
@@ -99,30 +107,57 @@ fun ScheduledTasksScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { onEditTask(null) }, shape = CircleShape) {
-                Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.scheduled_task_new))
+            if (tab == 0) {
+                FloatingActionButton(onClick = { onEditTask(null) }, shape = CircleShape) {
+                    Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.scheduled_task_new))
+                }
+            } else {
+                // [T-android-automation-rules] Create a conditional rule.
+                FloatingActionButton(onClick = { onEditRule(null) }, shape = CircleShape) {
+                    Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.automation_rule_new))
+                }
             }
         },
     ) { padding ->
-        if (tasks.isEmpty()) {
-            EmptyState(padding)
-            return@Scaffold
-        }
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-            contentPadding = PaddingValues(vertical = 8.dp),
-        ) {
-            items(tasks, key = { it.id }) { task ->
-                ScheduledTaskRow(
-                    task = task,
-                    onClick = { onEditTask(task.id) },
-                    onToggle = { vm.setEnabled(task.id, it) },
-                    onEdit = { onEditTask(task.id) },
-                    onViewRuns = { onViewRuns(task.id) },
-                    onDelete = { pendingDelete = task },
+        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            androidx.compose.material3.TabRow(selectedTabIndex = tab) {
+                androidx.compose.material3.Tab(
+                    selected = tab == 0,
+                    onClick = { tab = 0 },
+                    text = { Text(stringResource(R.string.automation_tab_timers)) },
                 )
+                androidx.compose.material3.Tab(
+                    selected = tab == 1,
+                    onClick = { tab = 1 },
+                    text = { Text(stringResource(R.string.automation_tab_rules)) },
+                )
+            }
+            if (tab == 1) {
+                com.openminis.app.automation.ui.AutomationRulesTab(
+                    onEditRule = onEditRule,
+                    onViewRuns = onViewRuleRuns,
+                )
+                return@Column
+            }
+            if (tasks.isEmpty()) {
+                EmptyState(Modifier)
+                return@Column
+            }
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize(),
+                contentPadding = PaddingValues(vertical = 8.dp),
+            ) {
+                items(tasks, key = { it.id }) { task ->
+                    ScheduledTaskRow(
+                        task = task,
+                        onClick = { onEditTask(task.id) },
+                        onToggle = { vm.setEnabled(task.id, it) },
+                        onEdit = { onEditTask(task.id) },
+                        onViewRuns = { onViewRuns(task.id) },
+                        onDelete = { pendingDelete = task },
+                    )
+                }
             }
         }
     }
@@ -151,11 +186,10 @@ fun ScheduledTasksScreen(
 }
 
 @Composable
-private fun EmptyState(padding: PaddingValues) {
+private fun EmptyState(modifier: Modifier = Modifier) {
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
-            .padding(padding)
             .padding(32.dp),
         contentAlignment = Alignment.Center,
     ) {
