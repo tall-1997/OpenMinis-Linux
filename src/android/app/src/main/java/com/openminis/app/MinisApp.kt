@@ -32,6 +32,7 @@ import com.openminis.app.di.AppGraph
 import com.openminis.app.evolution.EvolutionEngine
 import com.openminis.app.evolution.EvolutionHooks
 import com.openminis.app.notification.BackgroundTaskNotifier
+import com.openminis.app.platform.ProcessChecks
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.network.NetworkMonitor
 import com.openminis.app.offload.OffloadPermissionManager
@@ -256,26 +257,24 @@ class MinisApp : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
 
-        // T287-followup: ACRA spawns a separate reporter process named
-        // "<package>:acra" (declared by the library's manifest) to send the crash
-        // report after the main process dies. Application subclasses run in EVERY
-        // process of the package, so without this early-return the :acra process
-        // would also try to bind the abstract socket / boot the database / register
-        // offload handlers — racing the next main-process spawn for resources it
-        // doesn't need. Symptom: main process gets EADDRINUSE on LocalServerSocket and
-        // stays in a permanent restart loop on the splash screen. Skip everything except
-        // ACRA.init (already done in attachBaseContext, which makes the :acra process work).
+        // T287-followup: ACRA's reporter runs as "<package>:acra" and would
+        // otherwise bind the abstract socket / boot the database it doesn't
+        // need — the next main-process spawn then hits EADDRINUSE and loops on
+        // the splash screen. Only ACRA.init (attachBaseContext) belongs there.
         if (ACRA.isACRASenderServiceProcess()) {
             Log.i("MinisApp", "skipping app init in :acra reporter process")
             return
         }
 
         // T-android-safemode-lateinit-crash: hand AppLogger a Context before any
-        // early-return below can skip AppLogger.init(). Costs nothing (no I/O,
-        // prefs or capture) and lets the in-app log/crash list still find filesDir/logs
-        // on a safe-mode launch — the launch where the user reads the crash files.
+        // early-return below can skip AppLogger.init() — no I/O, prefs or capture;
+        // it just lets the in-app log/crash list find filesDir/logs.
         AppLogger.primeContext(this)
 
+        // [T-android-a2a-process-crash] Application subclasses run in EVERY
+        // process: sub-processes (`:a2a` panel, future ones) get the minimal
+        // boot — ACRA is armed in attachBaseContext, the rest is main-only.
+        if (ProcessChecks.shouldSkipMainInit(this)) return
         com.openminis.app.crash.LaunchPhaseProbes.startLaunchScan(this, appCoroutineScopes.io)
         com.openminis.app.crash.LaunchPhaseProbes.startDbVersionProbe(this, appCoroutineScopes.io)
 
