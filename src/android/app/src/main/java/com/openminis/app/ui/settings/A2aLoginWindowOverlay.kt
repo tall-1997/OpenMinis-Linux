@@ -46,8 +46,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.webkit.Profile
 import com.openminis.app.R
 import com.openminis.app.a2a.A2aLoginCallback
+import com.openminis.app.a2a.A2aLoginCookies
+import com.openminis.app.a2a.A2aLoginProfiles
 import com.openminis.app.browser.WebViewEngine
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.ui.components.MinisTextButton
@@ -283,8 +286,23 @@ internal fun createA2aLoginWebView(
     host: A2aPopupHostState,
     onExternalLink: (String) -> Unit,
     gatewayPort: Int,
+    loginProfile: Profile? = null,
+    incognitoLogin: Boolean = false,
 ): WebView {
-    val webView = WebView(context).apply {
+    // [T-android-a2a-incognito] A throwaway profile isolates the whole web
+    // state of this login round (cookies, DOM storage, IndexedDB, service
+    // workers, cache) and is deleted when the round's windows close — the
+    // cookie sweep alone cannot cover an SPA that restores its session from
+    // storage. Bind BEFORE any content loads, as the platform requires.
+    val webView = WebView(context)
+    val profileAttached = A2aLoginProfiles.attach(webView, loginProfile)
+    if (loginProfile != null && !profileAttached) {
+        // The platform refused the profile binding; without it this window
+        // would silently inherit the default jar. Fall back to the cookie
+        // sweep so the round is still isolated as far as this device allows.
+        A2aLoginCookies.clearProviderCookies(context)
+    }
+    webView.apply {
         layoutParams = ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT,
@@ -325,10 +343,23 @@ internal fun createA2aLoginWebView(
             // stuck capture can be traced from the in-app log viewer.
             url?.let { u ->
                 val parsed = runCatching { java.net.URI(u) }.getOrNull()
-                com.openminis.app.logging.AppLogger.info(
+                AppLogger.info(
                     "A2aLogin",
                     "login window load: ${parsed?.scheme}://${parsed?.host}",
                 )
+            }
+            // [T-android-a2a-incognito] The round is over the moment the
+            // gateway receives the code. The profile path retires the whole
+            // browser profile when the window closes (see
+            // A2aLoginProfiles.endRound); the fallback path sweeps cookies
+            // AND web storage, because a cleared jar alone lets an SPA
+            // restore its previous session from localStorage.
+            if (url != null && A2aLoginCallback.isCaptureCallback(url, gatewayPort)) {
+                AppLogger.info("A2aLogin", "login captured by gateway")
+                if (incognitoLogin && !profileAttached) {
+                    A2aLoginCookies.clearProviderCookies(context)
+                    A2aLoginCookies.clearProviderStorage(context)
+                }
             }
         }
 
@@ -399,7 +430,16 @@ internal fun createA2aLoginWebView(
             // note above): host it as another login window so its callback
             // is not dropped. Falls through when no handle can be returned.
             if (resultMsg == null || view == null) return false
-            val child = createA2aLoginWebView(context, host, onExternalLink, gatewayPort)
+            // Same round, same profile: a child window must share the
+            // opener's session or the provider's redirect flow breaks.
+            val child = createA2aLoginWebView(
+                context,
+                host,
+                onExternalLink,
+                gatewayPort,
+                loginProfile,
+                incognitoLogin,
+            )
             val transport = view.WebViewTransport()
             transport.webView = child
             resultMsg.obj = transport

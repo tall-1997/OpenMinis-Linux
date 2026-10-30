@@ -1853,7 +1853,7 @@
     <!-- [T-android-a2a-native] a2a gateway management page -->
 <string name="a2a_desktop_bridge_footer">パネルの一部操作（アカウントのインポート/エクスポート、ログのエクスポート、DB全体バックアップ）はエンジンのデスクトップブリッジを使用するため、この端末では利用できません。アカウントはパネル内で追加でき、SQLiteデータはアプリ専用フォルダに保存されます。</string>
 <string name="a2a_incognito_login_title">シークレットログイン</string>
-<string name="a2a_incognito_login_subtitle">各ログインウィンドウはクリーンなプロバイダーセッションで開始され、パネル自身のログインは影響を受けません。</string>
+<string name="a2a_incognito_login_subtitle">各ログインは使い捨てのブラウザプロファイルで実行され、ログインウィンドウを閉じると Cookie・ストレージ・キャッシュが消去されます。パネル自体のログインには影響しません。</string>
 <string name="a2a_view_gateway_log">ゲートウェイログ</string>
 <string name="a2a_log_filter_login">ログイン / セキュリティのみ</string>
 <string name="a2a_log_empty">ログ行はまだありません。</string>
@@ -1861,7 +1861,7 @@
     <string name="a2a_start_gateway">ゲートウェイを起動</string>
     <string name="a2a_status_running">実行中</string>
     <string name="a2a_panel_address">パネルのアドレス</string>
-    <string name="a2a_panel_not_installed">ゲートウェイをインストールするとウェブパネルが開きます。</string>
+    <string name="a2a_panel_not_installed">ゲートウェイは未展開です。パネルを開くと自動的に展開されます。</string>
     <string name="a2a_panel_needs_start">ゲートウェイを起動するとウェブパネルが開きます。</string>
     <string name="a2a_panel_load_failed">パネルを読み込めませんでした。</string>
     <string name="a2a_panel_page_title">Agent2API パネル</string>
@@ -1869,6 +1869,8 @@
     <string name="a2a_login_address_title">現在のアドレス</string>
     <string name="a2a_login_address_hint">このページを開けない場合（コールバックがローカルループバックポートを指している場合など）、サインインは完了している可能性があります。このアドレスをコピーして、パネルのコールバック入力欄に貼り付けてください。</string>
     <string name="a2a_login_copy_address">アドレスをコピー</string>
+    <string name="a2a_panel_starting">ゲートウェイを起動しています…</string>
+    <string name="a2a_open_panel_and_start">起動してパネルを開く</string>
     <string name="a2a_close">閉じる</string>
     <string name="a2a_open_in_browser">ブラウザで開く</string>
     <string name="dev_suite_no_space">ストレージが不足しています：約 %1$d GB 必要、利用可能 %2$d GB</string>

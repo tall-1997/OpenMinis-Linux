@@ -100,6 +100,12 @@ fun A2aScreen(
     LaunchedEffect(Unit) {
         kotlinx.coroutines.withContext(Dispatchers.IO) {
             A2aGateway.refresh(context)
+            // [T-android-a2a-panel-cold-start] Warm the engine while the user
+            // is still on the manage tab, so the panel opens into a serving
+            // gateway instead of racing its boot on the first tap.
+            if (A2aGateway.isEnabled(context) && !A2aGateway.status.value.running) {
+                A2aGateway.maybeAutoStart(context)
+            }
         }
     }
 
@@ -193,14 +199,6 @@ fun A2aScreen(
                 A2aTab.PANEL -> A2aPanelBody(
                     viewState = viewState,
                     incognitoLogin = incognitoLogin,
-                    onStartGateway = {
-                        scope.launch(Dispatchers.IO) {
-                            if (!A2aGateway.isInstalled(context)) {
-                                A2aGateway.ensureInstalled(context)
-                            }
-                            A2aGateway.start(context)
-                        }
-                    },
                 )
             }
         }
@@ -333,85 +331,60 @@ private fun A2aManageBody(
     }
 }
 
-/** Panel tab: launch card while the gateway is down, the panel activity while it runs. */
+/** Panel tab: one open action; the panel activity starts the gateway itself. */
 @Composable
 private fun A2aPanelBody(
     viewState: A2aViewState,
     incognitoLogin: Boolean,
-    onStartGateway: () -> Unit,
 ) {
     val context = LocalContext.current
-    val url = viewState.panelUrl
-    if (!viewState.running || url == null) {
-        // Guidance instead of a dead hand-off: the panel exists only while
-        // the gateway serves its loopback port.
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(horizontal = 32.dp),
-            ) {
-                Icon(
-                    imageVector = m3Icon(Icons.Outlined.Lan),
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(36.dp),
-                )
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    text = stringResource(
-                        if (viewState.installed) R.string.a2a_panel_needs_start
-                        else R.string.a2a_panel_not_installed,
-                    ),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                )
-                if (viewState.installed) {
-                    Spacer(Modifier.height(16.dp))
-                    MinisTextButton(onClick = onStartGateway) {
-                        Text(
-                            stringResource(R.string.a2a_start_gateway),
-                            style = MaterialTheme.typography.titleMedium,
-                        )
-                    }
-                }
-            }
-        }
-    } else {
-        // The panel opens as a dedicated full-screen activity in the :a2a
-        // process: WebView cookies/localStorage are per-process there, so
-        // provider web logins are isolated from the main process and the
-        // device browser — accounts never cross-contaminate. The panel
-        // opens via the button (not an auto-effect) so revisiting the tab
-        // always works.
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(horizontal = 32.dp),
-            ) {
-                Icon(
-                    imageVector = m3Icon(Icons.Outlined.Lan),
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(36.dp),
-                )
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    text = stringResource(R.string.a2a_panel_isolated_hint),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                )
+    // [T-android-a2a-panel-cold-start] "Open panel" must mean open panel:
+    // the button shows whenever the gateway is deployed, and the panel
+    // activity starts/waits for the engine on its own. Previously the button
+    // only appeared after the status snapshot said "running", so a cold start
+    // made the first taps land on guidance or a connection error.
+    val installing = viewState.state == A2aUiState.INSTALLING
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(horizontal = 32.dp),
+        ) {
+            Icon(
+                imageVector = m3Icon(Icons.Outlined.Lan),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(36.dp),
+            )
+            Spacer(Modifier.height(12.dp))
+            Text(
+                text = stringResource(
+                    when {
+                        installing -> R.string.dev_suite_installing
+                        !viewState.installed -> R.string.a2a_panel_not_installed
+                        viewState.running -> R.string.a2a_panel_isolated_hint
+                        else -> R.string.a2a_panel_needs_start
+                    },
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+            // The activity deploys/starts the gateway itself, so the first
+            // tap always lands in the panel — no visit-the-manage-tab detour.
+            if (!installing) {
                 Spacer(Modifier.height(16.dp))
                 MinisTextButton(onClick = {
                     context.startActivity(
                         Intent(context, A2aPanelActivity::class.java)
-                            .putExtra(A2aPanelActivity.EXTRA_PORT, viewState.port ?: 0)
+                            .putExtra(A2aPanelActivity.EXTRA_PORT, viewState.port ?: A2aGateway.PORT)
                             .putExtra(A2aPanelActivity.EXTRA_INCOGNITO_LOGIN, incognitoLogin),
                     )
                 }) {
                     Text(
-                        stringResource(R.string.builtin_plugin_open_panel),
+                        stringResource(
+                            if (viewState.running) R.string.builtin_plugin_open_panel
+                            else R.string.a2a_open_panel_and_start,
+                        ),
                         style = MaterialTheme.typography.titleMedium,
                     )
                 }

@@ -23,6 +23,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,6 +38,7 @@ import com.openminis.app.R
 import com.openminis.app.a2a.A2aGateway
 import com.openminis.app.a2a.A2aLoginCallback
 import com.openminis.app.a2a.A2aLoginCookies
+import com.openminis.app.a2a.A2aLoginProfiles
 import com.openminis.app.browser.WebViewEngine
 import com.openminis.app.ui.theme.m3Icon
 
@@ -98,6 +100,20 @@ fun A2aPanelWebView(
         runCatching { java.net.URI(baseUrl).port }.getOrNull()
             ?.takeIf { it > 0 }
             ?: A2aGateway.PORT
+    }
+    // [T-android-a2a-incognito] A login round exists exactly as long as its
+    // windows: once the last one leaves the board, the round's throwaway
+    // profile is deleted off-main (cookies, storage, cache). WebViews are
+    // destroyed one frame later in the overlay's onRelease — endRound waits
+    // that frame out and retries.
+    var hadLoginWindow by remember { mutableStateOf(false) }
+    LaunchedEffect(popups.isEmpty()) {
+        if (popups.isNotEmpty()) {
+            hadLoginWindow = true
+        } else if (hadLoginWindow) {
+            hadLoginWindow = false
+            A2aLoginProfiles.endRound()
+        }
     }
 
     Box(modifier = modifier) {
@@ -187,12 +203,20 @@ fun A2aPanelWebView(
                             // instead of opening an orphan window.
                             if (resultMsg == null || view == null) return false
                             // [T-android-a2a-incognito] Incognito login: the
-                            // window starts with the PROVIDER origins' cookies
-                            // expired (loopback — the panel's own session — is
-                            // never touched), so a second account of the same
-                            // provider is never silently pre-authenticated as
-                            // the first while the panel admin stays logged in.
-                            if (incognitoLogin) {
+                            // whole round runs in a THROWAWAY WebView profile
+                            // (cookies + DOM storage + IndexedDB + service
+                            // workers + cache), deleted when its windows close
+                            // — a cookie sweep alone cannot keep an SPA from
+                            // restoring the previous account out of storage.
+                            // Loopback (the panel's own session) is never
+                            // touched either way.
+                            val loginProfile =
+                                if (incognitoLogin) A2aLoginProfiles.currentOrBegin() else null
+                            if (incognitoLogin && loginProfile == null) {
+                                // No MULTI_PROFILE on this WebView: fall back
+                                // to expiring provider cookies before the
+                                // window opens (and sweeping storage once the
+                                // login lands, see createA2aLoginWebView).
                                 A2aLoginCookies.clearProviderCookies(context)
                             }
                             val popup = createA2aLoginWebView(
@@ -200,6 +224,8 @@ fun A2aPanelWebView(
                                 popupHost,
                                 onExternalLink,
                                 gatewayPort,
+                                loginProfile,
+                                incognitoLogin,
                             )
                             // WebViewTransport() takes no arguments — the
                             // only ctor param is the implicit outer WebView;

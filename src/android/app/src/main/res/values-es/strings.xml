@@ -1856,7 +1856,7 @@
     <!-- [T-android-a2a-native] a2a gateway management page -->
 <string name="a2a_desktop_bridge_footer">Algunas acciones del panel (importar/exportar cuentas, exportar registros, copia de BD completa) usan el puente de escritorio del motor y no están disponibles en este dispositivo. Las cuentas se añaden en el panel; los datos SQLite viven en la carpeta privada de la app.</string>
 <string name="a2a_incognito_login_title">Inicio de sesión de incógnito</string>
-<string name="a2a_incognito_login_subtitle">Cada ventana de inicio empieza con una sesión limpia del proveedor; el inicio de sesión del panel no se toca.</string>
+<string name="a2a_incognito_login_subtitle">Cada inicio de sesión se ejecuta en un perfil de navegador desechable: las cookies, el almacenamiento y la caché se borran al cerrar la ventana. La sesión del panel no se toca.</string>
 <string name="a2a_view_gateway_log">Registro del gateway</string>
 <string name="a2a_log_filter_login">Solo inicio de sesión / seguridad</string>
 <string name="a2a_log_empty">Aún no hay líneas de registro.</string>
@@ -1864,7 +1864,7 @@
     <string name="a2a_start_gateway">Iniciar gateway</string>
     <string name="a2a_status_running">En ejecución</string>
     <string name="a2a_panel_address">Dirección del panel</string>
-    <string name="a2a_panel_not_installed">Instala el gateway para abrir su panel web.</string>
+    <string name="a2a_panel_not_installed">La puerta de enlace aún no está desplegada: al abrir el panel se instala automáticamente.</string>
     <string name="a2a_panel_needs_start">Inicia el gateway para abrir su panel web.</string>
     <string name="a2a_panel_load_failed">No se pudo cargar el panel.</string>
     <string name="a2a_panel_page_title">Panel de Agent2API</string>
@@ -1872,6 +1872,8 @@
     <string name="a2a_login_address_title">Dirección actual</string>
     <string name="a2a_login_address_hint">Si esta página no se puede abrir (por ejemplo, una devolución de llamada dirigida a un puerto de bucle local), es posible que el inicio de sesión ya se haya completado. Copia esta dirección y pégala en el campo de devolución de llamada del panel.</string>
     <string name="a2a_login_copy_address">Copiar dirección</string>
+    <string name="a2a_panel_starting">Iniciando la puerta de enlace…</string>
+    <string name="a2a_open_panel_and_start">Iniciar y abrir el panel</string>
     <string name="a2a_close">Cerrar</string>
     <string name="a2a_open_in_browser">Abrir en el navegador</string>
     <string name="dev_suite_no_space">Almacenamiento insuficiente: se necesitan unos %1$d GB, hay %2$d GB libres</string>

@@ -1854,7 +1854,7 @@
     <!-- [T-android-a2a-native] a2a gateway management page -->
 <string name="a2a_desktop_bridge_footer">Ang ilang aksyon ng panel (account import/export, log export, full-DB backup) ay gumagamit ng desktop bridge ng engine at hindi available sa device na ito. Ang mga account ay idinaragdag sa panel; ang SQLite data ay nasa app-private na data folder.</string>
 <string name="a2a_incognito_login_title">Incognito na pag-login</string>
-<string name="a2a_incognito_login_subtitle">Bawat login window ay nagsisimula sa malinis na session ng provider; hindi ginagalaw ang login ng panel mismo.</string>
+<string name="a2a_incognito_login_subtitle">Bawat login ay tumatakbo sa pansamantalang browser profile — binubura ang cookies, storage at cache kapag sarado na ang login window. Hindi naaapektuhan ang login ng panel mismo.</string>
 <string name="a2a_view_gateway_log">Gateway log</string>
 <string name="a2a_log_filter_login">Login / security lang</string>
 <string name="a2a_log_empty">Wala pang log lines.</string>
@@ -1862,7 +1862,7 @@
     <string name="a2a_start_gateway">I-start ang gateway</string>
     <string name="a2a_status_running">Tumatakbo</string>
     <string name="a2a_panel_address">Address ng panel</string>
-    <string name="a2a_panel_not_installed">I-install ang gateway para buksan ang web panel nito.</string>
+    <string name="a2a_panel_not_installed">Hindi pa naka-deploy ang gateway — awtomatikong i-install ito kapag binuksan ang panel.</string>
     <string name="a2a_panel_needs_start">I-start ang gateway para buksan ang web panel nito.</string>
     <string name="a2a_panel_load_failed">Hindi na-load ang panel.</string>
     <string name="a2a_panel_page_title">Panel ng Agent2API</string>
@@ -1870,6 +1870,8 @@
     <string name="a2a_login_address_title">Kasalukuyang address</string>
     <string name="a2a_login_address_hint">Kung hindi mabuksan ang page na ito (halimbawa, callback patungo sa local loopback port), maaaring natapos na ang pag-sign in. Kopyahin ang address na ito at i-paste sa callback field ng panel.</string>
     <string name="a2a_login_copy_address">Kopyahin ang address</string>
+    <string name="a2a_panel_starting">Sinisimulan ang gateway…</string>
+    <string name="a2a_open_panel_and_start">Simulan at buksan ang panel</string>
     <string name="a2a_close">Isara</string>
     <string name="a2a_open_in_browser">Buksan sa browser</string>
     <string name="dev_suite_no_space">Kulang ang storage: kailangan mga %1$d GB, available %2$d GB</string>

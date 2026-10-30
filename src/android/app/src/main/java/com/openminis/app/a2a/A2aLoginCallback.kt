@@ -70,6 +70,29 @@ internal object A2aLoginCallback {
         return "http://127.0.0.1:$gatewayPort$path$query"
     }
 
+    /**
+     * True when [url] is a callback landing on the GATEWAY's loopback port —
+     * the moment the engine received the code, i.e. the login round has
+     * nothing left to keep. Used to retire the round's throwaway browser
+     * profile (and, on the fallback path, to drop the provider's storage).
+     * Non-callback loopback pages (the panel itself, its login gate) are
+     * excluded by the path check.
+     */
+    fun isCaptureCallback(url: String?, gatewayPort: Int): Boolean {
+        if (url.isNullOrBlank() || gatewayPort <= 0) return false
+        val parsed = runCatching { URI(url.trim()) }.getOrNull() ?: return false
+        val scheme = parsed.scheme?.lowercase() ?: return false
+        if (scheme != "http" && scheme != "https") return false
+        if (!isLoopbackHost(parsed.host)) return false
+        if (parsed.port != gatewayPort) return false
+        return parsed.path.orEmpty().contains("callback", ignoreCase = true)
+    }
+
+    private fun isLoopbackHost(host: String?): Boolean {
+        val value = host?.trim()?.lowercase()?.removePrefix("[")?.removeSuffix("]") ?: return false
+        return value == "127.0.0.1" || value == "localhost" || value == "::1"
+    }
+
     private fun hasParam(query: String, name: String): Boolean =
         query.split('&').any { pair ->
             pair.substringBefore('=') == name && pair.substringAfter('=', "").isNotEmpty()

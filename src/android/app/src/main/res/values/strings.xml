@@ -324,7 +324,7 @@
     <!-- [T-android-a2a-native] a2a gateway management page -->
 <string name="a2a_desktop_bridge_footer">Some panel actions (account import/export, log export, full-DB backup) use the engine\'s desktop bridge and are unavailable on this device. Accounts are added in the panel; SQLite data lives in the app-private data folder.</string>
 <string name="a2a_incognito_login_title">Incognito login</string>
-<string name="a2a_incognito_login_subtitle">Each login window starts with a clean provider session; the panel\'s own login is untouched.</string>
+<string name="a2a_incognito_login_subtitle">Each login runs in a throwaway browser profile — cookies, storage and cache are wiped when the login window closes. The panel\'s own login is untouched.</string>
 <string name="a2a_view_gateway_log">Gateway log</string>
 <string name="a2a_log_filter_login">Login / security only</string>
 <string name="a2a_log_empty">No log lines yet.</string>
@@ -332,7 +332,7 @@
     <string name="a2a_start_gateway">Start gateway</string>
     <string name="a2a_status_running">Running</string>
     <string name="a2a_panel_address">Panel address</string>
-    <string name="a2a_panel_not_installed">Install the gateway to open its web panel.</string>
+    <string name="a2a_panel_not_installed">The gateway is not deployed yet — opening the panel deploys it first.</string>
     <string name="a2a_panel_needs_start">Start the gateway to open its web panel.</string>
     <string name="a2a_panel_load_failed">Panel failed to load.</string>
     <string name="a2a_panel_page_title">Agent2API Panel</string>
@@ -340,6 +340,8 @@
     <string name="a2a_login_address_title">Current address</string>
     <string name="a2a_login_address_hint">If this page cannot open (for example a callback aimed at a loopback port), the sign-in may still have completed. Copy this address and paste it into the panel\'s callback prompt.</string>
     <string name="a2a_login_copy_address">Copy address</string>
+    <string name="a2a_panel_starting">Starting gateway…</string>
+    <string name="a2a_open_panel_and_start">Start and open panel</string>
     <string name="a2a_close">Close</string>
     <string name="a2a_open_in_browser">Open in browser</string>
     <string name="dev_suite_no_space">Not enough storage: about %1$d GB needed, %2$d GB free</string>

@@ -1856,7 +1856,7 @@
     <!-- [T-android-a2a-native] a2a gateway management page -->
 <string name="a2a_desktop_bridge_footer">Einige Panel-Aktionen (Konto-Import/Export, Log-Export, Voll-DB-Backup) nutzen die Desktop-Brücke des Engines und sind auf diesem Gerät nicht verfügbar. Konten werden im Panel hinzugefügt; SQLite-Daten liegen im app-privaten Datenordner.</string>
 <string name="a2a_incognito_login_title">Inkognito-Anmeldung</string>
-<string name="a2a_incognito_login_subtitle">Jedes Anmeldefenster startet mit einer sauberen Anbieter-Sitzung; die Anmeldung des Panels selbst bleibt unberührt.</string>
+<string name="a2a_incognito_login_subtitle">Jede Anmeldung läuft in einem temporären Browserprofil – Cookies, Speicher und Cache werden beim Schließen des Anmeldefensters gelöscht. Die Anmeldung des Panels bleibt unberührt.</string>
 <string name="a2a_view_gateway_log">Gateway-Protokoll</string>
 <string name="a2a_log_filter_login">Nur Anmeldung / Sicherheit</string>
 <string name="a2a_log_empty">Noch keine Protokollzeilen.</string>
@@ -1864,7 +1864,7 @@
     <string name="a2a_start_gateway">Gateway starten</string>
     <string name="a2a_status_running">Läuft</string>
     <string name="a2a_panel_address">Panel-Adresse</string>
-    <string name="a2a_panel_not_installed">Installiere das Gateway, um sein Web-Panel zu öffnen.</string>
+    <string name="a2a_panel_not_installed">Das Gateway ist noch nicht eingerichtet – beim Öffnen des Panels wird es automatisch bereitgestellt.</string>
     <string name="a2a_panel_needs_start">Starte das Gateway, um sein Web-Panel zu öffnen.</string>
     <string name="a2a_panel_load_failed">Panel konnte nicht geladen werden.</string>
     <string name="a2a_panel_page_title">Agent2API-Panel</string>
@@ -1872,6 +1872,8 @@
     <string name="a2a_login_address_title">Aktuelle Adresse</string>
     <string name="a2a_login_address_hint">Falls sich diese Seite nicht öffnen lässt (z. B. ein Callback auf einen Loopback-Port), kann die Anmeldung trotzdem abgeschlossen sein. Kopieren Sie diese Adresse und fügen Sie sie in das Callback-Feld des Panels ein.</string>
     <string name="a2a_login_copy_address">Adresse kopieren</string>
+    <string name="a2a_panel_starting">Gateway wird gestartet…</string>
+    <string name="a2a_open_panel_and_start">Starten und Panel öffnen</string>
     <string name="a2a_close">Schließen</string>
     <string name="a2a_open_in_browser">Im Browser öffnen</string>
     <string name="dev_suite_no_space">Zu wenig Speicherplatz: etwa %1$d GB erforderlich, %2$d GB frei</string>
