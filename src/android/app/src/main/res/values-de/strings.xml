@@ -2071,4 +2071,30 @@
     <string name="automation_day_sat">Sa</string>
     <string name="automation_day_sun">So</string>
 
+
+    <!-- [E-batch-quick-invocation] Quick invocation: half-screen panel, floating ball, QS tile, share intake -->
+    <string name="quick_settings_title">Schnellzugriff</string>
+    <string name="notif_vscreen_handoff_channel_name">Agent braucht dich (virtueller Bildschirm)</string>
+    <string name="notif_vscreen_handoff_channel_desc">Bittet dich, einen Schritt zu übernehmen, den der Agent nicht kann: Anmeldung, Captcha, Zahlung oder eine Auswahl.</string>
+    <string name="notif_vscreen_handoff_title">Agent braucht dich</string>
+    <string name="notif_vscreen_handoff_text">Öffne %1$s und erledige: %2$s</string>
+    <string name="notif_vscreen_handoff_action_done">Erledigt (zurück verschieben)</string>
+    <string name="notif_vscreen_handoff_action_keep">Ich habe es selbst erledigt</string>
+    <string name="notif_vscreen_handoff_action_abort">Jetzt nicht</string>
+    <string name="quick_settings_footer">Minis von überall aufrufen — schwebende Kugel, Schnelleinstellungen-Kachel oder direktes Teilen in das Panel. Sendungen laufen unbeaufsichtigt im letzten Chat und benachrichtigen dich bei Abschluss.</string>
+    <string name="quick_ball_enabled">Schwebende Kugel</string>
+    <string name="quick_ball_enabled_subtitle">Zeigt eine randgedockte Kugel über anderen Apps. Tippen öffnet das Panel, Doppeltippen fügt den Bildschirminhalt hinzu.</string>
+    <string name="quick_panel_input_hint">Was soll Minis tun?</string>
+    <string name="quick_send_failed">Ausführung konnte nicht gestartet werden. Öffne Minis und versuche es erneut.</string>
+    <string name="quick_panel_open_session">Sitzung öffnen</string>
+    <string name="quick_panel_screen_chip">Bildschirm: %1$s</string>
+    <string name="quick_panel_images_attached">%1$d Bild(er) angehängt</string>
+    <string name="quick_share_image_unsupported">Bildfreigaben werden im Schnellpanel noch nicht unterstützt.</string>
+    <string name="quick_panel_default_screen_prompt">Sieh dir meinen aktuellen Bildschirm an</string>
+    <string name="quick_panel_running">Läuft im Hintergrund — du erhältst eine Benachrichtigung, wenn es fertig ist.</string>
+    <string name="quick_ball_needs_overlay">Erlaube „Über anderen Apps anzeigen“, um die schwebende Kugel zu zeigen.</string>
+    <string name="quick_ball_notification_title">Minis-Schwebekugel</string>
+    <string name="quick_ball_notification_text">Tippe auf die Kugel, um das Schnellpanel zu öffnen</string>
+    <string name="quick_notify_channel_name">Schnellpanel-Ergebnisse</string>
+    <string name="quick_notify_title">Schnellauftrag abgeschlossen</string>
 </resources>

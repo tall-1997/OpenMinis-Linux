@@ -2069,4 +2069,30 @@
     <string name="automation_day_sat">sáb</string>
     <string name="automation_day_sun">dom</string>
 
+
+    <!-- [E-batch-quick-invocation] Quick invocation: half-screen panel, floating ball, QS tile, share intake -->
+    <string name="quick_settings_title">Chamada rápida</string>
+    <string name="notif_vscreen_handoff_channel_name">O agente precisa de você (tela virtual)</string>
+    <string name="notif_vscreen_handoff_channel_desc">Pede que você cuide de uma etapa que ele não consegue fazer: login, captcha, pagamento ou uma escolha.</string>
+    <string name="notif_vscreen_handoff_title">O agente precisa de você</string>
+    <string name="notif_vscreen_handoff_text">Abra %1$s e cuide: %2$s</string>
+    <string name="notif_vscreen_handoff_action_done">Pronto (devolver à tela virtual)</string>
+    <string name="notif_vscreen_handoff_action_keep">Eu mesmo fiz</string>
+    <string name="notif_vscreen_handoff_action_abort">Agora não</string>
+    <string name="quick_settings_footer">Chame o Minis de qualquer lugar — bola flutuante, bloco de configurações rápidas ou compartilhando direto no painel. Os envios rodam sem supervisão no chat mais recente e avisam ao terminar.</string>
+    <string name="quick_ball_enabled">Bola flutuante</string>
+    <string name="quick_ball_enabled_subtitle">Mostra uma bola ancorada na borda sobre outros apps. Toque para abrir o painel; toque duas vezes para incluir o que está na tela.</string>
+    <string name="quick_panel_input_hint">O que o Minis deve fazer?</string>
+    <string name="quick_send_failed">Não foi possível iniciar a execução. Abra o Minis e tente novamente.</string>
+    <string name="quick_panel_open_session">Abrir sessão</string>
+    <string name="quick_panel_screen_chip">Tela: %1$s</string>
+    <string name="quick_panel_images_attached">%1$d imagem(ns) anexada(s)</string>
+    <string name="quick_share_image_unsupported">Compartilhar imagens ainda não é compatível com o painel rápido.</string>
+    <string name="quick_panel_default_screen_prompt">Olhe minha tela atual</string>
+    <string name="quick_panel_running">Executando em segundo plano: você receberá uma notificação ao terminar.</string>
+    <string name="quick_ball_needs_overlay">Conceda a permissão \"Exibir sobre outros apps\" para mostrar a bola flutuante.</string>
+    <string name="quick_ball_notification_title">Bola flutuante do Minis</string>
+    <string name="quick_ball_notification_text">Toque na bola para abrir o painel rápido</string>
+    <string name="quick_notify_channel_name">Resultados do painel rápido</string>
+    <string name="quick_notify_title">Prompt rápido concluído</string>
 </resources>

@@ -66,7 +66,9 @@ class VirtualScreenManagerTest {
     }
 
     private class FakeShell : VirtualScreenManager.ShellRunner {
-        val calls = mutableListOf<Array<String>>()
+        // CopyOnWriteArrayList: the V2 spillback watcher polls from a daemon
+        // thread while the test thread asserts (T-android-vscreen2).
+        val calls = java.util.concurrent.CopyOnWriteArrayList<Array<String>>()
         var respond: (Array<String>) -> ShizukuManager.ProcessResult = {
             ShizukuManager.ProcessResult(0, "", "")
         }
@@ -149,9 +151,11 @@ class VirtualScreenManagerTest {
             }
         }
         val r = VirtualScreenManager.launch(2, "com.android.settings", null) as CommandOutcome.Ok
+        // [T-android-vscreen2] The spillback watcher's `am stack list` probe
+        // may ride along — assert on the start command specifically.
         assertEquals(
             listOf("am", "start", "-W", "--display", "2", "-n", "com.android.settings/.Settings"),
-            shell.argvOf("am").single(),
+            shell.argvOf("am").filter { it.contains("start") }.single(),
         )
         assertTrue(r.detail.contains("com.android.settings/.Settings"))
     }
@@ -164,8 +168,12 @@ class VirtualScreenManagerTest {
             else ShizukuManager.ProcessResult(1, "", "unexpected")
         }
         VirtualScreenManager.launch(2, "com.example", "com.example/.Bar") as CommandOutcome.Ok
-        assertEquals(listOf("am", "start", "-W", "--display", "2", "-n", "com.example/.Bar"), shell.argvOf("am").single())
-        assertTrue(shell.argvOf("cmd").isEmpty())
+        assertEquals(
+            listOf("am", "start", "-W", "--display", "2", "-n", "com.example/.Bar"),
+            shell.argvOf("am").filter { it.contains("start") }.single(),
+        )
+        // No activity RESOLVE ran (the watcher's stack-list probe is not a resolve).
+        assertTrue(shell.argvOf("cmd").none { it.contains("resolve-activity") })
     }
 
     @Test

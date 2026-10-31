@@ -11,5 +11,18 @@
         <item name="android:windowBackground">@android:color/white</item>
         <item name="android:colorBackground">@android:color/white</item>
     </style>
+    <!-- [T-android-quick-invocation] Half-screen quick panel over a dimmed,
+         transparent backdrop. Parent resolves to the light/night Theme.Minis
+         at runtime, so no values-night copy is needed. -->
+    <style name="Theme.Minis.QuickPanel" parent="Theme.Minis">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowIsFloating">false</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:backgroundDimEnabled">true</item>
+        <item name="android:backgroundDimAmount">0.45</item>
+        <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowContentOverlay">@null</item>
+    </style>
 </resources>
 

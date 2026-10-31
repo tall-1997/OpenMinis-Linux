@@ -2079,4 +2079,30 @@
     <string name="automation_day_sat">сб</string>
     <string name="automation_day_sun">вс</string>
 
+
+    <!-- [E-batch-quick-invocation] Quick invocation: half-screen panel, floating ball, QS tile, share intake -->
+    <string name="quick_settings_title">Быстрый вызов</string>
+    <string name="notif_vscreen_handoff_channel_name">Агенту нужна ваша помощь (виртуальный экран)</string>
+    <string name="notif_vscreen_handoff_channel_desc">Просит вас выполнить шаг, который он не может: вход, капчу, оплату или выбор.</string>
+    <string name="notif_vscreen_handoff_title">Агенту нужна ваша помощь</string>
+    <string name="notif_vscreen_handoff_text">Откройте %1$s и выполните: %2$s</string>
+    <string name="notif_vscreen_handoff_action_done">Готово (вернуть на виртуальный экран)</string>
+    <string name="notif_vscreen_handoff_action_keep">Я сделал сам</string>
+    <string name="notif_vscreen_handoff_action_abort">Не сейчас</string>
+    <string name="quick_settings_footer">Вызывайте Minis откуда угодно — плавающий шар, плитка быстрых настроек или прямой обмен в панель. Отправки выполняются без присмотра в последнем чате и уведомляют по завершении.</string>
+    <string name="quick_ball_enabled">Плавающий шар</string>
+    <string name="quick_ball_enabled_subtitle">Показывает шар у края экрана поверх других приложений. Коснитесь, чтобы открыть панель; двойное касание добавит содержимое экрана.</string>
+    <string name="quick_panel_input_hint">Что должен сделать Minis?</string>
+    <string name="quick_send_failed">Не удалось запустить выполнение. Откройте Minis и попробуйте снова.</string>
+    <string name="quick_panel_open_session">Открыть сессию</string>
+    <string name="quick_panel_screen_chip">Экран: %1$s</string>
+    <string name="quick_panel_images_attached">Приложено изображений: %1$d</string>
+    <string name="quick_share_image_unsupported">Отправка изображений пока не поддерживается в быстрой панели.</string>
+    <string name="quick_panel_default_screen_prompt">Посмотри на мой текущий экран</string>
+    <string name="quick_panel_running">Выполняется в фоне — по завершении придёт уведомление.</string>
+    <string name="quick_ball_needs_overlay">Разрешите «Поверх других приложений», чтобы показать плавающий шар.</string>
+    <string name="quick_ball_notification_title">Плавающий шар Minis</string>
+    <string name="quick_ball_notification_text">Коснитесь шара, чтобы открыть быструю панель</string>
+    <string name="quick_notify_channel_name">Результаты быстрой панели</string>
+    <string name="quick_notify_title">Быстрый запрос завершён</string>
 </resources>

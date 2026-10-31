@@ -2069,4 +2069,30 @@
     <string name="automation_day_sat">Sab</string>
     <string name="automation_day_sun">Ahd</string>
 
+
+    <!-- [E-batch-quick-invocation] Quick invocation: half-screen panel, floating ball, QS tile, share intake -->
+    <string name="quick_settings_title">Panggilan pantas</string>
+    <string name="notif_vscreen_handoff_channel_name">Agen memerlukan anda (skrin maya)</string>
+    <string name="notif_vscreen_handoff_channel_desc">Meminta anda mengendalikan langkah yang tidak dapat dilakannya: log masuk, captcha, pembayaran atau pilihan.</string>
+    <string name="notif_vscreen_handoff_title">Agen memerlukan anda</string>
+    <string name="notif_vscreen_handoff_text">Buka %1$s dan uruskan: %2$s</string>
+    <string name="notif_vscreen_handoff_action_done">Selesai (kembalikan ke skrin maya)</string>
+    <string name="notif_vscreen_handoff_action_keep">Saya buat sendiri</string>
+    <string name="notif_vscreen_handoff_action_abort">Bukan sekarang</string>
+    <string name="quick_settings_footer">Panggil Minis dari mana sahaja — bebola terapung, jubin tetapan pantas atau kongsi terus ke panel. Hantaran berjalan tanpa pengawasan dalam sembang terkini dan memaklumkan apabila selesai.</string>
+    <string name="quick_ball_enabled">Bebola terapung</string>
+    <string name="quick_ball_enabled_subtitle">Paparkan bebola terlekat di tepi di atas aplikasi lain. Ketik untuk membuka panel, ketik dua kali untuk menyertakan kandungan skrin.</string>
+    <string name="quick_panel_input_hint">Apakah yang Minis perlu lakukan?</string>
+    <string name="quick_send_failed">Tidak dapat memulakan pelaksanaan. Buka Minis dan cuba lagi.</string>
+    <string name="quick_panel_open_session">Buka sesi</string>
+    <string name="quick_panel_screen_chip">Skrin: %1$s</string>
+    <string name="quick_panel_images_attached">%1$d imej dilampirkan</string>
+    <string name="quick_share_image_unsupported">Perkongsian imej belum disokong dalam panel pantas.</string>
+    <string name="quick_panel_default_screen_prompt">Lihat skrin semasa saya</string>
+    <string name="quick_panel_running">Berjalan di latar belakang — anda akan mendapat pemberitahuan apabila selesai.</string>
+    <string name="quick_ball_needs_overlay">Berikan kebenaran \"Paparkan di atas aplikasi lain\" untuk memaparkan bebola terapung.</string>
+    <string name="quick_ball_notification_title">Bebola terapung Minis</string>
+    <string name="quick_ball_notification_text">Ketik bebola untuk membuka panel pantas</string>
+    <string name="quick_notify_channel_name">Keputusan panel pantas</string>
+    <string name="quick_notify_title">Prompt pantas selesai</string>
 </resources>

@@ -2071,4 +2071,30 @@
     <string name="automation_day_sat">sam</string>
     <string name="automation_day_sun">dim</string>
 
+
+    <!-- [E-batch-quick-invocation] Quick invocation: half-screen panel, floating ball, QS tile, share intake -->
+    <string name="quick_settings_title">Invocation rapide</string>
+    <string name="notif_vscreen_handoff_channel_name">L\'agent a besoin de vous (écran virtuel)</string>
+    <string name="notif_vscreen_handoff_channel_desc">Vous demande de gérer une étape qu\'il ne peut pas faire : connexion, captcha, paiement ou un choix.</string>
+    <string name="notif_vscreen_handoff_title">L\'agent a besoin de vous</string>
+    <string name="notif_vscreen_handoff_text">Ouvrez %1$s et gérez : %2$s</string>
+    <string name="notif_vscreen_handoff_action_done">Terminé (renvoyer à l\'écran virtuel)</string>
+    <string name="notif_vscreen_handoff_action_keep">Je l\'ai fait moi-même</string>
+    <string name="notif_vscreen_handoff_action_abort">Pas maintenant</string>
+    <string name="quick_settings_footer">Appelez Minis n\'importe où — bille flottante, tuile de réglages rapides ou partage direct dans le panneau. Les envois s\'exécutent sans supervision dans votre chat le plus récent et vous préviennent à la fin.</string>
+    <string name="quick_ball_enabled">Bille flottante</string>
+    <string name="quick_ball_enabled_subtitle">Affiche une bille ancrée au bord par-dessus les autres applis. Touchez pour ouvrir le panneau, touchez deux fois pour inclure ce qui est à l\'écran.</string>
+    <string name="quick_panel_input_hint">Que doit faire Minis ?</string>
+    <string name="quick_send_failed">Impossible de démarrer l\'exécution. Ouvrez Minis et réessayez.</string>
+    <string name="quick_panel_open_session">Ouvrir la session</string>
+    <string name="quick_panel_screen_chip">Écran : %1$s</string>
+    <string name="quick_panel_images_attached">%1$d image(s) jointe(s)</string>
+    <string name="quick_share_image_unsupported">Le partage d\'images n\'est pas encore pris en charge dans le panneau rapide.</string>
+    <string name="quick_panel_default_screen_prompt">Regarde mon écran actuel</string>
+    <string name="quick_panel_running">Exécution en arrière-plan — vous recevrez une notification à la fin.</string>
+    <string name="quick_ball_needs_overlay">Accordez « Afficher par-dessus les autres applis » pour afficher la bille flottante.</string>
+    <string name="quick_ball_notification_title">Bille flottante Minis</string>
+    <string name="quick_ball_notification_text">Touchez la bille pour ouvrir le panneau rapide</string>
+    <string name="quick_notify_channel_name">Résultats du panneau rapide</string>
+    <string name="quick_notify_title">Requête rapide terminée</string>
 </resources>
