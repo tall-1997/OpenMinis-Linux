@@ -8,8 +8,8 @@ import org.junit.Test
 
 /**
  * [E-batch-quick-invocation] Pure decision logic for the quick surface:
- * panel-session reuse window, share-text extraction, ball gesture windows and
- * edge docking. Plain JVM — no Android runtime involved.
+ * panel-session reuse window, share-text extraction and notification
+ * helpers. Plain JVM — no Android runtime involved.
  */
 class QuickPanelPolicyTest {
 
@@ -64,87 +64,6 @@ class QuickPanelPolicyTest {
             "Same content",
             QuickPanelPolicy.extractShareText("Same content", "Same content"),
         )
-    }
-
-    // ---- classifyGesture --------------------------------------------------- //
-
-    @org.junit.Test
-    fun `gesture under the slop is a tap and beyond it a drag`() {
-        // Zero movement → tap.
-        assertEquals(QuickPanelPolicy.Gesture.TAP, QuickPanelPolicy.classifyGesture(100f, 100f, 100f, 100f))
-        // Just under the 12 px slop on one axis → still a tap.
-        assertEquals(QuickPanelPolicy.Gesture.TAP, QuickPanelPolicy.classifyGesture(100f, 100f, 111f, 100f))
-        // Exactly at the slop → drag.
-        assertEquals(QuickPanelPolicy.Gesture.DRAG, QuickPanelPolicy.classifyGesture(100f, 100f, 112f, 100f))
-        // Vertical movement counts too.
-        assertEquals(QuickPanelPolicy.Gesture.DRAG, QuickPanelPolicy.classifyGesture(100f, 100f, 100f, 130f))
-    }
-
-    // ---- isWithinDoubleTapWindow ------------------------------------------- //
-
-    @org.junit.Test
-    fun `double tap window matches only a fresh second tap`() {
-        val first = 500L
-        assertTrue(QuickPanelPolicy.isWithinDoubleTapWindow(first, first + 200))
-        // At the boundary → expired (half-open).
-        assertFalse(QuickPanelPolicy.isWithinDoubleTapWindow(first, first + QuickPanelPolicy.DOUBLE_TAP_WINDOW_MS))
-        assertFalse(QuickPanelPolicy.isWithinDoubleTapWindow(first, first + 400))
-        // No pending tap (0 / negative) never matches.
-        assertFalse(QuickPanelPolicy.isWithinDoubleTapWindow(0L, first + 100))
-        assertFalse(QuickPanelPolicy.isWithinDoubleTapWindow(-1L, first + 100))
-    }
-
-    // ---- dockX / clampY ----------------------------------------------------- //
-
-    @org.junit.Test
-    fun `ball docks to the nearer horizontal edge`() {
-        val w = 1080
-        val ball = 132  // 48dp @2.75x
-        val margin = 22
-        // Left half → left edge.
-        assertEquals(margin, QuickPanelPolicy.dockX(100, ball, w, margin))
-        // Right half → right edge.
-        assertEquals(w - ball - margin, QuickPanelPolicy.dockX(w - ball - 100, ball, w, margin))
-        // Centre decides: just left of the middle → left.
-        assertEquals(margin, QuickPanelPolicy.dockX(w / 2 - ball / 2 - 1, ball, w, margin))
-        // Just right of the middle → right.
-        assertEquals(w - ball - margin, QuickPanelPolicy.dockX(w / 2 - ball / 2 + 1, ball, w, margin))
-    }
-
-    @org.junit.Test
-    fun `ball vertical position is clamped on screen`() {
-        val h = 2400
-        val ball = 132
-        assertEquals(0, QuickPanelPolicy.clampY(-50, ball, h))
-        assertEquals(h - ball, QuickPanelPolicy.clampY(h + 500, ball, h))
-        assertEquals(700, QuickPanelPolicy.clampY(700, ball, h))
-        // Degenerate sizes pass through unchanged rather than divide by zero.
-        assertEquals(42, QuickPanelPolicy.clampY(42, 0, h))
-        assertEquals(42, QuickPanelPolicy.clampY(42, ball, 0))
-    }
-
-    // ---- screenContextPreamble ---------------------------------------------- //
-
-    @org.junit.Test
-    fun `screen preamble wraps package and is null without capture`() {
-        assertNull(QuickPanelPolicy.screenContextPreamble(null, "com.foo"))
-        assertNull(QuickPanelPolicy.screenContextPreamble("   ", "com.foo"))
-
-        val preamble = QuickPanelPolicy.screenContextPreamble("Hello screen", "com.example.app")!!
-        assertTrue(preamble.startsWith("[The user double-tapped"))
-        assertTrue(preamble.contains("com.example.app"))
-        assertTrue(preamble.endsWith("Hello screen"))
-        // Missing package degrades to a placeholder, not null.
-        assertTrue(QuickPanelPolicy.screenContextPreamble("Hi", null)!!.contains("unknown app"))
-    }
-
-    @org.junit.Test
-    fun `screen preamble is capped at the max character budget`() {
-        val huge = "x".repeat(QuickPanelPolicy.MAX_SCREEN_TEXT_CHARS + 500)
-        val preamble = QuickPanelPolicy.screenContextPreamble(huge, "com.foo")!!
-        // Preamble header + at most MAX chars of body.
-        assertTrue(preamble.length <= 100 + QuickPanelPolicy.MAX_SCREEN_TEXT_CHARS)
-        assertTrue(preamble.contains("x".repeat(100)))
     }
 
     // ---- status / preview helpers ------------------------------------------- //

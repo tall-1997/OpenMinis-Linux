@@ -32,7 +32,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Image
-import androidx.compose.material.icons.outlined.Monitor
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -98,7 +97,6 @@ class QuickActivity : ComponentActivity() {
     // the same way.
     private val composerText = mutableStateOf("")
     private val stagedImages = mutableStateListOf<InputAttachment>()
-    private val useScreenContext = mutableStateOf(false)
     private val runningSessionId = mutableStateOf<String?>(null)
     private val sending = mutableStateOf(false)
 
@@ -110,10 +108,6 @@ class QuickActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Self-healing hook: if the ball's pref is on but the service died
-        // (process death without a sticky restart), bring it back while we
-        // are foreground — the only reliable place this package owns.
-        FloatingBallService.ensureRunning(this)
         enableEdgeToEdge()
         if (savedInstanceState == null) {
             handleIntent(intent)
@@ -149,11 +143,6 @@ class QuickActivity : ComponentActivity() {
         prefs.touchPanelSession()
     }
 
-    override fun onDestroy() {
-        if (isFinishing) ScreenContext.clear()
-        super.onDestroy()
-    }
-
     // ------------------------------------------------------------------ //
     // Intent handling                                                     //
     // ------------------------------------------------------------------ //
@@ -162,15 +151,15 @@ class QuickActivity : ComponentActivity() {
         when (intent?.action) {
             Intent.ACTION_SEND -> handleSend(intent)
             Intent.ACTION_SEND_MULTIPLE -> handleSendMultiple(intent)
-            else -> handleSummon(intent)
+            else -> handleSummon()
         }
     }
 
     /**
-     * Plain summon (ball / tile / app). Reuse the last panel session inside
-     * the window so the user sees where the previous prompt ran.
+     * Plain summon (tile / app). Reuse the last panel session inside the
+     * window so the user sees where the previous prompt ran.
      */
-    private fun handleSummon(intent: Intent?) {
+    private fun handleSummon() {
         if (QuickPanelPolicy.shouldReusePanelSession(
                 lastSessionId = prefs.panelSessionId,
                 lastUsedAtMs = prefs.panelUsedAtMs,
@@ -178,15 +167,6 @@ class QuickActivity : ComponentActivity() {
             )
         ) {
             runningSessionId.value = prefs.panelSessionId
-        }
-        val fromScreen = intent?.getBooleanExtra(EXTRA_FROM_SCREEN, false) == true
-        if (!fromScreen) return
-        if (ScreenContext.hasCapture) {
-            useScreenContext.value = true
-        } else {
-            // Accessibility off (or capture failed): degrade to a pre-filled
-            // generic prompt the user can edit or send as-is.
-            composerText.value = getString(R.string.quick_panel_default_screen_prompt)
         }
     }
 
@@ -277,15 +257,7 @@ class QuickActivity : ComponentActivity() {
         val raw = composerText.value.trim()
         if (raw.isEmpty() && stagedImages.isEmpty()) return
         sending.value = true
-        // Wrap the screen context (ball double-tap) around the user's text.
-        val prompt: String = if (useScreenContext.value) {
-            QuickPanelPolicy.screenContextPreamble(ScreenContext.text, ScreenContext.sourcePackage)
-                ?.let { preamble -> if (raw.isEmpty()) preamble else "$preamble\n\n$raw" }
-                ?: raw
-        } else {
-            raw
-        }
-        useScreenContext.value = false
+        val prompt: String = raw
         val attachments = stagedImages.toList()
         QuickPromptDispatcher.send(this, prompt, attachments) { sessionId ->
             sending.value = false
@@ -373,9 +345,6 @@ class QuickActivity : ComponentActivity() {
                         }
                     }
 
-                    if (useScreenContext.value) {
-                        ScreenChip()
-                    }
                     if (stagedImages.isNotEmpty()) {
                         ImagesChip()
                     }
@@ -423,46 +392,6 @@ class QuickActivity : ComponentActivity() {
                         }
                     }
                 }
-            }
-        }
-    }
-
-    @Composable
-    private fun ScreenChip() {
-        val colors = MaterialTheme.colorScheme
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 8.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(colors.surfaceVariant)
-                .padding(horizontal = 10.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Icon(
-                Icons.Outlined.Monitor,
-                contentDescription = null,
-                tint = colors.onSurfaceVariant,
-                modifier = Modifier.size(14.dp),
-            )
-            Text(
-                text = stringResource(
-                    R.string.quick_panel_screen_chip,
-                    ScreenContext.sourcePackage ?: stringResource(R.string.app_name),
-                ),
-                style = MaterialTheme.typography.bodySmall,
-                color = colors.onSurfaceVariant,
-                maxLines = 1,
-                modifier = Modifier.weight(1f),
-            )
-            IconButton(onClick = { useScreenContext.value = false; ScreenContext.clear() }, modifier = Modifier.size(20.dp)) {
-                Icon(
-                    Icons.Outlined.Close,
-                    contentDescription = stringResource(R.string.a2a_close),
-                    tint = colors.onSurfaceVariant,
-                    modifier = Modifier.size(14.dp),
-                )
             }
         }
     }
@@ -532,12 +461,6 @@ class QuickActivity : ComponentActivity() {
     }
 
     companion object {
-        /** Set by FloatingBallService's double tap: ScreenContext holds a capture. */
-        const val EXTRA_FROM_SCREEN = "from_screen"
-
-        /** Plain summon marker (single tap / tile) — reserved for diagnostics. */
-        const val EXTRA_FROM_BALL = "from_ball"
-
         const val ATTACHMENT_DIR = "quick_attachments"
     }
 }

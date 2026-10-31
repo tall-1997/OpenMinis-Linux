@@ -2911,20 +2911,12 @@
     <string name="notif_vscreen_handoff_action_done">Done (move it back)</string>
     <string name="notif_vscreen_handoff_action_keep">I did it myself</string>
     <string name="notif_vscreen_handoff_action_abort">Not now</string>
-    <string name="quick_settings_footer">Summon Minis from anywhere — a floating ball, a quick-settings tile, or sharing straight into the panel. Sends run unattended on your most recent chat and notify you when done.</string>
-    <string name="quick_ball_enabled">Floating ball</string>
-    <string name="quick_ball_enabled_subtitle">Show an edge-docked ball over other apps. Tap to open the panel, double-tap to include what\'s on screen.</string>
     <string name="quick_panel_input_hint">What should Minis do?</string>
     <string name="quick_send_failed">Couldn\'t start the run. Open Minis and try again.</string>
     <string name="quick_panel_open_session">Open session</string>
-    <string name="quick_panel_screen_chip">Screen: %1$s</string>
     <string name="quick_panel_images_attached">%1$d image(s) attached</string>
     <string name="quick_share_image_unsupported">Image shares aren\'t supported in the quick panel yet.</string>
-    <string name="quick_panel_default_screen_prompt">Take a look at my current screen</string>
     <string name="quick_panel_running">Running in the background — you\'ll get a notification when it finishes.</string>
-    <string name="quick_ball_needs_overlay">Grant \"Display over other apps\" to show the floating ball.</string>
-    <string name="quick_ball_notification_title">Minis floating ball</string>
-    <string name="quick_ball_notification_text">Tap the ball to open the quick panel</string>
     <string name="quick_notify_channel_name">Quick panel results</string>
     <string name="quick_notify_title">Quick prompt finished</string>
 </resources>

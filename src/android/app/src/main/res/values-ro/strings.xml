@@ -2083,20 +2083,12 @@
     <string name="notif_vscreen_handoff_action_done">Gata (înapoi pe ecranul virtual)</string>
     <string name="notif_vscreen_handoff_action_keep">Am făcut-o eu</string>
     <string name="notif_vscreen_handoff_action_abort">Nu acum</string>
-    <string name="quick_settings_footer">Apelează Minis de oriunde — minge flotantă, dale din setările rapide sau partajare directă în panou. Trimiterile rulează nesupravegheat în cel mai recent chat și te anunță la final.</string>
-    <string name="quick_ball_enabled">Minge flotantă</string>
-    <string name="quick_ball_enabled_subtitle">Afișează o minge ancorată la margine peste alte aplicații. Atinge pentru a deschide panoul; atinge de două ori pentru a include ce este pe ecran.</string>
     <string name="quick_panel_input_hint">Ce să facă Minis?</string>
     <string name="quick_send_failed">Nu s-a putut porni execuția. Deschide Minis și încearcă din nou.</string>
     <string name="quick_panel_open_session">Deschide sesiunea</string>
-    <string name="quick_panel_screen_chip">Ecran: %1$s</string>
     <string name="quick_panel_images_attached">Imagini atașate: %1$d</string>
     <string name="quick_share_image_unsupported">Partajarea imaginilor nu este încă acceptată în panoul rapid.</string>
-    <string name="quick_panel_default_screen_prompt">Uită-te la ecranul meu curent</string>
     <string name="quick_panel_running">Rulează în fundal — vei primi o notificare la final.</string>
-    <string name="quick_ball_needs_overlay">Acordă permisiunea „Afișare peste alte aplicații” pentru a afișa mingea flotantă.</string>
-    <string name="quick_ball_notification_title">Minge flotantă Minis</string>
-    <string name="quick_ball_notification_text">Atinge mingea pentru a deschide panoul rapid</string>
     <string name="quick_notify_channel_name">Rezultatele panoului rapid</string>
     <string name="quick_notify_title">Cererea rapidă s-a încheiat</string>
 </resources>

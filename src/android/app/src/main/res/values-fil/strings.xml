@@ -2079,20 +2079,12 @@
     <string name="notif_vscreen_handoff_action_done">Tapos na (ibalik sa virtual screen)</string>
     <string name="notif_vscreen_handoff_action_keep">Ako mismo ang gumawa</string>
     <string name="notif_vscreen_handoff_action_abort">Hindi muna</string>
-    <string name="quick_settings_footer">Tawagin ang Minis kahit saan — lumulutang na bola, quick settings tile, o direktang pagbahagi sa panel. Ang mga padala ay tumatakbo nang walang gabay sa pinakabagong chat at magbibigay-abiso kapag tapos na.</string>
-    <string name="quick_ball_enabled">Lumulutang na bola</string>
-    <string name="quick_ball_enabled_subtitle">Nagpapakita ng bolang nakadikit sa gilid sa ibabaw ng ibang apps. I-tap para buksan ang panel; i-double tap para isama ang nasa screen.</string>
     <string name="quick_panel_input_hint">Ano ang gagawin ng Minis?</string>
     <string name="quick_send_failed">Hindi nasimulan ang pagtakbo. Buksan ang Minis at subukan muli.</string>
     <string name="quick_panel_open_session">Buksan ang session</string>
-    <string name="quick_panel_screen_chip">Screen: %1$s</string>
     <string name="quick_panel_images_attached">%1$d larawan ang nakakabit</string>
     <string name="quick_share_image_unsupported">Hindi pa suportado ang pagbahagi ng larawan sa mabilisang panel.</string>
-    <string name="quick_panel_default_screen_prompt">Tingnan ang kasalukuyan kong screen</string>
     <string name="quick_panel_running">Tumatakbo sa background — may notification kapag natapos na.</string>
-    <string name="quick_ball_needs_overlay">Bigyan ng pahintulot na “Magpakita sa ibabaw ng ibang apps” para makita ang lumulutang na bola.</string>
-    <string name="quick_ball_notification_title">Lumulutang na bola ng Minis</string>
-    <string name="quick_ball_notification_text">I-tap ang bola para buksan ang mabilisang panel</string>
     <string name="quick_notify_channel_name">Mga resulta ng mabilisang panel</string>
     <string name="quick_notify_title">Tapos na ang mabilis na prompt</string>
 </resources>

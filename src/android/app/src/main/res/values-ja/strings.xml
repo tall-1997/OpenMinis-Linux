@@ -2078,20 +2078,12 @@
     <string name="notif_vscreen_handoff_action_done">処理した（戻す）</string>
     <string name="notif_vscreen_handoff_action_keep">自分で済ませた</string>
     <string name="notif_vscreen_handoff_action_abort">今はしない</string>
-    <string name="quick_settings_footer">どこからでも Minis を呼び出せます — フローティングボール、クイック設定タイル、またはパネルへの直接共有。送信は最近のチャットで無人実行され、完了時に通知します。</string>
-    <string name="quick_ball_enabled">フローティングボール</string>
-    <string name="quick_ball_enabled_subtitle">他のアプリの上に端に寄せたボールを表示します。タップでパネルを開き、ダブルタップで画面の内容を添付します。</string>
     <string name="quick_panel_input_hint">Minis に何をさせますか？</string>
     <string name="quick_send_failed">実行を開始できませんでした。Minis を開いてもう一度お試しください。</string>
     <string name="quick_panel_open_session">セッションを開く</string>
-    <string name="quick_panel_screen_chip">画面：%1$s</string>
     <string name="quick_panel_images_attached">画像 %1$d 枚を添付しました</string>
     <string name="quick_share_image_unsupported">クイックパネルはまだ画像の共有に対応していません。</string>
-    <string name="quick_panel_default_screen_prompt">今の画面を見て</string>
     <string name="quick_panel_running">バックグラウンドで実行中 — 完了したら通知が届きます。</string>
-    <string name="quick_ball_needs_overlay">フローティングボールを表示するには「他のアプリの上に重ねて表示」を許可してください。</string>
-    <string name="quick_ball_notification_title">Minis フローティングボール</string>
-    <string name="quick_ball_notification_text">ボールをタップしてクイックパネルを開く</string>
     <string name="quick_notify_channel_name">クイックパネルの結果</string>
     <string name="quick_notify_title">クイックプロンプトが完了しました</string>
 </resources>
