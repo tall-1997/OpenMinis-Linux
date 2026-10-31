@@ -9,6 +9,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.model.AgentToolParam
+import com.openminis.app.knowledge.AppKnowledgeStore
 import org.json.JSONObject
 
 /**
@@ -34,10 +35,10 @@ internal object AppTools {
         ShareToAppTool.definition(),
     )
 
-    fun execute(name: String, argsJson: String, context: Context): String = when (name) {
+    fun execute(name: String, argsJson: String, context: Context, sessionId: String? = null): String = when (name) {
         AppListTool.NAME -> AppListTool.execute(argsJson, context)
         AppInfoTool.NAME -> AppInfoTool.execute(argsJson, context)
-        AppLaunchTool.NAME -> AppLaunchTool.execute(argsJson, context)
+        AppLaunchTool.NAME -> AppLaunchTool.execute(argsJson, context, sessionId)
         AppOpenLinkTool.NAME -> AppOpenLinkTool.execute(argsJson, context)
         AppSendIntentTool.NAME -> AppSendIntentTool.execute(argsJson, context)
         ShareToAppTool.NAME -> ShareToAppTool.execute(argsJson, context)
@@ -181,7 +182,7 @@ internal object AppTools {
             propertyOrdering = listOf(TOOL_TITLE_PARAM, "package", "activity"),
         )
 
-        fun execute(argsJson: String, context: Context): String {
+        fun execute(argsJson: String, context: Context, sessionId: String? = null): String {
             val obj = DeviceArgs.parseOrNull(argsJson)
                 ?: return DeviceArgs.fail("invalid_args", "arguments are not valid JSON")
             val pkg = obj.strArg("package") ?: return DeviceArgs.fail("invalid_args", "missing 'package'")
@@ -201,7 +202,11 @@ internal object AppTools {
             if (intent == null) return DeviceArgs.fail("invalid_args", "no launchable activity for '$pkg' (is it installed?)")
             return try {
                 start(context, intent)
-                "Launched $pkg."
+                val base = "Launched $pkg."
+                // [T-app-knowledge] When the target app has a knowledge pack, append it once
+                // per session so the model gets the app's UI facts right after the launch.
+                val knowledge = AppKnowledgeStore.afterLaunch(context, pkg, sessionId)
+                if (knowledge == null) base else "$base\n$knowledge"
             } catch (e: ActivityNotFoundException) {
                 DeviceArgs.fail("invalid_args", "no launchable activity for '$pkg'")
             }

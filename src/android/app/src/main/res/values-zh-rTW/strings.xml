@@ -2180,6 +2180,16 @@
     <string name="notif_vscreen_handoff_action_done">處理好了（挪回背景螢幕）</string>
     <string name="notif_vscreen_handoff_action_keep">我自己做完了</string>
     <string name="notif_vscreen_handoff_action_abort">先不用</string>
+    <string name="card_action_open">開啟</string>
+    <string name="card_action_copy">複製</string>
+    <string name="card_action_share">分享</string>
+    <string name="card_action_undo">復原</string>
+    <string name="card_action_undone">已復原</string>
+    <string name="card_list_more">… 以及另外 %1$d 項</string>
+    <string name="card_media_title">圖片</string>
+    <string name="card_file_title">檔案</string>
+    <string name="card_file_created">檔案已建立</string>
+    <string name="card_link_title">連結</string>
     <string name="quick_panel_input_hint">要 Minis 做什麼？</string>
     <string name="quick_send_failed">無法啟動執行。請開啟 Minis 後再試一次。</string>
     <string name="quick_panel_open_session">開啟會話</string>
@@ -2188,4 +2198,13 @@
     <string name="quick_panel_running">正在背景執行，完成後會通知你。</string>
     <string name="quick_notify_channel_name">快捷面板結果</string>
     <string name="quick_notify_title">快捷指令已執行完成</string>
+    <!-- [E-batch-app-knowledge] App notes: agent-recorded app experience library -->
+    <string name="settings_section_app_notes">App 經驗</string>
+    <string name="settings_app_notes_footer">Agent 在本機操作 App 時記下的介面經驗，之後會自動重用。</string>
+    <string name="settings_app_notes_empty">暫無記錄。Agent 發現 App 裡不明顯的入口或陷阱時會自動記一條。</string>
+    <string name="settings_app_notes_clear">清空全部經驗</string>
+    <string name="settings_app_notes_clear_title">清空所有 App 經驗？</string>
+    <string name="settings_app_notes_clear_message">Agent 記錄的全部 App 經驗都會被刪除，且無法復原。</string>
+    <string name="settings_app_notes_clear_ok">清空</string>
+    <string name="settings_app_notes_cancel">取消</string>
 </resources>

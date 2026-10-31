@@ -2089,6 +2089,16 @@
     <string name="notif_vscreen_handoff_action_done">เสร็จแล้ว (ย้ายกลับ)</string>
     <string name="notif_vscreen_handoff_action_keep">ฉันทำเองแล้ว</string>
     <string name="notif_vscreen_handoff_action_abort">ไว้ก่อน</string>
+    <string name="card_action_open">เปิด</string>
+    <string name="card_action_copy">คัดลอก</string>
+    <string name="card_action_share">แชร์</string>
+    <string name="card_action_undo">ย้อนกลับ</string>
+    <string name="card_action_undone">ย้อนกลับแล้ว</string>
+    <string name="card_list_more">… อีก %1$d รายการ</string>
+    <string name="card_media_title">รูปภาพ</string>
+    <string name="card_file_title">ไฟล์</string>
+    <string name="card_file_created">สร้างไฟล์แล้ว</string>
+    <string name="card_link_title">ลิงก์</string>
     <string name="quick_panel_input_hint">ให้ Minis ทำอะไร?</string>
     <string name="quick_send_failed">เริ่มการทำงานไม่สำเร็จ เปิด Minis แล้วลองอีกครั้ง</string>
     <string name="quick_panel_open_session">เปิดเซสชัน</string>
@@ -2097,4 +2107,13 @@
     <string name="quick_panel_running">กำลังทำงานเบื้องหลัง — จะแจ้งเตือนเมื่อเสร็จ</string>
     <string name="quick_notify_channel_name">ผลลัพธ์แผงด่วน</string>
     <string name="quick_notify_title">คำสั่งด่วนเสร็จสิ้นแล้ว</string>
+    <!-- [E-batch-app-knowledge] App notes: agent-recorded app experience library -->
+    <string name="settings_section_app_notes">โน้ตแอป</string>
+    <string name="settings_app_notes_footer">ข้อเท็จจริงเกี่ยวกับ UI ที่เอเจนต์บันทึกไว้ระหว่างใช้งานแอปบนโทรศัพท์นี้ และจะนำกลับมาใช้ในการรันครั้งต่อไป</string>
+    <string name="settings_app_notes_empty">ยังไม่มีโน้ต เอเจนต์จะบันทึกเมื่อพบสิ่งที่ไม่ชัดเจนในแอป</string>
+    <string name="settings_app_notes_clear">ล้างโน้ตทั้งหมด</string>
+    <string name="settings_app_notes_clear_title">ล้างโน้ตแอปทั้งหมดหรือไม่</string>
+    <string name="settings_app_notes_clear_message">โน้ตทั้งหมดที่เอเจนต์บันทึกไว้จะถูกลบและกู้คืนไม่ได้</string>
+    <string name="settings_app_notes_clear_ok">ล้าง</string>
+    <string name="settings_app_notes_cancel">ยกเลิก</string>
 </resources>

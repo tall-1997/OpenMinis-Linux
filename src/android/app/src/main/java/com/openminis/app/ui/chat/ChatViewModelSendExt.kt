@@ -244,6 +244,9 @@ internal fun ChatViewModel.sendMessage(
         // guard state — repeat/no-effect/re-read/failure ladders and pacing
         // all restart from zero when the user speaks again.
         com.openminis.app.guard.ActionGuard.onUserTurn(activeSessionId)
+        // [T-android-app-knowledge] The tap-route tracker is per-turn too: a
+        // route only describes how one instruction was carried out.
+        com.openminis.app.knowledge.RouteTrackers.global.clear(activeSessionId)
 
         if (editingId != null && !truncateBeforeEdit(editingId)) {
             // [T-anchor-lookup-fail-closed] The truncation anchor could not be

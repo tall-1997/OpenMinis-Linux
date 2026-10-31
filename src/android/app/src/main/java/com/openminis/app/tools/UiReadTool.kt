@@ -34,7 +34,7 @@ object UiReadTool {
         propertyOrdering = listOf("tool_title", "max_chars"),
     )
 
-    fun execute(argsJson: String): ToolExecutionResult {
+    fun execute(argsJson: String, sessionId: String? = null): ToolExecutionResult {
         val obj = runCatching { JSONObject(argsJson) }.getOrElse {
             return ToolExecutionResult("Error: invalid args: ${it.message}", false)
         }
@@ -60,12 +60,25 @@ object UiReadTool {
             process.waitFor()
             val exit = process.exitValue()
             val trimmed = out.trim().take(cap)
-            val body = trimmed.ifBlank { "（屏幕为空或读屏失败——确认已授予无障碍权限：Settings → 权限）" }
+            var body = trimmed.ifBlank { "（屏幕为空或读屏失败——确认已授予无障碍权限：Settings → 权限）" }
             val code = when {
                 trimmed.contains("SERVICE_NOT_RUNNING") -> ToolErrorCode.PERMISSION_DENIED
                 exit == 127 -> ToolErrorCode.UNSUPPORTED
                 exit != 0 -> ToolErrorCode.EXECUTION_FAILED
                 else -> null
+            }
+            // [T-app-knowledge] App-knowledge injection: the a11y snapshot text does not carry
+            // the foreground package, so it is read from the host accessibility service instead
+            // (honest degradation: no service or no pack -> nothing is appended). The read's
+            // own session id is not threaded through this dispatcher yet, so the once-per-
+            // session record falls back to the process-wide bucket.
+            if (code == null) {
+                val injection = runCatching {
+                    com.openminis.app.accessibility.MinisAccessibilityService.getInstance()?.let { svc ->
+                        com.openminis.app.knowledge.AppKnowledgeStore.onScreenRead(svc, sessionId)
+                    }
+                }.getOrNull()
+                if (injection != null) body = "$body\n$injection"
             }
             ToolExecutionResult(body, exit == 0, errorCode = code, toolTitle = toolTitle)
         }.getOrElse {

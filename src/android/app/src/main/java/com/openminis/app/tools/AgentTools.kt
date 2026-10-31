@@ -105,6 +105,10 @@ object AgentTools {
         // descriptions carry the capability keywords (wifi, volume, sms,
         // clipboard, …), find_tools surfaces them on demand.
         com.openminis.app.device.DeviceTools.definitions().forEach { add(it) }
+        // [T-android-app-knowledge] Bundled per-app usage guides + the on-device
+        // experience notes. Long-tail: descriptions carry app names/aliases,
+        // find_tools("wechat"/"app guide") discovers them.
+        com.openminis.app.knowledge.AppKnowledgeTools.definitions().forEach { add(it) }
         // [T-ssh-backend] Remote SSH exec/SFTP. Unconditional — the backend
         // needs no repository wiring (hosts live in the encrypted
         // SshConfigStore; empty state self-documents via list_hosts). Kept

@@ -329,12 +329,28 @@ internal fun ToolDetailSheet(
                 try { org.json.JSONObject(block.toolArgs) } catch (_: Exception) { org.json.JSONObject() }
             }
 
-            Box(
+            // [G-batch tool cards] Dual-channel result cards: derived at render
+            // time from (toolName, args, result text) by cards/CardDerivers.kt —
+            // the model channel (block.content) is untouched. Emits nothing when
+            // no card derives, so every branch below is unchanged otherwise.
+            Column(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
             ) {
-                when (block.toolName) {
+                com.openminis.app.cards.ToolCardSection(
+                    toolName = block.toolName,
+                    argsJson = block.toolArgs,
+                    resultText = block.content,
+                    callId = block.id,
+                    imagePath = block.imageFilePath,
+                )
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                ) {
+                    when (block.toolName) {
                     // ── Shell: black rounded terminal card (mirrors iOS ToolLiveSheet) ──
                     "shell_execute" -> {
                         val command = extractShellCommand(toolArgsObj, block)
@@ -1001,6 +1017,7 @@ internal fun ToolDetailSheet(
                         }
                     }
                 }
+                }
             }
 
             // ── Bottom Bar (iOS: tool info row + navigation row) ──
@@ -1165,59 +1182,8 @@ internal fun ToolDetailSheet(
     }
 }
 
-// Helper: extract shell command from args or content (mirrors iOS toolDescription logic).
-// Also tolerant of *partial* streaming JSON (JSONObject.optString returns "" for
-// truncated objects, so fall back to a streaming-safe substring scan).
-internal fun extractShellCommand(args: org.json.JSONObject, block: AssistantBlock): String {
-    // 1. Try toolArgs "command" field (works once JSON is complete)
-    val fromArgs = args.optString("command", "")
-    if (fromArgs.isNotEmpty()) return fromArgs
-    // 2. Streaming fallback: scan the raw toolArgs buffer for `"command":"…`
-    //    which may not yet close. Mirrors iOS extractPartialStringValue.
-    val partial = extractPartialJsonString("command", block.toolArgs)
-    if (!partial.isNullOrEmpty()) return partial
-    // 3. Try parsing "$ <command>" from first line of content (iOS fallback)
-    if (block.content.startsWith("$ ")) {
-        val firstLine = block.content.lineSequence().firstOrNull() ?: ""
-        if (firstLine.length > 2) return firstLine.drop(2)
-    }
-    // 4. iOS fallback: generic "Shell command"
-    return "Shell command"
-}
-
-/**
- * Tolerant partial-JSON string extractor — UI-side mirror of
- * StreamChunkJsonHelper.extractPartialStringValue. Used so detail-sheet renderers
- * (shell command, file path, write content) can show live content while the
- * model is still streaming the tool input JSON.
- */
-internal fun extractPartialJsonString(key: String, json: String): String? {
-    if (json.isEmpty()) return null
-    val patterns = listOf("\"$key\": \"", "\"$key\":\"")
-    for (p in patterns) {
-        val at = json.indexOf(p)
-        if (at < 0) continue
-        val after = json.substring(at + p.length)
-        var i = 0
-        val n = after.length
-        while (i < n) {
-            val c = after[i]
-            if (c == '\\') { i += 2; continue }
-            if (c == '"') {
-                return after.substring(0, i)
-                    .replace("\\n", "\n").replace("\\t", "\t")
-                    .replace("\\\"", "\"").replace("\\/", "/")
-                    .replace("\\\\", "\\")
-            }
-            i++
-        }
-        // No closing quote yet (still streaming) — return what we have.
-        return after.replace("\\n", "\n").replace("\\t", "\t")
-            .replace("\\\"", "\"").replace("\\/", "/")
-            .replace("\\\\", "\\")
-    }
-    return null
-}
+// extractShellCommand / extractPartialJsonString moved to ToolBlockTextExtractors.kt
+// (same package) to keep this file under its line ceiling.
 
 /**
  * Shared editor-card layout used by file_read / file_write / memory_* detail
