@@ -538,6 +538,16 @@
     <string name="chat_input_placeholder_hint_4">답변을 길게 누르면 전체를 선택해 복사할 수 있습니다</string>
     <string name="browser_takeover">제어 인계</string>
     <string name="browser_settings_done">완료</string>
+    <string name="browser_settings_engine_title">WebView 커널</string>
+    <string name="browser_settings_engine_version">%1$s(대상 Chrome/%2$s)</string>
+    <string name="browser_settings_engine_below">%1$s보다 오래됨 — 계속 호환됩니다. System WebView를 업데이트하면 Blink %1$s+를 얻습니다.</string>
+    <string name="browser_settings_engine_at">대상 Chrome/%1$s 실행 중입니다.</string>
+    <string name="browser_settings_engine_above">%1$s보다 최신 — 상위 호환됩니다.</string>
+    <string name="browser_settings_engine_unknown">버전 확인 불가 — 기능 감지로 호환성을 판단합니다.</string>
+    <string name="browser_settings_engine_update">System WebView 업데이트</string>
+    <string name="browser_engine_stale">WebView 커널 Chrome/%1$s는 %2$d개 메이저 버전 뒤처져 있습니다. 최신 웹 기능을 위해 업데이트하세요.</string>
+    <string name="browser_engine_stale_action">커널 업데이트</string>
+    <string name="browser_settings_engine_shared">browser_use와 앱 내 브라우저가 이 커널을 공유합니다.</string>
     <string name="browser_settings_user_agent">사용자 에이전트</string>
     <string name="browser_settings_ua_mobile_chrome">모바일 Chrome (Android)</string>
     <string name="browser_settings_ua_desktop_chrome">데스크톱 Chrome (Linux)</string>

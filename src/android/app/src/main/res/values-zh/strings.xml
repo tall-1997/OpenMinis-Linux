@@ -824,11 +824,13 @@
     <string name="browser_settings_done">完成</string>
     <string name="browser_settings_engine_title">WebView 内核</string>
     <string name="browser_settings_engine_version">%1$s（目标 Chrome/%2$s）</string>
-    <string name="browser_settings_engine_below">低于 151，仍可兼容。更新系统 WebView 可获得 Blink 151+。</string>
-    <string name="browser_settings_engine_at">当前为目标内核 Chrome/151。</string>
-    <string name="browser_settings_engine_above">高于 151，向前兼容。</string>
+    <string name="browser_settings_engine_below">低于 %1$s —— 仍兼容。更新系统 WebView 可获 Blink %1$s+。</string>
+    <string name="browser_settings_engine_at">当前即目标 Chrome/%1$s。</string>
+    <string name="browser_settings_engine_above">高于 %1$s —— 向前兼容。</string>
     <string name="browser_settings_engine_unknown">无法识别版本，按特性探测兼容。</string>
     <string name="browser_settings_engine_update">更新系统 WebView</string>
+    <string name="browser_engine_stale">WebView 内核 Chrome/%1$s 落后 %2$d 个大版本，更新后解锁最新网页特性。</string>
+    <string name="browser_engine_stale_action">更新内核</string>
     <string name="browser_settings_engine_shared">browser_use 与应用内浏览器共用此内核。</string>
     <string name="browser_settings_user_agent">用户代理</string>
     <string name="browser_settings_ua_mobile_chrome">移动 Chrome (Android)</string>

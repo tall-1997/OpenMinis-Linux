@@ -591,6 +591,16 @@
     <string name="chat_input_placeholder_hint_4">長按回覆的任意位置，可全選並複製</string>
     <string name="browser_takeover">接管</string>
     <string name="browser_settings_done">完成</string>
+    <string name="browser_settings_engine_title">WebView 核心</string>
+    <string name="browser_settings_engine_version">%1$s（目標 Chrome/%2$s）</string>
+    <string name="browser_settings_engine_below">低於 %1$s —— 仍相容。更新系統 WebView 可獲 Blink %1$s+。</string>
+    <string name="browser_settings_engine_at">目前即目標 Chrome/%1$s。</string>
+    <string name="browser_settings_engine_above">高於 %1$s —— 向前相容。</string>
+    <string name="browser_settings_engine_unknown">無法辨識版本，依功能偵測相容性。</string>
+    <string name="browser_settings_engine_update">更新系統 WebView</string>
+    <string name="browser_engine_stale">WebView 核心 Chrome/%1$s 落後 %2$d 個大版本，更新後解鎖最新網頁功能。</string>
+    <string name="browser_engine_stale_action">更新核心</string>
+    <string name="browser_settings_engine_shared">browser_use 與應用程式內瀏覽器共用此核心。</string>
     <string name="browser_settings_user_agent">使用者代理</string>
     <string name="browser_settings_ua_mobile_chrome">行動 Chrome (Android)</string>
     <string name="browser_settings_ua_desktop_chrome">桌面 Chrome (Linux)</string>

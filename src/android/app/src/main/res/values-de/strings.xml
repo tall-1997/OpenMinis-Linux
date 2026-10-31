@@ -538,6 +538,16 @@
     <string name="chat_input_placeholder_hint_4">Lange auf eine Antwort tippen, um alles auszuwählen und zu kopieren</string>
     <string name="browser_takeover">Übernehmen</string>
     <string name="browser_settings_done">Fertig</string>
+    <string name="browser_settings_engine_title">WebView-Kernel</string>
+    <string name="browser_settings_engine_version">%1$s (Ziel: Chrome/%2$s)</string>
+    <string name="browser_settings_engine_below">Älter als %1$s — weiterhin kompatibel. System WebView aktualisieren für Blink %1$s+.</string>
+    <string name="browser_settings_engine_at">Ziel-Chrome/%1$s wird ausgeführt.</string>
+    <string name="browser_settings_engine_above">Neuer als %1$s — vorwärtskompatibel.</string>
+    <string name="browser_settings_engine_unknown">Version unbekannt — Kompatibilität per Funktionserkennung.</string>
+    <string name="browser_settings_engine_update">System WebView aktualisieren</string>
+    <string name="browser_engine_stale">WebView-Kernel Chrome/%1$s ist %2$d Hauptversionen zurück. Aktualisieren für die neuesten Webfunktionen.</string>
+    <string name="browser_engine_stale_action">Kernel aktualisieren</string>
+    <string name="browser_settings_engine_shared">browser_use und der In-App-Browser teilen sich diesen Kernel.</string>
     <string name="browser_settings_user_agent">User Agent</string>
     <string name="browser_settings_ua_mobile_chrome">Mobile Chrome (Android)</string>
     <string name="browser_settings_ua_desktop_chrome">Desktop Chrome (Linux)</string>

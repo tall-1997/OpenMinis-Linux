@@ -538,6 +538,16 @@
     <string name="chat_input_placeholder_hint_4">Appuyez longuement sur une réponse pour tout sélectionner et copier</string>
     <string name="browser_takeover">Reprendre la main</string>
     <string name="browser_settings_done">OK</string>
+    <string name="browser_settings_engine_title">Noyau WebView</string>
+    <string name="browser_settings_engine_version">%1$s (cible Chrome/%2$s)</string>
+    <string name="browser_settings_engine_below">Antérieur à %1$s — toujours compatible. Mettez à jour System WebView pour Blink %1$s+.</string>
+    <string name="browser_settings_engine_at">Cible Chrome/%1$s en cours d\'exécution.</string>
+    <string name="browser_settings_engine_above">Postérieur à %1$s — compatible avec l\'avenir.</string>
+    <string name="browser_settings_engine_unknown">Version inconnue — compatibilité détectée par fonctionnalités.</string>
+    <string name="browser_settings_engine_update">Mettre à jour System WebView</string>
+    <string name="browser_engine_stale">Le noyau WebView Chrome/%1$s a %2$d versions majeures de retard. Mettez-le à jour pour les dernières fonctions web.</string>
+    <string name="browser_engine_stale_action">Mettre à jour le noyau</string>
+    <string name="browser_settings_engine_shared">browser_use et le navigateur intégré partagent ce noyau.</string>
     <string name="browser_settings_user_agent">User-Agent</string>
     <string name="browser_settings_ua_mobile_chrome">Chrome mobile (Android)</string>
     <string name="browser_settings_ua_desktop_chrome">Chrome pour ordinateur (Linux)</string>

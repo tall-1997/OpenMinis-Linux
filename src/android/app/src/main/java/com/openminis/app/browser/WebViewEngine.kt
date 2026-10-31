@@ -13,12 +13,21 @@ import androidx.webkit.WebViewFeature
  * system WebView APK. This app cannot ship Chromium; the real kernel is
  * whatever `WebView.getCurrentWebViewPackage()` provides.
  *
- * Target major is Chrome/151. Older and newer WebViews keep working
- * (downward / upward compatible). UA and Client Hints follow the actual
- * package — never spoof 151 when Blink is something else.
+ * Target major is Chrome/157 (current stable at the time of writing). Older
+ * and newer WebViews keep working (downward / upward compatible). UA and
+ * Client Hints follow the actual package — never spoof 157 when Blink is
+ * something else.
+ *
+ * [T-webview-stale-prompt] A WebView more than [STALE_GAP] majors below the
+ * target is "stale": the Play push cycle would have delivered the new one,
+ * so the user is on a frozen ROM build and browser_use / the in-app browser
+ * are missing features the current stable has.
  */
 object WebViewEngine {
-    const val TARGET_MAJOR = 151
+    const val TARGET_MAJOR = 157
+
+    /** Majors of lag below which the kernel counts as stale. */
+    const val STALE_GAP = 2
 
     enum class CompatBand {
         BELOW_TARGET,
@@ -52,6 +61,29 @@ object WebViewEngine {
         major < TARGET_MAJOR -> CompatBand.BELOW_TARGET
         major == TARGET_MAJOR -> CompatBand.AT_TARGET
         else -> CompatBand.ABOVE_TARGET
+    }
+
+    /** Majors behind the target; zero when unknown or already ahead. */
+    fun lag(major: Int?): Int =
+        if (major == null || major >= TARGET_MAJOR) 0 else TARGET_MAJOR - major
+
+    /** True when the kernel is far enough behind that a prompt is warranted. */
+    fun isStale(snapshot: Snapshot): Boolean =
+        snapshot.major != null && lag(snapshot.major) > STALE_GAP
+
+    /**
+     * True when the engine-stale banner was already acknowledged (or the
+     * update action was taken) this app session set — the banner stays a
+     * one-time notice instead of nagging every sheet open.
+     */
+    fun stalePromptSeen(context: Context): Boolean =
+        context.getSharedPreferences("browser_prefs", Context.MODE_PRIVATE)
+            .getBoolean("engine_stale_seen_$TARGET_MAJOR", false)
+
+    /** Mark the stale banner as acknowledged for the current target. */
+    fun markStalePromptSeen(context: Context) {
+        context.getSharedPreferences("browser_prefs", Context.MODE_PRIVATE)
+            .edit().putBoolean("engine_stale_seen_$TARGET_MAJOR", true).apply()
     }
 
     fun snapshot(context: Context, seedUa: String? = null): Snapshot {
@@ -111,8 +143,32 @@ object WebViewEngine {
             try {
                 context.startActivity(storeHttpsIntent(packageName))
             } catch (_: Throwable) {
+                // No GMS: Play links are dead on ROMs without Google services.
+                // Fall back to the system app-info page — the only system
+                // surface that works everywhere (update path then depends on
+                // the vendor, e.g. a system OTA).
+                try {
+                    context.startActivity(settingsIntent(packageName))
+                } catch (_: Throwable) {
+                }
             }
         }
+    }
+
+    /** `package:` URI for the WebView package's app-info settings page. */
+    internal fun settingsUri(packageName: String?): String {
+        val id = packageName?.takeIf { it.isNotBlank() } ?: "com.google.android.webview"
+        return "package:$id"
+    }
+
+    /** App-info settings page for the WebView package; works without GMS. */
+    internal fun settingsIntent(packageName: String?): Intent {
+        val intent = Intent(
+            android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+            Uri.parse(settingsUri(packageName)),
+        )
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        return intent
     }
 
     private fun currentPackage(context: Context) = try {

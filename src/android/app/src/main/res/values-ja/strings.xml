@@ -538,6 +538,16 @@
     <string name="chat_input_placeholder_hint_4">返信を長押しすると全体を選択してコピーできます</string>
     <string name="browser_takeover">操作引き継ぎ</string>
     <string name="browser_settings_done">完了</string>
+    <string name="browser_settings_engine_title">WebView カーネル</string>
+    <string name="browser_settings_engine_version">%1$s（目標 Chrome/%2$s）</string>
+    <string name="browser_settings_engine_below">%1$s より古い — 互換性は維持されます。System WebView を更新すると Blink %1$s+ になります。</string>
+    <string name="browser_settings_engine_at">目標の Chrome/%1$s を実行中です。</string>
+    <string name="browser_settings_engine_above">%1$s より新しい — 前方互換です。</string>
+    <string name="browser_settings_engine_unknown">バージョン不明 — 機能検出による互換性判定です。</string>
+    <string name="browser_settings_engine_update">System WebView を更新</string>
+    <string name="browser_engine_stale">WebView カーネル Chrome/%1$s は %2$d メジャーバージョン遅れています。最新の Web 機能のために更新してください。</string>
+    <string name="browser_engine_stale_action">カーネルを更新</string>
+    <string name="browser_settings_engine_shared">browser_use とアプリ内ブラウザはこのカーネルを共有します。</string>
     <string name="browser_settings_user_agent">ユーザーエージェント</string>
     <string name="browser_settings_ua_mobile_chrome">モバイル Chrome (Android)</string>
     <string name="browser_settings_ua_desktop_chrome">デスクトップ Chrome (Linux)</string>

@@ -540,6 +540,16 @@
     <string name="chat_input_placeholder_hint_4">Удерживайте ответ, чтобы выделить и скопировать его целиком</string>
     <string name="browser_takeover">Перехватить управление</string>
     <string name="browser_settings_done">Готово</string>
+    <string name="browser_settings_engine_title">Ядро WebView</string>
+    <string name="browser_settings_engine_version">%1$s (цель Chrome/%2$s)</string>
+    <string name="browser_settings_engine_below">Старше %1$s — всё ещё совместимо. Обновите System WebView для Blink %1$s+.</string>
+    <string name="browser_settings_engine_at">Работает целевой Chrome/%1$s.</string>
+    <string name="browser_settings_engine_above">Новее %1$s — совместимо с будущими версиями.</string>
+    <string name="browser_settings_engine_unknown">Версия неизвестна — совместимость определяется по функциям.</string>
+    <string name="browser_settings_engine_update">Обновить System WebView</string>
+    <string name="browser_engine_stale">Ядро WebView Chrome/%1$s отстаёт на %2$d основных версий. Обновите его для новейших веб-функций.</string>
+    <string name="browser_engine_stale_action">Обновить ядро</string>
+    <string name="browser_settings_engine_shared">browser_use и встроенный браузер используют это ядро совместно.</string>
     <string name="browser_settings_user_agent">User Agent</string>
     <string name="browser_settings_ua_mobile_chrome">Мобильный Chrome (Android)</string>
     <string name="browser_settings_ua_desktop_chrome">Десктопный Chrome (Linux)</string>

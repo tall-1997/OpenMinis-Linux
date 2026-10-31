@@ -540,6 +540,16 @@
     <string name="chat_input_placeholder_hint_4">Przytrzymaj odpowiedź, aby skopiować całość</string>
     <string name="browser_takeover">Przejmij</string>
     <string name="browser_settings_done">Gotowe</string>
+    <string name="browser_settings_engine_title">Jądro WebView</string>
+    <string name="browser_settings_engine_version">%1$s (docelowo Chrome/%2$s)</string>
+    <string name="browser_settings_engine_below">Starsze niż %1$s — nadal zgodne. Zaktualizuj System WebView, aby uzyskać Blink %1$s+.</string>
+    <string name="browser_settings_engine_at">Działa docelowy Chrome/%1$s.</string>
+    <string name="browser_settings_engine_above">Nowsze niż %1$s — zgodne w przód.</string>
+    <string name="browser_settings_engine_unknown">Nieznana wersja — zgodność wykrywana na podstawie funkcji.</string>
+    <string name="browser_settings_engine_update">Zaktualizuj System WebView</string>
+    <string name="browser_engine_stale">Jądro WebView Chrome/%1$s jest %2$d wersji głównych w tyle. Zaktualizuj je, aby uzyskać najnowsze funkcje internetowe.</string>
+    <string name="browser_engine_stale_action">Zaktualizuj jądro</string>
+    <string name="browser_settings_engine_shared">browser_use i wbudowana przeglądarka współdzielą to jądro.</string>
     <string name="browser_settings_user_agent">User Agent</string>
     <string name="browser_settings_ua_mobile_chrome">Chrome mobilny (Android)</string>
     <string name="browser_settings_ua_desktop_chrome">Chrome na komputer (Linux)</string>

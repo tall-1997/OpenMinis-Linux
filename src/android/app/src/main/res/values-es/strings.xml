@@ -538,6 +538,16 @@
     <string name="chat_input_placeholder_hint_4">Mantén pulsada una respuesta para seleccionarla y copiarla entera</string>
     <string name="browser_takeover">Tomar control</string>
     <string name="browser_settings_done">Listo</string>
+    <string name="browser_settings_engine_title">Núcleo de WebView</string>
+    <string name="browser_settings_engine_version">%1$s (objetivo Chrome/%2$s)</string>
+    <string name="browser_settings_engine_below">Anterior a %1$s: sigue siendo compatible. Actualiza System WebView para obtener Blink %1$s+.</string>
+    <string name="browser_settings_engine_at">Ejecutando Chrome/%1$s objetivo.</string>
+    <string name="browser_settings_engine_above">Posterior a %1$s: compatible hacia delante.</string>
+    <string name="browser_settings_engine_unknown">Versión desconocida: compatibilidad detectada por funciones.</string>
+    <string name="browser_settings_engine_update">Actualizar System WebView</string>
+    <string name="browser_engine_stale">El núcleo WebView Chrome/%1$s va %2$d versiones por detrás. Actualízalo para las últimas funciones web.</string>
+    <string name="browser_engine_stale_action">Actualizar núcleo</string>
+    <string name="browser_settings_engine_shared">browser_use y el navegador integrado comparten este núcleo.</string>
     <string name="browser_settings_user_agent">User Agent</string>
     <string name="browser_settings_ua_mobile_chrome">Chrome móvil (Android)</string>
     <string name="browser_settings_ua_desktop_chrome">Chrome de escritorio (Linux)</string>

@@ -543,6 +543,16 @@
     <string name="chat_input_placeholder_hint_4">Tekan lama balasan untuk pilih &amp; salin semua</string>
     <string name="browser_takeover">Ambil Alih</string>
     <string name="browser_settings_done">Selesai</string>
+    <string name="browser_settings_engine_title">Kernel WebView</string>
+    <string name="browser_settings_engine_version">%1$s (target Chrome/%2$s)</string>
+    <string name="browser_settings_engine_below">Lebih lama dari %1$s — tetap kompatibel. Perbarui System WebView untuk Blink %1$s+.</string>
+    <string name="browser_settings_engine_at">Menjalankan target Chrome/%1$s.</string>
+    <string name="browser_settings_engine_above">Lebih baru dari %1$s — kompatibel ke depan.</string>
+    <string name="browser_settings_engine_unknown">Versi tidak diketahui — kompatibilitas dideteksi berdasarkan fitur.</string>
+    <string name="browser_settings_engine_update">Perbarui System WebView</string>
+    <string name="browser_engine_stale">Kernel WebView Chrome/%1$s tertinggal %2$d versi utama. Perbarui untuk fitur web terbaru.</string>
+    <string name="browser_engine_stale_action">Perbarui kernel</string>
+    <string name="browser_settings_engine_shared">browser_use dan browser dalam aplikasi berbagi kernel ini.</string>
     <string name="browser_settings_user_agent">User Agent</string>
     <string name="browser_settings_ua_mobile_chrome">Chrome Seluler (Android)</string>
     <string name="browser_settings_ua_desktop_chrome">Chrome Desktop (Linux)</string>

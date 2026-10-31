@@ -538,6 +538,16 @@
     <string name="chat_input_placeholder_hint_4">Yanıta uzun basıp tümünü kopyalayın</string>
     <string name="browser_takeover">Devral</string>
     <string name="browser_settings_done">Bitti</string>
+    <string name="browser_settings_engine_title">WebView çekirdeği</string>
+    <string name="browser_settings_engine_version">%1$s (hedef Chrome/%2$s)</string>
+    <string name="browser_settings_engine_below">%1$s sürümünden eski — yine de uyumlu. Blink %1$s+ için System WebView\'i güncelleyin.</string>
+    <string name="browser_settings_engine_at">Hedef Chrome/%1$s çalışıyor.</string>
+    <string name="browser_settings_engine_above">%1$s sürümünden yeni — ileriye dönük uyumlu.</string>
+    <string name="browser_settings_engine_unknown">Sürüm bilinmiyor — uyumluluk özellik algılamayla belirlenir.</string>
+    <string name="browser_settings_engine_update">System WebView\'i güncelle</string>
+    <string name="browser_engine_stale">WebView çekirdeği Chrome/%1$s %2$d ana sürüm geride. En yeni web özellikleri için güncelleyin.</string>
+    <string name="browser_engine_stale_action">Çekirdeği güncelle</string>
+    <string name="browser_settings_engine_shared">browser_use ve uygulama içi tarayıcı bu çekirdeği paylaşır.</string>
     <string name="browser_settings_user_agent">User Agent</string>
     <string name="browser_settings_ua_mobile_chrome">Mobil Chrome (Android)</string>
     <string name="browser_settings_ua_desktop_chrome">Masaüstü Chrome (Linux)</string>

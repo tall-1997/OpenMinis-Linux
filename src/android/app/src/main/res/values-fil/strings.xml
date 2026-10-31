@@ -538,6 +538,16 @@
     <string name="chat_input_placeholder_hint_4">Pindutin nang matagal para kopyahin lahat</string>
     <string name="browser_takeover">Kunin ang Kontrol</string>
     <string name="browser_settings_done">Tapos</string>
+    <string name="browser_settings_engine_title">WebView kernel</string>
+    <string name="browser_settings_engine_version">%1$s (target na Chrome/%2$s)</string>
+    <string name="browser_settings_engine_below">Mas luma sa %1$s — compatible pa rin. I-update ang System WebView para sa Blink %1$s+.</string>
+    <string name="browser_settings_engine_at">Gumagamit ng target na Chrome/%1$s.</string>
+    <string name="browser_settings_engine_above">Mas bago sa %1$s — forward compatible.</string>
+    <string name="browser_settings_engine_unknown">Hindi matukoy ang bersyon — compatibility batay sa feature detection.</string>
+    <string name="browser_settings_engine_update">I-update ang System WebView</string>
+    <string name="browser_engine_stale">Ang WebView kernel na Chrome/%1$s ay %2$d major versions na huli. Mag-update para sa pinakabagong web features.</string>
+    <string name="browser_engine_stale_action">I-update ang kernel</string>
+    <string name="browser_settings_engine_shared">Magkapareho ang kernel na ginagamit ng browser_use at ng in-app browser.</string>
     <string name="browser_settings_user_agent">User Agent</string>
     <string name="browser_settings_ua_mobile_chrome">Mobile Chrome (Android)</string>
     <string name="browser_settings_ua_desktop_chrome">Desktop Chrome (Linux)</string>
