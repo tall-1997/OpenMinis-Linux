@@ -67,6 +67,14 @@ internal object SystemTools {
 
     // ── shared plumbing ──
 
+    /**
+     * Machine-readable old-value trailer for write tools: the result plus a final
+     * `\nwas: <old>` line. The prefix `was: ` is fixed verbatim so the parallel result-card
+     * undo button can parse it; a null/empty old value omits the line entirely.
+     */
+    internal fun withWas(result: String, old: String?): String =
+        if (old.isNullOrEmpty()) result else "$result\nwas: $old"
+
     private fun audio(ctx: Context): AudioManager? =
         ctx.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
 
@@ -89,6 +97,15 @@ internal object SystemTools {
         }
     }
 
+    /** dnd_set naming of an interruption filter; null (omit) for unknown values. */
+    internal fun dndName(filter: Int?): String? = when (filter) {
+        NotificationManager.INTERRUPTION_FILTER_ALL -> "off"
+        NotificationManager.INTERRUPTION_FILTER_PRIORITY -> "priority"
+        NotificationManager.INTERRUPTION_FILTER_ALARMS -> "alarms"
+        NotificationManager.INTERRUPTION_FILTER_NONE -> "all"
+        else -> null
+    }
+
     /** Common key names surfaced to the model; also covered by unit tests. */
     internal val COMMON_KEYS: Map<String, List<String>> = mapOf(
         "global" to listOf(
@@ -104,11 +121,14 @@ internal object SystemTools {
 
     private fun panelIntent(action: String): Intent = Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 
-    private fun openPanel(context: Context, action: String, what: String, verify: String): String {
+    private fun openPanel(context: Context, action: String, what: String, verify: String, was: String? = null): String {
         return runCatching { context.startActivity(panelIntent(action)) }.fold(
             {
-                "no Shizuku: opened the system $what; ask the user to toggle it there " +
-                    "(verify with $verify before relying on it)."
+                withWas(
+                    "no Shizuku: opened the system $what; ask the user to toggle it there " +
+                        "(verify with $verify before relying on it).",
+                    was,
+                )
             },
             { DeviceArgs.fail("failed", "no Shizuku and the system $what could not be opened: ${it.message}") },
         )
@@ -295,6 +315,7 @@ internal object SystemTools {
                 else -> AudioManager.RINGER_MODE_NORMAL
             }
             // Entering or leaving silent toggles DND on Android 7+; that needs the policy-access grant.
+            val old = ringerName(audio.ringerMode)
             val touchesSilent = mode == "silent" || audio.ringerMode == AudioManager.RINGER_MODE_SILENT
             if (touchesSilent && nm?.isNotificationPolicyAccessGranted != true) {
                 return DevicePermission.missingError(DevicePermission.SPECIAL_NOTIFICATION_POLICY)
@@ -304,7 +325,7 @@ internal object SystemTools {
             } catch (e: SecurityException) {
                 return DevicePermission.missingError(DevicePermission.SPECIAL_NOTIFICATION_POLICY)
             }
-            return "Ringer mode set to $mode."
+            return withWas("Ringer mode set to $mode.", old)
         }
     }
 
@@ -346,12 +367,13 @@ internal object SystemTools {
             val audio = audio(context) ?: return DeviceArgs.fail("unsupported", "no audio service on this device")
             val s = streamOf(stream)
             val max = audio.getStreamMaxVolume(s)
+            val old = "${audio.getStreamVolume(s)}/$max"
             try {
                 audio.setStreamVolume(s, (max * percent + 50) / 100, 0)
             } catch (e: SecurityException) {
                 return DevicePermission.missingError(DevicePermission.SPECIAL_NOTIFICATION_POLICY)
             }
-            return "Volume $stream set to $percent% (${audio.getStreamVolume(s)}/$max)."
+            return withWas("Volume $stream set to $percent% (${audio.getStreamVolume(s)}/$max).", old)
         }
     }
 
@@ -389,6 +411,7 @@ internal object SystemTools {
             if (!nm.isNotificationPolicyAccessGranted) {
                 return DevicePermission.missingError(DevicePermission.SPECIAL_NOTIFICATION_POLICY)
             }
+            val old = dndName(runCatching { nm.currentInterruptionFilter }.getOrNull())
             val filter = when (mode) {
                 "priority" -> NotificationManager.INTERRUPTION_FILTER_PRIORITY
                 "alarms" -> NotificationManager.INTERRUPTION_FILTER_ALARMS
@@ -397,11 +420,12 @@ internal object SystemTools {
             }
             return runCatching { nm.setInterruptionFilter(filter) }.fold(
                 {
-                    when (mode) {
+                    val base = when (mode) {
                         "off" -> "Do Not Disturb is off."
                         "all" -> "Do Not Disturb set to 'all' (total silence)."
                         else -> "Do Not Disturb set to $mode."
                     }
+                    withWas(base, old)
                 },
                 { DeviceArgs.fail("failed", "could not set interruption filter: ${it.message}") },
             )
@@ -439,11 +463,18 @@ internal object SystemTools {
                 return DevicePermission.missingError(DevicePermission.SPECIAL_WRITE_SETTINGS)
             }
             val cr = context.contentResolver
+            val oldLevel = runCatching {
+                Settings.System.getInt(cr, Settings.System.SCREEN_BRIGHTNESS)
+            }.getOrDefault(-1)
+            val oldMode = runCatching {
+                Settings.System.getInt(cr, Settings.System.SCREEN_BRIGHTNESS_MODE)
+            }.getOrDefault(-1)
             if (adaptive == true) {
                 runCatching {
                     Settings.System.putInt(cr, Settings.System.SCREEN_BRIGHTNESS_MODE, Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC)
                 }.getOrElse { return DeviceArgs.fail("failed", "could not enable adaptive brightness: ${it.message}") }
-                return "Adaptive brightness enabled."
+                val old = if (oldMode == Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC) "adaptive" else "manual"
+                return withWas("Adaptive brightness enabled.", old)
             }
             if (level != null && level !in 0..255) {
                 return DeviceArgs.fail("invalid_args", "level must be 0-255 (got $level)")
@@ -455,7 +486,9 @@ internal object SystemTools {
                 }
                 Settings.System.putInt(cr, Settings.System.SCREEN_BRIGHTNESS, target)
             }.getOrElse { return DeviceArgs.fail("failed", "could not set brightness: ${it.message}") }
-            return if (applied) "Brightness set to $target/255." else "Brightness write was ignored by the system."
+            val old = if (oldLevel >= 0) "$oldLevel" else null
+            return if (applied) withWas("Brightness set to $target/255.", old)
+            else "Brightness write was ignored by the system."
         }
     }
 
@@ -589,16 +622,20 @@ internal object SystemTools {
                 ?: return DeviceArgs.fail("invalid_args", "arguments are not valid JSON")
             val on = obj.boolArg("on") ?: return DeviceArgs.fail("invalid_args", "missing 'on' (true/false)")
             val wm = context.getSystemService(Context.WIFI_SERVICE) as? android.net.wifi.WifiManager
+            val old = wm?.let { runCatching { if (it.isWifiEnabled) "on" else "off" }.getOrNull() }
             if (wm != null && runCatching { wm.isWifiEnabled }.getOrNull() == on) {
-                return "Wi-Fi is already ${if (on) "on" else "off"}; nothing to do."
+                return withWas("Wi-Fi is already ${if (on) "on" else "off"}; nothing to do.", old)
             }
             val via = DeviceArgs.shizukuShell(arrayOf("svc", "wifi", if (on) "enable" else "disable"))
             if (via != null) {
-                return "Wi-Fi switched ${if (on) "on" else "off"} via Shizuku shell." + if (via.isEmpty()) "" else " Output: $via"
+                return withWas(
+                    "Wi-Fi switched ${if (on) "on" else "off"} via Shizuku shell." + if (via.isEmpty()) "" else " Output: $via",
+                    old,
+                )
             }
             val action = if (Build.VERSION.SDK_INT >= 29) Settings.Panel.ACTION_INTERNET_CONNECTIVITY
             else Settings.ACTION_WIFI_SETTINGS
-            return openPanel(context, action, "internet panel", "device_status")
+            return openPanel(context, action, "internet panel", "device_status", old)
         }
     }
 
@@ -628,19 +665,23 @@ internal object SystemTools {
                 (context.getSystemService(Context.BLUETOOTH_SERVICE) as? android.bluetooth.BluetoothManager)?.adapter
             }.getOrNull()
             if (adapter == null) return DeviceArgs.fail("unsupported", "this device has no Bluetooth adapter")
+            val old = runCatching { if (adapter.isEnabled) "on" else "off" }.getOrNull()
             if (runCatching { adapter.isEnabled }.getOrNull() == on) {
-                return "Bluetooth is already ${if (on) "on" else "off"}; nothing to do."
+                return withWas("Bluetooth is already ${if (on) "on" else "off"}; nothing to do.", old)
             }
             val via = DeviceArgs.shizukuShell(arrayOf("svc", "bluetooth", if (on) "enable" else "disable"))
             if (via != null) {
-                return "Bluetooth switched ${if (on) "on" else "off"} via Shizuku shell." + if (via.isEmpty()) "" else " Output: $via"
+                return withWas(
+                    "Bluetooth switched ${if (on) "on" else "off"} via Shizuku shell." + if (via.isEmpty()) "" else " Output: $via",
+                    old,
+                )
             }
             val canAskSystem = on && (Build.VERSION.SDK_INT < 31 ||
                 context.checkSelfPermission(android.Manifest.permission.BLUETOOTH_CONNECT) ==
                 android.content.pm.PackageManager.PERMISSION_GRANTED)
             val action = if (canAskSystem) android.bluetooth.BluetoothAdapter.ACTION_REQUEST_ENABLE
             else Settings.ACTION_BLUETOOTH_SETTINGS
-            return openPanel(context, action, "Bluetooth page", "device_status")
+            return openPanel(context, action, "Bluetooth page", "device_status", old)
         }
     }
 
@@ -666,13 +707,31 @@ internal object SystemTools {
             val obj = DeviceArgs.parseOrNull(argsJson)
                 ?: return DeviceArgs.fail("invalid_args", "arguments are not valid JSON")
             val on = obj.boolArg("on") ?: return DeviceArgs.fail("invalid_args", "missing 'on' (true/false)")
+            val old = mobileDataState(context)
             val via = DeviceArgs.shizukuShell(arrayOf("svc", "data", if (on) "enable" else "disable"))
             if (via != null) {
-                return "Mobile data switched ${if (on) "on" else "off"} via Shizuku shell." + if (via.isEmpty()) "" else " Output: $via"
+                return withWas(
+                    "Mobile data switched ${if (on) "on" else "off"} via Shizuku shell." + if (via.isEmpty()) "" else " Output: $via",
+                    old,
+                )
             }
             val action = if (Build.VERSION.SDK_INT >= 29) Settings.Panel.ACTION_INTERNET_CONNECTIVITY
             else Settings.ACTION_WIRELESS_SETTINGS
-            return openPanel(context, action, "internet panel", "device_status")
+            return openPanel(context, action, "internet panel", "device_status", old)
+        }
+
+        /** Best-effort pre-change mobile-data state; null when it cannot be read. */
+        private fun mobileDataState(context: Context): String? {
+            val direct = runCatching {
+                Settings.Global.getInt(context.contentResolver, "mobile_data", -1)
+            }.getOrDefault(-1)
+            if (direct == 0 || direct == 1) return if (direct == 1) "on" else "off"
+            val via = DeviceArgs.shizukuShell(arrayOf("settings", "get", "global", "mobile_data"))
+            return when (via?.trim()) {
+                "1" -> "on"
+                "0" -> "off"
+                else -> null
+            }
         }
     }
 }

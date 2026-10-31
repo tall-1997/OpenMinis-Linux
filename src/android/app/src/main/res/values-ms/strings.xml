@@ -2089,6 +2089,16 @@
     <string name="notif_vscreen_handoff_action_done">Selesai (kembalikan ke skrin maya)</string>
     <string name="notif_vscreen_handoff_action_keep">Saya buat sendiri</string>
     <string name="notif_vscreen_handoff_action_abort">Bukan sekarang</string>
+    <string name="card_action_open">Buka</string>
+    <string name="card_action_copy">Salin</string>
+    <string name="card_action_share">Kongsi</string>
+    <string name="card_action_undo">Buat asal</string>
+    <string name="card_action_undone">Dahul dipulihkan</string>
+    <string name="card_list_more">… dan %1$d lagi</string>
+    <string name="card_media_title">Imej</string>
+    <string name="card_file_title">Fail</string>
+    <string name="card_file_created">Fail dicipta</string>
+    <string name="card_link_title">Pautan</string>
     <string name="quick_panel_input_hint">Apakah yang Minis perlu lakukan?</string>
     <string name="quick_send_failed">Tidak dapat memulakan pelaksanaan. Buka Minis dan cuba lagi.</string>
     <string name="quick_panel_open_session">Buka sesi</string>
@@ -2097,4 +2107,13 @@
     <string name="quick_panel_running">Berjalan di latar belakang — anda akan mendapat pemberitahuan apabila selesai.</string>
     <string name="quick_notify_channel_name">Keputusan panel pantas</string>
     <string name="quick_notify_title">Prompt pantas selesai</string>
+    <!-- [E-batch-app-knowledge] App notes: agent-recorded app experience library -->
+    <string name="settings_section_app_notes">Nota apl</string>
+    <string name="settings_app_notes_footer">Fakta UI yang direkodkan ejen semasa mengendalikan apl pada telefon ini dan digunakan semula pada run berikutnya.</string>
+    <string name="settings_app_notes_empty">Tiada nota lagi. Ejen menambah nota apabila menemui sesuatu yang kurang jelas tentang sesebuah apl.</string>
+    <string name="settings_app_notes_clear">Kosongkan semua nota</string>
+    <string name="settings_app_notes_clear_title">Kosongkan semua nota apl?</string>
+    <string name="settings_app_notes_clear_message">Semua nota yang direkodkan ejen akan dipadamkan dan tidak dapat dikembalikan.</string>
+    <string name="settings_app_notes_clear_ok">Kosongkan</string>
+    <string name="settings_app_notes_cancel">Batal</string>
 </resources>

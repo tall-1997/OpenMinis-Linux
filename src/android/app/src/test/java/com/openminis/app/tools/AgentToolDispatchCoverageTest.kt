@@ -95,6 +95,8 @@ class AgentToolDispatchCoverageTest {
                 { com.openminis.app.device.DeviceTools.definitions().map { it.name } },
             "com.openminis.app.automation.AutomationRuleTools" to
                 { com.openminis.app.automation.AutomationRuleTools.definitions().map { it.name } },
+            "com.openminis.app.knowledge.AppKnowledgeTools" to
+                { com.openminis.app.knowledge.AppKnowledgeTools.definitions().map { it.name } },
         )
     }
 }

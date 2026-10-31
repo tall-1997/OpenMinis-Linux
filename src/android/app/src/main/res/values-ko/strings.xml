@@ -2088,6 +2088,16 @@
     <string name="notif_vscreen_handoff_action_done">완료(가상 화면으로 복귀)</string>
     <string name="notif_vscreen_handoff_action_keep">직접 처리했음</string>
     <string name="notif_vscreen_handoff_action_abort">지금은 안 함</string>
+    <string name="card_action_open">열기</string>
+    <string name="card_action_copy">복사</string>
+    <string name="card_action_share">공유</string>
+    <string name="card_action_undo">실행 취소</string>
+    <string name="card_action_undone">실행 취소됨</string>
+    <string name="card_list_more">… 외 %1$d개</string>
+    <string name="card_media_title">이미지</string>
+    <string name="card_file_title">파일</string>
+    <string name="card_file_created">파일 생성됨</string>
+    <string name="card_link_title">링크</string>
     <string name="quick_panel_input_hint">Minis에게 무엇을 시킬까요?</string>
     <string name="quick_send_failed">실행을 시작하지 못했습니다. Minis를 열어 다시 시도해 주세요.</string>
     <string name="quick_panel_open_session">세션 열기</string>
@@ -2096,4 +2106,13 @@
     <string name="quick_panel_running">백그라운드에서 실행 중 — 완료되면 알림을 보내드립니다.</string>
     <string name="quick_notify_channel_name">빠른 패널 결과</string>
     <string name="quick_notify_title">빠른 프롬프트가 완료되었습니다</string>
+    <!-- [E-batch-app-knowledge] App notes: agent-recorded app experience library -->
+    <string name="settings_section_app_notes">앱 메모</string>
+    <string name="settings_app_notes_footer">에이전트가 이 기기의 앱을 조작하며 기록한 UI 정보로, 이후 실행에서 재사용됩니다.</string>
+    <string name="settings_app_notes_empty">아직 메모가 없습니다. 에이전트가 앱에서 유용한 정보를 발견하면 기록합니다.</string>
+    <string name="settings_app_notes_clear">모든 메모 지우기</string>
+    <string name="settings_app_notes_clear_title">앱 메모를 모두 지울까요?</string>
+    <string name="settings_app_notes_clear_message">에이전트가 기록한 앱 메모가 모두 삭제되며 되돌릴 수 없습니다.</string>
+    <string name="settings_app_notes_clear_ok">지우기</string>
+    <string name="settings_app_notes_cancel">취소</string>
 </resources>

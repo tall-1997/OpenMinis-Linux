@@ -44,9 +44,9 @@
       "reason": "data/sandbox/provider/browser are headless layers — UI types stay in ui/"
     },
     {
-      "fromPath": "^(?!.*com/openminis/app/(ui|automation/ui|quick)/)",
+      "fromPath": "^(?!.*com/openminis/app/(ui|automation/ui|quick|cards)/)",
       "ban": "import com.openminis.app.ui.",
-      "reason": "com.openminis.app.ui is the UI layer — non-UI sources (deeplink, config, i18n, webapp, agent, tools, ...) must not import it. automation/ui/ and quick/ are feature-owned UI subpackages (Compose screens/activities next to their engine); they import ui components by design, like ui/ itself."
+      "reason": "com.openminis.app.ui is the UI layer — non-UI sources (deeplink, config, i18n, webapp, agent, tools, ...) must not import it. automation/ui/, quick/ and cards/ are feature-owned UI subpackages (Compose screens/activities/renderers next to their engine); they import ui components by design, like ui/ itself."
     },
     {
       "fromPath": "com/openminis/app/ui/",
@@ -123,7 +123,7 @@
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatMiscViews.kt": 883,
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatModelPickerSheet.kt": 822,
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatScreen.kt": 5644,
-    "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatToolDetailUI.kt": 1510,
+    "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatToolDetailUI.kt": 1476,
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatViewModel.kt": 6230,
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatViewModelAgentLoopExt.kt": 2088,
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatViewModelGroupChatExt.kt": 820,

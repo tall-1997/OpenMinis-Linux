@@ -25,6 +25,7 @@ import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.BatteryFull
 import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.Dashboard
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Extension
@@ -47,8 +48,10 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material.icons.outlined.Translate
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.TextButton
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -56,6 +59,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import com.openminis.app.ui.components.MinisCenterTopBar
 import androidx.compose.runtime.Composable
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -72,6 +76,8 @@ import androidx.compose.ui.res.stringResource
 import com.openminis.app.ProjectRepo
 import com.openminis.app.BuildConfig
 import com.openminis.app.R
+import com.openminis.app.knowledge.AppNotes
+import com.openminis.app.knowledge.AppNotesStore
 import com.openminis.app.ui.components.openExternalUrl
 import com.openminis.app.i18n.uppercaseForDisplay
 import com.openminis.app.ui.theme.m3Icon
@@ -266,6 +272,9 @@ fun SettingsScreen(
                 )
             }
 
+            // -- App notes (F batch: agent-recorded app experience library) --
+            AppNotesSection()
+
             SettingsSection(title = stringResource(R.string.settings_section_tools)) {
                 SettingsItem(
                     icon = Icons.Outlined.Terminal,
@@ -428,6 +437,97 @@ fun SettingsScreen(
                 )
             }
         }
+    }
+}
+
+/**
+ * "App notes" section (batch F): the agent's on-device app experience library.
+ * Lists every recorded note as "app label — text (x uses)", with a clear-all
+ * row guarded by a confirmation dialog. Backed by the single AppNotes store.
+ */
+@Composable
+private fun AppNotesSection() {
+    val context = LocalContext.current
+    val notes = remember { AppNotesStore.forContext(context).all }
+        .collectAsStateWithLifecycle()
+    var showClearDialog by remember { mutableStateOf(false) }
+
+    SettingsSection(
+        title = stringResource(R.string.settings_section_app_notes),
+        footer = stringResource(R.string.settings_app_notes_footer),
+    ) {
+        val items = notes.value
+        if (items.isEmpty()) {
+            Text(
+                text = stringResource(R.string.settings_app_notes_empty),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            )
+        } else {
+            items.forEach { note ->
+                Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = remember(note.pkg) { AppNotes.labelOf(context, note.pkg) },
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(
+                            text = "${note.kind.name} · x${note.uses}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Text(
+                        text = note.text,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showClearDialog = true }
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Delete,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(Modifier.width(14.dp))
+                Text(
+                    text = stringResource(R.string.settings_app_notes_clear),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+        }
+    }
+
+    if (showClearDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearDialog = false },
+            title = { Text(stringResource(R.string.settings_app_notes_clear_title)) },
+            text = { Text(stringResource(R.string.settings_app_notes_clear_message)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    AppNotesStore.forContext(context).clearAll()
+                    showClearDialog = false
+                }) { Text(stringResource(R.string.settings_app_notes_clear_ok)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearDialog = false }) {
+                    Text(stringResource(R.string.settings_app_notes_cancel))
+                }
+            },
+        )
     }
 }
 

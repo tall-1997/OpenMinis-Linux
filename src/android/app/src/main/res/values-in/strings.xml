@@ -2094,6 +2094,16 @@
     <string name="notif_vscreen_handoff_action_done">Selesai (kembalikan)</string>
     <string name="notif_vscreen_handoff_action_keep">Aku urus sendiri</string>
     <string name="notif_vscreen_handoff_action_abort">Nanti saja</string>
+    <string name="card_action_open">Buka</string>
+    <string name="card_action_copy">Salin</string>
+    <string name="card_action_share">Bagikan</string>
+    <string name="card_action_undo">Urungkan</string>
+    <string name="card_action_undone">Diurungkan</string>
+    <string name="card_list_more">… dan %1$d lagi</string>
+    <string name="card_media_title">Gambar</string>
+    <string name="card_file_title">Berkas</string>
+    <string name="card_file_created">Berkas dibuat</string>
+    <string name="card_link_title">Tautan</string>
     <string name="quick_panel_input_hint">Apa yang harus Minis lakukan?</string>
     <string name="quick_send_failed">Tidak dapat memulai eksekusi. Buka Minis dan coba lagi.</string>
     <string name="quick_panel_open_session">Buka sesi</string>
@@ -2102,4 +2112,13 @@
     <string name="quick_panel_running">Berjalan di latar belakang — Anda akan mendapat notifikasi saat selesai.</string>
     <string name="quick_notify_channel_name">Hasil panel cepat</string>
     <string name="quick_notify_title">Prompt cepat selesai</string>
+    <!-- [E-batch-app-knowledge] App notes: agent-recorded app experience library -->
+    <string name="settings_section_app_notes">Catatan aplikasi</string>
+    <string name="settings_app_notes_footer">Fakta UI yang dicatat agen saat mengoperasikan aplikasi di ponsel ini dan dipakai lagi pada eksekusi berikutnya.</string>
+    <string name="settings_app_notes_empty">Belum ada catatan. Agen menambahkan satu saat menemukan hal yang kurang jelas pada sebuah aplikasi.</string>
+    <string name="settings_app_notes_clear">Hapus semua catatan</string>
+    <string name="settings_app_notes_clear_title">Hapus semua catatan aplikasi?</string>
+    <string name="settings_app_notes_clear_message">Semua catatan yang dicatat agen akan dihapus dan tidak dapat dipulihkan.</string>
+    <string name="settings_app_notes_clear_ok">Hapus</string>
+    <string name="settings_app_notes_cancel">Batal</string>
 </resources>

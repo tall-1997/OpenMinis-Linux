@@ -2089,6 +2089,16 @@
     <string name="notif_vscreen_handoff_action_done">Tamam (sanal ekrana geri gönder)</string>
     <string name="notif_vscreen_handoff_action_keep">Kendim hallettim</string>
     <string name="notif_vscreen_handoff_action_abort">Şimdi değil</string>
+    <string name="card_action_open">Aç</string>
+    <string name="card_action_copy">Kopyala</string>
+    <string name="card_action_share">Paylaş</string>
+    <string name="card_action_undo">Geri al</string>
+    <string name="card_action_undone">Geri alındı</string>
+    <string name="card_list_more">… ve %1$d tane daha</string>
+    <string name="card_media_title">Görüntü</string>
+    <string name="card_file_title">Dosya</string>
+    <string name="card_file_created">Dosya oluşturuldu</string>
+    <string name="card_link_title">Bağlantı</string>
     <string name="quick_panel_input_hint">Minis ne yapsın?</string>
     <string name="quick_send_failed">Çalıştırma başlatılamadı. Minis\'i açıp tekrar deneyin.</string>
     <string name="quick_panel_open_session">Oturumu aç</string>
@@ -2097,4 +2107,13 @@
     <string name="quick_panel_running">Arka planda çalışıyor — bitince bildirim alacaksınız.</string>
     <string name="quick_notify_channel_name">Hızlı panel sonuçları</string>
     <string name="quick_notify_title">Hızlı istek tamamlandı</string>
+    <!-- [E-batch-app-knowledge] App notes: agent-recorded app experience library -->
+    <string name="settings_section_app_notes">Uygulama notları</string>
+    <string name="settings_app_notes_footer">Ajan, bu telefondaki uygulamaları kullanırken kaydettiği arayüz bilgileri; sonraki çalıştırmalarda yeniden kullanılır.</string>
+    <string name="settings_app_notes_empty">Henüz not yok. Ajan, bir uygulama hakkında belirgin olmayan bir şey öğrendiğinde not ekler.</string>
+    <string name="settings_app_notes_clear">Tüm notları temizle</string>
+    <string name="settings_app_notes_clear_title">Tüm uygulama notları temizlensin mi?</string>
+    <string name="settings_app_notes_clear_message">Ajanın kaydettiği tüm notlar silinecek. Bu işlem geri alınamaz.</string>
+    <string name="settings_app_notes_clear_ok">Temizle</string>
+    <string name="settings_app_notes_cancel">İptal</string>
 </resources>

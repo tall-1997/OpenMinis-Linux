@@ -2093,6 +2093,16 @@
     <string name="notif_vscreen_handoff_action_done">Gata (înapoi pe ecranul virtual)</string>
     <string name="notif_vscreen_handoff_action_keep">Am făcut-o eu</string>
     <string name="notif_vscreen_handoff_action_abort">Nu acum</string>
+    <string name="card_action_open">Deschide</string>
+    <string name="card_action_copy">Copiază</string>
+    <string name="card_action_share">Distribuie</string>
+    <string name="card_action_undo">Anulează</string>
+    <string name="card_action_undone">Anulat</string>
+    <string name="card_list_more">… și încă %1$d</string>
+    <string name="card_media_title">Imagine</string>
+    <string name="card_file_title">Fișier</string>
+    <string name="card_file_created">Fișier creat</string>
+    <string name="card_link_title">Link</string>
     <string name="quick_panel_input_hint">Ce să facă Minis?</string>
     <string name="quick_send_failed">Nu s-a putut porni execuția. Deschide Minis și încearcă din nou.</string>
     <string name="quick_panel_open_session">Deschide sesiunea</string>
@@ -2101,4 +2111,13 @@
     <string name="quick_panel_running">Rulează în fundal — vei primi o notificare la final.</string>
     <string name="quick_notify_channel_name">Rezultatele panoului rapid</string>
     <string name="quick_notify_title">Cererea rapidă s-a încheiat</string>
+    <!-- [E-batch-app-knowledge] App notes: agent-recorded app experience library -->
+    <string name="settings_section_app_notes">Note despre aplicații</string>
+    <string name="settings_app_notes_footer">Fapte de interfață înregistrate de agent în timpul utilizării aplicațiilor pe acest telefon, reutilizate în rulările următoare.</string>
+    <string name="settings_app_notes_empty">Nicio notă deocamdată. Agentul adaugă una atunci când descoperă ceva neevident despre o aplicație.</string>
+    <string name="settings_app_notes_clear">Șterge toate notele</string>
+    <string name="settings_app_notes_clear_title">Ștergi toate notele despre aplicații?</string>
+    <string name="settings_app_notes_clear_message">Toate notele înregistrate de agent vor fi șterse. Acțiunea nu poate fi anulată.</string>
+    <string name="settings_app_notes_clear_ok">Șterge</string>
+    <string name="settings_app_notes_cancel">Anulare</string>
 </resources>

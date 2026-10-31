@@ -97,6 +97,15 @@ internal suspend fun ChatViewModel.executeTool(
         return ToolExecutionResult(out, !out.startsWith("Error:"), toolTitle = toolTitle)
     }
 
+    // [T-android-app-knowledge] Bundled app guides + the on-device experience
+    // notes the agent maintains about the apps it operates.
+    if (com.openminis.app.knowledge.AppKnowledgeTools.handles(canonical)) {
+        val out = com.openminis.app.knowledge.AppKnowledgeTools.execute(
+            canonical, argsJson, activeSessionId, context,
+        )
+        return ToolExecutionResult(out, !out.startsWith("Error:"), toolTitle = toolTitle)
+    }
+
     // [T-find-tools] On-demand tool discovery: resolve the query against the
     // full registry and enable matches for subsequent turns in this session.
     if (canonical == com.openminis.app.tools.FindTools.NAME) {
@@ -142,11 +151,30 @@ internal suspend fun ChatViewModel.executeTool(
         com.openminis.app.tools.WebFetchTool.NAME -> com.openminis.app.tools.WebFetchTool.execute(argsJson)
         // [T-ui-read] GUI Agent 的眼睛：a11y 读屏快照，配合 shell_execute 里
         // 的 android-a11y-cli 点击/输入形成"看屏→决策→执行→再看"闭环。
-        com.openminis.app.tools.UiReadTool.NAME ->
-            com.openminis.app.tools.UiReadTool.execute(argsJson)
+        com.openminis.app.tools.UiReadTool.NAME -> {
+            // Session-scoped: ui_read also injects the first-entry app guide
+            // (per session, per pack) when the foreground app changed.
+            com.openminis.app.tools.UiReadTool.execute(argsJson, activeSessionId)
+        }
         // [T-ui-action] GUI Agent 的手：tap/type/swipe/scroll/back/open_app/open_url。
-        com.openminis.app.tools.UiActionTool.NAME ->
-            com.openminis.app.tools.UiActionTool.execute(argsJson)
+        com.openminis.app.tools.UiActionTool.NAME -> {
+            val action = com.openminis.app.tools.UiActionTool.execute(argsJson)
+            // [T-android-app-knowledge] Feed the tap-route tracker: package from
+            // the accessibility foreground probe, target from the action text.
+            runCatching {
+                val pkg = com.openminis.app.accessibility.MinisAccessibilityService
+                    .getInstance()?.foregroundPackage()?.first
+                if (pkg != null) {
+                    val args = JSONObject(argsJson)
+                    val target = listOf("text", "selector", "package_name", "url")
+                        .firstNotNullOfOrNull { args.optString(it).takeIf { v -> v.isNotBlank() } }
+                        ?: args.optString("action")
+                    com.openminis.app.knowledge.RouteTrackers
+                        .global.record(activeSessionId ?: "", pkg, target)
+                }
+            }
+            action
+        }
         // [T-android-vscreen] Agent-owned virtual displays: the target app is
         // started on a VirtualDisplay so reads/taps/typing never steal the
         // user's physical screen and no Accessibility permission is needed

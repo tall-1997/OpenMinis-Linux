@@ -2091,6 +2091,16 @@
     <string name="notif_vscreen_handoff_action_done">Listo (devolver a la pantalla virtual)</string>
     <string name="notif_vscreen_handoff_action_keep">Lo hice yo mismo</string>
     <string name="notif_vscreen_handoff_action_abort">Ahora no</string>
+    <string name="card_action_open">Abrir</string>
+    <string name="card_action_copy">Copiar</string>
+    <string name="card_action_share">Compartir</string>
+    <string name="card_action_undo">Deshacer</string>
+    <string name="card_action_undone">Deshecho</string>
+    <string name="card_list_more">… y %1$d más</string>
+    <string name="card_media_title">Imagen</string>
+    <string name="card_file_title">Archivo</string>
+    <string name="card_file_created">Archivo creado</string>
+    <string name="card_link_title">Enlace</string>
     <string name="quick_panel_input_hint">¿Qué debe hacer Minis?</string>
     <string name="quick_send_failed">No se pudo iniciar la ejecución. Abre Minis e inténtalo de nuevo.</string>
     <string name="quick_panel_open_session">Abrir sesión</string>
@@ -2099,4 +2109,13 @@
     <string name="quick_panel_running">Ejecutándose en segundo plano: recibirás una notificación al terminar.</string>
     <string name="quick_notify_channel_name">Resultados del panel rápido</string>
     <string name="quick_notify_title">Prompt rápido finalizado</string>
+    <!-- [E-batch-app-knowledge] App notes: agent-recorded app experience library -->
+    <string name="settings_section_app_notes">Notas de apps</string>
+    <string name="settings_app_notes_footer">Datos de interfaz que el agente registró al usar apps en este teléfono y reutiliza en ejecuciones futuras.</string>
+    <string name="settings_app_notes_empty">Aún no hay notas. El agente añade una cuando aprende algo poco obvio sobre una app.</string>
+    <string name="settings_app_notes_clear">Borrar todas las notas</string>
+    <string name="settings_app_notes_clear_title">¿Borrar todas las notas de apps?</string>
+    <string name="settings_app_notes_clear_message">Se eliminarán todas las notas registradas por el agente. No se puede deshacer.</string>
+    <string name="settings_app_notes_clear_ok">Borrar</string>
+    <string name="settings_app_notes_cancel">Cancelar</string>
 </resources>

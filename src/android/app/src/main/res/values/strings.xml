@@ -2913,6 +2913,16 @@
     <string name="notif_vscreen_handoff_action_done">Done (move it back)</string>
     <string name="notif_vscreen_handoff_action_keep">I did it myself</string>
     <string name="notif_vscreen_handoff_action_abort">Not now</string>
+    <string name="card_action_open">Open</string>
+    <string name="card_action_copy">Copy</string>
+    <string name="card_action_share">Share</string>
+    <string name="card_action_undo">Undo</string>
+    <string name="card_action_undone">Undone</string>
+    <string name="card_list_more">… and %1$d more</string>
+    <string name="card_media_title">Image</string>
+    <string name="card_file_title">File</string>
+    <string name="card_file_created">File created</string>
+    <string name="card_link_title">Link</string>
     <string name="quick_panel_input_hint">What should Minis do?</string>
     <string name="quick_send_failed">Couldn\'t start the run. Open Minis and try again.</string>
     <string name="quick_panel_open_session">Open session</string>
@@ -2921,4 +2931,13 @@
     <string name="quick_panel_running">Running in the background — you\'ll get a notification when it finishes.</string>
     <string name="quick_notify_channel_name">Quick panel results</string>
     <string name="quick_notify_title">Quick prompt finished</string>
+    <!-- [E-batch-app-knowledge] App notes: agent-recorded app experience library -->
+    <string name="settings_section_app_notes">App notes</string>
+    <string name="settings_app_notes_footer">Short UI facts the agent recorded while operating apps on this phone, reused in future runs.</string>
+    <string name="settings_app_notes_empty">No notes yet. The agent adds one when it learns something non-obvious about an app.</string>
+    <string name="settings_app_notes_clear">Clear all notes</string>
+    <string name="settings_app_notes_clear_title">Clear all app notes?</string>
+    <string name="settings_app_notes_clear_message">Every note the agent recorded about your apps will be deleted. This cannot be undone.</string>
+    <string name="settings_app_notes_clear_ok">Clear</string>
+    <string name="settings_app_notes_cancel">Cancel</string>
 </resources>
