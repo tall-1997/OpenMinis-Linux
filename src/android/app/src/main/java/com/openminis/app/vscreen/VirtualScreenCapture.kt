@@ -1,26 +1,19 @@
 package com.openminis.app.vscreen
 
 import android.graphics.Bitmap
-import android.graphics.PixelFormat
 import android.media.Image
-import android.media.ImageReader
-import android.os.Handler
-import android.os.HandlerThread
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.offload.ShizukuManager
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.Base64
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicReference
 
 /**
  * [T-android-vscreen] The layered screenshot PNG pipeline, split out of
  * [VirtualScreenManager] (architecture ratchet): pure functions over the
  * seams, touching NO manager-private state.
  *
- *  - [captureViaImageReader] — layer 1 (ImageReader, app-uid, no Shizuku).
+ *  - [captureViaImageReader] — layer 1 (persistent reader, app-uid, no Shizuku).
  *  - [readChunked] — layer 3 (Shizuku screencap + chunked base64 through
  *    stdout); the shell is injected so JVM tests keep driving it.
  *  - [writePng] — terminal write into the offloads dir, returning the
@@ -31,8 +24,6 @@ import java.util.concurrent.atomic.AtomicReference
 internal object VirtualScreenCapture {
     private const val TAG = "VirtualScreenCapture"
 
-    private const val FRAME_TIMEOUT_MS = 3_000L
-
     /** base64 of one chunk stays inside the 64KB BoundedOutputBuffer head cap. */
     private const val CHUNK_BYTES = 48_000
 
@@ -40,40 +31,23 @@ internal object VirtualScreenCapture {
     internal const val PNG_SUFFIX = ".png"
 
     /**
-     * Layer 1. Attaches an ImageReader surface to our own display, awaits one
-     * frame (bounded), reads it to a PNG and detaches — all app-uid. Returns
-     * null on any failure (timeout, no frame, attach refused) so the caller
+     * Layer 1. Reads the latest frame from the display's OWN persistent
+     * ImageReader (attached at create — the [VirtualScreenManager] surface
+     * contract, never detached) and converts it to PNG. No surface churn:
+     * the display keeps input focus across captures. Returns null when no
+     * frame is available yet (fresh display, app not drawn), so the caller
      * falls through to the screencap layers.
      */
-    fun captureViaImageReader(handle: VirtualScreenManager.DisplayHandle?, width: Int, height: Int): ByteArray? {
+    fun captureViaImageReader(handle: VirtualScreenManager.DisplayHandle?): ByteArray? {
         if (handle == null) return null
-        var reader: ImageReader? = null
-        var thread: HandlerThread? = null
+        val img = handle.acquireLatestFrame() ?: return null
         return try {
-            val frame = AtomicReference<Image>(null)
-            val latch = CountDownLatch(1)
-            reader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2)
-            thread = HandlerThread("minis-vscreen-capture").also { it.start() }
-            reader.setOnImageAvailableListener({ r ->
-                if (frame.get() != null) return@setOnImageAvailableListener
-                runCatching { r.acquireLatestImage() }.getOrNull()?.let {
-                    frame.set(it)
-                    latch.countDown()
-                }
-            }, Handler(thread.looper))
-            if (!handle.attach(reader.surface)) return null
-            latch.await(FRAME_TIMEOUT_MS, TimeUnit.MILLISECONDS)
-            handle.detach()
-            val img = frame.get() ?: return null
-            val png = imageToPng(img)
-            img.close()
-            png
+            imageToPng(img)
         } catch (t: Throwable) {
             AppLogger.warning(TAG, "ImageReader capture failed: ${t.message}")
             null
         } finally {
-            runCatching { reader?.close() }
-            runCatching { thread?.quitSafely() }
+            runCatching { img.close() }
         }
     }
 

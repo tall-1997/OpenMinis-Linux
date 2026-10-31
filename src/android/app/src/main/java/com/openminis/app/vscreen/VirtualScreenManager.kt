@@ -1,10 +1,12 @@
 package com.openminis.app.vscreen
 
 import android.content.Context
+import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
+import android.media.Image
+import android.media.ImageReader
 import android.os.Handler
 import android.os.Looper
-import android.view.Surface
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.offload.ShizukuManager
 import java.io.File
@@ -37,11 +39,16 @@ import java.io.File
  *      a marker in between), so a whole-PNG base64 CANNOT ride one call;
  *      chunks stay under the head cap and are concatenated here.
  *
- * Tradeoff recorded at create time: the display is created with NO surface
- * (OWN_CONTENT_ONLY class), so nothing renders and no frame is composited
- * until the screenshot flow attaches one. The target app still starts,
- * runs and receives input on that display — verify state via `screenshot`,
- * which attaches an ImageReader for the capture and detaches it after.
+ * Surface contract (root cause of T-android-vscreen3): the display is
+ * created WITH a surface — an app-owned ImageReader attached for the
+ * display's WHOLE lifetime. A surface-less virtual display is put to
+ * sleep by the platform (WMS holds an internal "Display-off" sleep
+ * token), which hides its windows and drops every injected input event,
+ * so a transiently-attached capture surface can never be driven.
+ * OWN_CONTENT_ONLY keeps the frames private to our reader (the user's
+ * screen shows nothing) at the cost of compositing on our display while
+ * it lives — bounded by [MAX_SCREENS] and the idle release. Screenshots
+ * read the reader directly; there is no attach/detach churn.
  *
  * Caps and seams:
  *   - At most [MAX_SCREENS] displays; the least-recently-used one is released
@@ -82,8 +89,14 @@ object VirtualScreenManager {
     /** Live handle over one created virtual display. Test seam. */
     interface DisplayHandle {
         val displayId: Int
-        fun attach(surface: Surface): Boolean
-        fun detach()
+
+        /**
+         * Latest frame rendered on the display, or null when none is
+         * available yet. The caller owns the returned [Image] and must
+         * close it. The display surface stays attached — [release] is the
+         * only teardown, so the display keeps input focus for its lifetime.
+         */
+        fun acquireLatestFrame(): Image?
         fun release()
     }
 
@@ -405,7 +418,7 @@ object VirtualScreenManager {
         offloadsDir.mkdirs()
 
         // Layer 1: our own display, our own uid.
-        VirtualScreenCapture.captureViaImageReader(s.handle, s.width, s.height)?.let { bytes ->
+        VirtualScreenCapture.captureViaImageReader(s.handle)?.let { bytes ->
             return VirtualScreenCapture.writePng(offloadsDir, displayId, bytes, "ImageReader")
         }
 
@@ -626,28 +639,32 @@ object VirtualScreenManager {
 
     /**
      * OWN_CONTENT_ONLY class (API 19+; project minSdk is 26, so no runtime
-     * gate is needed). Null surface — see the class KDoc tradeoff.
+     * gate is needed). The reader's surface is attached AT CREATE and never
+     * detached — see the class KDoc surface contract. A null-surface display
+     * would sleep immediately and drop every injected input event.
      */
     private fun buildRealFactory(app: Context): DisplayHandleFactory =
         DisplayHandleFactory { label, w, h, dpi ->
             val dm = app.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager
+            val reader = ImageReader.newInstance(w, h, PixelFormat.RGBA_8888, 2)
             val vd = runCatching {
                 dm?.createVirtualDisplay(
-                    label, w, h, dpi, null,
+                    label, w, h, dpi, reader.surface,
                     DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY,
                     null, null,
                 )
             }.getOrNull()
-            vd?.let { v ->
+            if (vd == null) {
+                runCatching { reader.close() }
+                null
+            } else {
                 object : DisplayHandle {
-                    override val displayId: Int = v.display.displayId
-                    override fun attach(surface: Surface): Boolean =
-                        runCatching { v.surface = surface }.isSuccess
-                    override fun detach() {
-                        runCatching { v.surface = null }
-                    }
+                    override val displayId: Int = vd.display.displayId
+                    override fun acquireLatestFrame(): Image? =
+                        runCatching { reader.acquireLatestImage() }.getOrNull()
                     override fun release() {
-                        runCatching { v.release() }
+                        runCatching { vd.release() }
+                        runCatching { reader.close() }
                     }
                 }
             }
