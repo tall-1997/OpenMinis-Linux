@@ -48,7 +48,8 @@ import org.json.JSONObject
  * granted ([ToolErrorCode.PERMISSION_DENIED]), the display does not exist
  * ([ToolErrorCode.NOT_FOUND]), this ROM has no display-targeted input /
  * screencap / task move ([ToolErrorCode.UNSUPPORTED]), or a plain execution
- * failure with the underlying command output. Requires Shizuku for
+ * failure with the underlying command output. Requires Shizuku or host su
+ * (Magisk/KernelSU) for
  * launch/screenshot/tap/swipe/text/key/hand_to_user; create/list/destroy
  * need no Shizuku at all.
  *
@@ -71,7 +72,9 @@ object VirtualScreenTool {
         description = "Put a target Android app on an agent-owned VIRTUAL display and drive it " +
             "there independently of the user's physical screen: the app runs on a headless " +
             "virtual display, so the user keeps their phone and no Accessibility permission is " +
-            "needed (driving goes through the Shizuku shell). Requires Shizuku for launch, " +
+            "needed (driving goes through the Shizuku shell, falling back to host su from " +
+            "Magisk/KernelSU when Shizuku is unavailable). Requires Shizuku or host su " +
+            "(Magisk/KernelSU) for launch, " +
             "screenshot fallbacks, input and hand_to_user; create/list/destroy need none. " +
             "Actions: 'create' (width/height/dpi, default 1080x1920@320) makes a display and " +
             "returns a display_id (at most 2 live, least-recently-used is released; the display " +
@@ -572,8 +575,9 @@ object VirtualScreenTool {
                 "Error: ${outcome.message}",
                 false,
                 errorCode = ToolErrorCode.PERMISSION_DENIED,
-                recoveryHint = "Grant Shizuku (Settings -> Permissions -> Shizuku), then retry. " +
-                    "create/list/destroy work without Shizuku; screenshot falls back to the " +
+                recoveryHint = "Grant Shizuku (Settings -> Permissions -> Shizuku) or root " +
+                    "with Magisk/KernelSU (host su), then retry. " +
+                    "create/list/destroy work without either; screenshot falls back to the " +
                     "in-app ImageReader capture first.",
                 toolTitle = toolTitle,
             )

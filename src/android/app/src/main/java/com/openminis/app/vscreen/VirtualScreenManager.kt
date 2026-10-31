@@ -8,6 +8,7 @@ import android.media.ImageReader
 import android.os.Handler
 import android.os.Looper
 import com.openminis.app.logging.AppLogger
+import com.openminis.app.offload.HostSuFallback
 import com.openminis.app.offload.ShizukuManager
 import java.io.File
 
@@ -181,15 +182,13 @@ object VirtualScreenManager {
 
     private val defaultShizukuGuard: () -> String? = {
         ShizukuManager.refresh()
-        when (ShizukuManager.snapshot.value.state) {
-            ShizukuManager.State.NOT_INSTALLED ->
-                "Shizuku is not installed. Open Settings -> Permissions -> Shizuku to install it."
-            ShizukuManager.State.NOT_RUNNING ->
-                "Shizuku service is not running. Start it via adb or root, then retry."
-            ShizukuManager.State.NEED_PERMISSION ->
-                "Minis is not authorized for Shizuku. Grant permission in Settings -> Permissions -> Shizuku."
-            ShizukuManager.State.READY -> null
-        }
+        // [T-host-su-fallback] guardDecision lets a su-equipped device pass
+        // because runProcess routes its commands through host su when the
+        // binder is not READY.
+        HostSuFallback.guardDecision(
+            ShizukuManager.snapshot.value.state,
+            HostSuFallback.isAvailable(),
+        )
     }
 
     // ── [T-android-vscreen2] component wiring + upkeep ─────────────────────

@@ -61,9 +61,24 @@ fun applyUnrecognizedModelDefaults(model: LLMModel): LLMModel {
         .withInferredVoiceModality()
         .withInferredVideoModality()
         .withInferredImageModality()
+    // [T-generator-stamp-exemption] A model whose output modalities are
+    // explicitly non-empty and contain no `text` is a pure generator
+    // (image/video/audio): it runs the generation path and never consumes
+    // maxOutputTokens. Stamping 256k/128k on it was wrong information.
+    val pureGenerator = inferred.outputModalities
+        ?.let { it.isNotEmpty() && "text" !in it }
+        ?: false
     return inferred.copy(
-        contextWindow = inferred.contextWindow?.takeIf { it > 0 } ?: UNKNOWN_CONTEXT_WINDOW,
-        maxOutputTokens = inferred.maxOutputTokens?.takeIf { it > 0 } ?: UNKNOWN_MAX_OUTPUT,
+        contextWindow = if (pureGenerator) {
+            inferred.contextWindow?.takeIf { it > 0 }
+        } else {
+            inferred.contextWindow?.takeIf { it > 0 } ?: UNKNOWN_CONTEXT_WINDOW
+        },
+        maxOutputTokens = if (pureGenerator) {
+            inferred.maxOutputTokens?.takeIf { it > 0 }
+        } else {
+            inferred.maxOutputTokens?.takeIf { it > 0 } ?: UNKNOWN_MAX_OUTPUT
+        },
         supportsReasoning = inferred.supportsReasoning ?: true,
         reasoningEffortValues = inferred.reasoningEffortValues?.takeIf { it.isNotEmpty() }
             ?: UNKNOWN_REASONING_EFFORT,

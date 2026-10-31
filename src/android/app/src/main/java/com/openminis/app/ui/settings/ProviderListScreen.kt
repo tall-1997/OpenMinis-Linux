@@ -55,6 +55,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.key
 import sh.calvin.reorderable.ReorderableColumn
 import com.openminis.app.data.model.ProviderInstance
+import com.openminis.app.data.model.ProviderRowSnapshot
+import com.openminis.app.data.repository.cachedRowSnapshots
+import com.openminis.app.data.repository.computeRowSnapshots
 import com.openminis.app.data.repository.ProviderRefreshMarks
 import com.openminis.app.data.repository.ProviderRepository
 import com.openminis.app.data.repository.missingBuiltInFreeLanes
@@ -85,41 +88,7 @@ private sealed class ProviderImportOutcome {
     data class ZipSummary(val ok: Int, val total: Int) : ProviderImportOutcome()
 }
 
-private data class ProviderRowSnapshot(
-    val loaded: Boolean = false,
-    val modelCount: Int = 0,
-    val apiKey: String? = null,
-    val isConfigured: Boolean = false,
-    val needsReauth: Boolean = false,
-)
 
-private suspend fun loadProviderRowSnapshots(
-    instances: List<ProviderInstance>,
-    providerRepository: ProviderRepository,
-    context: android.content.Context,
-): Map<String, ProviderRowSnapshot> = withContext(Dispatchers.IO) {
-    // One bounded IO snapshot for the whole page. The previous implementation
-    // launched one produceState/IO job per row; entering a list with many
-    // providers caused a burst of encrypted-prefs, OAuth and config reads and
-    // made the navigation transition wait behind dozens of continuations.
-    instances.associate { instance ->
-        val apiKey = providerRepository.loadApiKey(instance.id)
-        val configured = if (instance.credentialType ==
-            com.openminis.app.data.model.ProviderCredential.oauth) {
-            val mgr = com.openminis.app.auth.OAuthManager.forInstance(context, instance)
-            mgr?.isAuthenticated() == true
-        } else {
-            !apiKey.isNullOrBlank() || instance.allowsEmptyAPIKey
-        }
-        instance.id to ProviderRowSnapshot(
-            loaded = true,
-            modelCount = providerRepository.visibleEntries(instance.id).size,
-            apiKey = apiKey,
-            isConfigured = configured,
-            needsReauth = com.openminis.app.auth.OAuthManager.needsReauth(context, instance.id),
-        )
-    }
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -137,11 +106,16 @@ fun ProviderListScreen(
     val groupedInstances = instances.groupBy { it.providerType }
     val context = LocalContext.current
     val rowSnapshots by produceState<Map<String, ProviderRowSnapshot>>(
-        initialValue = emptyMap(),
+        initialValue = providerRepository.cachedRowSnapshots(
+            instances, configRevision, credentialRevision,
+        ) ?: emptyMap(),
         configRevision,
         credentialRevision,
     ) {
-        value = loadProviderRowSnapshots(instances, providerRepository, context)
+        // First frame comes from the process-level cache; this background
+        // recompute still runs to correct OAuth drift that no revision event
+        // announces, and refreshes the cache for the next entry.
+        value = providerRepository.computeRowSnapshots(instances, credentialRevision)
     }
     val shadowSnapshot by produceState(
         initialValue = ProviderRepository.ShadowVoiceSnapshot(emptyList(), false),
