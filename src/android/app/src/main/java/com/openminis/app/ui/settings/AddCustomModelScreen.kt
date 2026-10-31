@@ -16,10 +16,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
-import com.openminis.app.data.model.LLMModel
-import com.openminis.app.data.model.ModelEntry
-import com.openminis.app.data.model.applyUnrecognizedModelDefaults
+import com.openminis.app.data.model.buildCustomModelEntry
 import com.openminis.app.data.repository.ProviderRepository
+import com.openminis.app.provider.ModelsDevApi
 import com.openminis.app.ui.components.RowLabel
 import com.openminis.app.ui.components.SectionTextField
 import com.openminis.app.R
@@ -77,18 +76,12 @@ fun AddCustomModelScreen(
         Spacer(Modifier.height(20.dp))
         MinisButton(
             onClick = {
-                val name = displayName.ifBlank { modelId }
-                val model = applyUnrecognizedModelDefaults(
-                    LLMModel(
-                        id = modelId.trim(),
-                        displayName = name.trim(),
-                        provider = instance.providerType.displayName,
-                    ),
-                )
-                val entry = ModelEntry(
+                val entry = buildCustomModelEntry(
+                    modelId = modelId,
+                    displayName = displayName,
                     providerInstanceId = instanceId,
-                    baseModel = model,
-                    isCustom = true,
+                    providerTypeDisplayName = instance.providerType.displayName,
+                    enrich = ModelsDevApi::enrichModel,
                 )
                 providerRepository.addEntry(entry)
                 onBack()

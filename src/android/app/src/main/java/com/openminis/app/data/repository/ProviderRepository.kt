@@ -33,7 +33,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class ProviderRepository(private val context: Context) {
+class ProviderRepository(internal val context: Context) {
 
     // ── Persistence collaborator [ProviderRepository split] ──
     // The persistence slice (JSON codec, prefs, encrypted prefs, hash mirror,

@@ -119,14 +119,19 @@ object ShizukuManager {
         cwd: String? = null,
         timeoutMs: Long = 5_000L,
     ): ProcessResult {
-        if (!isReady()) {
-            return ProcessResult(
+        // [T-host-su-fallback] The sandbox's Shizuku handler and the vscreen
+        // chain both call runProcess, so this one decision upgrades every
+        // privileged consumer at once.
+        return when (HostSuFallback.lane(isReady(), HostSuFallback.isAvailable())) {
+            HostSuFallback.Lane.BINDER -> backend!!.runProcess(argv, env, cwd, timeoutMs)
+            HostSuFallback.Lane.HOST_SU -> HostSuFallback.run(argv, timeoutMs)
+            HostSuFallback.Lane.NONE -> ProcessResult(
                 exitCode = 126,
                 stdout = "",
-                stderr = "shizuku not ready (state=${_snapshot.value.state})",
+                stderr = "shizuku not ready (state=${_snapshot.value.state}) " +
+                    "and no host su binary (Magisk/KernelSU)",
             )
         }
-        return backend!!.runProcess(argv, env, cwd, timeoutMs)
     }
 
     fun deviceSdk(): Int = Build.VERSION.SDK_INT
