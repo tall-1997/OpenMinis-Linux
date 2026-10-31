@@ -88,4 +88,39 @@ class A2aPanelMobileShellTest {
         assertTrue(script.contains("if (!shell) return;"))
         assertTrue(script.contains("if (topbar && "))
     }
+
+    private val startScript = A2aPanelMobileShell.START_SCRIPT
+
+    @Test
+    fun `document-start wiring has its own guard`() {
+        // The full script re-checks GUARD and would skip the drawer nodes
+        // if the document-start pass claimed it.
+        assertTrue(startScript.contains("window.${A2aPanelMobileShell.START_GUARD}"))
+        assertTrue(!startScript.contains("window.${A2aPanelMobileShell.GUARD}"))
+    }
+
+    @Test
+    fun `document-start wiring does not depend on the rendered shell`() {
+        // Document start runs before React mounts: `.shell` does not exist
+        // yet, so the script must not look for it (the full script already
+        // does, from onPageFinished).
+        assertTrue(!startScript.contains(".shell"))
+    }
+
+    @Test
+    fun `document-start wiring uses the same markers as the full script`() {
+        // Both passes must agree on the ids, or the full script's probes
+        // fail to see the start pass and duplicate the nodes.
+        assertTrue(startScript.contains("link.id = '${A2aPanelMobileShell.LINK_ID}'"))
+        assertTrue(startScript.contains("patch.id = '${A2aPanelMobileShell.PATCH_ID}'"))
+        assertTrue(startScript.contains("window.location.origin + '/css/mobile.css'"))
+    }
+
+    @Test
+    fun `document-start wiring is confined to the gateway origin`() {
+        // The panel opens vendor SSO pages in in-app login windows; the
+        // rule must keep this script off them. The panel lives on loopback
+        // with a non-fixed port, which the wildcard-scheme rule covers.
+        assertTrue(A2aPanelMobileShell.START_ORIGIN_RULES == "*://127.0.0.1/*")
+    }
 }

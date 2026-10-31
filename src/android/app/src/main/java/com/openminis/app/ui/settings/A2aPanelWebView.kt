@@ -35,6 +35,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.webkit.WebViewCompat
 import com.openminis.app.R
 import com.openminis.app.a2a.A2aGateway
 import com.openminis.app.a2a.A2aLoginCallback
@@ -154,6 +155,20 @@ fun A2aPanelWebView(
                     // ships with third-party cookies OFF.
                     android.webkit.CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
                     WebViewEngine.applyCompat(this)
+                    // [T-android-a2a-mobile-fouc] The full mobile wiring
+                    // runs from onPageFinished (it needs the rendered
+                    // shell), which is after the first paint — so every cold
+                    // start flashes the desktop grid before snapping into
+                    // the card layout. The stylesheet and scrollbar patch
+                    // are render-blocking: injected at document start (the
+                    // earliest WebView hook) they are applied to the very
+                    // first frame. The origin rule keeps vendor SSO pages,
+                    // opened as in-app login windows, from running it.
+                    WebViewCompat.addDocumentStartJavaScript(
+                        this,
+                        A2aPanelMobileShell.START_SCRIPT,
+                        setOf(A2aPanelMobileShell.START_ORIGIN_RULES),
+                    )
                     webViewClient = object : WebViewClient() {
                         override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                             loadStarted = true
