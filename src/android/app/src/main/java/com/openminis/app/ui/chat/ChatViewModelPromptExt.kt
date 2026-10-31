@@ -279,12 +279,9 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
         engine?.formatAsPromptFragment(hits) ?: ""
     } else null
     // Standing, user-approved evolution rules. Not gated by memoryOn (same as SOUL.md).
-    val learnedSample = _messages.value.lastOrNull { it.role == "user" }?.content
-    val learnedScene = com.openminis.app.evolution.SceneClassifier.classify(
-        _sessionCategory.value,
-        _sessionTitle.value,
-        learnedSample,
-    )
+    // [P1-20] Scene classification is memoized on its exact input triple
+    // (category/title/latest-user-sample) — see ChatViewModel.learnedSceneTag.
+    val learnedScene = learnedSceneTag()
     val learnedPrefsFragment = memoryRepository?.loadLearnedPrefsFragment(learnedScene)
     // [XSessionDiag] Hypothesis 3: ties the memory-injection sizes to a
     // SESSION id. MemoryRepository itself has no session context, so its own

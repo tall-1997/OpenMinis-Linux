@@ -57,3 +57,36 @@ internal fun extractPartialJsonString(key: String, json: String): String? {
     }
     return null
 }
+
+/**
+ * [P1-17] Single source for the model-provided `tool_title` argument.
+ * Replaces three hand-rolled extractions that had drifted apart
+ * (ToolTurnExec dispatch status, ExecuteToolExt guard results, AgentLoopExt
+ * streaming pill):
+ *
+ *  1. Complete-JSON path — `JSONObject.optString` is authoritative once the
+ *     args are fully received (it also decodes \uXXXX escapes the substring
+ *     scan doesn't).
+ *  2. Partial/streaming path — [extractPartialJsonString] scans the value out
+ *     of a still-streaming args buffer (`"tool_title": "Editing Cha…`), where
+ *     the JSONObject constructor would throw.
+ *
+ * A blank / absent title falls through to [fallback], so callers keep their
+ * own "what to show instead" policy (null, the canonical tool name, the
+ * previous live title, …). Note the deliberate unification of the
+ * explicit-empty case: sites that used to surface an empty-string title now
+ * take the fallback, matching the isBlank() handling those same call sites
+ * apply downstream.
+ */
+internal fun extractToolTitle(argsJson: String, fallback: String?): String? {
+    if (argsJson.isEmpty()) return fallback
+    val fromJson = try {
+        org.json.JSONObject(argsJson).optString("tool_title", "")
+    } catch (_: Exception) {
+        ""
+    }
+    if (fromJson.isNotBlank()) return fromJson
+    val partial = extractPartialJsonString("tool_title", argsJson)
+    if (!partial.isNullOrBlank()) return partial
+    return fallback
+}

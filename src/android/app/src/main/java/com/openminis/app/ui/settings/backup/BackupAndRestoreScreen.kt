@@ -1,5 +1,13 @@
 package com.openminis.app.ui.settings.backup
 
+import com.openminis.app.ui.theme.IosBlue
+import com.openminis.app.ui.theme.IosGray
+import com.openminis.app.ui.theme.IosGreen
+import com.openminis.app.ui.theme.IosIndigo
+import com.openminis.app.ui.theme.IosOrange
+import com.openminis.app.ui.theme.IosPurple
+import com.openminis.app.ui.theme.IosRed
+import com.openminis.app.ui.theme.IosTeal
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -177,14 +185,10 @@ fun BackupAndRestoreScreen(
             ) { Text(stringResource(R.string.backup_tab_restore)) }
         }
 
-        // [T-restore-keep-tab-state] Only ONE tab is composed at a time, so the
-        // other leaves the tree and plain `remember` state dies with it. The
-        // picked package survives regardless — it lives in the ViewModel — but
-        // a half-typed passphrase did not, so glancing at the other tab
-        // mid-restore silently emptied the field.
+        // [T-restore-keep-tab-state] Only ONE tab is composed at a time, so the other leaves the tree and plain `remember` state dies with it. The
+        // picked package survives regardless — it lives in the ViewModel — but a half-typed passphrase did not, so glancing at the other tab mid-restore silently emptied the field.
         //
-        // Hoisted to the container, which outlives both tabs. NOT
-        // `rememberSaveable`: that would write the passphrase into the
+        // Hoisted to the container, which outlives both tabs. NOT `rememberSaveable`: that would write the passphrase into the
         // saved-instance-state bundle, persisting a secret to disk to save the
         // user a few keystrokes.
         if (tab == 0) {
@@ -347,7 +351,7 @@ private fun BackupTab(
         CategorySwitchRow(
             title = stringResource(R.string.backup_encrypt_backup),
             icon = Icons.Outlined.Lock,
-            iconColor = Color(0xFF34C759),
+            iconColor = IosGreen,
             checked = encrypt,
             onCheckedChange = { vm.setEncrypt(it) },
             enabled = !running,
@@ -575,7 +579,7 @@ private fun BackupHistorySection(
         if (!expanded && records.size > shown.size) {
             RestoreSourceRow(
                 icon = Icons.Outlined.History,
-                iconColor = Color(0xFF8E8E93),
+                iconColor = IosGray,
                 label = stringResource(
                     R.string.backup_history_show_all,
                     records.size,
@@ -595,10 +599,10 @@ private fun BackupHistoryRow(
     onClick: () -> Unit,
 ) {
     val (icon, tint) = when (record.status) {
-        BackupHistory.Status.RUNNING -> Icons.Outlined.Sync to Color(0xFF8E8E93)
-        BackupHistory.Status.SUCCEEDED -> Icons.Outlined.CheckCircle to Color(0xFF34C759)
-        BackupHistory.Status.COMPLETED_WITH_ISSUES -> Icons.Outlined.Warning to Color(0xFFFF9500)
-        BackupHistory.Status.FAILED -> Icons.Outlined.ErrorOutline to Color(0xFFFF3B30)
+        BackupHistory.Status.RUNNING -> Icons.Outlined.Sync to IosGray
+        BackupHistory.Status.SUCCEEDED -> Icons.Outlined.CheckCircle to IosGreen
+        BackupHistory.Status.COMPLETED_WITH_ISSUES -> Icons.Outlined.Warning to IosOrange
+        BackupHistory.Status.FAILED -> Icons.Outlined.ErrorOutline to IosRed
     }
     Column {
         Row(
@@ -747,7 +751,7 @@ private fun MaxFileSizeRow(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
-                modifier = Modifier.size(30.dp).background(Color(0xFF8E8E93), CircleShape),
+                modifier = Modifier.size(30.dp).background(IosGray, CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
@@ -891,7 +895,7 @@ private fun RestoreTab(
                     phoneRestoreItems.forEachIndexed { i, item ->
                         RestoreSourceRow(
                             icon = Icons.Outlined.Description,
-                            iconColor = Color(0xFF007AFF),
+                            iconColor = IosBlue,
                             label = item.name,
                             enabled = !running,
                             onClick = { vm.loadPackage(item.uri) },
@@ -917,7 +921,7 @@ private fun RestoreTab(
                 phoneFolders.forEachIndexed { i, folder ->
                     RestoreSourceRow(
                         icon = Icons.Outlined.Folder,
-                        iconColor = Color(0xFF007AFF),
+                        iconColor = IosBlue,
                         label = folder.name,
                         subtitle = stringResource(R.string.backup_dest_phone_subtitle),
                         enabled = !running,
@@ -928,7 +932,7 @@ private fun RestoreTab(
                 destinations.forEachIndexed { i, r ->
                     RestoreSourceRow(
                         icon = Icons.Outlined.Cloud,
-                        iconColor = Color(0xFFAF52DE),
+                        iconColor = IosPurple,
                         label = r.name,
                         subtitle = stringResource(
                             R.string.backup_dest_row_subtitle,
@@ -955,7 +959,7 @@ private fun RestoreTab(
             // folder support is untouched — only this duplicate entry is gone.
             RestoreSourceRow(
                 icon = Icons.Outlined.Description,
-                iconColor = Color(0xFF007AFF),
+                iconColor = IosBlue,
                 label = if (running) status ?: stringResource(R.string.backup_reading)
                 else stringResource(R.string.backup_choose_file),
                 enabled = !running,
@@ -964,20 +968,14 @@ private fun RestoreTab(
             )
             RestoreSourceRow(
                 icon = Icons.Outlined.Cloud,
-                iconColor = Color(0xFFAF52DE),
+                iconColor = IosPurple,
                 label = stringResource(R.string.backup_choose_server),
                 enabled = !running,
-                // [T-android-restore-server-list] ALWAYS the same destination:
-                // a "Restore from Server" list page. It used to branch on
-                // whether any server existed — a dialog when there was one,
-                // and with none a dialog whose entire content was "no servers
-                // configured" over a lone Cancel: a dead end that named the
-                // problem and then refused to solve it, on the one screen
+                // [T-android-restore-server-list] ALWAYS the same destination: a "Restore from Server" list page. It used to branch on whether any server existed — a dialog when there was one,
+                // and with none a dialog whose entire content was "no servers configured" over a lone Cancel: a dead end that named the problem and then refused to solve it, on the one screen
                 // where the user had already said what they wanted.
                 //
-                // One unconditional destination is what makes the empty state
-                // stop being special. That page lists the servers with an Add
-                // Server entry always at the end, so "none configured" is just
+                // One unconditional destination is what makes the empty state stop being special. That page lists the servers with an Add Server entry always at the end, so "none configured" is just
                 // the case where the list happens to be empty — the entry the
                 // user needs is in the same place either way. Matches iOS.
                 onClick = onChooseRestoreServer,
@@ -1268,7 +1266,7 @@ private fun DestinationsSection(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Box(
-                        modifier = Modifier.size(30.dp).background(Color(0xFF007AFF), CircleShape),
+                        modifier = Modifier.size(30.dp).background(IosBlue, CircleShape),
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(com.openminis.app.ui.theme.m3Icon(Icons.Outlined.Folder), contentDescription = null, tint = Color.White, modifier = Modifier.size(17.dp))
@@ -1305,7 +1303,7 @@ private fun DestinationsSection(
         }
         RestoreSourceRow(
             icon = Icons.Outlined.CreateNewFolder,
-            iconColor = Color(0xFF34C759),
+            iconColor = IosGreen,
             label = stringResource(R.string.backup_dest_add_folder),
             enabled = enabled,
             onClick = onAddPhoneFolder,
@@ -1313,7 +1311,7 @@ private fun DestinationsSection(
         )
         RestoreSourceRow(
             icon = Icons.Outlined.Add,
-            iconColor = Color(0xFF34C759),
+            iconColor = IosGreen,
             label = stringResource(R.string.backup_manage_destinations),
             enabled = enabled,
             onClick = onManage,
@@ -1360,7 +1358,7 @@ private fun DestinationRow(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
-                modifier = Modifier.size(30.dp).background(Color(0xFF007AFF), CircleShape),
+                modifier = Modifier.size(30.dp).background(IosBlue, CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(17.dp))
@@ -1436,7 +1434,7 @@ private fun ResultDestinationRow(
             Icon(
                 if (outcome.succeeded) com.openminis.app.ui.theme.m3Icon(Icons.Outlined.CheckCircle) else com.openminis.app.ui.theme.m3Icon(Icons.Outlined.Warning),
                 contentDescription = null,
-                tint = if (outcome.succeeded) Color(0xFF34C759) else Color(0xFFFF9500),
+                tint = if (outcome.succeeded) IosGreen else IosOrange,
                 modifier = Modifier.size(20.dp),
             )
             Spacer(Modifier.width(10.dp))
@@ -1719,16 +1717,16 @@ private fun categoryIcon(cat: BackupCategory): ImageVector = when (cat) {
 
 /** Tint per category, mirroring iOS BackupCategoryIcon.tint(for:). */
 private fun categoryTint(cat: BackupCategory): Color = when (cat) {
-    BackupCategory.CHATS -> Color(0xFF007AFF)                 // blue
-    BackupCategory.SHARED_FILES -> Color(0xFF5856D6)         // indigo
-    BackupCategory.SKILLS -> Color(0xFFFF9500)              // orange
+    BackupCategory.CHATS -> IosBlue                 // blue
+    BackupCategory.SHARED_FILES -> IosIndigo         // indigo
+    BackupCategory.SKILLS -> IosOrange              // orange
     BackupCategory.MEMORY -> Color(0xFFFF2D55)             // pink
-    BackupCategory.PROVIDERS -> Color(0xFF30B0C7)         // teal
+    BackupCategory.PROVIDERS -> IosTeal         // teal
     BackupCategory.MCP_SERVERS -> Color(0xFF32ADE6)      // cyan
     BackupCategory.ENVIRONMENT_VARIABLES -> Color(0xFFA2845E) // brown
-    BackupCategory.VOICE_CORRECTIONS -> Color(0xFFAF52DE) // purple
-    BackupCategory.ROOTFS -> Color(0xFF34C759)             // green
-    BackupCategory.CACHE -> Color(0xFF8E8E93)              // gray
+    BackupCategory.VOICE_CORRECTIONS -> IosPurple // purple
+    BackupCategory.ROOTFS -> IosGreen             // green
+    BackupCategory.CACHE -> IosGray              // gray
 }
 
 /**

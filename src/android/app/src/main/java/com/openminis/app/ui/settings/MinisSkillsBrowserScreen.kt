@@ -61,6 +61,9 @@ import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
 import com.openminis.app.ui.theme.m3Icon
+import com.openminis.app.ui.theme.IosBlue
+import com.openminis.app.ui.theme.IosGreen
+import com.openminis.app.ui.theme.IosRed
 
 private enum class HudState {
     HIDDEN, IMPORTING, SUCCESS, ERROR, HINT
@@ -222,17 +225,17 @@ fun MinisSkillsBrowserScreen(
                             Text(stringResource(R.string.skills_browser_hud_importing), color = Color.White, style = MaterialTheme.typography.labelLarge)
                         }
                         HudState.SUCCESS -> {
-                            Icon(m3Icon(Icons.Filled.CheckCircle), contentDescription = null, tint = Color(0xFF34C759), modifier = Modifier.size(16.dp))
+                            Icon(m3Icon(Icons.Filled.CheckCircle), contentDescription = null, tint = IosGreen, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(10.dp))
                             Text(hudMessage, color = Color.White, style = MaterialTheme.typography.labelLarge, maxLines = 1)
                         }
                         HudState.ERROR -> {
-                            Icon(m3Icon(Icons.Filled.Error), contentDescription = null, tint = Color(0xFFFF3B30), modifier = Modifier.size(16.dp))
+                            Icon(m3Icon(Icons.Filled.Error), contentDescription = null, tint = IosRed, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(10.dp))
                             Text(hudMessage, color = Color.White, style = MaterialTheme.typography.labelLarge, maxLines = 2)
                         }
                         HudState.HINT -> {
-                            Icon(m3Icon(Icons.Filled.Info), contentDescription = null, tint = Color(0xFF007AFF), modifier = Modifier.size(16.dp))
+                            Icon(m3Icon(Icons.Filled.Info), contentDescription = null, tint = IosBlue, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(10.dp))
                             Text(hudMessage, color = Color.White, style = MaterialTheme.typography.labelLarge, maxLines = 2)
                         }

@@ -21,7 +21,9 @@ object UiActionTool {
             "accessibility service: tap coordinates, type text, swipe, scroll, press back, " +
             "open an app by package, or launch an intent URL. " +
             "Use with ui_read in a loop: read the screen to find a target, act, read again " +
-            "to verify. Requires Accessibility permission.",
+            "to verify. Requires Accessibility permission. " +
+            "Prefer the structured device tools (app_launch/app_open_link) when available; " +
+            "use open_app/open_url for accessibility-driven flows.",
         parameters = mapOf(
             "tool_title" to AgentToolParam("string", "A concise 5-10 word summary shown to the user, e.g. 'Tap the send button'."),
             "action" to AgentToolParam("string", "One of: tap, type, swipe, scroll, back, open_app, open_url, long_press."),

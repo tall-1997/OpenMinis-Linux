@@ -41,6 +41,9 @@ import androidx.compose.ui.unit.dp
 import com.openminis.app.R
 import com.openminis.app.ui.theme.m3Icon
 import com.openminis.app.ui.theme.monetIconTint
+import com.openminis.app.ui.theme.IosBlue
+import com.openminis.app.ui.theme.IosGreen
+import com.openminis.app.ui.theme.IosOrange
 
 /**
  * Detail screen for a single shared folder. Mirrors the iOS Folder Details
@@ -102,7 +105,7 @@ fun SharedFolderDetailScreen(
                     Icon(
                         imageVector = m3Icon(Icons.Outlined.Folder),
                         contentDescription = null,
-                        tint = monetIconTint(Color(0xFF007AFF)), // [T-android-dynamic-accent-icons]
+                        tint = monetIconTint(IosBlue), // [T-android-dynamic-accent-icons]
                     )
                     Text(
                         text = stringResource(R.string.shared_folder_browse_files),
@@ -171,9 +174,9 @@ private fun HeaderCard(folder: SharedFolderEntry) {
 @Composable
 private fun AccessBadge(writable: Boolean) {
     val (textRes, color) = if (writable) {
-        R.string.mount_badge_rw to Color(0xFF34C759)
+        R.string.mount_badge_rw to IosGreen
     } else {
-        R.string.mount_badge_readonly to Color(0xFFFF9500)
+        R.string.mount_badge_readonly to IosOrange
     }
     Surface(
         shape = RoundedCornerShape(8.dp),

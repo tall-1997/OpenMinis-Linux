@@ -27,16 +27,62 @@ private fun guardEligible(canonical: String): Boolean =
     canonical in GUARD_ELIGIBLE_TOOLS ||
         com.openminis.app.device.DeviceTools.handles(canonical)
 
+// [T-android-capability-sets] The predicate registries, in probe order. Each
+// adapter maps its native contract (Error:-prefix text / {"ok":bool} JSON /
+// Error:-prefix text) onto ToolExecutionResult.
+private val CAPABILITY_SETS: List<com.openminis.app.tools.CapabilityToolSet> = listOf(
+    object : com.openminis.app.tools.CapabilityToolSet {
+        override fun handles(name: String) =
+            com.openminis.app.device.DeviceTools.handles(name)
+        override fun execute(name: String, argsJson: String, sessionId: String?, context: android.content.Context) =
+            com.openminis.app.device.DeviceTools.execute(name, argsJson, sessionId, context).let { out ->
+                ToolExecutionResult(out, !out.startsWith("Error:"))
+            }
+    },
+    object : com.openminis.app.tools.CapabilityToolSet {
+        override fun handles(name: String) =
+            com.openminis.app.automation.AutomationRuleTools.handles(name)
+        override fun execute(name: String, argsJson: String, sessionId: String?, context: android.content.Context) =
+            com.openminis.app.automation.AutomationRuleTools.execute(name, argsJson, sessionId ?: "", context).let { out ->
+                ToolExecutionResult(out, runCatching { JSONObject(out).optBoolean("ok", false) }.getOrDefault(false))
+            }
+    },
+    object : com.openminis.app.tools.CapabilityToolSet {
+        override fun handles(name: String) =
+            com.openminis.app.knowledge.AppKnowledgeTools.handles(name)
+        override fun execute(name: String, argsJson: String, sessionId: String?, context: android.content.Context) =
+            com.openminis.app.knowledge.AppKnowledgeTools.execute(name, argsJson, sessionId, context).let { out ->
+                ToolExecutionResult(out, !out.startsWith("Error:"))
+            }
+    },
+)
+
 /** Last ui_read output hash per session — the "screen unchanged" detector. */
 private val uiReadFingerprints = java.util.concurrent.ConcurrentHashMap<String, Int>()
+
+/**
+ * [P1-16] Session-scoped eviction for [uiReadFingerprints]. The map is
+ * process-level and keyed by the canonical session id, so entries for
+ * released / wiped sessions would otherwise live forever (one Int per
+ * session — small, but unbounded across a long app lifetime). Called from
+ * [ChatViewModelStore.release] (session deleted / VM dropped) and
+ * [ChatViewModel.clearChat] (session wiped in place).
+ */
+internal fun evictUiReadFingerprints(sessionId: String) {
+    uiReadFingerprints.remove(sessionId)
+}
 
 internal suspend fun ChatViewModel.executeTool(
     name: String,
     argsJson: String,
     toolId: String,
-    toolBlocks: MutableList<AssistantBlock>,
-    assistantId: String,
-    currentText: String,
+    // [T-android-capability-sets] Trailing params default for the detached
+    // child-executor call sites (sub-agent/supervisor/group-chat) that have
+    // no streaming UI context — kills the four-copy `("" , mutableListOf(),
+    // "", "")` ritual.
+    toolBlocks: MutableList<AssistantBlock> = mutableListOf(),
+    assistantId: String = "",
+    currentText: String = "",
 ): ToolExecutionResult {
     // T330: tri-state permission gating moved into the offload IPC
     // handler (OffloadGate). The CLIs land there whether the LLM
@@ -51,7 +97,9 @@ internal suspend fun ChatViewModel.executeTool(
         context, canonical, argsJson, activeSessionId,
     )
     if (gated != null) return gated
-    val toolTitle = try { JSONObject(argsJson).optString("tool_title", canonical) } catch (_: Exception) { canonical }
+    // [P1-17] Routed through the shared extractToolTitle: complete-JSON first,
+    // streaming partial fallback, canonical name when absent/blank.
+    val toolTitle = extractToolTitle(argsJson, fallback = canonical) ?: canonical
 
     // [T-android-action-guard] Loop/refusal guard for screen-side tools
     // (ui_read / ui_action / virtual screen): the Repeat ladder can refuse
@@ -72,39 +120,20 @@ internal suspend fun ChatViewModel.executeTool(
         )
     }
 
-    // [T-android-automation-rules] Conditional-trigger rules the agent can
-    // create and manage. Early return (not a when branch): the dispatch when
-    // matches on the tool-name subject, and `handles(...)` is a predicate.
-    // The execute surface answers a JSON envelope whose `ok` decides success
-    // so the evolution failure hook sees real data.
-    if (com.openminis.app.automation.AutomationRuleTools.handles(canonical)) {
-        val out = com.openminis.app.automation.AutomationRuleTools.execute(
-            canonical, argsJson, activeSessionId ?: "", context,
-        )
-        val ok = runCatching { JSONObject(out).optBoolean("ok", false) }.getOrDefault(false)
-        return ToolExecutionResult(out, ok, toolTitle = toolTitle)
+    // [T-android-capability-sets] Predicate registries run ahead of the name
+    // subject when. Results flow through the SAME guard/evolution/output tail
+    // as every other branch — this is what closes the half-wired guard seam
+    // (device tools used to early-return before afterCall, silently disabling
+    // the repeat/failure ladders and outward pacing for all 30 of them).
+    var capabilityResult: ToolExecutionResult? = null
+    for (set in CAPABILITY_SETS) {
+        if (set.handles(canonical)) {
+            capabilityResult = set.execute(canonical, argsJson, activeSessionId, context)
+                .let { if (it.toolTitle.isBlank()) it.copy(toolTitle = toolTitle) else it }
+            break
+        }
     }
 
-    // [T-android-device-tools] Structured device tools (system settings,
-    // apps, notifications, comms, media, clipboard, location). Results are
-    // model-readable text; "Error:"-prefixed output is the failure contract
-    // (DevicePermission.missingError and friends) so the evolution failure
-    // hook sees real failures.
-    if (com.openminis.app.device.DeviceTools.handles(canonical)) {
-        val out = com.openminis.app.device.DeviceTools.execute(
-            canonical, argsJson, activeSessionId, context,
-        )
-        return ToolExecutionResult(out, !out.startsWith("Error:"), toolTitle = toolTitle)
-    }
-
-    // [T-android-app-knowledge] Bundled app guides + the on-device experience
-    // notes the agent maintains about the apps it operates.
-    if (com.openminis.app.knowledge.AppKnowledgeTools.handles(canonical)) {
-        val out = com.openminis.app.knowledge.AppKnowledgeTools.execute(
-            canonical, argsJson, activeSessionId, context,
-        )
-        return ToolExecutionResult(out, !out.startsWith("Error:"), toolTitle = toolTitle)
-    }
 
     // [T-find-tools] On-demand tool discovery: resolve the query against the
     // full registry and enable matches for subsequent turns in this session.
@@ -124,7 +153,7 @@ internal suspend fun ChatViewModel.executeTool(
         return findAndEnableTools(query, limit)
     }
 
-    var result = when (canonical) {
+    var result = capabilityResult ?: when (canonical) {
         FileReadTool.NAME -> {
             val result = FileReadTool.execute(argsJson, activeSessionId, context)
             // Record skill usage when SKILL.md under /var/minis/skills/<id>/ is read.
@@ -200,7 +229,10 @@ internal suspend fun ChatViewModel.executeTool(
         // bindMounts map and would surface another session's
         // /var/minis/{workspace,attachments,offloads,browser} files.
         ReadImageTool.NAME -> executeReadImageTool(argsJson)
-        "shell_execute", "shell_exec", "env_exec" -> {
+        // [P1-19] The when dispatches on the ToolAliases.canonical() name, so
+        // the historical alias labels "shell_exec" (→ shell_execute) can never
+        // match here; env_exec is its own registered tool and stays.
+        "shell_execute", "env_exec" -> {
             executeShellCommand(argsJson, toolId, toolBlocks, assistantId, currentText)
         }
         "su_exec" -> {
@@ -211,8 +243,11 @@ internal suspend fun ChatViewModel.executeTool(
             executeShellCommand(o.toString(), toolId, toolBlocks, assistantId, currentText)
         }
         "browser_use" -> executeBrowserUseTool(argsJson)
-        "memory_write", "save_memory" -> executeMemoryWriteTool(argsJson)
-        "memory_get", "recall_memory" -> executeMemoryGetTool(argsJson)
+        // [P1-19] Aliases save_memory / recall_memory are canonicalized to
+        // memory_write / memory_get by ToolAliases before this when, so the
+        // alias labels were unreachable.
+        "memory_write" -> executeMemoryWriteTool(argsJson)
+        "memory_get" -> executeMemoryGetTool(argsJson)
         // Evolution was previously reachable only through Settings; the
         // agent that gathers the evidence had no way to inspect or decide
         // a proposal. See EvolutionTool for why this is read-mostly.

@@ -38,7 +38,7 @@ private class StreamingOverlayMessages(
     }
 }
 
-private fun overlay(m: ChatMessage, delta: StreamingDelta): ChatMessage {
+internal fun overlay(m: ChatMessage, delta: StreamingDelta): ChatMessage {
     // [T-android-stream-duplicate-text] `delta.content` is the WHOLE
     // assistant reply accumulated across every tool round, while
     // `delta.toolBlocks` is that same reply split chronologically into
@@ -74,4 +74,35 @@ private fun overlay(m: ChatMessage, delta: StreamingDelta): ChatMessage {
         toolBlocks = blocks,
         isAwaitingModelResponse = delta.isAwaitingModelResponse,
     )
+}
+
+/**
+ * [P1-13] Tail-only read of the streaming overlay: the latest assistant
+ * message with its active delta (if any) applied. Byte-equivalent to
+ * `mergeStreamingOverlay(messages, streaming).lastOrNull { it.role ==
+ * "assistant" }` — the merge never changes roles or ordering, so the last
+ * assistant element is the same message in both views, and the only element
+ * the full merge could have rewritten for that index is the one whose id
+ * carries a delta, which is exactly what is applied here.
+ *
+ * Boundary cases (same outcomes as the merged view):
+ *  - no assistant message at all → null;
+ *  - the streaming delta belongs to a message that is NOT the last
+ *    assistant (a queued-user row arrived after it, or the delta targets a
+ *    stale id after a retry-truncate) → the canonical message is returned
+ *    untouched, identical to how the merged view would leave it;
+ *  - the delta exists but carries empty toolBlocks → [overlay]'s own
+ *    fallback (canonical blocks) applies, unchanged.
+ *
+ * Unlike the full merge this allocates no list wrapper and no overlay cache
+ * — one message copy at most — so per-publish recomposition keys like the
+ * floating-tool reserve gate can call it on every tick for free.
+ */
+internal fun latestAssistantWithOverlay(
+    messages: List<ChatMessage>,
+    streaming: Map<String, StreamingDelta>,
+): ChatMessage? {
+    val last = messages.lastOrNull { it.role == "assistant" } ?: return null
+    val delta = streaming[last.id] ?: return last
+    return overlay(last, delta)
 }

@@ -7,21 +7,25 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+/**
+ * [P1-18] Rewritten against [parseSubAgentBatch] after the zero-caller
+ * convenience wrapper [parseSubAgentSpawn] was removed: every former
+ * single-spawn assertion is expressed as a one-element batch.
+ */
 class ChatSubAgentSpawnTest {
 
     @Test
-    fun missingPromptOrBadJsonIsNull() {
-        assertNull(parseSubAgentSpawn("{}", 12))
-        assertNull(parseSubAgentSpawn("not-json", 12))
+    fun missingPromptOrBadJsonIsEmpty() {
         assertTrue(parseSubAgentBatch("{}", 12).isEmpty())
+        assertTrue(parseSubAgentBatch("not-json", 12).isEmpty())
     }
 
     @Test
     fun parsesKindAndClampsTurns() {
-        val spawn = parseSubAgentSpawn(
+        val spawn = parseSubAgentBatch(
             """{"prompt":"look at Foo","kind":"explore","max_turns":99,"role":"search"}""",
             defaultCap = 12,
-        )!!
+        ).single()
         assertEquals(SubAgentKind.EXPLORE, spawn.kind)
         assertEquals(12, spawn.maxTurns)
         assertEquals("search", spawn.role)
@@ -63,9 +67,14 @@ class ChatSubAgentSpawnTest {
 
     @Test
     fun thinkingDefaultsToModelResolutionAndAcceptsExplicitOff() {
-        assertNull(parseSubAgentSpawn("{\"prompt\":\"inspect\"}", 20)?.thinkingLevel)
-        assertEquals(ThinkingLevel.OFF, parseSubAgentSpawn("{\"prompt\":\"inspect\",\"thinking_level\":\"off\"}", 20)?.thinkingLevel)
-        assertNull(parseSubAgentSpawn("{\"prompt\":\"inspect\",\"thinking_level\":\"supreme\"}", 20)?.thinkingLevel)
+        assertNull(parseSubAgentBatch("{\"prompt\":\"inspect\"}", 20).single().thinkingLevel)
+        assertEquals(
+            ThinkingLevel.OFF,
+            parseSubAgentBatch("{\"prompt\":\"inspect\",\"thinking_level\":\"off\"}", 20).single().thinkingLevel,
+        )
+        assertNull(
+            parseSubAgentBatch("{\"prompt\":\"inspect\",\"thinking_level\":\"supreme\"}", 20).single().thinkingLevel,
+        )
     }
 
     @Test

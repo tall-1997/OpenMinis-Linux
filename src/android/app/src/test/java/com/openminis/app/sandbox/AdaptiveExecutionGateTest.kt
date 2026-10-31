@@ -48,10 +48,48 @@ class AdaptiveExecutionGateTest {
         assertFalse(started)
         assertTrue(a.isActive && b.isActive)
         cap = 3
-        advanceTimeBy(100); runCurrent()
+        // [T-aptgate-event] A limits() change is external state: it is noticed
+        // on the next 1s pressure-probe window (the old 50ms poll tick is gone
+        // by design — releases wake the queue immediately, external changes
+        // ride the probe cadence).
+        advanceTimeBy(1_000); runCurrent()
         assertTrue(started)
         hold.complete(Unit)
         a.await(); b.await(); c.await()
+    }
+
+    @Test fun releaseWakesWaiterImmediatelyWithoutProbeTick() = runTest {
+        val gate = AdaptiveExecutionGate()
+        val hold = CompletableDeferred<Unit>()
+        val first = async { gate.run(false, 5000, { AdaptiveExecutionGate.Limits(1, 1) },
+            { null }, {}, { testScheduler.currentTime }) { hold.await() } }
+        runCurrent()
+        var started = false
+        val second = async { gate.run(false, 5000, { AdaptiveExecutionGate.Limits(1, 1) },
+            { null }, {}, { testScheduler.currentTime }) { started = true } }
+        runCurrent()
+        assertFalse(started)
+        // [T-aptgate-event] Release notification, not polling: the waiter
+        // acquires at the moment of release — long before its 1s probe window.
+        hold.complete(Unit)
+        first.await()
+        runCurrent()
+        assertTrue(started)
+        second.await()
+    }
+
+    @Test fun pressureProbesStayThrottledToOncePerSecond() = runTest {
+        val gate = AdaptiveExecutionGate()
+        var probes = 0
+        val job = async { gate.run(false, 0, { AdaptiveExecutionGate.Limits(1, 1) },
+            { probes++; "pressure" }, {}, { testScheduler.currentTime }) { } }
+        advanceTimeBy(5_500); runCurrent()
+        assertTrue(job.isActive)
+        // Entry probe + the ~5 one-second refreshes. The old code polled the
+        // same throttle from a 50ms tick (110 wake-ups for this window); the
+        // event-driven loop wakes ~6 times total.
+        assertTrue("probes=$probes", probes in 1..6)
+        job.cancel()
     }
 
     @Test fun cancelledAndTimedOutWaitersNeverExecute() = runTest {

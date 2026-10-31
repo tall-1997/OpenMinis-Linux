@@ -24,15 +24,25 @@ import com.openminis.app.logging.AppLogger
  *  - The WebView is created lazily but exactly once per holder. Compose
  *    can recompose freely without churning the view (which would lose
  *    scroll position and force a reload).
+ *  - [T-android-webview-deferred-create] Construction of the platform
+ *    WebView is deferred past the holder's creation: `rememberWebViewHolder`
+ *    runs during the preview host's composition, but the WebView itself
+ *    (a heavyweight native allocation) is only built on [ensureWebView] /
+ *    first `webView` access — which the preview hosts trigger at the
+ *    sheet's first visible frame, after the scrim/toolbar have painted.
+ *    Hosts observe [webViewReady] to swap a placeholder for the real
+ *    view without recomposing anything else.
  *  - `pageTitle` / `currentUrl` / `isLoading` are Compose state, so any
  *    composable reading them recomposes when WebView reports progress.
  *  - The same holder is **shared** across the bottom-sheet preview and
  *    the fullscreen variant — that's how iOS makes the expand toggle
  *    feel instant. Tearing down + recreating the WebView would reload
- *    the page, breaking that illusion.
+ *    the page, breaking that illusion. Close semantics unchanged:
+ *    [destroy] tears down the WebView exactly once, and is a no-op for
+ *    the (never-created) case.
  */
 class WebViewHolder(
-    appContext: Context,
+    private val appContext: Context,
     initialUrl: String,
 ) {
 
@@ -54,8 +64,44 @@ class WebViewHolder(
     var onShowFileChooser:
         ((android.webkit.WebChromeClient.FileChooserParams, ValueCallback<Array<Uri>>) -> Unit)? = null
 
+    /**
+     * [T-android-webview-deferred-create] True once the platform WebView
+     * exists. Preview hosts read this to gate the `AndroidView` that embeds
+     * it — the first sheet frame renders the (cheap) placeholder, then the
+     * WebView is created and swapped in.
+     */
+    var webViewReady by mutableStateOf(false)
+        private set
+
+    private val webViewLock = Any()
+
+    @Volatile
+    private var _webView: WebView? = null
+
+    /** The platform WebView, created on first access (main thread). */
+    @get:SuppressLint("SetJavaScriptEnabled")
+    val webView: WebView
+        get() = ensureWebView()
+
+    /**
+     * Create the WebView if it does not exist yet and return it. Exactly-once
+     * under the [webViewLock]; every call site runs on the main thread (the
+     * preview composables and their click handlers), which is what WebView
+     * construction requires.
+     */
+    fun ensureWebView(): WebView {
+        _webView?.let { return it }
+        synchronized(webViewLock) {
+            _webView?.let { return it }
+            val created = createWebView()
+            _webView = created
+            webViewReady = true
+            return created
+        }
+    }
+
     @SuppressLint("SetJavaScriptEnabled")
-    val webView: WebView = WebView(appContext).apply {
+    private fun createWebView(): WebView = WebView(appContext).apply {
         // Same Blink bootstrap as browser_use / BrowserSheet: hardware layer
         // for sheet compositing, cookies, file://, metaviewport, WebViewEngine
         // compat. Preview-only clients stay below.
@@ -260,6 +306,10 @@ class WebViewHolder(
      */
     fun startIfNeeded() {
         if (hasLoaded) return
+        // [T-android-webview-deferred-create] First start request is what
+        // materializes the WebView (the preview hosts call this from a
+        // LaunchedEffect at the sheet's first frame).
+        val w = ensureWebView()
         // T-htmlpreview-2d5c4f3d: defer the actual loadUrl until the
         // WebView is attached to a window AND has been laid out with a
         // positive width/height. Pages that compute `100vh` / `height: 100%`
@@ -271,12 +321,12 @@ class WebViewHolder(
         // (warm reuse — re-entering a sheet for the same holder), and
         // otherwise post once to the WebView's handler after attach.
         hasLoaded = true
-        if (webView.isAttachedToWindow && webView.width > 0 && webView.height > 0) {
+        if (w.isAttachedToWindow && w.width > 0 && w.height > 0) {
             AppLogger.info(TAG, "loadUrl (attached) ${currentUrl.take(160)}")
-            webView.loadUrl(currentUrl)
+            w.loadUrl(currentUrl)
             return
         }
-        webView.addOnAttachStateChangeListener(object : android.view.View.OnAttachStateChangeListener {
+        w.addOnAttachStateChangeListener(object : android.view.View.OnAttachStateChangeListener {
             override fun onViewAttachedToWindow(v: android.view.View) {
                 v.removeOnAttachStateChangeListener(this)
                 // doOnLayout fires after the next layout pass — guarantees
@@ -284,7 +334,7 @@ class WebViewHolder(
                 v.post {
                     if (v.width > 0 && v.height > 0) {
                         AppLogger.info(TAG, "loadUrl (post-attach) ${currentUrl.take(160)}")
-                        webView.loadUrl(currentUrl)
+                        w.loadUrl(currentUrl)
                     } else {
                         v.viewTreeObserver.addOnGlobalLayoutListener(object :
                             android.view.ViewTreeObserver.OnGlobalLayoutListener {
@@ -292,7 +342,7 @@ class WebViewHolder(
                                 if (v.width > 0 && v.height > 0) {
                                     v.viewTreeObserver.removeOnGlobalLayoutListener(this)
                                     AppLogger.info(TAG, "loadUrl (post-layout) ${currentUrl.take(160)}")
-                                    webView.loadUrl(currentUrl)
+                                    w.loadUrl(currentUrl)
                                 }
                             }
                         })
@@ -305,7 +355,7 @@ class WebViewHolder(
 
     fun reload() {
         AppLogger.info(TAG, "reload")
-        webView.reload()
+        _webView?.reload()
     }
 
     /**
@@ -317,26 +367,30 @@ class WebViewHolder(
      */
     fun toggleDesktopMode() {
         desktopMode = !desktopMode
+        // User-initiated toggle before the WebView exists: materialize it now
+        // so the mode is applied to a real settings object (same semantics as
+        // before, when the view always existed).
+        val w = ensureWebView()
         if (desktopMode) {
-            webView.settings.userAgentString = ChromeUserAgent.desktop(mobileUserAgent)
-            webView.settings.useWideViewPort = true
-            webView.settings.loadWithOverviewMode = true
-            webView.settings.setSupportZoom(true)
-            webView.settings.builtInZoomControls = true
-            webView.settings.displayZoomControls = false
-            applyShrinkToFit(DESKTOP_VIEWPORT_CSS_WIDTH)
+            w.settings.userAgentString = ChromeUserAgent.desktop(mobileUserAgent)
+            w.settings.useWideViewPort = true
+            w.settings.loadWithOverviewMode = true
+            w.settings.setSupportZoom(true)
+            w.settings.builtInZoomControls = true
+            w.settings.displayZoomControls = false
+            applyShrinkToFit(w, DESKTOP_VIEWPORT_CSS_WIDTH)
         } else {
-            webView.settings.userAgentString = mobileUserAgent
-            webView.settings.useWideViewPort = false
-            webView.settings.loadWithOverviewMode = false
-            webView.setInitialScale(0)
+            w.settings.userAgentString = mobileUserAgent
+            w.settings.useWideViewPort = false
+            w.settings.loadWithOverviewMode = false
+            w.setInitialScale(0)
         }
         AppLogger.info(TAG, "toggleDesktopMode → $desktopMode")
         // Clear cache so the site can't serve a cached variant keyed on the
         // previous UA. Sites like baidu pin their first-paint variant to a
         // cookie + UA combo, so a plain reload often returns the old page.
-        webView.clearCache(false)
-        webView.reload()
+        w.clearCache(false)
+        w.reload()
     }
 
     /**
@@ -344,7 +398,7 @@ class WebViewHolder(
      * fits the WebView's container width. Mirrors `BrowserUseManager`'s
      * applyShrinkToFit.
      */
-    private fun applyShrinkToFit(cssWidth: Int) {
+    private fun applyShrinkToFit(webView: WebView, cssWidth: Int) {
         val containerPx = webView.width.takeIf { it > 0 }
             ?: webView.resources.displayMetrics.widthPixels
         val density = webView.resources.displayMetrics.density
@@ -359,7 +413,7 @@ class WebViewHolder(
 
     fun stopLoading() {
         AppLogger.info(TAG, "stopLoading")
-        webView.stopLoading()
+        _webView?.stopLoading()
         isLoading = false
     }
 
@@ -368,24 +422,36 @@ class WebViewHolder(
      * the same view between the sheet and the fullscreen screen — Android
      * throws if a view is added to a new parent while still attached to
      * the old one, so callers should invoke this between handoffs.
+     *
+     * [T-android-webview-deferred-create] No-op when the WebView was never
+     * created (user dismissed the sheet before its first frame settled).
      */
     fun detach() {
-        (webView.parent as? android.view.ViewGroup)?.removeView(webView)
+        _webView?.let { w -> (w.parent as? android.view.ViewGroup)?.removeView(w) }
     }
 
     /**
      * Final teardown. Call when the preview path is fully closed (sheet
      * dismissed AND fullscreen popped) so the WebView's renderer process
      * doesn't linger. Safe to call multiple times.
+     *
+     * [T-android-webview-deferred-create] With a holder that never got its
+     * first frame, there is nothing to tear down — the flags flip and the
+     * (nonexistent) WebView is skipped. Close semantics unchanged.
      */
     fun destroy() {
         if (destroyed) return
         destroyed = true
+        val w = _webView
+        if (w == null) {
+            AppLogger.info(TAG, "destroyed (never created)")
+            return
+        }
         try {
             detach()
-            webView.stopLoading()
-            webView.loadUrl("about:blank")
-            webView.destroy()
+            w.stopLoading()
+            w.loadUrl("about:blank")
+            w.destroy()
             AppLogger.info(TAG, "destroyed")
         } catch (e: Throwable) {
             AppLogger.warning(TAG, "destroy failed: ${e.message}")
@@ -403,6 +469,13 @@ class WebViewHolder(
  * Compose-friendly holder factory. Produces a holder keyed on URL — the
  * holder lives across recompositions but is rebuilt if the caller swaps
  * the URL.
+ *
+ * [T-android-webview-deferred-create] Cheap by design: only the (state-only)
+ * holder is built here; the platform WebView is deferred to the first
+ * [WebViewHolder.ensureWebView] / `startIfNeeded()` call, which the preview
+ * hosts trigger at the sheet's first visible frame. Disposal semantics
+ * unchanged — the DisposableEffect below still destroys the holder (and any
+ * WebView it materialized) exactly once when the preview path closes.
  */
 @Composable
 fun rememberWebViewHolder(url: String): WebViewHolder {

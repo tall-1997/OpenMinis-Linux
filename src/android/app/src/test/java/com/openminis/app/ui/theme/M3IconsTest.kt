@@ -170,4 +170,115 @@ class M3IconsTest {
             assertSame(outlined, m3Icon(m3Icon(outlined, dynamicActive = false), dynamicActive = true))
         }
     }
+
+    // ─── [T-android-m3icon-full-coverage] source-scan guard ──────────────────
+
+    /**
+     * Scans every `ui/` source file for `m3Icon(Icons.…)` references and
+     * asserts each referenced icon IS in the mapping table — the full-coverage
+     * form of the "M3IconsTest 抽样把关" contract in M3Icons.kt's doc.
+     *
+     * Membership is probed through the public API, not by reading the private
+     * table: in dynamic mode a registered Filled vector normalizes to its
+     * Outlined pair (different object), an unregistered one passes through
+     * identity — so `m3Icon(icon, dynamic) !== icon` is exactly "the table has
+     * this key". The vectors themselves are resolved reflectively the same way
+     * the compiler does: `Icons.Filled.Lock` is an extension property `Lock`
+     * declared in `androidx.compose.material.icons.filled.LockKt`, taking the
+     * `Icons.Filled` object as its single receiver.
+     *
+     * A failure lists the exact missing references so the fix is to add the
+     * (Filled, Outlined) pair to iconPairs — not to change the call site.
+     */
+    @Test
+    fun `every m3Icon reference in ui sources is registered in the mapping table`() {
+        val root = java.io.File("src/main/java/com/openminis/app/ui")
+        org.junit.Assert.assertTrue(
+            "source root not found — this test locates sources relative to the " +
+                "module dir (cwd=${java.io.File(".").absolutePath})",
+            root.isDirectory,
+        )
+
+        val referenced = sortedSetOf<String>()
+        val pattern = Regex(
+            """m3Icon\(\s*Icons\.(AutoMirrored\.)?(Filled|Outlined|Default)\.([A-Za-z0-9_]+)""",
+        )
+        root.walkTopDown()
+            .filter { it.isFile && it.extension == "kt" }
+            .forEach { f ->
+                // Strip comments: the correct pattern is documented by NAMING
+                // it (see the m3Icon doc), and those mentions must not trip
+                // the guard.
+                val code = f.readText()
+                    .replace(Regex("/\\*.*?\\*/", RegexOption.DOT_MATCHES_ALL), "")
+                    .lineSequence()
+                    .map { it.substringBefore("//") }
+                    .joinToString("\n")
+                pattern.findAll(code).forEach { m ->
+                    val automirrored = m.groupValues[1].isNotEmpty()
+                    val variant = if (m.groupValues[2] == "Default") "Filled" else m.groupValues[2]
+                    referenced += (if (automirrored) "AutoMirrored." else "") +
+                        variant + "." + m.groupValues[3]
+                }
+            }
+        org.junit.Assert.assertTrue(
+            "scanner found no m3Icon(Icons…) references — regex or paths broke",
+            referenced.isNotEmpty(),
+        )
+
+        val unmapped = referenced.filter { ref ->
+            val icon = resolveIcon(ref)
+            // Filled (and Default) inputs are mapped in DYNAMIC mode
+            // (Filled→Outlined); Outlined inputs are mapped in APPLE mode
+            // (Outlined→Filled). Identity on the probe = key missing.
+            val isOutlined = ref.startsWith("Outlined.") || ref.startsWith("AutoMirrored.Outlined.")
+            m3Icon(icon, dynamicActive = !isOutlined) === icon
+        }
+        org.junit.Assert.assertTrue(
+            buildString {
+                append("m3Icon call sites reference icons that are NOT in the ")
+                append("M3Icons.kt iconPairs table — add the (Filled, Outlined) ")
+                append("pair so the dynamic-color toggle restyles them:\n")
+                unmapped.forEach { append("  ").append(it).append('\n') }
+            },
+            unmapped.isEmpty(),
+        )
+    }
+
+    /**
+     * Resolves a scanned reference like "Filled.Lock" /
+     * "AutoMirrored.Outlined.KeyboardArrowRight" to its actual ImageVector by
+     * the same mechanics the compiler uses for `Icons.<path>.<Name>`: a
+     * top-level extension property `Name` on the nested `Icons.…` object,
+     * compiled to a static `get<Name>` method in
+     * `androidx.compose.material.icons[.automirrored].<variant>.<Name>Kt`.
+     */
+    private fun resolveIcon(ref: String): ImageVector {
+        val automirrored = ref.startsWith("AutoMirrored.")
+        val rest = ref.removePrefix("AutoMirrored.")
+        val variant = rest.substringBefore('.').lowercase()   // filled | outlined
+        val name = rest.substringAfter('.')
+
+        // Walk the nested-object chain: Icons → (AutoMirrored)? → (Filled|Outlined).
+        var className = "androidx.compose.material.icons.Icons"
+        var receiver: Any? = null
+        for (part in buildList {
+            if (automirrored) add("AutoMirrored")
+            add(variant.replaceFirstChar { it.uppercase() })
+        }) {
+            className += '$' + part
+            receiver = Class.forName(className).getDeclaredField("INSTANCE").get(null)
+        }
+
+        val pkg = "androidx.compose.material.icons." +
+            (if (automirrored) "automirrored." else "") + variant
+        val holder = Class.forName("$pkg.${name}Kt")
+        val getter = holder.declaredMethods.firstOrNull {
+            it.name == "get$name" && it.parameterTypes.size == 1
+        } ?: throw IllegalStateException(
+            "could not resolve Icons.${ref} — expected $pkg.${name}Kt.get$name; " +
+                "if this icon moved files, extend the resolver",
+        )
+        return getter.invoke(null, receiver) as ImageVector
+    }
 }

@@ -61,6 +61,19 @@ class MainActivity : ComponentActivity() {
     private var navController: NavHostController? = null
 
     /**
+     * [T-android-prefs-double-read] Single canonical appearance-prefs handle
+     * for this Activity. Previously the composition used
+     * `remember { getAppearancePrefs(this) }` while [onStart] re-fetched the
+     * same file through a second call — two lookups for one preference file,
+     * and (before the [getAppearancePrefs] implementation gained its own
+     * process-wide cache) two separate listener registrations on
+     * configuration change. One field, one instance, shared by both readers.
+     */
+    private val appearancePrefs: SharedPreferences by lazy {
+        getAppearancePrefs(this)
+    }
+
+    /**
      * T166: id of the chat the user is currently inside, mirrored from
      * the nav back-stack so [onSaveInstanceState] can persist it across
      * process death. Restored value is fed into [AppNavigation] as the
@@ -202,32 +215,16 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // Safe-mode short-circuit: if CrashFrequencyDetector tripped in
-        // MinisApp.onCreate (≥THRESHOLD recent crash files), the
-        // Application skipped all heavy init — no DB, no repos, no
-        // offload server. We must NOT call setContent() / ChatViewModel /
-        // any code that touches MinisApp's lateinit deps; doing so would
-        // throw UninitializedPropertyAccessException and overwrite the
+        // Safe-mode short-circuit: if CrashFrequencyDetector tripped in MinisApp.onCreate (≥THRESHOLD recent crash files), the Application skipped all heavy init — no DB, no repos, no
+        // offload server. We must NOT call setContent() / ChatViewModel / any code that touches MinisApp's lateinit deps; doing so would throw UninitializedPropertyAccessException and overwrite the
         // very crash logs we're trying to ship.
         //
-        // Pop the share/dismiss dialog directly and finish() on close so
-        // the user's next launch starts fresh. The dialog UI uses
-        // AlertDialog (system-level) which doesn't touch MinisApp state.
-        // T-android-safemode-lateinit-crash: gate on the Application's own
-        // "did init actually run" flag, NOT on isSafeMode(). The two are
-        // not equivalent, and the difference was a hard crash loop:
-        // finishClose() sets safe-mode back to false as soon as the user
-        // dismisses the share dialog, but MinisApp.onCreate already
-        // early-returned and never re-runs for the life of the process.
-        // Any MainActivity created after that dismissal (launcher icon —
-        // including the MainActivityIconDark alias — notification tap, or
-        // MIUI restoring the task) therefore sailed past the old
-        // isSafeMode() check and hit `app.chatRepository` inside
-        // setContent(), throwing UninitializedPropertyAccessException on
-        // the first Compose frame (onAttachedToWindow →
-        // setOnViewTreeOwnersAvailable). That crash wrote another
-        // crash-*.log, which re-tripped the burst detector on the next
-        // launch — a self-sustaining loop the user could not escape.
+        // Pop the share/dismiss dialog directly and finish() on close so the user's next launch starts fresh. The dialog UI uses AlertDialog (system-level) which doesn't touch MinisApp state.
+        // T-android-safemode-lateinit-crash: gate on the Application's own "did init actually run" flag, NOT on isSafeMode(). The two are not equivalent, and the difference was a hard crash loop:
+        // finishClose() sets safe-mode back to false as soon as the user dismisses the share dialog, but MinisApp.onCreate already early-returned and never re-runs for the life of the process.
+        // Any MainActivity created after that dismissal (launcher icon — including the MainActivityIconDark alias — notification tap, or MIUI restoring the task) therefore sailed past the old
+        // isSafeMode() check and hit `app.chatRepository` inside setContent(), throwing UninitializedPropertyAccessException on the first Compose frame (onAttachedToWindow →
+        // setOnViewTreeOwnersAvailable). That crash wrote another crash-*.log, which re-tripped the burst detector on the next launch — a self-sustaining loop the user could not escape.
         //
         // `subsystemsInitialized` only goes true after every repository is
         // assigned, so it stays false for exactly as long as composing is
@@ -257,20 +254,13 @@ class MainActivity : ComponentActivity() {
                     "${com.openminis.app.crash.CrashFrequencyDetector.isSafeMode()}" +
                     ", cause=$initFailure) — showing recovery UI",
             )
-            // [T-android-startup-splash-hang] Read BEFORE maybeShowOnActivity,
-            // which consumes and clears it.
+            // [T-android-startup-splash-hang] Read BEFORE maybeShowOnActivity, which consumes and clears it.
             //
-            // An init failure is caught and logged, never written as a crash
-            // file, so pendingShareFiles is essentially always null on this
-            // path — and maybeShowOnActivity invokes onClosed *synchronously*
-            // when there is nothing to share. onClosed is
-            // finishAndRestartProcess(): a 1.2s Toast, finish(), killProcess.
-            // Since this branch also `return`s without setContent, the Activity
-            // had no content at all: white system splash, then a content-less
-            // window going black, then the process gone. Application.onCreate
-            // never re-runs and the cause is usually deterministic, so every
-            // tap repeated it — "stuck on the splash, then a black screen", with
-            // no reason shown and no in-app way out.
+            // An init failure is caught and logged, never written as a crash file, so pendingShareFiles is essentially always null on this
+            // path — and maybeShowOnActivity invokes onClosed *synchronously* when there is nothing to share. onClosed is finishAndRestartProcess(): a 1.2s Toast, finish(), killProcess.
+            // Since this branch also `return`s without setContent, the Activity had no content at all: white system splash, then a content-less
+            // window going black, then the process gone. Application.onCreate never re-runs and the cause is usually deterministic, so every
+            // tap repeated it — "stuck on the splash, then a black screen", with no reason shown and no in-app way out.
             //
             // When there IS a crash burst the existing dialog is strictly better
             // (it ships logs), so that path is unchanged.
@@ -554,7 +544,10 @@ class MainActivity : ComponentActivity() {
                     onDismiss = { pendingDbReport = null },
                 )
             }
-            val prefs = remember { getAppearancePrefs(this) }
+            // [T-android-prefs-double-read] Same instance as onStart's
+            // `appearancePrefs` (one SharedPreferences handle per Activity,
+            // not one per reader).
+            val prefs = appearancePrefs
             var themeMode by remember { mutableIntStateOf(prefs.getInt(KEY_THEME_MODE, 0)) }
             var appBaseLevel by remember { mutableIntStateOf(prefs.getInt(KEY_FONT_APP_BASE, 0)) }
             var dynamicColor by remember { mutableStateOf(prefs.getBoolean(KEY_DYNAMIC_COLOR, false)) }
@@ -691,7 +684,12 @@ class MainActivity : ComponentActivity() {
             hasResumedFromBackground = true
             return
         }
-        val mode = getAppearancePrefs(this).getInt(KEY_LAUNCH_SESSION, 0)
+        // [T-android-prefs-double-read] Reuse the same appearance-prefs
+        // instance the composition (onCreate setContent) already holds instead
+        // of calling getAppearancePrefs() again: getSharedPreferences returns
+        // a cached impl, but the instance identity matters for the listener
+        // contract and this keeps a single canonical handle per Activity.
+        val mode = appearancePrefs.getInt(KEY_LAUNCH_SESSION, 0)
         if (mode != 2) return
         val nav = navController ?: return
         val newRoute = Routes.chat("__new__${java.util.UUID.randomUUID()}")

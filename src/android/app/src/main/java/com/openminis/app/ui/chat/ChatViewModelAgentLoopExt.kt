@@ -938,12 +938,18 @@ internal suspend fun ChatViewModel.runAgentLoop(
                         // [T-perf-async-db-init] extractPartialStringValue is CPU-bound
                         // string scanning (scans from scratch each delta). Run it on
                         // Dispatchers.Default to prevent blocking the IO dispatcher.
-                        val partialTitle = StreamChunkJsonHelper.extractPartialStringValue("tool_title", chunk.accumulated)
-                        val liveTitle = when {
-                            !partialTitle.isNullOrEmpty() -> partialTitle
-                            prev.toolTitle.isNotEmpty() && prev.toolTitle != prev.toolName -> prev.toolTitle
-                            else -> friendlyToolTitle(prev.toolName)
-                        }
+                        // [P1-17] Routed through the shared extractToolTitle: complete-
+                        // JSON first (this collector already runs on the IO dispatcher,
+                        // so the parse stays off-main), streaming partial fallback, and
+                        // the same previous-title/friendly-name else-chain as fallback.
+                        val liveTitle = extractToolTitle(
+                            chunk.accumulated,
+                            fallback = if (prev.toolTitle.isNotEmpty() && prev.toolTitle != prev.toolName) {
+                                prev.toolTitle
+                            } else {
+                                friendlyToolTitle(prev.toolName)
+                            },
+                        ) ?: friendlyToolTitle(prev.toolName)
                         allToolBlocks[idx] = prev.copy(
                             toolArgs = chunk.accumulated,
                             toolTitle = liveTitle,
@@ -1709,22 +1715,13 @@ internal suspend fun ChatViewModel.runAgentLoop(
             // which already covers it well — re-routing it here would lose
             // that recovery.
             if (turnFinishReason == null && hasVisibleContent) {
-                // [T-android-stream-drop-autocontinue] Relay-side silent cut:
-                // the SSE stream ended with no finish_reason and no [DONE]
-                // while content was already on screen. Buffet relays do this
-                // routinely (nginx proxy_read_timeout during long thinking
-                // silences, upstream caps after big tool-call turns) — the
-                // "一瞬间出现4个 Execute Shell 然后中断" pattern is exactly a
+                // [T-android-stream-drop-autocontinue] Relay-side silent cut: the SSE stream ended with no finish_reason and no [DONE] while content was already on screen. Buffet relays do this
+                // routinely (nginx proxy_read_timeout during long thinking silences, upstream caps after big tool-call turns) — the "一瞬间出现4个 Execute Shell 然后中断" pattern is exactly a
                 // cut right after the tool-call flush.
                 //
-                // The partial assistant turn is ALREADY appended to
-                // agentHistory (turn boundary above) and ALREADY persisted
-                // (persistAssistantTurnForRun just ran), so continuing is
-                // safe and lossless: append a continue-reminder and re-enter
-                // the loop. The next turn streams into the SAME assistant
-                // bubble (accumulatedText/allToolBlocks carry over), so the
-                // user sees one continuous reply instead of a banner + a
-                // manual retry that regenerates everything. Mirrors the Goal
+                // The partial assistant turn is ALREADY appended to agentHistory (turn boundary above) and ALREADY persisted (persistAssistantTurnForRun just ran), so continuing is
+                // safe and lossless: append a continue-reminder and re-enter the loop. The next turn streams into the SAME assistant bubble (accumulatedText/allToolBlocks carry over), so the
+                // user sees one continuous reply instead of a banner + a manual retry that regenerates everything. Mirrors the Goal
                 // auto-continuation pattern. Budget-limited per run; the
                 // banner below only fires once the budget is exhausted.
                 if (activeRun?.isStopped != true &&

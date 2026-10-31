@@ -225,6 +225,8 @@ fun MinisTheme(
             // 消费者必须显式读 LocalDecorPhase / decor* 派生器才真正共享时钟
             // ——PR #126 只挂了 Provider 没接消费者，共享时钟空转、独立
             // transition 照跑，是假修复；本提交把 8 处动画全部迁到派生器上。
+            // [T-decor-consumer-gate] 派生器现在还承担消费者计数：无消费者时
+            // Provider 的帧循环整体取消，静止页面不再为装饰动画付帧成本。
             DecorClockProvider(content)
         }
     }

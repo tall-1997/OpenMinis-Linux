@@ -187,21 +187,28 @@ fun WebPreviewFullscreenScreen(
                 .fillMaxSize()
                 .background(Color.Black),
         ) {
-            AndroidView(
-                factory = {
-                    val wv = holder.webView
-                    // Tap-to-show — return false so WebView still handles input.
-                    wv.setOnTouchListener { _, ev ->
-                        if (ev.actionMasked == MotionEvent.ACTION_DOWN) {
-                            toolbarVisible = true
-                            interactionTick += 1
+            // [T-android-webview-deferred-create] Same deferred-create gate as
+            // WebPreviewBottomSheet: the WebView is materialized at the first
+            // visible frame (startIfNeeded effect), so a fullscreen handoff of
+            // a never-shown holder doesn't build it synchronously during
+            // composition either.
+            if (holder.webViewReady) {
+                AndroidView(
+                    factory = {
+                        val wv = holder.webView
+                        // Tap-to-show — return false so WebView still handles input.
+                        wv.setOnTouchListener { _, ev ->
+                            if (ev.actionMasked == MotionEvent.ACTION_DOWN) {
+                                toolbarVisible = true
+                                interactionTick += 1
+                            }
+                            false
                         }
-                        false
-                    }
-                    wv
-                },
-                modifier = Modifier.fillMaxSize(),
-            )
+                        wv
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
 
             val navInset = WindowInsets.navigationBars.asPaddingValues()
                 .calculateBottomPadding()

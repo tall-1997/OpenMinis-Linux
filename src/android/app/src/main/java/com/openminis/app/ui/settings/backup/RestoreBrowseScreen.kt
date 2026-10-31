@@ -55,6 +55,8 @@ import com.openminis.app.ui.components.MinisTextButton
 import com.openminis.app.ui.settings.SettingsScaffold
 import com.openminis.app.ui.settings.SettingsSection
 import com.openminis.app.ui.theme.m3Icon
+import com.openminis.app.ui.theme.IosBlue
+import com.openminis.app.ui.theme.IosGray
 
 /**
  * [T-android-restore-browse] Walk a destination's folders and pick a backup.
@@ -271,7 +273,7 @@ private fun EntryRow(
         ) {
             Box(
                 Modifier.size(30.dp).background(
-                    if (entry.isDirectory) Color(0xFF8E8E93) else Color(0xFF007AFF),
+                    if (entry.isDirectory) IosGray else IosBlue,
                     CircleShape,
                 ),
                 contentAlignment = Alignment.Center,

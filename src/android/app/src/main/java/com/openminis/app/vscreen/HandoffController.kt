@@ -163,6 +163,13 @@ class HandoffController(
     }
 
     /**
+     * Raw store state for [displayId] — no record, no guidance string. Read
+     * seam for [VirtualScreenUpkeep.handoffState] so a state-enum check can
+     * honor a test-provided controller override without exposing the store.
+     */
+    internal fun rawState(displayId: Int): HandoffStateMachine.State? = store.get(displayId)?.state
+
+    /**
      * Model-facing annotation for tool results on [displayId]: the record's
      * state guidance plus any accumulated note. Null when nothing is going on.
      */

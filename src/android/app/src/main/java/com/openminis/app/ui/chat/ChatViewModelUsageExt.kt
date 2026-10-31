@@ -89,15 +89,9 @@ internal data class MessageUsageStats(
     }
 }
 
-/** Sum every parseable row; null when none parse. Pure — JVM-tested. */
-internal fun mergeMessageUsageRows(rows: List<String?>): MessageUsageStats? {
-    var merged: MessageUsageStats? = null
-    for (json in rows) {
-        val parsed = MessageUsageStats.fromJson(json) ?: continue
-        merged = merged?.plus(parsed) ?: parsed
-    }
-    return merged
-}
+// [P1-18] mergeMessageUsageRows (List<String?>) removed: zero production
+// callers — the footer path pre-parses rows (usageByUiMessageId) and merges
+// via mergeMessageUsageStats; the raw-row variant existed only for its test.
 
 /** Sum pre-parsed rows (see [usageByUiMessageId]); null entries skipped. Pure. */
 internal fun mergeMessageUsageStats(stats: List<MessageUsageStats?>): MessageUsageStats? {

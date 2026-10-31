@@ -32,7 +32,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -44,6 +43,9 @@ import com.openminis.app.ui.components.MinisTextButton
 import com.openminis.app.ui.settings.SettingsScaffold
 import com.openminis.app.ui.settings.SettingsSection
 import com.openminis.app.ui.theme.m3Icon
+import com.openminis.app.ui.theme.IosGreen
+import com.openminis.app.ui.theme.IosOrange
+import com.openminis.app.ui.theme.IosRed
 
 /**
  * [T-android-backup-history-detail] One backup run, on its own screen.
@@ -297,11 +299,11 @@ private fun StatusValue(status: BackupHistory.Status) {
         BackupHistory.Status.RUNNING ->
             Triple(null, MaterialTheme.colorScheme.onSurfaceVariant, R.string.backup_history_running)
         BackupHistory.Status.SUCCEEDED ->
-            Triple(Icons.Outlined.CheckCircle, Color(0xFF34C759), R.string.backup_status_succeeded)
+            Triple(Icons.Outlined.CheckCircle, IosGreen, R.string.backup_status_succeeded)
         BackupHistory.Status.COMPLETED_WITH_ISSUES ->
-            Triple(Icons.Outlined.Warning, Color(0xFFFF9500), R.string.backup_status_issues)
+            Triple(Icons.Outlined.Warning, IosOrange, R.string.backup_status_issues)
         BackupHistory.Status.FAILED ->
-            Triple(Icons.Outlined.ErrorOutline, Color(0xFFFF3B30), R.string.backup_status_failed)
+            Triple(Icons.Outlined.ErrorOutline, IosRed, R.string.backup_status_failed)
     }
     Row(verticalAlignment = Alignment.CenterVertically) {
         if (icon != null) {
@@ -333,7 +335,7 @@ private fun DestinationOutcomeRow(
             Icon(
                 if (outcome.succeeded) m3Icon(Icons.Outlined.CheckCircle) else m3Icon(Icons.Outlined.ErrorOutline),
                 contentDescription = null,
-                tint = if (outcome.succeeded) Color(0xFF34C759) else Color(0xFFFF3B30),
+                tint = if (outcome.succeeded) IosGreen else IosRed,
                 modifier = Modifier.size(22.dp),
             )
             Spacer(Modifier.width(12.dp))

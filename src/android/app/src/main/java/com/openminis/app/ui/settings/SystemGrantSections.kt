@@ -1,5 +1,7 @@
 package com.openminis.app.ui.settings
 
+import com.openminis.app.ui.theme.IosOrange
+import com.openminis.app.ui.theme.IosRed
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
@@ -20,7 +22,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import com.openminis.app.R
@@ -67,7 +68,7 @@ fun SystemGrantSections(
         ) {
             SettingsRow(
                 icon = Icons.Outlined.Build,
-                iconColor = Color(0xFFFF3B30),
+                iconColor = IosRed,
                 title = stringResource(
                     if (shizukuReady) R.string.a11y_repair_row_shizuku
                     else R.string.a11y_repair_row_manual
@@ -115,7 +116,7 @@ fun SystemGrantSections(
         ) {
             SettingsRow(
                 icon = Icons.Outlined.RestartAlt,
-                iconColor = Color(0xFFFF9500),
+                iconColor = IosOrange,
                 title = stringResource(R.string.system_permissions_a11y_oem_autostart),
                 subtitle = stringResource(R.string.system_permissions_a11y_oem_autostart_sub),
                 onClick = {
@@ -126,7 +127,7 @@ fun SystemGrantSections(
             )
             SettingsRow(
                 icon = Icons.Outlined.BatteryAlert,
-                iconColor = Color(0xFFFF9500),
+                iconColor = IosOrange,
                 title = stringResource(R.string.system_permissions_a11y_oem_battery),
                 subtitle = stringResource(R.string.system_permissions_a11y_oem_battery_sub),
                 onClick = {

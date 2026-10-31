@@ -116,6 +116,20 @@ object NativeOffloadServer {
 
     const val socketName: String = SOCKET_NAME
 
+    /**
+     * [T-android-offload-lazy-handlers] Handler FACTORIES by name. Names are
+     * registered eagerly — the `--native-offload=` argv, the /usr/local/bin
+     * stub files and every diagnostic read [registeredHandlers], so the NAME
+     * set must be complete the moment registration returns — but the handler
+     * OBJECTS are built on first dispatch ([resolveHandler]). MinisApp used
+     * to construct all 28 handlers synchronously on the onCreate critical
+     * path; each construction is small, but together (context captures,
+     * managers, StateFlows) they were measurable, and nothing needs a handler
+     * before a shell actually issues an execve.
+     */
+    private val handlerFactories = ConcurrentHashMap<String, () -> NativeOffloadHandler>()
+
+    /** Lazily-materialized handlers, populated on first dispatch per name. */
     private val handlers = ConcurrentHashMap<String, NativeOffloadHandler>()
     private val counter = AtomicLong(0)
     private var serverSocket: LocalServerSocket? = null
@@ -124,12 +138,23 @@ object NativeOffloadServer {
     @Volatile
     private var rootfsTmpDir: File? = null
 
-    val registeredHandlers: Set<String> get() = handlers.keys.toSet()
+    val registeredHandlers: Set<String> get() = handlerFactories.keys.toSet()
 
-    fun register(name: String, handler: NativeOffloadHandler) {
+    fun register(name: String, factory: () -> NativeOffloadHandler) {
         require(name.isNotEmpty())
-        handlers[name] = handler
-        Log.d(TAG, "register '$name' (total=${handlers.size})")
+        handlerFactories[name] = factory
+        Log.d(TAG, "register '$name' (total=${handlerFactories.size})")
+    }
+
+    /**
+     * Resolve a handler by name, instantiating (and caching) it on first use.
+     * `computeIfAbsent` keeps the exactly-once construction guarantee under
+     * concurrent dispatches of the same name.
+     */
+    internal fun resolveHandler(name: String): NativeOffloadHandler? {
+        handlers[name]?.let { return it }
+        val factory = handlerFactories[name] ?: return null
+        return handlers.computeIfAbsent(name) { factory() }
     }
 
     @Synchronized
@@ -157,7 +182,7 @@ object NativeOffloadServer {
             runAcceptLoop(s)
         }
         Log.i(TAG, "listening on abstract socket '$SOCKET_NAME' " +
-            "handlers=${handlers.keys.sorted()} tmpDir=${rootfsTmpDir?.absolutePath}")
+            "handlers=${handlerFactories.keys.sorted()} tmpDir=${rootfsTmpDir?.absolutePath}")
 
         // [T-android-offload-tmp-leak] Sweep reply files orphaned by earlier
         // app processes. See sweepStaleReplies for why this is safe here and
@@ -309,9 +334,11 @@ object NativeOffloadServer {
         Log.d(TAG, "recv pid=$pid name='$name' argc=$argc cwdHash=${cwd.hashCode()} envc=$envc")
 
         val t0 = System.nanoTime()
-        val handler = handlers[name]
+        // [T-android-offload-lazy-handlers] First dispatch of a name builds
+        // its handler here (see resolveHandler).
+        val handler = resolveHandler(name)
         val result = if (handler == null) {
-            Log.w(TAG, "no handler registered for '$name' (known=${handlers.keys})")
+            Log.w(TAG, "no handler registered for '$name' (known=${handlerFactories.keys})")
             NativeOffloadResult(exitCode = 127, output = "native_offload: no handler for '$name'\n")
         } else {
             runHandlerWithWatchdog(

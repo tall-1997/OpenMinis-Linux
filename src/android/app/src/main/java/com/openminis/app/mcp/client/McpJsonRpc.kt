@@ -1,9 +1,11 @@
 package com.openminis.app.mcp.client
 
 import com.openminis.app.provider.NonFiniteJson
+import com.openminis.app.provider.ssePayloads
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
+import java.io.StringReader
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -119,30 +121,21 @@ object McpJsonRpc {
      * fields. Multi-line `data:` continuations within one event are joined
      * with '\n' per the SSE spec. Non-JSON data (e.g. `event: ping`
      * keepalives with empty data) is skipped.
+     *
+     * [P2-convergence] The line assembly itself moved onto the shared
+     * [ssePayloads] ([com.openminis.app.provider.SseEventParser]) so MCP and the
+     * streaming providers cannot drift apart on SSE semantics. Alignment notes:
+     * a blank line terminates an event, `:` comment/keepalive lines are
+     * skipped, `event:`/`id:`/`retry:` carry nothing we need, exactly one
+     * leading space after `data:` belongs to the field separator, and a stream
+     * that ends without the trailing blank line still flushes its last event.
+     * The non-streaming (whole-string) body is fed through a [StringReader],
+     * so no streaming reader is involved on this path.
      */
-    fun parseSseEvents(body: String): List<JSONObject> {
-        val out = mutableListOf<JSONObject>()
-        val dataLines = mutableListOf<String>()
-        fun flush() {
-            if (dataLines.isEmpty()) return
-            val joined = dataLines.joinToString("\n")
-            dataLines.clear()
-            if (joined.isBlank()) return
-            runCatching { NonFiniteJson.parse(joined) }.getOrNull()?.let(out::add)
-        }
-        for (raw in body.split('\n')) {
-            val line = raw.removeSuffix("\r")
-            when {
-                line.isEmpty() -> flush()
-                line.startsWith(":") -> { /* comment / keepalive */ }
-                line.startsWith("data:") ->
-                    dataLines.add(line.removePrefix("data:").removePrefix(" "))
-                // event:, id:, retry: fields carry no payload we need.
-            }
-        }
-        flush() // stream ended without a trailing blank line
-        return out
-    }
+    fun parseSseEvents(body: String): List<JSONObject> =
+        ssePayloads(BufferedReader(StringReader(body)))
+            .mapNotNull { payload -> runCatching { NonFiniteJson.parse(payload) }.getOrNull() }
+            .toList()
 
     /**
      * STDIO framing: read newline-delimited JSON from [reader] until the

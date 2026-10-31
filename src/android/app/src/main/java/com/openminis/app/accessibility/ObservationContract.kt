@@ -30,6 +30,12 @@ object ObservationReferencePolicy {
  * One published screen observation. [nodeIds] are the registry ids that were
  * allocated inside this observation; a node action re-checks membership so a
  * recycled id from an older observation cannot slip through after expiry.
+ *
+ * [P2-convergence] This file was flagged for deletion as "zero references",
+ * but [ObservationStore] and [PublishedObservation] are live — they back
+ * sandbox/offload/AccessibilityOffloadHandler.kt (publish + checkNodeAction).
+ * Only the truly unreferenced [AccessibilityNodeIdentity] was removed; the
+ * observation contract itself stays.
  */
 data class PublishedObservation(
     val id: String,
@@ -37,31 +43,6 @@ data class PublishedObservation(
     val packageName: String?,
     val nodeIds: Set<String>,
 )
-
-/**
- * Stable per-node identity fingerprint. `viewId` alone is not unique inside
- * lists; text/description/class plus window+package give a matchable signature
- * that survives a registry-id recycle (Eta's node-identity lesson, rewritten).
- */
-data class AccessibilityNodeIdentity(
-    val windowId: Int,
-    val packageName: String,
-    val className: String,
-    val viewId: String,
-    val text: String,
-    val description: String,
-) {
-    val strong: Boolean
-        get() = text.isNotBlank() || description.isNotBlank() || viewId.isNotBlank()
-
-    fun matches(refreshed: AccessibilityNodeIdentity): Boolean =
-        windowId == refreshed.windowId &&
-            packageName == refreshed.packageName &&
-            className == refreshed.className &&
-            (viewId.isBlank() || viewId == refreshed.viewId) &&
-            text == refreshed.text &&
-            description == refreshed.description
-}
 
 /**
  * Holds the most recently published observation. Thread-safe: publisher is the

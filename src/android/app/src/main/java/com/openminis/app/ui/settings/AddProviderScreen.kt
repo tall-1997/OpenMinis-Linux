@@ -35,7 +35,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -59,6 +58,7 @@ import com.openminis.app.ui.components.MinisButton
 import com.openminis.app.ui.components.RowLabel
 import com.openminis.app.ui.components.SectionTextField
 import com.openminis.app.ui.theme.m3Icon
+import com.openminis.app.ui.theme.IosGreen
 private enum class AddProviderStep {
     CHOOSE_TYPE,
     CHOOSE_CREDENTIAL,
@@ -692,7 +692,7 @@ private fun ColumnScope.OAuthConfigSection(
                     Icon(
                         m3Icon(Icons.Default.CheckCircle),
                         contentDescription = null,
-                        tint = Color(0xFF34C759),
+                        tint = IosGreen,
                         modifier = Modifier.size(20.dp),
                     )
                     Spacer(Modifier.width(8.dp))

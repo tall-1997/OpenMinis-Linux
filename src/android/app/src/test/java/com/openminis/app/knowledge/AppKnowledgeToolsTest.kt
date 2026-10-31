@@ -28,6 +28,7 @@ class AppKnowledgeToolsTest {
         AppKnowledgeStore.resetForTests()
         AppKnowledgeStore.sourceProvider = { TestPacks.source() }
         AppNotesStore.resetForTests()
+        RouteTrackers.global.resetForTests()
     }
 
     private fun guide(app: String, session: String? = "sess-1"): String =
@@ -120,5 +121,65 @@ class AppKnowledgeToolsTest {
         guide("wechat", session = "sess-7")
         assertTrue(AppKnowledgeStore.wasGiven("sess-7", "wechat"))
         assertFalse(AppKnowledgeStore.wasGiven("sess-8", "wechat"))
+    }
+
+    // ── [T-android-route-tracker-read] the tap ledger gains readers ──
+
+    @Test
+    fun routeNoteRecordsTheTrackedTapPathInsteadOfTheModelText() {
+        // Dedicated session so sibling tests' recorded routes cannot leak in
+        // (JUnit method order is not guaranteed).
+        RouteTrackers.global.record("sess-route-a", "com.tencent.mm", "我")
+        RouteTrackers.global.record("sess-route-a", "com.tencent.mm", "设置")
+        val out = AppKnowledgeTools.execute(
+            AppKnowledgeTools.NOTE,
+            JSONObject().put("package", "com.tencent.mm")
+                .put("text", "the model's own retelling")
+                .put("kind", "route")
+                .put("tool_title", "t")
+                .toString(),
+            "sess-route-a",
+            context,
+        )
+        assertTrue(out.startsWith("Saved note"))
+        val stored = AppNotesStore.forContext(context).all.value.single { it.text == "Route: 我 → 设置" }
+        assertEquals(AppNotes.Kind.route, stored.kind)
+    }
+
+    @Test
+    fun routeNoteFallsBackToModelTextWhenTrackerIsEmpty() {
+        // Dedicated session AND package so sibling tests' recorded routes and
+        // notes cannot leak in (JUnit method order is not guaranteed).
+        val out = AppKnowledgeTools.execute(
+            AppKnowledgeTools.NOTE,
+            JSONObject().put("package", "com.example.routefallback")
+                .put("text", "底部 tab 第三个进入设置")
+                .put("kind", "route")
+                .put("tool_title", "t")
+                .toString(),
+            "sess-no-route",
+            context,
+        )
+        assertTrue(out.startsWith("Saved note"))
+        assertEquals(
+            "底部 tab 第三个进入设置",
+            AppNotesStore.forContext(context).all.value.single { it.pkg == "com.example.routefallback" }.text,
+        )
+    }
+
+    @Test
+    fun guidePrependsRecentSuccessfulRouteBeforeBody() {
+        RouteTrackers.global.record("sess-1", "com.tencent.mm", "搜索")
+        RouteTrackers.global.record("sess-1", "com.tencent.mm", "设置")
+        val out = guide("com.tencent.mm")
+        val routeIdx = out.indexOf("Recent successful route: 搜索 → 设置")
+        val bodyIdx = out.indexOf("## ")
+        assertTrue("route line present", routeIdx > 0)
+        assertTrue("route comes before the pack body", routeIdx < bodyIdx)
+    }
+
+    @Test
+    fun guideOmitsRouteBlockWhenNothingWasRecorded() {
+        assertFalse(guide("com.tencent.mm").contains("Recent successful route"))
     }
 }

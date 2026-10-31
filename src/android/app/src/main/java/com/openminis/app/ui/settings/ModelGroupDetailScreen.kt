@@ -1,5 +1,7 @@
 package com.openminis.app.ui.settings
 import com.openminis.app.ui.theme.m3Icon
+import com.openminis.app.ui.theme.IosIndigo
+import com.openminis.app.ui.theme.IosPurple
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -56,7 +58,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.graphics.Color
 import com.openminis.app.data.model.FallbackStrategy
 import com.openminis.app.data.model.RoutingStrategy
 import com.openminis.app.data.model.ThinkingLevel
@@ -475,7 +476,7 @@ fun ModelGroupDetailScreen(
                             )
                         },
                         icon = m3Icon(Icons.Default.Psychology),
-                        iconColor = Color(0xFFAF52DE),
+                        iconColor = IosPurple,
                         showDivider = reasoningEnabled,
                     )
                     if (reasoningEnabled) {
@@ -590,7 +591,7 @@ fun ModelGroupDetailScreen(
                             }
                         },
                         icon = Icons.Default.Memory,
-                        iconColor = Color(0xFF5856D6),
+                        iconColor = IosIndigo,
                         showDivider = contextEnabled,
                     )
                     if (contextEnabled) {

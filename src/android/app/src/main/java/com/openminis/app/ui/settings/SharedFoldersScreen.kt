@@ -1,5 +1,9 @@
 package com.openminis.app.ui.settings
 
+import com.openminis.app.ui.theme.IosBlue
+import com.openminis.app.ui.theme.IosGreen
+import com.openminis.app.ui.theme.IosOrange
+import com.openminis.app.ui.theme.IosPurple
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -148,9 +152,9 @@ private fun SharedFolderRow(
 @Composable
 private fun AccessBadge(writable: Boolean) {
     val (textRes, color) = if (writable) {
-        R.string.mount_badge_rw to Color(0xFF34C759)
+        R.string.mount_badge_rw to IosGreen
     } else {
-        R.string.mount_badge_readonly to Color(0xFFFF9500)
+        R.string.mount_badge_readonly to IosOrange
     }
     Surface(
         shape = RoundedCornerShape(8.dp),
@@ -183,7 +187,7 @@ internal object SharedFolderRegistry {
             linuxPath = "/var/minis/shared",
             writable = true,
             icon = Icons.Outlined.Folder,
-            iconColor = Color(0xFF007AFF),
+            iconColor = IosBlue,
         ),
         SharedFolderEntry(
             id = "skills",
@@ -191,7 +195,7 @@ internal object SharedFolderRegistry {
             linuxPath = "/var/minis/skills",
             writable = false,
             icon = Icons.Outlined.AutoAwesome,
-            iconColor = Color(0xFFAF52DE),
+            iconColor = IosPurple,
         ),
     )
 

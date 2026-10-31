@@ -1,9 +1,8 @@
 package com.openminis.app.provider.openai
 
 import com.openminis.app.data.model.LLMError
+import com.openminis.app.provider.ZenErrorBody
 import com.openminis.app.provider.mapHttpErrorShared
-import com.openminis.app.provider.safeOptString
-import org.json.JSONObject
 
 internal fun OpenAIProvider.mapHttpError(statusCode: Int, body: String, retryAfterHeader: String? = null): LLMError {
     // [T-zen-structured-error] OpenCode Zen answers with a structured body
@@ -64,18 +63,18 @@ internal fun OpenAIProvider.mapError(error: Throwable): LLMError = mapThrowableT
  * generic OpenAI bodies flow to the historical mapping untouched. The upstream
  * message is user-visible verbatim, so it goes through [maskSecrets] like every
  * other server-provided string in this file.
+ *
+ * [P2-convergence] The envelope scan is the shared [ZenErrorBody.parse] (same
+ * reader the free-lane classifier uses). The `envelopeType == "error"` gate is
+ * this mapper's own strictness and stays here: only the bare spelling carries
+ * an envelope type, so an SSE-framed error keeps flowing to the generic
+ * mapping exactly as before.
  */
 internal fun zenStructuredProviderRefusal(body: String): LLMError? {
-    val json = try {
-        JSONObject(body)
-    } catch (_: Exception) {
-        return null
-    }
-    if (json.optString("type", "") != "error") return null
-    val error = json.optJSONObject("error") ?: return null
-    val type = error.optString("type", "")
-    val message = error.safeOptString("message", "").orEmpty()
-    return when (type) {
+    val zen = ZenErrorBody.parse(body) ?: return null
+    if (zen.envelopeType != "error") return null
+    val message = zen.errorMessage
+    return when (zen.errorType) {
         // [T-zen-free-lane-retired] Measured 2026-10-17: this refusal is not a
         // header problem and not a key problem — the official 2.0.32 CLI answers
         // 200 on the same models from the same machine, while the CLI's own

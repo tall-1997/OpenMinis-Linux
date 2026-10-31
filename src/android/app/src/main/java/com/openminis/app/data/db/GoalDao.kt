@@ -30,9 +30,6 @@ interface GoalDao {
         updatedAt: Long,
     )
 
-    @Query("UPDATE session_goals SET objective = :objective, updated_at = :updatedAt WHERE session_id = :sessionId")
-    suspend fun updateObjective(sessionId: String, objective: String, updatedAt: Long)
-
     @Query("UPDATE session_goals SET status = :status, paused_at = :pausedAt, updated_at = :updatedAt WHERE session_id = :sessionId")
     suspend fun updateStatus(sessionId: String, status: String, pausedAt: Long?, updatedAt: Long)
 

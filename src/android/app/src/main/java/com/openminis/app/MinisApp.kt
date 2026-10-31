@@ -41,32 +41,7 @@ import com.openminis.app.sandbox.ExecutionCoordinator
 import com.openminis.app.sandbox.NativeOffloadServer
 import com.openminis.app.sandbox.PRootKernel
 import com.openminis.app.sandbox.RootfsManager
-import com.openminis.app.sandbox.offload.AccessibilityOffloadHandler
-import com.openminis.app.sandbox.offload.AlarmOffloadHandler
-import com.openminis.app.sandbox.offload.BrowserUseOffloadHandler
-import com.openminis.app.sandbox.offload.CalendarOffloadHandler
-import com.openminis.app.sandbox.offload.ClipboardOffloadHandler
-import com.openminis.app.sandbox.offload.ContactsOffloadHandler
-import com.openminis.app.sandbox.offload.DeviceOffloadHandler
-import com.openminis.app.sandbox.offload.LocationOffloadHandler
-import com.openminis.app.sandbox.offload.ModelUseOffloadHandler
-import com.openminis.app.sandbox.offload.SessionsOffloadHandler
-import com.openminis.app.sandbox.offload.ShizukuOffloadHandler
-import com.openminis.app.sandbox.offload.SuOffloadHandler
-import com.openminis.app.sandbox.offload.NotificationOffloadHandler
-import com.openminis.app.sandbox.offload.OpenOffloadHandler
-import com.openminis.app.sandbox.offload.PhotosOffloadHandler
-import com.openminis.app.sandbox.offload.PlayerOffloadHandler
-import com.openminis.app.sandbox.offload.SpeakOffloadHandler
-import com.openminis.app.sandbox.offload.DozeOffloadHandler
-import com.openminis.app.sandbox.offload.FirewallOffloadHandler
-import com.openminis.app.sandbox.offload.HostEventOffloadHandler
-import com.openminis.app.sandbox.offload.MinisNotifyOffloadHandler
-import com.openminis.app.sandbox.offload.ProcfsOffloadHandler
-import com.openminis.app.sandbox.offload.ToastOffloadHandler
 import com.openminis.app.sandbox.HostEventHooks
-import com.openminis.app.sandbox.offload.SpeechOffloadHandler
-import com.openminis.app.sandbox.offload.WeatherOffloadHandler
 import com.openminis.app.service.SessionActivityTracker
 import com.openminis.app.ui.MinisImageFetcher
 import kotlinx.coroutines.launch
@@ -587,6 +562,19 @@ class MinisApp : Application(), ImageLoaderFactory {
             }.onFailure {
                 android.util.Log.e("MinisApp", "legacy workspace migrate failed", it)
             }
+            // [T268 / T-android-migrate-ghost-alarms-off-main] One-shot migration
+            // of pre-T266 internal alarms into the system Clock app. Pre-T266
+            // builds wrote alarms into Minis's own SharedPreferences +
+            // AlarmManager; T266 retired that path but old installs still have
+            // ghost entries that fire only inside Minis Ultra. Replay each
+            // future-dated entry through the same SET_ALARM / SET_TIMER intents
+            // the new path uses, then clear prefs so the migration runs at most
+            // once. Prefs blob read + intent dispatch are not dependency init —
+            // they moved off the onCreate critical path into this tail slot.
+            // Wrapped in runCatching so an unexpected prefs shape never blocks
+            // app launch. The early-return logic (blank/empty blob) is unchanged.
+            runCatching { migrateGhostAlarms() }
+                .onFailure { Log.w("MinisApp", "ghost alarm migration failed: ${it.message}") }
         }
 
         // [skill-startup-refresh] Every launch: re-scan minis-global/skills/,
@@ -683,90 +671,12 @@ class MinisApp : Application(), ImageLoaderFactory {
         // the server only needs the rootfs tmp directory, which can be
         // materialized lazily. Starting here means the abstract socket is
         // reachable even before any shell session is launched.
-        NativeOffloadServer.register("android-alarm", AlarmOffloadHandler(this))
-        NativeOffloadServer.register("android-calendar", CalendarOffloadHandler(this))
-        val clipboardOffload = ClipboardOffloadHandler(this)
-        NativeOffloadServer.register("android-clipboard", clipboardOffload)
-        NativeOffloadServer.register("minis-clipboard", clipboardOffload)
-        NativeOffloadServer.register("minis-toast", ToastOffloadHandler(this))
-        NativeOffloadServer.register("minis-firewall", FirewallOffloadHandler(this))
-        NativeOffloadServer.register("minis-doze", DozeOffloadHandler(this))
-        NativeOffloadServer.register("minis-ps", ProcfsOffloadHandler())
-        NativeOffloadServer.register("minis-notify", MinisNotifyOffloadHandler(this))
-        NativeOffloadServer.register("minis-on-event", HostEventOffloadHandler())
-        NativeOffloadServer.register("android-contacts", ContactsOffloadHandler(this))
-        NativeOffloadServer.register("android-device", DeviceOffloadHandler(this))
-        NativeOffloadServer.register("android-location", LocationOffloadHandler(this))
-        NativeOffloadServer.register("android-notification", NotificationOffloadHandler(this))
-        NativeOffloadServer.register("android-open", OpenOffloadHandler(this))
-        NativeOffloadServer.register("android-photos", PhotosOffloadHandler(this))
-        NativeOffloadServer.register("android-player", PlayerOffloadHandler())
-        NativeOffloadServer.register("android-speak", SpeakOffloadHandler(this))
-        NativeOffloadServer.register("android-speech", SpeechOffloadHandler(this))
-        NativeOffloadServer.register("android-weather", WeatherOffloadHandler(this))
-        // T323: UI-layer automation backed by MinisAccessibilityService.
-        NativeOffloadServer.register("android-a11y-cli", AccessibilityOffloadHandler(this))
-        NativeOffloadServer.register("minis-model-use", ModelUseOffloadHandler(this, providerRepository))
-        // T-config: minis-config — agent-facing settings management
-        // (read/write registered ConfigFields with audit + revert).
-        // Mirrors iOS `config_offload_register()` in ISHKernel.m.
-        NativeOffloadServer.register(
-            "minis-config",
-            com.openminis.app.sandbox.offload.ConfigOffloadHandler(),
-        )
-        NativeOffloadServer.register("minis-browser-use", BrowserUseOffloadHandler(this))
-        // T188: minis-sessions-cli — agent-side query of chat history.
-        // Registers next to the other minis-* tools so PRootKernel.
-        // installHandlerStubs() picks it up on the next rootfs boot
-        // (writes a 17-byte exit-0 stub at /usr/local/bin/minis-sessions-cli
-        // so PATH lookup succeeds; PRoot intercepts the execve before
-        // the stub runs and routes to this handler).
-        NativeOffloadServer.register("minis-sessions-cli", SessionsOffloadHandler(chatRepository))
-        // [T-android-session-read-boundary] Cross-session reads are audited
-        // regardless of scope; point the audit at app storage so the trail
-        // survives a logcat flush. Only ids/actions are written, never bodies.
-        com.openminis.app.sandbox.SessionAccessAudit.dir = filesDir.resolve("session-access")
-        // The gate has no Context, but its guest-path policy has to know whether
-        // /sdcard is really bind-mounted before refusing a command that names it.
-        // shellSharedStorageBinds is the single source of truth for that plan, so
-        // ask it instead of re-deriving the All Files Access state here.
-        com.openminis.app.security.SecurityGateHolder.gate.sdcardMounted = {
-            com.openminis.app.sandbox.PRootKernel
-                .shellSharedStorageBinds(this, publish = false)
-                .containsKey(com.openminis.app.sandbox.SharedStorageBindPlan.SDCARD)
-        }
-        // [T-android-scheduled-tasks-full] minis-scheduled — create/list/run
-        // timed AI tasks (new chat / follow-up / re-run), mirroring the in-app
-        // Scheduled Tasks editor and the iOS Shortcuts intent set.
-        NativeOffloadServer.register(
-            "minis-scheduled",
-            com.openminis.app.sandbox.offload.ScheduledTaskOffloadHandler(this),
-        )
-        // T322: android-shizuku-cli — privileged Android control via Shizuku.
-        // The handler short-circuits with a typed error envelope when the
-        // user hasn't installed / started / authorized Shizuku, so we
-        // can register unconditionally; ShizukuManager.init below wires
-        // up the binder lifecycle listeners + StateFlow.
-        NativeOffloadServer.register("android-shizuku-cli", ShizukuOffloadHandler(this))
-        com.openminis.app.offload.ShizukuManager.init(this)
-        // Host Magisk/KernelSU su passthrough (no Shizuku). Registered as
-        // both `su` and `android-su` so PATH lookup and the android-* CLI
-        // convention both work; installHandlerStubs writes both stubs.
-        val suHandler = SuOffloadHandler()
-        NativeOffloadServer.register("android-su", suHandler)
-        NativeOffloadServer.register("su", suHandler)
-
-        // T-android-minis-debug-cli: shell-side CLI wrapper around the in-app
-        // DebugServer (127.0.0.1:5322) JSON-RPC. DEBUG-only — Release builds
-        // ship neither the DebugServer nor this handler, so the
-        // `/usr/local/bin/minis-debug` stub is also absent (PRootKernel.
-        // installHandlerStubs enumerates currently-registered handlers).
-        if (BuildConfig.DEBUG) {
-            NativeOffloadServer.register(
-                "minis-debug",
-                com.openminis.app.sandbox.offload.DebugOffloadHandler(this),
-            )
-        }
+        // [T-android-offload-lazy-handlers] The 28 handler registrations (plus
+        // the audit-dir / sdcard-gate / ShizukuManager wiring interleaved with
+        // them) moved verbatim into AppGraph.registerOffloadHandlers — onCreate
+        // spends one line here, and handlers are FACTORIES built on first
+        // dispatch instead of 28 eager constructions on this critical path.
+        AppGraph.registerOffloadHandlers(this)
 
         NativeOffloadServer.start(RootfsManager.getInstance(this).rootfsDir)
 
@@ -785,13 +695,11 @@ class MinisApp : Application(), ImageLoaderFactory {
         // runs it, so the badge would be missing after restart. The persisted
         // message tail is the durable source of truth — scan it off-main and
         // reconcile. Runs after init() so it merges with the restored queues.
+        // [T-android-paused-badge-reconcile-single-source] Same one-liner as
+        // the lifecycle path below: the read-DB → subtract-active → reconcile
+        // sequence collapsed into SessionBadgeStore.reconcileFromDb.
         appCoroutineScopes.io.launch {
-            val interrupted = runCatching { chatRepository.interruptedSessionIds() }.getOrElse { emptySet() }
-            // Exclude any session that is already actively streaming (defensive;
-            // at cold start this is empty, but keeps the rule "active ⇒ never
-            // paused" uniform with the foreground reconcile path).
-            val active = SessionActivityTracker.activeSessions.value
-            com.openminis.app.service.SessionBadgeStore.reconcileInterruptedSessions(interrupted - active)
+            com.openminis.app.service.SessionBadgeStore.reconcileFromDb(this@MinisApp)
         }
 
         // T180-bg-notif: background-settings + task-completion notifier.
@@ -869,11 +777,12 @@ class MinisApp : Application(), ImageLoaderFactory {
                 // only looks "interrupted" for a session whose loop is actually
                 // stranded; we additionally exclude currently-active sessions so
                 // a mid-loop running session is never flagged.
+                // [T-android-paused-badge-reconcile-single-source] The former
+                // inline copy of the cold-start reconcile; both now funnel
+                // through SessionBadgeStore.reconcileFromDb.
                 if (wasBackgrounded) {
                     appCoroutineScopes.io.launch {
-                        val interrupted = runCatching { chatRepository.interruptedSessionIds() }.getOrElse { emptySet() }
-                        val active = SessionActivityTracker.activeSessions.value
-                        com.openminis.app.service.SessionBadgeStore.reconcileInterruptedSessions(interrupted - active)
+                        com.openminis.app.service.SessionBadgeStore.reconcileFromDb(this@MinisApp)
                     }
                 }
             }
@@ -975,16 +884,9 @@ class MinisApp : Application(), ImageLoaderFactory {
             com.openminis.app.mcp.server.McpServerManager.bootIfEnabled()
         }.onFailure { Log.w("MinisApp", "MCP server init failed: ${it.message}") }
 
-        // T268: one-shot migration of pre-T266 internal alarms into the
-        // system Clock app. Pre-T266 builds wrote alarms into Minis's own
-        // SharedPreferences + AlarmManager; T266 retired that path but old
-        // installs still have ghost entries that fire only inside Minis Ultra.
-        // Replay each future-dated entry through the same SET_ALARM /
-        // SET_TIMER intents the new path uses, then clear prefs so the
-        // migration runs at most once. Wrapped in runCatching so an
-        // unexpected prefs shape never blocks app launch.
-        runCatching { migrateGhostAlarms() }
-            .onFailure { Log.w("MinisApp", "ghost alarm migration failed: ${it.message}") }
+        // [T268] The one-shot ghost-alarm migration call moved into the
+        // startup IO block above (see its tail) — off the onCreate critical
+        // path. The early-return logic inside migrateGhostAlarms is unchanged.
     }
 
     /**

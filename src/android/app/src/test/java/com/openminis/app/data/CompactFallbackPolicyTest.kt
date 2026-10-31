@@ -21,15 +21,10 @@ class CompactFallbackPolicyTest {
     }
 
     @Test
-    fun twoShotKindsUseFallbackWhenConfiguredOtherwiseRetrySession() {
-        assertEquals(
-            listOf("session", "fallback"),
-            ChatViewModel.compactStageKinds(hasFallbackDistinctFromSession = true),
-        )
-        assertEquals(
-            listOf("session", "session-retry"),
-            ChatViewModel.compactStageKinds(hasFallbackDistinctFromSession = false),
-        )
+    fun twoShotBudgetIsTwo() {
+        // [P1-18] compactStageKinds (the stage-name projection) was deleted as
+        // production-dead; the two-shot budget constant remains the tested
+        // contract.
         assertEquals(2, ChatViewModel.COMPACT_STAGE_BUDGET)
     }
 

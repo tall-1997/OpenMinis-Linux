@@ -228,6 +228,10 @@ internal object FreeLaneDirectory {
                         )
                         updated
                     }
+                    // [P2-convergence] learned.paid / FreeLaneHealth death marks are the
+                    // free-lane side of the permanence spectrum whose 429/body-marker end
+                    // lives in HttpRetryAfter.classifyCapacityBody; see FreeLaneEvidence
+                    // .marksDead for why the two stay separate vocabularies.
                     verdict == FreeLaneVerdict.PAID -> updated.withPaid(id)
                     // DEAD is recorded inside the lane's classify via
                     // FreeLaneHealth. UNKNOWN writes nothing at all.

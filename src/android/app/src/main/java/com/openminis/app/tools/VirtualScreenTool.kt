@@ -511,25 +511,16 @@ object VirtualScreenTool {
      * [T-ui-action-arg-quoting] precedent: coordinates are model-supplied, so
      * accept a plain integer only — anything else is refused before it can
      * reach the manager.
+     *
+     * [P2-convergence] The body was byte-identical to the [intArg] copy below
+     * it; both now delegate to the shared [ToolArgs.strictInt] (strict on
+     * purpose — a numeric string must be a plain integer, "12.5" is absent,
+     * unlike the device tools' lenient reader).
      */
-    private fun coordinate(obj: JSONObject, key: String): Int? {
-        if (!obj.has(key) || obj.isNull(key)) return null
-        return when (val raw = obj.get(key)) {
-            is Number -> raw.toInt()
-            is String -> raw.trim().toIntOrNull()
-            else -> null
-        }
-    }
+    private fun coordinate(obj: JSONObject, key: String): Int? = ToolArgs.strictInt(obj, key)
 
     /** optInt parses numeric strings too, so the schema's integer type is fine. */
-    private fun intArg(obj: JSONObject, key: String): Int? {
-        if (!obj.has(key) || obj.isNull(key)) return null
-        return when (val raw = obj.get(key)) {
-            is Number -> raw.toInt()
-            is String -> raw.trim().toIntOrNull()
-            else -> null
-        }
-    }
+    private fun intArg(obj: JSONObject, key: String): Int? = ToolArgs.strictInt(obj, key)
 
     private fun displayIdOrZero(obj: JSONObject): Int = intArg(obj, "display_id") ?: 0
 

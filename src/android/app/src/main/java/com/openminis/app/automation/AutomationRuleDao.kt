@@ -113,12 +113,6 @@ interface AutomationRuleDao {
         "SELECT COUNT(*) FROM automation_runs WHERE rule_id = :ruleId " +
             "AND fired_at >= :sinceMs AND outcome NOT LIKE 'skipped%'",
     )
-    suspend fun countActionableSince(ruleId: String, sinceMs: Long): Int
-
-    @Query(
-        "SELECT COUNT(*) FROM automation_runs WHERE rule_id = :ruleId " +
-            "AND fired_at >= :sinceMs AND outcome NOT LIKE 'skipped%'",
-    )
     fun countActionableSinceBlocking(ruleId: String, sinceMs: Long): Int
 
     @Query("SELECT * FROM automation_runs WHERE rule_id = :ruleId ORDER BY fired_at DESC, run_id DESC LIMIT :limit")
@@ -127,9 +121,10 @@ interface AutomationRuleDao {
     @Query("SELECT * FROM automation_runs WHERE rule_id = :ruleId ORDER BY fired_at DESC, run_id DESC LIMIT :limit")
     fun recentRunsBlocking(ruleId: String, limit: Int): List<AutomationRunEntity>
 
-    @Query("SELECT * FROM automation_runs WHERE session_id = :sessionId LIMIT 1")
-    suspend fun runForSession(sessionId: String): AutomationRunEntity?
-
     @Query("DELETE FROM automation_runs WHERE rule_id = :ruleId")
     suspend fun deleteRunsFor(ruleId: String)
+
+    /** [v3 二-9] Rolling retention: everything fired before [cutoffMs] goes. */
+    @Query("DELETE FROM automation_runs WHERE fired_at < :cutoffMs")
+    suspend fun deleteRunsBefore(cutoffMs: Long): Int
 }

@@ -1,8 +1,5 @@
 package com.openminis.app.cards
 
-import org.json.JSONArray
-import org.json.JSONObject
-
 /**
  * [G-batch tool result cards] Typed card model for tool results — the
  * "dual channel" design: the model keeps reading the ORIGINAL tool result
@@ -20,13 +17,14 @@ import org.json.JSONObject
  *    field semantics never change. An unknown type tag decodes to null and
  *    the UI degrades to the plain tool row.
  *
- * Serialization is hand-rolled on org.json (no new dependency): see
- * [ToolCardJson]. A serialized card stays far below the 16KB budget from
- * the design doc because list cards cap at [CardDeriver.MAX_LIST_ITEMS].
+ * [P2-convergence] The hand-rolled org.json serialization layer
+ * (`ToolCardJson`) was deleted: nothing ever serialized a card to disk or
+ * across the wire — cards live only in memory between [CardDeriver.derive]
+ * and the renderers, so the (de)serializer had no production reader.
  */
 sealed class ToolCard {
 
-    /** Stable wire tag for [ToolCardJson]; one value per variant, never renamed. */
+    /** Stable per-variant tag; one value per variant, never renamed. */
     abstract val typeTag: String
 
     /** Key–value snapshot card: device status, settings read, clipboard. */
@@ -120,172 +118,4 @@ sealed class ToolCard {
 
     /** One entry of [ListCard]. */
     data class CardItem(val title: String, val subtitle: String? = null)
-}
-
-/**
- * org.json based (de)serialization for [ToolCard]. Format:
- * `{"v":1,"type":"facts","title":...,"rows":[{"label":..,"value":..}]}`
- *
- * Reading is total: any malformed input, unknown type tag or wrong field
- * shape returns null instead of throwing, so an older/newer build degrades
- * to the plain tool row rather than crashing.
- */
-object ToolCardJson {
-
-    private const val KEY_VERSION = "v"
-    private const val KEY_TYPE = "type"
-    private const val VERSION = 1
-
-    /** Serialize [card]; never throws for the v1 shapes. */
-    fun write(card: ToolCard): String = try {
-        when (card) {
-            is ToolCard.Facts -> JSONObject()
-                .put(KEY_TYPE, card.typeTag)
-                .put("title", card.title)
-                .put("highlight", card.highlight ?: JSONObject.NULL)
-                .put("rows", JSONArray().apply {
-                    card.rows.forEach {
-                        put(JSONObject().put("label", it.label).put("value", it.value))
-                    }
-                })
-
-            is ToolCard.ListCard -> JSONObject()
-                .put(KEY_TYPE, card.typeTag)
-                .put("title", card.title)
-                .put("total", card.total)
-                .put("items", JSONArray().apply {
-                    card.items.forEach {
-                        put(
-                            JSONObject().put("title", it.title)
-                                .put("subtitle", it.subtitle ?: JSONObject.NULL),
-                        )
-                    }
-                })
-
-            is ToolCard.Media -> JSONObject()
-                .put(KEY_TYPE, card.typeTag)
-                .put("path", card.path)
-                .put("mimeType", card.mimeType)
-                .put("isImage", card.isImage)
-
-            is ToolCard.FileCard -> JSONObject()
-                .put(KEY_TYPE, card.typeTag)
-                .put("name", card.name)
-                .put("path", card.path)
-                .put("sizeBytes", card.sizeBytes ?: JSONObject.NULL)
-                .put("isNew", card.isNew)
-
-            is ToolCard.EventCard -> JSONObject()
-                .put(KEY_TYPE, card.typeTag)
-                .put("title", card.title)
-                .put("timeText", card.timeText)
-                .put("repeat", card.repeat ?: JSONObject.NULL)
-
-            is ToolCard.Change -> JSONObject()
-                .put(KEY_TYPE, card.typeTag)
-                .put("label", card.label)
-                .put("oldText", card.oldText ?: JSONObject.NULL)
-                .put("newText", card.newText)
-                .put("undoable", card.undoable)
-                .put("tool", card.tool ?: JSONObject.NULL)
-                .put("undoArgsJson", card.undoArgsJson ?: JSONObject.NULL)
-
-            is ToolCard.Link -> JSONObject()
-                .put(KEY_TYPE, card.typeTag)
-                .put("title", card.title)
-                .put("url", card.url)
-                .put("domain", card.domain ?: JSONObject.NULL)
-        }.put(KEY_VERSION, VERSION).toString()
-    } catch (_: Exception) {
-        ""
-    }
-
-    /** Parse [json] back to a [ToolCard]; null on ANY mismatch. */
-    fun read(json: String): ToolCard? {
-        return try {
-            val obj = JSONObject(json)
-            if (obj.optInt(KEY_VERSION, -1) != VERSION) null
-            else when (obj.optString(KEY_TYPE)) {
-                ToolCard.Facts.TYPE_FACTS -> readFacts(obj)
-                ToolCard.ListCard.TYPE_LIST -> readList(obj)
-                ToolCard.Media.TYPE_MEDIA -> ToolCard.Media(
-                    path = requireText(obj, "path") ?: return null,
-                    mimeType = requireText(obj, "mimeType") ?: return null,
-                    isImage = obj.optBoolean("isImage", false),
-                )
-                ToolCard.FileCard.TYPE_FILE -> ToolCard.FileCard(
-                    name = requireText(obj, "name") ?: return null,
-                    path = requireText(obj, "path") ?: return null,
-                    sizeBytes = if (obj.isNull("sizeBytes")) null else obj.optLong("sizeBytes"),
-                    isNew = obj.optBoolean("isNew", false),
-                )
-                ToolCard.EventCard.TYPE_EVENT -> ToolCard.EventCard(
-                    title = requireText(obj, "title") ?: return null,
-                    timeText = requireText(obj, "timeText") ?: return null,
-                    repeat = obj.optStringOrNull("repeat"),
-                )
-                ToolCard.Change.TYPE_CHANGE -> ToolCard.Change(
-                    label = requireText(obj, "label") ?: return null,
-                    oldText = obj.optStringOrNull("oldText"),
-                    newText = requireText(obj, "newText") ?: return null,
-                    undoable = obj.optBoolean("undoable", false),
-                    tool = obj.optStringOrNull("tool"),
-                    undoArgsJson = obj.optStringOrNull("undoArgsJson"),
-                )
-                ToolCard.Link.TYPE_LINK -> ToolCard.Link(
-                    title = requireText(obj, "title") ?: return null,
-                    url = requireText(obj, "url") ?: return null,
-                    domain = obj.optStringOrNull("domain"),
-                )
-                // Unknown type tag → degrade to null (the tool row stays).
-                else -> null
-            }
-        } catch (_: Exception) {
-            null
-        }
-    }
-
-    private fun readFacts(obj: JSONObject): ToolCard.Facts? {
-        val rowsJson = obj.optJSONArray("rows") ?: return null
-        val rows = ArrayList<ToolCard.FactRow>(rowsJson.length())
-        for (i in 0 until rowsJson.length()) {
-            val row = rowsJson.optJSONObject(i) ?: return null
-            val label = row.optStringOrNull("label") ?: return null
-            val value = row.optStringOrNull("value") ?: return null
-            rows.add(ToolCard.FactRow(label, value))
-        }
-        return ToolCard.Facts(
-            title = requireText(obj, "title") ?: return null,
-            rows = rows,
-            highlight = obj.optStringOrNull("highlight"),
-        )
-    }
-
-    private fun readList(obj: JSONObject): ToolCard.ListCard? {
-        val itemsJson = obj.optJSONArray("items") ?: return null
-        val items = ArrayList<ToolCard.CardItem>(itemsJson.length())
-        for (i in 0 until itemsJson.length()) {
-            val item = itemsJson.optJSONObject(i) ?: return null
-            items.add(
-                ToolCard.CardItem(
-                    title = item.optStringOrNull("title") ?: return null,
-                    subtitle = item.optStringOrNull("subtitle"),
-                ),
-            )
-        }
-        return ToolCard.ListCard(
-            title = requireText(obj, "title") ?: return null,
-            items = items,
-            total = obj.optInt("total", items.size),
-        )
-    }
-
-    private fun requireText(obj: JSONObject, key: String): String? {
-        if (obj.isNull(key)) return null
-        val v = obj.optString(key, "")
-        return v.takeIf { it.isNotEmpty() }
-    }
-
-    private fun JSONObject.optStringOrNull(key: String): String? =
-        if (isNull(key)) null else optString(key, "").takeIf { it.isNotEmpty() }
 }

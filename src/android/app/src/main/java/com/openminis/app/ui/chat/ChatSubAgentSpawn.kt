@@ -22,9 +22,9 @@ internal data class ChatSubAgentSpawn(
     val thinkingLevel: ThinkingLevel? = null,
 )
 
-internal fun parseSubAgentSpawn(argsJson: String, defaultCap: Int): ChatSubAgentSpawn? {
-    return parseSubAgentBatch(argsJson, defaultCap).singleOrNull()
-}
+// [P1-18] parseSubAgentSpawn removed: zero production callers (dispatch goes
+// through parseSubAgentBatch directly); the single-spawn convenience wrapper
+// existed only for its unit test.
 
 internal fun parseSubAgentBatch(argsJson: String, defaultCap: Int): List<ChatSubAgentSpawn> {
     val args = try {

@@ -140,7 +140,38 @@ class MinisImageFetcher(
     }
 
     companion object {
-        private fun composeMtimeKey(uri: String): String {
+        /**
+         * [T-image-cache-mtime-ttl] In-memory TTL over the uri→mtime stat.
+         *
+         * The original note called a single stat "cheap", but the keyer runs
+         * per request AND per candidate: `resolveHostPath` walks the bind-mount
+         * plan and the candidate loop can stat several paths before a hit, and
+         * a chat screen rendering a dozen attachments issued the whole chain
+         * repeatedly during one scroll. A 2-second TTL keeps the cache-bust
+         * contract (an in-place rewrite invalidates the Coil key within one
+         * reload — users re-open the image to see the new bytes) while turning
+         * the repeated per-compose stats into at most one stat per uri per
+         * 2s window.
+         *
+         * ConcurrentHashMap keyed by the raw uri; value = (composed key, wall
+         * clock of the last resolve). Reads are lock-free; a stale entry is
+         * simply recomputed. Bounded by the number of distinct minis:// uris
+         * seen recently — small (attachments in view), no eviction needed.
+         */
+        private const val MTIME_TTL_MS = 2_000L
+        internal val mtimeCache = java.util.concurrent.ConcurrentHashMap<String, Pair<String, Long>>()
+
+        /** Test hook: drop all cached mtime keys (visible for unit tests). */
+        internal fun clearMtimeCache() = mtimeCache.clear()
+
+        internal fun mtimeCacheSize(): Int = mtimeCache.size
+
+        /** internal so the TTL behavior is unit-testable (JVM: unresolved paths key as mt=0). */
+        internal fun composeMtimeKey(uri: String): String {
+            val now = System.currentTimeMillis()
+            mtimeCache[uri]?.let { (key, at) ->
+                if (now - at < MTIME_TTL_MS) return key
+            }
             // Resolve once to fetch mtime. Cheap (single stat on host fs);
             // Coil only calls Keyer when computing/looking up cache keys,
             // not on every recomposition.
@@ -162,7 +193,9 @@ class MinisImageFetcher(
                     break
                 }
             }
-            return "$uri?mt=$mtime"
+            val key = "$uri?mt=$mtime"
+            mtimeCache[uri] = key to now
+            return key
         }
     }
 }

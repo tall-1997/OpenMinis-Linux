@@ -194,8 +194,11 @@ class AppNotes internal constructor(
         const val MAX_LEN = 200
         private val kinds = Kind.entries.map { it.name }.toSet()
 
+        /** Pre-compiled: clean() runs on every add/dedupe comparison. */
+        private val WHITESPACE_RUN = Regex("\\s+")
+
         /** Collapse whitespace; the normalized form is what dedupe compares. */
-        fun clean(text: String): String = text.trim().replace(Regex("\\s+"), " ")
+        fun clean(text: String): String = text.trim().replace(WHITESPACE_RUN, " ")
 
         /** Letters and digits only, lowercased, so punctuation/spacing variants compare equal. */
         fun normalize(text: String): String = text.lowercase().filter { it.isLetterOrDigit() }

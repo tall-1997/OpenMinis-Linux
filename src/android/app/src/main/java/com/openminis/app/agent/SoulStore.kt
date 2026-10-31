@@ -99,44 +99,34 @@ data class SoulFile(val metadata: SoulMetadata, val body: String)
  * implementation — only handles the four keys used by SOUL.md, each on
  * its own line in `key: "value"` form. Designed to be lossless enough
  * that `serialize(parse(s)) == s` for files this app writes itself.
+ *
+ * [P2-convergence] The `---` scan / key-value split / quote-stripping moved
+ * onto the shared [com.openminis.app.knowledge.Frontmatter] reader (same one
+ * the app knowledge packs use). SOUL.md's own tolerances stay here: leading
+ * blank lines are dropped first, a file without a usable frontmatter parses
+ * to [SoulMetadata.DEFAULT] with the original source as body (pass-through,
+ * not an error), keys match case-insensitively, and the body keeps its
+ * leading-newline-only trim so round-trips stay byte-stable.
  */
 object SoulMDParser {
 
     fun parse(source: String): SoulFile {
         val trimmedLeading = source.dropWhile { it == '\n' || it == '\r' }
-        if (!trimmedLeading.startsWith("---")) {
+        val fm = if (trimmedLeading.startsWith("---")) {
+            com.openminis.app.knowledge.Frontmatter.parse(trimmedLeading)
+        } else null
+        if (fm == null) {
             return SoulFile(SoulMetadata.DEFAULT, source)
         }
-        val lines = trimmedLeading.split("\n")
-        if (lines.firstOrNull()?.trim() != "---") {
-            return SoulFile(SoulMetadata.DEFAULT, source)
-        }
-        val closeIdx = lines.drop(1).indexOfFirst { it.trim() == "---" }
-        if (closeIdx < 0) return SoulFile(SoulMetadata.DEFAULT, source)
-        // indexOfFirst on drop(1) result is offset by 1 — restore absolute index.
-        val absCloseIdx = closeIdx + 1
-        val frontmatter = lines.subList(1, absCloseIdx)
-        val bodyLines = if (absCloseIdx + 1 <= lines.size) lines.subList(absCloseIdx + 1, lines.size) else emptyList()
-        val body = bodyLines.joinToString("\n").dropWhile { it == '\n' || it == '\r' }
+        val body = fm.body.dropWhile { it == '\n' || it == '\r' }
 
         var name = SoulMetadata.DEFAULT.name
         var emoji = SoulMetadata.DEFAULT.emoji
         var icon = SoulMetadata.DEFAULT.icon
         var style = SoulMetadata.DEFAULT.style
         var lang = SoulMetadata.DEFAULT.lang
-        for (raw in frontmatter) {
-            val line = raw.trim()
-            val colon = line.indexOf(':')
-            if (colon <= 0) continue
-            // [T-android-soul-custom-icon] FIRST colon only. The `icon` value
-            // can be `data:image/png;base64,…`, which contains further colons —
-            // splitting on all of them would truncate the payload. (indexOf
-            // already gives the first; this comment exists so it stays that way.)
-            val key = line.substring(0, colon).trim().lowercase()
-            var value = line.substring(colon + 1).trim()
-            if (value.length >= 2 && value.startsWith("\"") && value.endsWith("\"")) {
-                value = value.substring(1, value.length - 1)
-            }
+        for ((rawKey, value) in fm.fields) {
+            val key = rawKey.lowercase()
             when (key) {
                 "name" -> if (value.isNotEmpty()) name = value
                 "emoji" -> if (value.isNotEmpty()) emoji = value

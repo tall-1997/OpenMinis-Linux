@@ -1474,11 +1474,8 @@ private fun DualFabRow(
                 containerColor = minisFabColor(),
                 modifier = Modifier
                     .size(56.dp)
-                    // [T-android-fab-square-ripple] Clip BEFORE combinedClickable.
-                    // FloatingActionButton's own `shape = CircleShape` only bounds
-                    // the ripple it draws internally; this extra clickable layer
-                    // (added for the long-press group menu) is a separate
-                    // interaction source and draws its own indication, which
+                    // [T-android-fab-square-ripple] Clip BEFORE combinedClickable. FloatingActionButton's own `shape = CircleShape` only bounds
+                    // the ripple it draws internally; this extra clickable layer (added for the long-press group menu) is a separate interaction source and draws its own indication, which
                     // without a clip spreads to the square 56dp bounds and shows
                     // as a grey box behind the round button. Same ordering as the
                     // circular voice button in ChatComposerWidgets.
@@ -1622,12 +1619,8 @@ private fun DualFabRow(
                 // height. Pair with a fixed 48dp height so the field aligns
                 // with the flanking 56dp FABs without overpowering them.
                 shape = androidx.compose.foundation.shape.RoundedCornerShape(percent = 50),
-                // T10: Material3's default OutlinedTextField containerColor is
-                // Color.Transparent, which lets the LazyColumn's session rows
-                // bleed through and overlap the typed query text. Set both
-                // focused and unfocused container colors to surfaceContainerHigh
-                // (matches the grouped-section card background already used
-                // throughout settings) so the field reads as a discrete
+                // T10: Material3's default OutlinedTextField containerColor is Color.Transparent, which lets the LazyColumn's session rows bleed through and overlap the typed query text. Set both
+                // focused and unfocused container colors to surfaceContainerHigh (matches the grouped-section card background already used throughout settings) so the field reads as a discrete
                 // surface above the list. Also drop both border colors —
                 // capsule shape with no outline reads more like iOS's filled
                 // search bar than the M3 outlined field default.
@@ -1640,12 +1633,8 @@ private fun DualFabRow(
                 modifier = Modifier
                     .weight(1f)
                     .padding(horizontal = 10.dp)
-                    // [T-android-search-height] Left at the component's own
-                    // height. Forcing 42dp here clipped the placeholder: a
-                    // plain OutlinedTextField keeps its 16dp vertical
-                    // contentPadding no matter what the outer frame says, so
-                    // shrinking the frame cuts the text. The model picker's
-                    // field was rebuilt on BasicTextField + DecorationBox to
+                    // [T-android-search-height] Left at the component's own height. Forcing 42dp here clipped the placeholder: a plain OutlinedTextField keeps its 16dp vertical
+                    // contentPadding no matter what the outer frame says, so shrinking the frame cuts the text. The model picker's field was rebuilt on BasicTextField + DecorationBox to
                     // get around that; this one is a simpler inline field and
                     // is not worth the same surgery for a few dp.
                     .heightIn(min = 48.dp)
@@ -1658,6 +1647,14 @@ private fun DualFabRow(
 }
 
 // ─── Section Header (matching iOS .subheadline.weight(.semibold)) ───────────
+
+// [v3-P2-3 known duplicate] This private header and the public
+// ui/components/SectionDesign.kt SectionHeader are name-twins but NOT
+// pixel-equivalent (here: 14sp SemiBold onSurfaceVariant + conditional pin
+// glyph; there: titleMedium onSurface card title; ui/chat
+// MemoryDetailScreens.kt has a third 11sp uppercase-caption variant).
+// Kept as-is per the v3 review report's convergence plan — do not merge
+// unless the three call sites agree on one visual spec.
 
 @Composable
 private fun SectionHeader(title: String) {

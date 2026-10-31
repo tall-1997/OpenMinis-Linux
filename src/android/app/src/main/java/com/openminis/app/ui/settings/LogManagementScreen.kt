@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.SegmentedButton
@@ -74,12 +73,9 @@ fun LogManagementScreen(
     onLogFileClick: (fileName: String) -> Unit = {},
 ) {
     val context = LocalContext.current
-    // T-logs-perf: capped, separated daily/crash lists. Pre-T-logs-perf the
-    // screen called AppLogger.listLogFiles() + totalSize() synchronously on
-    // the main thread inside a LaunchedEffect, AND each row called
-    // file.length() on every recomposition. With ~14 daily logs + dozens
-    // of crash files in long-running installs the directory scan + per-row
-    // stats stalled the screen for noticeable seconds. Now: stat once on
+    // T-logs-perf: capped, separated daily/crash lists. Pre-T-logs-perf the screen called AppLogger.listLogFiles() + totalSize() synchronously on
+    // the main thread inside a LaunchedEffect, AND each row called file.length() on every recomposition. With ~14 daily logs + dozens
+    // of crash files in long-running installs the directory scan + per-row stats stalled the screen for noticeable seconds. Now: stat once on
     // Dispatchers.IO, cap each kind at 100, render LogFileMeta directly
     // (no further stat calls).
     val dailyLogs = remember { mutableStateListOf<AppLogger.LogFileMeta>() }
@@ -504,8 +500,7 @@ private fun LogsBody(
             )
         }
 
-        // While the IO load is in flight (single frame in practice, but the
-        // dir scan + 100×stat can spike on slow eMMC), show a centered
+        // While the IO load is in flight (single frame in practice, but the dir scan + 100×stat can spike on slow eMMC), show a centered
         // spinner instead of the empty-state row — otherwise the screen
         // briefly reads as "no logs yet" before the real list pops in.
         if (loading) {
@@ -652,8 +647,7 @@ private class LazyLogFile private constructor(
     companion object {
         fun open(file: File): LazyLogFile {
             val raf = RandomAccessFile(file, "r")
-            // First-line offset is always 0; subsequent offsets sit
-            // immediately after each newline. Dynamic LongArray growth
+            // First-line offset is always 0; subsequent offsets sit immediately after each newline. Dynamic LongArray growth
             // via mutableList is fine — 30-50 K Long boxings is a few MB
             // of churn that the GC handles easily.
             val offsets = mutableListOf(0L)
@@ -669,8 +663,7 @@ private class LazyLogFile private constructor(
                 }
                 pos += n
             }
-            // Drop a trailing empty offset if the file ends with \n
-            // (the last "line" past the final newline is empty, but
+            // Drop a trailing empty offset if the file ends with \n (the last "line" past the final newline is empty, but
             // logs typically end with a newline so this prevents
             // showing a blank ghost row at the bottom).
             val arr = if (offsets.size > 1 && offsets.last() >= raf.length()) {
@@ -777,7 +770,15 @@ fun LogDetailScreen(
                         .padding(padding)
                         .padding(horizontal = 12.dp, vertical = 12.dp),
                 ) {
-                    items(log.lineCount) { i ->
+                    // [T-android-log-line-keys] itemsIndexed + stable key (line number + content fragment hash). Without keys the LazyColumn fell back to positional identity: any change
+                    // that shifted offsets (file re-opened after rotation, trailing newline pruning in LazyLogFile.open) moved every row, so Compose re-bound text across rows and the user
+                    // saw a full-viewport flash. Keying on index + a fragment of the line itself keeps row identity stable for the
+                    // immutable snapshot the screen reads. readLine is one
+                    // RAF seek per call and runs for visible rows only.
+                    items(
+                        count = log.lineCount,
+                        key = { i -> "log-line:$i:${log.readLine(i).take(24).hashCode()}" },
+                    ) { i ->
                         Text(
                             text = log.readLine(i),
                             style = TextStyle(
@@ -812,15 +813,13 @@ private fun shareLogFile(context: Context, file: File) {
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         val chooser = Intent.createChooser(intent, context.getString(R.string.log_share_chooser))
-        // The chooser itself starts the receiver; on some OEM builds
-        // the grant flag has to live on the outer intent too or the
+        // The chooser itself starts the receiver; on some OEM builds the grant flag has to live on the outer intent too or the
         // receiver hits SecurityException reading the content://
         // FileProvider URI.
         chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         context.startActivity(chooser)
     } catch (e: Exception) {
-        // Log the FileProvider failure — earlier this catch silently dropped
-        // the exception and fell back to EXTRA_TEXT, masking config bugs
+        // Log the FileProvider failure — earlier this catch silently dropped the exception and fell back to EXTRA_TEXT, masking config bugs
         // (e.g. a missing files-path root) as "share works but pastes the
         // whole file as text body" UX. Now any future regression is one
         // logcat line away from being root-caused.
@@ -836,4 +835,3 @@ private fun shareLogFile(context: Context, file: File) {
         context.startActivity(Intent.createChooser(intent, context.getString(R.string.log_share_chooser)))
     }
 }
-

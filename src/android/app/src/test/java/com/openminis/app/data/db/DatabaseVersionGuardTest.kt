@@ -2,6 +2,7 @@ package com.openminis.app.data.db
 
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -72,6 +73,21 @@ class DatabaseVersionGuardTest {
             match.groupValues[1].toInt(),
             DatabaseVersionGuard.CODE_DB_VERSION,
         )
+    }
+
+    @Test
+    fun `next-version downgrade is not auto-handled without a registered no-op chain`() {
+        // handledNoOpDowngrades is deliberately EMPTY for this build: every
+        // registered downgrade migration starts at CODE_DB_VERSION or below
+        // (an on-disk version <= CODE_DB_VERSION is an upgrade, never a
+        // downgrade), so no newer-build database can be vouched for yet. The
+        // conservative default is the guidance screen; when a future version
+        // ships a verified keep-compatible downgrade chain, its source version
+        // is what gets added to handledNoOpDowngrades.
+        assertFalse(
+            DatabaseVersionGuard.isHandledDowngrade(DatabaseVersionGuard.CODE_DB_VERSION + 1),
+        )
+        assertFalse(DatabaseVersionGuard.isHandledDowngrade(DatabaseVersionGuard.CODE_DB_VERSION))
     }
 
     /** The exported schema must actually contain the four attribution columns. */

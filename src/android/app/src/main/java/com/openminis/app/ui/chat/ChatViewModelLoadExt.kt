@@ -9,6 +9,8 @@ import com.openminis.app.data.model.ThinkingLevel
 import com.openminis.app.provider.ProviderFactory
 import com.openminis.app.service.SessionActivityTracker
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -199,8 +201,40 @@ internal fun ChatViewModel.loadSession() {
             return@launch
         }
 
-        // Existing session: load from DB
-        val session = chatRepository.getSession(sessionId) ?: return@launch
+        // Existing session: load from DB.
+        // [P1-15] The sessionId-keyed reads this restore needs are mutually
+        // independent — launch them concurrently here and await each at its
+        // original position, so every state write below keeps its exact
+        // original ordering while the DB round-trips overlap:
+        //   - session row (this line) → awaited immediately (the draft
+        //     early-return and the model resolution below consume it);
+        //   - latest compact marker → independent read, awaited where the
+        //     compact-marker restore used to query it;
+        //   - persisted token usages → independent read, awaited where the
+        //     cold-open context restore used to query it;
+        //   - the heavy tail window → launched inside the IO block below
+        //     (its post-processing DEPENDS on the tail result and stays
+        //     strictly after that await).
+        val sessionDeferred = async(Dispatchers.IO) { chatRepository.getSession(sessionId) }
+        // [P1-15] latest compact marker: independent of the session row and
+        // of the tail window (sessionId-keyed). The runCatching shape is the
+        // original query's error policy, moved verbatim into the task.
+        val markerDeferred = async(Dispatchers.IO) {
+            runCatching { chatRepository.dao.latestCompactMarker(sessionId) }
+                .onFailure { Log.w(ChatViewModel.TAG, "latestCompactMarker failed: ${it.message}") }
+                .getOrNull()
+        }
+        val tokenSid = realSessionId.ifEmpty { sessionId }
+        val tokenUsagesDeferred = async(Dispatchers.IO) {
+            chatRepository.sessionTokenUsages(tokenSid)
+                .asReversed()
+                .firstNotNullOfOrNull { json ->
+                    runCatching {
+                        org.json.JSONObject(json).optLong("latestContextTokens", 0L)
+                    }.getOrNull()?.takeIf { it > 0L }
+                }
+        }
+        val session = sessionDeferred.await() ?: return@launch
 
         // [T-supervisor-status-bar] The UI host is a process-wide singleton,
         // so switching conversations leaves the PREVIOUS session's live
@@ -304,12 +338,18 @@ internal fun ChatViewModel.loadSession() {
         com.openminis.app.diagnostics.PerfLongCtx.step(sessionId, "db.query.begin")
         val loaded = withContext(Dispatchers.IO) {
             val tIoBeforeLoad = System.currentTimeMillis()
-            val tail = chatRepository.loadSessionTail(sessionId)
-            // [T-task-anchor] One session-scoped read of the opening turn.
-            // Long sessions window their history — the task description
-            // lives at the very head and falls out of `_messages`, so a
-            // per-turn windowed read would anchor on the wrong message.
-            _taskAnchorText.value = chatRepository.firstUserPartsJson(sessionId)
+            // [P1-15] The tail window and the task-anchor's opening-turn read
+            // are independent sessionId-keyed queries — run concurrently.
+            // [T-task-anchor] Long sessions window their history — the task
+            // description lives at the very head and falls out of `_messages`,
+            // so a per-turn windowed read would anchor on the wrong message.
+            // loadSplitTurnPrefix / hydrateDisplayRows below DEPEND on the
+            // tail result (they key off dbRows.first().sortOrder), so they
+            // stay strictly after tailDef.await() — serial by necessity.
+            val tailDef = async { chatRepository.loadSessionTail(sessionId) }
+            val anchorDef = async { chatRepository.firstUserPartsJson(sessionId) }
+            val tail = tailDef.await()
+            _taskAnchorText.value = anchorDef.await()
                 ?.let { TaskAnchor.firstUserTextFromParts(it) }
             val totalMessages = tail.totalMessages
             var dbRows = tail.messages
@@ -485,25 +525,35 @@ internal fun ChatViewModel.loadSession() {
         // the folded-away context via [effectiveAgentHistory]. Also gray
         // out every UI message that falls before the marker's boundary —
         // mirrors iOS Phase 2.5 restore (AIChatViewModel.swift:3360+).
-        val marker = runCatching { chatRepository.dao.latestCompactMarker(sessionId) }
-            .onFailure { Log.w(ChatViewModel.TAG, "latestCompactMarker failed: ${it.message}") }
-            .getOrNull()
+        // [P1-15] The marker read was launched concurrently at the top of
+        // the restore (independent sessionId-keyed query); awaiting here
+        // keeps the write order below identical to the serial version.
+        val marker = markerDeferred.await()
         _compactSummary.value = marker?.summary
         _cachedLatestMarker = marker
         if (marker == null) {
             val oldest = loaded.llmOldestSortOrder
             if (oldest != null) {
-                val prefix = withContext(Dispatchers.IO) { collectDigestLines(oldest) }
-                val notExcerpted = withContext(Dispatchers.IO) {
-                    chatRepository.dao.countMessagesBeforeSort(sessionId, oldest) - prefix.size
-                }.coerceAtLeast(0)
-                if (prefix.isNotEmpty() || notExcerpted > 0) {
-                    val trimmed = llmDigestLines.toList()
-                    val omitted = llmDigestOmitted
-                    llmDigestLines.clear()
-                    llmDigestOmitted = 0
-                    rememberDigestLines(prefix + trimmed)
-                    llmDigestOmitted += omitted + notExcerpted
+                // [P1-15] The digest walk and the before-count are independent
+                // reads over the rows older than `oldest`: the count depends
+                // only on (sessionId, oldest) — never on the digest result —
+                // and the arithmetic below joins the two. The marker == null
+                // gate above is a genuine serial dependency and stays.
+                coroutineScope {
+                    val prefixDef = async(Dispatchers.IO) { collectDigestLines(oldest) }
+                    val countDef = async(Dispatchers.IO) {
+                        chatRepository.dao.countMessagesBeforeSort(sessionId, oldest)
+                    }
+                    val prefix = prefixDef.await()
+                    val notExcerpted = (countDef.await() - prefix.size).coerceAtLeast(0)
+                    if (prefix.isNotEmpty() || notExcerpted > 0) {
+                        val trimmed = llmDigestLines.toList()
+                        val omitted = llmDigestOmitted
+                        llmDigestLines.clear()
+                        llmDigestOmitted = 0
+                        rememberDigestLines(prefix + trimmed)
+                        llmDigestOmitted += omitted + notExcerpted
+                    }
                 }
             }
         }
@@ -642,15 +692,11 @@ internal fun ChatViewModel.loadSession() {
         // Restore the last provider-reported context size on cold open. Without
         // this, the menu ring stays `?` until the next model call even though
         // the session has persisted an exact latestContextTokens value.
+        // [P1-15] The usage read + parse were launched concurrently at the top
+        // of the restore (independent of the session row and the tail window);
+        // awaiting here keeps the restore write below in its original order.
         if (!isDraft) {
-            val sid = realSessionId.ifEmpty { sessionId }
-            val restoredContext = withContext(Dispatchers.IO) {
-                chatRepository.sessionTokenUsages(sid).asReversed().firstNotNullOfOrNull { json ->
-                    runCatching {
-                        org.json.JSONObject(json).optLong("latestContextTokens", 0L)
-                    }.getOrNull()?.takeIf { it > 0L }
-                }
-            }
+            val restoredContext = tokenUsagesDeferred.await()
             if (restoredContext != null) {
                 _lastTurnContextTokens.value = restoredContext
                     .coerceAtMost(Int.MAX_VALUE.toLong()).toInt()

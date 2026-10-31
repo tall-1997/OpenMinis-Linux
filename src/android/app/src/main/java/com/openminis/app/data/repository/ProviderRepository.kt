@@ -874,7 +874,7 @@ class ProviderRepository(internal val context: Context) {
         ensurePersistWorker()
         persistRequests.trySend(ProviderPersistRequest.Task {
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                val dao = com.openminis.app.data.db.AppDatabase.getInstance(context).chatDao()
+                val dao = (context as? com.openminis.app.MinisApp)?.appContainer?.database?.chatDao() ?: com.openminis.app.data.db.AppDatabase.getInstance(context).chatDao() // [T-singleton-convergence] AppContainer-first; getInstance = pre-wiring fallback only
                 for (id in ids) {
                     dao.clearBindingReferencing(id)
                 }

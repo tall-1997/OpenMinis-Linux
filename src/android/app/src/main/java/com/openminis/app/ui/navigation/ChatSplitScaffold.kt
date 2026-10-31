@@ -349,26 +349,18 @@ fun ChatSplitScaffold(
 
     // [T-android-tablet-sidebar-collapse] Whether the list pane is hidden.
     //
-    // Persisted like the width: a user who collapsed the sidebar to give a long
-    // chat the whole window should not find it back on the next launch.
+    // Persisted like the width: a user who collapsed the sidebar to give a long chat the whole window should not find it back on the next launch.
     //
-    // EXCEPT when the app opens on the empty placeholder. It has nothing to act
-    // on, so restoring the collapse there would open the app on a blank screen
-    // with no session list — the first thing the user sees would be an
-    // interface with nothing in it. Landing expanded puts the sessions in front
-    // of them instead, and the corrected value is written back so the stored
-    // state and the UI never disagree.
+    // EXCEPT when the app opens on the empty placeholder. It has nothing to act on, so restoring the collapse there would open the app on a blank screen
+    // with no session list — the first thing the user sees would be an interface with nothing in it. Landing expanded puts the sessions in front
+    // of them instead, and the corrected value is written back so the stored state and the UI never disagree.
     //
-    // In practice that makes the collapse a WITHIN-SESSION state today: a plain
-    // cold start always begins on the placeholder (`initialSessionId` is only
-    // non-null for a deep link or share hand-off), so the sidebar is always
-    // back on next launch. That is the intended behaviour, and the condition is
-    // written against `initialSessionId` rather than hardcoded so it keeps
-    // holding if the app later restores the last session on launch — then the
+    // In practice that makes the collapse a WITHIN-SESSION state today: a plain cold start always begins on the placeholder (`initialSessionId` is only
+    // non-null for a deep link or share hand-off), so the sidebar is always back on next launch. That is the intended behaviour, and the condition is
+    // written against `initialSessionId` rather than hardcoded so it keeps holding if the app later restores the last session on launch — then the
     // collapse would survive, and only a genuinely empty start would reset it.
     //
-    // Evaluated ONCE, at first composition, not as a live
-    // `collapsed && selected != null` guard: a guard would also spring the list
+    // Evaluated ONCE, at first composition, not as a live `collapsed && selected != null` guard: a guard would also spring the list
     // open every time the user closes a chat mid-session, overriding a choice
     // they had just made.
     var listCollapsed by remember {
@@ -404,22 +396,15 @@ fun ChatSplitScaffold(
 
     val directive = chatPaneScaffoldDirective(twoPane, effectiveListWidth)
 
-    // [T-android-tablet-split] The selected session, held HERE rather than read
-    // back out of the navigator.
+    // [T-android-tablet-split] The selected session, held HERE rather than read back out of the navigator.
     //
-    // `rememberListDetailPaneScaffoldNavigator` captures `scaffoldDirective`
-    // when it first builds the navigator and never re-reads the argument — it
-    // is an initial value, not a live binding. Measured on a Pixel 4a: with the
-    // directive supplied only at construction, a COLD START at 550dp correctly
-    // showed one pane, but RESIZING a running window from 1745dp down to 550dp
-    // stayed at two. That is the original bug one layer deeper — a correct
-    // decision that never reaches the layout — and it defeats the whole point
-    // of this screen, since windows change size at runtime.
+    // `rememberListDetailPaneScaffoldNavigator` captures `scaffoldDirective` when it first builds the navigator and never re-reads the argument — it
+    // is an initial value, not a live binding. Measured on a Pixel 4a: with the directive supplied only at construction, a COLD START at 550dp correctly
+    // showed one pane, but RESIZING a running window from 1745dp down to 550dp stayed at two. That is the original bug one layer deeper — a correct
+    // decision that never reaches the layout — and it defeats the whole point of this screen, since windows change size at runtime.
     //
-    // The supported fix is to rebuild the navigator when the directive changes
-    // (`key(...)` below). DefaultThreePaneScaffoldNavigator does expose a
-    // settable `scaffoldDirective`, but the class is `internal` and cannot be
-    // referenced from here. Rebuilding discards the navigator's own history,
+    // The supported fix is to rebuild the navigator when the directive changes (`key(...)` below). DefaultThreePaneScaffoldNavigator does expose a
+    // settable `scaffoldDirective`, but the class is `internal` and cannot be referenced from here. Rebuilding discards the navigator's own history,
     // so the selection is hoisted into this state and fed back as the new
     // navigator's initial history — the user stays on the same chat across the
     // breakpoint, which is the behaviour being verified.
@@ -544,20 +529,12 @@ fun ChatSplitScaffold(
                 modifier = if (twoPane) Modifier.width(effectiveListWidth) else Modifier,
             ) {
                 listPane(
-                    // Only reflect a selection when both panes are visible.
-                    // In single-pane the list is never beside a chat, so a
-                    // highlight would be a stale mark on a screen the user
+                    // Only reflect a selection when both panes are visible. In single-pane the list is never beside a chat, so a highlight would be a stale mark on a screen the user
                     // navigated back to.
                     //
-                    // Resolved through the alias map so a draft that has since
-                    // been persisted highlights its REAL row: the pane key
-                    // stays `__new__…` for the life of the screen (see
-                    // ChatViewModelStore.rename — aliasing rather than
-                    // re-keying is what keeps the streaming ViewModel intact),
-                    // and no persisted row would ever match that raw key.
-                    // [T-android-split-draft-highlight] rememberPersistedId,
-                    // not resolvePersistedId: the alias map is written when a
-                    // draft is promoted on first send, and a plain lookup gives
+                    // Resolved through the alias map so a draft that has since been persisted highlights its REAL row: the pane key stays `__new__…` for the life of the screen (see
+                    // ChatViewModelStore.rename — aliasing rather than re-keying is what keeps the streaming ViewModel intact), and no persisted row would ever match that raw key.
+                    // [T-android-split-draft-highlight] rememberPersistedId, not resolvePersistedId: the alias map is written when a draft is promoted on first send, and a plain lookup gives
                     // Compose nothing to observe, so the highlight stayed
                     // resolved against the dead `__new__` key.
                     if (twoPane && currentSessionId != null) {
@@ -664,14 +641,10 @@ fun ChatSplitScaffold(
         },
         )
 
-        // [T-android-tablet-split-resizable] The drag handle, overlaid on the
-        // scaffold and positioned at the seam.
+        // [T-android-tablet-split-resizable] The drag handle, overlaid on the scaffold and positioned at the seam.
         //
-        // Sibling-not-child is the whole point: it is clipped by neither pane,
-        // so the grab region straddles the divider and the drag works in BOTH
-        // directions. It also occupies no layout width, so it cannot push the
-        // chat sideways or paint a strip beside the line — the two failure
-        // modes of the in-pane attempts.
+        // Sibling-not-child is the whole point: it is clipped by neither pane, so the grab region straddles the divider and the drag works in BOTH
+        // directions. It also occupies no layout width, so it cannot push the chat sideways or paint a strip beside the line — the two failure modes of the in-pane attempts.
         // [T-android-tablet-sidebar-collapse] Nothing to drag while
         // collapsed; the handle would otherwise sit at x=0 over the
         // chat's own leading edge.
@@ -881,9 +854,18 @@ fun ChatSplitScaffoldRoute(
     skillRepository: com.openminis.app.data.repository.SkillRepository?,
     mcpRepository: com.openminis.app.data.repository.MCPRepository?,
 ) {
-    ChatSplitScaffold(
-        initialSessionId = initialSessionId,
-        listPane = { selectedSessionId, draftPlaceholderId, onSessionSelected ->
+    // [T-android-split-lambda-stability] The two pane lambdas are @Composable
+    // slots ChatSplitScaffold invokes per pane; as plain lambdas they were
+    // re-allocated on EVERY recomposition of this route (selection flips,
+    // draft placeholder churn, pane-width drags), defeating Compose's lambda
+    // memoization inside the scaffold and re-invalidating both panes. Wrapping
+    // in remember keyed on (navController, initialSessionId) — everything the
+    // closures capture — keeps the lambda objects referentially stable across
+    // recompositions. The captures are all effectively immutable for the life
+    // of the route entry, so a stable identity is sound.
+    val stableListPane = remember(navController, initialSessionId) {
+        @Composable {
+        selectedSessionId: String?, draftPlaceholderId: String?, onSessionSelected: (String) -> Unit ->
             com.openminis.app.ui.sessions.SessionListScreen(
                 chatRepository = chatRepository,
                 providerRepository = providerRepository,
@@ -905,9 +887,13 @@ fun ChatSplitScaffoldRoute(
                 // never persisted — see the listPane param docs.
                 draftPlaceholderId = draftPlaceholderId,
             )
-        },
-        detailPane = { sessionId, onBackInPane, onNewChatInPane, onMoveToInPane,
-            onToggleSidebar, sidebarCollapsed ->
+        }
+    }
+    val stableDetailPane = remember(navController, initialSessionId) {
+        @Composable {
+        sessionId: String, onBackInPane: () -> Unit, onNewChatInPane: () -> Unit,
+            onMoveToInPane: (String) -> Unit, onToggleSidebar: (() -> Unit)?,
+            sidebarCollapsed: Boolean ->
             com.openminis.app.ui.chat.ChatScreen(
                 // The pane navigator's contentKey IS the session id, so a
                 // draft ("__new__…") flows through unchanged and ChatScreen's
@@ -964,6 +950,11 @@ fun ChatSplitScaffoldRoute(
                 },
                 onModelGroupsClick = { navController.safeNavigate(Routes.MODEL_GROUPS) },
             )
-        },
+        }
+    }
+    ChatSplitScaffold(
+        initialSessionId = initialSessionId,
+        listPane = stableListPane,
+        detailPane = stableDetailPane,
     )
 }

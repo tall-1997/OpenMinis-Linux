@@ -3,6 +3,7 @@ package com.openminis.app.provider.anthropic
 import com.openminis.app.provider.ModelListFetchIsolation
 import com.openminis.app.provider.ModelListFetchRetry
 import com.openminis.app.provider.ProviderKeyGate
+import com.openminis.app.provider.ProviderModelsCache
 import android.content.Context
 import com.openminis.app.data.model.LLMModel
 import com.openminis.app.provider.ModelsDevApi
@@ -19,13 +20,23 @@ object AnthropicModelsApi {
     private val client = SharedHttpClients.default
 
     /**
+     * [P2-convergence] The Anthropic on-disk model cache moved onto the shared
+     * [ProviderModelsCache] (`cacheDir/models-cache/anthropic/<sha256>.json`,
+     * same 7-day TTL and SHA-256-keyed file naming as the deleted
+     * AnthropicModelsCache). One-time cost: entries written by older builds sit
+     * orphaned one level up and simply expire unread.
+     */
+    private val modelsCache = ProviderModelsCache("anthropic")
+
+    /**
      * Fetch models from Anthropic API.
      * @param apiKey The API key or OAuth access token
      * @param baseURL Optional custom base URL
      * @param isOAuth Whether to use OAuth Bearer auth + beta headers (vs x-api-key)
      * @param context Optional Android [Context]; when provided, results are cached
-     *   for 7 days at `cacheDir/models-cache/<sha256(credential)>.json` (matches
-     *   iOS `ModelsCache`). When null, the fetch bypasses the cache entirely.
+     *   for 7 days at `cacheDir/models-cache/anthropic/<sha256(credential)>.json`
+     *   (shared [ProviderModelsCache]; matches iOS `ModelsCache` semantics). When
+     *   null, the fetch bypasses the cache entirely.
      * @param forceRefresh When true, skip the cache read but still write-through
      *   on success. Used for explicit "refresh models" UI actions.
      */
@@ -44,7 +55,7 @@ object AnthropicModelsApi {
         // share cached model lists (vLLM vs api.anthropic.com can differ).
         val cacheKey = ModelListFetchIsolation.cacheKey((baseURL ?: "") + "|" + apiKey + "|" + isOAuth, cacheScope)
         if (context != null && !forceRefresh) {
-            AnthropicModelsCache.load(context, cacheKey)?.let { return@withContext it }
+            modelsCache.load(context, cacheKey)?.let { return@withContext it }
         }
 
         // Anthropic-compatible custom endpoints (e.g. DashScope/Bailian) often don't
@@ -125,7 +136,7 @@ object AnthropicModelsApi {
                 // 401/403 almost always means the credential rotated; drop any stale
                 // cache entry so the next lookup hits the network again.
                 if (context != null && (response.code == 401 || response.code == 403)) {
-                    AnthropicModelsCache.invalidate(context, cacheKey)
+                    modelsCache.invalidate(context, cacheKey)
                 }
                 lastFailureCode = response.code
                 lastFailureBody = body
@@ -180,7 +191,7 @@ object AnthropicModelsApi {
         }
 
         if (context != null) {
-            AnthropicModelsCache.save(context, cacheKey, models)
+            modelsCache.save(context, cacheKey, models)
         }
         return models
     }
