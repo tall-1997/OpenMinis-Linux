@@ -2084,20 +2084,12 @@
     <string name="notif_vscreen_handoff_action_done">Selesai (kembalikan)</string>
     <string name="notif_vscreen_handoff_action_keep">Aku urus sendiri</string>
     <string name="notif_vscreen_handoff_action_abort">Nanti saja</string>
-    <string name="quick_settings_footer">Panggil Minis dari mana saja — bola melayang, ubin quick settings, atau bagikan langsung ke panel. Kiriman berjalan tanpa pengawasan di chat terbaru Anda dan memberi tahu saat selesai.</string>
-    <string name="quick_ball_enabled">Bola melayang</string>
-    <string name="quick_ball_enabled_subtitle">Menampilkan bola yang menempel di tepi di atas aplikasi lain. Ketuk untuk membuka panel, ketuk dua kali untuk menyertakan isi layar.</string>
     <string name="quick_panel_input_hint">Apa yang harus Minis lakukan?</string>
     <string name="quick_send_failed">Tidak dapat memulai eksekusi. Buka Minis dan coba lagi.</string>
     <string name="quick_panel_open_session">Buka sesi</string>
-    <string name="quick_panel_screen_chip">Layar: %1$s</string>
     <string name="quick_panel_images_attached">%1$d gambar dilampirkan</string>
     <string name="quick_share_image_unsupported">Berbagi gambar belum didukung di panel cepat.</string>
-    <string name="quick_panel_default_screen_prompt">Lihat layar saya saat ini</string>
     <string name="quick_panel_running">Berjalan di latar belakang — Anda akan mendapat notifikasi saat selesai.</string>
-    <string name="quick_ball_needs_overlay">Berikan izin \"Tampilkan di atas aplikasi lain\" untuk menampilkan bola melayang.</string>
-    <string name="quick_ball_notification_title">Bola melayang Minis</string>
-    <string name="quick_ball_notification_text">Ketuk bola untuk membuka panel cepat</string>
     <string name="quick_notify_channel_name">Hasil panel cepat</string>
     <string name="quick_notify_title">Prompt cepat selesai</string>
 </resources>

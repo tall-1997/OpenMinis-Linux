@@ -12,8 +12,8 @@ import com.openminis.app.logging.AppLogger
 
 /**
  * [E-batch-quick-invocation] Notification plumbing for the quick surface:
- * the floating ball's silent foreground-service channel and the completion
- * notification a quick-panel send posts when the unattended run finishes.
+ * the completion notification a quick-panel send posts when the unattended
+ * run finishes.
  *
  * The completion notification deep-links `minis://session/<id>` — the same
  * route ScheduledAgentRunner / AutomationAgentRunner already use, handled by
@@ -25,12 +25,6 @@ object QuickNotifications {
 
     /** Result notifications ("quick prompt finished"). Default importance. */
     const val CHANNEL_RESULTS = "minis_quick_results"
-
-    /** Floating-ball foreground service. LOW importance: must never beep. */
-    const val CHANNEL_BALL = "minis_quick_ball"
-
-    /** Stable id for the ball's FGS notification (one per process). */
-    const val BALL_NOTIFICATION_ID = 47_101
 
     /**
      * Id for completion notices. One per session, so a second send into the
@@ -50,15 +44,6 @@ object QuickNotifications {
                 ).apply {
                     description = context.getString(R.string.quick_notify_channel_name)
                 },
-            )
-        }
-        if (nm.getNotificationChannel(CHANNEL_BALL) == null) {
-            nm.createNotificationChannel(
-                NotificationChannel(
-                    CHANNEL_BALL,
-                    context.getString(R.string.quick_ball_notification_title),
-                    NotificationManager.IMPORTANCE_LOW,
-                ),
             )
         }
     }

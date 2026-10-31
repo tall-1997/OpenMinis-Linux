@@ -13,9 +13,9 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * [E-batch-quick-invocation] The quick package's self-owned prefs: panel
- * session record (drives the 10-minute reopen window) and the floating-ball
- * switch. Robolectric supplies a real SharedPreferences implementation.
+ * [E-batch-quick-invocation] The quick package's self-owned prefs: the
+ * panel session record that drives the 10-minute reopen window. Robolectric
+ * supplies a real SharedPreferences implementation.
  */
 @RunWith(RobolectricTestRunner::class)
 // Plain android.app.Application, NOT MinisApp — quick prefs must work in any
@@ -34,10 +34,9 @@ class QuickPrefsTest {
     }
 
     @Test
-    fun `defaults are empty and the ball is off`() {
+    fun `defaults are empty`() {
         assertNull(prefs.panelSessionId)
         assertEquals(0L, prefs.panelUsedAtMs)
-        assertFalse(prefs.ballEnabled)
     }
 
     @Test
@@ -62,14 +61,6 @@ class QuickPrefsTest {
         prefs.touchPanelSession()
         assertTrue(prefs.panelUsedAtMs > stamped - QuickPanelPolicy.RECENT_PANEL_MS)
         assertEquals("s1", prefs.panelSessionId)
-    }
-
-    @Test
-    fun `ball switch persists across instances`() {
-        prefs.ballEnabled = true
-        assertTrue(QuickPrefs(context).ballEnabled)
-        QuickPrefs(context).ballEnabled = false
-        assertFalse(prefs.ballEnabled)
     }
 
     @Test

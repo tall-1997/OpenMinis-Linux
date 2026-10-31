@@ -6,16 +6,13 @@ import android.content.SharedPreferences
 /**
  * [E-batch-quick-invocation] Self-owned preferences for the quick-invocation
  * surface. Deliberately NOT wired into the app's settings repository: the
- * floating-ball switch and the panel's session-reuse timestamps live in this
- * one file so the quick/ package stays self-contained (no MinisApp edits).
+ * panel's session-reuse timestamps live in this one file so the quick/
+ * package stays self-contained (no MinisApp edits).
  *
  * Keys:
  *  - [KEY_PANEL_SESSION] / [KEY_PANEL_AT] — the session the panel last sent
  *    into and when; drives the 10-minute reuse window in
  *    [QuickPanelPolicy.shouldReusePanelSession].
- *  - [KEY_BALL_ENABLED] — the floating-ball switch shown in Settings →
- *    快捷唤起. The service reads it on (re)start so a START_STICKY restart
- *    after process death does not resurrect a ball the user turned off.
  */
 class QuickPrefs(context: Context) {
 
@@ -45,14 +42,9 @@ class QuickPrefs(context: Context) {
         }
     }
 
-    var ballEnabled: Boolean
-        get() = sp.getBoolean(KEY_BALL_ENABLED, false)
-        set(value) = sp.edit().putBoolean(KEY_BALL_ENABLED, value).apply()
-
     companion object {
         const val PREFS_NAME = "minis_quick"
         const val KEY_PANEL_SESSION = "panel_session_id"
         const val KEY_PANEL_AT = "panel_session_at"
-        const val KEY_BALL_ENABLED = "ball_enabled"
     }
 }

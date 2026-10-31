@@ -2170,20 +2170,12 @@
     <string name="notif_vscreen_handoff_action_done">處理好了（挪回背景螢幕）</string>
     <string name="notif_vscreen_handoff_action_keep">我自己做完了</string>
     <string name="notif_vscreen_handoff_action_abort">先不用</string>
-    <string name="quick_settings_footer">隨時隨地喚起 Minis：懸浮球、快捷磁貼，或直接分享到面板。傳送的內容會在最近的會話中無人值守執行，完成後通知你。</string>
-    <string name="quick_ball_enabled">懸浮球</string>
-    <string name="quick_ball_enabled_subtitle">在其他應用程式上顯示貼邊懸浮球。輕觸開啟面板，輕觸兩下附帶目前螢幕內容。</string>
     <string name="quick_panel_input_hint">要 Minis 做什麼？</string>
     <string name="quick_send_failed">無法啟動執行。請開啟 Minis 後再試一次。</string>
     <string name="quick_panel_open_session">開啟會話</string>
-    <string name="quick_panel_screen_chip">螢幕：%1$s</string>
     <string name="quick_panel_images_attached">已附加 %1$d 張圖片</string>
     <string name="quick_share_image_unsupported">快捷面板暫不支援分享圖片。</string>
-    <string name="quick_panel_default_screen_prompt">看看我目前的螢幕</string>
     <string name="quick_panel_running">正在背景執行，完成後會通知你。</string>
-    <string name="quick_ball_needs_overlay">需要授權「顯示在其他應用程式上層」才能顯示懸浮球。</string>
-    <string name="quick_ball_notification_title">Minis 懸浮球</string>
-    <string name="quick_ball_notification_text">輕觸懸浮球開啟快捷面板</string>
     <string name="quick_notify_channel_name">快捷面板結果</string>
     <string name="quick_notify_title">快捷指令已執行完成</string>
 </resources>

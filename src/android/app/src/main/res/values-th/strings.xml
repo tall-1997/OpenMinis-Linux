@@ -2079,20 +2079,12 @@
     <string name="notif_vscreen_handoff_action_done">เสร็จแล้ว (ย้ายกลับ)</string>
     <string name="notif_vscreen_handoff_action_keep">ฉันทำเองแล้ว</string>
     <string name="notif_vscreen_handoff_action_abort">ไว้ก่อน</string>
-    <string name="quick_settings_footer">เรียก Minis ได้จากทุกที่ — ลูกบอลลอย ไทล์การตั้งค่าด่วน หรือแชร์เข้าแผงโดยตรง การส่งจะทำงานแบบไม่มีผู้ดูแลในแชทล่าสุดและแจ้งเตือนเมื่อเสร็จ</string>
-    <string name="quick_ball_enabled">ลูกบอลลอย</string>
-    <string name="quick_ball_enabled_subtitle">แสดงลูกบอลติดขอบบนแอปอื่น ๆ แตะเพื่อเปิดแผง แตะสองครั้งเพื่อรวมสิ่งที่อยู่บนหน้าจอ</string>
     <string name="quick_panel_input_hint">ให้ Minis ทำอะไร?</string>
     <string name="quick_send_failed">เริ่มการทำงานไม่สำเร็จ เปิด Minis แล้วลองอีกครั้ง</string>
     <string name="quick_panel_open_session">เปิดเซสชัน</string>
-    <string name="quick_panel_screen_chip">หน้าจอ: %1$s</string>
     <string name="quick_panel_images_attached">แนบรูปภาพ %1$d รายการ</string>
     <string name="quick_share_image_unsupported">การแชร์รูปภาพยังไม่รองรับในแผงด่วน</string>
-    <string name="quick_panel_default_screen_prompt">ดูหน้าจอปัจจุบันของฉัน</string>
     <string name="quick_panel_running">กำลังทำงานเบื้องหลัง — จะแจ้งเตือนเมื่อเสร็จ</string>
-    <string name="quick_ball_needs_overlay">ต้องให้สิทธิ์ “แสดงทับแอปอื่น” จึงจะแสดงลูกบอลลอยได้</string>
-    <string name="quick_ball_notification_title">ลูกบอลลอย Minis</string>
-    <string name="quick_ball_notification_text">แตะลูกบอลเพื่อเปิดแผงด่วน</string>
     <string name="quick_notify_channel_name">ผลลัพธ์แผงด่วน</string>
     <string name="quick_notify_title">คำสั่งด่วนเสร็จสิ้นแล้ว</string>
 </resources>
