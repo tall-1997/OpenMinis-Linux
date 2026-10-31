@@ -38,15 +38,12 @@ class VirtualScreenManagerTest {
 
     private class FakeDisplay(override val displayId: Int) : DisplayHandle {
         var released = false
-        var attachCalls = 0
-        var detachCalls = 0
-        override fun attach(surface: android.view.Surface): Boolean {
-            attachCalls++
-            return true
-        }
+        var acquireCalls = 0
 
-        override fun detach() {
-            detachCalls++
+        /** No frame on the JVM (no real ImageReader) — the layers degrade. */
+        override fun acquireLatestFrame(): android.media.Image? {
+            acquireCalls++
+            return null
         }
 
         override fun release() {
@@ -387,6 +384,31 @@ class VirtualScreenManagerTest {
         }
         val r = VirtualScreenManager.screenshot(2, outDir) as CommandOutcome.Failed
         assertTrue(r.message.contains("no app-readable retrieval path worked"))
+    }
+
+    @Test
+    fun `screenshot reads the persistent frame reader and never blanks the display surface`() {
+        val factory = FakeFactory()
+        VirtualScreenManager.resetForTest(VirtualScreenManager.DisplayHandleFactory { _, _, _, _ -> factory.create() }, shell, { null })
+        VirtualScreenManager.create(0, 0, 0, null, null)
+        // The capture path owns no attach/detach churn: it consults the
+        // handle's frame reader exactly once (persistent-surface contract —
+        // a blanked virtual display sleeps, loses input focus and drops
+        // every injected event, which is the bug this test pins).
+        shell.respond = { argv ->
+            val joined = argv.joinToString(" ")
+            when {
+                argv[0] == "screencap" ->
+                    ShizukuManager.ProcessResult(0, "screencap [-hp] [-d display-id] [FILENAME]", "")
+                joined.startsWith("sh -c screencap -d") ->
+                    ShizukuManager.ProcessResult(0, "", "")
+                else -> ShizukuManager.ProcessResult(1, "", "Permission denied")
+            }
+        }
+        val r = VirtualScreenManager.screenshot(2, tmp.newFolder()) as CommandOutcome.Failed
+        assertTrue(r.message.contains("no app-readable retrieval path worked"))
+        assertEquals(1, factory.displays.single().acquireCalls)
+        assertFalse(factory.displays.single().released)
     }
 
     @Test

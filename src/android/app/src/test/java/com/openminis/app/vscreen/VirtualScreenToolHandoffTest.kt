@@ -41,8 +41,7 @@ class VirtualScreenToolHandoffTest {
             factory = VirtualScreenManager.DisplayHandleFactory { _, _, _, _ ->
                 object : DisplayHandle {
                     override val displayId: Int = 2
-                    override fun attach(surface: android.view.Surface): Boolean = true
-                    override fun detach() {}
+                    override fun acquireLatestFrame(): android.media.Image? = null
                     override fun release() {}
                 }
             },
@@ -132,8 +131,7 @@ class VirtualScreenToolHandoffTest {
             factory = VirtualScreenManager.DisplayHandleFactory { _, _, _, _ ->
                 object : DisplayHandle {
                     override val displayId: Int = 2
-                    override fun attach(surface: android.view.Surface): Boolean = true
-                    override fun detach() {}
+                    override fun acquireLatestFrame(): android.media.Image? = null
                     override fun release() {}
                 }
             },
@@ -188,8 +186,7 @@ class VirtualScreenToolHandoffTest {
             factory = VirtualScreenManager.DisplayHandleFactory { _, _, _, _ ->
                 object : DisplayHandle {
                     override val displayId: Int = 2
-                    override fun attach(surface: android.view.Surface): Boolean = true
-                    override fun detach() {}
+                    override fun acquireLatestFrame(): android.media.Image? = null
                     override fun release() {}
                 }
             },
@@ -211,8 +208,7 @@ class VirtualScreenToolHandoffTest {
             factory = VirtualScreenManager.DisplayHandleFactory { _, _, _, _ ->
                 object : DisplayHandle {
                     override val displayId: Int = 2
-                    override fun attach(surface: android.view.Surface): Boolean = true
-                    override fun detach() {}
+                    override fun acquireLatestFrame(): android.media.Image? = null
                     override fun release() {}
                 }
             },
@@ -236,8 +232,7 @@ class VirtualScreenToolHandoffTest {
             factory = VirtualScreenManager.DisplayHandleFactory { _, _, _, _ ->
                 object : DisplayHandle {
                     override val displayId: Int = 2
-                    override fun attach(surface: android.view.Surface): Boolean = true
-                    override fun detach() {}
+                    override fun acquireLatestFrame(): android.media.Image? = null
                     override fun release() {}
                 }
             },
@@ -287,8 +282,7 @@ class VirtualScreenToolHandoffTest {
             factory = VirtualScreenManager.DisplayHandleFactory { _, _, _, _ ->
                 object : DisplayHandle {
                     override val displayId: Int = 2
-                    override fun attach(surface: android.view.Surface): Boolean = true
-                    override fun detach() {}
+                    override fun acquireLatestFrame(): android.media.Image? = null
                     override fun release() {}
                 }
             },

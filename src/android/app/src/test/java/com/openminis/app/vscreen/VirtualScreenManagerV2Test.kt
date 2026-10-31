@@ -34,8 +34,7 @@ class VirtualScreenManagerV2Test {
 
     private class FakeDisplay(override val displayId: Int) : DisplayHandle {
         var released = false
-        override fun attach(surface: android.view.Surface): Boolean = true
-        override fun detach() {}
+        override fun acquireLatestFrame(): android.media.Image? = null
         override fun release() {
             released = true
         }

@@ -40,8 +40,7 @@ class VirtualScreenToolTest {
         VirtualScreenManager.resetForTest(
             factory = VirtualScreenManager.DisplayHandleFactory { _, _, _, _ -> object : VirtualScreenManager.DisplayHandle {
                 override val displayId: Int = 2
-                override fun attach(surface: android.view.Surface): Boolean = true
-                override fun detach() {}
+                override fun acquireLatestFrame(): android.media.Image? = null
                 override fun release() {}
             } },
             shell = FakeShell(),
@@ -230,8 +229,7 @@ class VirtualScreenToolTest {
     private fun seedDisplayHandle(id: Int): VirtualScreenManager.DisplayHandle =
         object : VirtualScreenManager.DisplayHandle {
             override val displayId: Int = id
-            override fun attach(surface: android.view.Surface): Boolean = true
-            override fun detach() {}
+            override fun acquireLatestFrame(): android.media.Image? = null
             override fun release() {}
         }
 
