@@ -49,10 +49,53 @@ internal object A2aPanelMobileShell {
     /** Flag set on `window` once the wiring ran, so a re-render is a no-op. */
     internal const val GUARD = "__a2aMobileShell"
 
+    /** Separate flag for the document-start stylesheet pass, asserted by the JVM test. */
+    internal const val START_GUARD = "__a2aMobileCssWired"
+
     /**
-     * The wiring script. The only interpolations are [GUARD] and [LINK_ID],
-     * so the test can assert the rest verbatim and the guard/marker cannot
-     * drift from the constants that describe them.
+     * Confines [START_SCRIPT] to the gateway's loopback document, so vendor
+     * SSO pages opened inside the panel never run it. The rule matches any
+     * port, which the panel needs — the gateway port is not fixed.
+     */
+    internal const val START_ORIGIN_RULES = "*://127.0.0.1/*"
+
+    /**
+     * Document-start wiring: the mobile stylesheet goes into the head
+     * before the parser reaches the body.
+     *
+     * [T-android-a2a-mobile-fouc] [SCRIPT] runs from `onPageFinished`, which
+     * is after the first paint — every cold start briefly shows the desktop
+     * grid (68 px sidebar + the 1313 px table) and then snaps into the card
+     * layout. `mobile.css` is a render-blocking stylesheet, so a link created
+     * here makes the very first frame the phone layout.
+     *
+     * It is registered through
+     * [androidx.webkit.WebViewCompat.addDocumentStartJavaScript] and uses
+     * its own guard because it must NOT reuse [GUARD]: the full [SCRIPT]
+     * re-checks that flag and would skip the drawer nodes.
+     */
+    val START_SCRIPT: String = """
+        (function () {
+          if (window.$START_GUARD) return;
+          window.$START_GUARD = true;
+          var link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = window.location.origin + '/css/mobile.css';
+          link.id = '$LINK_ID';
+          (document.head || document.documentElement).appendChild(link);
+          var patch = document.createElement('style');
+          patch.id = '$PATCH_ID';
+          patch.textContent = '@media (max-width: 767px){'
+            + 'html,body,body *{scrollbar-width:none;}'
+            + 'body ::-webkit-scrollbar{width:0;height:0;}}';
+          (document.head || document.documentElement).appendChild(patch);
+        })();
+    """.trimIndent()
+
+    /**
+     * The wiring script. The only interpolations are [GUARD], [LINK_ID] and
+     * [PATCH_ID], so the test can assert the rest verbatim and the
+     * guard/markers cannot drift from the constants that describe them.
      *
      * Loads are resolved against the origin root rather than the document
      * URL: the panel is an SPA, and a pathname route would otherwise resolve
