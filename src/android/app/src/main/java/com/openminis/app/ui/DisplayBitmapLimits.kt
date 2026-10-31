@@ -95,4 +95,30 @@ object DisplayBitmapLimits {
     /** See [decodeFileForDisplay]. */
     fun decodeStreamForDisplay(input: InputStream): Bitmap? =
         SampledDecode.decodeStream(input, MAX_DISPLAY_EDGE_PX)
+
+    /**
+     * Preview-path decode for the sandbox file viewer: samples up to the
+     * device's GPU texture limit ([DeviceTextureLimit.maxBitmapEdge]) instead
+     * of the fixed [MAX_DISPLAY_EDGE_PX], so zooming into a large photo keeps
+     * near-source detail on devices that can actually draw it. A 4032x3024
+     * camera photo decodes 1:1 on a modern GPU (8192/16384 texture limit) —
+     * exactly the pre-fix experience — while a device whose GPU only supports
+     * 4096 still gets the safe ceiling.
+     *
+     * Safety valve: if the decoded bitmap would still blow the ~80MB budget
+     * that keeps Canvas software fallback alive (e.g. 8192x9830 on a 16384
+     * GPU), it re-decodes at [MAX_DISPLAY_EDGE_PX]. The viewer never receives
+     * a bitmap that could reproduce the 322MB crash.
+     */
+    fun decodeFileForPreviewWithSize(path: String): Pair<Bitmap?, Pair<Int, Int>?> {
+        val size = SampledDecode.readBoundsFile(path)
+        var bmp = SampledDecode.decodeFile(path, DeviceTextureLimit.maxBitmapEdge())
+        if (bmp != null && bmp.byteCount > PREVIEW_BYTE_BUDGET) {
+            bmp.recycle()
+            bmp = SampledDecode.decodeFile(path, MAX_DISPLAY_EDGE_PX)
+        }
+        return bmp to size
+    }
+
+    private const val PREVIEW_BYTE_BUDGET = 80 * 1024 * 1024
 }
