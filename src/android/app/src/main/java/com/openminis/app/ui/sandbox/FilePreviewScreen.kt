@@ -2,7 +2,7 @@ package com.openminis.app.ui.sandbox
 import com.openminis.app.ui.theme.m3Icon
 
 import com.openminis.app.R
-import com.openminis.app.provider.SampledDecode
+import com.openminis.app.ui.DisplayBitmapLimits
 import androidx.compose.ui.res.stringResource
 import android.annotation.SuppressLint
 import android.content.Context
@@ -258,7 +258,7 @@ private fun ImagePreview(item: FileItem) {
     LaunchedEffect(item.file) {
         withContext(Dispatchers.IO) {
             try {
-                val bmp = SampledDecode.decodeFileWithSourceSize(item.file.absolutePath, 4096).also { originalSize = it.second }.first
+                val bmp = DisplayBitmapLimits.decodeFileForPreviewWithSize(item.file.absolutePath).also { originalSize = it.second }.first
                 if (bmp != null) {
                     bitmap = bmp
                 } else {

@@ -93,7 +93,15 @@ object ReadImageTool {
 
             val displayW = rawSize?.first ?: original.width
             val displayH = rawSize?.second ?: original.height
-            val metadata = "[$path | ${displayW}x${displayH} | ${file.length()} bytes]"
+            // Be transparent to the LLM: it reads a decoded JPEG, not the
+            // source pixels — report both so it never assumes the payload is
+            // full-resolution (it could otherwise reason about details the
+            // sample no longer contains).
+            val metadata = if (original.width < displayW || original.height < displayH) {
+                "[$path | source ${displayW}x${displayH} | decoded ${original.width}x${original.height} | ${file.length()} bytes]"
+            } else {
+                "[$path | ${displayW}x${displayH} | ${file.length()} bytes]"
+            }
             ToolExecutionResult(
                 output = metadata,
                 success = true,
