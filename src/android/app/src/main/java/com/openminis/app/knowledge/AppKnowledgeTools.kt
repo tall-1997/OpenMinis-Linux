@@ -3,6 +3,7 @@ package com.openminis.app.knowledge
 import android.content.Context
 import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.model.AgentToolParam
+import com.openminis.app.tools.ToolArgs
 import org.json.JSONObject
 
 /**
@@ -45,7 +46,7 @@ object AppKnowledgeTools {
         context: Context,
     ): String = when (name) {
         GUIDE -> executeGuide(argsJson, activeSessionId, context)
-        NOTE -> executeNote(argsJson, context)
+        NOTE -> executeNote(argsJson, activeSessionId, context)
         else -> "Error: unknown_tool — knowledge tools handle only $GUIDE and $NOTE"
     }
 
@@ -73,7 +74,7 @@ object AppKnowledgeTools {
         val obj = runCatching { JSONObject(argsJson) }.getOrElse {
             return "Error: invalid_args — arguments are not valid JSON"
         }
-        val app = obj.str("app")
+        val app = ToolArgs.str(obj, "app")
             ?: return "Error: invalid_args — missing 'app' (package name, app id, display name or alias)"
         val knowledge = AppKnowledgeStore.get(context)
         val entry = knowledge.find(app)
@@ -98,8 +99,24 @@ object AppKnowledgeTools {
                 append(notes)
                 append("\n\n")
             }
+            // [T-android-route-tracker-read] The ui_action tap ledger finally has a
+            // reader: when this session already walked a route in one of the pack's
+            // packages, show it before the body so the model can reuse the path
+            // that worked instead of re-discovering it.
+            recentRoute(sessionId, entry.packages)?.let {
+                append(it)
+                append("\n\n")
+            }
             append(entry.body)
         }
+    }
+
+    /** "Recent successful route: A → B → C" for the first of [pkgs] with a recorded route, or null. */
+    private fun recentRoute(sessionId: String?, pkgs: List<String>): String? {
+        val steps = pkgs.firstNotNullOfOrNull { pkg ->
+            RouteTrackers.global.route(sessionId ?: "", pkg).takeIf { it.isNotEmpty() }
+        } ?: return null
+        return "Recent successful route: " + steps.joinToString(" → ")
     }
 
     private fun appLabel(context: Context, pkg: String): String =
@@ -129,15 +146,25 @@ object AppKnowledgeTools {
         propertyOrdering = listOf(TOOL_TITLE_PARAM, "package", "text", "kind"),
     )
 
-    private fun executeNote(argsJson: String, context: Context): String {
+    private fun executeNote(argsJson: String, sessionId: String?, context: Context): String {
         val obj = runCatching { JSONObject(argsJson) }.getOrElse {
             return "Error: invalid_args — arguments are not valid JSON"
         }
-        val pkg = obj.str("package") ?: return "Error: invalid_args — missing 'package'"
-        val text = obj.str("text") ?: return "Error: invalid_args — missing 'text'"
-        val kind = obj.str("kind") ?: "fact"
+        val pkg = ToolArgs.str(obj, "package") ?: return "Error: invalid_args — missing 'package'"
+        val requestedKind = ToolArgs.str(obj, "kind") ?: "fact"
+        // [T-android-route-tracker-read] kind=route now records what actually
+        // happened: the note text is assembled from the session's ui_action tap
+        // ledger ([RouteTracker]) instead of the model's own retelling, so the
+        // write-only ledger gains a reader on the very next app_guide. When no
+        // route was recorded (e.g. the tracker was cleared on a new user turn),
+        // the model-provided text is kept as before.
+        val text = if (requestedKind.trim().lowercase() == "route") {
+            routeText(sessionId, pkg) ?: ToolArgs.str(obj, "text")
+        } else {
+            ToolArgs.str(obj, "text")
+        } ?: return "Error: invalid_args — missing 'text'"
         val notes = AppNotesStore.forContext(context)
-        return when (val outcome = notes.add(pkg, text, kind)) {
+        return when (val outcome = notes.add(pkg, text, requestedKind)) {
             is AppNotes.Outcome.Saved ->
                 "Saved note ${outcome.note.id} for $pkg (${outcome.note.kind.name}); " +
                     "app_guide will show it on future runs."
@@ -148,6 +175,10 @@ object AppKnowledgeTools {
         }
     }
 
-    private fun JSONObject.str(key: String): String? =
-        if (!has(key) || isNull(key)) null else optString(key).trim().takeIf { it.isNotEmpty() }
+    /** The session's recorded tap path for [pkg], as a storable one-line route, or null when empty. */
+    private fun routeText(sessionId: String?, pkg: String): String? {
+        val steps = RouteTrackers.global.route(sessionId ?: "", pkg)
+        if (steps.isEmpty()) return null
+        return "Route: " + steps.joinToString(" → ")
+    }
 }

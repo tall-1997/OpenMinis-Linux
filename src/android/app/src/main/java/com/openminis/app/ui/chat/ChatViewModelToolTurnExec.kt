@@ -503,9 +503,9 @@ private suspend fun ChatViewModel.runPlannedCall(
     currentCoroutineContext().ensureActive()
     // [T-android-overlay-tool-title] Pull tool_title uniformly from
     // args for ALL tools, at the moment execution actually starts.
-    val dispatchToolTitle = try {
-        JSONObject(call.argsStr).optString("tool_title", "").takeIf { it.isNotBlank() }
-    } catch (_: Exception) { null }
+    // [P1-17] Routed through the shared extractToolTitle (complete-JSON path
+    // first, streaming partial fallback); blank/absent → null, as before.
+    val dispatchToolTitle = extractToolTitle(call.argsStr, fallback = null)
     SessionActivityTracker.updateToolStatus(
         status = "Running: ${call.name}",
         toolName = call.name,

@@ -240,34 +240,42 @@ fun WebPreviewBottomSheet(
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth().height(2.dp))
             }
             Box(modifier = Modifier.fillMaxSize()) {
-                AndroidView(
-                    factory = {
-                        // Issue #24: ModalBottomSheet's nested-scroll grabbed
-                        // every vertical drag on the hosted WebView, so the
-                        // user could never scroll the HTML report inside the
-                        // sheet (drag would either do nothing or try to drag
-                        // the sheet itself). AndroidView-hosted WebView does
-                        // not participate in Compose nested scroll, so the
-                        // sheet's drag handler wins by default. Mirror the
-                        // BrowserWebView fix: as soon as a finger touches the
-                        // WebView, ask every ancestor (the sheet included)
-                        // to stop intercepting; release on UP/CANCEL.
-                        holder.webView.setOnTouchListener { v, event ->
-                            when (event.actionMasked) {
-                                MotionEvent.ACTION_DOWN,
-                                MotionEvent.ACTION_MOVE,
-                                MotionEvent.ACTION_POINTER_DOWN ->
-                                    v.parent?.requestDisallowInterceptTouchEvent(true)
-                                MotionEvent.ACTION_UP,
-                                MotionEvent.ACTION_CANCEL ->
-                                    v.parent?.requestDisallowInterceptTouchEvent(false)
+                // [T-android-webview-deferred-create] The platform WebView is
+                // created at the sheet's first visible frame (startIfNeeded's
+                // effect below), not during holder construction: the scrim +
+                // toolbar paint first, then webViewReady flips and the real
+                // view swaps in for the placeholder. Keeps sheet-open latency
+                // free of the WebView bootstrap cost.
+                if (holder.webViewReady) {
+                    AndroidView(
+                        factory = {
+                            // Issue #24: ModalBottomSheet's nested-scroll grabbed
+                            // every vertical drag on the hosted WebView, so the
+                            // user could never scroll the HTML report inside the
+                            // sheet (drag would either do nothing or try to drag
+                            // the sheet itself). AndroidView-hosted WebView does
+                            // not participate in Compose nested scroll, so the
+                            // sheet's drag handler wins by default. Mirror the
+                            // BrowserWebView fix: as soon as a finger touches the
+                            // WebView, ask every ancestor (the sheet included)
+                            // to stop intercepting; release on UP/CANCEL.
+                            holder.webView.setOnTouchListener { v, event ->
+                                when (event.actionMasked) {
+                                    MotionEvent.ACTION_DOWN,
+                                    MotionEvent.ACTION_MOVE,
+                                    MotionEvent.ACTION_POINTER_DOWN ->
+                                        v.parent?.requestDisallowInterceptTouchEvent(true)
+                                    MotionEvent.ACTION_UP,
+                                    MotionEvent.ACTION_CANCEL ->
+                                        v.parent?.requestDisallowInterceptTouchEvent(false)
+                                }
+                                false
                             }
-                            false
-                        }
-                        holder.webView
-                    },
-                    modifier = Modifier.fillMaxSize(),
-                )
+                            holder.webView
+                        },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
             }
         }
     }

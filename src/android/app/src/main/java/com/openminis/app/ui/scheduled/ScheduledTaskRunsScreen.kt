@@ -2,19 +2,17 @@ package com.openminis.app.ui.scheduled
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -27,6 +25,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import com.openminis.app.ui.components.EmptyStateHint
 import com.openminis.app.ui.components.MinisCenterTopBar
 import androidx.compose.runtime.Composable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -97,39 +96,26 @@ fun ScheduledTaskRunsScreen(
         },
     ) { padding ->
         if (runs.isEmpty()) {
-            EmptyRuns(padding)
+            EmptyStateHint(
+                icon = Icons.Outlined.History,
+                text = stringResource(R.string.scheduled_task_runs_empty),
+                modifier = Modifier.padding(padding),
+            )
             return@Scaffold
         }
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
             contentPadding = PaddingValues(vertical = 8.dp),
         ) {
-            items(runs, key = { it.firedAt }) { run ->
+            // [v3 P0-3] Keyed by run identity, not raw firedAt: two runs can
+            // share a millisecond timestamp (markFired uses
+            // System.currentTimeMillis), and a duplicate key crashes the
+            // LazyColumn. ScheduledRun carries no persisted run id (its schema
+            // lives in ScheduledTask.kt and is intentionally untouched here),
+            // so the list position disambiguates equal firedAt values.
+            itemsIndexed(runs, key = { index, run -> "${run.firedAt}-$index" }) { _, run ->
                 RunRow(run = run, onOpenSession = onOpenSession)
             }
-        }
-    }
-}
-
-@Composable
-private fun EmptyRuns(padding: PaddingValues) {
-    Box(
-        modifier = Modifier.fillMaxSize().padding(padding).padding(32.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(
-                Icons.Outlined.History,
-                contentDescription = null,
-                modifier = Modifier.size(64.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(16.dp))
-            Text(
-                stringResource(R.string.scheduled_task_runs_empty),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            )
         }
     }
 }

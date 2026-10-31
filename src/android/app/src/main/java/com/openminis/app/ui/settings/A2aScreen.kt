@@ -43,7 +43,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -57,6 +56,9 @@ import com.openminis.app.a2a.A2aGateway
 import com.openminis.app.ui.components.MinisCenterTopBar
 import com.openminis.app.ui.components.MinisTextButton
 import com.openminis.app.ui.theme.m3Icon
+import com.openminis.app.ui.theme.IosGray
+import com.openminis.app.ui.theme.IosGreen
+import com.openminis.app.ui.theme.IosRed
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
@@ -262,7 +264,7 @@ private fun A2aManageBody(
                     title = viewState.lastError,
                     titleColor = MaterialTheme.colorScheme.error,
                     icon = Icons.Outlined.ErrorOutline,
-                    iconColor = Color(0xFFFF3B30),
+                    iconColor = IosRed,
                     showChevron = false,
                     showDivider = !viewState.installed,
                 )
@@ -300,7 +302,7 @@ private fun A2aManageBody(
                     checked = viewState.running,
                     onCheckedChange = onToggleRunning,
                     icon = Icons.Outlined.CloudUpload,
-                    iconColor = Color(0xFF34C759),
+                    iconColor = IosGreen,
                     showDivider = true,
                 )
                 // [T-android-a2a-login-capture] Each login window starts from a
@@ -312,7 +314,7 @@ private fun A2aManageBody(
                     checked = incognitoLogin,
                     onCheckedChange = onIncognitoChange,
                     icon = Icons.Outlined.VisibilityOff,
-                    iconColor = Color(0xFF8E8E93),
+                    iconColor = IosGray,
                     showDivider = true,
                 )
                 // The engine's own log — the only place a failed login state
@@ -478,7 +480,7 @@ private fun a2aStatusIcon(state: A2aUiState) = when (state) {
 
 /** Status-row chip color (iOS-family palette used across Settings). */
 private fun a2aStatusColor(state: A2aUiState) = when (state) {
-    A2aUiState.RUNNING -> Color(0xFF34C759)
-    A2aUiState.ERROR -> Color(0xFFFF3B30)
-    else -> Color(0xFF8E8E93)
+    A2aUiState.RUNNING -> IosGreen
+    A2aUiState.ERROR -> IosRed
+    else -> IosGray
 }

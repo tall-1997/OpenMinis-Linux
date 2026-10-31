@@ -5,6 +5,45 @@ package com.openminis.app.navigation
  * MainActivity) can reference destinations without importing ui.*
  * (architecture-policy forbiddenImports). Moved verbatim from
  * ui/navigation/AppNavigation.kt; [navEnc] came with it from FilePreviewRoute.kt.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * [T-android-entry-matrix] EVERY ENTRY POINT AND WHERE IT LANDS. This file is
+ * the index so a new entry (widget / shortcut / tile / assistant / …) can be
+ * added without reverse-engineering four dispatch layers.
+ *
+ *   ENTRY                            INTENT / MECHANISM                LANDING
+ *   ──────────────────────────────── ───────────────────────────────── ─────────────────────────────
+ *   Launcher icon                    (none)                            startDestination: SESSION_LIST,
+ *                                                                      launch-session resolver (AppNavigation)
+ *                                                                      may auto-open chat/new draft
+ *   App shortcut (long-press)        res/xml/shortcuts.xml →           DeepLinkAction.NewChat / NewVoiceChat /
+ *                                    minis://action/{new_chat,         NewCameraChat → startDestination is a
+ *                                    voice_chat, camera_chat}          fresh `chat/__new__<uuid>` draft; voice/
+ *                                                                      camera seed DeepLinkCoordinator.
+ *                                                                      pendingChatAction for ChatScreen
+ *   Assistant (voice search, ACTION_ ASSIST / VOICE_COMMAND intent    DeepLinkAction.NewChat → fresh draft
+ *   ASSIST on onNewIntent)                                             (MainActivity.onCreate / onNewIntent)
+ *   Widget (MinisChatWidgetProvider) widget PendingIntent → MainActivity DeepLinkAction.NewChat → fresh draft
+ *                                    (widget layout
+ *                                    res/xml/minis_chat_widget_info.xml)
+ *   QS tile / quick panel            quick.QuickActivity (half-screen, NOT a route — no NavHost; separate
+ *                                    quick package)                    composition root, hand-built UI
+ *   Notification tap                 session deep link / PendingIntent DeepLinkAction.OpenSession(chat/<id>)
+ *   Share sheet                      ShareReceiverActivity →           ShareCoordinator.processPendingShare +
+ *                                    shared_content=true extra         possible auto-draft (launch resolver /
+ *                                                                      shareBufferVersion fallback)
+ *   External http(s) minis:// link   DeepLinkHandler.parse(intent.data) per DeepLinkAction below (terminal,
+ *                                                                      session, env-var, settings screens…)
+ *   HTML preview shortcut            WebPreviewShortcut.pin →          ChatScreen mount +
+ *                                    minis:// deep link + pendingHtml  DeepLinkCoordinator.pendingHtmlPreview
+ *                                                                      → WebPreview sheet
+ *   In-app markdown link             previewLink() (AppNavigation.kt)  file_preview?path=… or HOME_BROWSER?url=…
+ *
+ * Rule of thumb: every external entry resolves to a [DeepLinkAction] in
+ * MainActivity, which either sets startDestination (cold start) or calls
+ * handleDeepLink → navigate (warm start). The only non-NavHost roots are
+ * QuickActivity and the :acra reporter process.
+ * ─────────────────────────────────────────────────────────────────────────────
  */
 
 internal fun navEnc(v: String): String =

@@ -55,13 +55,20 @@ class MessageUsageFooterTest {
     // ── Merging ──────────────────────────────────────────────────────────
 
     @Test
-    fun `merges rows and skips unparseable ones`() {
-        val merged = mergeMessageUsageRows(
+    fun `merges parsed rows and skips null ones`() {
+        // [P1-18] mergeMessageUsageRows (raw-row variant) was deleted as
+        // production-dead; the footer path pre-parses rows and merges via
+        // mergeMessageUsageStats, so the same merge semantics are asserted
+        // through the pre-parsed inputs.
+        val merged = mergeMessageUsageStats(
             listOf(
-                """{"inputTokens":100,"outputTokens":10,"cacheCreationTokens":0,"cacheReadTokens":900}""",
-                "garbage",
+                MessageUsageStats.fromJson(
+                    """{"inputTokens":100,"outputTokens":10,"cacheCreationTokens":0,"cacheReadTokens":900}""",
+                ),
                 null,
-                """{"inputTokens":50,"outputTokens":5,"cacheCreationTokens":20,"cacheReadTokens":0}""",
+                MessageUsageStats.fromJson(
+                    """{"inputTokens":50,"outputTokens":5,"cacheCreationTokens":20,"cacheReadTokens":0}""",
+                ),
             ),
         )!!
         assertEquals(150, merged.inputTokens)
@@ -97,7 +104,7 @@ class MessageUsageFooterTest {
     @Test
     fun `merging nothing yields null`() {
         assertNull(mergeMessageUsageStats(emptyList()))
-        assertNull(mergeMessageUsageRows(listOf<String?>(null, "garbage")))
+        assertNull(mergeMessageUsageStats(listOf(null, null)))
     }
 
     // ── Formatting ───────────────────────────────────────────────────────

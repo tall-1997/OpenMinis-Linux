@@ -32,6 +32,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import com.openminis.app.ui.components.EmptyStateHint
 import com.openminis.app.ui.components.MinisCenterTopBar
 import androidx.compose.runtime.Composable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -140,7 +141,10 @@ fun ScheduledTasksScreen(
                 return@Column
             }
             if (tasks.isEmpty()) {
-                EmptyState(Modifier)
+                EmptyStateHint(
+                    icon = Icons.Outlined.Schedule,
+                    text = stringResource(R.string.scheduled_tasks_empty),
+                )
                 return@Column
             }
             LazyColumn(
@@ -182,31 +186,6 @@ fun ScheduledTasksScreen(
                 }
             },
         )
-    }
-}
-
-@Composable
-private fun EmptyState(modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(32.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(
-                Icons.Outlined.Schedule,
-                contentDescription = null,
-                modifier = Modifier.size(64.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(16.dp))
-            Text(
-                stringResource(R.string.scheduled_tasks_empty),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            )
-        }
     }
 }
 

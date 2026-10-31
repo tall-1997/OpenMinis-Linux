@@ -4,6 +4,7 @@ import android.content.Context
 import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.model.AgentToolParam
 import com.openminis.app.tools.AgentTools
+import com.openminis.app.tools.ToolArgs
 import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
@@ -249,25 +250,28 @@ object AutomationRuleTools {
     }
 
     private suspend fun update(manager: AutomationRuleManager, args: JSONObject): String {
-        val id = args.optString("id").trim()
-        if (id.isEmpty()) return error("id is required")
+        val id = ToolArgs.str(args, "id") ?: return error("id is required")
         val resolved = resolveRuleId(manager, id) ?: return error("no rule with id or prefix '$id'")
         val partial = parseSpec(args, allowPartial = true)
         if (partial == null && hasAnySpecField(args)) {
             return error("malformed trigger/action/conditions payload")
         }
+        // [P2-convergence] NOT ToolArgs.bool on purpose: the historic contract
+        // here is optBoolean with a string=="true" fallback, so "1"/"yes" and
+        // a quoted "true" behave differently from the device tools' dialect.
+        // Preserving that byte-for-byte beats unifying the tolerance.
         val enabled: Boolean? = when {
             !args.has("enabled") -> null
             else -> args.optBoolean("enabled", args.optString("enabled") == "true")
         }
         val (entity, problems) = manager.updateValidated(
             ruleId = resolved,
-            name = args.optString("name").trim().takeIf { it.isNotEmpty() },
+            name = ToolArgs.str(args, "name"),
             trigger = partial?.trigger,
             conditions = partial?.conditions,
             action = partial?.action,
             allowedTools = partial?.allowedTools,
-            permissionMode = args.optString("permission_mode").trim().takeIf { it.isNotEmpty() },
+            permissionMode = ToolArgs.str(args, "permission_mode"),
             enabled = enabled,
             knownTools = knownToolNames(),
         )
@@ -281,17 +285,17 @@ object AutomationRuleTools {
     }
 
     private suspend fun delete(manager: AutomationRuleManager, args: JSONObject): String {
-        val id = args.optString("id").trim()
-        if (id.isEmpty()) return error("id is required")
+        val id = ToolArgs.str(args, "id") ?: return error("id is required")
         val resolved = resolveRuleId(manager, id) ?: return error("no rule with id or prefix '$id'")
         val removed = manager.delete(resolved)
         return JSONObject().put("ok", removed).put("id", resolved).toString()
     }
 
     private suspend fun runs(manager: AutomationRuleManager, args: JSONObject): String {
-        val id = args.optString("id").trim()
-        if (id.isEmpty()) return error("id is required")
+        val id = ToolArgs.str(args, "id") ?: return error("id is required")
         val resolved = resolveRuleId(manager, id) ?: return error("no rule with id or prefix '$id'")
+        // Kept off ToolArgs.int: the historic limit parsing accepts integer
+        // STRINGS only ("20.5" → default 20), while ToolArgs.int truncates.
         val limit = (args.optString("limit").toIntOrNull() ?: 20).coerceIn(1, 100)
         val runs = manager.recentRuns(resolved, limit)
         val arr = JSONArray()
@@ -325,9 +329,12 @@ object AutomationRuleTools {
      * Build a [RuleSpec] from flat tool args. With [allowPartial], missing
      * fields stay null on the returned spec (the manager merges with the
      * stored one); otherwise all of name/trigger/action are required.
+     *
+     * [P2-convergence] String extraction goes through [ToolArgs] like every
+     * other tool family.
      */
     private fun parseSpec(args: JSONObject, allowPartial: Boolean): RuleSpec? {
-        val name = args.optString("name").trim()
+        val name = ToolArgs.str(args, "name").orEmpty()
         val triggerJson = args.optJSONObject("trigger")
         val actionJson = args.optJSONObject("action")
         if (!allowPartial && (name.isEmpty() || triggerJson == null || actionJson == null)) return null
@@ -359,7 +366,7 @@ object AutomationRuleTools {
             conditions = conditions ?: emptyList(),
             action = action ?: RuleAction.Agent(""),
             allowedTools = allowedTools ?: emptyList(),
-            permissionMode = args.optString("permission_mode").trim().takeIf { it.isNotEmpty() },
+            permissionMode = ToolArgs.str(args, "permission_mode"),
         )
     }
 

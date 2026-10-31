@@ -29,6 +29,13 @@ interface MessageVersionDao {
     )
     suspend fun maxVersionIndexesForSession(sessionId: String): List<MessageVersionIndexRow>
 
+    // The two readers below have NO production caller today — the archive and
+    // restore paths go through maxVersionIndex(es) / versionsForSession. They
+    // are KEPT on purpose: the archive-transaction and restore integration
+    // tests (ChatRepositoryArchiveTxTest, RestoreArchivedVersionsIntegrationTest)
+    // assert through them, and the latter's fake MessageVersionDao overrides
+    // them as part of the interface contract. Test-only surface, not dead code.
+
     @Query("SELECT * FROM message_versions WHERE message_id = :messageId ORDER BY version_index DESC")
     suspend fun versionsFor(messageId: String): List<MessageVersionEntity>
 

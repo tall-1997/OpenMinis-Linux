@@ -6,9 +6,6 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
-import com.openminis.app.data.db.CodeIndexDao
-import com.openminis.app.data.db.CodeSymbolEntity
-import com.openminis.app.data.db.CodeEdgeEntity
 
 @Database(
     entities = [
@@ -24,11 +21,11 @@ import com.openminis.app.data.db.CodeEdgeEntity
         com.openminis.app.automation.AutomationRuleEntity::class,
         com.openminis.app.automation.AutomationRunEntity::class,
     ],
-    version = 23, // keep DatabaseVersionGuard.CODE_DB_VERSION in lockstep
+    version = 24, // keep DatabaseVersionGuard.CODE_DB_VERSION in lockstep
     // [T-android-downgrade-compat] Kept ON so MigrationTestHelper and CI can
     // validate migrations against the committed schema json. Note the honest
     // scope: src/android/app/schemas/…AppDatabase/ currently holds 12, 14, 15,
-    // 16, 18-22 — 13.json and 17.json were never committed, so the 12→13
+    // 16, 18-23 — 13.json and 17.json were never committed, so the 12→13
     // (code_symbols/code_edges) and 16→17 (permission_mode) steps have no
     // baseline to validate against. Room only exports the schema of the version
     // being compiled, so those two can't be recovered retro; the entity
@@ -319,6 +316,7 @@ abstract class AppDatabase : RoomDatabase() {
          * Downgrade 13 → 12. Intentionally a no-op: the two code index tables
          * remain on disk so the index survives a version round-trip and the
          * next 1.31+ upgrade doesn't need to rebuild from scratch.
+         * Downgrade backstop note: also covers the secondary `AppDatabase.getInstance` call sites that open Room without the [DatabaseVersionGuard] pre-check.
          */
         val MIGRATION_13_12 = object : Migration(13, 12) {
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -351,6 +349,7 @@ abstract class AppDatabase : RoomDatabase() {
          * Downgrade 14 → 13. Intentionally a no-op: the kanban_tasks table
          * remains on disk so tasks survive a version round-trip. The older
          * build simply won't see the column, which is the safe fallback.
+         * Downgrade backstop note: also covers the secondary `AppDatabase.getInstance` call sites that open Room without the [DatabaseVersionGuard] pre-check.
          */
         val MIGRATION_14_13 = object : Migration(14, 13) {
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -372,6 +371,7 @@ abstract class AppDatabase : RoomDatabase() {
         /**
          * Downgrade 15 -> 14. No-op: the table is already gone and the older
          * build only touched it from the removed Kanban screen.
+         * Downgrade backstop note: also covers the secondary `AppDatabase.getInstance` call sites that open Room without the [DatabaseVersionGuard] pre-check.
          */
         val MIGRATION_15_14 = object : Migration(15, 14) {
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -392,7 +392,10 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        /** Downgrade 16 -> 15: drop the index; the old schema has no column constraints. */
+        /**
+         * Downgrade 16 -> 15: drop the index; the old schema has no column constraints.
+         * Downgrade backstop note: also covers the secondary `AppDatabase.getInstance` call sites that open Room without the [DatabaseVersionGuard] pre-check.
+         */
         val MIGRATION_16_15 = object : Migration(16, 15) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("DROP INDEX IF EXISTS `index_sessions_updated_at`")
@@ -408,6 +411,10 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Downgrade 18 → 17. No-op (keep summary_chunks).
+         * Downgrade backstop note: also covers the secondary `AppDatabase.getInstance` call sites that open Room without the [DatabaseVersionGuard] pre-check.
+         */
         val MIGRATION_18_17 = object : Migration(18, 17) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 // Keep the column. Older builds ignore extra fields.
@@ -437,6 +444,10 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Downgrade 19 → 18. No-op (keep the body-metadata columns).
+         * Downgrade backstop note: also covers the secondary `AppDatabase.getInstance` call sites that open Room without the [DatabaseVersionGuard] pre-check.
+         */
         val MIGRATION_19_18 = object : Migration(19, 18) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 // Keep the columns. Older builds ignore extra fields.
@@ -463,6 +474,10 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Downgrade 20 → 19. No-op (keep session_goals).
+         * Downgrade backstop note: also covers the secondary `AppDatabase.getInstance` call sites that open Room without the [DatabaseVersionGuard] pre-check.
+         */
         val MIGRATION_20_19 = object : Migration(20, 19) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 // Keep session_goals so a downgrade does not discard a user's goal.
@@ -517,6 +532,11 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Downgrade 21 → 20. Re-creates the session/sort index as non-unique —
+         * the exact reverse of 20_21.
+         * Downgrade backstop note: also covers the secondary `AppDatabase.getInstance` call sites that open Room without the [DatabaseVersionGuard] pre-check.
+         */
         val MIGRATION_21_20 = object : Migration(21, 20) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("DROP INDEX IF EXISTS `index_messages_session_id_sort_order`")
@@ -563,6 +583,11 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Downgrade 22 → 21. Drops message_versions (the table did not exist
+         * for the older build). Destructive but by design — see MIGRATION_21_22.
+         * Downgrade backstop note: also covers the secondary `AppDatabase.getInstance` call sites that open Room without the [DatabaseVersionGuard] pre-check.
+         */
         val MIGRATION_22_21 = object : Migration(22, 21) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("DROP TABLE IF EXISTS `message_versions`")
@@ -615,10 +640,42 @@ abstract class AppDatabase : RoomDatabase() {
          * stay on disk so a version round-trip keeps rules and run history
          * (the same policy as the code-index and session_goals downgrades).
          * The older build simply ignores the extra tables.
+         *
+         * Downgrade backstop note: this migration is also what lets the
+         * secondary `AppDatabase.getInstance` call sites (BackupViewModel,
+         * ChatViewModelExecuteToolExt, ProviderRepository scrub,
+         * VoiceCorrection) survive a downgrade — they open Room WITHOUT the
+         * [DatabaseVersionGuard] pre-check, so these registered downgrades are
+         * their only safety net.
          */
         val MIGRATION_23_22 = object : Migration(23, 22) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 // Keep the tables. Older builds ignore extra tables.
+            }
+        }
+
+        /**
+         * [T-android-messages-role-time-index] 23 → 24: composite index on `messages(role, created_at)`
+         * for the cross-session mining query (ChatDao.loadUserMessagesSince). The name must equal
+         * Room's generated `index_messages_role_created_at` or post-migration validation fails.
+         */
+        val MIGRATION_23_24 = object : Migration(23, 24) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_messages_role_created_at` " +
+                        "ON `messages` (`role`, `created_at`)"
+                )
+            }
+        }
+
+        /**
+         * Downgrade 24 → 23. NOT a no-op — drops the v24 index: Room validates entity indices
+         * EXACTLY, so an extra index fails the older build's open (same policy as MIGRATION_16_15).
+         * Downgrade backstop note: also covers the secondary `AppDatabase.getInstance` call sites that open Room without the [DatabaseVersionGuard] pre-check.
+         */
+        val MIGRATION_24_23 = object : Migration(24, 23) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("DROP INDEX IF EXISTS `index_messages_role_created_at`")
             }
         }
 
@@ -631,6 +688,10 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Downgrade 17 → 16. No-op (keep the permission_mode column).
+         * Downgrade backstop note: also covers the secondary `AppDatabase.getInstance` call sites that open Room without the [DatabaseVersionGuard] pre-check.
+         */
         val MIGRATION_17_16 = object : Migration(17, 16) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 // Keep the column. Older builds ignore extra fields.
@@ -685,6 +746,7 @@ abstract class AppDatabase : RoomDatabase() {
          * Those need a real reverse migration — or the version pre-check in
          * [com.openminis.app.data.db.DatabaseVersionGuard], which is the
          * backstop for exactly this case.
+         * Downgrade backstop note: also covers the secondary `AppDatabase.getInstance` call sites that open Room without the [DatabaseVersionGuard] pre-check.
          */
 
         val MIGRATION_12_11 = object : Migration(12, 11) {
@@ -697,26 +759,20 @@ abstract class AppDatabase : RoomDatabase() {
         fun getInstance(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: run {
-                // [T-db-startup-integrity-gate] quick_check BEFORE Room opens
-                // the file. A corrupt database is quarantined (renamed aside,
-                // never opened, never silently erased) and the app starts on
-                // a fresh empty database; MainActivity surfaces the pending
-                // failure report so the user learns where their data copy is.
-                when (val gate = DatabaseHealthCheck.ensureHealthyOrQuarantined(
-                    context.applicationContext, "minis.db"
-                )) {
-                    is DatabaseHealthCheck.Outcome.QuarantineFailed ->
-                        throw IllegalStateException(
-                            "minis.db failed integrity check and could not be " +
-                                "quarantined: ${gate.reason}"
-                        )
-                    else -> Unit
-                }
+                val appContext = context.applicationContext
+                // [T-db-gate-async] quick_check BEFORE Room opens the file, on its own
+                // background thread — see DatabaseStartupGate for the ordering constraints
+                // (gate-before-open is structural via the gated open helper; the
+                // DatabaseVersionGuard decision precedes this call). A corrupt database is
+                // quarantined (renamed aside, never opened) and the app starts on a fresh
+                // empty database; MainActivity surfaces the failure report.
+                DatabaseStartupGate.start(appContext)
                 Room.databaseBuilder(
-                    context.applicationContext,
+                    appContext,
                     AppDatabase::class.java,
                     "minis.db"
                 )
+                    .openHelperFactory(DatabaseStartupGate.openHelperFactory())
                     // MIGRATION_12_11 is the downgrade counterpart of
                     // MIGRATION_11_12 — registering it is what lets an older
                     // build open a newer database instead of failing to start.
@@ -733,6 +789,7 @@ abstract class AppDatabase : RoomDatabase() {
                         MIGRATION_20_21, MIGRATION_21_20,
                         MIGRATION_21_22, MIGRATION_22_21,
                         MIGRATION_22_23, MIGRATION_23_22,
+                        MIGRATION_23_24, MIGRATION_24_23,
                     )
                     .build()
                     .also { INSTANCE = it }

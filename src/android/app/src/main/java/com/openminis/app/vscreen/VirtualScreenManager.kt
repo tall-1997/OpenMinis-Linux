@@ -169,8 +169,13 @@ object VirtualScreenManager {
         fun post(r: Runnable, delayMs: Long)
     }
 
+    // [v3] The post target is the MAIN looper regardless of the calling
+    // thread — the old `if (Looper.myLooper() == null) Looper.prepare()`
+    // prepared a throwaway looper on whatever background thread happened to
+    // schedule the reap (never quit → thread leak) and was then ignored in
+    // favor of getMainLooper() anyway. Handler(Looper.getMainLooper()) is
+    // legal from any thread.
     private val defaultScheduler = Scheduler { r, delayMs ->
-        if (Looper.myLooper() == null) Looper.prepare()
         Handler(Looper.getMainLooper()).postDelayed(r, delayMs)
     }
 
@@ -712,7 +717,9 @@ object VirtualScreenManager {
         val released = mutableListOf<Int>()
         for (id in idle) {
             // A waiting handoff pins its display: the user's move-back needs it.
-            val waiting = handoffNote(id)?.contains("WAITING") == true
+            // [v3] Read the raw HandoffStore state instead of substring-
+            // matching the human-facing guidance string.
+            val waiting = upkeep.handoffState(id) == HandoffStateMachine.State.WAITING
             if (waiting) {
                 synchronized(lock) { screens[id]?.let { it.lastUsedAtMs = nowMs } }
                 continue

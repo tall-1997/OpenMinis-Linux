@@ -1,5 +1,6 @@
 package com.openminis.app.ui.settings
 import com.openminis.app.ui.theme.m3Icon
+import com.openminis.app.ui.theme.IosGreen
 
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.foundation.clickable
@@ -101,7 +102,7 @@ fun KimiDeviceLoginDialog(
                             if (copied) m3Icon(m3Icon(Icons.Default.CheckCircle)) else m3Icon(m3Icon(Icons.Default.ContentCopy)),
                             contentDescription = stringResource(R.string.kimi_login_copy_code),
                             tint = if (copied) {
-                                androidx.compose.ui.graphics.Color(0xFF34C759)
+                                IosGreen
                             } else {
                                 MaterialTheme.colorScheme.onSurfaceVariant
                             },

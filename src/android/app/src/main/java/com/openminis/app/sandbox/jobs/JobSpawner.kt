@@ -27,7 +27,16 @@ object JobSpawner {
 
     private const val GUEST_JOBS_DIR = "/var/minis/workspace/tool-spill/jobs"
     private const val SPAWN_TIMEOUT_MS = 30_000L
-    private const val EXIT_POLL_MS = 500L
+
+    /**
+     * [T-android-jobs-await-backoff] Exit/liveness poll cadence: exponential
+     * backoff instead of a fixed 500ms sleep — 100ms start (a short job
+     * returns on the first or second check), x2 per round, capped at 1s. A
+     * long-running job no longer wakes the host twice a second for its whole
+     * lifetime; a dead shell is still noticed within one round of its death.
+     */
+    private const val AWAIT_POLL_INITIAL_MS = 100L
+    private const val AWAIT_POLL_CAP_MS = 1_000L
     private const val PID_MARKER = "MINIS_JOB_PID="
 
     /** Idempotent; call once after [ExecutionCoordinator.init]. */
@@ -76,10 +85,16 @@ object JobSpawner {
             override val outputGuestPath: String = guestLog
 
             override fun await(): Int {
+                // [T-android-jobs-await-backoff] Same checks as before (exit
+                // sidecar first, then shell liveness as the isAlive probe),
+                // but the sleep doubles each round from 100ms up to the 1s cap
+                // instead of a fixed 500ms spin.
+                var pollMs = AWAIT_POLL_INITIAL_MS
                 while (true) {
                     pollExitCode?.let { return it }
                     if (!ExecutionCoordinator.hasLiveShell(sessionId)) return -1
-                    Thread.sleep(EXIT_POLL_MS)
+                    Thread.sleep(pollMs)
+                    pollMs = (pollMs * 2).coerceAtMost(AWAIT_POLL_CAP_MS)
                 }
             }
 

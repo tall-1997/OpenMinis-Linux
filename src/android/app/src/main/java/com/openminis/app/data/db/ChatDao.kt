@@ -477,9 +477,6 @@ interface ChatDao : MessageHeadDao {
     )
     suspend fun rowsFrom(sessionId: String, cutoff: Int): List<MessageEntity>
 
-    @Query("SELECT COUNT(*) FROM messages")
-    suspend fun totalMessageCount(): Int
-
     @Query("SELECT token_usage FROM messages WHERE session_id = :sessionId AND token_usage IS NOT NULL")
     suspend fun tokenUsages(sessionId: String): List<String>
 
@@ -591,10 +588,6 @@ interface ChatDao : MessageHeadDao {
     @Query("UPDATE sessions SET source = :source WHERE id = :id")
     suspend fun updateSource(id: String, source: String?)
 
-    // Messages: increment stream_interrupt_count
-    @Query("UPDATE messages SET stream_interrupt_count = stream_interrupt_count + 1, updated_at = :updatedAt WHERE id = :id")
-    suspend fun incrementStreamInterruptCount(id: String, updatedAt: Long = System.currentTimeMillis())
-
     // Messages: rewrite a single row's parts_json in place. Mirrors iOS
     // ChatStore.updateMessageParts. Used by rerunFromToolBlock's block-
     // boundary cut: deleteMessagesAfter drops whole rows after the boundary,
@@ -617,9 +610,6 @@ interface ChatDao : MessageHeadDao {
         preview: String?,
         updatedAt: Long = System.currentTimeMillis(),
     )
-
-    @Query("SELECT substr(parts_json, :offset, :len) FROM messages WHERE id = :id")
-    suspend fun readPartsChunk(id: String, offset: Int, len: Int): String?
 
     @Query("SELECT id, body_bytes, body_ref FROM messages WHERE id = :id")
     suspend fun bodyMeta(id: String): MessageBodyMeta?
@@ -692,10 +682,6 @@ interface ChatDao : MessageHeadDao {
         )
     """)
     suspend fun updateLastAssistantError(sessionId: String, errorInfo: String?)
-
-    // Pinned sessions first, then by updated_at
-    @Query("SELECT * FROM sessions ORDER BY CASE WHEN pinned_at IS NOT NULL THEN 0 ELSE 1 END, pinned_at DESC, updated_at DESC")
-    fun observeSessionsSorted(): Flow<List<ChatSessionEntity>>
 
     // Compact markers — session-scoped archival summaries. "Append-only": rows
     // are never updated, only inserted and (on session delete) cascade-removed.

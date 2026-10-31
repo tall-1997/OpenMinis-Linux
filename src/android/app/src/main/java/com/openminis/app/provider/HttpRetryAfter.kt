@@ -97,15 +97,45 @@ object HttpRetryAfter {
      * the ChatViewModel classification site). This keeps "余额不足" from
      * burning the whole ladder on the last candidate while still switching
      * away immediately when a sibling is available.
+     *
+     * [P2-convergence] This is the SINGLE home of the "is this rejection
+     * permanent" body classification. [classifyCapacityBody] is the one
+     * internal entry point; the predicates below are its views, so a new
+     * marker lands in exactly one list and every consumer — 429 mapping,
+     * 503 mapping ([mapHttpErrorShared]), the ChatViewModel fallback decision —
+     * sees it the same way.
      */
-    fun isStrongCapacityBody(body: String): Boolean =
-        containsAny(body, STRONG_CAPACITY_MARKERS)
 
+    /** Verdict of [classifyCapacityBody] for one error body. */
+    internal enum class CapacityClass { STRONG, WEAK, NONE }
+
+    /**
+     * The shared capacity classifier. STRONG outranks WEAK (a body naming both
+     * an unambiguous quota statement and a short phrase is STRONG); NONE means
+     * nothing permanent was recognized and the usual retry ladder applies.
+     */
+    internal fun classifyCapacityBody(body: String): CapacityClass = when {
+        containsAny(body, STRONG_CAPACITY_MARKERS) -> CapacityClass.STRONG
+        containsAny(body, WEAK_CAPACITY_MARKERS) -> CapacityClass.WEAK
+        else -> CapacityClass.NONE
+    }
+
+    fun isStrongCapacityBody(body: String): Boolean =
+        classifyCapacityBody(body) == CapacityClass.STRONG
+
+    /**
+     * Kept as its own [containsAny] call on purpose, NOT as
+     * `classifyCapacityBody(...) == WEAK`: a STRONG body usually also contains
+     * a WEAK marker (e.g. "无可用渠道" contains "无可用"), and the historical
+     * contract of this predicate is "a WEAK marker is present", which the
+     * ChatViewModel tiering relies on. [classifyCapacityBody] exists for
+     * consumers that need the precedence-aware verdict.
+     */
     fun isWeakCapacityBody(body: String): Boolean =
         containsAny(body, WEAK_CAPACITY_MARKERS)
 
     fun isPermanentCapacityBody(body: String): Boolean =
-        isStrongCapacityBody(body) || isWeakCapacityBody(body)
+        classifyCapacityBody(body) != CapacityClass.NONE
 
     private fun containsAny(body: String, markers: List<String>): Boolean {
         if (body.isBlank()) return false

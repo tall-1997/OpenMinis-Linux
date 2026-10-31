@@ -11,6 +11,7 @@ import com.openminis.app.service.SessionConcurrencyManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.withContext
 
 /**
  * [T-android-rerun-from-tool-block-position] Shared streaming tail used by
@@ -52,7 +53,10 @@ internal suspend fun ChatViewModel.runRerunStreamTail(
         }
     }
 
-    val baseSystemPrompt = buildSystemPrompt()
+    // [P0-5] Prompt assembly does disk I/O (skills/MCP reloads, memory
+    // fragments) — keep it off the main dispatcher. All inputs are StateFlow
+    // reads / pure helpers; written fields are @Volatile.
+    val baseSystemPrompt = withContext(Dispatchers.Default) { buildSystemPrompt() }
     val systemPrompt = if ((provider as? com.openminis.app.provider.anthropic.AnthropicProvider)?.isOAuth == true) {
         val prefix = com.openminis.app.auth.ClaudeOAuthManager.ANTHROPIC_OAUTH_IDENTIFIER_PROMPT
         if (baseSystemPrompt?.startsWith(prefix) == true) baseSystemPrompt

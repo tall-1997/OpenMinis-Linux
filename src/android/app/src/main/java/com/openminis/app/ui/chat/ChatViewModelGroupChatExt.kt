@@ -573,9 +573,9 @@ internal suspend fun ChatViewModel.speakModel(
             val result = if (denied != null) {
                 ToolExecutionResult(denied, false)
             } else if (toolGate != null) {
-                toolGate.withLock { executeTool(name, args.toString(), "", mutableListOf(), "", "") }
+                toolGate.withLock { executeTool(name, args.toString(), "") }
             } else {
-                executeTool(name, args.toString(), "", mutableListOf(), "", "")
+                executeTool(name, args.toString(), "")
             }
             results += AgentContentPart.ToolResult(callId, name, result.output, isError = !result.success)
         }

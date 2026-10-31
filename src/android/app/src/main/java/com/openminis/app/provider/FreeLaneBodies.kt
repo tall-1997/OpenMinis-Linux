@@ -3,6 +3,45 @@ package com.openminis.app.provider
 import org.json.JSONObject
 
 /**
+ * One parsed Zen/OpenCode structured refusal:
+ * `{"type":"error","error":{"type":"FreeTierError"|…,"message":…}}`.
+ *
+ * [P2-convergence] Single parse for the two former readers — the free-lane
+ * classifier (via [FreeLaneBodies.errorType]) and the OpenAI chat error mapper
+ * (`zenStructuredProviderRefusal` in provider/openai) — so the envelope shapes
+ * they accept cannot drift apart. [envelopeType] is the OUTER `type` field
+ * ("" when the body did not arrive as a bare JSON object, e.g. an SSE frame);
+ * [errorType]/[errorMessage] come from the nested `error` object.
+ */
+internal data class ZenErrorBody(
+    val envelopeType: String,
+    val errorType: String,
+    val errorMessage: String,
+) {
+    companion object {
+        /**
+         * Null when [body] carries no structured `error` object in either
+         * spelling (bare JSON or SSE `data:` frame). Reads exactly what
+         * [FreeLaneBodies.errorObject] accepts, so the lane verdicts and the
+         * chat mapper see the same set of bodies.
+         */
+        fun parse(body: String): ZenErrorBody? {
+            val error = FreeLaneBodies.errorObject(body) ?: return null
+            return ZenErrorBody(
+                envelopeType = bareEnvelopeType(body),
+                errorType = error.optString("type"),
+                errorMessage = error.safeOptString("message"),
+            )
+        }
+
+        /** The outer `type` of the bare spelling; "" for SSE frames/unparseable bodies. */
+        private fun bareEnvelopeType(body: String): String = runCatching {
+            JSONObject(body).optString("type")
+        }.getOrDefault("")
+    }
+}
+
+/**
  * Reads a structured error out of a response body, in either spelling.
  *
  * Shared by every lane because the two spellings are a property of HTTP+SSE and
@@ -34,7 +73,7 @@ internal object FreeLaneBodies {
 
     /** The nested `error.type` — Zen's dialect word. */
     fun errorType(body: String): String? =
-        errorObject(body)?.optString("type")?.takeIf { it.isNotEmpty() }
+        ZenErrorBody.parse(body)?.errorType?.takeIf { it.isNotEmpty() }
 
     /** The nested `error.code` — Kilo's dialect word. */
     fun errorCode(body: String): String? =

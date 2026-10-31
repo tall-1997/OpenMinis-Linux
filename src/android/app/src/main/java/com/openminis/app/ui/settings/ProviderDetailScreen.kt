@@ -1,5 +1,7 @@
 package com.openminis.app.ui.settings
 import com.openminis.app.ui.theme.m3Icon
+import com.openminis.app.ui.theme.IosGreen
+import com.openminis.app.ui.theme.IosRed
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import com.openminis.app.ui.chat.ModelBrandIcon
@@ -46,7 +48,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -85,8 +86,7 @@ fun ProviderDetailScreen(
     val config by providerRepository.config.collectAsStateWithLifecycle()
     val instance = config.instances.find { it.id == instanceId }
     var showDeleteDialog by remember { mutableStateOf(false) }
-    // T143: long-press → confirm delete on a single model entry. Built-in
-    // entries (entry.isCustom == false) skip the gesture because the repo
+    // T143: long-press → confirm delete on a single model entry. Built-in entries (entry.isCustom == false) skip the gesture because the repo
     // re-creates them from ProviderType.builtInModels on next refresh anyway —
     // mirrors DebugProviderMutationMethods note "Built-in entries can't be
     // deleted — set isHidden=true instead".
@@ -866,7 +866,7 @@ private fun OAuthCredentialBlock(
                     .padding(horizontal = 8.dp)
                     .size(8.dp)
                     .background(
-                        if (needsReauth) Color(0xFFFF3B30) else Color(0xFF34C759),
+                        if (needsReauth) IosRed else IosGreen,
                         CircleShape,
                     ),
             )
@@ -1164,7 +1164,7 @@ private fun ManualBearerTokenSection(
                 modifier = Modifier
                     .padding(horizontal = 8.dp)
                     .size(8.dp)
-                    .background(Color(0xFF34C759), CircleShape),
+                    .background(IosGreen, CircleShape),
             )
         }
         Row(modifier = Modifier.padding(top = 8.dp)) {
@@ -1197,4 +1197,3 @@ private fun ManualBearerTokenSection(
         }
     }
 }
-

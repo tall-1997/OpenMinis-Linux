@@ -1,5 +1,6 @@
 package com.openminis.app.ui.settings
 
+import com.openminis.app.ui.theme.IosBlue
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -26,7 +27,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -46,7 +46,7 @@ import com.openminis.app.ui.components.openExternalUrl
 fun AboutScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
-    val tileBlue = Color(0xFF007AFF)
+    val tileBlue = IosBlue
     var commitCopied by remember { mutableStateOf(false) }
 
     SettingsScaffold(title = stringResource(R.string.about_title), onBack = onBack) {

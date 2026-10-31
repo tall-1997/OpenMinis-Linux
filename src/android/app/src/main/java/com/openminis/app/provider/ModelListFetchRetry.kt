@@ -90,6 +90,15 @@ object ModelListFetchRetry {
     /**
      * Pure decision for one attempt.
      *
+     * [P2-convergence] This is the STATUS-level permanence judgment; the
+     * BODY-level one lives in [HttpRetryAfter.classifyCapacityBody] (a 429/503
+     * body naming an unambiguous capacity/quota statement is permanent at the
+     * chat layer). Deliberately NOT merged: this loop classifies from the
+     * status code alone — reading bodies here would consume/pool-buffer the
+     * response the caller still needs, and a 429 body that says "permanent"
+     * returns the identical response either way, so only the retry count could
+     * change. That trade-off is recorded here rather than silently taken.
+     *
      * @param httpCode response status, or null when no response was produced
      * @param transportFailure true when the call threw before a response
      * @param attempt 1-based attempt counter
@@ -102,7 +111,8 @@ object ModelListFetchRetry {
         val cap = when {
             httpCode == 429 || httpCode in 500..599 -> MAX_ATTEMPTS
             httpCode == 401 || httpCode == 403 -> AUTH_ATTEMPTS
-            // 400/404/422/… : a repeat cannot produce a different answer.
+            // 400/404/422/… : a repeat cannot produce a different answer —
+            // the status analogue of HttpRetryAfter's STRONG capacity verdict.
             else -> 1
         }
         return if (attempt < cap) Verdict.RETRY else Verdict.FATAL

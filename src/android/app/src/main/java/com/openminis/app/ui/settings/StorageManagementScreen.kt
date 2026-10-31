@@ -49,6 +49,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import com.openminis.app.ui.theme.m3Icon
+import com.openminis.app.ui.theme.IosBlue
+import com.openminis.app.ui.theme.IosGray
+import com.openminis.app.ui.theme.IosIndigo
 
 private data class SessionStorageInfo(
     val id: String,
@@ -127,7 +130,7 @@ fun StorageManagementScreen(
     SettingsScaffold(title = stringResource(R.string.storage_title), onBack = null) {
         SettingsSection(header = stringResource(R.string.storage_section_overview)) {
             StorageOverviewRow(
-                color = Color(0xFF8E8E93),
+                color = IosGray,
                 label = stringResource(R.string.storage_overview_shell),
                 value = when {
                     shellScanning && shellSize > 0L ->
@@ -139,13 +142,13 @@ fun StorageManagementScreen(
                 showDivider = true,
             )
             StorageOverviewRow(
-                color = Color(0xFF007AFF),
+                color = IosBlue,
                 label = stringResource(R.string.storage_overview_database),
                 value = Formatter.formatFileSize(context, dbSize),
                 showDivider = true,
             )
             StorageOverviewRow(
-                color = Color(0xFF5856D6),
+                color = IosIndigo,
                 label = stringResource(R.string.storage_overview_sessions),
                 value = Formatter.formatFileSize(context, totalSessionSize),
                 showDivider = false,

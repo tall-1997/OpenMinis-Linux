@@ -204,6 +204,9 @@ object ChatViewModelStore {
         val key = resolveKey(sessionId)
         aliases.entries.removeAll { it.value == key }
         aliasGeneration.intValue++
+        // [P1-16] Evict the session's ui_read fingerprint alongside the VM —
+        // the map is process-level and this is the session-gone path.
+        evictUiReadFingerprints(key)
         models.remove(key)
         lastAccess.remove(key)
         mounted.remove(key)

@@ -25,7 +25,9 @@ object UiReadTool {
             "device accessibility tree (labels, texts, clickable nodes, positions). " +
             "Use together with android-a11y-cli in shell_execute to drive the system UI: " +
             "read screen → decide → tap/type → read again to verify. " +
-            "Requires Accessibility permission; returns a hint when missing.",
+            "Requires Accessibility permission; returns a hint when missing. " +
+            "Prefer the structured device tools (app_launch/app_open_link) when available; " +
+            "use open_app/open_url for accessibility-driven flows.",
         parameters = mapOf(
             "tool_title" to AgentToolParam("string", "A concise 5-10 word summary shown to the user, e.g. 'Read current screen'."),
             "max_chars" to AgentToolParam("integer", "Optional cap on returned characters (default 6000, max 12000)."),

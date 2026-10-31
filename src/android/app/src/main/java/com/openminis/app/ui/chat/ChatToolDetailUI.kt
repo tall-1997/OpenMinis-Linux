@@ -192,9 +192,7 @@ internal fun ToolDetailSheet(
 
                 Spacer(modifier = Modifier.weight(1f))
 
-                // [T-step-timestamp v3 aa8b1128] Sheet header reverted to a
-                // single-line title. The HH:mm:ss + duration line was moved
-                // out to the inline ToolCallPill's trailing column (under
+                // [T-step-timestamp v3 aa8b1128] Sheet header reverted to a single-line title. The HH:mm:ss + duration line was moved out to the inline ToolCallPill's trailing column (under
                 // the elapsed-duration text) so it sits next to where the
                 // user is already scanning timing info.
                 Text(
@@ -276,12 +274,8 @@ internal fun ToolDetailSheet(
                                     onOpenTerminalWithCommand(command)
                                 }
                             } else if (hasBrowserUrl) {
-                                // Mirror iOS ToolLiveSheet: nav-bar globe
-                                // routes back into the Session WebView pool
-                                // (BrowserTabPool.selectOrCreateTabForURL)
-                                // so an existing browser_use tab for this
-                                // URL is reused; otherwise a new tab is
-                                // spawned and loaded. Avoids dumping the
+                                // Mirror iOS ToolLiveSheet: nav-bar globe routes back into the Session WebView pool (BrowserTabPool.selectOrCreateTabForURL) so an existing browser_use tab for this
+                                // URL is reused; otherwise a new tab is spawned and loaded. Avoids dumping the
                                 // user into a system chooser for what is
                                 // already a live in-app browser session.
                                 AppLogger.info(
@@ -325,9 +319,28 @@ internal fun ToolDetailSheet(
 
             // ── Content Area (iOS: tool-specific rendering) ──
             val outputScrollState = rememberScrollState()
-            val toolArgsObj = remember(block.toolArgs) {
-                try { org.json.JSONObject(block.toolArgs) } catch (_: Exception) { org.json.JSONObject() }
+            // [P1-21] One-shot args resolution per toolArgs change: the JSONObject parse AND the streaming partial-JSON fallbacks for every key the branches below need were previously re-run on
+            // each recomposition (the `.ifEmpty { extractPartialJsonString… }` chains). Resolving them here inside the same remember makes
+            // them allocation-once per args buffer; values are pure functions
+            // of block.toolArgs, so this is byte-equivalent.
+            val toolArgsResolved = remember(block.toolArgs) {
+                val obj = try {
+                    org.json.JSONObject(block.toolArgs)
+                } catch (_: Exception) {
+                    org.json.JSONObject()
+                }
+                fun res(key: String): String =
+                    obj.optString(key, "").ifEmpty { extractPartialJsonString(key, block.toolArgs) ?: "" }
+                ToolArgsResolved(
+                    obj = obj,
+                    path = res("path"),
+                    oldString = res("old_string"),
+                    newString = res("new_string"),
+                    content = res("content"),
+                    keywords = res("keywords"),
+                )
             }
+            val toolArgsObj = toolArgsResolved.obj
 
             // [G-batch tool cards] Dual-channel result cards: derived at render
             // time from (toolName, args, result text) by cards/CardDerivers.kt —
@@ -368,17 +381,10 @@ internal fun ToolDetailSheet(
                                 .padding(horizontal = 12.dp)
                                 .padding(top = 12.dp, bottom = 16.dp),
                         ) {
-                            // T177 / T179: card grows from a 4:3 floor and
-                            // fills the surrounding weight(1f) Box so the
-                            // footer sits directly beneath it. The outer
-                            // ModalBottomSheet column is already clamped at
-                            // 0.85f viewport, so the card's effective max
-                            // height is automatically the sheet body minus
-                            // header + footer — no separate cardMaxHeight
-                            // cap needed (and a 55%-screen cap was actively
-                            // wrong: it left a ~200dp gray gap between the
-                            // card's bottom edge and the footer Column on
-                            // tall devices, which is the T179 user report).
+                            // T177 / T179: card grows from a 4:3 floor and fills the surrounding weight(1f) Box so the footer sits directly beneath it. The outer
+                            // ModalBottomSheet column is already clamped at 0.85f viewport, so the card's effective max height is automatically the sheet body minus
+                            // header + footer — no separate cardMaxHeight cap needed (and a 55%-screen cap was actively wrong: it left a ~200dp gray gap between the
+                            // card's bottom edge and the footer Column on tall devices, which is the T179 user report).
                             // Internal verticalScroll takes over once the
                             // command + output exceed the card height.
                             val cardMinHeight = maxWidth * 3f / 4f
@@ -400,55 +406,50 @@ internal fun ToolDetailSheet(
                                         shape = RoundedCornerShape(10.dp),
                                     ),
                             ) {
-                                // T193 (supersedes T191): nested SelectionContainer
-                                // gives shell output its own SelectionRegistrar so a
-                                // long-press inside the ToolLiveSheet copy stays within
-                                // this subtree (no cross-tree findCommonAncestor crash)
-                                // while still letting the user select / copy command
-                                // output and the linkified URLs inside it.
-                                androidx.compose.foundation.text.selection.SelectionContainer {
-                                    Column(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .verticalScroll(outputScrollState)
-                                            .padding(14.dp)
-                                            .padding(bottom = hudReservePadding),
-                                    ) {
+                                // [P1-14] Plain text — no SelectionContainer here. This whole subtree lives inside the ToolDetailSheet ModalBottomSheet (its own
+                                // window/composition, hoisted out of the chat LazyColumn), so there is no outer chat-list registrar to conflict with and the
+                                // T193 nested-container rationale no longer applies. The sheet header carries a dedicated copy action for the output, and a
+                                // selection container would only fight the linkified URLs and the
+                                // pinned HUD for gestures.
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .verticalScroll(outputScrollState)
+                                        .padding(14.dp)
+                                        .padding(bottom = hudReservePadding),
+                                ) {
+                                    Text(
+                                        text = "$ $command",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = FontFamily.Monospace,
+                                        color = Color.White,
+                                        lineHeight = 18.sp,
+                                    )
+                                    if (block.content.isNotEmpty()) {
+                                        // T38: linkify http/https URLs in shell output so the user can
+                                        // tap them to open the in-app web preview (matches iOS
+                                        // TerminalCanvasView.addURLLinks → MinisOpenURLBroker).
+                                        val urlClick = LocalMarkdownUrlClickHandler.current
+                                        val linkified = remember(block.content, urlClick) {
+                                            if (urlClick != null) {
+                                                com.openminis.app.ui.util.linkifyUrls(
+                                                    text = block.content,
+                                                    onClick = urlClick,
+                                                    linkColor = Color(0xFF7CC4FF), // light blue on dark terminal bg
+                                                )
+                                            } else androidx.compose.ui.text.AnnotatedString(block.content)
+                                        }
                                         Text(
-                                            text = "$ $command",
+                                            text = linkified,
                                             fontSize = 13.sp,
-                                            fontWeight = FontWeight.Bold,
                                             fontFamily = FontFamily.Monospace,
-                                            color = Color.White,
+                                            color = Color(0xFF34C759),  // iOS .green
                                             lineHeight = 18.sp,
                                         )
-                                        if (block.content.isNotEmpty()) {
-                                            // T38: linkify http/https URLs in shell output so the user can
-                                            // tap them to open the in-app web preview (matches iOS
-                                            // TerminalCanvasView.addURLLinks → MinisOpenURLBroker).
-                                            val urlClick = LocalMarkdownUrlClickHandler.current
-                                            val linkified = remember(block.content, urlClick) {
-                                                if (urlClick != null) {
-                                                    com.openminis.app.ui.util.linkifyUrls(
-                                                        text = block.content,
-                                                        onClick = urlClick,
-                                                        linkColor = Color(0xFF7CC4FF), // light blue on dark terminal bg
-                                                    )
-                                                } else androidx.compose.ui.text.AnnotatedString(block.content)
-                                            }
-                                            Text(
-                                                text = linkified,
-                                                fontSize = 13.sp,
-                                                fontFamily = FontFamily.Monospace,
-                                                color = Color(0xFF34C759),  // iOS .green
-                                                lineHeight = 18.sp,
-                                            )
-                                        }
                                     }
                                 }
-                                // T141 / T173 / T177: live CPU/MEM HUD ribbon
-                                // overlaid on the card's bottom edge, *outside*
-                                // the verticalScroll so it stays pinned even
+                                // T141 / T173 / T177: live CPU/MEM HUD ribbon overlaid on the card's bottom edge, *outside* the verticalScroll so it stays pinned even
                                 // when the command/output content scrolls.
                                 // Mirrors iOS ToolLiveSheet.swift L1523
                                 // `.overlay(alignment: .bottom)`.
@@ -489,13 +490,10 @@ internal fun ToolDetailSheet(
                     // footer once the tool finishes. minHeight=cardWidth × 3/4 keeps
                     // small diffs from collapsing into a thin stripe.
                     "file_edit" -> {
-                        val path = toolArgsObj.optString("path", "")
-                            .ifEmpty { extractPartialJsonString("path", block.toolArgs) ?: "" }
+                        val path = toolArgsResolved.path
                         val fileName = if (path.contains("/")) path.substringAfterLast("/") else path
-                        val oldStr = toolArgsObj.optString("old_string", "")
-                            .ifEmpty { extractPartialJsonString("old_string", block.toolArgs) ?: "" }
-                        val newStr = toolArgsObj.optString("new_string", "")
-                            .ifEmpty { extractPartialJsonString("new_string", block.toolArgs) ?: "" }
+                        val oldStr = toolArgsResolved.oldString
+                        val newStr = toolArgsResolved.newString
 
                         // T126-fix: ChatPalette.isDark follows the in-app theme
                         // override, isSystemInDarkTheme() doesn't.
@@ -582,47 +580,45 @@ internal fun ToolDetailSheet(
                                 HorizontalDivider(thickness = 0.5.dp, color = cardBorder)
 
                                 // Diff ribbon — scrollable body, zero inter-line spacing.
-                                // T193 (supersedes T191): nested SelectionContainer scopes
-                                // the diff lines into their own SelectionRegistrar so a
-                                // long-press inside the ToolLiveSheet copy can't walk back
-                                // to the outer chat-list container and trip
-                                // findCommonAncestor. Users can select / copy + / - lines.
-                                androidx.compose.foundation.text.selection.SelectionContainer {
-                                    Column(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .verticalScroll(outputScrollState),
-                                        verticalArrangement = Arrangement.spacedBy(0.dp),
-                                    ) {
-                                        if (oldStr.isNotEmpty()) {
-                                            oldStr.lines().forEach { line ->
-                                                Text(
-                                                    text = "- $line",
-                                                    fontSize = 13.sp,
-                                                    fontFamily = FontFamily.Monospace,
-                                                    color = redText,
-                                                    lineHeight = 17.sp,
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .background(redBg)
-                                                        .padding(horizontal = 14.dp, vertical = 2.dp),
-                                                )
-                                            }
+                                // [P1-14] Plain diff lines — no SelectionContainer (see the shell
+                                // branch above): the sheet renders in an isolated
+                                // ModalBottomSheet window and has its own copy affordances, so
+                                // nested text selection is unnecessary and would only compete
+                                // with the scroll gesture.
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .verticalScroll(outputScrollState),
+                                    verticalArrangement = Arrangement.spacedBy(0.dp),
+                                ) {
+                                    if (oldStr.isNotEmpty()) {
+                                        oldStr.lines().forEach { line ->
+                                            Text(
+                                                text = "- $line",
+                                                fontSize = 13.sp,
+                                                fontFamily = FontFamily.Monospace,
+                                                color = redText,
+                                                lineHeight = 17.sp,
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .background(redBg)
+                                                    .padding(horizontal = 14.dp, vertical = 2.dp),
+                                            )
                                         }
-                                        if (newStr.isNotEmpty()) {
-                                            newStr.lines().forEach { line ->
-                                                Text(
-                                                    text = "+ $line",
-                                                    fontSize = 13.sp,
-                                                    fontFamily = FontFamily.Monospace,
-                                                    color = greenText,
-                                                    lineHeight = 17.sp,
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .background(greenBg)
-                                                        .padding(horizontal = 14.dp, vertical = 2.dp),
-                                                )
-                                            }
+                                    }
+                                    if (newStr.isNotEmpty()) {
+                                        newStr.lines().forEach { line ->
+                                            Text(
+                                                text = "+ $line",
+                                                fontSize = 13.sp,
+                                                fontFamily = FontFamily.Monospace,
+                                                color = greenText,
+                                                lineHeight = 17.sp,
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .background(greenBg)
+                                                    .padding(horizontal = 14.dp, vertical = 2.dp),
+                                            )
                                         }
                                     }
                                 }
@@ -674,13 +670,10 @@ internal fun ToolDetailSheet(
 
                     // ── File Read / File Write: editor-style with title bar (mirrors iOS fileEditorContent) ──
                     "file_read", "file_write" -> {
-                        val path = toolArgsObj.optString("path", "")
-                            .ifEmpty { extractPartialJsonString("path", block.toolArgs) ?: "" }
+                        val path = toolArgsResolved.path
                         val fileName = if (path.contains("/")) path.substringAfterLast("/") else path
                         val displayText = if (block.toolName == "file_write") {
-                            toolArgsObj.optString("content", "")
-                                .ifEmpty { extractPartialJsonString("content", block.toolArgs) ?: "" }
-                                .ifEmpty { block.content }
+                            toolArgsResolved.content.ifEmpty { block.content }
                         } else {
                             block.content
                         }
@@ -888,14 +881,11 @@ internal fun ToolDetailSheet(
                         // memory_write: content comes from tool args.
                         // memory_get: content comes from the tool's result text.
                         val memContent = if (block.toolName == "memory_write") {
-                            toolArgsObj.optString("content", "")
-                                .ifEmpty { extractPartialJsonString("content", block.toolArgs) ?: "" }
-                                .ifEmpty { block.content }
+                            toolArgsResolved.content.ifEmpty { block.content }
                         } else {
                             block.content
                         }
-                        val keywords = toolArgsObj.optString("keywords", "")
-                            .ifEmpty { extractPartialJsonString("keywords", block.toolArgs) ?: "" }
+                        val keywords = toolArgsResolved.keywords
                         val prefix = if (keywords.isNotEmpty() && block.toolName == "memory_get")
                             "Keywords: $keywords\n\n" else ""
                         EditorCard(
@@ -982,17 +972,16 @@ internal fun ToolDetailSheet(
                                 // that route through the in-app web preview.
                                 // [T-android-tool-result-lazy-render] Reveal large
                                 // generic output incrementally (LazyRevealToolText
-                                // handles the linkify + reveal window); wrap in a
-                                // SelectionContainer so the revealed text stays
-                                // selectable/copyable (it wasn't before).
-                                androidx.compose.foundation.text.selection.SelectionContainer {
-                                    LazyRevealToolText(
-                                        bodyText = block.content,
-                                        color = ChatColors.primaryText,
-                                        scrollState = outputScrollState,
-                                        linkify = true,
-                                    )
-                                }
+                                // handles the linkify + reveal window).
+                                // [P1-14] No SelectionContainer (see the shell branch
+                                // above): isolated sheet window + the header's dedicated
+                                // copy action make nested text selection unnecessary.
+                                LazyRevealToolText(
+                                    bodyText = block.content,
+                                    color = ChatColors.primaryText,
+                                    scrollState = outputScrollState,
+                                    linkify = true,
+                                )
                             }
                         } else {
                             Box(
@@ -1210,10 +1199,11 @@ internal fun ToolDetailSheet(
 // lines / 10KB, whichever is fewer), growing the window each time the user
 // reaches the bottom (auto-bump on the footer's onGloballyPositioned) or taps
 // "Load more" / "Load all". Only the revealed Texts are composed, so open is
-// cheap regardless of total size. Still scrollable and still selectable —
-// rendered inside the caller's SelectionContainer; the reveal window's Texts
-// register with the same plain-Compose SelectionRegistrar (NOT MinisTextKit,
-// which is the chat-list markdown layer and isn't involved here).
+// cheap regardless of total size. Still scrollable. [P1-14] No longer
+// wrapped in a SelectionContainer: every call site renders inside the
+// ToolDetailSheet's isolated window, where the header's dedicated copy
+// action covers copying (NOT MinisTextKit, which is the chat-list markdown
+// layer and isn't involved here).
 
 private const val LAZY_TOOL_CHUNK_LINES = 40
 private const val LAZY_TOOL_INITIAL_CHUNKS = 5            // ~200 lines
@@ -1257,7 +1247,8 @@ private fun initialRevealChunks(chunks: List<String>): Int {
  * Builds the revealed prefix as ONE AnnotatedString (optionally linkified) so
  * selection/copy spans the whole revealed window as a single contiguous Text,
  * then a "Load more / Load all" footer. Caller supplies the surrounding
- * verticalScroll (passed in as [scrollState]) + SelectionContainer.
+ * verticalScroll (passed in as [scrollState]). [P1-14] Callers no longer wrap
+ * this in a SelectionContainer — see the shell branch note in ToolDetailSheet.
  *
  * Auto-reveal is gated on the scroll position reaching the bottom — NOT on the
  * footer being positioned. The body lives inside a `verticalScroll` Column,
@@ -1424,30 +1415,22 @@ private fun EditorCard(
 
             // Body
             if (bodyText.isNotEmpty()) {
-                // T193 (supersedes T191): EditorCard renders both inline in
-                // the chat LazyColumn (wrapped in SelectionContainer at L1519)
-                // AND inside the ToolLiveSheet ModalBottomSheet — two
-                // independent Compose subtrees. T191 used DisableSelection to
-                // dodge the cross-tree `findCommonAncestor` crash but lost
-                // the ability to select text. A nested SelectionContainer
-                // creates its own SelectionRegistrar; Texts inside it register
-                // there instead of the outer chat-list registrar, so the
-                // selection toolbar's coordinate walk stays within this
-                // subtree and never tries to span two hierarchies — both
-                // instances are crash-safe and individually selectable.
-                androidx.compose.foundation.text.selection.SelectionContainer {
-                    // [T-android-tool-result-lazy-render] Reveal large bodies
-                    // incrementally instead of laying the whole string out on
-                    // open (a 70KB memory_get janked the sheet for seconds).
-                    LazyRevealToolText(
-                        bodyText = bodyText,
-                        color = bodyColor,
-                        scrollState = scrollState,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 14.dp),
-                    )
-                }
+                // [P1-14] Plain body — no SelectionContainer. EditorCard renders only
+                // inside the ToolDetailSheet ModalBottomSheet (own window, hoisted out
+                // of the chat LazyColumn), so the T193 cross-tree findCommonAncestor
+                // rationale no longer applies and the sheet header's copy action
+                // covers copying.
+                // [T-android-tool-result-lazy-render] Reveal large bodies
+                // incrementally instead of laying the whole string out on
+                // open (a 70KB memory_get janked the sheet for seconds).
+                LazyRevealToolText(
+                    bodyText = bodyText,
+                    color = bodyColor,
+                    scrollState = scrollState,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 14.dp),
+                )
             } else if (isStreaming) {
                 Box(
                     modifier = Modifier
@@ -1474,3 +1457,18 @@ private fun EditorCard(
         }
     }
 }
+
+/**
+ * [P1-21] One-shot resolution of the tool args plus the streaming
+ * partial-JSON fallbacks for every key the sheet branches render. Computed
+ * once per [AssistantBlock.toolArgs] change inside the ToolDetailSheet's
+ * remember; see the note at the remember site.
+ */
+private data class ToolArgsResolved(
+    val obj: org.json.JSONObject,
+    val path: String,
+    val oldString: String,
+    val newString: String,
+    val content: String,
+    val keywords: String,
+)

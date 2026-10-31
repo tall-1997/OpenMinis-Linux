@@ -29,6 +29,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.openminis.app.data.repository.SkillRepository
 import com.openminis.app.ui.theme.m3Icon
+import com.openminis.app.ui.theme.IosBlue
+import com.openminis.app.ui.theme.IosGreen
+import com.openminis.app.ui.theme.IosOrange
+import com.openminis.app.ui.theme.IosPurple
 
 /**
  * Shared list row for a single skill — used by both [SkillsManagementScreen]
@@ -128,8 +132,8 @@ fun SkillRowItem(
  * stay consistent between Settings and the in-chat sheet.
  */
 fun sourceIconAndColor(source: SkillRepository.ImportSource): Pair<ImageVector, Color> = when (source) {
-    SkillRepository.ImportSource.URL -> Icons.Default.Link to Color(0xFF007AFF)
-    SkillRepository.ImportSource.FILE -> Icons.Outlined.Description to Color(0xFFFF9500)
-    SkillRepository.ImportSource.BUNDLED -> Icons.Default.Inventory2 to Color(0xFF34C759)
-    SkillRepository.ImportSource.SESSION -> Icons.Outlined.ChatBubble to Color(0xFFAF52DE)
+    SkillRepository.ImportSource.URL -> Icons.Default.Link to IosBlue
+    SkillRepository.ImportSource.FILE -> Icons.Outlined.Description to IosOrange
+    SkillRepository.ImportSource.BUNDLED -> Icons.Default.Inventory2 to IosGreen
+    SkillRepository.ImportSource.SESSION -> Icons.Outlined.ChatBubble to IosPurple
 }

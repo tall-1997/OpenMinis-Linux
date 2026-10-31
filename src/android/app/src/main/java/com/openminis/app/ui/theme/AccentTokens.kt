@@ -5,6 +5,33 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
+// ═══════════════════════════════════════════════════════════════════════════
+// [T-android-color-contract] THE APP HAS THREE COLOR SYSTEMS. READ EXACTLY ONE.
+//
+//   1. MaterialTheme.colorScheme  (Theme.kt Light/DarkColorScheme + the
+//      wallpaper-derived dynamic scheme)  →  general app chrome: bars, cards,
+//      buttons, surfaces. Read via MaterialTheme.colorScheme.* only.
+//
+//   2. ChatPalette  (ChatColors.kt, LocalChatPalette)  →  chat surfaces and
+//      anything that must follow the IN-APP theme override (theme_mode pref)
+//      rather than the OS setting: bubbles, composer, tool cards, syntax
+//      colors. Read via ChatColors / LocalChatPalette only.
+//
+//   3. AccentTokens  (this file)  →  hand-tuned iOS-parity decorative accents
+//      (settings menu tiles, session category circles, folder glyphs). Read
+//      via the NAMED tokens below (IosBlue, IosGreen, …) — never a raw
+//      Color(0xFF…) literal — so the [monetAccentTiles] bridge can restyle
+//      them when dynamic color is ON.
+//
+// CONTRACT FOR NEW CODE: do not hardcode new static colors outside these
+// systems. A fresh Color(0xFF…) literal in a screen is a bug on three axes —
+// it ignores dark mode, ignores the in-app theme override, and opts out of
+// dynamic color. Pick the system by what the surface is (chrome → 1, chat /
+// theme-following → 2, decorative accent → 3); if none fits, the default is
+// MaterialTheme.colorScheme. Raw literals survive ONLY inside the three
+// definition files themselves (Theme.kt, ChatColors.kt, AccentTokens.kt).
+// ═══════════════════════════════════════════════════════════════════════════
+
 // [T-android-dynamic-accent-icons] The single accent bridge between the
 // hand-tuned iOS-parity chrome accents and the wallpaper scheme. Every icon
 // decoration that used to hardcode an iOS system color — the settings menu's
@@ -23,6 +50,20 @@ import androidx.compose.ui.graphics.Color
 // same `chat.dynamicColor` pref the AppearanceScreen toggle writes — this file
 // is the reader, not a second truth source.
 
+// [v3-P2-5] Named iOS system palette tokens — the single source the settings
+// chrome's row icon colors / content colors reference (instead of each screen
+// repeating a Color(0xFF...) literal) and from which the dynamic-accent table
+// below is built. Declare BEFORE monetAccentTiles so the table initializer
+// sees them.
+val IosBlue = Color(0xFF007AFF)
+val IosGreen = Color(0xFF34C759)
+val IosOrange = Color(0xFFFF9500)
+val IosIndigo = Color(0xFF5856D6)
+val IosPurple = Color(0xFFAF52DE)
+val IosTeal = Color(0xFF30B0C7)
+val IosRed = Color(0xFFFF3B30)
+val IosGray = Color(0xFF8E8E93)
+
 // Accent hues that follow the wallpaper when dynamic color is on. The first
 // block is the iOS system palette the settings chrome was tuned against; the
 // rest is the session category palette (SessionListScreen.categoryStyle), so
@@ -30,12 +71,12 @@ import androidx.compose.ui.graphics.Color
 // Red (destructive) and systemGray (neutral/informational) deliberately stay
 // static: their hue IS the message.
 internal val monetAccentTiles = setOf(
-    Color(0xFF007AFF), // iOS systemBlue / session writing + education
-    Color(0xFF34C759), // iOS systemGreen / session chat
-    Color(0xFFFF9500), // iOS systemOrange / session paused-badge family
-    Color(0xFF5856D6), // iOS indigo / session analysis
-    Color(0xFFAF52DE), // iOS purple
-    Color(0xFF30B0C7), // iOS teal / session research
+    IosBlue,           // iOS systemBlue / session writing + education
+    IosGreen,          // iOS systemGreen / session chat
+    IosOrange,         // iOS systemOrange / session paused-badge family
+    IosIndigo,         // iOS indigo / session analysis
+    IosPurple,         // iOS purple
+    IosTeal,           // iOS teal / session research
     Color(0xFF5AC8FA), // iOS light teal
     Color(0xFFF09A37), // session code + travel orange
     Color(0xFF3478F6), // session writing + education blue

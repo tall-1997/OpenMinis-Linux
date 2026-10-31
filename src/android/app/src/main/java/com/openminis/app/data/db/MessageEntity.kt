@@ -21,7 +21,18 @@ object PersistedMessageStatus {
             onDelete = ForeignKey.CASCADE,
         )
     ],
-    indices = [Index(value = ["session_id", "sort_order"], unique = true)]
+    indices = [
+        Index(value = ["session_id", "sort_order"], unique = true),
+        // [T-android-messages-role-time-index] v24. Composite, not a lone
+        // `created_at`: the only cross-session query over this table is
+        // ChatDao.loadUserMessagesSince (`WHERE role = 'user' AND
+        // created_at > :since ORDER BY created_at ASC LIMIT :limit`), which
+        // equality-filters on role then range-scans created_at — exactly the
+        // (role, created_at) shape. A lone created_at index would also be
+        // scanned for every non-user row; every per-session query is already
+        // served by the (session_id, sort_order) prefix.
+        Index(value = ["role", "created_at"]),
+    ]
 )
 data class MessageEntity(
     @PrimaryKey val id: String,

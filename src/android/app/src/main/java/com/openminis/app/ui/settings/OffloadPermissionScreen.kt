@@ -1,5 +1,8 @@
 package com.openminis.app.ui.settings
 
+import com.openminis.app.ui.theme.IosGreen
+import com.openminis.app.ui.theme.IosOrange
+import com.openminis.app.ui.theme.IosPurple
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -179,7 +182,7 @@ fun OffloadPermissionScreen(
         // deeplink back to the OS settings page that fixes it.
         IntegrationSection(
             iconVector = Icons.Outlined.Accessibility,
-            iconTint = Color(0xFF34C759),
+            iconTint = IosGreen,
             sectionHeaderRes = R.string.perm_section_a11y,
             sectionFooterRes = R.string.perm_a11y_section_footer,
             toolName = "a11y_cli",
@@ -261,7 +264,7 @@ fun OffloadPermissionScreen(
 
         IntegrationSection(
             iconVector = Icons.Outlined.Security,
-            iconTint = Color(0xFFFF9500),
+            iconTint = IosOrange,
             sectionHeaderRes = R.string.perm_section_host_su,
             sectionFooterRes = R.string.perm_host_su_section_footer,
             toolName = "su_cli",
@@ -277,7 +280,7 @@ fun OffloadPermissionScreen(
 
         IntegrationSection(
             iconVector = Icons.Outlined.Shield,
-            iconTint = Color(0xFFAF52DE),
+            iconTint = IosPurple,
             // [T-android-privileged-backend] One section covers both Shizuku
             // and AXManager (they share the same binder slot + protocol);
             // toolName stays "shizuku_cli" so user authz is preserved.

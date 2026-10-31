@@ -56,7 +56,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
@@ -70,10 +69,15 @@ import com.openminis.app.R
 import com.openminis.app.data.MountedFoldersStore
 import com.openminis.app.data.SafMountHelper
 import com.openminis.app.ui.components.DialogTextField
+import com.openminis.app.ui.components.EmptyStateHint
 import kotlinx.coroutines.launch
 import com.openminis.app.i18n.uppercaseForDisplay
 import com.openminis.app.ui.theme.m3Icon
 import com.openminis.app.ui.theme.monetIconTint
+import com.openminis.app.ui.theme.IosBlue
+import com.openminis.app.ui.theme.IosGreen
+import com.openminis.app.ui.theme.IosOrange
+import com.openminis.app.ui.theme.IosPurple
 
 /**
  * Settings → Mount External Folders. Mirrors iOS MountedFoldersSettingsView.
@@ -236,7 +240,14 @@ fun MountedFoldersScreen(
             }
 
             if (entries.isEmpty()) {
-                EmptyState()
+                // [v3-P2-4] Shared empty-state hint; m3Icon resolved at the call
+                // site so the component stays icon-pass-through.
+                EmptyStateHint(
+                    icon = m3Icon(Icons.Outlined.FolderShared),
+                    text = stringResource(R.string.mount_folders_empty_title),
+                    subText = stringResource(R.string.mount_folders_empty_subtitle),
+                    iconSize = 48.dp,
+                )
             } else {
                 ListHeader(count = entries.size, atCapacity = isAtCapacity)
                 LazyColumn(
@@ -284,7 +295,7 @@ fun MountedFoldersScreen(
                         item {
                             Text(
                                 text = stringResource(R.string.mount_folders_limit_reached),
-                                color = Color(0xFFFF9500),
+                                color = IosOrange,
                                 style = MaterialTheme.typography.bodySmall,
                                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
                             )
@@ -456,35 +467,6 @@ private fun checkAllFilesAccess(context: android.content.Context): Boolean {
 }
 
 @Composable
-private fun EmptyState() {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Icon(
-            imageVector = m3Icon(Icons.Outlined.FolderShared),
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(48.dp),
-        )
-        Spacer(Modifier.height(12.dp))
-        Text(
-            text = stringResource(R.string.mount_folders_empty_title),
-            style = MaterialTheme.typography.titleMedium,
-        )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            text = stringResource(R.string.mount_folders_empty_subtitle),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-@Composable
 private fun ListHeader(count: Int, atCapacity: Boolean) {
     Row(
         modifier = Modifier
@@ -502,7 +484,7 @@ private fun ListHeader(count: Int, atCapacity: Boolean) {
         Text(
             text = "$count / ${MountedFoldersStore.MAX_MOUNTS}",
             style = MaterialTheme.typography.labelSmall,
-            color = if (atCapacity) Color(0xFFFF9500) else MaterialTheme.colorScheme.onSurfaceVariant,
+            color = if (atCapacity) IosOrange else MaterialTheme.colorScheme.onSurfaceVariant,
             fontFamily = FontFamily.Monospace,
         )
     }
@@ -523,7 +505,7 @@ private fun MountRow(
         Icon(
             imageVector = m3Icon(Icons.Outlined.Folder),
             contentDescription = null,
-            tint = monetIconTint(Color(0xFF007AFF)), // [T-android-dynamic-accent-icons]
+            tint = monetIconTint(IosBlue), // [T-android-dynamic-accent-icons]
             modifier = Modifier.size(28.dp),
         )
         Spacer(Modifier.width(12.dp))
@@ -571,9 +553,9 @@ private fun MountRow(
 @Composable
 private fun AccessBadge(entry: MountedFoldersStore.Entry) {
     val (text, color) = when {
-        !entry.isWritable -> stringResource(R.string.mount_badge_readonly) to Color(0xFFFF9500)
-        !entry.userAllowWrite -> stringResource(R.string.mount_badge_locked) to Color(0xFFAF52DE)
-        else -> stringResource(R.string.mount_badge_rw) to Color(0xFF34C759)
+        !entry.isWritable -> stringResource(R.string.mount_badge_readonly) to IosOrange
+        !entry.userAllowWrite -> stringResource(R.string.mount_badge_locked) to IosPurple
+        else -> stringResource(R.string.mount_badge_rw) to IosGreen
     }
     Surface(
         shape = RoundedCornerShape(8.dp),

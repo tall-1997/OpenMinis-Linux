@@ -228,6 +228,41 @@ object SessionBadgeStore {
      * Only touches [PAUSED]; other queued states are left intact. Mirrors iOS
      * SessionBadgeStore.reconcileInterruptedSessions.
      */
+    /**
+     * [T-android-paused-badge-reconcile-single-source] THE one reconcile entry
+     * point for "PAUSED badges vs the DB tail". MinisApp used to carry two
+     * byte-identical copies of the read-DB → subtract-active → reconcile
+     * sequence (one at cold start, one on every background→foreground
+     * transition); both now call this. Suspending — it does one DAO read and
+     * is meant to be invoked from Dispatchers.IO.
+     *
+     * Resolves the interrupted set through [MinisApp.chatRepositoryOrNull] so
+     * safe-mode / degraded processes (repositories never assigned) reconcile
+     * with an empty set — which is the no-op for the badge store, not a
+     * wipe-all (reconcile only ADDS/REMOVES [PAUSED] against real ids).
+     *
+     * @param app any Context; the application context is used.
+     */
+    suspend fun reconcileFromDb(app: Context) {
+        val interrupted = readInterruptedFromDb(app)
+        reconcileFromDb(interrupted, SessionActivityTracker.activeSessions.value)
+    }
+
+    /**
+     * Pure core of [reconcileFromDb]: interrupted minus active, then the
+     * standard reconcile. internal + parameterized so the "active session is
+     * never flagged paused" rule is unit-testable without a MinisApp.
+     */
+    internal fun reconcileFromDb(interrupted: Set<String>, active: Set<String>) {
+        reconcileInterruptedSessions(interrupted - active)
+    }
+
+    private suspend fun readInterruptedFromDb(app: Context): Set<String> =
+        (app.applicationContext as? com.openminis.app.MinisApp)
+            ?.chatRepositoryOrNull
+            ?.let { repo -> runCatching { repo.interruptedSessionIds() }.getOrElse { emptySet() } }
+            ?: emptySet()
+
     fun reconcileInterruptedSessions(interruptedIds: Set<String>) {
         mutate { current ->
             val next = current.toMutableMap()

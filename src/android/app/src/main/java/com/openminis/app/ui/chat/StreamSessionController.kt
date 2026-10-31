@@ -8,6 +8,26 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
 /**
+ * [P1-12] Incremental side-channel publish switch.
+ *
+ * When true (default), a delta whose tool blocks are element-wise UNCHANGED
+ * since the previously published delta (the "pure text append, no tool-block
+ * interleaving" case) reuses the already-published immutable block list
+ * instead of snapshotting the caller's list twice per publish (once here,
+ * once more inside [publish] and again in the SnapshotMutableStateFlow
+ * boundary). The published [StreamingDelta] is byte-for-byte identical:
+ * element-wise-equal data-class instances and equal-content lists produce
+ * equal values, and all reused lists are unmodifiable snapshots.
+ *
+ * Set to false to restore the previous full-snapshot path verbatim (one-line
+ * rollback); with the switch off every code path below behaves exactly as
+ * before the optimization. A @Volatile var (not a const) so the equivalence
+ * test can exercise both paths in one process; production never writes it.
+ */
+@Volatile
+internal var STREAM_INCREMENTAL_PUBLISH = true
+
+/**
  * Owns the streaming side-channel + dual-path flush that used to live inside
  * [ChatViewModel]. Behavior is unchanged: live tokens write [_streamingById],
  * canonical [_messages] is only mutated on structural/error/end paths.
@@ -105,7 +125,24 @@ internal class StreamSessionController(
         // clear the side-channel entry so post-turn reads (history rebuild,
         // persist, agent loop) see the canonical truth.
         if (isStreaming) {
-            val toolBlocksImmutable = snapshotAssistantBlocks(toolBlocks)
+            val prev = streamingById.value[id]
+            // [P1-12] Incremental path: when the caller's block list is
+            // element-wise equal to the previously published one (pure text
+            // append, no tool-block change of any field), reuse that immutable
+            // published list instead of allocating a fresh snapshot. Equality
+            // is exact (AssistantBlock is a data class, so ALL fields
+            // participate), which is a strictly stronger check than the
+            // size/status/content scans below — when it holds, those scans
+            // would all report "unchanged" too, so skipping them is
+            // behavior-equivalent. With [STREAM_INCREMENTAL_PUBLISH] off, the
+            // unconditional snapshot below restores the original path.
+            val blocksUnchanged = STREAM_INCREMENTAL_PUBLISH &&
+                prev != null && toolBlocks == prev.toolBlocks
+            val toolBlocksImmutable = if (blocksUnchanged) {
+                prev!!.toolBlocks
+            } else {
+                snapshotAssistantBlocks(toolBlocks)
+            }
 
             // [T-android-stream-flush-dualpath] Dual-path flush at the
             // message-accumulation layer (NOT per-fragment, which never
@@ -122,23 +159,25 @@ internal class StreamSessionController(
             val st = streamFlushStates.getOrPut(id) {
                 StreamFlushState().also { it.lastFlushedLen = 0 }
             }
-            val prev = streamingById.value[id]
             // [T-android-stream-flush-review] Structural change also covers an
             // in-place tool-block STATUS flip (running → success), not just a
             // count change — otherwise a spinner→checkmark could lag up to one
             // throttle tier. Compare a cheap (kind,status) fingerprint.
-            val toolStatusChanged = prev != null &&
+            // [P1-12] When [blocksUnchanged] held, every field already matches
+            // the published list, so both change scans are provably false and
+            // are skipped without allocating.
+            val toolStatusChanged = !blocksUnchanged && prev != null &&
                 prev.toolBlocks.size == toolBlocksImmutable.size &&
                 toolBlocksImmutable.indices.any { i ->
                     prev.toolBlocks[i].toolStatus != toolBlocksImmutable[i].toolStatus
                 }
-            val toolContentChanged = prev != null &&
+            val toolContentChanged = !blocksUnchanged && prev != null &&
                 prev.toolBlocks.size == toolBlocksImmutable.size &&
                 toolBlocksImmutable.indices.any { i ->
                     prev.toolBlocks[i].content != toolBlocksImmutable[i].content
                 }
             val structuralChange = prev == null ||
-                prev.toolBlocks.size != toolBlocksImmutable.size ||
+                (!blocksUnchanged && prev.toolBlocks.size != toolBlocksImmutable.size) ||
                 prev.isAwaitingModelResponse != isAwaitingModelResponse ||
                 toolStatusChanged ||
                 toolContentChanged
@@ -197,7 +236,21 @@ internal class StreamSessionController(
                 streamingById.value = streamingById.value + (
                     id to StreamingDelta(
                         content = text,
-                        toolBlocks = snapshotAssistantBlocks(blocks),
+                        // [P1-12] Every list reaching [publish] is already an
+                        // unmodifiable snapshot: a fresh [snapshotAssistantBlocks]
+                        // result, the previously published list reused by the
+                        // incremental path, or a stashed [StreamFlushState
+                        // .pendingBlocks] (one of the former two). Re-snapshotting
+                        // an immutable list is a pure copy — skip it under the
+                        // switch; the SnapshotMutableStateFlow boundary still
+                        // applies its own snapshot, so the published value is
+                        // unchanged. With the switch off the original
+                        // re-snapshot runs.
+                        toolBlocks = if (STREAM_INCREMENTAL_PUBLISH) {
+                            blocks
+                        } else {
+                            snapshotAssistantBlocks(blocks)
+                        },
                         isAwaitingModelResponse = awaiting,
                     )
                 )

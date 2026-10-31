@@ -4,6 +4,10 @@ import com.openminis.app.config.KEY_LANGUAGE
 import com.openminis.app.config.PREF_APPEARANCE
 import com.openminis.app.R
 import com.openminis.app.ui.theme.*
+import com.openminis.app.ui.theme.IosBlue
+import com.openminis.app.ui.theme.IosGreen
+import com.openminis.app.ui.theme.IosIndigo
+import com.openminis.app.ui.theme.IosOrange
 import com.openminis.app.data.repository.AppIconRepository
 import com.openminis.app.ui.components.MinisTextButton
 
@@ -117,10 +121,8 @@ const val KEY_AUTO_EXPAND_THINKING = "chat.autoExpandThinking"  // Boolean, defa
 // back to the default when the key is absent).
 const val KEY_FOLD_AI_PROCESS = "chat.foldAiProcess"
 const val DEFAULT_FOLD_AI_PROCESS = true
-// [T-composer-mic-toggle] Show the composer's mic (voice input) button.
-// Default OFF: in practice the mic is rarely used and it competes for the
-// same bottom-row slot as the paste-image chip and edit pill. Voice mode
-// itself is unaffected — the app-icon "voice chat" quick action and the
+// [T-composer-mic-toggle] Show the composer's mic (voice input) button. Default OFF: in practice the mic is rarely used and it competes for the
+// same bottom-row slot as the paste-image chip and edit pill. Voice mode itself is unaffected — the app-icon "voice chat" quick action and the
 // START_VOICE deep link still enter the panel; and once voice mode IS
 // active the mic button re-appears regardless (it is the only way back to
 // the keyboard), so hiding it can never strand the user in voice mode.
@@ -136,13 +138,10 @@ const val KEY_COMPOSER_CONTEXT_GLOW = "chat.composerContextGlow"  // Boolean, de
 // Material You wallpaper dynamic color. Default OFF: the app's identity is the
 // iOS-parity palette with measured contrast, so wallpaper tinting is opt-in.
 const val KEY_DYNAMIC_COLOR = "chat.dynamicColor"  // Boolean, default false
-// [T-android-auto-grouping] When a chat's title is first generated, also file
-// it into a matching EXISTING group. Rides the title-generation call — no
-// second round-trip. Key name matches iOS `autoGroupingEnabled` so a future
-// config sync reads the same value.
+// [T-android-auto-grouping] When a chat's title is first generated, also file it into a matching EXISTING group. Rides the title-generation call — no
+// second round-trip. Key name matches iOS `autoGroupingEnabled` so a future config sync reads the same value.
 //
-// Default ON (both platforms, per product decision 2026-08-16). iOS originally
-// shipped this opt-in on the reasoning that it "moves user data without being
+// Default ON (both platforms, per product decision 2026-08-16). iOS originally shipped this opt-in on the reasoning that it "moves user data without being
 // asked"; that concern is bounded here because the feature only ever files a
 // chat into a group the user already created, only when the model is confident,
 // only once per chat, and never over a hand-filed session (setFolderIfUnfiled).
@@ -308,10 +307,10 @@ fun AppearanceScreen(
 
     val fontsModified = chatInputLevel != 0 || messageLevel != 0 || appBaseLevel != 0
 
-    val tilePurple = Color(0xFF5856D6)
-    val tileBlue = Color(0xFF007AFF)
-    val tileOrange = Color(0xFFFF9500)
-    val tileGreen = Color(0xFF34C759)
+    val tilePurple = IosIndigo
+    val tileBlue = IosBlue
+    val tileOrange = IosOrange
+    val tileGreen = IosGreen
     val tileTeal = Color(0xFF5AC8FA)
 
     SettingsScaffold(title = stringResource(R.string.appearance_title), onBack = null) {

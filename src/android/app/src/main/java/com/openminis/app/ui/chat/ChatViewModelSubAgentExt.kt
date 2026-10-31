@@ -875,7 +875,7 @@ private suspend fun ChatViewModel.runOneSubAgentInner(
                             ToolExecutionResult("Error: type $role cannot use $name.", false)
                         } else {
                             grepSourceToolResult(name, json)
-                                ?: executeTool(name, json, "", mutableListOf(), "", "")
+                                ?: executeTool(name, json, "")
                         }
                     },
                     onStep = { turn, toolName -> onStep(turn, toolName) },

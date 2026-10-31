@@ -385,7 +385,7 @@ private suspend fun ChatViewModel.runSupervisorSession(
                         ToolExecutionResult("Error: WORKER sub-agent cannot use $name.", false)
                     } else {
                         grepSourceToolResult(name, json)
-                            ?: executeTool(name, json, "", mutableListOf(), "", "")
+                            ?: executeTool(name, json, "")
                     }
                 },
                 kind = SubAgentKind.WORKER,

@@ -37,16 +37,6 @@ interface MessageHeadDao {
         SELECT id, role, created_at,
                substr(parts_json, 1, :headChars) AS head_text
         FROM messages
-        WHERE session_id = :sessionId
-        ORDER BY sort_order DESC, created_at DESC
-        LIMIT :limit
-    """)
-    suspend fun loadMessageHeadsNewest(sessionId: String, headChars: Int, limit: Int): List<MessageHeadRow>
-
-    @Query("""
-        SELECT id, role, created_at,
-               substr(parts_json, 1, :headChars) AS head_text
-        FROM messages
         WHERE session_id = :sessionId AND role = :role
         ORDER BY sort_order ASC, created_at ASC
         LIMIT :limit

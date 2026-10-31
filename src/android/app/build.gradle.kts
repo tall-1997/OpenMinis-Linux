@@ -405,7 +405,11 @@ dependencies {
     implementation("androidx.compose.material3.adaptive:adaptive-layout:1.2.0")
     implementation("androidx.compose.material3.adaptive:adaptive-navigation:1.2.0")
     implementation("androidx.compose.ui:ui")
-    implementation("androidx.compose.ui:ui-tooling-preview")
+    // [T-android-tooling-preview-debug-only] ui-tooling-preview carries only
+    // the IDE @Preview annotation surface — grep confirmed ZERO references in
+    // the main (release) source set, so it moves next to ui-tooling as a
+    // debug-only dependency instead of riding the release classpath.
+    debugImplementation("androidx.compose.ui:ui-tooling-preview")
     debugImplementation("androidx.compose.ui:ui-tooling")
 
     // Core

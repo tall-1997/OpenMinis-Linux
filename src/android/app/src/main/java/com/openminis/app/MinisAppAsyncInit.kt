@@ -2,6 +2,7 @@ package com.openminis.app
 
 import android.util.Log
 import com.openminis.app.data.db.AppDatabase
+import com.openminis.app.data.db.DatabaseStartupGate
 import com.openminis.app.di.AppContainer
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.launch
@@ -46,6 +47,18 @@ object MinisAppAsyncInit {
         val db = checkNotNull(appContainer.database)
         appContainer.scopes.io.launch {
             try {
+                // [T-db-gate-async] ORDERING CONSTRAINT: the integrity gate
+                // (PRAGMA quick_check + quarantine) runs on its own background
+                // thread, started by AppDatabase.getInstance on the main
+                // thread — this await is what keeps the OLD invariant "the
+                // gate's verdict lands before Room opens the file": a corrupt
+                // database is renamed aside BEFORE anything touches it, and an
+                // unquarantiable one throws here (failing the open) instead of
+                // being read. This await is the warmup barrier; the db layer's
+                // GatedOpenHelper enforces the same ordering for any other
+                // caller that could race us, so this line is the explicit
+                // fast-path of a structural guarantee.
+                DatabaseStartupGate.awaitOrThrow()
                 db.openHelper.writableDatabase
                 openDeferred.complete(db)
                 Log.i(TAG, "database open completed on background thread")

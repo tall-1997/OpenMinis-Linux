@@ -607,9 +607,12 @@
             android:name=".automation.RuleMonitorService"
             android:exported="false"
             android:foregroundServiceType="specialUse">
+            <!-- [T-android-fgs-specialuse-copy] One-sentence Play-review
+                 description: WHAT runs (automation monitor) and WHY (the
+                 broadcast receivers its rules listen on). Behavior unchanged. -->
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Conditional-trigger automation monitor: keeps broadcast receivers for Wi-Fi/Bluetooth/power/battery/screen events alive while automation rules are enabled." />
+                android:value="Automation monitor: holds broadcast receivers for system events (Wi-Fi, Bluetooth, battery, screen) while the user's automation rules are enabled." />
         </service>
 
         <!-- [T-android-quick-invocation] Half-screen quick panel: QS tile

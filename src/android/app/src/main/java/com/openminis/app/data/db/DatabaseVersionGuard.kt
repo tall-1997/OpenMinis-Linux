@@ -59,7 +59,7 @@ object DatabaseVersionGuard {
      * treated the user's own database as "from a newer build" and blocked
      * opening. Keep this equal to `@Database(version=...)`.
      */
-    const val CODE_DB_VERSION = 23 // automation_rules + automation_runs 22 -> 23
+    const val CODE_DB_VERSION = 24 // messages(role, created_at) index 23 -> 24
 
     /** Filename must match the one passed to `Room.databaseBuilder`. */
     private const val DB_NAME = "minis.db"
@@ -107,18 +107,41 @@ object DatabaseVersionGuard {
     }
 
     /**
+     * On-disk schema versions whose jump down to [CODE_DB_VERSION] is covered
+     * END-TO-END by registered downgrade migrations that keep the file openable
+     * for the older build (pure no-ops that leave extra columns/tables in
+     * place, or index drops like [AppDatabase.MIGRATION_16_15] — anything that
+     * lands the schema exactly on the older build's expected shape).
+     *
+     * Membership in this set is what makes [evaluate] return PROCEED instead
+     * of SHOW_NEWER_DB_GUIDANCE for a downgraded database.
+     *
+     * EMPTY today — and that is the honest answer, not a regression: every
+     * downgrade migration this build registers starts at [CODE_DB_VERSION] or
+     * below, and an on-disk version ≤ CODE_DB_VERSION is an upgrade, never a
+     * downgrade. The previous expression — `onDiskVersion == 12 &&
+     * CODE_DB_VERSION == 11` — encoded the same answer for the v11 build that
+     * shipped [AppDatabase.MIGRATION_12_11], but as a constant comparison that
+     * rotted to permanently-false the moment 1.31 bumped past 11 and nobody
+     * could extend it. When a future version V > CODE_DB_VERSION ships a
+     * verified no-op/keep-compatible downgrade chain back to CODE_DB_VERSION,
+     * add V here; [DatabaseVersionGuardTest] pins the wiring.
+     */
+    private val handledNoOpDowngrades: Set<Int> = emptySet()
+
+    /**
      * Whether a registered downgrade migration covers this jump, in which case
      * the app can open the database normally and the guidance screen is
      * unnecessary.
      *
-     * Only versions with an explicit, verified no-op downgrade belong here.
-     * Anything else falls through to the guidance screen rather than being
-     * optimistically opened — being wrong in that direction costs the user a
-     * screen they can dismiss by upgrading; being wrong the other way costs
-     * them a crash.
+     * Only versions with an explicit, verified no-op downgrade belong in
+     * [handledNoOpDowngrades]. Anything else falls through to the guidance
+     * screen rather than being optimistically opened — being wrong in that
+     * direction costs the user a screen they can dismiss by upgrading; being
+     * wrong the other way costs them a crash.
      */
     fun isHandledDowngrade(onDiskVersion: Int): Boolean =
-        onDiskVersion == 12 && CODE_DB_VERSION == 11
+        onDiskVersion in handledNoOpDowngrades
 
     /** Result of the launch-time check. */
     enum class Decision {

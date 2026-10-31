@@ -97,16 +97,26 @@ internal object RawQuerySql {
      * `parts_json`, which means every other [MessageEntity] column has to be
      * named here or it comes back null.
      */
+    /**
+     * The 15 columns that follow `parts_json` in every full-row message
+     * projection. Single source for [MESSAGE_PAGE_SELECT]; the `@Query`
+     * literals in ChatDao cannot reference Kotlin constants (annotation
+     * values must be literals), so [com.openminis.app.data.db] drift is
+     * locked by MessageProjectionDriftTest instead.
+     */
+    const val MESSAGE_TAIL_COLUMNS =
+        "created_at, token_usage, sort_order, reasoning_content, " +
+            "stream_interrupt_count, updated_at, error_info, model_id, " +
+            "model_display_name, provider_type, provider_instance_id, " +
+            "body_bytes, body_ref, body_sha, preview"
+
     const val MESSAGE_PAGE_SELECT =
         "SELECT id, session_id, role, " +
             "CASE WHEN body_ref IS NOT NULL THEN parts_json " +
             "WHEN body_bytes <= 2048 THEN parts_json " +
             "ELSE COALESCE(preview, " +
             "'[{\"type\":\"text\",\"value\":\"[body kept on disk]\"}]') END AS parts_json, " +
-            "created_at, token_usage, sort_order, reasoning_content, " +
-            "stream_interrupt_count, updated_at, error_info, model_id, " +
-            "model_display_name, provider_type, provider_instance_id, " +
-            "body_bytes, body_ref, body_sha, preview " +
+            MESSAGE_TAIL_COLUMNS + " " +
             "FROM messages"
 
     /** Backs [ChatDao.runMessageCountQuery] → [MessageCountRow]. */

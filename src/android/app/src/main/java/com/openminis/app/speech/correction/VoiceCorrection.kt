@@ -82,10 +82,15 @@ object VoiceCorrection {
             )
         }
 
-        // Straight from the Room singleton rather than adding an accessor to
-        // MinisApp — AppDatabase.getInstance is already the shared handle.
+        // [T-singleton-convergence] Straight from the AppContainer slot (wired
+        // once in MinisApp.onCreate) rather than adding an accessor to MinisApp
+        // or re-hitting the AppDatabase.getInstance singleton path. The
+        // getInstance fallback only covers the not-yet-wired window (safe-mode
+        // early-return before the container's database slot is assigned), where
+        // the old code still built the vocabulary builder off the shared handle.
         val dao = runCatching {
-            com.openminis.app.data.db.AppDatabase.getInstance(app).chatDao()
+            (app as? MinisApp)?.appContainer?.database?.chatDao()
+                ?: com.openminis.app.data.db.AppDatabase.getInstance(app).chatDao()
         }.getOrNull()
         if (dao != null) {
             vocabularyBuilder = TypedVocabularyBuilder(app, database, dao, posTag, segment, rank)

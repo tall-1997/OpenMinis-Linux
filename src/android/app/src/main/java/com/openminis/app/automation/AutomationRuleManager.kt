@@ -45,14 +45,35 @@ class AutomationRuleManager(
             },
     )
 
+    /** Test seam: when non-null, takes precedence over the MinisApp DB lookup. */
+    @Volatile
+    internal var daoOverride: AutomationRuleDao? = null
+
     /** Room handle; null while the app is half-initialized (GH#156 pattern). */
     internal val daoOrNull: AutomationRuleDao?
-        get() = (context.applicationContext as? com.openminis.app.MinisApp)
-            ?.let { app -> runCatching { app.database }.getOrNull() }
-            ?.automationRuleDao()
+        get() = daoOverride
+            ?: (context.applicationContext as? com.openminis.app.MinisApp)
+                ?.let { app -> runCatching { app.database }.getOrNull() }
+                ?.automationRuleDao()
 
     @Volatile
     private var cache: List<Pair<AutomationRuleEntity, RuleSpec>> = emptyList()
+
+    /**
+     * [v3 P1-11] Process-level fast path: true when the last sync found at
+     * least one enabled, parseable rule. Every CRUD path ends in [sync], and
+     * [rebuildCache] refreshes it too, so the flag is the honest "are there
+     * rules at all" answer. When false, [onEventSuspend] returns before the
+     * per-event DB probe and the battery poll — a no-rules device pays one
+     * volatile read per notification instead of a query.
+     */
+    @Volatile
+    internal var hasActiveRules: Boolean = false
+        private set
+
+    /** True once this process has probed the DB for rules at least once. */
+    @Volatile
+    private var probedRulesOnce: Boolean = false
 
     private val syncLock = Mutex()
 
@@ -162,6 +183,10 @@ class AutomationRuleManager(
     /**
      * Re-register every OS hook for the enabled rules. Called at boot, after
      * any rule change, and defensively from the automation UI. Never throws.
+     *
+     * Also enforces the automation_runs retention (v3 二-9): rows older than
+     * [RUN_RETENTION_MS] are deleted here, so the history tables grow with
+     * actual rule activity instead of forever.
      */
     suspend fun sync() = syncLock.withLock {
         val dao = daoOrNull ?: return@withLock
@@ -173,6 +198,9 @@ class AutomationRuleManager(
                 null
             }
         }
+        hasActiveRules = cache.isNotEmpty()
+        runCatching { dao.deleteRunsBefore(clock() - RUN_RETENTION_MS) }
+            .onFailure { AppLogger.warning(TAG, "automation_runs retention failed: ${it.message}") }
         for (e in all) runCatching { cancelAlarm(e.id) }
         for ((e, s) in cache) {
             val t = s.trigger as? Trigger.Time ?: continue
@@ -190,11 +218,10 @@ class AutomationRuleManager(
         is Trigger.BatteryLow, is Trigger.ScreenOn, is Trigger.ScreenOff, is Trigger.ScreenUnlock,
         -> true
         // NotificationReceived rides the existing NotificationListenerService;
-        // AppOpened needs the accessibility hook (v1: funnel exists, not wired).
+        // AppOpened rides the accessibility service's foreground-package
+        // transition (MinisAccessibilityService.maybeEmitAppOpened).
         else -> false
     }
-
-    fun cachedRules(): List<RuleSpec> = cache.map { it.second }
 
     // ── event matching ───────────────────────────────────────────────────
 
@@ -207,7 +234,19 @@ class AutomationRuleManager(
     }
 
     suspend fun onEventSuspend(event: AutomationEvent) {
-        if (cache.isEmpty()) rebuildCache()
+        // [v3 P1-11] No-rules fast path. The flag is refreshed by sync() (every
+        // CRUD path) — when it says "no rules", skip straight out: no rebuild
+        // probe, no battery poll, no DB. The one-shot probe below only covers
+        // a process that started after the rules were created and has not
+        // synced yet (e.g. the alarm receiver fires first); afterwards sync()
+        // keeps the flag honest.
+        if (!hasActiveRules) {
+            if (!probedRulesOnce) {
+                probedRulesOnce = true
+                rebuildCache()
+            }
+            if (cache.isEmpty()) return
+        }
         // Re-arm the time alarm FIRST so a long agent run cannot push the
         // next occurrence out (same order as ScheduledTaskAlarmReceiver).
         if (event is AutomationEvent.Time) {
@@ -236,6 +275,7 @@ class AutomationRuleManager(
         val dao = daoOrNull ?: return
         cache = runCatching { dao.enabled().mapNotNull { e -> e.spec()?.let { e to it } } }
             .getOrElse { emptyList() }
+        hasActiveRules = cache.isNotEmpty()
     }
 
     // ── firing ───────────────────────────────────────────────────────────
@@ -382,6 +422,9 @@ class AutomationRuleManager(
         const val OUTCOME_ERROR_PREFIX = "error: "
         const val OUTCOME_SKIPPED_RATE_LIMIT = "skipped_rate_limit"
         const val OUTCOME_SKIPPED_STEPS_TODO = "skipped_steps_todo"
+
+        /** [v3 二-9] automation_runs rolling retention window: 30 days. */
+        const val RUN_RETENTION_MS: Long = 30L * 24 * 60 * 60 * 1000
     }
 }
 

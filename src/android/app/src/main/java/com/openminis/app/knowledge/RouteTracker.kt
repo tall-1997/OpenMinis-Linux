@@ -33,7 +33,7 @@ class RouteTracker {
      * most recent [MAX_STEPS] steps.
      */
     fun record(sessionId: String, pkg: String, targetText: String) {
-        val label = targetText.trim().replace(Regex("\\s+"), " ")
+        val label = targetText.trim().replace(WHITESPACE_RUN, " ")
         if (label.isEmpty()) return
         synchronized(lock) {
             val s = sessionOf(sessionId)
@@ -69,6 +69,9 @@ class RouteTracker {
 
     companion object {
         const val MAX_STEPS = 6
+
+        /** Pre-compiled: record() runs on every ui_action dispatch. */
+        private val WHITESPACE_RUN = Regex("\\s+")
     }
 }
 

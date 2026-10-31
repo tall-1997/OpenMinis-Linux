@@ -15,6 +15,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.openminis.app.R
 
 /**
@@ -381,7 +382,11 @@ internal fun ChatViewModel.sendMessage(
 
         // Build system prompt
         // Anthropic OAuth requires the Claude Code prefix in the system prompt
-        val baseSystemPrompt = buildSystemPrompt()
+        // [P0-5] Prompt assembly reloads skills/MCP repos from disk and reads
+        // memory fragments — move it off the main dispatcher. All inputs are
+        // StateFlow reads / pure helpers; the fields it writes
+        // (personaHistorySteering, systemPromptStablePrefixLen) are @Volatile.
+        val baseSystemPrompt = withContext(Dispatchers.Default) { buildSystemPrompt() }
         val systemPrompt = if ((provider as? com.openminis.app.provider.anthropic.AnthropicProvider)?.isOAuth == true) {
             val prefix = com.openminis.app.auth.ClaudeOAuthManager.ANTHROPIC_OAUTH_IDENTIFIER_PROMPT
             if (baseSystemPrompt?.startsWith(prefix) == true) baseSystemPrompt

@@ -12,6 +12,7 @@ import com.openminis.app.logging.AppLogger
 import com.openminis.app.data.repository.listFolders
 import com.openminis.app.data.repository.setFolderForSessions
 import com.openminis.app.service.AgentForegroundService
+import com.openminis.app.session.InputAttachment
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -308,6 +309,177 @@ object ScheduledAgentRunner {
             }
         }
         return session
+    }
+
+    // ── [v3] unattended-runner template ──────────────────────────────────
+
+    /**
+     * Shared skeleton of the unattended runners (scheduled tasks, automation
+     * rules, quick panel): MinisApp readiness guard → session resolution →
+     * foreground service BEFORE dispatch → wait=true prompt under the
+     * caller's own timeout → completion callback. The three runners used to
+     * copy this sequence line by line; the template owns the ordering and
+     * every caller keeps its identity.
+     *
+     * Firing semantics are unchanged per runner: returns the session id once
+     * DISPATCHED (null when the runner could not even start — no provider,
+     * half-built app), and the agent loop keeps running on [bgScope] after
+     * this returns.
+     *
+     * @param logTag caller's log tag (each runner logs under its own name).
+     * @param abortSuffix guard-failure log suffix — the full line is
+     *   "Application is not MinisApp — <abortSuffix>" (e.g. "skipping rule
+     *   r1" / "quick send aborted").
+     * @param subject mid-flow log subject: dispatch-failure line is
+     *   "<subject> dispatch failed: …", no-provider line is "<subject>: no
+     *   provider — abort".
+     * @param sessionTitle label for a freshly created row
+     *   ([persistNewSessionRow] blanks it to "Scheduled task" when empty,
+     *   exactly like the quick panel's row).
+     * @param source `source` column value written for a freshly created row
+     *   (over [persistNewSessionRow]'s "scheduled" default).
+     * @param maxTurns reserved for a per-runner turn cap — no runner sets it
+     *   today (HeadlessChatRunner.prompt does not take one yet); plumbed
+     *   through here when the runner loop grows one.
+     * @param timeoutMs the caller's own ceiling (all three use 10 min today,
+     *   kept a per-caller argument so a future per-runner change stays local).
+     * @param newSessionPermissionMode tool-gate token for a fresh row
+     *   (null = app default), written through [persistNewSessionRow].
+     * @param reuseSession hook returning an existing session id, or null to
+     *   create a fresh row via [createUnattendedSessionRow] on the IO
+     *   dispatcher (all runners resolve sessions off-main).
+     * @param onReady invoked exactly once with the dispatch outcome — the
+     *   session id, or null on any abort before dispatch. Quick bounces it to
+     *   the main looper; automation relies on the return value.
+     * @param onDispatched synchronous pre-prompt hook (logging seam), after
+     *   the foreground service is up.
+     * @param onCompleted completion hook with the resolved app/session/result.
+     */
+    internal suspend fun runUnattended(
+        context: Context,
+        logTag: String,
+        abortSuffix: String,
+        subject: String,
+        sessionTitle: String,
+        source: String,
+        prompt: String,
+        attachments: List<InputAttachment> = emptyList(),
+        maxTurns: Int? = null,
+        timeoutMs: Long = RUN_TIMEOUT_MS,
+        newSessionPermissionMode: String? = null,
+        reuseSession: suspend (MinisApp) -> String? = { null },
+        onReady: (String?) -> Unit = {},
+        onDispatched: (String) -> Unit = {},
+        onCompleted: suspend (MinisApp, String, HeadlessChatRunner.PromptResult) -> Unit = { _, _, _ -> },
+    ): String? {
+        val app = context.applicationContext as? MinisApp ?: run {
+            AppLogger.error(logTag, "Application is not MinisApp — $abortSuffix")
+            onReady(null)
+            return null
+        }
+        if (!app.subsystemsReady()) {
+            AppLogger.error(
+                logTag,
+                "MinisApp subsystems not initialized (safe-mode or failed init) — $abortSuffix",
+            )
+            onReady(null)
+            return null
+        }
+        val sessionId = withContext(Dispatchers.IO) {
+            reuseSession(app) ?: createUnattendedSessionRow(
+                repo = app.chatRepository,
+                providers = app.providerRepository,
+                appContext = app,
+                sessionTitle = sessionTitle,
+                source = source,
+                permissionMode = newSessionPermissionMode,
+                taskId = subject,
+                logTag = logTag,
+                subject = subject,
+            )
+        }
+        if (sessionId == null) {
+            onReady(null)
+            return null
+        }
+        // Only start the foreground service after the runner has a valid
+        // target; an aborted run must not leave an orphan status row.
+        AgentForegroundService.startService(app)
+        onDispatched(sessionId)
+        onReady(sessionId)
+        bgScope.launch {
+            val result = runCatching {
+                HeadlessChatRunner.prompt(
+                    context = app,
+                    sessionId = sessionId,
+                    text = prompt,
+                    attachments = attachments,
+                    thinkingLevel = null,
+                    wait = true,
+                    timeoutMs = timeoutMs,
+                )
+            }.getOrElse { t ->
+                AppLogger.error(logTag, "${subject} dispatch failed: ${t.message}")
+                HeadlessChatRunner.PromptResult(
+                    status = "Error",
+                    responseText = "Error: ${t.message}",
+                    timedOut = false,
+                )
+            }
+            onCompleted(app, sessionId, result)
+        }
+        return sessionId
+    }
+
+    /**
+     * Fresh-row creation for an unattended fire, shared by the automation and
+     * quick-panel paths (repo-parameterized so tests can drive it without a
+     * MinisApp): credential-aware seed model through the default primary
+     * group, default-group binding write-through, [persistNewSessionRow]
+     * persistence, then the `source` column flip that marks the origin.
+     * Returns null (with a log) when no provider is configured.
+     */
+    internal suspend fun createUnattendedSessionRow(
+        repo: com.openminis.app.data.repository.ChatRepository,
+        providers: com.openminis.app.data.repository.ProviderRepository,
+        appContext: Context,
+        sessionTitle: String,
+        source: String,
+        permissionMode: String?,
+        taskId: String,
+        logTag: String,
+        subject: String,
+    ): String? {
+        val defaultGroupId = providers.defaultPrimaryGroupId
+        val seedModelId: String = defaultGroupId
+            ?.let { gid -> providers.group(gid) }
+            ?.let { group -> providers.availableMemberEntries(group).firstOrNull()?.model?.id }
+            ?: providers.allVisibleEntries().firstOrNull()?.baseModel?.id
+            ?: run {
+                AppLogger.warning(logTag, "$subject: no provider — abort")
+                return null
+            }
+        val bindingToWrite: String? = defaultGroupId?.let { """{"type":"group","groupId":"$it"}""" }
+        val synthetic = ScheduledTask(
+            id = taskId,
+            label = sessionTitle,
+            timeOfDayHour = 0,
+            timeOfDayMinute = 0,
+            repeatMode = ScheduledRepeatMode.ONCE,
+            prompt = "",
+            newSessionPermissionMode = permissionMode,
+        )
+        val session = persistNewSessionRow(
+            repo = repo,
+            context = appContext,
+            task = synthetic,
+            seedModelId = seedModelId,
+            bindingToWrite = bindingToWrite,
+        )
+        // Mark the origin over persistNewSessionRow's "scheduled" default —
+        // the same two-step write the per-runner code used to do.
+        repo.dao.updateSource(session.id, source)
+        return session.id
     }
 
     // Mirrors ChatViewModel.restoreFromBinding's JSON shape. Robust against

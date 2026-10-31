@@ -1,10 +1,13 @@
 package com.openminis.app.ui.settings
 
-import androidx.compose.foundation.background
+import com.openminis.app.ui.theme.IosBlue
+import com.openminis.app.ui.theme.IosGray
+import com.openminis.app.ui.theme.IosGreen
+import com.openminis.app.ui.theme.IosIndigo
+import com.openminis.app.ui.theme.IosOrange
+import com.openminis.app.ui.theme.IosTeal
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,12 +17,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.BatteryFull
@@ -66,12 +66,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.stringResource
 import com.openminis.app.ProjectRepo
 import com.openminis.app.BuildConfig
@@ -79,10 +76,6 @@ import com.openminis.app.R
 import com.openminis.app.knowledge.AppNotes
 import com.openminis.app.knowledge.AppNotesStore
 import com.openminis.app.ui.components.openExternalUrl
-import com.openminis.app.i18n.uppercaseForDisplay
-import com.openminis.app.ui.theme.m3Icon
-import com.openminis.app.ui.theme.monetIconTileColor
-import com.openminis.app.ui.theme.monetIconTileContentColor
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -148,19 +141,19 @@ fun SettingsScreen(
         ) {
             // -- LLM Providers --
             SettingsSection(
-                title = stringResource(R.string.settings_section_llm_providers),
+                header = stringResource(R.string.settings_section_llm_providers),
                 footer = stringResource(R.string.settings_section_llm_providers_footer),
             ) {
-                SettingsItem(
+                SettingsRow(
                     icon = Icons.Outlined.Lock,
-                    iconColor = Color(0xFF007AFF),
+                    iconColor = IosBlue,
                     title = stringResource(R.string.settings_manage_providers),
                     subtitle = stringResource(R.string.settings_manage_providers_subtitle),
                     onClick = onProvidersClick,
                 )
-                SettingsItem(
+                SettingsRow(
                     icon = Icons.Outlined.Settings,
-                    iconColor = Color(0xFF007AFF),
+                    iconColor = IosBlue,
                     title = stringResource(R.string.settings_model_groups),
                     subtitle = stringResource(R.string.settings_model_groups_subtitle),
                     onClick = onModelGroupsClick,
@@ -169,16 +162,16 @@ fun SettingsScreen(
                 // Agent2API gateway. Lan (registered in the M3Icons
                 // filled/outlined table) reads as a local network endpoint;
                 // the row routes to the dedicated A2aScreen.
-                SettingsItem(
+                SettingsRow(
                     icon = Icons.Outlined.Lan,
-                    iconColor = Color(0xFF007AFF),
+                    iconColor = IosBlue,
                     title = stringResource(R.string.builtin_plugin_a2a_name),
                     subtitle = stringResource(R.string.builtin_plugin_a2a_summary),
                     onClick = onA2aClick,
                 )
-                SettingsItem(
+                SettingsRow(
                     icon = Icons.Outlined.BarChart,
-                    iconColor = Color(0xFF007AFF),
+                    iconColor = IosBlue,
                     title = stringResource(R.string.settings_token_usage),
                     subtitle = stringResource(R.string.settings_token_usage_subtitle),
                     onClick = onUsageClick,
@@ -187,10 +180,10 @@ fun SettingsScreen(
             }
 
             // -- Appearance --
-            SettingsSection(title = stringResource(R.string.settings_section_appearance)) {
-                SettingsItem(
+            SettingsSection(header = stringResource(R.string.settings_section_appearance)) {
+                SettingsRow(
                     icon = Icons.Outlined.Palette,
-                    iconColor = Color(0xFF5856D6),
+                    iconColor = IosIndigo,
                     title = stringResource(R.string.settings_section_appearance),
                     subtitle = stringResource(R.string.settings_appearance_subtitle),
                     onClick = onAppearanceClick,
@@ -199,46 +192,46 @@ fun SettingsScreen(
             }
 
             // -- Agent Runtime --
-            SettingsSection(title = stringResource(R.string.settings_section_agent_runtime)) {
-                SettingsItem(
+            SettingsSection(header = stringResource(R.string.settings_section_agent_runtime)) {
+                SettingsRow(
                     icon = Icons.Outlined.Groups,
-                    iconColor = Color(0xFF5856D6),
+                    iconColor = IosIndigo,
                     title = stringResource(R.string.settings_multi_agent),
                     subtitle = stringResource(R.string.settings_multi_agent_subtitle),
                     onClick = onMultiAgentClick,
                 )
-                SettingsItem(
+                SettingsRow(
                     icon = Icons.Outlined.Extension,
-                    iconColor = Color(0xFF007AFF),
+                    iconColor = IosBlue,
                     title = stringResource(R.string.settings_skills),
                     subtitle = stringResource(R.string.settings_skills_subtitle),
                     onClick = onSkillsClick,
                 )
-                SettingsItem(
+                SettingsRow(
                     icon = Icons.Outlined.TravelExplore,
-                    iconColor = Color(0xFF34C759),
+                    iconColor = IosGreen,
                     title = stringResource(R.string.settings_web_search),
                     subtitle = stringResource(R.string.settings_web_search_subtitle),
                     onClick = onWebSearchClick,
                 )
-                SettingsItem(
+                SettingsRow(
                     icon = Icons.Outlined.Translate,
-                    iconColor = Color(0xFF007AFF),
+                    iconColor = IosBlue,
                     title = stringResource(R.string.settings_translate),
                     subtitle = stringResource(R.string.settings_translate_subtitle),
                     onClick = onTranslateClick,
                 )
                 // [T-soul-md] insertion between Skills and Memory per spec.
-                SettingsItem(
+                SettingsRow(
                     icon = Icons.Outlined.AutoAwesome,
-                    iconColor = Color(0xFFFF9500),
+                    iconColor = IosOrange,
                     title = stringResource(R.string.settings_soul),
                     subtitle = stringResource(R.string.settings_soul_subtitle),
                     onClick = onSoulClick,
                 )
-                SettingsItem(
+                SettingsRow(
                     icon = Icons.Outlined.Psychology,
-                    iconColor = Color(0xFF5856D6),
+                    iconColor = IosIndigo,
                     title = stringResource(R.string.settings_memory),
                     subtitle = stringResource(R.string.settings_memory_subtitle),
                     onClick = onMemoryClick,
@@ -248,23 +241,23 @@ fun SettingsScreen(
                 // [T-android-mcp-icon-distinct] Dashboard (2x2 block grid) instead of
                 // Extension so MCP no longer shares the Skills row's puzzle-piece icon —
                 // the grid reads as "multiple composed blocks/servers". teal unchanged.
-                SettingsItem(
+                SettingsRow(
                     icon = Icons.Outlined.Dashboard,
-                    iconColor = Color(0xFF30B0C7),
+                    iconColor = IosTeal,
                     title = stringResource(R.string.settings_mcp),
                     subtitle = stringResource(R.string.settings_mcp_subtitle),
                     onClick = onMcpClick,
                 )
-                SettingsItem(
+                SettingsRow(
                     icon = Icons.Outlined.Extension,
-                    iconColor = Color(0xFFFF9500),
+                    iconColor = IosOrange,
                     title = stringResource(R.string.plugin_market_title),
                     subtitle = stringResource(R.string.plugin_market_subtitle),
                     onClick = onPluginMarketClick,
                 )
-                SettingsItem(
+                SettingsRow(
                     icon = Icons.Outlined.Terminal,
-                    iconColor = Color(0xFF34C759),
+                    iconColor = IosGreen,
                     title = stringResource(R.string.settings_env_vars),
                     subtitle = stringResource(R.string.settings_env_vars_subtitle),
                     onClick = onEnvVarsClick,
@@ -275,25 +268,25 @@ fun SettingsScreen(
             // -- App notes (F batch: agent-recorded app experience library) --
             AppNotesSection()
 
-            SettingsSection(title = stringResource(R.string.settings_section_tools)) {
-                SettingsItem(
+            SettingsSection(header = stringResource(R.string.settings_section_tools)) {
+                SettingsRow(
                     icon = Icons.Outlined.Terminal,
-                    iconColor = Color(0xFF5856D6),
+                    iconColor = IosIndigo,
                     title = stringResource(R.string.sessionlist_shell_terminal),
                     subtitle = stringResource(R.string.settings_section_tools),
                     onClick = onTerminalClick,
                 )
                 // [T-tool-approval-removed] 审批门按 LO 裁决移除。
-                SettingsItem(
+                SettingsRow(
                     icon = Icons.Outlined.Language,
-                    iconColor = Color(0xFF34C759),
+                    iconColor = IosGreen,
                     title = stringResource(R.string.sessionlist_open_browser),
                     subtitle = stringResource(R.string.sessionlist_browser_settings),
                     onClick = onOpenBrowser,
                 )
-                SettingsItem(
+                SettingsRow(
                     icon = Icons.Outlined.Settings,
-                    iconColor = Color(0xFF8E8E93),
+                    iconColor = IosGray,
                     title = stringResource(R.string.sessionlist_browser_settings),
                     subtitle = null,
                     onClick = onBrowserSettings,
@@ -302,31 +295,31 @@ fun SettingsScreen(
             }
 
             // -- Storage --
-            SettingsSection(title = stringResource(R.string.settings_section_storage)) {
-                SettingsItem(
+            SettingsSection(header = stringResource(R.string.settings_section_storage)) {
+                SettingsRow(
                     icon = Icons.Outlined.Inventory2,
-                    iconColor = Color(0xFF007AFF),
+                    iconColor = IosBlue,
                     title = stringResource(R.string.settings_section_storage),
                     subtitle = stringResource(R.string.settings_storage_subtitle),
                     onClick = onRootfsClick,
                 )
-                SettingsItem(
+                SettingsRow(
                     icon = Icons.Outlined.Folder,
-                    iconColor = Color(0xFF34C759),
+                    iconColor = IosGreen,
                     title = stringResource(R.string.settings_shared_folders),
                     subtitle = stringResource(R.string.settings_shared_folders_subtitle),
                     onClick = onSharedFoldersClick,
                 )
-                SettingsItem(
+                SettingsRow(
                     icon = Icons.Outlined.FolderShared,
-                    iconColor = Color(0xFFFF9500),
+                    iconColor = IosOrange,
                     title = stringResource(R.string.settings_mount_external_folders),
                     subtitle = stringResource(R.string.settings_mount_external_folders_subtitle),
                     onClick = onMountedFoldersClick,
                 )
-                SettingsItem(
+                SettingsRow(
                     icon = Icons.Outlined.Backup,
-                    iconColor = Color(0xFF34C759),
+                    iconColor = IosGreen,
                     title = stringResource(R.string.settings_backup_restore),
                     subtitle = stringResource(R.string.settings_backup_restore_subtitle),
                     onClick = onBackupClick,
@@ -335,10 +328,10 @@ fun SettingsScreen(
             }
 
             // -- Permissions --
-            SettingsSection(title = stringResource(R.string.settings_section_permissions)) {
-                SettingsItem(
+            SettingsSection(header = stringResource(R.string.settings_section_permissions)) {
+                SettingsRow(
                     icon = Icons.Outlined.Shield,
-                    iconColor = Color(0xFF007AFF),
+                    iconColor = IosBlue,
                     title = stringResource(R.string.settings_section_permissions),
                     subtitle = stringResource(R.string.settings_permissions_subtitle),
                     // [T-settings-single-permissions-entry] One entry: the
@@ -352,12 +345,12 @@ fun SettingsScreen(
 
             // -- Background & Notifications (T50) --
             SettingsSection(
-                title = stringResource(R.string.bg_section_header),
+                header = stringResource(R.string.bg_section_header),
                 footer = stringResource(R.string.bg_section_footer),
             ) {
-                SettingsItem(
+                SettingsRow(
                     icon = Icons.Outlined.BatteryFull,
-                    iconColor = Color(0xFFFF9500),
+                    iconColor = IosOrange,
                     title = stringResource(R.string.bg_section_header),
                     subtitle = stringResource(R.string.bg_section_subtitle),
                     onClick = onBackgroundClick,
@@ -366,10 +359,10 @@ fun SettingsScreen(
             }
 
             // -- Logs --
-            SettingsSection(title = stringResource(R.string.settings_section_logs)) {
-                SettingsItem(
+            SettingsSection(header = stringResource(R.string.settings_section_logs)) {
+                SettingsRow(
                     icon = Icons.Outlined.Description,
-                    iconColor = Color(0xFF007AFF),
+                    iconColor = IosBlue,
                     title = stringResource(R.string.settings_section_logs),
                     subtitle = stringResource(R.string.settings_logs_subtitle),
                     onClick = onLogsClick,
@@ -378,25 +371,25 @@ fun SettingsScreen(
             }
 
             // -- About --
-            SettingsSection(title = stringResource(R.string.settings_section_about)) {
-                SettingsItem(
+            SettingsSection(header = stringResource(R.string.settings_section_about)) {
+                SettingsRow(
                     icon = Icons.Outlined.Info,
-                    iconColor = Color(0xFF007AFF),
+                    iconColor = IosBlue,
                     title = stringResource(R.string.settings_about_minis),
                     subtitle = stringResource(R.string.settings_about_subtitle),
                     onClick = onAboutClick,
                 )
-                SettingsItem(
+                SettingsRow(
                     icon = Icons.Outlined.FrontHand,
-                    iconColor = Color(0xFF007AFF),
+                    iconColor = IosBlue,
                     title = stringResource(R.string.settings_privacy_policy),
                     subtitle = null,
                     // iOS canonical URL — ContentView.swift / AddProviderView.swift
                     onClick = { openExternalUrl(context, "https://openminis.github.io/privacy-policy.html") },
                 )
-                SettingsItem(
+                SettingsRow(
                     icon = Icons.Outlined.Feedback,
-                    iconColor = Color(0xFF007AFF),
+                    iconColor = IosBlue,
                     title = stringResource(R.string.settings_feedback),
                     subtitle = null,
                     onClick = { showFeedbackSheet = true },
@@ -411,29 +404,59 @@ fun SettingsScreen(
     if (showFeedbackSheet) {
         ModalBottomSheet(onDismissRequest = { showFeedbackSheet = false }) {
             Column(modifier = Modifier.padding(bottom = 24.dp)) {
-                FeedbackSheetItem(
-                    icon = Icons.Outlined.BugReport,
+                // [v3-P2-2] Was a private FeedbackSheetItem; the shared
+                // SettingsRow covers it — bare icon via the `leading` slot
+                // (no accent tile), no chevron, no divider.
+                SettingsRow(
                     title = stringResource(R.string.settings_submit_github_issues),
+                    leading = {
+                        Icon(
+                            imageVector = Icons.Outlined.BugReport,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(22.dp),
+                        )
+                    },
                     onClick = {
                         showFeedbackSheet = false
                         openExternalUrl(context, buildBugReportUrl())
                     },
+                    showChevron = false,
+                    showDivider = false,
                 )
-                FeedbackSheetItem(
-                    icon = Icons.AutoMirrored.Outlined.Send,
+                SettingsRow(
                     title = stringResource(R.string.settings_feedback_telegram),
+                    leading = {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Outlined.Send,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(22.dp),
+                        )
+                    },
                     onClick = {
                         showFeedbackSheet = false
                         openExternalUrl(context, "https://t.me/+2NzhOJuzRyI1YmM1")
                     },
+                    showChevron = false,
+                    showDivider = false,
                 )
-                FeedbackSheetItem(
-                    icon = Icons.Outlined.Email,
+                SettingsRow(
                     title = stringResource(R.string.settings_feedback_email),
+                    leading = {
+                        Icon(
+                            imageVector = Icons.Outlined.Email,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(22.dp),
+                        )
+                    },
                     onClick = {
                         showFeedbackSheet = false
                         openExternalUrl(context, buildFeedbackMailto())
                     },
+                    showChevron = false,
+                    showDivider = false,
                 )
             }
         }
@@ -453,7 +476,7 @@ private fun AppNotesSection() {
     var showClearDialog by remember { mutableStateOf(false) }
 
     SettingsSection(
-        title = stringResource(R.string.settings_section_app_notes),
+        header = stringResource(R.string.settings_section_app_notes),
         footer = stringResource(R.string.settings_app_notes_footer),
     ) {
         val items = notes.value
@@ -527,34 +550,6 @@ private fun AppNotesSection() {
                     Text(stringResource(R.string.settings_app_notes_cancel))
                 }
             },
-        )
-    }
-}
-
-@Composable
-private fun FeedbackSheetItem(
-    icon: ImageVector,
-    title: String,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.size(22.dp),
-        )
-        Spacer(Modifier.width(16.dp))
-        Text(
-            text = title,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface,
         )
     }
 }
@@ -657,136 +652,10 @@ private fun buildFeedbackMailto(): String {
     return "mailto:dev@openminis.app?subject=$subject&body=$encodedBody"
 }
 
-/**
- * A grouped settings section with header and optional footer, matching iOS grouped List sections.
- */
-@Composable
-private fun SettingsSection(
-    title: String,
-    footer: String? = null,
-    content: @Composable () -> Unit,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 20.dp),
-    ) {
-        // Section header
-        Text(
-            text = title.uppercaseForDisplay(),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontWeight = FontWeight.Medium,
-            letterSpacing = 0.5.sp,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-        )
+// [v3-P2-2] The private SettingsSection / SettingsItem / FeedbackSheetItem
+// that used to live here were folded into the shared primitives in
+// SettingsComponents.kt (SettingsSection / SettingsRow). The feedback-sheet
+// rows keep their bare-icon look via SettingsRow's `leading` slot instead of
+// a private composable.
 
-        // Section card
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(color = MaterialTheme.colorScheme.surfaceContainerLow),
-        ) {
-            content()
-        }
-
-        // Section footer
-        if (footer != null) {
-            Text(
-                text = footer,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
-                lineHeight = 16.sp,
-            )
-        }
-    }
-}
-
-/**
- * A single settings row item with colored icon, title, optional subtitle, and chevron.
- * Styled to match iOS settings rows with SF Symbol-like colored circle icons.
- */
-@Composable
-private fun SettingsItem(
-    icon: ImageVector,
-    iconColor: Color,
-    title: String,
-    subtitle: String?,
-    onClick: () -> Unit,
-    showDivider: Boolean = true,
-) {
-    Column {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onClick)
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            // Colored circle icon (matching iOS settings style)
-            // [T-android-dynamic-accent-icons] Tile + glyph resolve through the
-            // shared AccentTokens bridge: wallpaper chip in dynamic mode, the
-            // hardcoded iOS color + White glyph otherwise.
-            Box(
-                modifier = Modifier
-                    .size(30.dp)
-                    .background(
-                        color = monetIconTileColor(iconColor),
-                        shape = CircleShape,
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = monetIconTileContentColor(iconColor),
-                    modifier = Modifier.size(16.dp),
-                )
-            }
-
-            Spacer(Modifier.width(14.dp))
-
-            // Title + subtitle
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(1.dp),
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                if (subtitle != null) {
-                    Text(
-                        text = subtitle,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-
-            // Chevron
-            Icon(
-                imageVector = m3Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight),
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                modifier = Modifier.size(20.dp),
-            )
-        }
-
-        // Divider between items (inset to match icon alignment)
-        if (showDivider) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 58.dp, end = 14.dp)
-                    .height(0.5.dp)
-                    .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-            )
-        }
-    }
-}
 

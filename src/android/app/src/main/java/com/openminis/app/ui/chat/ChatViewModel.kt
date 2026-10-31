@@ -177,9 +177,9 @@ class ChatViewModel(
         /** Two shots only: session, then fallback or one session retry. */
         internal const val COMPACT_STAGE_BUDGET = 2
 
-        internal fun compactStageKinds(hasFallbackDistinctFromSession: Boolean): List<String> =
-            if (hasFallbackDistinctFromSession) listOf("session", "fallback")
-            else listOf("session", "session-retry")
+        // [P1-18] compactStageKinds removed: zero production callers — the
+        // compact pipeline tracks its stage kinds inline; the projection
+        // existed only for its unit test.
 
         /** [T-compact-summary-quality] Floor for an acceptable summary. */
         internal val MIN_ACCEPTABLE_SUMMARY_CHARS = 120
@@ -230,13 +230,11 @@ class ChatViewModel(
         /** Chunks injected per turn after retrieval. */
         internal const val SUMMARY_CHUNK_TOP_K = 3
 
-        /**
-         * [T-compact-chunk-pool] Parse the marker column into chunk texts.
-         * Returns an empty list for legacy/garbage rows — every caller must
-         * treat that as "no pool" and fall back to `summary`.
-         */
-        internal fun parseSummaryChunks(json: String?): List<String> =
-            parseSummaryChunkRecords(json).map { it.first }
+        // [P1-18] parseSummaryChunks removed: zero production callers — the
+        // read path goes through selectSummaryChunks (relevance-ranked) and
+        // the pool writer through appendSummaryChunk, both of which parse via
+        // parseSummaryChunkRecords. The text-only projection existed only for
+        // its unit test.
 
         /** (text, epochMs) pairs, oldest first. */
         private fun parseSummaryChunkRecords(json: String?): List<Pair<String, Long>> {
@@ -1544,6 +1542,37 @@ class ChatViewModel(
     internal val _sessionCategory = MutableStateFlow<String?>(null)
     val sessionCategory: StateFlow<String?> = _sessionCategory.asStateFlow()
 
+    // ── [P1-20] Scene-classification memo ────────────────────────────────
+    //
+    // SceneClassifier.classify(category, title, sample) re-tokenizes the
+    // title + latest-user-message sample on EVERY system-prompt build
+    // (send / retry / resume / queue-resume / rerun tail). The inputs only
+    // change when the session category/title is re-tagged or a new user
+    // turn lands, so memoize on the exact input triple: identical inputs →
+    // the identical SceneTag, by construction (classify is a pure function).
+    // Fields are @Volatile because the prompt build now runs on
+    // Dispatchers.Default; the turn-level _isStreaming gate means at most
+    // one build is in flight, and a torn race could only ever serve a
+    // freshly recomputed-equivalent tag — benign.
+    @Volatile
+    private var cachedSceneInputs: Triple<String?, String?, String?>? = null
+    @Volatile
+    private var cachedScene: com.openminis.app.evolution.SceneTag? = null
+
+    /** Memoized [com.openminis.app.evolution.SceneClassifier.classify] over the
+     *  live (category, title, latest-user-sample) triple. */
+    internal fun learnedSceneTag(): com.openminis.app.evolution.SceneTag {
+        val category = _sessionCategory.value
+        val title = _sessionTitle.value
+        val sample = _messages.value.lastOrNull { it.role == "user" }?.content
+        val key = Triple(category, title, sample)
+        cachedScene?.let { scene -> if (cachedSceneInputs == key) return scene }
+        val computed = com.openminis.app.evolution.SceneClassifier.classify(category, title, sample)
+        cachedSceneInputs = key
+        cachedScene = computed
+        return computed
+    }
+
     internal val _attachments = MutableStateFlow<List<InputAttachment>>(emptyList())
     val attachments: StateFlow<List<InputAttachment>> = _attachments.asStateFlow()
 
@@ -2345,14 +2374,9 @@ class ChatViewModel(
 
     val pendingApprovals: StateFlow<Map<String, ApprovalGate.ApprovalRequest>> =
         ApprovalGate.pendingApprovals.map { all ->
-            // [T-draft-approval-key-drift] ApprovalGate.pendingApprovals(sid)
-            // snapshots its session key at PROPERTY-INIT time — for a draft
-            // session that is the `__new__…` routing id, while requests are
-            // filed under the PERSISTED activeSessionId once ensureSession
-            // runs (ChatViewModelEnsureSession). The keyed flow then filters
-            // to empty forever, the approval banner never renders, and every
-            // tool call dies in ApprovalGate's 90s timeout ("不弹申请权限
-            // 窗口，等待超时失败"). Derive from the GLOBAL flow instead and
+            // [T-draft-approval-key-drift] ApprovalGate.pendingApprovals(sid) snapshots its session key at PROPERTY-INIT time — for a draft
+            // session that is the `__new__…` routing id, while requests are filed under the PERSISTED activeSessionId once ensureSession runs (ChatViewModelEnsureSession). The keyed flow then filters
+            // to empty forever, the approval banner never renders, and every tool call dies in ApprovalGate's 90s timeout ("不弹申请权限 窗口，等待超时失败"). Derive from the GLOBAL flow instead and
             // re-filter with the CURRENT id on every emission, so the key
             // drift cannot strand a request.
             val sid = realSessionId.ifEmpty { sessionId }
@@ -3571,14 +3595,10 @@ class ChatViewModel(
             }
         }
 
-    // T203 part 2: these MUST be declared before `init { loadSession() }` below.
-    // viewModelScope.launch defaults to Dispatchers.Main.immediate, which runs
-    // the launch body synchronously up to the first suspend point — and the
-    // launch body reads `isDraft` before its first suspend. If `isDraft` is
-    // declared further down the class, its property initializer hasn't run yet,
-    // so the read returns the JVM default (`false`), routing every draft
-    // session through the load-from-DB branch. The DB lookup misses (no row
-    // for `__new__…` keys), the function returns early, and no model name /
+    // T203 part 2: these MUST be declared before `init { loadSession() }` below. viewModelScope.launch defaults to Dispatchers.Main.immediate, which runs
+    // the launch body synchronously up to the first suspend point — and the launch body reads `isDraft` before its first suspend. If `isDraft` is
+    // declared further down the class, its property initializer hasn't run yet, so the read returns the JVM default (`false`), routing every draft
+    // session through the load-from-DB branch. The DB lookup misses (no row for `__new__…` keys), the function returns early, and no model name /
     // group name is ever set on the draft chat — exactly the bug T203 was
     // chasing through the wrong layer.
     /** Model group ID from long-press FAB, encoded in the draft session ID.
@@ -3607,12 +3627,9 @@ class ChatViewModel(
             }
         }
         loadSession()
-        // [T-session-paused-badge-active-false-positive] Drive the session-list
-        // PAUSED badge directly off canResume — the authoritative "this session
-        // is interrupted (tap Resume)" flag. This is the single chokepoint over
-        // every _canResume setter (background-suspend cleanup, cancel cleanup,
-        // loadSession DB detection, …): canResume true → badge on; false
-        // (resumed / new send / completed) → badge off. Replaces both the old
+        // [T-session-paused-badge-active-false-positive] Drive the session-list PAUSED badge directly off canResume — the authoritative "this session
+        // is interrupted (tap Resume)" flag. This is the single chokepoint over every _canResume setter (background-suspend cleanup, cancel cleanup,
+        // loadSession DB detection, …): canResume true → badge on; false (resumed / new send / completed) → badge off. Replaces both the old
         // foreground heuristic AND clear-on-open, so a session the user merely
         // glanced at but didn't resume keeps its badge, and a running/resolved
         // session never shows one.
@@ -3636,15 +3653,9 @@ class ChatViewModel(
         viewModelScope.launch {
             canResume.collect { interrupted ->
                 if (interrupted) {
-                    // [T-android-group-pause-badge-restamp] Only a REAL
-                    // interruption re-stamps the badge's entry time. This
-                    // collector is the single chokepoint over every
-                    // `_canResume` setter, so it ALSO fires when loadSession
-                    // merely RE-DETECTS an old interrupted tail — that is not
-                    // a new entry into the paused state, and re-stamping it
-                    // there is what let a days-old pause keep looking "fresh"
-                    // to the group card's 24h window forever (the more often
-                    // the user opened the chat, the less able it was to
+                    // [T-android-group-pause-badge-restamp] Only a REAL interruption re-stamps the badge's entry time. This collector is the single chokepoint over every
+                    // `_canResume` setter, so it ALSO fires when loadSession merely RE-DETECTS an old interrupted tail — that is not a new entry into the paused state, and re-stamping it
+                    // there is what let a days-old pause keep looking "fresh" to the group card's 24h window forever (the more often the user opened the chat, the less able it was to
                     // expire). The detecting site raises a sticky generation
                     // mark before its assignment; we consume it here, once the
                     // annotated emission has actually been observed.
@@ -3685,23 +3696,13 @@ class ChatViewModel(
         viewModelScope.launch {
             // T306: wait for loadSession to finish BEFORE observing config.
             //
-            // Pre-T306 we used a "skip first replay" trick that broke under
-            // a real race: loadSession suspends inside `chatRepository.getSession`,
-            // so when ProviderRepository finishes its async config load and
-            // emits the populated value, the collector can fire BEFORE
-            // loadSession's `restoreFromBinding(session.modelBinding)` runs.
-            // The collector then resolves to the default group's first
-            // entry (X), `_modelName` flips to X, and seconds later
-            // restoreFromBinding finds Y and re-sets `_modelName` to Y —
-            // exactly the "top model picker first shows X, then flickers and switches to Y"
-            // the user reported after a fallback persisted Y.
+            // Pre-T306 we used a "skip first replay" trick that broke under a real race: loadSession suspends inside `chatRepository.getSession`,
+            // so when ProviderRepository finishes its async config load and emits the populated value, the collector can fire BEFORE loadSession's `restoreFromBinding(session.modelBinding)` runs.
+            // The collector then resolves to the default group's first entry (X), `_modelName` flips to X, and seconds later restoreFromBinding finds Y and re-sets `_modelName` to Y —
+            // exactly the "top model picker first shows X, then flickers and switches to Y" the user reported after a fallback persisted Y.
             //
-            // Awaiting `sessionLoaded == true` here means loadSession has
-            // already had its turn at the persisted binding (success or
-            // failure). After that, the `currentProvider == null` guard
-            // below correctly captures BOTH the draft case (no binding,
-            // currentProvider may still be null because config hadn't
-            // loaded yet during loadSession) AND the existing-session
+            // Awaiting `sessionLoaded == true` here means loadSession has already had its turn at the persisted binding (success or failure). After that, the `currentProvider == null` guard
+            // below correctly captures BOTH the draft case (no binding, currentProvider may still be null because config hadn't loaded yet during loadSession) AND the existing-session
             // case where binding restore failed, while leaving alone any
             // session whose binding successfully resolved to its target.
             sessionLoaded.first { it }
@@ -3713,19 +3714,11 @@ class ChatViewModel(
                 // selection; _availableGroups has no such risk because the sheet
                 // re-reads it on each open.
                 _availableGroups.value = config.modelGroups
-                // [T-android-disabled-provider-still-selectable-via-group #34]
-                // Runtime re-resolution when a GROUP-bound session's currently
-                // active member has its provider DISABLED mid-session. The
-                // selection paths (resolveProviderFromGroup → enabledMemberEntries)
-                // already skip disabled members, but they only run while
-                // currentProvider == null (cold start / fallback). Once a group
-                // member is resolved, currentProvider is cached and the guard
-                // below short-circuits — so if the user then disables that
-                // member's provider (e.g. a Coding Plan whose quota ran out,
-                // turned off to force fallback to the next provider), the stale
-                // currentProvider keeps routing to the disabled provider's
-                // pay-as-you-go model and bills them. Mirror iOS resolveCurrentEntry
-                // (a306ce08): when the active entry's provider is no longer
+                // [T-android-disabled-provider-still-selectable-via-group #34] Runtime re-resolution when a GROUP-bound session's currently active member has its provider DISABLED mid-session. The
+                // selection paths (resolveProviderFromGroup → enabledMemberEntries) already skip disabled members, but they only run while
+                // currentProvider == null (cold start / fallback). Once a group member is resolved, currentProvider is cached and the guard below short-circuits — so if the user then disables that
+                // member's provider (e.g. a Coding Plan whose quota ran out, turned off to force fallback to the next provider), the stale currentProvider keeps routing to the disabled provider's
+                // pay-as-you-go model and bills them. Mirror iOS resolveCurrentEntry (a306ce08): when the active entry's provider is no longer
                 // enabled, re-resolve the group to its next enabled member. Only
                 // for group bindings — a deliberate direct-entry pick is left
                 // untouched (it has no in-group alternative to fall back to).
@@ -4229,6 +4222,9 @@ class ChatViewModel(
         // newly cleared chat doesn't briefly flash a stale tool's sheet
         // before the existence-guard catches up.
         _selectedToolDetailId.value = null
+        // [P1-16] The wiped session's ui_read fingerprint must not leak into
+        // the next chat's "screen unchanged" detection.
+        evictUiReadFingerprints(sid)
         // Drop any browser tabs the agent spawned for this session, and
         // delete the persisted tab snapshot so a future open starts clean.
         // iOS calls BrowserTabPool.deletePersistedData(for:) +

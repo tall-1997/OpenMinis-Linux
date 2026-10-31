@@ -1,5 +1,7 @@
 package com.openminis.app.ui.settings
 
+import com.openminis.app.ui.theme.IosBlue
+import com.openminis.app.ui.theme.IosIndigo
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
@@ -36,7 +38,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
@@ -156,13 +157,9 @@ fun CheckUpdateSection() {
     val shouldAutoInstall = stagedNotInstalled && !installAlreadyLaunched
     val needsInstallPerm = !canInstallNow
 
-    // Progress is a DISPLAY value only. It deliberately does not gate the
-    // dialog's action button any more: `enabled = downloadProgress == null`
-    // was permanently false once a download completed (doneFile stays non-null
-    // for the life of the process), so any flow that failed to reach the
-    // installer — MIUI refusing the intent, permission revoked mid-flight, a
-    // failed integrity check — ended on a dead button whose only way out,
-    // "Cancel", discarded the whole flow.
+    // Progress is a DISPLAY value only. It deliberately does not gate the dialog's action button any more: `enabled = downloadProgress == null`
+    // was permanently false once a download completed (doneFile stays non-null for the life of the process), so any flow that failed to reach the
+    // installer — MIUI refusing the intent, permission revoked mid-flight, a failed integrity check — ended on a dead button whose only way out, "Cancel", discarded the whole flow.
     //
     // Keyed on dlState.doneFile (this process) rather than stagedApk, so a
     // cold start that only knows about the persisted APK doesn't render a
@@ -284,7 +281,7 @@ fun CheckUpdateSection() {
     ) {
         SettingsRow(
             icon = Icons.Outlined.SystemUpdate,
-            iconColor = Color(0xFF007AFF),
+            iconColor = IosBlue,
             title = stringResource(
                 if (checking) R.string.check_update_checking
                 else R.string.check_update_check_button
@@ -379,7 +376,7 @@ fun CheckUpdateSection() {
         )
         SettingsRow(
             icon = Icons.Outlined.Build,
-            iconColor = Color(0xFF5856D6),
+            iconColor = IosIndigo,
             title = stringResource(R.string.check_update_self_build),
             subtitle = selfBuild.message ?: stringResource(R.string.check_update_self_build_sub),
             showDivider = false,

@@ -13,7 +13,8 @@ import com.openminis.app.offload.ShizukuManager
  *  - [muter] — the persistent mute ledger (SharedPreferences once a context
  *    is seen, MemoryPrefs before that, override in tests);
  *  - [mover] — user-service-first task move with the shell probe fallback;
- *  - [handoffController] — fresh per call (state lives in [HandoffStore]).
+ *  - [handoffController] — built once and reused (state lives in
+ *    [HandoffStore], prefs-backed, so the shared instance never diverges).
  *
  * Plus the two cross-cutting upkeep ops that ride on those components:
  * [reconcileState] (leftover sweep) and [muteForLaunch] (silence before
@@ -33,6 +34,15 @@ internal class VirtualScreenUpkeep(
     @Volatile private var defaultMuter: AudioMuter? = null
     @Volatile private var defaultMover: TaskMover? = null
     @Volatile private var defaultServiceClient: VscreenServiceClient? = null
+
+    /**
+     * [v3] Process-level handoff controller, built once and reused. The
+     * handoff state itself lives in [HandoffStore] (prefs-backed), so the
+     * controller is stateless over prefs and a shared instance never diverges;
+     * a fresh instance per call was pure garbage. [resetForTest] drops it so
+     * test overrides keep flowing into a rebuilt controller.
+     */
+    @Volatile private var defaultController: HandoffController? = null
 
     @Volatile internal var muterOverride: AudioMuter? = null
     @Volatile internal var moverOverride: TaskMover? = null
@@ -82,29 +92,52 @@ internal class VirtualScreenUpkeep(
 
     /**
      * The handoff controller for the hand_to_user flow. Stateless over prefs
-     * (state lives in [HandoffStore]) so fresh instances per call never
-     * diverge; [context] only feeds the notification path.
+     * (state lives in [HandoffStore]) so the cached instance never diverges;
+     * [context] only seeds the app context on first use (notification +
+     * broadcast paths always ride the application context).
      */
     fun handoffController(context: Context? = null): HandoffController? {
         controllerOverride?.let { return it }
+        defaultController?.let { return it }
         val ctx = context ?: appContext ?: return null
         if (appContext == null) {
             appContext = ctx.applicationContext
             sharedPrefs = SharedPrefsVscreenPrefs(ctx.applicationContext)
         }
         val prefs = sharedPrefs ?: return null
-        return HandoffController(
-            store = HandoffStore(prefs, broadcaster = { record ->
-                record?.let {
-                    runCatching { HandoffNotifier.broadcastStateChanged(ctx, it.displayId, it.state) }
-                }
-            }),
-            mover = mover(),
-            muter = muter(),
-            notifier = { record ->
-                (context ?: appContext)?.let { HandoffNotifier.post(it, record) } ?: false
-            },
-        )
+        synchronized(this) {
+            defaultController?.let { return it }
+            val app = appContext
+            val c = HandoffController(
+                store = HandoffStore(prefs, broadcaster = { record ->
+                    record?.let {
+                        if (app != null) {
+                            runCatching { HandoffNotifier.broadcastStateChanged(app, it.displayId, it.state) }
+                        }
+                    }
+                }),
+                mover = mover(),
+                muter = muter(),
+                notifier = { record ->
+                    app?.let { HandoffNotifier.post(it, record) } ?: false
+                },
+            )
+            defaultController = c
+            return c
+        }
+    }
+
+    /**
+     * Raw handoff state for [displayId] (no controller build, no
+     * guidance-string construction), or null when the display has no record.
+     * Honors [controllerOverride] so test fakes keep flowing; production
+     * reads [HandoffStore] straight from the prefs. Consumers that only need
+     * "is it WAITING" use this instead of substring-matching [handoffNote].
+     */
+    fun handoffState(displayId: Int): HandoffStateMachine.State? {
+        controllerOverride?.let { return it.rawState(displayId) }
+        val prefs = sharedPrefs ?: return null
+        return HandoffStore(prefs).get(displayId)?.state
     }
 
     /**
@@ -188,6 +221,7 @@ internal class VirtualScreenUpkeep(
         defaultMuter = null
         defaultMover = null
         defaultServiceClient = null
+        defaultController = null
         muterOverride = muter
         moverOverride = mover
         controllerOverride = controller

@@ -90,6 +90,15 @@ internal enum class FreeLaneEvidence {
      * exhaustive on purpose: adding a value forces whoever adds it to decide
      * whether it may hide a model, which is the decision that went missing
      * twice already.
+     *
+     * [P2-convergence] This is the free-lane permanence vocabulary; the
+     * relay/429 body-marker one lives in [HttpRetryAfter.classifyCapacityBody]
+     * and the catalog-fetch one in [ModelListFetchRetry.classify]. Deliberately
+     * not folded together: a lane verdict is about the MODEL (per-lane,
+     * evidence-scoped, TTL-healed), while the capacity classifier is about the
+     * ACCOUNT/plan (body markers, no per-model scope). RATE_LIMITED stays
+     * non-death even when a 429 body carries a strong capacity marker — a
+     * relay quota is not proof the model is gone.
      */
     val marksDead: Boolean
         get() = when (this) {

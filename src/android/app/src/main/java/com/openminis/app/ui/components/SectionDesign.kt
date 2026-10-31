@@ -111,6 +111,13 @@ object SectionDesign {
  * Section title above a card. iOS reference uses 17pt SemiBold sentence-case
  * onSurface — bigger and more present than Material's labelMedium ALL CAPS
  * onSurfaceVariant which fades into the background.
+ *
+ * [v3-P2-3 known duplicate] Two private name-twins exist elsewhere and were
+ * deliberately NOT merged: ui/sessions/SessionListScreen.kt SectionHeader
+ * (14sp SemiBold onSurfaceVariant + conditional pin glyph) and ui/chat
+ * MemoryDetailScreens.kt SectionHeader (11sp uppercase caption). Neither is
+ * pixel-equivalent to this card-title style — see the v3 review report's
+ * convergence plan before unifying.
  */
 @Composable
 fun SectionHeader(
@@ -187,8 +194,8 @@ fun SectionDivider() {
 }
 
 /**
- * Inline label placed directly above a [SectionTextField] (or
- * [SectionDropdown]) when several labelled fields share a section but
+ * Inline label placed directly above a [SectionTextField] (or a dropdown
+ * field) when several labelled fields share a section but
  * each row needs its own short caption — too small a scope for a full
  * [SectionHeader]. Used by ModelEntryDetail / AddCustomModel /
  * AddProvider for fields like "Model ID" / "Display Name" / "Context Window".

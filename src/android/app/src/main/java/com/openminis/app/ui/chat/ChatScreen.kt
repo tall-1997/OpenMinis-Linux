@@ -2238,10 +2238,19 @@ fun ChatScreen(
                     if (!showFloatingToolBar || !isStreaming) {
                         false
                     } else {
-                        val merged = if (streamingById.isEmpty()) messages
-                                     else mergeStreamingOverlay(messages, streamingById)
+                        // [P1-13] Tail-only: the overlay projection below reads
+                        // the LATEST assistant reply, so apply the streaming
+                        // delta to just that one message instead of materialising
+                        // a full lazy merge wrapper per recomposition tick.
+                        // Equivalent to the previous
+                        // mergeStreamingOverlay(messages, streamingById)
+                        //   .lastOrNull { it.role == "assistant" }
+                        // — see latestAssistantWithOverlay for the boundary-case
+                        // equivalence argument (roles/ordering are never changed
+                        // by the merge, and only the delta-keyed message is
+                        // rewritten).
                         floatingOverlayBlocks(
-                            merged.lastOrNull { it.role == "assistant" },
+                            latestAssistantWithOverlay(messages, streamingById),
                             foldAiProcess,
                             showSubAgentBar,
                             activeSubAgentToolIds,
@@ -2670,27 +2679,14 @@ fun ChatScreen(
                 LaunchedEffect(messages, sessionId, showCompletedToolCards, foldAiProcess, showSubAgentBar) {
                     // [T-android-stream-pipeline-incremental] Frozen/live split.
                     //
-                    // `messages` is CONSTANT within this effect (the effect is
-                    // keyed on it and the streaming turn writes high-frequency
-                    // fields into the streamingById side-channel, never the
-                    // canonical list). So the rows for every message BEFORE the
-                    // first streamed one (= the frozen prefix) can be computed
-                    // ONCE per effect lifetime and reused by reference on every
-                    // tick. Per tick we only rebuild the live suffix (usually a
-                    // single message). Pre-split, every 80ms tick re-flattened
-                    // ALL messages (1146 rows on the ANR-loop session), re-ran
-                    // splitMarkdownIntoBlockTexts over every frozen message,
-                    // and allocated the whole row set fresh — the 130–180MB/s
-                    // GC storm and the 100s builds in minis-2026-06-10.log.
+                    // `messages` is CONSTANT within this effect (the effect is keyed on it and the streaming turn writes high-frequency fields into the streamingById side-channel, never the
+                    // canonical list). So the rows for every message BEFORE the first streamed one (= the frozen prefix) can be computed ONCE per effect lifetime and reused by reference on every
+                    // tick. Per tick we only rebuild the live suffix (usually a single message). Pre-split, every 80ms tick re-flattened ALL messages (1146 rows on the ANR-loop session), re-ran
+                    // splitMarkdownIntoBlockTexts over every frozen message, and allocated the whole row set fresh — the 130–180MB/s GC storm and the 100s builds in minis-2026-06-10.log.
                     //
-                    // Row-for-row equivalence with the old full build holds by
-                    // construction: buildFlatChatItems' neighbor lookbacks
-                    // (isResumeContinuation) only ever read
-                    // EARLIER messages, the live suffix is built against the
-                    // full merged list with fromIndex (lookbacks cross the
-                    // boundary), and dedupe continuity is preserved via
-                    // seedKeys. Frozen rows are the same instances every tick,
-                    // so LazyColumn's key+equals skip path sees ZERO change.
+                    // Row-for-row equivalence with the old full build holds by construction: buildFlatChatItems' neighbor lookbacks (isResumeContinuation) only ever read
+                    // EARLIER messages, the live suffix is built against the full merged list with fromIndex (lookbacks cross the boundary), and dedupe continuity is preserved via
+                    // seedKeys. Frozen rows are the same instances every tick, so LazyColumn's key+equals skip path sees ZERO change.
                     //
                     // Throttle (unchanged): conflate() + sample(80) keeps UI
                     // publication at ~12fps regardless of token rate.
@@ -5641,4 +5637,3 @@ private fun HistoryPageEdge(text: String, onClick: () -> Unit) {
 // [T-android-split-chat] Message rows, assistant blocks, tool detail, composer
 // widgets, model picker and misc views live in their own Chat*UI / ChatMiscViews
 // files; see the KDoc at each extracted declaration.
-

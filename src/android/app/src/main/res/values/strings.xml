@@ -2,21 +2,9 @@
 <resources>
     <string name="app_name">Minis Ultra</string>
     <string name="new_chat">New Chat</string>
-    <string name="settings">Settings</string>
-    <string name="providers">Providers</string>
-    <string name="add_provider">Add Provider</string>
-    <string name="appearance">Appearance</string>
-    <string name="no_sessions">No conversations yet</string>
-    <string name="no_providers">Add a provider to get started</string>
-    <string name="send">Send</string>
-    <string name="type_message">Type a message…</string>
     <string name="delete">Delete</string>
     <string name="cancel">Cancel</string>
     <string name="save">Save</string>
-    <string name="api_key">API Key</string>
-    <string name="label">Label</string>
-    <string name="enabled">Enabled</string>
-    <string name="select_model">Select Model</string>
 
     <!-- Session Memory Sheet -->
     <string name="session_memory_title">Memories in Session</string>
@@ -51,7 +39,6 @@
     <string name="memory_section_tool_activity_footer">Memory reads and writes performed by the Agent during this session.</string>
     <string name="memory_section_written_content">Written Content</string>
     <string name="memory_section_tool_result">Tool Result</string>
-    <string name="memory_section_keywords">Keywords</string>
     <string name="memory_action_edit">Edit</string>
     <string name="memory_action_save">Save</string>
     <string name="memory_action_revoke">Revoke</string>
@@ -62,7 +49,6 @@
     <string name="memory_revoke_result_not_found">Entry not found in recent daily logs.</string>
     <string name="memory_revoke_result_io_error">Error writing file: %1$s</string>
     <string name="memory_save_toast">Saved</string>
-    <string name="memory_save_error">Save failed: %1$s</string>
     <string name="memory_global_footer">Persistent instructions and preferences visible to the Agent in every session. The Agent cannot modify this file.</string>
 
     <!-- Check Update -->
@@ -121,17 +107,6 @@
     <string name="check_update_self_build_result">Self-build: %1$s</string>
 
     <!-- Permissions (Settings → Permissions) -->
-    <string name="permissions_title">Permissions</string>
-    <string name="permissions_reset_all">Reset All</string>
-    <string name="permissions_reset_dialog_title">Reset All Permissions?</string>
-    <string name="permissions_reset_dialog_message">Restore every permission to its default (Always Allow). Per-tool overrides will be cleared.</string>
-    <string name="permissions_reset_confirm">Reset</string>
-    <string name="permissions_level_always_allow">Always Allow</string>
-    <string name="permissions_level_ask_once">Ask Once</string>
-    <string name="permissions_level_not_allowed">Not Allowed</string>
-    <string name="permissions_category_privacy">Privacy</string>
-    <string name="permissions_category_media">Media</string>
-    <string name="permissions_category_system">System</string>
 
     <!-- T4: @ file-mention picker -->
     <string name="mention_scanning">Scanning files…</string>
@@ -196,7 +171,6 @@
     <string name="a11y_repair_footer_shizuku">Android removes the accessibility grant whenever an app is force-stopped, and does not restore it automatically. Shizuku can write it back directly.</string>
     <string name="a11y_repair_footer_manual">Android removes the accessibility grant whenever an app is force-stopped, and does not restore it automatically. Install and authorize Shizuku to repair this in one tap in future.</string>
     <string name="bg_service_notification_title">Minis Ultra Agent Active</string>
-    <string name="bg_service_notification_text">%1$s | %2$s | %3$s</string>
     <string name="bg_service_notification_text_live">%1$s | %2$s</string>
     <!-- Shown on the ongoing notification / Live Update chip once the agent
          task has finished but the service is still alive because the user is
@@ -221,7 +195,6 @@
     <!-- T68: Browser settings — UA list "Not set" placeholder for empty Custom UA -->
     <string name="browser_settings_ua_not_set">Not set</string>
     <!-- T135 — Settings + About i18n keys -->
-    <string name="settings_back">Back</string>
     <string name="settings_title">Settings</string>
     <string name="settings_section_llm_providers">LLM Providers</string>
     <string name="settings_section_llm_providers_footer">Configure which models the Agent uses, manage API keys &amp; OAuth for each provider, and create model groups for fallback or load balancing.</string>
@@ -243,9 +216,6 @@
     <string name="settings_multi_agent_enable_subtitle">Main session model coordinates; teammates run via spawn_agent</string>
     <string name="settings_multi_agent_max">Max concurrent sub-agents</string>
     <string name="settings_multi_agent_max_subtitle">Up to %1$d teammates in one turn</string>
-    <string name="settings_multi_agent_turns">Sub-agent turn limit</string>
-    <string name="settings_multi_agent_turns_subtitle">Hard cap %1$d turns (simple ≈ 10, complex 40–60, max 60)</string>
-    <string name="settings_multi_agent_turns_subtitle_v2">Coordinator-assigned per task (simple ≈ 10, complex 40–60); fixed 200-turn runaway guard</string>
     <string name="settings_multi_agent_attempts">Sub-agent retry attempts</string>
     <string name="settings_multi_agent_attempts_subtitle">Up to %1$d attempts on transient endpoint errors (1 = no retry; retries rotate pool endpoints)</string>
     <string name="settings_multi_agent_decrease">Decrease</string>
@@ -261,11 +231,6 @@
     <string name="settings_multi_agent_slot_main">Main session model</string>
     <string name="settings_multi_agent_no_models">No enabled models yet. Add a provider first.</string>
     <string name="settings_multi_agent_stale_pruned">Cleared %1$d slot(s) whose providers no longer exist. Pick again.</string>
-    <string name="settings_plan_discussion_section">Plan discussion</string>
-    <string name="settings_plan_discussion_off">Off</string>
-    <string name="settings_plan_discussion_auto">Auto (skip chitchat)</string>
-    <string name="settings_plan_discussion_always">Every message</string>
-    <string name="settings_plan_discussion_footer">Auto opens a role graph only for task-shaped messages: product brief, architecture, parallel engineer/tester critique, at most one revise, then a secretary contract. Discussion is read-only. The main session then executes the contract. Off and Every message override Auto.</string>
     <string name="settings_memory">Memory</string>
     <string name="settings_memory_subtitle">Persistent knowledge across sessions</string>
     <!-- [T-mcp-integration-android] MCP Integrations settings entry + management screen -->
@@ -303,11 +268,7 @@
     <string name="dev_suite_required">required</string>
     <string name="dev_suite_assemble">Assemble</string>
     <string name="dev_suite_start_install">Starting install</string>
-    <string name="dev_suite_apt_failed">apt install failed (exit %1$d)</string>
-    <string name="dev_suite_step_failed">Step failed (exit %1$d): %2$s</string>
-    <string name="dev_suite_probe_failed">Install finished but the readiness probe did not pass — %1$s</string>
     <string name="dev_suite_interrupted">Install was interrupted</string>
-    <string name="local_gateway_install_failed">Install failed</string>
     <string name="builtin_plugin_a2a_name">Agent2API Gateway (local)</string>
     <string name="builtin_plugin_a2a_summary">Local multi-provider OpenAI-compatible proxy · add upstream accounts in its web panel · loopback only</string>
     <string name="builtin_plugin_install">Install</string>
@@ -339,7 +300,6 @@
     <string name="a2a_open_in_browser">Open in browser</string>
     <string name="dev_suite_no_space">Not enough storage: about %1$d GB needed, %2$d GB free</string>
     <string name="dev_suite_skipped_dep">Skipped: %1$s did not install</string>
-    <string name="dev_suite_uninstall_failed">Uninstall failed (exit %1$d)</string>
     <string name="dev_suite_remove_confirm">Remove %1$s from the sandbox? Downloaded files and command links are deleted; apt packages stay installed.</string>
     <string name="plugin_market_footer_online">Remote OpenAPI-lite tools. Requests are SSRF-checked; API keys never enter the model context.</string>
     <string name="plugin_market_section_local">Local tools</string>
@@ -349,7 +309,6 @@
     <string name="plugin_market_local_add_hint">Command template with {{param}} placeholders</string>
     <string name="plugin_market_local_edit">Edit local tool</string>
     <string name="plugin_market_local_name">Tool name</string>
-    <string name="plugin_market_local_name_invalid">Letters, digits and underscore only; cannot start with a digit.</string>
     <string name="plugin_market_local_desc">Description (shown to the model)</string>
     <string name="plugin_market_local_command">Command template</string>
     <string name="plugin_market_local_params">Params (one per line)</string>
@@ -371,7 +330,6 @@
     <string name="settings_collab_roles_import_mindmap_subtitle">Paste a Mermaid mindmap or indented tree, preview roles, then add them to the catalog</string>
     <string name="settings_collab_roles_import_title">Import team from mind map</string>
     <string name="settings_collab_roles_import_hint">Paste Mermaid mindmap or an indented tree</string>
-    <string name="settings_collab_roles_import_preview">Preview</string>
     <string name="settings_collab_roles_import_preview_count">%1$d roles detected</string>
     <string name="settings_collab_roles_import_empty">No team members found. Check the root and indentation.</string>
     <string name="settings_collab_roles_import_confirm">Import %1$d roles</string>
@@ -391,14 +349,10 @@
     <string name="mcp_edit">Edit MCP Server</string>
     <string name="mcp_section_servers">Servers</string>
     <string name="mcp_section_footer">MCP servers let the Agent call external tools via minis-mcp-cli. Configs are stored in /var/minis/mcp-servers/servers.json (Claude Desktop compatible). Presets start off — flip a switch to add one.</string>
-    <string name="mcp_section_presets">Presets</string>
-    <string name="mcp_section_presets_footer">One tap adds a server. Git is the official Python mcp-server-git (status, diff, log, commit, blame). Tap a server below to see its tools.</string>
     <string name="mcp_manage">Manage</string>
     <string name="mcp_tools_refresh">Refresh tools</string>
     <string name="mcp_delete_server">Delete server</string>
     <string name="mcp_tools_loading">Loading tools…</string>
-    <string name="mcp_empty_title">No MCP servers</string>
-    <string name="mcp_empty_action">Add a server with the + button.</string>
     <string name="mcp_transport_http">HTTP</string>
     <string name="mcp_transport_sse">SSE</string>
     <string name="mcp_transport_stdio">STDIO</string>
@@ -499,17 +453,6 @@
     <!-- T-soul-md — SOUL.md personality / identity settings -->
     <string name="settings_soul">Soul</string>
     <string name="settings_soul_subtitle">Persistent personality and identity (SOUL.md)</string>
-    <string name="settings_workspace_rules">Workspace rules</string>
-    <string name="settings_workspace_rules_subtitle">Markdown rule files on device (id.md + id.json)</string>
-    <string name="workspace_rules_title">Workspace rules</string>
-    <string name="workspace_rules_header">Rules</string>
-    <string name="workspace_rules_footer">Stored as id.md + id.json + state.json. Rules are not injected into the chat system prompt.</string>
-    <string name="workspace_rules_empty">No rules yet</string>
-    <string name="workspace_rules_add">New rule</string>
-    <string name="workspace_rules_name">Name</string>
-    <string name="workspace_rules_body">Markdown</string>
-    <string name="settings_tool_limits">Tool limits</string>
-    <string name="settings_tool_limits_subtitle">Shell timeout, file_read caps, sub-agent turns</string>
     <string name="tool_limits_title">Tool limits</string>
     <string name="tool_limits_header">Caps</string>
     <string name="tool_limits_footer">These caps apply to the next tool call. Shell timeout is both the default and the maximum the agent may request. file_read still has an 80 KB hard cap to protect the UI.</string>
@@ -530,9 +473,6 @@
     <string name="gate_intercept_rejected">Tool rejected</string>
     <string name="gate_intercept_dismiss">Dismiss</string>
     <string name="settings_evolution">Evolution</string>
-    <string name="settings_evolution_subtitle">Learn preferences from corrections (%1$s)</string>
-    <string name="settings_evolution_state_on">currently on</string>
-    <string name="settings_evolution_state_off">currently off</string>
     <string name="evolution_title">Evolution</string>
     <string name="evolution_section_master">Learning</string>
     <string name="evolution_enable_title">Enable evolution</string>
@@ -577,19 +517,10 @@
     <string name="soul_prompt_delete_body">%1$s will be removed from the private persona folder. SOUL.md is not affected.</string>
     <string name="soul_field_name">Name</string>
     <string name="soul_field_style">Style</string>
-    <string name="soul_field_lang">Language</string>
-    <string name="soul_lang_auto">Auto</string>
-    <string name="soul_lang_zh">中文</string>
-    <string name="soul_lang_en">English</string>
     <string name="soul_body_placeholder">Describe how the Agent should sound, think, and behave…</string>
-    <string name="soul_length_indicator">%1$d characters</string>
     <string name="soul_count_zero">0 chars</string>
-    <string name="soul_count_chars">%1$d / %2$d chars</string>
     <string name="soul_count_plain_chars">%1$d chars</string>
     <string name="soul_count_plain_words">%1$d words</string>
-    <string name="soul_count_words">%1$d / %2$d words</string>
-    <string name="soul_over_limit_chinese">Over limit: %1$d / %2$d chars. Chinese ≤ %2$d chars or English ≤ %3$d words.</string>
-    <string name="soul_over_limit_english">Over limit: %1$d / %2$d words. Chinese ≤ %3$d chars or English ≤ %2$d words.</string>
     <string name="soul_save">Save</string>
     <string name="soul_cancel">Cancel</string>
     <string name="soul_ok">OK</string>
@@ -703,7 +634,6 @@
     <string name="common_off">Off</string>
     <string name="common_yes">Yes</string>
     <string name="common_no">No</string>
-    <string name="memory_file_empty">Empty</string>
 
     <!-- T172 — components / onboarding / preview i18n -->
     <string name="common_close">Close</string>
@@ -716,13 +646,9 @@
     <string name="webpreview_close">Close</string>
     <string name="webpreview_stop">Stop loading</string>
     <string name="webpreview_reload">Reload</string>
-    <string name="webpreview_share">Share</string>
     <string name="webpreview_open_external">Open in external browser</string>
-    <string name="webpreview_open_external_failed">No app available to open this</string>
-    <string name="webpreview_open_in_browser">Open in browser</string>
     <string name="webpreview_open_fullscreen">Open fullscreen</string>
     <string name="webpreview_more">More</string>
-    <string name="webpreview_collapse">Collapse</string>
     <string name="webpreview_desktop_site">Desktop site</string>
     <string name="webpreview_mobile_site">Mobile site</string>
     <string name="webpreview_pin_to_home">Add to Home screen</string>
@@ -741,7 +667,6 @@
     <string name="filebrowser_delete_title">Delete \"%1$s\"?</string>
     <string name="filebrowser_delete_message">This action cannot be undone.</string>
     <string name="filebrowser_error_title">Error</string>
-    <string name="filebrowser_sort_action">Sort</string>
     <string name="filebrowser_sort_ascending">Ascending</string>
     <string name="filebrowser_sort_descending">Descending</string>
     <string name="filebrowser_sort_folders_first">Folders First</string>
@@ -772,10 +697,6 @@
     <string name="filepreview_pdf_empty">Empty document</string>
     <string name="filepreview_image_decode_error">Unable to decode image</string>
     <string name="filepreview_image_load_error">Failed to load image</string>
-    <string name="filepreview_file_read_error">Failed to read file</string>
-    <string name="filepreview_csv_parse_error">Failed to parse CSV</string>
-    <string name="filepreview_archive_read_error">Failed to read archive</string>
-    <string name="filepreview_pdf_render_error">Failed to render PDF</string>
     <string name="filepreview_page_n">Page %1$d</string>
     <string name="sessionlist_section_pinned">Pinned</string>
     <string name="sessionlist_section_today">Today</string>
@@ -787,11 +708,6 @@
          list pane when the first DB emission hasn't arrived within the 3s
          budget. -->
     <string name="sessionlist_recovering">Recovering…</string>
-    <string name="sessionlist_select_title">Select Sessions</string>
-    <string name="sessionlist_n_selected">%1$d Selected</string>
-    <string name="sessionlist_select_all">Select All</string>
-    <string name="sessionlist_deselect_all">Deselect All</string>
-    <string name="sessionlist_select_action">Select</string>
 
     <!-- [T-android-session-grouping] Session groups. Keys mirror the iOS
          wording so the two platforms read identically. -->
@@ -829,13 +745,10 @@
     <string name="group_suggest">AI Suggest</string>
     <string name="group_suggest_failed">AI Suggest (failed — try again)</string>
     <string name="group_suggest_merge">Move into “%1$s”?</string>
-    <string name="group_move_action">Move</string>
     <string name="group_collapse">Collapse workspace</string>
     <string name="group_expand">Expand workspace</string>
     <string name="sessionlist_settings">Settings</string>
-    <string name="sessionlist_shell">Shell</string>
     <string name="sessionlist_shell_terminal">Shell Terminal</string>
-    <string name="sessionlist_rootfs_management">Rootfs Management</string>
     <string name="sessionlist_open_browser">Open Browser</string>
     <string name="sessionlist_browser_settings">Browser Settings</string>
     <string name="sessionlist_pin">Pin</string>
@@ -844,19 +757,6 @@
     <string name="sessionlist_export_json">JSON</string>
     <string name="sessionlist_export_plain">Plain Text</string>
     <!-- T-export-optimize (b443b54d) — batched/zipped export progress + preview -->
-    <string name="export_summary_format">Format</string>
-    <string name="export_summary_format_value_json">JSON</string>
-    <string name="export_summary_format_value_txt">Plain Text</string>
-    <string name="export_summary_messages">Messages</string>
-    <string name="export_summary_messages_value">%1$d messages</string>
-    <string name="export_summary_timerange">Time range</string>
-    <string name="export_summary_timerange_value">%1$s — %2$s</string>
-    <string name="export_summary_attachments">Attachments</string>
-    <string name="export_summary_attachments_value">%1$d images / %2$d videos</string>
-    <string name="export_summary_size">Estimated size</string>
-    <string name="export_summary_size_value">~ %1$s</string>
-    <string name="export_progress_running">Exporting %1$d / %2$d…</string>
-    <string name="export_progress_done">Export complete</string>
     <string name="export_progress_failed">Export failed</string>
     <string name="sessionlist_edit_title_category">Edit Title &amp; Category</string>
     <string name="sessionlist_regenerate_title">Regenerate Title</string>
@@ -865,7 +765,6 @@
     <string name="sessionlist_search_action">Search</string>
     <string name="sessionlist_dismiss">Dismiss</string>
     <string name="sessionlist_delete_one_title">Delete conversation?</string>
-    <string name="sessionlist_delete_n_title">Delete %1$d conversations?</string>
     <string name="sessionlist_delete_message">This cannot be undone.</string>
     <string name="browser_title">Browser</string>
     <string name="browser_settings_title">Browser Settings</string>
@@ -929,13 +828,10 @@
     <string name="browser_history_search">Search history</string>
     <string name="browser_history_empty_title">No browsing history</string>
     <string name="browser_history_empty_subtitle">History is kept for 7 days</string>
-    <string name="browser_history_results">Results</string>
     <string name="browser_history_clear_dialog_title">Clear Browsing History?</string>
     <string name="browser_history_clear_dialog_message">This will remove all browsing history. This cannot be undone.</string>
     <string name="terminal_title">Minis Ultra Shell</string>
     <string name="terminal_clear">Clear</string>
-    <string name="terminal_show_keyboard">Show</string>
-    <string name="terminal_hide_keyboard">Hide</string>
 
     <!-- T172 — settings detail screen i18n keys (Appearance, EnvVars, Logs,
          Memory, Permissions, Skills, Minis UltraSkillsBrowser, Storage, Usage,
@@ -1015,12 +911,10 @@
     <string name="appearance_context_glow_subtitle">A rotating glow traces the composer edge as context approaches the limit</string>
     <string name="chat_usage_footer_tokens">↑ %1$s ↓ %2$s</string>
     <string name="chat_usage_footer_cache">cache %1$d%%</string>
-    <string name="chat_title_pill_session_default">Untitled</string>
     <string name="appearance_section_grouping">Grouping</string>
     <string name="appearance_auto_grouping">Auto-Grouping</string>
     <string name="appearance_auto_grouping_subtitle">File new chats into a matching group</string>
     <string name="appearance_auto_grouping_footer">When a chat\'s title is first generated, also file it into a matching existing group. Runs once per chat, only uses groups you already created, and leaves the chat ungrouped when nothing matches.</string>
-    <string name="appearance_section_tool_preview">Tool Status Bar</string>
     <string name="appearance_section_chat_chrome">Chat chrome</string>
     <string name="appearance_chat_chrome_footer">Hide overlapping live-status UI so the transcript stays readable. Running tools still appear until they finish.</string>
     <string name="appearance_show_floating_tool_bar">Floating tool status bar</string>
@@ -1029,7 +923,6 @@
     <string name="appearance_show_subagent_bar">Sub-agent live chips</string>
     <string name="appearance_show_mic_button_title">Show mic button</string>
     <string name="appearance_show_mic_button_subtitle">Voice input button in the composer. Voice mode itself is always reachable from the app icon.</string>
-    <string name="appearance_show_plan_banner">Plan-discussion banner</string>
     <string name="appearance_section_auto_focus_after_reply">Auto-Focus Input After Reply</string>
     <string name="appearance_auto_focus_after_reply_title">Auto-Focus Input After Reply</string>
     <string name="appearance_auto_focus_after_reply_footer">When on, the keyboard pops up automatically after the model finishes replying so the input is ready for a follow-up. On by default; entering a conversation never pops the keyboard. Turn off if you prefer to read the response without the keyboard.</string>
@@ -1070,13 +963,11 @@
     <string name="env_var_platform_tier_0">Needs config</string>
     <string name="env_var_platform_var_configured">Configured</string>
     <string name="env_var_platform_var_missing">Tap to add %1$s</string>
-    <string name="env_var_platform_var_add_title">Add %1$s</string>
     <string name="env_var_section_header">Variables</string>
     <string name="env_var_section_footer">Environment variables are injected into the sandbox shell at session start. Names are uppercased and must match POSIX shell variable rules.</string>
     <string name="env_var_empty_title">No Environment Variables</string>
     <string name="env_var_empty_action">Tap + to add one.</string>
     <string name="env_var_toggle_visibility">Toggle visibility</string>
-    <string name="env_var_delete_confirm_title">Delete %1$s?</string>
     <string name="env_var_delete_confirm_text">This will permanently remove the environment variable and its value.</string>
     <string name="env_var_form_edit_title">Edit Variable</string>
     <string name="env_var_form_add_title">Add Variable</string>
@@ -1087,7 +978,6 @@
     <string name="env_var_error_invalid_key">Must start with a letter, use only letters/numbers/underscores</string>
     <string name="env_var_error_duplicate">A variable with this name already exists</string>
     <string name="log_title">Logs</string>
-    <string name="log_share_all">Share All</string>
     <string name="log_section_logging">Logging</string>
     <string name="log_section_logging_footer">When enabled, all console output is captured to daily log files in the app\'s private storage.</string>
     <string name="log_enable_switch">Enable Logging</string>
@@ -1100,11 +990,9 @@
     <string name="log_delete_confirm_title">Delete All Logs?</string>
     <string name="log_delete_confirm_text">This will delete %1$s of log files. This action cannot be undone.</string>
     <string name="log_delete_confirm">Delete All</string>
-    <string name="log_truncated_marker">… (truncated, %1$s total)</string>
     <string name="log_not_found">Log file not found.</string>
     <string name="log_error_reading">Error reading log: %1$s</string>
     <string name="log_share_chooser">Share Log</string>
-    <string name="log_share_all_chooser">Share Logs</string>
     <string name="memory_title">Memory</string>
     <string name="settings_memory_global_header">Default</string>
     <string name="settings_memory_global_footer">Per-session toggles (set via the /memory slash command or the Session Memory sheet) override this default. Existing sessions are not affected when you flip this switch.</string>
@@ -1137,11 +1025,9 @@
     <string name="perm_tool_a11y_cli">android-a11y-cli</string>
     <string name="perm_tool_shizuku_cli">android-shizuku-cli</string>
     <string name="perm_section_a11y">Accessibility</string>
-    <string name="perm_section_shizuku">Shizuku</string>
     <string name="perm_a11y_section_footer">android-a11y-cli lets the Agent read on-screen UI structure, perform taps and gestures, and watch system events. Both rows below must be set: pick an Agent permission and enable the Accessibility service in system Settings.</string>
     <string name="perm_shizuku_section_footer">android-shizuku-cli grants the Agent privileged Android APIs (package install, settings put, force-stop, …) via the Shizuku service authorized over wireless ADB or root. Both rows below must be set.</string>
     <string name="perm_a11y_cli_description">Lets the Agent read screen UI, tap, type, and watch events</string>
-    <string name="perm_shizuku_cli_description">Privileged Android APIs via the Shizuku service</string>
     <string name="perm_tool_su_cli">android-su</string>
     <string name="perm_section_host_su">Host su</string>
     <string name="perm_host_su_cli_description">Magisk/KernelSU host root. Falls back to Shizuku if su is missing or denied.</string>
@@ -1186,35 +1072,22 @@
 
     <!-- T322: Shizuku permission walkthrough -->
     <string name="shizuku_title">Shizuku</string>
-    <string name="shizuku_settings_subtitle">Privileged Android control via Shizuku or AXManager</string>
     <string name="shizuku_status_header">Status</string>
     <string name="shizuku_status_footer">Shizuku exposes privileged system APIs to user apps without root, by running a small service started via wireless ADB or root. Three compatible providers are supported — Shizuku (RikkaApps), AXManager (Axeron), and Sui (a Magisk/KernelSU module for rooted devices); install any one. Once authorized, Minis Ultra can use the android-shizuku-cli CLI for package, permission, settings, input, and activity management.</string>
     <string name="shizuku_actions_header">Next Step</string>
     <string name="shizuku_capabilities_header">Capabilities</string>
     <string name="shizuku_capabilities_footer">Run `android-shizuku-cli --help` in a shell for full usage. Available whether the binder comes from Shizuku, AXManager, or Sui — the command surface is identical.</string>
-    <string name="shizuku_cap_package">package</string>
     <string name="shizuku_cap_package_desc">Install, uninstall, list, and query apps</string>
-    <string name="shizuku_cap_permission">permission</string>
     <string name="shizuku_cap_permission_desc">Grant or revoke runtime permissions</string>
-    <string name="shizuku_cap_activity">activity</string>
     <string name="shizuku_cap_activity_desc">Start activities and send broadcasts</string>
-    <string name="shizuku_cap_display">display</string>
     <string name="shizuku_cap_display_desc">Query and adjust display settings</string>
-    <string name="shizuku_cap_settings">settings</string>
     <string name="shizuku_cap_settings_desc">Read and write system / secure / global settings</string>
-    <string name="shizuku_cap_user">user</string>
     <string name="shizuku_cap_user_desc">List and manage device users</string>
-    <string name="shizuku_cap_network">network</string>
     <string name="shizuku_cap_network_desc">Inspect and toggle network state</string>
-    <string name="shizuku_cap_input">input</string>
     <string name="shizuku_cap_input_desc">Inject taps, swipes, keys, and text</string>
-    <string name="shizuku_cap_notification">notification</string>
     <string name="shizuku_cap_notification_desc">Post and manage notifications</string>
-    <string name="shizuku_cap_file">file</string>
     <string name="shizuku_cap_file_desc">Read and write privileged file paths</string>
-    <string name="shizuku_cap_device">device</string>
     <string name="shizuku_cap_device_desc">Query device properties and hardware state</string>
-    <string name="shizuku_cap_service">service</string>
     <string name="shizuku_cap_service_desc">Call and inspect system services</string>
     <string name="shizuku_install_footer">Install any one of Shizuku (RikkaApps), AXManager (Axeron), or Sui (RikkaApps) — all three implement the same protocol and are fully interchangeable. Shizuku and AXManager are regular apps activated via wireless ADB. Sui is for already-rooted devices: it installs as a Magisk/KernelSU module, needs no app, and stays active across reboots. On KernelSU or APatch, Sui also requires a Zygisk implementation (Zygisk Next / ReZygisk / NeoZygisk) — without it Sui will not load. Install one, then return here.</string>
     <string name="shizuku_start_footer">Open the manager app and start the service via wireless ADB (no PC) or root. After it shows running, return here.\n\nUsing AXManager? Also enable Settings → "AX-Permission Intercept" inside AXManager — only that switch makes AXManager push its Shizuku-compatible binder to Minis Ultra.</string>
@@ -1261,17 +1134,13 @@
     <string name="skill_empty_action">Tap + to import a SKILL.md, .zip, or .skill file, or browse Minis Ultra Skills.</string>
     <string name="skill_import_modal_title">Import Skill</string>
     <string name="skill_minis_skills_modal">Minis Ultra Skills</string>
-    <string name="skill_delete_confirm_title">Delete %1$s?</string>
     <string name="skill_delete_confirm_text">This will permanently remove the skill and its files.</string>
-    <string name="skill_import_sheet_title">Import Skill</string>
     <string name="skill_import_tab_url">URL</string>
     <string name="skill_import_tab_paste">Paste</string>
     <string name="skill_import_tab_file">File</string>
     <string name="skill_import_url_instruction">Enter the URL of a SKILL.md file (GitHub links supported).</string>
-    <string name="skill_import_url_label">URL</string>
     <string name="skill_import_url_placeholder">github.com/user/repo/blob/main/SKILL.md</string>
     <string name="skill_import_paste_instruction">Paste the contents of a SKILL.md file. Must include YAML frontmatter with \'name\' field.</string>
-    <string name="skill_import_paste_label">SKILL.md Content</string>
     <string name="skill_import_file_instruction">Select a .md, .zip, or .skill file from your device.</string>
     <string name="skill_import_file_button">Choose File</string>
     <string name="skill_import_error_no_url">Enter a URL</string>
@@ -1291,10 +1160,6 @@
     <string name="skill_detail_updated">Updated</string>
     <string name="skill_detail_delete">Delete Skill</string>
     <string name="skill_detail_edit_name_title">Edit Name</string>
-    <string name="skill_detail_section_description">DESCRIPTION</string>
-    <string name="skill_detail_section_files">FILES</string>
-    <string name="skill_detail_section_meta">META</string>
-    <string name="skill_detail_section_update">UPDATE</string>
     <string name="skill_file_save">Save</string>
     <string name="skill_file_edit">Edit</string>
     <string name="skill_detail_status_reading">Reading file…</string>
@@ -1304,7 +1169,6 @@
     <string name="skill_detail_status_downloading">Downloading…</string>
     <string name="skill_detail_status_rescanning">Rescanning…</string>
     <string name="skill_detail_error_missing">SKILL.md missing or invalid on disk</string>
-    <string name="skill_detail_source_url">URL</string>
     <string name="skill_detail_source_file">File import</string>
     <string name="skill_detail_source_bundled">Built-in</string>
     <string name="skill_detail_source_session">Session created</string>
@@ -1334,8 +1198,6 @@
     <string name="storage_clearing_status">Clearing…</string>
     <string name="storage_clear_session_button">Clear Session Files</string>
     <string name="storage_clear_confirm_title">Clear Session Files?</string>
-    <string name="storage_clear_confirm_text">This will delete %1$s of files. This action cannot be undone.</string>
-    <string name="storage_clear_confirm_button">Clear %1$s</string>
     <string name="usage_title">Usage</string>
     <string name="usage_section_total">Total Usage</string>
     <string name="usage_range_today">Today</string>
@@ -1371,9 +1233,6 @@
     <string name="usage_attr_unknown_session">Model unknown — the session record was deleted</string>
     <string name="usage_attr_removed">No longer in your configured providers</string>
     <string name="usage_detail_output">Output</string>
-    <string name="usage_detail_cache_read">Cache Read</string>
-    <string name="usage_detail_cache_creation">Cache Creation</string>
-    <string name="usage_detail_cache_hit_rate">Cache Hit Rate</string>
     <string name="usage_detail_daily_avg">Daily Avg</string>
     <string name="usage_detail_session_avg">Per-Session Avg</string>
     <string name="usage_detail_sessions">Sessions</string>
@@ -1386,7 +1245,6 @@
     <string name="mirror_mirrors_section">Mirrors</string>
     <string name="mirror_test_speed_testing">Testing…</string>
     <string name="mirror_test_speed_label">Test Speed</string>
-    <string name="mirror_detect_fast_testing">Testing…</string>
     <string name="mirror_detect_fast_label">Detect Fast Mirrors</string>
     <string name="mirror_official_badge">Official</string>
     <string name="mirror_timeout_label">Timeout</string>
@@ -1410,8 +1268,6 @@
     <string name="rootfs_result_section">Result</string>
     <string name="rootfs_info_section">Info</string>
     <string name="rootfs_about_title">About Rootfs</string>
-    <string name="rootfs_about_description">The rootfs contains the Ubuntu Linux filesystem used by the sandbox. Resetting will delete all data and restore to factory state.</string>
-    <string name="rootfs_about_operations">Reset: Delete everything | Backup: Save /root directory | Restore: Recover saved data</string>
     <string name="rootfs_reset_confirm_title">Reset Rootfs?</string>
     <string name="rootfs_reset_confirm_message">This will delete the entire rootfs. All data will be lost.</string>
     <string name="rootfs_reset_backup_confirm_title">Reset with Backup?</string>
@@ -1595,11 +1451,8 @@
     <string name="model_group_detail_limit_context_window">Limit Context Window</string>
     <string name="model_group_detail_max_context">Max Context</string>
     <string name="model_group_detail_unlimited">Unlimited</string>
-    <string name="model_group_detail_context_limit_unavailable">Group members did not declare a context window — cannot apply a limit. Add a model or check model metadata first.</string>
-    <string name="model_group_detail_context_limit_runtime_capped">Current member max ctx=%1$s; saved %2$s will be clipped at runtime. The saved value is preserved and re-applies if you add a higher-context model.</string>
     <string name="model_groups_defaults">Defaults</string>
     <string name="model_groups_default_primary">Default primary</string>
-    <string name="model_groups_translation">Translation</string>
     <string name="model_groups_slot_groups">Groups</string>
     <string name="model_groups_slot_models">Models</string>
     <string name="composer_expand_editor">Expand editor</string>
@@ -1617,7 +1470,6 @@
     <string name="code_editor_status_position">Ln %1$d, Col %2$d</string>
     <string name="code_editor_status_size">%1$d lines · %2$d chars</string>
     <string name="translate_action">Translate</string>
-    <string name="translate_using_model">Using %1$s</string>
     <string name="translate_set_in_defaults">Choose a translation model in Settings → Translate.</string>
     <string name="model_groups_model_groups">Model Groups</string>
     <string name="model_groups_new_group">New Group</string>
@@ -1629,17 +1481,11 @@
     <string name="model_groups_none">None</string>
     <string name="add_models_to_group_search_models">Search models</string>
     <string name="add_models_to_group_clear">Clear</string>
-    <string name="settings_agent_loop_models">Agent Loop Models</string>    <string name="agent_loop_models_groups">Groups</string>
-    <string name="agent_loop_models_picking_a_group_pins_every_model_in_it_a">Picking a group pins every model in it. Add or remove models inside Model Groups.</string>
-    <string name="agent_loop_models_add_a_provider_and_refresh_its_model_lis">Add a provider and refresh its model list to populate this picker.</string>
-    <string name="agent_loop_models_no_models_or_groups_available_yet">No models or groups available yet.</string>
-    <string name="agent_loop_models_selected">Selected</string>
-    <string name="agent_loop_models_not_selected">Not selected</string>
+    <string name="agent_loop_models_groups">Groups</string>
 
     <!-- T172-A parameterized strings -->
     <string name="add_custom_model_id_footer">Model ID is the API identifier sent to %1$s. Display Name is the friendlier label shown in the picker; defaults to Model ID when left blank.</string>
     <string name="add_custom_model_eg_id_placeholder">e.g. gpt-4o-custom</string>
-    <string name="add_provider_built_in_models_count">%1$d built-in models</string>
     <string name="add_provider_subtitle_openai">Works with Codex, DeepSeek, Moonshot, Groq and other compatible vendors</string>
     <string name="add_provider_subtitle_anthropic">Works with Claude and Anthropic-protocol-compatible services</string>
     <string name="add_provider_subtitle_gemini">Works with the Gemini series and Google AI Studio</string>
@@ -1703,8 +1549,6 @@
     <string name="read_aloud_group">Read Aloud</string>
     <!-- T-minis-textkit selection menu actions (Copy / Copy Markdown / Copy Rich Text) -->
     <string name="selection_copy">Copy</string>
-    <string name="selection_copy_markdown">Copy Markdown</string>
-    <string name="selection_copy_rich_text">Copy Rich Text</string>
     <string name="selection_copy_full_markdown">Copy Full Markdown</string>
     <string name="selection_copy_full_rich_text">Copy Full Rich Text</string>
     <string name="selection_copy_full_plain_text">Copy Full Plain Text</string>
@@ -1783,9 +1627,6 @@
     <string name="chat_menu_enhanced_cache">Enhanced Cache</string>
     <string name="chat_menu_fast_mode">Enable Fast Mode</string>
     <string name="chat_menu_auto_compact">Auto Compact</string>
-    <string name="chat_menu_plan_discussion">Plan discussion</string>
-    <string name="plan_discussion_banner">Plan discussion is on (Settings → Multi-agent). Task-shaped messages run a role graph first: brief, design, parallel critique, at most one revise, then the contract.</string>
-    <string name="settings_task_notifications_permission">Notification permission is required on Android 13+. If the toggle is on but you see no alerts, grant notifications for Minis Ultra.</string>
     <string name="settings_task_notifications_granted">Notification permission granted.</string>
     <string name="settings_task_notifications_denied">Notification permission denied — task alerts will not appear until you grant it.</string>
     <string name="context_near_capacity_title">Context Near Capacity</string>
@@ -1829,7 +1670,6 @@
     <string name="shared_folders_info_banner">These directories are visible inside the Linux sandbox. Skills and Memory are maintained by Minis Ultra Agent tools — do not edit manually.</string>
     <string name="shared_folder_name_shared">Shared</string>
     <string name="shared_folder_name_skills">Skills</string>
-    <string name="shared_folder_name_memory">Memory</string>
     <string name="shared_folder_detail_title">Folder Details</string>
     <string name="shared_folder_browse_files">Browse Files</string>
 
@@ -1873,7 +1713,6 @@
     <string name="backup_encrypt_footer_off">Without encryption the backup is not protected — anyone with the file can read its contents.</string>
     <!-- Actions -->
     <string name="backup_start">Start Backup</string>
-    <string name="backup_working">Working…</string>
     <string name="backup_manage_destinations">Manage Destinations…</string>
     <string name="backup_section_destinations">Destinations</string>
     <string name="backup_destinations_footer">New backups are sent to every destination listed here.</string>
@@ -1893,7 +1732,6 @@
     <string name="backup_history_summary">SUMMARY</string>
     <string name="backup_history_log">LOG</string>
     <string name="backup_history_no_log">No log for this run.</string>
-    <string name="backup_history_skipped">%1$d file(s) excluded by the size limit</string>
     <string name="backup_history_remove">Remove Record</string>
     <string name="backup_history_status">Status</string>
     <string name="backup_history_started">Started</string>
@@ -1920,11 +1758,6 @@
     <string name="backup_local_removed">Local copy removed — %1$s freed on this device</string>
     <string name="backup_local_kept">Local copy kept — not every destination was verified</string>
     <string name="backup_result_delivered_cleaned">Delivered to all %1$d destination(s) and verified. The copy on this device was removed to save space.</string>
-    <string name="backup_ready_footer">Size %1$s.</string>
-    <string name="backup_ready_footer_excluded">Size %1$s · %2$d file(s) excluded by the size limit.</string>
-    <string name="backup_share">Share…</string>
-    <string name="backup_share_chooser">Share backup</string>
-    <string name="backup_save_to_files">Save to Files…</string>
     <!-- Restore -->
     <string name="backup_choose_file">Choose Backup File…</string>
     <string name="backup_choose_file_footer">Pick a .minisbak file from Files, Drive, or any connected storage.</string>
@@ -1939,7 +1772,6 @@
     <string name="backup_restore_other_sources">Other Sources</string>
     <string name="backup_choose_server">Choose from Server…</string>
     <string name="backup_server_title">Restore from Server</string>
-    <string name="backup_server_empty">No servers configured. Add one under Manage Destinations.</string>
     <string name="backup_server_no_packages">No backups found on this server.</string>
     <string name="backup_server_row">%1$s · /%2$s</string>
     <string name="backup_restore_servers_footer">Pick a server to see the backups stored on it.</string>
@@ -2071,7 +1903,6 @@
     <string name="mount_all_files_access_required_desc">Without this, the shell will only see files this app created — files written by other apps (e.g. Obsidian) will be hidden. Tap to grant in Settings.</string>
     <string name="mount_detail_title">Edit Mount</string>
     <string name="mount_detail_browse_files">Browse Files</string>
-    <string name="mount_detail_browse_files_toast">Access this mount from chat @-mentions.</string>
     <string name="mount_detail_name_invalid">Mount name must not be empty, contain \'/\', or be \'.\' or \'..\'</string>
     <string name="mount_path_unavailable">Path unavailable</string>
     <string name="mount_add_failed">Could not add mount. Name may be taken or invalid.</string>
@@ -2152,8 +1983,6 @@
     <string name="voice_system_online_subtitle">Android built-in, needs network</string>
     <string name="voice_system_offline_subtitle">Android built-in, works offline</string>
     <string name="voice_input_picker_title">Voice Input</string>
-    <string name="voice_input_picker_done">Done</string>
-    <string name="voice_input_picker_groups">Model Groups</string>
     <string name="voice_input_picker_system">System</string>
     <string name="voice_input_picker_group_models">%1$d models</string>
     <string name="voice_input_picker_group_footer">Pick a group whose audio-capable models drive this direction.</string>
@@ -2165,10 +1994,8 @@
     <!-- T288 — Logs / Config Changes screen i18n. -->
     <string name="logs_tab_config_changes">Config Changes</string>
     <string name="logs_config_used_count">%1$d / %2$d used</string>
-    <string name="logs_config_clear_all">Clear All</string>
     <string name="logs_config_empty">No config changes recorded yet.</string>
     <string name="logs_config_status_applied">APPLIED</string>
-    <string name="logs_config_status_pending">PENDING</string>
     <string name="logs_config_status_rejected">REJECTED</string>
     <string name="logs_config_status_timeout">TIMEOUT</string>
     <string name="logs_config_status_reverted">REVERTED</string>
@@ -2192,7 +2019,6 @@
     <string name="logs_config_time_yesterday">Yesterday</string>
 
     <!-- T323: System Permissions screen + AccessibilityService -->
-    <string name="system_permissions_subtitle">OS-level permissions granted from system Settings</string>
     <string name="system_permissions_a11y_oem_header">Service keeps getting killed?</string>
     <string name="system_permissions_a11y_oem_footer">%1$s may show \"this service has failed\" and stop the accessibility service in the background. Whitelist autostart and remove the battery restriction so it stays connected.</string>
     <string name="system_permissions_a11y_oem_autostart">Add to autostart whitelist</string>
@@ -2227,7 +2053,6 @@
 
     <!-- T-pwa-1: WebApp shortcut foundation (renamed from PWA) -->
     <string name="webapp_activity_label">Minis Ultra WebApp</string>
-    <string name="webapp_source_missing">Source file no longer exists.</string>
     <string name="webapp_external_nav_blocked">External navigation blocked.</string>
     <string name="webapp_pin_unsupported">Pin shortcut not supported on this launcher.</string>
     <string name="webapp_pin_failed">Failed to add to home screen.</string>
@@ -2257,7 +2082,6 @@
 
     <!-- T-imgsize: composer-side image-budget Snackbar messages -->
     <string name="image_budget_compressed">Compressed %1$d image(s) before send</string>
-    <string name="image_budget_dropped">Skipped %1$d oversized URL(s) (&gt;5MB)</string>
     <string name="image_budget_total_exceeded">Total image size exceeds 25MB; later images dropped</string>
     <!-- T-request-imgsize: request-level image-budget Snackbar message -->
     <string name="image_budget_request_elided">Older %1$d image(s) elided from request to fit 25MB budget</string>
@@ -2277,9 +2101,6 @@
     <string name="update_error_forbidden_with_link">Couldn\'t access the update server, possibly blocked by your network. Open GitHub Releases to download manually.</string>
     <string name="update_error_open_releases">Open GitHub Releases</string>
     <!-- T-android-crash-freq-share -->
-    <string name="crash_freq_dialog_title">Multiple crashes detected</string>
-    <string name="crash_freq_dialog_message">Minis Ultra has crashed several times in the last hour. Share crash logs to help fix the issue?</string>
-    <string name="crash_freq_dialog_share">Share logs</string>
     <string name="crash_freq_dialog_dismiss">Not now</string>
     <string name="crash_safe_mode_restart_needed">Minis Ultra needs to restart to finish recovering. Please tap the app icon again.</string>
     <string name="crash_freq_email_subject">Minis Ultra Crash Report %1$s</string>
@@ -2312,7 +2133,6 @@
     <!-- [T-android-scheduled-tasks-design] Scheduled tasks UI -->
     <string name="ok">OK</string>
     <string name="sessionlist_scheduled_tasks">Scheduled tasks</string>
-    <string name="scheduled_tasks_title">Scheduled Tasks</string>
     <string name="scheduled_tasks_empty">No scheduled tasks yet. Tap + to schedule a prompt that runs automatically at a chosen time.</string>
     <string name="scheduled_task_new">New scheduled task</string>
     <string name="scheduled_task_edit">Edit scheduled task</string>
@@ -2321,7 +2141,6 @@
     <string name="scheduled_task_field_repeat">Repeat</string>
     <string name="scheduled_task_field_prompt">Prompt</string>
     <string name="scheduled_task_field_prompt_hint">What should the assistant do when this fires?</string>
-    <string name="scheduled_task_target_new_session_note">Each fire creates a new chat session and posts a notification when finished. Tap the notification to view the result.</string>
     <string name="scheduled_task_repeat_once">Once</string>
     <string name="scheduled_task_repeat_daily">Daily</string>
     <string name="scheduled_task_repeat_weekdays">Weekdays</string>
@@ -2332,8 +2151,6 @@
     <string name="scheduled_task_delete_title">Delete scheduled task?</string>
     <string name="scheduled_task_delete_body">Remove \"%1$s\" from the scheduled list. The chat sessions it has already created will stay.</string>
     <string name="scheduled_task_delete_confirm">Delete</string>
-    <string name="scheduled_task_run_now_done">Task finished</string>
-    <string name="scheduled_task_run_now_done_body">The scheduled task ran and produced a response.</string>
     <string name="scheduled_task_run_now_failed">Task failed</string>
     <string name="scheduled_task_run_now_failed_body">The scheduled task couldn\'t run. Check that a provider is configured.</string>
     <string name="scheduled_task_run_now_open_session">Open session</string>
@@ -2356,7 +2173,6 @@
     <string name="scheduled_task_rerun_note">Re-runs the chosen chat from the selected message. The prompt field is not used for re-run.</string>
     <string name="scheduled_task_no_sessions">No chats yet.</string>
     <string name="scheduled_task_no_messages_in_session">No user messages in this chat.</string>
-    <string name="scheduled_task_no_models">No models configured.</string>
     <string name="scheduled_task_run_now_starting">Starting task…</string>
     <string name="scheduled_task_run_now_starting_body">Dispatching the task. This won\'t wait for it to finish.</string>
     <string name="scheduled_task_run_now_started">Task started</string>
@@ -2433,7 +2249,6 @@
     <string name="browser_downloads_failed">Failed</string>
     <string name="browser_downloads_open">Open</string>
     <string name="provider_no_key_required">No key required</string>
-    <string name="split_no_conversation_title">No Conversation Selected</string>
     <string name="split_no_conversation_subtitle">Select a conversation or start a new one</string>
     <string name="external_link_blocked">Blocked link to external app (%1$s)</string>
     <string name="external_link_no_app">No app available to open this link.</string>
@@ -2443,8 +2258,6 @@
     <string name="selection_copy_as_plain_text">Copy as Plain Text</string>
     <string name="chat_input_placeholder_hint_5">Minis Ultra can make the Return key send or insert a newline</string>
     <!-- [T-android-compact-progress] Live status while a compaction runs. -->
-    <string name="compact_progress">Compacting… %1$d s elapsed</string>
-    <string name="compact_progress_split">Compacting… %1$d s · summarizing in segments (%2$d/%3$d)</string>
     <string name="compact_progress_session">Compressing (%1$d/%2$d) with current model %3$s… %4$d s. If this fails, the fallback or a one-shot retry runs.</string>
     <string name="compact_progress_fallback">Compressing (%1$d/%2$d) with fallback model %3$s… %4$d s. If this fails, older context is truncated.</string>
     <string name="compact_progress_session_retry">Compressing (%1$d/%2$d) retrying current model %3$s… %4$d s. No fallback set. If this fails, older context is truncated.</string>
@@ -2458,7 +2271,6 @@
     <string name="character_extras_confirm_remove">Remove</string>
     <string name="character_extras_confirm_body">Remove this entry? This does not change the standing persona file or messages already sent.</string>
     <string name="settings_character_extras">World book</string>
-    <string name="settings_character_extras_subtitle">Keyword lore and display regex</string>
     <string name="settings_translate">Translate</string>
     <string name="settings_translate_subtitle">Target language, model, bubble switch, and a standalone page</string>
     <string name="world_book_header">World book</string>
@@ -2483,7 +2295,6 @@
     <string name="translate_source">Text to translate</string>
     <string name="translate_target">Target language</string>
     <string name="translate_run">Translate</string>
-    <string name="translate_bubble">Translate this reply</string>
     <string name="translate_pick_model">Translation model</string>
     <string name="persona_worldbook_header">World book</string>
     <string name="persona_worldbook_footer">When the user says the words on the left, this extra text is added to the reply. Tap an entry to remove it.</string>
@@ -2522,7 +2333,6 @@
     <string name="web_search_in_use">In use</string>
     <string name="web_search_no_key_needed">No API key needed</string>
     <string name="web_search_not_configured">Not configured</string>
-    <string name="web_search_key_saved">API key saved</string>
     <string name="web_search_ddg_detail">HTML search with no credentials. Default engine.</string>
     <string name="web_search_searxng_detail">Public or self-hosted SearXNG instance. Paste the search endpoint or site origin.</string>
     <string name="web_search_bing_detail">Microsoft Bing Web Search v7 subscription key.</string>
@@ -2531,9 +2341,7 @@
     <string name="web_search_custom_key_placeholder">Leave blank if unused</string>
     <string name="web_search_custom_key_header">API key header (optional)</string>
     <string name="web_search_custom_detail">Use {query} (and optional {key}) in the URL. JSON arrays named results/items/data are parsed; HTML falls back to DuckDuckGo-style cards. If the header is Authorization, the key is sent as Bearer.</string>
-    <string name="web_search_credentials_header">Endpoints</string>
     <string name="web_search_searxng_url">SearXNG URL</string>
-    <string name="web_search_bing_key">Bing subscription key</string>
     <string name="web_search_fallback">Fallback to DuckDuckGo</string>
     <string name="web_search_fallback_sub">If the selected engine fails, retry DuckDuckGo</string>
     <string name="web_search_keyless">Keyless CN fallback chain</string>
@@ -2577,16 +2385,10 @@
     <string name="settings_section_tools">Tools</string>
     <string name="loading">Loading…</string>
     <string name="cd_back">Back</string>
-    <string name="cd_close">Close</string>
-    <string name="cd_copy">Copy</string>
     <string name="cd_more">More</string>
     <string name="cd_send">Send</string>
     <string name="cd_stop">Stop</string>
     <string name="cd_attach">Attach</string>
-    <string name="cd_previous">Previous</string>
-    <string name="cd_next">Next</string>
-    <string name="cd_share">Share</string>
-    <string name="cd_remove">Remove</string>
     <string name="action_reset">Reset</string>
     <string name="label_title">Title</string>
     <string name="label_width">Width</string>
@@ -2601,17 +2403,8 @@
     <string name="config_reversible">Reversible, but worth a quick look.</string>
     <string name="storage_media">Media</string>
     <string name="delete_named">Delete %1$s?</string>
-    <string name="cd_read_image">Read image</string>
-    <string name="cd_browser_screenshot">Browser screenshot</string>
-    <string name="cd_show_summary">Show full summary</string>
     <string name="cd_scroll_prev">Scroll to previous message</string>
     <string name="cd_scroll_bottom">Scroll to bottom</string>
-    <string name="cd_open_full">Open full output</string>
-    <string name="cd_withdraw">Withdraw queued message</string>
-    <string name="cd_image_attachment">Image attachment</string>
-    <string name="cd_play_video">Play video</string>
-    <string name="cd_copy_code">Copy code</string>
-    <string name="cd_edit_name">Edit name</string>
     <string name="browser_viewport_custom_hint">Set your own width × height</string>
     <string name="env_var_fallback">variable</string>
     <string name="skill_fallback">skill</string>
@@ -2637,7 +2430,6 @@
     <string name="execution_resources">Execution resources</string>
     <string name="execution_resources_help">Applies to heavy sandbox calls across all chats. Light tools and model requests continue. Running tasks are never paused or killed. Waiting does not consume execution time; zero queue timeout means wait until resources recover or you cancel. No per-task memory cap is imposed.</string>
     <string name="execution_auto">Automatically adjust concurrency</string>
-    <string name="execution_concurrent">Sandbox command concurrency limit</string>
     <string name="execution_heavy">Heavy task concurrency limit</string>
     <string name="execution_queue">Advanced execution settings</string>
     <string name="execution_queue_timeout">Queue timeout (separate from execution)</string>
@@ -2650,7 +2442,6 @@
     <string name="group_chat_banner">AI group chat is on. Each model keeps its own mark. @Name asks one model. End discussion, or send “总结一下”, for the report. The switch turns off after the report.</string>
     <string name="group_chat_analyzing">Analyzing…</string>
     <string name="group_chat_thinking">Thinking…</string>
-    <string name="group_chat_framing">Framing the question…</string>
     <string name="group_chat_summarizing">Summarizing the discussion…</string>
     <string name="group_chat_host_suffix">Host</string>
     <string name="group_chat_need_models">AI group chat needs at least one other model. The current session only opens and closes. Choose teammates in Settings → Multi-agent.</string>
@@ -2814,7 +2605,6 @@
     <string name="goal_confirm_clear_yes">Clear</string>
     <string name="goal_error_objective_empty">Enter an objective first</string>
     <string name="goal_error_budget_invalid">Budget must be a positive number</string>
-    <string name="goal_error_exists">A Goal already exists for this chat</string>
     <string name="env_var_disabled_badge">Disabled</string>
     <string name="env_var_enabled">Enabled</string>
     <string name="env_var_enabled_hint">When off, the variable is not injected into the sandbox, MCP servers or provider credentials. The stored value is kept.</string>

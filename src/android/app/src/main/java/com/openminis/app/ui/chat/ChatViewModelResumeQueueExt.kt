@@ -12,6 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * T189: spawn a fresh agent loop to drain whatever the user queued during
@@ -74,7 +75,10 @@ internal fun ChatViewModel.resumeQueueAfterCancel() {
             }
         }
 
-        val baseSystemPrompt = buildSystemPrompt()
+        // [P0-5] Prompt assembly does disk I/O (skills/MCP reloads, memory
+        // fragments) — keep it off the main dispatcher. All inputs are
+        // StateFlow reads / pure helpers; written fields are @Volatile.
+        val baseSystemPrompt = withContext(Dispatchers.Default) { buildSystemPrompt() }
         val systemPrompt = if ((provider as? com.openminis.app.provider.anthropic.AnthropicProvider)?.isOAuth == true) {
             val prefix = com.openminis.app.auth.ClaudeOAuthManager.ANTHROPIC_OAUTH_IDENTIFIER_PROMPT
             if (baseSystemPrompt?.startsWith(prefix) == true) baseSystemPrompt

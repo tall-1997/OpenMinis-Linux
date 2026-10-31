@@ -25,8 +25,26 @@ object ProviderFactory {
      * resolved model state, and a fingerprint of the credential so a rotated
      * OAuth token yields a fresh provider. Config writes call [invalidateAll]
      * via ProviderRepository.
+     *
+     * [T-provider-factory-lru] Eviction is LRU-by-last-access, not a full
+     * clear: the old `if (size >= CAP) cache.clear()` nuked ALL 64 clients
+     * (each carrying its own OkHttpClient + Dispatcher) and forced every lane
+     * to rebuild on the next send. An access-ordered [java.util.LinkedHashMap]
+     * behind [java.util.Collections.synchronizedMap] re-links an entry on
+     * every get/put and evicts the LEAST-recently-accessed one past
+     * [CACHE_CAP]. The wrapper's internal monitor IS the map object, so the
+     * hit fast-path (`cache[key]`, synchronized inside the wrapper) and the
+     * put path's `synchronized(cache)` below share one lock — the access-order
+     * mutation stays race-free and the [generation] check-then-put semantics
+     * are unchanged.
      */
-    private val cache = java.util.concurrent.ConcurrentHashMap<String, LLMProvider>()
+    private val cache: MutableMap<String, LLMProvider> =
+        java.util.Collections.synchronizedMap(
+            object : java.util.LinkedHashMap<String, LLMProvider>(16, 0.75f, true) {
+                override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, LLMProvider>): Boolean =
+                    size > CACHE_CAP
+            },
+        )
 
     // [T-provider-factory-race] Bump on every invalidation. The old
     // check-then-act (cache miss → slow build → put) could interleave with
@@ -36,7 +54,7 @@ object ProviderFactory {
     // unchanged; a stale build is returned to its caller but never cached.
     private val generation = java.util.concurrent.atomic.AtomicLong(0L)
 
-    private const val CACHE_CAP = 64
+    internal const val CACHE_CAP = 64
 
     fun create(instance: ProviderInstance, apiKey: String, model: LLMModel, context: Context? = null): LLMProvider {
         val key = instance.id + "|" + model.hashCode() + "|" +
@@ -52,11 +70,15 @@ object ProviderFactory {
         // the invalidation was meant to kill.
         synchronized(cache) {
             if (generation.get() != genAtEntry) return built
-            if (cache.size >= CACHE_CAP) cache.clear()
             cache[key] = built
         }
         return built
     }
+
+    // [T-provider-factory-lru] Test observability hooks — the cache is private,
+    // so the LRU contract (cap respected, least-recently-ACCESSED entry evicted)
+    // is asserted through these. Production code never calls them.
+    internal fun cachedKeysForTest(): Set<String> = synchronized(cache) { cache.keys.toSet() }
 
     /** Drop every memoized provider. Called on config writes with no narrower key. */
     fun invalidateAll() {

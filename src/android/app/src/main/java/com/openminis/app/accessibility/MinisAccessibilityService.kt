@@ -14,6 +14,7 @@ import android.view.Display
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.annotation.RequiresApi
+import com.openminis.app.automation.AutomationEvents
 import com.openminis.app.logging.AppLogger
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CopyOnWriteArrayList
@@ -51,6 +52,12 @@ class MinisAccessibilityService : AccessibilityService() {
 
     private val eventRing = ConcurrentLinkedQueue<RecordedEvent>()
     private val eventListeners = CopyOnWriteArrayList<(RecordedEvent) -> Unit>()
+
+    /**
+     * Last foreground package seen on a window-state transition; only touched
+     * from [onAccessibilityEvent] (main thread), so no volatile is needed.
+     */
+    private var lastForegroundPackage: String? = null
 
     val nodeRegistry: NodeRegistry = NodeRegistry()
 
@@ -98,6 +105,7 @@ class MinisAccessibilityService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
+        maybeEmitAppOpened(event)
         val copy = AccessibilityEvent.obtain(event)
         AccessibilityQueryGuard.submit {
             val src = try {
@@ -133,6 +141,27 @@ class MinisAccessibilityService : AccessibilityService() {
 
     override fun onInterrupt() {
         AppLogger.info(TAG, "service interrupted")
+    }
+
+    /**
+     * [T-android-automation-rules / v3 P0-2] app_opened producer: forward
+     * foreground-package transitions to the automation engine. The
+     * activity-level signal is TYPE_WINDOW_STATE_CHANGED; a package different
+     * from the last seen one means a different app came to the front.
+     *
+     * Zero-overhead when nothing cares: [AutomationEvents.appOpened] is a
+     * no-op until an engine was created, and the engine's hasActiveRules
+     * short-circuit (v3 P1-11) reduces a no-rule emit to a volatile read plus
+     * a boolean check. runCatching keeps a broken engine from ever killing
+     * the accessibility event pump.
+     */
+    private fun maybeEmitAppOpened(event: AccessibilityEvent) {
+        if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
+        val pkg = event.packageName?.toString() ?: return
+        if (pkg == lastForegroundPackage) return
+        lastForegroundPackage = pkg
+        runCatching { AutomationEvents.appOpened(pkg) }
+            .onFailure { AppLogger.warning(TAG, "app_opened emit failed: ${it.message}") }
     }
 
     override fun onDestroy() {

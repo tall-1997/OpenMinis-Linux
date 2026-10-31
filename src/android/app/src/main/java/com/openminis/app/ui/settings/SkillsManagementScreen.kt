@@ -1,5 +1,7 @@
 package com.openminis.app.ui.settings
 import com.openminis.app.ui.theme.m3Icon
+import com.openminis.app.ui.theme.IosBlue
+import com.openminis.app.ui.theme.IosGreen
 
 import com.openminis.app.R
 import com.openminis.app.ui.components.MinisButton
@@ -72,7 +74,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -114,13 +115,10 @@ fun SkillsManagementScreen(
     var searchQuery by remember { mutableStateOf("") }
     val context = LocalContext.current
 
-    // Sort preference — persisted like the file browser's (SharedPreferences,
-    // default name ascending). Mirrors iOS skillsList.sortKey/sortAscending.
+    // Sort preference — persisted like the file browser's (SharedPreferences, default name ascending). Mirrors iOS skillsList.sortKey/sortAscending.
     //
-    // [T-android-sessionlist-prefs-io] getSharedPreferences() PARSES the prefs
-    // XML synchronously on first touch, and both reads used to sit in a
-    // `remember {}` in the composition body: a cold-process main-thread stall on
-    // every entry to this screen. The handle is lazy, the first touch happens on
+    // [T-android-sessionlist-prefs-io] getSharedPreferences() PARSES the prefs XML synchronously on first touch, and both reads used to sit in a
+    // `remember {}` in the composition body: a cold-process main-thread stall on every entry to this screen. The handle is lazy, the first touch happens on
     // Dispatchers.IO, and the first frame shows the same defaults the file
     // stores (name / ascending) so nothing has to be "loaded" visually.
     val sortPrefs = remember {
@@ -849,9 +847,9 @@ fun SkillDetailScreen(
                     is UpdateStatus.Done -> {
                         DetailDivider()
                         DetailRow {
-                            Icon(m3Icon(Icons.Default.CheckCircle), contentDescription = null, tint = Color(0xFF34C759), modifier = Modifier.size(16.dp))
+                            Icon(m3Icon(Icons.Default.CheckCircle), contentDescription = null, tint = IosGreen, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(10.dp))
-                            Text(stringResource(R.string.skill_detail_updated), style = MaterialTheme.typography.bodySmall, color = Color(0xFF34C759))
+                            Text(stringResource(R.string.skill_detail_updated), style = MaterialTheme.typography.bodySmall, color = IosGreen)
                         }
                     }
                     is UpdateStatus.Failed -> {
@@ -1079,8 +1077,8 @@ private fun shareSkillZip(context: android.content.Context, zip: java.io.File) {
 /** [T-android-skill-icon-circular] The same iOS-system-palette values the main
  *  Settings rows use (SettingsScreen): blue for navigational/remote actions,
  *  green for local filesystem operations. */
-private val SettingsIconBlue = Color(0xFF007AFF)
-private val SettingsIconGreen = Color(0xFF34C759)
+private val SettingsIconBlue = IosBlue
+private val SettingsIconGreen = IosGreen
 
 /**
  * Strip Markdown syntax for display in compact UI surfaces (subtitle rows

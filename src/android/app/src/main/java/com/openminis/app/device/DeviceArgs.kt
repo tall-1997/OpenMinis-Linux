@@ -3,7 +3,7 @@ package com.openminis.app.device
 import android.app.ActivityManager
 import android.content.Context
 import android.os.Process
-import org.json.JSONArray
+import com.openminis.app.tools.ToolArgs
 import org.json.JSONObject
 
 /**
@@ -38,51 +38,27 @@ internal object DeviceArgs {
     fun shizukuReady(): Boolean = com.openminis.app.offload.ShizukuManager.isReady()
 }
 
+/**
+ * [P2-convergence] The device tool group's argument readers, kept as extension
+ * functions (the per-tool call sites read naturally) but now one-line
+ * delegates onto the shared [ToolArgs] matrix, which also serves the
+ * knowledge / virtual-screen / automation tool families. Semantics are
+ * byte-identical to the former inline bodies; [ToolArgs.strictInt] documents
+ * where the virtual-screen dialect deliberately differs.
+ */
+
 /** String arg: present, non-null and non-blank (trimmed). */
-internal fun JSONObject.strArg(key: String): String? {
-    if (!has(key) || isNull(key)) return null
-    return optString(key).trim().takeIf { it.isNotEmpty() }
-}
+internal fun JSONObject.strArg(key: String): String? = ToolArgs.str(this, key)
 
 /** Int arg: accepts a JSON number or a numeric string ("12"); anything else is absent. */
-internal fun JSONObject.intArg(key: String): Int? {
-    if (!has(key) || isNull(key)) return null
-    return when (val v = get(key)) {
-        is Number -> v.toInt()
-        is String -> v.trim().toDoubleOrNull()?.toInt()
-        else -> null
-    }
-}
+internal fun JSONObject.intArg(key: String): Int? = ToolArgs.int(this, key)
 
-internal fun JSONObject.longArg(key: String): Long? {
-    if (!has(key) || isNull(key)) return null
-    return when (val v = get(key)) {
-        is Number -> v.toLong()
-        is String -> v.trim().toDoubleOrNull()?.toLong()
-        else -> null
-    }
-}
+internal fun JSONObject.longArg(key: String): Long? = ToolArgs.long(this, key)
 
-internal fun JSONObject.boolArg(key: String): Boolean? {
-    if (!has(key) || isNull(key)) return null
-    return when (val v = get(key)) {
-        is Boolean -> v
-        is String -> v.trim().lowercase().let { when (it) { "true", "1", "yes" -> true; "false", "0", "no" -> false; else -> null } }
-        is Number -> v.toInt() != 0
-        else -> null
-    }
-}
+internal fun JSONObject.boolArg(key: String): Boolean? = ToolArgs.bool(this, key)
 
 /** String list arg: a JSON array of strings, or a single string treated as one element. */
-internal fun JSONObject.strListArg(key: String): List<String>? {
-    if (!has(key) || isNull(key)) return null
-    return when (val v = get(key)) {
-        is JSONArray -> (0 until v.length()).mapNotNull { i -> v.optString(i).trim().takeIf { s -> s.isNotEmpty() } }
-            .takeIf { it.isNotEmpty() }
-        is String -> v.trim().takeIf { it.isNotEmpty() }?.let { listOf(it) }
-        else -> null
-    }
-}
+internal fun JSONObject.strListArg(key: String): List<String>? = ToolArgs.strList(this, key)
 
 /**
  * Android 10+ lets only the app in focus read the clipboard. Process-importance is the one

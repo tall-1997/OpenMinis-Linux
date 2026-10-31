@@ -32,6 +32,8 @@ import com.openminis.app.R
 import com.openminis.app.data.model.ProviderInstance
 import com.openminis.app.data.repository.ModelRefreshResult
 import com.openminis.app.ui.theme.m3Icon
+import com.openminis.app.ui.theme.IosGreen
+import com.openminis.app.ui.theme.IosRed
 
 @Composable
 internal fun ProviderInstanceRow(
@@ -60,9 +62,9 @@ internal fun ProviderInstanceRow(
                 .size(8.dp)
                 .background(
                     color = when {
-                        needsReauth -> Color(0xFFFF3B30)
+                        needsReauth -> IosRed
                         isLoading -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f)
-                        isActive -> Color(0xFF34C759)
+                        isActive -> IosGreen
                         else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f)
                     },
                     shape = CircleShape,

@@ -91,36 +91,28 @@ class AppKnowledge internal constructor(private val source: () -> List<Pair<Stri
          * Hand-parsed on purpose: no YAML/serialization dependency. Unknown keys are ignored;
          * lines without a colon, blank lines and `#` lines are skipped (not fatal). A missing or
          * empty `packages` list, an unterminated frontmatter or an empty body throws.
+         *
+         * [P2-convergence] The frontmatter scan itself is the shared
+         * [Frontmatter.parse] (same reader SOUL.md uses); only the pack's own
+         * strictness — the thrown errors and the `packages` requirement —
+         * stays here. CRLF is normalized first, exactly as before.
          */
         fun parse(id: String, text: String): Entry {
-            val lines = text.replace("\r\n", "\n").lines()
-            require(lines.firstOrNull()?.trim() == "---") { "$id: missing frontmatter" }
-            val closeIdx = lines.drop(1).indexOfFirst { it.trim() == "---" }
-            require(closeIdx >= 0) { "$id: unterminated frontmatter" }
-            val close = closeIdx + 1
+            val normalized = text.replace("\r\n", "\n")
+            val fm = Frontmatter.parse(normalized) ?: throw IllegalArgumentException(
+                "$id: " +
+                    // Distinguish the two failure shapes the pack used to report separately.
+                    if (normalized.lineSequence().firstOrNull()?.trim() == "---") "unterminated frontmatter"
+                    else "missing frontmatter",
+            )
 
-            var name: String? = null
-            var display: String? = null
-            var description = ""
-            var packages: List<String> = emptyList()
-            var aliases: List<String> = emptyList()
-            lines.subList(1, close).forEach { raw ->
-                val line = raw.trim()
-                if (line.isEmpty() || line.startsWith("#")) return@forEach
-                val colon = line.indexOf(':')
-                if (colon <= 0) return@forEach // malformed YAML line: skip, do not fail the pack
-                val key = line.substring(0, colon).trim()
-                val value = line.substring(colon + 1).trim().removeSurrounding("\"")
-                when (key) {
-                    "name" -> name = value.ifEmpty { null }
-                    "display" -> display = value.ifEmpty { null }
-                    "description" -> description = value
-                    "packages" -> packages = parseList(value)
-                    "aliases" -> aliases = parseList(value)
-                }
-            }
+            val name = fm.value("name")?.ifEmpty { null }
+            val display = fm.value("display")?.ifEmpty { null }
+            val description = fm.value("description").orEmpty()
+            val packages = fm.value("packages")?.let { parseList(it) } ?: emptyList()
+            val aliases = fm.value("aliases")?.let { parseList(it) } ?: emptyList()
             require(packages.isNotEmpty()) { "$id: no packages" }
-            val body = lines.drop(close + 1).joinToString("\n").trim()
+            val body = fm.body.trim()
             require(body.isNotEmpty()) { "$id: empty body" }
             return Entry(id, name ?: id, display ?: name ?: id, description, packages, aliases, body)
         }
