@@ -3,6 +3,7 @@ package com.openminis.app.automation
 import androidx.room.ColumnInfo
 import androidx.room.Dao
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.Insert
 import androidx.room.PrimaryKey
 import androidx.room.Query
@@ -38,8 +39,18 @@ data class AutomationRuleEntity(
  * this table directly; [outcome] is one of:
  *  "started" (agent dispatched, updated to ok/error on completion),
  *  "ok", "error: …", "skipped_steps_todo", "skipped_rate_limit".
+ *
+ * The `(rule_id, fired_at)` index is also created by [AppDatabase.MIGRATION_22_23]
+ * — it backs both the per-rule newest-first history and the rolling-24h
+ * rate-limit COUNT. It MUST stay declared here: Room validates the migrated
+ * schema against this entity on every upgrade, and an index present on disk
+ * but missing from this declaration crashes startup with
+ * "Migration didn't properly handle: automation_runs".
  */
-@Entity(tableName = "automation_runs")
+@Entity(
+    tableName = "automation_runs",
+    indices = [Index(value = ["rule_id", "fired_at"])],
+)
 data class AutomationRunEntity(
     @PrimaryKey(autoGenerate = true) @ColumnInfo(name = "run_id") val runId: Long = 0,
     @ColumnInfo(name = "rule_id") val ruleId: String,

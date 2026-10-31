@@ -1042,7 +1042,18 @@
             "run_id"
           ]
         },
-        "indices": [],
+        "indices": [
+          {
+            "name": "index_automation_runs_rule_id_fired_at",
+            "unique": false,
+            "columnNames": [
+              "rule_id",
+              "fired_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_automation_runs_rule_id_fired_at` ON `${TABLE_NAME}` (`rule_id`, `fired_at`)"
+          }
+        ],
         "foreignKeys": []
       }
     ],

@@ -108,6 +108,15 @@ jobs:
           ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
         run: ./gradlew :app:testReleaseUnitTest --parallel --stacktrace
 
+      # [T-schema-drift] Hand-written migration DDL must agree with the
+      # exported Room schema: an index created by a migration but undeclared
+      # on the entity crashes RoomOpenHelper.onUpgrade — after the migration
+      # ran, taking down the whole app. SchemaMigrationDriftTest covers this
+      # inside the unit-test job above; this standalone replay gives a
+      # two-second local check with the same verdict before any gradle work.
+      - name: Migration DDL matches exported schema
+        run: python3 scripts/ci/check_schema_drift.py
+
       - name: No new untranslated strings
         if: github.event_name == 'pull_request'
         run: |
