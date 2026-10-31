@@ -1,22 +1,13 @@
 package com.openminis.app.vscreen
 
 import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
-import android.media.Image
-import android.media.ImageReader
 import android.os.Handler
-import android.os.HandlerThread
+import android.os.Looper
 import android.view.Surface
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.offload.ShizukuManager
-import java.io.ByteArrayOutputStream
 import java.io.File
-import java.util.Base64
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicReference
 
 /**
  * [T-android-vscreen] Agent-owned virtual screens (VirtualDisplay).
@@ -58,6 +49,20 @@ import java.util.concurrent.atomic.AtomicReference
  *   - [DisplayHandle] / [DisplayHandleFactory] / [ShellRunner] are seams so
  *     the LRU, probe and degradation logic run on the JVM in tests without
  *     DisplayManager, Shizuku or a device (ShizukuBackendStateTest style).
+ *
+ * V2 ([T-android-vscreen2], DSH AGENT-SCREEN-V2.md semantics, self-written):
+ *   - SILENT LEDGER: apps started on a screen are muted via Shizuku
+ *     `appops PLAY_AUDIO ignore` (previous mode recorded in prefs); the
+ *     original value is restored when the app leaves the screen — destroy,
+ *     LRU eviction, hand_to_user, or the leftover reconcile.
+ *   - HAND_TO_USER: [HandoffController] moves the display's top task to the
+ *     main display (user service binder first, shell probe table second),
+ *     restores its sound and posts the "needs you" notification; the three
+ *     user choices drive a pure [HandoffStateMachine] persisted in prefs.
+ *   - TASK MOVE: [TaskMover] with runtime probing; every failure is honest.
+ *   - SPILLOVER RECOVERY: a 3s watcher after launch pulls jumped-back apps
+ *     to the agent screen (best effort).
+ *   - IDLE RELEASE: screens idle for [IDLE_RELEASE_MS] destroy themselves.
  */
 object VirtualScreenManager {
     private const val TAG = "VirtualScreenManager"
@@ -72,12 +77,7 @@ object VirtualScreenManager {
     private const val MIN_DPI = 120
     private const val MAX_DPI = 640
 
-    private const val FRAME_TIMEOUT_MS = 3_000L
-    /** base64 of one chunk stays inside the 64KB BoundedOutputBuffer head cap. */
-    private const val CHUNK_BYTES = 48_000
     private const val TMP_PREFIX = "/data/local/tmp/minis_vs_"
-    private const val PNG_PREFIX = "vscreen_"
-    private const val PNG_SUFFIX = ".png"
 
     /** Live handle over one created virtual display. Test seam. */
     interface DisplayHandle {
@@ -106,6 +106,12 @@ object VirtualScreenManager {
         val createdAtMs: Long,
         @Volatile var lastUsedAtMs: Long = createdAtMs,
         @Volatile internal var handle: DisplayHandle? = null,
+        /** Best-effort spillover recovery result, consumed by the next tool result. */
+        @Volatile var spillbackNote: String? = null,
+        /** True while the post-launch spillover watcher thread is still polling. */
+        @Volatile var spillbackWatching: Boolean = false,
+        /** IME policy outcome of the async apply after create (null = unknown yet). */
+        @Volatile var imePolicyNote: String? = null,
     )
 
     sealed class CreateOutcome {
@@ -137,6 +143,25 @@ object VirtualScreenManager {
     @Volatile private var inputFormProbe: InputDisplayForm? = null
     @Volatile private var screencapProbe: Boolean? = null
 
+    // ── [T-android-vscreen2] component wiring lives in VirtualScreenUpkeep ──
+
+    @Volatile private var schedulerOverride: Scheduler? = null
+
+    /** Reap runnable already queued on the scheduler. */
+    private val reapPosted = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    /** Delayed-work seam: production posts on the main looper; tests capture runnables. */
+    fun interface Scheduler {
+        fun post(r: Runnable, delayMs: Long)
+    }
+
+    private val defaultScheduler = Scheduler { r, delayMs ->
+        if (Looper.myLooper() == null) Looper.prepare()
+        Handler(Looper.getMainLooper()).postDelayed(r, delayMs)
+    }
+
+    private val reapRunnable = Runnable { reapIdle() }
+
     private val defaultShellRunner = ShellRunner { argv, timeoutMs ->
         ShizukuManager.runProcess(argv, null, null, timeoutMs)
     }
@@ -154,12 +179,65 @@ object VirtualScreenManager {
         }
     }
 
+    // ── [T-android-vscreen2] component wiring + upkeep ─────────────────────
+
+    /**
+     * The mute ledger, task mover and handoff controller wiring plus the
+     * leftover reconcile / launch-mute / IME-policy upkeep ops live in
+     * [VirtualScreenUpkeep]; the shell closure binds to THIS object's
+     * current override so test fakes keep flowing through.
+     */
+    private val upkeep = VirtualScreenUpkeep(shell = { argv, timeoutMs -> runShell(argv, timeoutMs) })
+
+    /** The mute ledger (override-aware; tests reach it directly). */
+    internal fun muter(): AudioMuter = upkeep.muter()
+
+    /** The handoff controller for the hand_to_user flow (see [VirtualScreenUpkeep]). */
+    fun handoffController(context: Context? = null): HandoffController? = upkeep.handoffController(context)
+
+    /**
+     * Apply a handoff resolution (from [HandoffBroadcastReceiver]) — blocking;
+     * the receiver wraps it in a worker thread.
+     */
+    fun resolveHandoff(displayId: Int, action: HandoffStateMachine.Action): HandoffController.ResolveOutcome? =
+        upkeep.handoffController()?.resolve(displayId, action)
+
+    /**
+     * Model-facing handoff annotation for [displayId] (state guidance plus
+     * record note), or null. Used by the tool on screenshot/list results.
+     */
+    fun handoffNote(displayId: Int): String? = upkeep.handoffNote(displayId)
+
+    /** Consumes the pending spillover-recovery note of [displayId], if any. */
+    fun consumeSpillbackNote(displayId: Int): String? = synchronized(lock) {
+        SpillbackWatcher.consumeNote(screens[displayId])
+    }
+
+    /**
+     * Leftover sweep, run from the tool dispatch path and after each create:
+     *  - handoff records of dead displays expire (their move-back target is gone);
+     *  - mute ledger entries whose display no longer exists, or whose app is
+     *    now visible on the main display, get their sound back.
+     *
+     * Returns model-facing notes of everything it did (usually empty).
+     */
+    fun reconcileState(): List<String> =
+        upkeep.reconcileState(synchronized(lock) { screens.keys.toSet() })
+
     // ─── create / list / destroy ──────────────────────────────────────────
 
     /**
      * Create a virtual display (app-level DisplayManager; no Shizuku). The
      * display is created with NO surface — the target app can still be
      * started and driven on it, but nothing renders (recorded tradeoff).
+     *
+     * [T-android-vscreen2] After the display exists: leftover mute entries
+     * are reconciled (leftover restore), and the per-display IME policy is
+     * applied ASYNC best-effort through the user service (Android 12+,
+     * DISPLAY_IME_POLICY_HIDING) so the headless screen can never pull the
+     * keyboard away from the user — the outcome lands on
+     * [VirtualScreen.imePolicyNote] for the next list result, never blocks
+     * and never fails the create.
      */
     fun create(width: Int, height: Int, dpi: Int, label: String?, context: Context?): CreateOutcome {
         val factory = ensureFactory(context)
@@ -191,6 +269,11 @@ object VirtualScreenManager {
             screens[screen.displayId] = screen
             AppLogger.info(TAG, "created display ${screen.displayId} ${w}x${h}@${d}dpi" +
                 (evicted?.let { " (evicted LRU display ${it.displayId})" } ?: ""))
+            // Leftover restore (mute ledger entries of dead displays) — cheap when empty.
+            runCatching { reconcileState() }
+                .onFailure { AppLogger.warning(TAG, "reconcile after create failed: ${it.message}") }
+            upkeep.applyImePolicyAsync(screen)
+            scheduleReap()
             return CreateOutcome.Created(screen, evicted)
         }
     }
@@ -202,9 +285,34 @@ object VirtualScreenManager {
     }
 
     /** Releases the display and forgets it. Returns the removed screen, or null. */
-    fun destroy(displayId: Int): VirtualScreen? = synchronized(lock) {
-        screens.remove(displayId)?.also { it.handle?.release() }
+    fun destroy(displayId: Int): VirtualScreen? = destroyDetailed(displayId)?.screen
+
+    /**
+     * Full teardown ([T-android-vscreen2]): release the display, restore the
+     * PLAY_AUDIO mode of every app this screen muted, and clear any handoff
+     * record so a destroyed screen cannot leave a WAITING notification
+     * pointing at a dead move-back target.
+     */
+    fun destroyDetailed(displayId: Int): DestroyReport? {
+        val removed = synchronized(lock) { screens.remove(displayId) } ?: return null
+        val restored = runCatching { muter().restoreForDisplay(displayId) }
+            .onFailure { AppLogger.warning(TAG, "mute restore on destroy failed: ${it.message}") }
+            .getOrDefault(emptyList())
+        val clearedHandoff = runCatching { handoffController()?.clearForDestroyedDisplay(displayId) }
+            .getOrNull()
+        removed.handle?.release()
+        scheduleReap()
+        return DestroyReport(removed, restored, clearedHandoff != null)
     }
+
+    /** What a destroy actually did beyond releasing the handle. */
+    class DestroyReport(
+        val screen: VirtualScreen,
+        /** Packages whose original PLAY_AUDIO mode was restored. */
+        val soundRestored: List<String>,
+        /** True when a WAITING handoff record was cleared with the screen. */
+        val handoffCleared: Boolean,
+    )
 
     // ─── launch ───────────────────────────────────────────────────────────
 
@@ -215,6 +323,16 @@ object VirtualScreenManager {
      * existing shell resolve pattern — this is the first). Resolution failure
      * is reported honestly: the fallback (`monkey -p`) has no --display flag
      * and would silently misroute the launch to display 0, so it is NOT used.
+     *
+     * [T-android-vscreen2] The app is SILENCED before it starts (silent
+     * ledger): `appops set <pkg> PLAY_AUDIO ignore` via the Shizuku shell with
+     * the previous mode recorded — the mute note rides in the result detail,
+     * the original mode comes back when the app leaves this display (destroy,
+     * hand_to_user, reconcile). A package the user currently has open on the
+     * main display is never muted. After a successful launch a spillover
+     * watcher runs for [SpillbackWatcher.SPILL_WINDOW_MS]: an app that jumps to the main
+     * display within that window is moved back (best effort, see
+     * [SpillbackWatcher.watch]).
      */
     fun launch(displayId: Int, pkg: String, activity: String?): CommandOutcome {
         val s = screen(displayId) ?: return CommandOutcome.NotFound(notFoundMessage(displayId))
@@ -232,15 +350,17 @@ object VirtualScreenManager {
                     "Pass activity explicitly, e.g. $cleanPkg/.MainActivity.",
             )
         }
+        val muteNote = upkeep.muteForLaunch(displayId, cleanPkg)
         val argv = arrayOf("am", "start", "-W", "--display", displayId.toString(), "-n", component)
         val r = runShell(argv, 15_000L)
         val out = r.combined.trim()
         return if (r.exitCode == 0 && !out.contains("Status: error") && !out.contains("Error type")) {
-            CommandOutcome.Ok(displayId, "started $component on display $displayId\n$out")
+            SpillbackWatcher.watch(s, upkeep.mover(), upkeep.muter(), upkeep.handoffController())
+            CommandOutcome.Ok(displayId, "started $component on display $displayId\n$muteNote\n$out")
         } else {
             CommandOutcome.Failed(
                 "am start on display $displayId failed: ${out.ifBlank { "exitCode=${r.exitCode}" }} " +
-                    "— some ROMs refuse launching other apps on app-owned displays",
+                    "— some ROMs refuse launching other apps on app-owned displays\n$muteNote",
             )
         }
     }
@@ -285,8 +405,8 @@ object VirtualScreenManager {
         offloadsDir.mkdirs()
 
         // Layer 1: our own display, our own uid.
-        captureViaImageReader(s.handle, s.width, s.height)?.let { bytes ->
-            return writePng(offloadsDir, displayId, bytes, "ImageReader")
+        VirtualScreenCapture.captureViaImageReader(s.handle, s.width, s.height)?.let { bytes ->
+            return VirtualScreenCapture.writePng(offloadsDir, displayId, bytes, "ImageReader")
         }
 
         // Layers 2 and 3 ride the Shizuku shell.
@@ -302,7 +422,7 @@ object VirtualScreenManager {
                     "ImageReader capture returned no frame — no read path remains for this display",
             )
         }
-        val tmp = "$TMP_PREFIX${System.currentTimeMillis()}$PNG_SUFFIX"
+        val tmp = "$TMP_PREFIX${System.currentTimeMillis()}${VirtualScreenCapture.PNG_SUFFIX}"
         val cap = runShell(arrayOf("sh", "-c", "screencap -d $displayId -p $tmp"), 20_000L)
         if (cap.exitCode != 0) {
             return CommandOutcome.Failed(
@@ -313,7 +433,8 @@ object VirtualScreenManager {
 
         // Layer 2: cp into the app-readable dir (root-mode Shizuku works here;
         // adb-mode shell usually cannot write app data dirs — probed).
-        val direct = File(offloadsDir, "$PNG_PREFIX${displayId}_${System.currentTimeMillis()}$PNG_SUFFIX")
+        val direct = File(offloadsDir,
+            "${VirtualScreenCapture.PNG_PREFIX}${displayId}_${System.currentTimeMillis()}${VirtualScreenCapture.PNG_SUFFIX}")
         val cp = runShell(arrayOf("sh", "-c", "cp $tmp '${direct.absolutePath.replace("'", "'\\''")}'"), 10_000L)
         if (cp.exitCode == 0 && direct.isFile && direct.length() > 0) {
             runShell(arrayOf("sh", "-c", "rm -f $tmp"), 5_000L)
@@ -325,7 +446,7 @@ object VirtualScreenManager {
         }
 
         // Layer 3: chunked base64 through Shizuku stdout.
-        val bytes = readChunked(tmp, displayId)
+        val bytes = VirtualScreenCapture.readChunked(tmp, displayId) { argv, t -> runShell(argv, t) }
         runShell(arrayOf("sh", "-c", "rm -f $tmp"), 5_000L)
         if (bytes == null) {
             return CommandOutcome.Failed(
@@ -333,105 +454,7 @@ object VirtualScreenManager {
                     "(cp into the offloads dir refused by the ROM, and the chunked base64 read failed)",
             )
         }
-        return writePng(offloadsDir, displayId, bytes, "chunked base64")
-    }
-
-    private fun writePng(dir: File, displayId: Int, bytes: ByteArray, via: String): CommandOutcome {
-        val file = File(dir, "$PNG_PREFIX${displayId}_${System.currentTimeMillis()}$PNG_SUFFIX")
-        return runCatching { file.writeBytes(bytes) }
-            .map {
-                CommandOutcome.Ok(
-                    displayId,
-                    "screenshot ${bytes.size} bytes via $via",
-                    guestPathFor(file.name),
-                )
-            }
-            .getOrElse {
-                CommandOutcome.Failed("could not write the screenshot file: ${it.message}")
-            }
-    }
-
-    /**
-     * Layer 1. Attaches an ImageReader surface to our own display, awaits one
-     * frame (bounded), reads it to a PNG and detaches — all app-uid. Returns
-     * null on any failure (timeout, no frame, attach refused) so the caller
-     * falls through to the screencap layers.
-     */
-    private fun captureViaImageReader(handle: DisplayHandle?, width: Int, height: Int): ByteArray? {
-        if (handle == null) return null
-        var reader: ImageReader? = null
-        var thread: HandlerThread? = null
-        return try {
-            val frame = AtomicReference<Image>(null)
-            val latch = CountDownLatch(1)
-            reader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2)
-            thread = HandlerThread("minis-vscreen-capture").also { it.start() }
-            reader.setOnImageAvailableListener({ r ->
-                if (frame.get() != null) return@setOnImageAvailableListener
-                runCatching { r.acquireLatestImage() }.getOrNull()?.let {
-                    frame.set(it)
-                    latch.countDown()
-                }
-            }, Handler(thread.looper))
-            if (!handle.attach(reader.surface)) return null
-            latch.await(FRAME_TIMEOUT_MS, TimeUnit.MILLISECONDS)
-            handle.detach()
-            val img = frame.get() ?: return null
-            val png = imageToPng(img)
-            img.close()
-            png
-        } catch (t: Throwable) {
-            AppLogger.warning(TAG, "ImageReader capture failed: ${t.message}")
-            null
-        } finally {
-            runCatching { reader?.close() }
-            runCatching { thread?.quitSafely() }
-        }
-    }
-
-    private fun imageToPng(img: Image): ByteArray? = runCatching {
-        val plane = img.planes[0]
-        val buffer = plane.buffer
-        buffer.rewind()
-        val rowStridePx = plane.rowStride / plane.pixelStride
-        val full = Bitmap.createBitmap(rowStridePx, img.height, Bitmap.Config.ARGB_8888)
-        full.copyPixelsFromBuffer(buffer)
-        val scaled = if (full.width == img.width) {
-            full
-        } else {
-            Bitmap.createBitmap(full, 0, 0, img.width, img.height).also { full.recycle() }
-        }
-        val out = ByteArrayOutputStream()
-        scaled.compress(Bitmap.CompressFormat.PNG, 100, out)
-        scaled.recycle()
-        out.toByteArray()
-    }.getOrNull()
-
-    /**
-     * Layer 3. Reads [tmp] in [CHUNK_BYTES] pieces — each chunk's base64 stays
-     * inside the 64KB BoundedOutputBuffer head cap — and decodes the
-     * concatenation. Returns null on the first failed chunk (the caller
-     * reports honestly instead of handing back a corrupt PNG).
-     */
-    private fun readChunked(tmp: String, displayId: Int): ByteArray? {
-        val size = runShell(arrayOf("sh", "-c", "wc -c < $tmp"), 5_000L)
-        val total = size.stdout.trim().toIntOrNull()
-        if (total == null || total <= 0) {
-            AppLogger.warning(TAG, "screencap output for display $displayId unreadable: ${size.combined.ifBlank { "no size" }}")
-            return null
-        }
-        val b64 = StringBuilder()
-        var offset = 1 // tail -c +1 is 1-based
-        while (offset <= total) {
-            val chunk = runShell(
-                arrayOf("sh", "-c", "tail -c +$offset $tmp | head -c $CHUNK_BYTES | base64"),
-                10_000L,
-            )
-            if (chunk.exitCode != 0) return null
-            b64.append(chunk.stdout.filter { !it.isWhitespace() })
-            offset += CHUNK_BYTES
-        }
-        return runCatching { Base64.getDecoder().decode(b64.toString()) }.getOrNull()
+        return VirtualScreenCapture.writePng(offloadsDir, displayId, bytes, "chunked base64")
     }
 
     /** Probe: does this ROM's screencap accept `-d`? Null = inconclusive (try the capture). */
@@ -638,6 +661,53 @@ object VirtualScreenManager {
 
     private fun touch(s: VirtualScreen) {
         s.lastUsedAtMs = System.currentTimeMillis()
+        scheduleReap()
+    }
+
+    // ── [T-android-vscreen2] idle release ─────────────────────────────────
+
+    /**
+     * Queue the idle reap [IDLE_RELEASE_MS] out (deduplicated). Screens
+     * released here go through the full destroy path (sound restored,
+     * handoff cleared) — the agent simply finds them gone on its next call.
+     */
+    private fun scheduleReap() {
+        if (reapPosted.getAndSet(true)) return
+        (schedulerOverride ?: defaultScheduler).post({
+            reapPosted.set(false)
+            reapIdle()
+        }, IDLE_RELEASE_MS)
+    }
+
+    /**
+     * Release every screen idle for [IDLE_RELEASE_MS] or more (10 minutes),
+     * keeping screens with a WAITING handoff alive — the user may still tap
+     * 处理好了 and the move-back needs the display. Returns released ids.
+     *
+     * HONEST LIMIT: while no tool call and no process activity happen, the
+     * reap fires only via the scheduled runnable on the main looper — a dead
+     * process cannot destroy anything (the next process start reconciles the
+     * leftover mute ledger instead, which is the state that matters).
+     */
+    fun reapIdle(nowMs: Long = System.currentTimeMillis()): List<Int> {
+        val idle = synchronized(lock) {
+            screens.values.filter { nowMs - it.lastUsedAtMs >= IDLE_RELEASE_MS }.map { it.displayId }
+        }
+        val released = mutableListOf<Int>()
+        for (id in idle) {
+            // A waiting handoff pins its display: the user's move-back needs it.
+            val waiting = handoffNote(id)?.contains("WAITING") == true
+            if (waiting) {
+                synchronized(lock) { screens[id]?.let { it.lastUsedAtMs = nowMs } }
+                continue
+            }
+            destroyDetailed(id)?.let { released.add(it.screen.displayId) }
+        }
+        if (released.isNotEmpty()) {
+            AppLogger.info(TAG, "idle-released displays $released after ${IDLE_RELEASE_MS}ms")
+        }
+        if (synchronized(lock) { screens.isNotEmpty() }) scheduleReap()
+        return released
     }
 
     private fun evictLeastRecentlyUsed(): VirtualScreen? {
@@ -645,6 +715,11 @@ object VirtualScreenManager {
         val victim = screens.values.minByOrNull { it.lastUsedAtMs } ?: return null
         screens.remove(victim.displayId)
         victim.handle?.release()
+        // Same cleanup as an explicit destroy — an evicted screen must not
+        // leave apps muted or a handoff notification pointing at it.
+        runCatching { muter().restoreForDisplay(victim.displayId) }
+            .onFailure { AppLogger.warning(TAG, "mute restore on evict failed: ${it.message}") }
+        runCatching { handoffController()?.clearForDestroyedDisplay(victim.displayId) }
         return victim
     }
 
@@ -666,6 +741,10 @@ object VirtualScreenManager {
         factory: DisplayHandleFactory?,
         shell: ShellRunner?,
         guard: (() -> String?)?,
+        muter: AudioMuter? = null,
+        mover: TaskMover? = null,
+        controller: HandoffController? = null,
+        scheduler: Scheduler? = null,
     ) {
         synchronized(lock) {
             screens.values.forEach { it.handle?.release() }
@@ -676,8 +755,22 @@ object VirtualScreenManager {
         shizukuGuardOverride = guard
         inputFormProbe = null
         screencapProbe = null
+        // [T-android-vscreen2] component state lives in [VirtualScreenUpkeep]:
+        // fresh defaults (MemoryPrefs) unless overridden, no leftover context.
+        upkeep.resetForTest(muter, mover, controller)
+        schedulerOverride = scheduler
+        reapPosted.set(false)
+        AudioMuter.cachedUser = null
     }
 
     /** back / home / enter mapped to the universally-safe numeric keycodes. */
     private val KEYCODES = mapOf("back" to 4, "home" to 3, "enter" to 66)
+
+    // ── [T-android-vscreen2] constants ────────────────────────────────────
+
+    /** The user's physical display (spillover watch + reconcile share it). */
+    const val MAIN_DISPLAY_ID = 0
+
+    /** Session idle time before a virtual screen releases itself. */
+    const val IDLE_RELEASE_MS = 10 * 60_000L
 }

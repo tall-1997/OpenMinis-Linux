@@ -38,6 +38,11 @@ class InAppThemeSourceGuardTest {
     private val allowed = setOf(
         "MainActivity.kt",
         "Theme.kt",
+        // QuickActivity is a second theme ROOT (half-screen quick panel): it
+        // must hand a resolved darkTheme to MinisTheme before any composition
+        // exists, so ChatColors.isDark is not reachable there — same shape as
+        // MainActivity's "follow the system" branch.
+        "QuickActivity.kt",
     )
 
     @Test

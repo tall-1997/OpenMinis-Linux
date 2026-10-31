@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.Adjust
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.BatteryFull
@@ -72,6 +73,8 @@ import androidx.compose.ui.res.stringResource
 import com.openminis.app.ProjectRepo
 import com.openminis.app.BuildConfig
 import com.openminis.app.R
+import com.openminis.app.quick.FloatingBallService
+import com.openminis.app.quick.QuickPrefs
 import com.openminis.app.ui.components.openExternalUrl
 import com.openminis.app.i18n.uppercaseForDisplay
 import com.openminis.app.ui.theme.m3Icon
@@ -262,6 +265,43 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_env_vars),
                     subtitle = stringResource(R.string.settings_env_vars_subtitle),
                     onClick = onEnvVarsClick,
+                    showDivider = false,
+                )
+            }
+
+            // -- Quick invocation (E-batch): floating-ball switch lives here;
+            // the QS tile and share intake need no switch (always available).
+            // The switch and prefs are owned by the quick/ package.
+            val ballEnabledState = remember { mutableStateOf(QuickPrefs(context).ballEnabled) }
+            SettingsSection(
+                title = stringResource(R.string.quick_settings_title),
+                footer = stringResource(R.string.quick_settings_footer),
+            ) {
+                SettingsSwitchRow(
+                    title = stringResource(R.string.quick_ball_enabled),
+                    subtitle = stringResource(R.string.quick_ball_enabled_subtitle),
+                    icon = Icons.Outlined.Adjust,
+                    iconColor = Color(0xFFFF9500),
+                    checked = ballEnabledState.value,
+                    onCheckedChange = { on ->
+                        if (on && !android.provider.Settings.canDrawOverlays(context)) {
+                            android.widget.Toast.makeText(
+                                context,
+                                R.string.quick_ball_needs_overlay,
+                                android.widget.Toast.LENGTH_SHORT,
+                            ).show()
+                            try {
+                                context.startActivity(
+                                    android.content.Intent(
+                                        android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                        android.net.Uri.parse("package:" + context.packageName),
+                                    ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+                                )
+                            } catch (_: Throwable) {
+                            }
+                        }
+                        ballEnabledState.value = FloatingBallService.setEnabled(context, on)
+                    },
                     showDivider = false,
                 )
             }

@@ -612,6 +612,54 @@
                 android:value="Conditional-trigger automation monitor: keeps broadcast receivers for Wi-Fi/Bluetooth/power/battery/screen events alive while automation rules are enabled." />
         </service>
 
+        <!-- [T-android-quick-invocation] Half-screen quick panel: floating
+             ball, QS tile and explicit intents land here. Deliberately NO
+             ACTION_SEND filter — ShareReceiverActivity is the single share
+             target (T157 wildcard); two entries in the share sheet would be
+             a regression. QuickActivity's SEND handling stays for future
+             re-pointing of the share flow. -->
+        <activity
+            android:name=".quick.QuickActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.Minis.QuickPanel"
+            android:windowSoftInputMode="adjustResize" />
+
+        <service
+            android:name=".quick.FloatingBallService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Quick invocation floating ball: an always-available launcher overlay for the quick panel, shown only while the user enables it." />
+        </service>
+
+        <service
+            android:name=".quick.QuickTileService"
+            android:exported="true"
+            android:icon="@android:drawable/ic_menu_send"
+            android:label="@string/quick_settings_title"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <!-- [T-android-vscreen-handoff] hand_to_user notification buttons.
+             Runtime-registered while a handoff is live; declaring it here
+             keeps the buttons working after process death (double delivery
+             is harmless — the state machine rejects stale transitions). -->
+        <receiver
+            android:name=".vscreen.HandoffBroadcastReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.openminis.app.vscreen.HANDOFF_DONE" />
+                <action android:name="com.openminis.app.vscreen.HANDOFF_KEEP" />
+                <action android:name="com.openminis.app.vscreen.HANDOFF_ABORT" />
+            </intent-filter>
+        </receiver>
+
         <receiver
             android:name=".widget.MinisChatWidgetProvider"
             android:exported="true"

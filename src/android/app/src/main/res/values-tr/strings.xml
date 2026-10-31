@@ -2069,4 +2069,30 @@
     <string name="automation_day_sat">Cmt</string>
     <string name="automation_day_sun">Paz</string>
 
+
+    <!-- [E-batch-quick-invocation] Quick invocation: half-screen panel, floating ball, QS tile, share intake -->
+    <string name="quick_settings_title">Hızlı çağırma</string>
+    <string name="notif_vscreen_handoff_channel_name">Ajan size ihtiyaç duyuyor (sanal ekran)</string>
+    <string name="notif_vscreen_handoff_channel_desc">Yapamadığı bir adımı üstlenmenizi istiyor: giriş, captcha, ödeme veya bir seçim.</string>
+    <string name="notif_vscreen_handoff_title">Ajan size ihtiyaç duyuyor</string>
+    <string name="notif_vscreen_handoff_text">%1$s uygulamasını açın ve yapın: %2$s</string>
+    <string name="notif_vscreen_handoff_action_done">Tamam (sanal ekrana geri gönder)</string>
+    <string name="notif_vscreen_handoff_action_keep">Kendim hallettim</string>
+    <string name="notif_vscreen_handoff_action_abort">Şimdi değil</string>
+    <string name="quick_settings_footer">Minis\'i her yerden çağırın — yüzen top, hızlı ayarlar kutucuğu veya doğrudan panele paylaşım. Gönderimler en son sohbette gözetimsiz çalışır ve bitince bildirir.</string>
+    <string name="quick_ball_enabled">Yüzen top</string>
+    <string name="quick_ball_enabled_subtitle">Diğer uygulamaların üzerinde kenara yanaşan bir top gösterir. Paneli açmak için dokunun, ekran içeriğini eklemek için çift dokunun.</string>
+    <string name="quick_panel_input_hint">Minis ne yapsın?</string>
+    <string name="quick_send_failed">Çalıştırma başlatılamadı. Minis\'i açıp tekrar deneyin.</string>
+    <string name="quick_panel_open_session">Oturumu aç</string>
+    <string name="quick_panel_screen_chip">Ekran: %1$s</string>
+    <string name="quick_panel_images_attached">%1$d görsel eklendi</string>
+    <string name="quick_share_image_unsupported">Hızlı panel görsel paylaşımını henüz desteklemiyor.</string>
+    <string name="quick_panel_default_screen_prompt">Şu anki ekranıma bak</string>
+    <string name="quick_panel_running">Arka planda çalışıyor — bitince bildirim alacaksınız.</string>
+    <string name="quick_ball_needs_overlay">Yüzen topu göstermek için “Diğer uygulamaların üzerinde göster” iznini verin.</string>
+    <string name="quick_ball_notification_title">Minis yüzen top</string>
+    <string name="quick_ball_notification_text">Hızlı paneli açmak için topa dokunun</string>
+    <string name="quick_notify_channel_name">Hızlı panel sonuçları</string>
+    <string name="quick_notify_title">Hızlı istek tamamlandı</string>
 </resources>

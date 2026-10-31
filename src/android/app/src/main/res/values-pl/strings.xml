@@ -2077,4 +2077,30 @@
     <string name="automation_day_sat">sob</string>
     <string name="automation_day_sun">nd</string>
 
+
+    <!-- [E-batch-quick-invocation] Quick invocation: half-screen panel, floating ball, QS tile, share intake -->
+    <string name="quick_settings_title">Szybkie wywołanie</string>
+    <string name="notif_vscreen_handoff_channel_name">Agent potrzebuje Ciebie (ekran wirtualny)</string>
+    <string name="notif_vscreen_handoff_channel_desc">Prosi o wykonanie kroku, którego nie potrafi: logowanie, captcha, płatność lub wybór.</string>
+    <string name="notif_vscreen_handoff_title">Agent potrzebuje Ciebie</string>
+    <string name="notif_vscreen_handoff_text">Otwórz %1$s i wykonaj: %2$s</string>
+    <string name="notif_vscreen_handoff_action_done">Gotowe (wróć na ekran wirtualny)</string>
+    <string name="notif_vscreen_handoff_action_keep">Zrobiłem to sam</string>
+    <string name="notif_vscreen_handoff_action_abort">Nie teraz</string>
+    <string name="quick_settings_footer">Przywołaj Minis z dowolnego miejsca — unosząca się kula, kafelek szybkich ustawień lub udostępnienie bezpośrednio do panelu. Wysyłki działają bez nadzoru w najnowszym czacie i powiadamiają po zakończeniu.</string>
+    <string name="quick_ball_enabled">Unosząca się kula</string>
+    <string name="quick_ball_enabled_subtitle">Wyświetla kulę przyczepioną do krawędzi nad innymi aplikacjami. Stuknij, aby otworzyć panel; stuknij dwukrotnie, aby dołączyć zawartość ekranu.</string>
+    <string name="quick_panel_input_hint">Co ma zrobić Minis?</string>
+    <string name="quick_send_failed">Nie udało się uruchomić wykonania. Otwórz Minis i spróbuj ponownie.</string>
+    <string name="quick_panel_open_session">Otwórz sesję</string>
+    <string name="quick_panel_screen_chip">Ekran: %1$s</string>
+    <string name="quick_panel_images_attached">Dołączono obrazów: %1$d</string>
+    <string name="quick_share_image_unsupported">Udostępnianie obrazów nie jest jeszcze obsługiwane w szybkim panelu.</string>
+    <string name="quick_panel_default_screen_prompt">Spójrz na mój bieżący ekran</string>
+    <string name="quick_panel_running">Działa w tle — po zakończeniu otrzymasz powiadomienie.</string>
+    <string name="quick_ball_needs_overlay">Przyznaj uprawnienie \"Wyświetlanie nad innymi aplikacjami\", aby pokazać unoszącą się kulę.</string>
+    <string name="quick_ball_notification_title">Unosząca się kula Minis</string>
+    <string name="quick_ball_notification_text">Stuknij kulę, aby otworzyć szybki panel</string>
+    <string name="quick_notify_channel_name">Wyniki szybkiego panelu</string>
+    <string name="quick_notify_title">Szybkie polecenie zakończone</string>
 </resources>
