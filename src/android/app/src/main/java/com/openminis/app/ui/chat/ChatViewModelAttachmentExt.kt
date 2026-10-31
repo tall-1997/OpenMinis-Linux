@@ -1,12 +1,12 @@
 package com.openminis.app.ui.chat
 
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Log
 import com.openminis.app.data.model.LLMMessage
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.provider.ImageBudget
+import com.openminis.app.provider.SampledDecode
 import com.openminis.app.util.IsoTime
 import java.io.ByteArrayOutputStream
 import org.json.JSONObject
@@ -26,21 +26,19 @@ private fun ChatViewModel.resizeImageBytes(
     maxEdge: Int = 2000,
 ): ByteArray? {
     return try {
-        val original = BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size) ?: return null
-        if (original.width <= maxEdge && original.height <= maxEdge) {
-            original.recycle()
-            return null
-        }
-        val scale = maxEdge.toFloat() / maxOf(original.width, original.height)
-        val w = (original.width * scale).toInt()
-        val h = (original.height * scale).toInt()
-        val scaled = Bitmap.createScaledBitmap(original, w, h, true)
+        // Bounds-only pass first: the source already fits → return null
+        // WITHOUT ever allocating a bitmap (caller keeps rawBytes).
+        val bounds = SampledDecode.readBoundsBytes(rawBytes) ?: return null
+        if (bounds.first <= maxEdge && bounds.second <= maxEdge) return null
+        // Sampled decode capped at maxEdge: a giant attachment is
+        // downsampled in passes, the full-resolution bitmap is never
+        // allocated (OOM guard on the LLM payload path).
+        val scaled = SampledDecode.decodeBytes(rawBytes, maxEdge) ?: return null
         val out = ByteArrayOutputStream()
         val format = if (mimeType.contains("png")) Bitmap.CompressFormat.PNG
         else Bitmap.CompressFormat.JPEG
         scaled.compress(format, 85, out)
-        if (scaled !== original) scaled.recycle()
-        original.recycle()
+        scaled.recycle()
         out.toByteArray()
     } catch (_: Exception) {
         null

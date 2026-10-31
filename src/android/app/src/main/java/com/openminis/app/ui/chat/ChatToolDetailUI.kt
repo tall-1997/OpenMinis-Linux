@@ -6,7 +6,6 @@ package com.openminis.app.ui.chat
 // LazyRevealToolText, EditorCard. Imports trimmed after ChatScreen.kt split.
 // Externally-called ones are internal; cluster-only ones stay private.
 
-import android.graphics.BitmapFactory
 import java.io.File
 import androidx.compose.foundation.Image
 import androidx.compose.ui.graphics.asImageBitmap
@@ -44,6 +43,7 @@ import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Terminal
 import com.openminis.app.R
+import com.openminis.app.ui.DisplayBitmapLimits
 import com.openminis.app.logging.AppLogger
 import androidx.compose.ui.res.stringResource
 import androidx.compose.material3.HorizontalDivider
@@ -703,6 +703,8 @@ internal fun ToolDetailSheet(
                         // any concurrent navigation transition (chat → image
                         // preview is the worst case because that recomposition
                         // runs the same frame the destination begins to slide in).
+                        // Decode goes through DisplayBitmapLimits.decodeFileForDisplay
+                        // (sampled two-pass): oversized screenshots never reach Canvas at native size.
                         // Preserve the look-back-to-prev-browser_use semantics:
                         // try the current block's screenshot first, fall back to
                         // the most recent prior browser_use block's screenshot.
@@ -713,16 +715,14 @@ internal fun ToolDetailSheet(
                         ) {
                             value = withContext(Dispatchers.IO) {
                                 block.imageFilePath?.let { path ->
-                                    try { android.graphics.BitmapFactory.decodeFile(path) } catch (_: Throwable) { null }
+                                    DisplayBitmapLimits.decodeFileForDisplay(path)
                                 } ?: run {
                                     val blockIdx = toolBlocks.indexOfFirst { it.id == block.id }
                                     if (blockIdx <= 0) null
                                     else (blockIdx - 1 downTo 0).firstNotNullOfOrNull { i ->
                                         val prev = toolBlocks[i]
                                         if (prev.toolName == "browser_use" && prev.imageFilePath != null) {
-                                            try {
-                                                android.graphics.BitmapFactory.decodeFile(prev.imageFilePath)
-                                            } catch (_: Throwable) { null }
+                                            DisplayBitmapLimits.decodeFileForDisplay(prev.imageFilePath)
                                         } else null
                                     }
                                 }
@@ -907,7 +907,7 @@ internal fun ToolDetailSheet(
                             value = if (imgPath == null) null else withContext(Dispatchers.IO) {
                                 val f = File(imgPath)
                                 if (!f.exists()) null
-                                else try { BitmapFactory.decodeFile(f.absolutePath) } catch (_: Throwable) { null }
+                                else DisplayBitmapLimits.decodeFileForDisplay(f.absolutePath)
                             }
                         }
                         Column(

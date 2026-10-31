@@ -975,9 +975,9 @@ internal object ConfigBuiltins {
             }
         }
 
-        val bitmap = runCatching {
-            android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-        }.getOrNull() ?: throw ConfigError.InvalidValue(
+        // Sampled: stored icons are 96px, so 512px is generous headroom.
+        val bitmap = runCatching { com.openminis.app.provider.SampledDecode.decodeBytes(bytes, 512) }
+            .getOrNull() ?: throw ConfigError.InvalidValue(
             "that data isn't a decodable image (png / jpeg / webp / gif are supported; svg is not)",
         )
 

@@ -1,8 +1,8 @@
 package com.openminis.app.agent
 
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.util.Base64
+import com.openminis.app.provider.SampledDecode
 import java.io.ByteArrayOutputStream
 
 /**
@@ -117,7 +117,10 @@ object SoulIcon {
         if (!isDataUri(value)) return null
         return runCatching {
             val bytes = Base64.decode(value.removePrefix(DATA_URI_PREFIX), Base64.DEFAULT)
-            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            // Sampled: stored icons render at 96px, so a 512px ceiling is
+            // generous headroom — a pathological huge payload never
+            // allocates a full-resolution bitmap here.
+            SampledDecode.decodeBytes(bytes, 512)
         }.getOrNull()
     }
 

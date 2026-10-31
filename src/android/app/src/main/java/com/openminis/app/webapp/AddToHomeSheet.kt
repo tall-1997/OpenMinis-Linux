@@ -2,7 +2,6 @@ package com.openminis.app.webapp
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color as AGColor
 import android.graphics.Paint
@@ -62,6 +61,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.openminis.app.MinisApp
+import com.openminis.app.provider.SampledDecode
 import com.openminis.app.ui.components.MinisButton
 import com.openminis.app.ui.components.MinisOutlinedButton
 import com.openminis.app.R
@@ -267,7 +267,7 @@ fun AddToHomeSheet(
                                 contentDescription = stringResource(R.string.webapp_sheet_icon_webpage),
                             ) {
                                 val bmp = remember(path) {
-                                    runCatching { BitmapFactory.decodeFile(path) }.getOrNull()
+                                    runCatching { SampledDecode.decodeFile(path, 512) }.getOrNull()
                                 }
                                 if (bmp != null) {
                                     androidx.compose.foundation.Image(
@@ -480,7 +480,9 @@ private fun parseHtmlTitle(file: File): String? {
 }
 
 private fun loadBitmapFromUri(context: Context, uri: Uri): Bitmap? = runCatching {
-    context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
+    // Sampled: icon sources are only ever drawn at <=512px; a huge photo
+    // never allocates a full-resolution bitmap here.
+    context.contentResolver.openInputStream(uri)?.use { SampledDecode.decodeStream(it, 512) }
 }.getOrNull()
 
 /**
@@ -501,7 +503,7 @@ private fun renderIconBitmap(context: Context, choice: IconChoice, title: String
 
     when (choice) {
         is IconChoice.Webpage -> {
-            val src = runCatching { BitmapFactory.decodeFile(choice.path) }.getOrNull()
+            val src = runCatching { SampledDecode.decodeFile(choice.path, 512) }.getOrNull()
             if (src != null) {
                 val scaled = Bitmap.createScaledBitmap(src, size, size, true)
                 canvas.drawBitmap(scaled, 0f, 0f, null)

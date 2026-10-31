@@ -4,6 +4,7 @@ import com.openminis.app.agent.shell.BashismDetector
 import com.openminis.app.agent.shell.BashismReminder
 import com.openminis.app.agent.shell.OnDemandBash
 import com.openminis.app.browser.BrowserActionInput
+import com.openminis.app.provider.SampledDecode
 import com.openminis.app.sandbox.ExecutionCoordinator
 import com.openminis.app.terminal.MinisOpenUrlBroker
 import com.openminis.app.terminal.MinisUrlMarker
@@ -362,14 +363,13 @@ private fun ChatViewModel.linuxPathToMinisURL(path: String): String? {
  * if already within bounds. Mirrors iOS AIChatViewModel.resizedImageData.
  */
 private fun ChatViewModel.resizeJpegToMaxEdge(data: ByteArray, maxEdge: Int): ByteArray? {
-    val bmp = android.graphics.BitmapFactory.decodeByteArray(data, 0, data.size) ?: return null
-    val longest = maxOf(bmp.width, bmp.height)
-    if (longest <= maxEdge) { bmp.recycle(); return null }
-    val scale = maxEdge.toFloat() / longest
-    val w = (bmp.width * scale).toInt()
-    val h = (bmp.height * scale).toInt()
-    val resized = android.graphics.Bitmap.createScaledBitmap(bmp, w, h, true)
-    bmp.recycle()
+    // Bounds-only first: already fits → null with no bitmap allocated.
+    val bounds = SampledDecode.readBoundsBytes(data) ?: return null
+    val longest = maxOf(bounds.first, bounds.second)
+    if (longest <= maxEdge) return null
+    // Sampled decode capped at maxEdge: the full-resolution bitmap is
+    // never allocated (OOM guard).
+    val resized = SampledDecode.decodeBytes(data, maxEdge) ?: return null
     val out = java.io.ByteArrayOutputStream()
     resized.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, out)
     resized.recycle()

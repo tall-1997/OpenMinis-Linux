@@ -1,6 +1,5 @@
 package com.openminis.app.ui.components
 
-import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -60,6 +59,7 @@ import com.openminis.app.data.repository.ProviderRepository
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.provider.ProviderFactory
 import com.openminis.app.provider.openai.OpenAIProvider
+import com.openminis.app.ui.DisplayBitmapLimits
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -319,7 +319,9 @@ private fun TestContent(run: QuickTestRun) {
         )
         is QuickTestState.ImageReply -> {
             val bmp = remember(s.data) {
-                runCatching { BitmapFactory.decodeByteArray(s.data, 0, s.data.size) }.getOrNull()
+                // Display decode through the shared ceiling: a huge model
+                // image reply never allocates a full-resolution bitmap.
+                runCatching { DisplayBitmapLimits.decodeBytesForDisplay(s.data) }.getOrNull()
             }
             if (bmp != null) {
                 Image(
