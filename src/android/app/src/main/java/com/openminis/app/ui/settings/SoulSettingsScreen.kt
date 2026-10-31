@@ -1,7 +1,6 @@
 package com.openminis.app.ui.settings
 import com.openminis.app.ui.theme.m3Icon
 
-import android.graphics.BitmapFactory
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -67,6 +66,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openminis.app.R
+import com.openminis.app.provider.SampledDecode
 import com.openminis.app.ui.components.MinisButton
 import com.openminis.app.ui.components.MinisOutlinedButton
 import com.openminis.app.ui.components.MinisTextButton
@@ -159,7 +159,7 @@ fun SoulSettingsScreen(
             val result = withContext(Dispatchers.IO) {
                 val bmp = runCatching {
                     context.contentResolver.openInputStream(uri)?.use {
-                        BitmapFactory.decodeStream(it)
+                        SampledDecode.decodeStream(it, 512)
                     }
                 }.getOrNull()
                 if (bmp == null) {

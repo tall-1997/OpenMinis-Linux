@@ -1,7 +1,10 @@
 package com.openminis.app.ui
 
+import android.graphics.Bitmap
 import coil.request.ImageRequest
 import coil.size.Precision
+import com.openminis.app.provider.SampledDecode
+import java.io.InputStream
 
 /**
  * [T-android-canvas-large-bitmap-crash] Decode-size ceiling for images we hand
@@ -31,9 +34,18 @@ import coil.size.Precision
  * `ImageRequest` level means the giant bitmap is never allocated, which also
  * removes the OOM risk that a decode-then-downscale approach would keep.
  *
+ * [T-android-canvas-large-bitmap-crash-followup] That fix only guarded the
+ * Coil path. The non-Coil paths kept raw `BitmapFactory.decodeFile` calls and
+ * crashed the same way from a 322MB bitmap (2026-10-31, Redmi myron):
+ * `read_image` and `browser_use` tool blocks, the sandbox file preview, and
+ * the add-to-home icon picker all hand the full-resolution bitmap straight to
+ * `Image(bitmap=…)`. The `decode*ForDisplay` family below routes every such
+ * decode through [SampledDecode] at this object's ceiling, so ONE invariant
+ * now guards every display decode regardless of the image pipeline.
+ *
  * This is a DISPLAY-side guard only. It is unrelated to
  * [com.openminis.app.provider.ImageBudget], which caps bytes sent to LLM
- * providers on the network path.
+ * providers on the network path (and which now shares [SampledDecode] too).
  */
 object DisplayBitmapLimits {
 
@@ -66,4 +78,21 @@ object DisplayBitmapLimits {
     fun ImageRequest.Builder.limitDisplaySize(): ImageRequest.Builder =
         size(MAX_DISPLAY_EDGE_PX, MAX_DISPLAY_EDGE_PX)
             .precision(Precision.INEXACT)
+
+    /**
+     * Non-Coil counterpart of [limitDisplaySize]: decode a local file for
+     * display, sampled so the longest edge never exceeds
+     * [MAX_DISPLAY_EDGE_PX]. Returns null (never throws) on failure — callers
+     * show their existing error placeholder.
+     */
+    fun decodeFileForDisplay(path: String): Bitmap? =
+        SampledDecode.decodeFile(path, MAX_DISPLAY_EDGE_PX)
+
+    /** See [decodeFileForDisplay]. */
+    fun decodeBytesForDisplay(data: ByteArray): Bitmap? =
+        SampledDecode.decodeBytes(data, MAX_DISPLAY_EDGE_PX)
+
+    /** See [decodeFileForDisplay]. */
+    fun decodeStreamForDisplay(input: InputStream): Bitmap? =
+        SampledDecode.decodeStream(input, MAX_DISPLAY_EDGE_PX)
 }

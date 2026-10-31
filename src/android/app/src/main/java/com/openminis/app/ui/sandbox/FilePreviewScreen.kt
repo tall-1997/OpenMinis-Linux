@@ -2,12 +2,12 @@ package com.openminis.app.ui.sandbox
 import com.openminis.app.ui.theme.m3Icon
 
 import com.openminis.app.R
+import com.openminis.app.provider.SampledDecode
 import androidx.compose.ui.res.stringResource
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.Build
@@ -251,13 +251,14 @@ fun FilePreviewScreen(
 @Composable
 private fun ImagePreview(item: FileItem) {
     var bitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    var originalSize by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     val ctx = androidx.compose.ui.platform.LocalContext.current
 
     LaunchedEffect(item.file) {
         withContext(Dispatchers.IO) {
             try {
-                val bmp = BitmapFactory.decodeFile(item.file.absolutePath)
+                val bmp = SampledDecode.decodeFileWithSourceSize(item.file.absolutePath, 4096).also { originalSize = it.second }.first
                 if (bmp != null) {
                     bitmap = bmp
                 } else {
@@ -305,9 +306,8 @@ private fun ImagePreview(item: FileItem) {
                     contentScale = ContentScale.FillWidth,
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                // Image info
                 Text(
-                    text = "${bitmap!!.width} x ${bitmap!!.height} px  |  ${item.formattedSize}",
+                    text = "${originalSize?.first ?: bitmap!!.width} x ${originalSize?.second ?: bitmap!!.height} px  |  ${item.formattedSize}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),

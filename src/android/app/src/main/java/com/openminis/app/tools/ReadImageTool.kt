@@ -2,9 +2,9 @@ package com.openminis.app.tools
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.model.AgentToolParam
+import com.openminis.app.provider.SampledDecode
 import com.openminis.app.sandbox.PRootKernel
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
@@ -64,7 +64,14 @@ object ReadImageTool {
                 return ToolExecutionResult("Error: File not found: $path", false, toolTitle = toolTitle)
             }
 
-            val original = BitmapFactory.decodeFile(file.absolutePath)
+            // Sampled two-pass decode: bounds first (for the metadata's TRUE
+            // dimensions), then a bitmap whose longest edge never exceeds
+            // maxEdge. Pre-fix this was a raw full-resolution decode — an
+            // 80 Mpx attachment allocated a 320MB bitmap before scaling, with
+            // OOM risk on its own and a Canvas crash downstream in the tool
+            // result preview.
+            val rawSize = SampledDecode.readBoundsFile(file.absolutePath)
+            val original = SampledDecode.decodeFile(file.absolutePath, 2000)
                 ?: return ToolExecutionResult("Error: Cannot decode image: $path", false, toolTitle = toolTitle)
 
             val maxEdge = 2000
@@ -84,7 +91,9 @@ object ReadImageTool {
             if (scaled !== original) scaled.recycle()
             original.recycle()
 
-            val metadata = "[$path | ${original.width}x${original.height} | ${file.length()} bytes]"
+            val displayW = rawSize?.first ?: original.width
+            val displayH = rawSize?.second ?: original.height
+            val metadata = "[$path | ${displayW}x${displayH} | ${file.length()} bytes]"
             ToolExecutionResult(
                 output = metadata,
                 success = true,
