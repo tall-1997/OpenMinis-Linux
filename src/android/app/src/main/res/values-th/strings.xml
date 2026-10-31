@@ -538,6 +538,16 @@
     <string name="chat_input_placeholder_hint_4">กดค้างที่คำตอบเพื่อเลือกและคัดลอกทั้งหมด</string>
     <string name="browser_takeover">เข้าควบคุม</string>
     <string name="browser_settings_done">เสร็จสิ้น</string>
+    <string name="browser_settings_engine_title">เคอร์เนล WebView</string>
+    <string name="browser_settings_engine_version">%1$s (เป้าหมาย Chrome/%2$s)</string>
+    <string name="browser_settings_engine_below">เก่ากว่า %1$s — ยังคงใช้งานร่วมกันได้ อัปเดต System WebView เพื่อรับ Blink %1$s+</string>
+    <string name="browser_settings_engine_at">กำลังใช้งาน Chrome/%1$s ตามเป้าหมาย</string>
+    <string name="browser_settings_engine_above">ใหม่กว่า %1$s — ใช้งานร่วมกับเวอร์ชันใหม่กว่าได้</string>
+    <string name="browser_settings_engine_unknown">ไม่ทราบเวอร์ชัน — ตรวจสอบความเข้ากันได้ตามฟีเจอร์</string>
+    <string name="browser_settings_engine_update">อัปเดต System WebView</string>
+    <string name="browser_engine_stale">เคอร์เนล WebView Chrome/%1$s ล้าหลัง %2$d เวอร์ชันหลัก อัปเดตเพื่อรับฟีเจอร์เว็บล่าสุด</string>
+    <string name="browser_engine_stale_action">อัปเดตเคอร์เนล</string>
+    <string name="browser_settings_engine_shared">browser_use และเบราว์เซอร์ในแอปใช้เคอร์เนลนี้ร่วมกัน</string>
     <string name="browser_settings_user_agent">User Agent</string>
     <string name="browser_settings_ua_mobile_chrome">Chrome บนมือถือ (Android)</string>
     <string name="browser_settings_ua_desktop_chrome">Chrome บนเดสก์ท็อป (Linux)</string>

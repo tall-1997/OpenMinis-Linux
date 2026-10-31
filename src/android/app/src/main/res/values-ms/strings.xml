@@ -538,6 +538,16 @@
     <string name="chat_input_placeholder_hint_4">Tekan lama balasan untuk pilih &amp; salin semua</string>
     <string name="browser_takeover">Ambil Alih</string>
     <string name="browser_settings_done">Selesai</string>
+    <string name="browser_settings_engine_title">Kernel WebView</string>
+    <string name="browser_settings_engine_version">%1$s (sasaran Chrome/%2$s)</string>
+    <string name="browser_settings_engine_below">Lebih lama daripada %1$s — masih serasi. Kemas kini System WebView untuk Blink %1$s+.</string>
+    <string name="browser_settings_engine_at">Menjalankan sasaran Chrome/%1$s.</string>
+    <string name="browser_settings_engine_above">Lebih baharu daripada %1$s — serasi ke hadapan.</string>
+    <string name="browser_settings_engine_unknown">Versi tidak diketahui — keserasian dikesan mengikut ciri.</string>
+    <string name="browser_settings_engine_update">Kemas kini System WebView</string>
+    <string name="browser_engine_stale">Kernel WebView Chrome/%1$s ketinggalan %2$d versi utama. Kemas kini untuk ciri web terkini.</string>
+    <string name="browser_engine_stale_action">Kemas kini kernel</string>
+    <string name="browser_settings_engine_shared">browser_use dan penyemak imbas dalam apl berkongsi kernel ini.</string>
     <string name="browser_settings_user_agent">User Agent</string>
     <string name="browser_settings_ua_mobile_chrome">Chrome Mudah Alih (Android)</string>
     <string name="browser_settings_ua_desktop_chrome">Chrome Desktop (Linux)</string>

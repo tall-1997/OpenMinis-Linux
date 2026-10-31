@@ -3,7 +3,7 @@ package com.openminis.app.browser
 /**
  * Build browser_use / WebView UA strings from the **system WebView APK**
  * Chrome version ([WebViewEngine] target 151, older/newer still work).
- * Hardcoding Chrome/151 only spoofs the token; Blink and Client Hints
+ * Hardcoding Chrome/157 only spoofs the token; Blink and Client Hints
  * still follow the WebView package.
  *
  * Mobile profile: keep the WebView default UA unchanged.

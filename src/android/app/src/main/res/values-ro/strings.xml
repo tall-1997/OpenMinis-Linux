@@ -539,6 +539,16 @@
     <string name="chat_input_placeholder_hint_4">Ține apăsat pe răspuns ca să copiezi tot</string>
     <string name="browser_takeover">Preia controlul</string>
     <string name="browser_settings_done">Gata</string>
+    <string name="browser_settings_engine_title">Nucleu WebView</string>
+    <string name="browser_settings_engine_version">%1$s (țintă Chrome/%2$s)</string>
+    <string name="browser_settings_engine_below">Mai vechi decât %1$s — încă compatibil. Actualizați System WebView pentru Blink %1$s+.</string>
+    <string name="browser_settings_engine_at">Rulează Chrome/%1$s țintă.</string>
+    <string name="browser_settings_engine_above">Mai nou decât %1$s — compatibil cu versiunile viitoare.</string>
+    <string name="browser_settings_engine_unknown">Versiune necunoscută — compatibilitate detectată după funcții.</string>
+    <string name="browser_settings_engine_update">Actualizați System WebView</string>
+    <string name="browser_engine_stale">Nucleul WebView Chrome/%1$s este în urmă cu %2$d versiuni majore. Actualizați pentru cele mai noi funcții web.</string>
+    <string name="browser_engine_stale_action">Actualizați nucleul</string>
+    <string name="browser_settings_engine_shared">browser_use și browserul din aplicație partajează acest nucleu.</string>
     <string name="browser_settings_user_agent">User Agent</string>
     <string name="browser_settings_ua_mobile_chrome">Chrome mobil (Android)</string>
     <string name="browser_settings_ua_desktop_chrome">Chrome desktop (Linux)</string>

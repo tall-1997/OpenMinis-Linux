@@ -52,6 +52,7 @@ import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import com.openminis.app.ui.components.MinisTextButton
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.mutableStateOf
@@ -79,6 +80,7 @@ import androidx.compose.ui.unit.sp
 import com.openminis.app.browser.BrowserHistoryStore
 import com.openminis.app.browser.BrowserTabPool
 import com.openminis.app.browser.UserAgentProfile
+import com.openminis.app.browser.WebViewEngine
 import com.openminis.app.ui.chat.StandardChatSheet
 import kotlinx.coroutines.launch
 import com.openminis.app.ui.theme.decorPulse
@@ -242,6 +244,45 @@ fun BrowserSheet(
                     modifier = Modifier.size(36.dp),
                 ) {
                     Icon(m3Icon(Icons.Default.History), contentDescription = stringResource(R.string.browser_history_action), modifier = Modifier.size(20.dp))
+                }
+            }
+
+            // [T-webview-stale-prompt] One-time nudge when the system WebView
+            // lags the target by more than STALE_GAP majors. browser_use and
+            // this sheet share that kernel, so the gap means the newest web
+            // features are missing everywhere in the app.
+            val engineSnapshot = remember { WebViewEngine.snapshot(context) }
+            var staleBannerVisible by remember { mutableStateOf(false) }
+            LaunchedEffect(engineSnapshot) {
+                staleBannerVisible =
+                    WebViewEngine.isStale(engineSnapshot) && !WebViewEngine.stalePromptSeen(context)
+            }
+            if (staleBannerVisible) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(accent.copy(alpha = 0.12f))
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        stringResource(
+                            R.string.browser_engine_stale,
+                            engineSnapshot.chromeLabel,
+                            WebViewEngine.lag(engineSnapshot.major),
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f),
+                    )
+                    MinisTextButton(
+                        onClick = {
+                            WebViewEngine.markStalePromptSeen(context)
+                            WebViewEngine.openStore(context, engineSnapshot.packageName)
+                        },
+                    ) {
+                        Text(stringResource(R.string.browser_engine_stale_action))
+                    }
                 }
             }
 

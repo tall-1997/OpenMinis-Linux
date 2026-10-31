@@ -896,11 +896,13 @@
     <string name="browser_settings_done">Done</string>
     <string name="browser_settings_engine_title">WebView kernel</string>
     <string name="browser_settings_engine_version">%1$s (target Chrome/%2$s)</string>
-    <string name="browser_settings_engine_below">Older than 151 — still compatible. Update System WebView for Blink 151+.</string>
-    <string name="browser_settings_engine_at">Running target Chrome/151.</string>
-    <string name="browser_settings_engine_above">Newer than 151 — forward compatible.</string>
+    <string name="browser_settings_engine_below">Older than %1$s — still compatible. Update System WebView for Blink %1$s+.</string>
+    <string name="browser_settings_engine_at">Running target Chrome/%1$s.</string>
+    <string name="browser_settings_engine_above">Newer than %1$s — forward compatible.</string>
     <string name="browser_settings_engine_unknown">Version unknown — feature-detected compatibility.</string>
     <string name="browser_settings_engine_update">Update System WebView</string>
+    <string name="browser_engine_stale">WebView kernel Chrome/%1$s is %2$d majors behind. Update for the newest web features.</string>
+    <string name="browser_engine_stale_action">Update kernel</string>
     <string name="browser_settings_engine_shared">browser_use and the in-app browser share this kernel.</string>
     <string name="browser_settings_user_agent">User Agent</string>
     <string name="browser_settings_ua_mobile_chrome">Mobile Chrome (Android)</string>

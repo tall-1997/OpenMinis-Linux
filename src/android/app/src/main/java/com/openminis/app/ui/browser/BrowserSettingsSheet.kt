@@ -175,6 +175,7 @@ fun BrowserSettingsSheet(
                         WebViewEngine.CompatBand.ABOVE_TARGET -> R.string.browser_settings_engine_above
                         WebViewEngine.CompatBand.UNKNOWN -> R.string.browser_settings_engine_unknown
                     },
+                    WebViewEngine.TARGET_MAJOR.toString(),
                 ),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
