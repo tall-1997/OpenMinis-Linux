@@ -254,11 +254,14 @@ jobs:
       # tools download on demand inside minis-android-sdk-setup.
       - name: Install embedded sandbox assets
         run: |
-          for f in ubuntu-base.tar.gz; do
-            src=$(find /tmp/sandbox-assets -name "$f" -type f -print -quit)
-            test -n "$src" && test -s "$src"
-            cp "$src" "src/android/app/src/main/assets/$f"
-          done
+          # [T-apk-size-rootfs] Stage as .tgz: AGP auto-decompresses *.gz
+          # assets, which put a 180 MiB .tar in the APK (deflated back to
+          # 54 MiB). The .tgz name is packaged as-is (~40 MiB, stored via
+          # noCompress), saving ~13 MiB per APK.
+          src=$(find /tmp/sandbox-assets -name "ubuntu-base.tar.gz" -type f -print -quit)
+          test -n "$src" && test -s "$src"
+          cp "$src" "src/android/app/src/main/assets/ubuntu-base.tgz"
+          test -s "src/android/app/src/main/assets/ubuntu-base.tgz"
 
       - name: Provider customization stub
         run: |
