@@ -27,9 +27,18 @@ PREFIX=/tmp/a2a-ctng
 PATCH_DIR="$ROOT/scripts/a2a-glibc"
 APP_DATA="/data/user/0/com.openminis.linux/files/builtin-plugins/a2a/data"
 
+# GitHub runners drop privileges to the `runner` user; run root-only
+# steps (apt, writing crosstool-ng's /usr/lib package dir) through sudo
+# when needed. sudo passes -E for DEBIAN_FRONTEND via the env prefix below,
+# not the surrounding environment.
+SUDO=""
+if [ "$(id -u)" -ne 0 ]; then
+    SUDO="sudo"
+fi
+
 # --- toolchain deps (crosstool-ng builds gcc+glibc+binutils from source) ---
-apt-get update -qq
-DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+$SUDO apt-get update -qq
+$SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
     crosstool-ng bison flex texinfo gawk gperf help2man \
     libncurses-dev rsync unzip bzip2 xz-utils file >/dev/null
 
@@ -44,7 +53,7 @@ echo "crosstool-ng $CTNG_VERSION, glibc $GLIBC_VER"
 
 # --- stage the path patch into the crosstool-ng package dir -------------
 # crosstool-ng applies packages/<pkg>/<version>/*.patch automatically.
-cp "$PATCH_DIR"/glibc-*.patch "$GLIBC_PKG_DIR/$GLIBC_VER/" 2>/dev/null || true
+$SUDO cp "$PATCH_DIR"/glibc-*.patch "$GLIBC_PKG_DIR/$GLIBC_VER/"
 
 # --- build (skipped when the prefix was restored from cache) ------------
 if [ ! -d "$PREFIX" ] || [ ! -f "$(find "$PREFIX" -name ld-linux-aarch64.so.1 2>/dev/null | head -1)" ]; then
