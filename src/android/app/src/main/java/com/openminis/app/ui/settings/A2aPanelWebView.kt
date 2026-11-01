@@ -43,9 +43,12 @@ import com.openminis.app.a2a.A2aLoginCookies
 import com.openminis.app.a2a.A2aLoginProfiles
 import com.openminis.app.a2a.A2aPanelMobileShell
 import com.openminis.app.browser.WebViewEngine
+import com.openminis.app.logging.AppLogger
 import com.openminis.app.ui.theme.m3Icon
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+
+private const val TAG = "A2aPanelWebView"
 
 /**
  * In-app WebView hosting the a2a gateway's local web panel.
@@ -164,10 +167,29 @@ fun A2aPanelWebView(
                     // earliest WebView hook) they are applied to the very
                     // first frame. The origin rule keeps vendor SSO pages,
                     // opened as in-app login windows, from running it.
-                    WebViewCompat.addDocumentStartJavaScript(
-                        this,
-                        A2aPanelMobileShell.START_SCRIPT,
-                        setOf(A2aPanelMobileShell.START_ORIGIN_RULES),
+                    // Document-start is a first-frame *optimization*, not
+                    // the wiring itself: if the installed WebView rejects
+                    // the origin rule or does not implement the feature,
+                    // the full script still runs from onPageFinished. A
+                    // failure here must degrade, never crash the panel —
+                    // a strict future WebView release could turn a rule or
+                    // an unsupported feature into a startup exception that
+                    // would kill the whole `:a2a` process.
+                    registerDocumentStartSafely(
+                        register = {
+                            WebViewCompat.addDocumentStartJavaScript(
+                                this,
+                                A2aPanelMobileShell.START_SCRIPT,
+                                setOf(A2aPanelMobileShell.START_ORIGIN_RULES),
+                            )
+                        },
+                        onFailure = { e ->
+                            AppLogger.warning(
+                                TAG,
+                                "document-start injection unavailable, falling back to " +
+                                    "onPageFinished wiring: ${e.javaClass.simpleName}: ${e.message}",
+                            )
+                        },
                     )
                     webViewClient = object : WebViewClient() {
                         override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
@@ -421,3 +443,37 @@ internal object A2aPanelNav {
         }
     }
 }
+
+/**
+ * Registers the a2a panel's document-start script without ever letting a
+ * WebView rejection kill the host process.
+ *
+ * [T-android-a2a-origin-rule-crash] The registration runs inside WebView
+ * startup, where an exception thrown through the WebViewCompat call chain
+ * crashes the whole `:a2a` process and leaves the panel permanently
+ * closed. Two known throws are both recovery-free — the onPageFinished
+ * wiring already covers them, so the correct behavior is degrade + report,
+ * never propagate:
+ *
+ *  - an origin rule the installed WebView rejects (Chromium 156+ throws
+ *    `IllegalArgumentException` for match-pattern-shaped rules such as
+ *    `&#42;://127.0.0.1/&#42;`), and
+ *  - a WebView that does not implement the feature at all
+ *    (`UnsupportedOperationException` from
+ *    [androidx.webkit.WebViewCompat.addDocumentStartJavaScript]'s feature
+ *    check).
+ *
+ * [onFailure] runs outside the recovery path too, so a failure reporter
+ * that itself throws still cannot resurrect the original exception —
+ * returns `false` either way. Returns `true` when [register] completed.
+ */
+internal fun registerDocumentStartSafely(
+    register: () -> Unit,
+    onFailure: (Throwable) -> Unit,
+): Boolean = runCatching { register() }.fold(
+    onSuccess = { true },
+    onFailure = { e ->
+        runCatching { onFailure(e) }
+        false
+    },
+)

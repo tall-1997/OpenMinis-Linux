@@ -54,10 +54,20 @@ internal object A2aPanelMobileShell {
 
     /**
      * Confines [START_SCRIPT] to the gateway's loopback document, so vendor
-     * SSO pages opened inside the panel never run it. The rule matches any
-     * port, which the panel needs — the gateway port is not fixed.
+     * SSO pages opened inside the panel never run it.
+     *
+     * This is a WebView *origin rule*, not a Chrome extension match pattern:
+     * the accepted grammar is `scheme://host[:port]` — a concrete scheme,
+     * no path, and no `*` scheme wildcard. The gateway serves plain `http`
+     * on the loopback only, and a rule without a port matches every port of
+     * the host, which the panel needs — the gateway port is not fixed.
+     * Writing a match pattern here (`&#42;://127.0.0.1/&#42;`) makes current WebView
+     * releases (Chromium 156+) reject the rule with
+     * `IllegalArgumentException: allowedOriginRules ... is invalid` during
+     * WebView startup, and the exception kills the whole `:a2a` process —
+     * the panel would never open.
      */
-    internal const val START_ORIGIN_RULES = "*://127.0.0.1/*"
+    internal const val START_ORIGIN_RULES = "http://127.0.0.1"
 
     /**
      * Document-start wiring: the mobile stylesheet goes into the head
