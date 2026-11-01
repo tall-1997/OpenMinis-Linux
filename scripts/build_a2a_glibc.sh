@@ -37,7 +37,15 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 # --- toolchain deps (crosstool-ng builds gcc+glibc+binutils from source) ---
+# crosstool-ng lives in `universe`, which GitHub's ubuntu-22.04 image does
+# not always enable. Add it when the package is not resolvable, then retry.
 $SUDO apt-get update -qq
+if ! apt-cache show crosstool-ng >/dev/null 2>&1; then
+    CODENAME="$(. /etc/os-release && echo "$VERSION_CODENAME")"
+    echo "deb http://archive.ubuntu.com/ubuntu $CODENAME universe" |
+        $SUDO tee /etc/apt/sources.list.d/crosstool-ng-universe.list >/dev/null
+    $SUDO apt-get update -qq
+fi
 $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
     crosstool-ng bison flex texinfo gawk gperf help2man \
     libncurses-dev rsync unzip bzip2 xz-utils file >/dev/null
