@@ -1,6 +1,7 @@
 package com.openminis.app.a2a
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.ByteArrayOutputStream
@@ -158,6 +159,23 @@ class A2aInstallerTest {
     @Test fun `splitPackObjects returns empty for malformed documents`() {
         assertTrue(A2aInstaller.splitPackObjects("").isEmpty())
         assertTrue(A2aInstaller.splitPackObjects("{\"other\": 1}").isEmpty())
+    }
+
+    @Test fun `glibcAssetOf probes gz first and falls back to the plain tar name`() {
+        assertEquals(
+            "a2a-glibc.tar.gz",
+            A2aInstaller.glibcAssetOf(listOf("a2a-glibc.tar.gz", "a2a-glibc.tar")),
+        )
+        assertEquals(
+            "a2a-glibc.tar",
+            A2aInstaller.glibcAssetOf(listOf("a2a-glibc.tar")),
+        )
+        assertEquals(
+            "a2a-glibc.tar",
+            A2aInstaller.glibcAssetOf(listOf("x", "a2a-glibc.tar", "y")),
+        )
+        assertNull(A2aInstaller.glibcAssetOf(listOf("other.zip")))
+        assertNull(A2aInstaller.glibcAssetOf(emptyList()))
     }
 
     // --- helpers ---------------------------------------------------------

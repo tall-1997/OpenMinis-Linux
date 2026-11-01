@@ -3,6 +3,8 @@ package com.openminis.app.a2a
 import android.content.Context
 import com.openminis.app.logging.AppLogger
 import java.io.File
+import java.io.IOException
+import java.io.InputStream
 import java.util.zip.ZipInputStream
 
 /**
@@ -54,8 +56,23 @@ object A2aInstaller {
      */
     internal const val PAYLOAD_ASSET = "builtin_plugins/a2a-ui.zip"
 
-    /** Bundled glibc runtime tarball (built by scripts/build_a2a_glibc.sh). */
-    internal const val GLIBC_ASSET = "a2a-glibc.tar.gz"
+    /**
+     * Bundled glibc runtime tarball candidates, probed in order. CI's
+     * build script (scripts/build_a2a_glibc.sh) emits `a2a-glibc.tar.gz`;
+     * a pipeline that stages the tarball without gzip ships
+     * `a2a-glibc.tar`. The deploy accepts either — the stream format is
+     * sniffed by [A2aGlibcDeploy.openArchive], so packaging choice never
+     * gates the plugin shell.
+     */
+    internal val GLIBC_ASSETS = listOf("a2a-glibc.tar.gz", "a2a-glibc.tar")
+
+    /**
+     * First [GLIBC_ASSETS] candidate present in [available] — pins the
+     * probe order (gzip'd name first, plain tar as fallback) without an
+     * AssetManager. Pure, so the ordering is testable on the JVM.
+     */
+    internal fun glibcAssetOf(available: Collection<String>): String? =
+        GLIBC_ASSETS.firstOrNull { it in available }
 
     /** Upstream provider pack zips (staged by CI's native-deps workflow). */
     internal const val PROVIDERS_ASSET = "a2a-providers.zip"
@@ -214,13 +231,13 @@ object A2aInstaller {
         // <home>/glibc/ regardless of how the build script packed it. The
         // dry parse's RAW names decide the shared prefix; extract and
         // verify must both use the same normalized view.
-        val raw = context.assets.open(GLIBC_ASSET).use { zip ->
-            A2aGlibcDeploy.expectedEntries(zip)
+        val raw = openGlibcAsset(context).use { archive ->
+            A2aGlibcDeploy.expectedEntries(archive)
         }
         val topDir = A2aGlibcDeploy.topDirOf(raw.keys)
         val expected = raw.mapKeys { (name, _) -> A2aGlibcDeploy.deployName(name, topDir) }
-        val problems = context.assets.open(GLIBC_ASSET).use { zip ->
-            A2aGlibcDeploy.extract(zip, staging, topDir)
+        val problems = openGlibcAsset(context).use { archive ->
+            A2aGlibcDeploy.extract(archive, staging, topDir)
         } + A2aGlibcDeploy.verify(staging, expected)
         if (problems.isNotEmpty()) {
             staging.deleteRecursively()
@@ -233,6 +250,25 @@ object A2aInstaller {
             return "glibc deploy failed"
         }
         return null
+    }
+
+    /**
+     * Opens the bundled glibc tarball under whichever [GLIBC_ASSETS] name
+     * the APK actually carries. `assets.list("")` is unreliable on some
+     * builds, so every candidate is probed by open and the first success
+     * wins — an APK with only the plain-tar name deploys exactly like the
+     * gzip'd one.
+     */
+    private fun openGlibcAsset(context: Context): InputStream {
+        var last: Throwable? = null
+        for (name in GLIBC_ASSETS) {
+            try {
+                return context.assets.open(name)
+            } catch (t: Throwable) {
+                last = t
+            }
+        }
+        throw IOException("glibc runtime asset missing (${GLIBC_ASSETS.joinToString()})", last)
     }
 
     // ── plugin packs ────────────────────────────────────────────────────

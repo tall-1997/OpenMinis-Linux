@@ -36,6 +36,10 @@ import java.util.zip.GZIPInputStream
  */
 object A2aGlibcDeploy {
     private const val BLOCK = 512
+    // 0x8b exceeds Byte's signed range, so these are runtime vals (const
+    // initializers cannot call toByte()).
+    private val GZIP_MAGIC_HI = 0x1f.toByte()
+    private val GZIP_MAGIC_LO = 0x8b.toByte()
 
     /** One parsed ustar header. */
     internal data class TarEntry(
@@ -114,7 +118,7 @@ object A2aGlibcDeploy {
      */
     internal fun expectedEntries(input: InputStream): Map<String, Long> {
         val out = mutableMapOf<String, Long>()
-        gzip(input).use { stream ->
+        openArchive(input).use { stream ->
             while (true) {
                 val block = readBlock(stream) ?: break
                 val entry = parseHeader(block) ?: break
@@ -140,7 +144,7 @@ object A2aGlibcDeploy {
     internal fun extract(input: InputStream, staging: File, topDir: String?): List<String> {
         val problems = mutableListOf<String>()
         try {
-            gzip(input).use { stream ->
+            openArchive(input).use { stream ->
                 while (true) {
                     val block = readBlock(stream) ?: break
                     val entry = parseHeader(block) ?: break
@@ -227,8 +231,23 @@ object A2aGlibcDeploy {
         return problems
     }
 
-    private fun gzip(input: InputStream): GZIPInputStream =
-        GZIPInputStream(input.buffered())
+    /**
+     * Wraps the archive stream by sniffing the gzip magic instead of
+     * trusting the pipeline's packaging choice. CI's build script emits a
+     * `.tar.gz`, but a pipeline that stages the tarball without gzip
+     * ships a plain `.tar` — both deploy. The mark/reset keeps the sniff
+     * non-destructive: a plain stream is returned with its first bytes
+     * intact, a gzip stream unwraps through [GZIPInputStream].
+     */
+    internal fun openArchive(input: InputStream): InputStream {
+        val buffered = input.buffered()
+        buffered.mark(2)
+        val magic = ByteArray(2)
+        val read = buffered.read(magic)
+        buffered.reset()
+        val gzipped = read == 2 && magic[0] == GZIP_MAGIC_HI && magic[1] == GZIP_MAGIC_LO
+        return if (gzipped) GZIPInputStream(buffered) else buffered
+    }
 
     private fun readBlock(stream: InputStream): ByteArray? {
         val block = ByteArray(BLOCK)
