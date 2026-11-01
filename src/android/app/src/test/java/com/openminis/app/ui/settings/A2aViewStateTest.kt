@@ -7,6 +7,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 
 /**
@@ -231,5 +232,66 @@ class A2aViewStateTest {
         // never via an implicit ACTION_VIEW hand-off.
         assertTrue(screen, screen.contains("A2aPanelActivity::class.java"))
         assertFalse(screen, screen.contains("ACTION_VIEW"))
+    }
+
+    // [T-android-a2a-origin-rule-crash] A rejected document-start
+    // registration must degrade to the onPageFinished wiring — it must
+    // never escape the WebView startup call chain, where it crashes the
+    // whole `:a2a` process and leaves the panel permanently closed.
+
+    @Test
+    fun `document-start registration reports success when the provider accepts`() {
+        var registered = false
+        val ok = registerDocumentStartSafely(
+            register = { registered = true },
+            onFailure = { fail("accepted registration must not hit onFailure: $it") },
+        )
+        assertTrue(ok)
+        assertTrue(registered)
+    }
+
+    @Test
+    fun `document-start registration degrades on an invalid origin rule`() {
+        // Chromium 156+ rejects match-pattern-shaped rules during WebView
+        // startup with exactly this exception type.
+        val seen = mutableListOf<Throwable>()
+        val ok = registerDocumentStartSafely(
+            register = {
+                throw IllegalArgumentException(
+                    "allowedOriginRules \"*://127.0.0.1/*\" is invalid: " +
+                        "only http, https, or custom schemes are allowed",
+                )
+            },
+            onFailure = { seen += it },
+        )
+        assertFalse(ok)
+        assertEquals(1, seen.size)
+        assertTrue(seen.single() is IllegalArgumentException)
+    }
+
+    @Test
+    fun `document-start registration degrades when the feature is unsupported`() {
+        // addDocumentStartJavaScript feature-checks the provider first and
+        // throws UnsupportedOperationException on WebViews without it.
+        val seen = mutableListOf<Throwable>()
+        val ok = registerDocumentStartSafely(
+            register = { throw UnsupportedOperationException("document start not implemented") },
+            onFailure = { seen += it },
+        )
+        assertFalse(ok)
+        assertEquals(1, seen.size)
+        assertTrue(seen.single() is UnsupportedOperationException)
+    }
+
+    @Test
+    fun `a throwing failure reporter still cannot resurrect the crash`() {
+        // onFailure runs outside the recovery path, so even a reporter
+        // that itself throws (a broken logger) must not let the original
+        // exception escape the registration call.
+        val ok = registerDocumentStartSafely(
+            register = { throw IllegalArgumentException("rule invalid") },
+            onFailure = { throw IllegalStateException("logger down") },
+        )
+        assertFalse(ok)
     }
 }

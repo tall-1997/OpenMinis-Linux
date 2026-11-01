@@ -1,5 +1,6 @@
 package com.openminis.app.a2a
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -120,7 +121,13 @@ class A2aPanelMobileShellTest {
     fun `document-start wiring is confined to the gateway origin`() {
         // The panel opens vendor SSO pages in in-app login windows; the
         // rule must keep this script off them. The panel lives on loopback
-        // with a non-fixed port, which the wildcard-scheme rule covers.
-        assertTrue(A2aPanelMobileShell.START_ORIGIN_RULES == "*://127.0.0.1/*")
+        // with a non-fixed port. The grammar is WebView's origin rule
+        // (`scheme://host[:port]`): concrete scheme, no path, no `*`
+        // scheme wildcard — a match pattern like `*://127.0.0.1/*` is
+        // rejected by current WebView releases and kills the panel
+        // process, so this also pins the working shape: `http` only, no
+        // trailing slash, no port (an origin rule without a port matches
+        // every port of the host).
+        assertEquals("http://127.0.0.1", A2aPanelMobileShell.START_ORIGIN_RULES)
     }
 }
