@@ -232,11 +232,13 @@ private fun A2aManageBody(
                 iconColor = a2aStatusColor(viewState.state),
                 showChevron = false,
             )
-            // Port + copyable panel address, whenever the engine reports
-            // a port (the contract owns the number, currently 18901).
+            // Port + copyable panel address. The engine's contract owns
+            // the gateway port (currently 18901); the panel address is the
+            // panel router's own loopback port (A2aGateway.PANEL_PORT),
+            // which is what the WebView reads — 分端口形态.
             if (viewState.port != null) {
                 val clipboard = LocalClipboardManager.current
-                val address = remember(viewState.port) { a2aDisplayAddress(viewState.port) }
+                val address = remember { a2aDisplayAddress(A2aGateway.PANEL_PORT) }
                 SettingsValueRow(
                     title = stringResource(R.string.mcp_builtin_port),
                     value = viewState.port.toString(),
@@ -378,7 +380,7 @@ private fun A2aPanelBody(
                 MinisTextButton(onClick = {
                     context.startActivity(
                         Intent(context, A2aPanelActivity::class.java)
-                            .putExtra(A2aPanelActivity.EXTRA_PORT, viewState.port ?: A2aGateway.PORT)
+                            .putExtra(A2aPanelActivity.EXTRA_PORT, A2aGateway.PANEL_PORT)
                             .putExtra(A2aPanelActivity.EXTRA_INCOGNITO_LOGIN, incognitoLogin),
                     )
                 }) {
@@ -440,7 +442,8 @@ internal fun a2aViewState(status: com.openminis.app.a2a.A2aStatus, installing: B
         // Contract first; while running, the loopback root is a safe
         // fallback so the panel tab never dead-ends on a null URL.
         panelUrl = status.panelUrl
-            ?: status.port.takeIf { status.running && it > 0 }?.let { a2aEndpointUrl(it) },
+            ?: a2aEndpointUrl(status.port.takeIf { it > 0 } ?: A2aGateway.PANEL_PORT)
+                .takeIf { status.running },
         lastError = status.lastError,
     )
 }

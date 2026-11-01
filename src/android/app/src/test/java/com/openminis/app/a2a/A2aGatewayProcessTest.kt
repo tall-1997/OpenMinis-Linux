@@ -3,6 +3,7 @@ package com.openminis.app.a2a
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -46,14 +47,27 @@ class A2aGatewayProcessTest {
     }
 
     @Test fun `launch env carries home data and tmp`() {
-        val env = A2aGatewayProcess.launchEnv("/data/files")
+        val env = A2aGatewayProcess.launchEnv("/data/files", "Asia/Shanghai")
         assertEquals("127.0.0.1", env["AGENT2API_HOST"])
         assertEquals("18901", env["AGENT2API_PROXY_PORT"])
+        // 分端口：the panel router answers on its own loopback port; the
+        // WebView and login callbacks pin the same value.
+        assertEquals("18902", env["AGENT2API_PANEL_PORT"])
         assertEquals("/data/files/builtin-plugins/a2a/data", env["AGENT2API_PROXY_HOME"]!!.replace("\\", "/"))
         assertEquals("/data/files/builtin-plugins/a2a/ui", env["AGENT2API_UI_DIR"]!!.replace("\\", "/"))
         assertEquals("1", env["AGENT2API_ALLOW_NO_KEY"])
+        assertEquals("0", env["AGENT2API_SELF_UPDATE"])
+        // The panel ships its own captcha gate (no CDN SDK anymore).
+        assertEquals("1", env["AGENT2API_CAPTCHA_ENABLED"])
         assertEquals("/data/files/builtin-plugins/a2a/data", env["HOME"]!!.replace("\\", "/"))
         assertEquals("/data/files/builtin-plugins/a2a/data/tmp", env["TMPDIR"]!!.replace("\\", "/"))
+        // Time zone for the gateway AND the glibc plugin hosts it spawns —
+        // they inherit this env, and glibc reads zoneinfo from TZDIR.
+        assertEquals("Asia/Shanghai", env["TZ"])
+        assertEquals(
+            "/data/files/builtin-plugins/a2a/glibc/zoneinfo",
+            env["TZDIR"]!!.replace("\\", "/"),
+        )
     }
 
     @Test fun `home dir is filesDir-scoped`() {
@@ -73,6 +87,29 @@ class A2aGatewayProcessTest {
     @Test fun `orphanPids finds nothing on a host without our binary`() {
         val pids = A2aGatewayProcess.orphanPids(context)
         assertTrue("expected no matches, got $pids", pids.isEmpty())
+    }
+
+    @Test fun `plugin hosts match on argv0 where the wrapper execs the loader`() {
+        val bin = "/fake/nativeDir/liba2a.so"
+        val loader = "/data/files/builtin-plugins/a2a/glibc/ld-linux-aarch64.so.1"
+        // Gateway itself: argv[0] is the binary.
+        assertTrue(A2aGatewayProcess.matchesOwnedProcess(listOf(bin), bin, loader))
+        // Plugin host: `exec "$loader" …` replaces the wrapper shell, so
+        // the loader IS argv[0]. argv[1] carries the pack-versioned plugin
+        // binary path (unpinnable) — the old argv[1] match key missed every
+        // host and left plugin processes alive after stop.
+        assertTrue(
+            A2aGatewayProcess.matchesOwnedProcess(
+                listOf(loader, "${loader.substringBefore("glibc")}data/plugins/x/3.3.0/bin/plugin"),
+                bin,
+                loader,
+            ),
+        )
+        // Foreign processes never match.
+        assertFalse(
+            A2aGatewayProcess.matchesOwnedProcess(listOf("/system/bin/sh", loader), bin, loader),
+        )
+        assertFalse(A2aGatewayProcess.matchesOwnedProcess(emptyList(), bin, loader))
     }
 
     @Test fun `health url pins the lane port and path`() {

@@ -285,7 +285,7 @@ internal fun createA2aLoginWebView(
     context: Context,
     host: A2aPopupHostState,
     onExternalLink: (String) -> Unit,
-    gatewayPort: Int,
+    panelPort: Int,
     loginProfile: Profile? = null,
     incognitoLogin: Boolean = false,
 ): WebView {
@@ -354,7 +354,7 @@ internal fun createA2aLoginWebView(
             // A2aLoginProfiles.endRound); the fallback path sweeps cookies
             // AND web storage, because a cleared jar alone lets an SPA
             // restore its previous session from localStorage.
-            if (url != null && A2aLoginCallback.isCaptureCallback(url, gatewayPort)) {
+            if (url != null && A2aLoginCallback.isCaptureCallback(url, panelPort)) {
                 AppLogger.info("A2aLogin", "login captured by gateway")
                 if (incognitoLogin && !profileAttached) {
                     A2aLoginCookies.clearProviderCookies(context)
@@ -383,11 +383,13 @@ internal fun createA2aLoginWebView(
         ): Boolean {
             val url = request?.url?.toString() ?: return false
             // [T-android-a2a-login-capture] Callbacks only this shell can
-            // deliver (raccoon's custom scheme, AutoClaw's registered
-            // ports) go to the gateway instead of the system / a refused
-            // connection — upstream login.rs does the same rewrite.
+            // deliver go to the panel instead of the system / a refused
+            // connection. The raccoon custom scheme is intercepted by the
+            // gateway's web shim itself; the rewrite here is the
+            // AutoClaw registered-port net for packs that predate the SMS
+            // flow (see A2aLoginCallback).
             if (request.isForMainFrame) {
-                val rewritten = A2aLoginCallback.rewrite(url, gatewayPort)
+                val rewritten = A2aLoginCallback.rewrite(url, panelPort)
                 if (rewritten != null) {
                     val parsed = runCatching { java.net.URI(url) }.getOrNull()
                     AppLogger.info(
@@ -436,7 +438,7 @@ internal fun createA2aLoginWebView(
                 context,
                 host,
                 onExternalLink,
-                gatewayPort,
+                panelPort,
                 loginProfile,
                 incognitoLogin,
             )

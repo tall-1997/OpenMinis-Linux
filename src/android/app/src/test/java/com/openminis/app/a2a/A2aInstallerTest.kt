@@ -111,6 +111,55 @@ class A2aInstallerTest {
         )
     }
 
+    // --- registry --------------------------------------------------------
+
+    @Test fun `registryObjectText pins the load-bearing fields`() {
+        // The engine's PackRegistry deserializes with defaults for every
+        // omitted field — id/version/enabled/entry are the ones the plugin
+        // host actually loads ([T-a2a-glibc] pins that contract).
+        val text = A2aInstaller.registryObjectText(
+            A2aInstaller.PackRecord(
+                "agent2api-providers",
+                "3.3.0-beta.6",
+                "bin/agent2api-providers",
+            ),
+        )
+        assertTrue(text.contains("\"id\": \"agent2api-providers\""))
+        assertTrue(text.contains("\"version\": \"3.3.0-beta.6\""))
+        assertTrue(text.contains("\"enabled\": true"))
+        assertTrue(text.contains("\"entry\": \"bin/agent2api-providers\""))
+    }
+
+    @Test fun `registryText assembles packs in order and splitPackObjects round-trips`() {
+        val text = A2aInstaller.registryText(
+            listOf(
+                A2aInstaller.registryObjectText(A2aInstaller.PackRecord("a", "1", "bin/a")),
+                A2aInstaller.registryObjectText(A2aInstaller.PackRecord("b", "1", "bin/b")),
+            ),
+        )
+        // The merge logic re-emits foreign packs through this same parser —
+        // an object that does not survive the round-trip would be dropped
+        // from the registry on the next install.
+        val objects = A2aInstaller.splitPackObjects(text)
+        assertEquals(listOf("a", "b"), objects.mapNotNull { A2aInstaller.packIdOf(it) })
+    }
+
+    @Test fun `splitPackObjects parses nesting and quoted braces`() {
+        val text = "{\n  \"packs\": [\n" +
+            "    {\"id\": \"a\", \"providers\": {\"x\": {\"key\": \"}\"}}},\n" +
+            "    {\"id\": \"b\", \"meta\": \"escaped \\\"quote\\\" and } brace\"}\n" +
+            "  ]\n}\n"
+        val objects = A2aInstaller.splitPackObjects(text)
+        assertEquals(2, objects.size)
+        assertEquals("a", A2aInstaller.packIdOf(objects[0]))
+        assertEquals("b", A2aInstaller.packIdOf(objects[1]))
+    }
+
+    @Test fun `splitPackObjects returns empty for malformed documents`() {
+        assertTrue(A2aInstaller.splitPackObjects("").isEmpty())
+        assertTrue(A2aInstaller.splitPackObjects("{\"other\": 1}").isEmpty())
+    }
+
     // --- helpers ---------------------------------------------------------
 
     private fun zipWith(vararg entries: Pair<String, String?>): ByteArray {

@@ -97,12 +97,20 @@ class A2aPanelActivity : ComponentActivity() {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
             runCatching { WebView.setDataDirectorySuffix("a2a") }
         }
-        // Never crash on a missing/garbled extra: the port is a gateway
-        // constant, and a crash here would look like the panel "exiting".
-        val port = intent.getIntExtra(EXTRA_PORT, A2aGateway.PORT)
+        // Never crash on a missing/garbled extra: the panel port is a
+        // gateway constant, and a crash here would look like the panel
+        // "exiting".
+        val port = intent.getIntExtra(EXTRA_PORT, A2aGateway.PANEL_PORT)
             .takeIf { it > 0 }
-            ?: A2aGateway.PORT
+            ?: A2aGateway.PANEL_PORT
         val incognitoLogin = intent.getBooleanExtra(EXTRA_INCOGNITO_LOGIN, true)
+        // The full control center root — NOT /m.html. The upstream panel
+        // is two-layer: /m.html is the phone's day-to-day lite page
+        // (accounts, check-in, proxy editing — no data import/export, no
+        // fingerprint/model/routing/log settings) and / is the complete
+        // control center, mobile-adaptive since 3.3.0 (drawer sidebar,
+        // card-layout tables). [A2aGateway.panelUrlNow] pins the same root
+        // for the settings-screen entry.
         val baseUrl = "http://127.0.0.1:$port/"
         AppLogger.info(TAG, "panel opened (port=$port, incognito=$incognitoLogin)")
         // Column's content lambda is a ColumnScope receiver — a bare `this`

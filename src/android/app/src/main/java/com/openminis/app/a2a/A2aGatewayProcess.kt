@@ -21,9 +21,12 @@ import java.net.URL
  * calling discipline lives with the caller — the UI launches on Dispatchers.IO
  * exactly like the old market card's toggle did). Every behavior is unchanged:
  *
- *  - **No sandbox session.** The binary is bionic, linked against the
- *    platform's own libc, and runs as the app's uid directly. No PRoot
- *    translation layer between the gateway and the kernel.
+ *  - **Binary split.** The gateway server itself is bionic (the APK's
+ *    own liba2a.so, linked against the platform's libc, no PRoot); the
+ *    provider plugin packs it spawns are upstream-built glibc binaries and
+ *    run under the app-bundled glibc runtime via [A2aPluginShell]'s
+ *    wrapper scripts — the gateway never sees the difference, the wrapper
+ *    owns the loader exec.
  *  - **No pidfile.** [Process] owns the handle for the child we spawned,
  *    but the real ownership invariant is the port: if it answers, a
  *    gateway is already running and start is a no-op success. This also
@@ -32,10 +35,13 @@ import java.net.URL
  *    outlives the dead app process), and an adopted gateway has no
  *    [Process] handle at all. So stop TERMs every same-uid process whose
  *    cmdline argv[0] is the gateway's binary — a /proc scan, not a
- *    pidfile — waits out the grace window for the port to stop answering,
- *    then KILLs survivors. TERM-then-KILL either way: the upstream server
- *    traps SIGTERM for a clean shutdown; KILL only fires after the grace
- *    period so a wedged process cannot squat the port.
+ *    pidfile — plus every plugin host (a process whose argv[0] is the
+ *    bundled glibc loader, the [A2aPluginShell] wrapper's `exec` shape:
+ *    `exec "$loader" …` replaces the shell so argv[0] IS the loader),
+ *    waits out the grace window for the port to
+ *    stop answering, then KILLs survivors. TERM-then-KILL either way: the
+ *    upstream server traps SIGTERM for a clean shutdown; KILL only fires
+ *    after the grace period so a wedged process cannot squat the port.
  */
 object A2aGatewayProcess {
     private const val TAG = "A2aGatewayProcess"
@@ -80,16 +86,26 @@ object A2aGatewayProcess {
     /**
      * Host-process env for the gateway: the upstream binary's own
      * `AGENT2API_*` runtime contract, pointed at the private home.
-     * `ALLOW_NO_KEY` mirrors the guest launcher's stance — loopback only,
-     * the app itself is the only client. HOME/TMPDIR give the bionic process
-     * writable scratch inside the private dir (bionic has no /tmp, and a
-     * null HOME breaks SQLite temp files). Pure — the test pins every key.
+     * `AGENT2API_PANEL_PORT` puts the web panel on its own loopback port
+     * (headless 分端口形态 — the panel router alone, the gateway router
+     * stays on [A2aGateway.PORT]). `ALLOW_NO_KEY` mirrors the guest
+     * launcher's stance — loopback only, the app itself is the only
+     * client. HOME/TMPDIR give the bionic process writable scratch inside
+     * the private dir (bionic has no /tmp, and a null HOME breaks SQLite
+     * temp files). TZ + TZDIR make the gateway AND the glibc plugin hosts
+     * it spawns (which inherit this env) report the device time zone —
+     * glibc reads zoneinfo from the deployed `<home>/glibc/zoneinfo`, and
+     * without TZDIR a glibc process has no zoneinfo tree at all. Pure —
+     * the test pins every key.
      */
-    internal fun launchEnv(filesDir: String): Map<String, String> {
+    internal fun launchEnv(filesDir: String, timeZoneId: String): Map<String, String> {
         val home = homeDir(filesDir)
         return mapOf(
             "AGENT2API_HOST" to "127.0.0.1",
             "AGENT2API_PROXY_PORT" to A2aGateway.PORT.toString(),
+            // The panel router answers on its own loopback port; the app's
+            // WebView reads it and the gateway router stays on PORT.
+            "AGENT2API_PANEL_PORT" to A2aGateway.PANEL_PORT.toString(),
             "AGENT2API_PROXY_HOME" to "${home.path}/data",
             "AGENT2API_UI_DIR" to "${home.path}/ui",
             "AGENT2API_ALLOW_NO_KEY" to "1",
@@ -98,12 +114,15 @@ object A2aGatewayProcess {
             // self-update poll (its "downloading" state has no bridge and
             // would hang). The app ships the engine; updates ride app releases.
             "AGENT2API_SELF_UPDATE" to "0",
-            // The panel's captcha slider pulls an external SDK from a CDN; a
-            // loopback-only gateway gains nothing from it, and it is network
-            // chatter a phone session does not need.
-            "AGENT2API_CAPTCHA_ENABLED" to "0",
+            // The panel's captcha is the local ALTCHA slider (beta.6 panel
+            // ships it in the bundle — no CDN SDK), keep it on: loopback
+            // panel logins go through the same gate as desktop.
+            "AGENT2API_CAPTCHA_ENABLED" to "1",
             "HOME" to "${home.path}/data",
             "TMPDIR" to "${home.path}/data/tmp",
+            // Time zone for the gateway and every plugin host it spawns.
+            "TZ" to timeZoneId,
+            "TZDIR" to "${home.path}/glibc/zoneinfo",
         )
     }
 
@@ -151,10 +170,22 @@ object A2aGatewayProcess {
                 val home = homeDir(context.filesDir.path)
                 val log = File(home, "data/gateway.log")
                 log.parentFile?.mkdirs()
+                // Fresh DNS + wrapped plugin entries BEFORE the spawn: the
+                // glibc plugin hosts read resolv.conf at first lookup and
+                // the gateway spawns them during boot — a pack installed
+                // by the panel since the last start must be wrapped now.
+                A2aDns.refresh(context)
+                A2aDns.ensureStatic(context)
+                A2aPluginShell.ensure(home)
                 val pb = ProcessBuilder(launchArgv(context)).apply {
                     redirectErrorStream(true)
                     redirectOutput(log)
-                    environment().putAll(launchEnv(context.filesDir.path))
+                    environment().putAll(
+                        launchEnv(
+                            context.filesDir.path,
+                            java.util.TimeZone.getDefault().id,
+                        ),
+                    )
                 }
                 val proc = pb.start()
                 process = proc
@@ -206,12 +237,17 @@ object A2aGatewayProcess {
 
     /**
      * PIDs of processes (this uid only — /proc hides the rest) whose
-     * cmdline argv[0] is exactly the gateway's binary path. This is the
-     * orphan detector: the tracked child matches too, which is harmless —
-     * it gets the same TERM twice. Pure scan, no signals sent.
+     * cmdline argv[0] is exactly the gateway's binary path, plus the glibc
+     * plugin hosts: a process whose argv[0] is the bundled glibc loader
+     * (the [A2aPluginShell] wrapper's `exec` shape — `exec "$loader" …`
+     * replaces the shell, so the loader lands at argv[0], never argv[1]).
+     * This is the orphan
+     * detector: the tracked child matches too, which is harmless — it gets
+     * the same TERM twice. Pure scan, no signals sent.
      */
     internal fun orphanPids(context: Context): List<Int> {
         val bin = launchArgv(context).first()
+        val loader = File(homeDir(context.filesDir.path), "glibc/${A2aPluginShell.LOADER}").path
         val mine = android.os.Process.myPid()
         return File("/proc").listFiles()
             ?.filter { it.name.toIntOrNull() != null }
@@ -221,11 +257,21 @@ object A2aGatewayProcess {
                     val argv = File(dir, "cmdline").readBytes()
                         .toString(Charsets.ISO_8859_1)
                         .split('\u0000')
-                    if (pid != mine && argv.firstOrNull() == bin) pid else null
+                    if (pid != mine && matchesOwnedProcess(argv, bin, loader)) pid else null
                 }.getOrNull()
             }
             ?: emptyList()
     }
+
+    /**
+     * True when [argv] belongs to a process the stop sweep should reach:
+     * the gateway binary at argv[0], or a plugin host — the wrapper's
+     * `exec "$loader" …` shape puts the bundled glibc loader at argv[0]
+     * (the exec replaces the shell), so argv[1] — the pack-versioned
+     * plugin binary path — is never the match key. Pure.
+     */
+    internal fun matchesOwnedProcess(argv: List<String>, gatewayBinary: String, loader: String): Boolean =
+        argv.firstOrNull() == gatewayBinary || argv.firstOrNull() == loader
 
     private fun signalPids(pids: List<Int>, signal: Int) {
         for (pid in pids) {
