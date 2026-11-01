@@ -251,4 +251,82 @@ class A2aGlibcDeployTest {
         assertTrue(A2aGlibcDeploy.extract(ByteArrayInputStream(tar), staging, null).isEmpty())
         assertFalse(File(staging, "file.bin").canExecute())
     }
+
+    // ---- non-block-aligned payloads must not drift the stream ----
+
+    @Test fun `extract keeps parsing after a non-block-aligned payload`() {
+        // Regression for the double-padding bug: copyExactly handed the
+        // already-aligned padding to skipPayload, which aligned it AGAIN
+        // and swallowed 512-padding extra bytes, misparsing every header
+        // that followed. Sizes here deliberately avoid 512 multiples so
+        // the padding branch is exercised with a real entry after it.
+        val first = ByteArray(1000) { (it % 251).toByte() }
+        val second = "tail-marker".toByteArray()
+        val tar = plainTar(
+            listOf(
+                header("glibc/libm.so.6", first.size, '0') + first +
+                    ByteArray(512 - (first.size % 512)),
+                header("glibc/tail.txt", second.size, '0') + second +
+                    ByteArray(512 - (second.size % 512)),
+            ),
+        )
+        val expected = A2aGlibcDeploy.expectedEntries(ByteArrayInputStream(tar))
+        assertEquals(
+            mapOf("glibc/libm.so.6" to 1000L, "glibc/tail.txt" to second.size.toLong()),
+            expected,
+        )
+
+        val staging = tmp.newFolder("staging")
+        assertTrue(A2aGlibcDeploy.extract(ByteArrayInputStream(tar), staging, null).isEmpty())
+        assertTrue(File(staging, "glibc/libm.so.6").readBytes().contentEquals(first))
+        assertTrue(File(staging, "glibc/tail.txt").readBytes().contentEquals(second))
+        assertTrue(A2aGlibcDeploy.verify(staging, expected).isEmpty())
+    }
+
+    @Test fun `extract handles the real-world loader size 72424`() {
+        // 72424 is the exact byte size of libnss_files.so.2 in the shipped
+        // a2a-glibc.tar — 141 whole blocks plus 232 bytes, padding 280.
+        // The buggy code skipped 512 instead of 280 and corrupted the next
+        // header on-device.
+        val first = ByteArray(72424) { (it % 127).toByte() }
+        val second = ByteArray(500) { (it % 61).toByte() }
+        val tar = plainTar(
+            listOf(
+                header("glibc/libnss_files.so.2", first.size, '0') + first +
+                    ByteArray(512 - (first.size % 512)),
+                header("glibc/libpthread.so.0", second.size, '0') + second +
+                    ByteArray(512 - (second.size % 512)),
+            ),
+        )
+        val expected = A2aGlibcDeploy.expectedEntries(ByteArrayInputStream(tar))
+        assertEquals(2, expected.size)
+
+        val staging = tmp.newFolder("staging")
+        assertTrue(A2aGlibcDeploy.extract(ByteArrayInputStream(tar), staging, null).isEmpty())
+        assertTrue(File(staging, "glibc/libnss_files.so.2").readBytes().contentEquals(first))
+        assertTrue(File(staging, "glibc/libpthread.so.0").readBytes().contentEquals(second))
+        assertTrue(A2aGlibcDeploy.verify(staging, expected).isEmpty())
+    }
+
+    @Test fun `block-aligned and empty payloads keep their old behavior`() {
+        // Zero-padding shapes: an empty file and a full-block file both
+        // have padding 0, pinning that the fix changed nothing on the
+        // previously-covered paths.
+        val empty = ByteArray(0)
+        val full = ByteArray(1024) { (it % 211).toByte() }
+        val tar = plainTar(
+            listOf(
+                header("glibc/empty.so", 0, '0'),
+                header("glibc/full.so", full.size, '0') + full,
+            ),
+        )
+        val expected = A2aGlibcDeploy.expectedEntries(ByteArrayInputStream(tar))
+        assertEquals(2, expected.size)
+
+        val staging = tmp.newFolder("staging")
+        assertTrue(A2aGlibcDeploy.extract(ByteArrayInputStream(tar), staging, null).isEmpty())
+        assertTrue(File(staging, "glibc/empty.so").readBytes().isEmpty())
+        assertTrue(File(staging, "glibc/full.so").readBytes().contentEquals(full))
+        assertTrue(A2aGlibcDeploy.verify(staging, expected).isEmpty())
+    }
 }

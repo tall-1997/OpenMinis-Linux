@@ -263,18 +263,26 @@ object A2aGlibcDeploy {
         return block
     }
 
-    private fun skipPayload(stream: InputStream, size: Long) {
-        // Skip the payload plus its zero padding up to the next block
-        // boundary in one pass. Recursing through the same routine for the
-        // padding is a loop: padding of 490 yields padding of 22, and so
-        // on until the stream runs out.
-        var remaining = size + (BLOCK - (size % BLOCK)) % BLOCK
+    /** Skips exactly [count] bytes; performs no block alignment. */
+    private fun skipExactly(stream: InputStream, count: Long) {
+        var remaining = count
         val buffer = ByteArray(8192)
         while (remaining > 0) {
             val n = stream.read(buffer, 0, minOf(buffer.size.toLong(), remaining).toInt())
             if (n < 0) throw java.io.EOFException("tar truncated mid-payload")
             remaining -= n
         }
+    }
+
+    /** Skips [size] payload bytes plus the zero padding up to the next block boundary. */
+    private fun skipPayload(stream: InputStream, size: Long) {
+        // Recursing through the same routine for the padding is a loop:
+        // padding of 490 yields padding of 22, and so on until the stream
+        // runs out — so the alignment is computed once, in the caller's
+        // size space. Callers that already hold an aligned byte count must
+        // use [skipExactly] instead; feeding aligned bytes back through
+        // this routine double-counts the padding and drifts the stream.
+        skipExactly(stream, size + (BLOCK - (size % BLOCK)) % BLOCK)
     }
 
     private fun copyExactly(stream: InputStream, out: java.io.OutputStream, size: Long) {
@@ -287,7 +295,7 @@ object A2aGlibcDeploy {
             remaining -= n
         }
         val padding = ((BLOCK - (size % BLOCK)) % BLOCK).toInt()
-        if (padding > 0) skipPayload(stream, padding.toLong())
+        if (padding > 0) skipExactly(stream, padding.toLong())
     }
 
     private fun asciiField(block: ByteArray, offset: Int, length: Int): String {
