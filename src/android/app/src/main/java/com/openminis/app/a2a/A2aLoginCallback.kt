@@ -7,24 +7,36 @@ import java.net.URI
  *
  * The gateway's web panel assumes the browser runs on the same machine as
  * the gateway: either the redirect lands on the gateway's own loopback
- * port, or an embedded window intercepts a custom scheme the desktop shell
- * registered. Inside this app both assumptions break for two providers, and
- * the failure is silent — the user finishes signing in, the provider shows
- * success, and the gateway waits forever because nobody handed it the code.
- * Upstream's desktop shell rewrites exactly these two shapes
- * (`is_login_callback` / `autoclaw_callback_forward` in login.rs); this is
- * the same layer for the in-app login window.
+ * panel port, or an embedded window intercepts a custom scheme the desktop
+ * shell registered. Inside this app both assumptions break for one
+ * provider family, and the failure is silent — the user finishes signing
+ * in, the provider shows success, and the gateway waits forever because
+ * nobody handed it the code.
+ *
+ * The panel is served on its own port (the panel router, not the API
+ * router — the v3.3 split ships two listeners), so every callback URL the
+ * web shim builds off `window.location.origin` lands on the PANEL port.
+ * That shape (GET `/api/session/login/remote-callback`) is handled by the
+ * panel router itself and is deliberately left alone.
+ *
+ * What still needs a rewrite:
+ *
+ *  - `http://localhost:<registered>/auth/callback-{zai,google}` — AutoClaw
+ *    registered these ports with its OAuth service in the 3.0.x lineage.
+ *    On a desktop the official client may own the port; here nothing
+ *    listens, so the WebView dead-ends on ERR_CONNECTION_REFUSED. The
+ *    gateway serves the same paths publicly, so the load is pointed there.
+ *    The 3.3 panel has moved AutoClaw to an SMS flow, but the pack an app
+ *    upgrades from may still be the older lineage — the rewrite stays as a
+ *    compatibility net; on packs without the route it never matches.
  *
  *  - `office-raccoon://auth/callback?...` — the raccoon authorization
- *    page's deep link. Nothing on the phone handles that scheme, so
- *    dispatching it to the system drops the code. The gateway serves the
- *    same query on its public `GET /api/session/login/raccoon-callback`
- *    route (state is one-time and validated there).
- *  - `http://localhost:<registered>/auth/callback-{zai,google}` — AutoClaw
- *    registers these ports with its OAuth service. On a desktop the
- *    official client may own the port; here nothing listens, so the
- *    WebView dead-ends on ERR_CONNECTION_REFUSED. The gateway serves the
- *    same paths publicly.
+ *    page's deep link. Nothing on the phone handles that scheme. The v3.3
+ *    web shim intercepts this itself (it builds the callback off the panel
+ *    origin and POSTs it), so there is nothing to rewrite anymore; an old
+ *    pack whose shim does NOT intercept it dead-ends visibly in the login
+ *    window instead of being silently pointed at a route that no longer
+ *    exists.
  *
  * Everything else is deliberately left alone: Trae/Accio/Antigravity
  * redirects point at listeners the gateway itself opened, so loading them
@@ -33,58 +45,47 @@ import java.net.URI
  */
 internal object A2aLoginCallback {
 
-    private const val RACCOON_SCHEME = "office-raccoon"
-    private const val RACCOON_HOST = "auth"
-    private const val RACCOON_PATH = "/callback"
-
-    /** Upstream `providers::autoclaw::callback_server::REGISTERED_CALLBACK_PORTS` (v3.0.8). */
+    /** Upstream `providers::autoclaw::callback_server::REGISTERED_CALLBACK_PORTS` (3.0.x). */
     internal val AUTOCLAW_PORTS = setOf(18432, 19654, 19723, 53699)
 
     private val AUTOCLAW_PATHS = setOf("/auth/callback-zai", "/auth/callback-google")
 
     /**
-     * The gateway URL [url] must be navigated to instead, or null when the
-     * URL is not a shell-delivered callback (load it unchanged).
+     * The panel URL [url] must be navigated to instead, or null when the
+     * URL is not a shell-delivered callback (load it unchanged). [panelPort]
+     * is the panel router's port — the port whose own callbacks are
+     * correctly served in place and therefore never rewritten.
      */
-    fun rewrite(url: String?, gatewayPort: Int): String? {
-        if (url.isNullOrBlank() || gatewayPort <= 0) return null
+    fun rewrite(url: String?, panelPort: Int): String? {
+        if (url.isNullOrBlank() || panelPort <= 0) return null
         val parsed = runCatching { URI(url.trim()) }.getOrNull() ?: return null
         val scheme = parsed.scheme?.lowercase() ?: return null
         val host = parsed.host?.lowercase()
         val path = parsed.path.orEmpty()
 
-        if (scheme == RACCOON_SCHEME) {
-            if (host != RACCOON_HOST || path != RACCOON_PATH) return null
-            val query = parsed.rawQuery ?: return null
-            // The route refuses a callback without a task state; rewriting an
-            // empty one would only land the user on the gateway's error page.
-            if (!hasParam(query, "state")) return null
-            return "http://127.0.0.1:$gatewayPort/api/session/login/raccoon-callback?$query"
-        }
-
         if (scheme != "http") return null
         if (host != "localhost" && host != "127.0.0.1") return null
-        if (parsed.port == gatewayPort || parsed.port !in AUTOCLAW_PORTS) return null
+        if (parsed.port == panelPort || parsed.port !in AUTOCLAW_PORTS) return null
         if (path !in AUTOCLAW_PATHS) return null
         val query = parsed.rawQuery?.let { "?$it" }.orEmpty()
-        return "http://127.0.0.1:$gatewayPort$path$query"
+        return "http://127.0.0.1:$panelPort$path$query"
     }
 
     /**
-     * True when [url] is a callback landing on the GATEWAY's loopback port —
+     * True when [url] is a callback landing on the PANEL's loopback port —
      * the moment the engine received the code, i.e. the login round has
      * nothing left to keep. Used to retire the round's throwaway browser
      * profile (and, on the fallback path, to drop the provider's storage).
      * Non-callback loopback pages (the panel itself, its login gate) are
      * excluded by the path check.
      */
-    fun isCaptureCallback(url: String?, gatewayPort: Int): Boolean {
-        if (url.isNullOrBlank() || gatewayPort <= 0) return false
+    fun isCaptureCallback(url: String?, panelPort: Int): Boolean {
+        if (url.isNullOrBlank() || panelPort <= 0) return false
         val parsed = runCatching { URI(url.trim()) }.getOrNull() ?: return false
         val scheme = parsed.scheme?.lowercase() ?: return false
         if (scheme != "http" && scheme != "https") return false
         if (!isLoopbackHost(parsed.host)) return false
-        if (parsed.port != gatewayPort) return false
+        if (parsed.port != panelPort) return false
         return parsed.path.orEmpty().contains("callback", ignoreCase = true)
     }
 
@@ -92,9 +93,4 @@ internal object A2aLoginCallback {
         val value = host?.trim()?.lowercase()?.removePrefix("[")?.removeSuffix("]") ?: return false
         return value == "127.0.0.1" || value == "localhost" || value == "::1"
     }
-
-    private fun hasParam(query: String, name: String): Boolean =
-        query.split('&').any { pair ->
-            pair.substringBefore('=') == name && pair.substringAfter('=', "").isNotEmpty()
-        }
 }

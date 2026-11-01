@@ -42,6 +42,19 @@ class A2aGatewayTest {
     @Test fun `port pins the lane contract`() {
         assertEquals(18901, A2aGateway.port())
         assertEquals(18901, A2aGateway.status.value.port)
+        // The panel router binds its own loopback port (分端口); the app's
+        // WebView and the login callback handling both pin this one.
+        assertEquals(18902, A2aGateway.PANEL_PORT)
+    }
+
+    @Test fun `panel entry is the full control center, not the lite page`() {
+        // The upstream panel is two-layer: /m.html is the light-management
+        // entry (no data import/export, no fingerprint/model/routing/log
+        // settings) and / is the full control center, mobile-adaptive since
+        // 3.3.0 (drawer sidebar, card-layout tables). The app must always
+        // open the full entry — this exact line once read "/m.html" and
+        // shipped a crippled phone panel.
+        assertEquals("http://127.0.0.1:18902/", A2aGateway.panelUrlNow())
     }
 
     @Test fun `status starts not installed and not running`() {
@@ -69,9 +82,23 @@ class A2aGatewayTest {
         context.applicationInfo.nativeLibraryDir = nativeDir.path
         // Binary present, panel not deployed yet.
         assertFalse(A2aGateway.isInstalled(context))
-        val ui = File(context.filesDir, "builtin-plugins/a2a/ui")
-        ui.mkdirs()
-        File(ui, "index.html").writeText("<html></html>")
+        // Full home layout: panel entry, glibc loader, both pack version
+        // dirs and the registry — the same five gates isDeployed checks.
+        val home = File(context.filesDir, "builtin-plugins/${A2aGateway.ID}")
+        File(home, "ui/index.html").apply {
+            parentFile.mkdirs()
+            writeText("<html></html>")
+        }
+        File(home, "glibc/${A2aPluginShell.LOADER}").apply {
+            parentFile.mkdirs()
+            writeText("loader")
+        }
+        File(home, "data/plugins/${A2aInstaller.PROVIDER_PACK_ID}/${A2aInstaller.VERSION}").mkdirs()
+        File(home, "data/plugins/${A2aInstaller.WEB_PACK_ID}/${A2aInstaller.VERSION}").mkdirs()
+        File(home, "data/plugins/plugins.json").apply {
+            parentFile.mkdirs()
+            writeText("{}")
+        }
         assertTrue(A2aGateway.isInstalled(context))
     }
 

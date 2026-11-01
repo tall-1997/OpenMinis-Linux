@@ -22,8 +22,14 @@ env:
   # upstream tag, not vendored into this repo. A2A_SHA pins the exact commit
   # the tag pointed at when this was written; a moved tag fails the build
   # loudly instead of silently shipping a different binary.
-  A2A_TAG: "v3.0.8"
-  A2A_SHA: "68d0a4e4bfd8dc5a1daa296c61e0cc0b10a871da"
+  A2A_TAG: "v3.3.0-beta.6"
+  A2A_SHA: "3239d12f198d1f1ad644325b0086fb7143297fdf"
+  # Provider plugin packs: upstream-built glibc binaries from the official
+  # release repo, SHA-pinned so a re-uploaded release asset fails loudly
+  # instead of shipping a silently different pack.
+  A2A_PLUGIN_REPO: "Agent2Builder/agent2api-providers-releases"
+  A2A_PROVIDERS_SHA: "9dc6065208839697eacdbc0b596ed45f245d007ae73c4a8405adc9e515967f75"
+  A2A_WEB_SHA: "ac023a44e499607175e504ebb57ed28297d120ec95cb35aed742ea46b9963f88"
   # NOT upstream's declared rust-version (1.88): their own Cargo.lock pins
   # aes 0.9.3, which refuses to build on anything older than 1.89 — the
   # upstream Cargo.toml comment even warns about this trap. 1.89.0 is the
@@ -34,7 +40,7 @@ env:
 jobs:
   build-native-deps:
     runs-on: ubuntu-22.04
-    timeout-minutes: 120
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
         with:
@@ -229,6 +235,38 @@ jobs:
           cp "${A2A_BIN}" \
              "${GITHUB_WORKSPACE}/native-artifacts/jniLibs/arm64-v8a/liba2a.so"
 
+      - name: Restore a2a glibc toolchain
+        uses: actions/cache@v4
+        with:
+          # crosstool-ng prefix + extracted runtime. The script skips the
+          # ~30 min toolchain build when the prefix (and its loader) is
+          # restored; extraction + packaging still run every time so the
+          # retarget verification is never skipped. Exact key, no
+          # restore-keys: the patch retargets compile-time paths, so any
+          # script/patch change must rebuild from scratch.
+          path: |
+            /tmp/a2a-ctng
+            /tmp/a2a-glibc-build/out
+          key: a2a-glibc-${{ runner.os }}-${{ hashFiles('scripts/build_a2a_glibc.sh', 'scripts/a2a-glibc/**') }}
+
+      - name: Build a2a glibc runtime
+        run: bash scripts/build_a2a_glibc.sh
+
+      - name: Download a2a provider plugin packs
+        run: |
+          set -euo pipefail
+          mkdir -p native-artifacts/assets
+          base="https://github.com/${A2A_PLUGIN_REPO}/releases/download"
+          tagv="${A2A_TAG#v}"
+          curl -fsSL --retry 5 --retry-delay 2 --retry-all-errors \
+            -o native-artifacts/assets/a2a-providers.zip \
+            "${base}/${A2A_TAG}/agent2api-providers-${tagv}-aarch64-unknown-linux-gnu.zip"
+          curl -fsSL --retry 5 --retry-delay 2 --retry-all-errors \
+            -o native-artifacts/assets/a2a-web-providers.zip \
+            "${base}/web-v${A2A_TAG}/agent2api-web-providers-${tagv}-aarch64-unknown-linux-gnu.zip"
+          echo "${A2A_PROVIDERS_SHA}  native-artifacts/assets/a2a-providers.zip" | sha256sum -c -
+          echo "${A2A_WEB_SHA}  native-artifacts/assets/a2a-web-providers.zip" | sha256sum -c -
+
       - name: Restore LLVM libunwind sources
         uses: actions/cache@v4
         with:
@@ -259,6 +297,10 @@ jobs:
           test -s native-artifacts/jniLibs/arm64-v8a/liba2a.so
           file native-artifacts/jniLibs/arm64-v8a/liba2a.so
           file native-artifacts/jniLibs/arm64-v8a/liba2a.so | grep -F "ARM aarch64" >/dev/null
+          # glibc runtime + plugin packs staged by their build/download steps.
+          test -s native-artifacts/assets/a2a-glibc.tar.gz
+          test -s native-artifacts/assets/a2a-providers.zip
+          test -s native-artifacts/assets/a2a-web-providers.zip
       - uses: actions/upload-artifact@v4
         with:
           name: native-deps-${{ github.sha }}

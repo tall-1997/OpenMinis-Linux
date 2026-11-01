@@ -56,8 +56,12 @@ object A2aGateway {
      */
     const val PORT = 18901
 
-    /** Panel path on the port — the web panel serves at the root. */
-    private const val PANEL_PATH = "/"
+    /**
+     * Loopback port the panel router binds (`AGENT2API_PANEL_PORT` — the
+     * headless 分端口 form). The app's WebView reads the panel here; the
+     * gateway router stays on [PORT]. Loopback-only, like the gateway.
+     */
+    const val PANEL_PORT = 18902
 
     /**
      * Own enable/disable persistence. SharedPreferences, not Room and not
@@ -86,7 +90,20 @@ object A2aGateway {
      */
     fun panelUrl(): String? = if (A2aGatewayProcess.isRunning()) panelUrlNow() else null
 
-    private fun panelUrlNow(): String = "http://127.0.0.1:$PORT$PANEL_PATH"
+    /**
+     * The app's panel entry — the full control center at the web root,
+     * NOT the light-management entry (`/m.html`). The upstream panel is a
+     * two-layer product: `/m.html` is the phone's day-to-day lite page
+     * (accounts, check-in, proxy editing — no data import/export, no
+     * fingerprint settings, no model/routing/log management) and `/` is
+     * the complete control center, which the panel made mobile-adaptive
+     * since 3.3.0 (drawer sidebar, card-layout tables). The app always
+     * opens the full entry — pointing a phone at the lite page would drop
+     * whole setting sections, and [A2aPanelActivity] pins the same root.
+     * Internal so the test pins the entry shape — this exact line was
+     * once rewritten to `/m.html` and shipped the crippled entry.
+     */
+    internal fun panelUrlNow(): String = "http://127.0.0.1:$PANEL_PORT/"
 
     /**
      * True when the home layout is complete — the deployed panel bundle plus

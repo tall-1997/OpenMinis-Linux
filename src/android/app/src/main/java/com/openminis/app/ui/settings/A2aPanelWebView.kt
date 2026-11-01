@@ -35,13 +35,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.webkit.WebViewCompat
 import com.openminis.app.R
 import com.openminis.app.a2a.A2aGateway
 import com.openminis.app.a2a.A2aLoginCallback
 import com.openminis.app.a2a.A2aLoginCookies
 import com.openminis.app.a2a.A2aLoginProfiles
-import com.openminis.app.a2a.A2aPanelMobileShell
 import com.openminis.app.browser.WebViewEngine
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.ui.theme.m3Icon
@@ -103,12 +101,14 @@ fun A2aPanelWebView(
     val loadKey = reloadToken * 1_000 + retryCount
     val context = LocalContext.current
     val popups by popupHost.popups.collectAsStateWithLifecycle()
-    // Loopback port the gateway listens on — login-window callbacks that the
-    // shell has to deliver are rewritten onto it (see A2aLoginCallback).
-    val gatewayPort = remember(baseUrl) {
+    // Panel port the gateway's panel router listens on — the base URL's own
+    // port. Login-window callbacks that the shell has to deliver are
+    // rewritten onto it (see A2aLoginCallback), and a callback landing
+    // there is the round-retire signal.
+    val panelPort = remember(baseUrl) {
         runCatching { java.net.URI(baseUrl).port }.getOrNull()
             ?.takeIf { it > 0 }
-            ?: A2aGateway.PORT
+            ?: A2aGateway.PANEL_PORT
     }
     // [T-android-a2a-incognito] A login round exists exactly as long as its
     // windows: once the last one leaves the board, the round's throwaway
@@ -158,39 +158,6 @@ fun A2aPanelWebView(
                     // ships with third-party cookies OFF.
                     android.webkit.CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
                     WebViewEngine.applyCompat(this)
-                    // [T-android-a2a-mobile-fouc] The full mobile wiring
-                    // runs from onPageFinished (it needs the rendered
-                    // shell), which is after the first paint — so every cold
-                    // start flashes the desktop grid before snapping into
-                    // the card layout. The stylesheet and scrollbar patch
-                    // are render-blocking: injected at document start (the
-                    // earliest WebView hook) they are applied to the very
-                    // first frame. The origin rule keeps vendor SSO pages,
-                    // opened as in-app login windows, from running it.
-                    // Document-start is a first-frame *optimization*, not
-                    // the wiring itself: if the installed WebView rejects
-                    // the origin rule or does not implement the feature,
-                    // the full script still runs from onPageFinished. A
-                    // failure here must degrade, never crash the panel —
-                    // a strict future WebView release could turn a rule or
-                    // an unsupported feature into a startup exception that
-                    // would kill the whole `:a2a` process.
-                    registerDocumentStartSafely(
-                        register = {
-                            WebViewCompat.addDocumentStartJavaScript(
-                                this,
-                                A2aPanelMobileShell.START_SCRIPT,
-                                setOf(A2aPanelMobileShell.START_ORIGIN_RULES),
-                            )
-                        },
-                        onFailure = { e ->
-                            AppLogger.warning(
-                                TAG,
-                                "document-start injection unavailable, falling back to " +
-                                    "onPageFinished wiring: ${e.javaClass.simpleName}: ${e.message}",
-                            )
-                        },
-                    )
                     webViewClient = object : WebViewClient() {
                         override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                             loadStarted = true
@@ -204,19 +171,8 @@ fun A2aPanelWebView(
                             }
                         }
 
-                        /**
-                         * [T-android-a2a-mobile] The panel ships a phone layout
-                         * (`css/mobile.css` + `mobile-columns.js`) that its own
-                         * `index.html` never references, so a phone gets the
-                         * desktop grid: a 68px sidebar rail and a table whose
-                         * inline `min-width` (1313px) hides four fifths of every
-                         * row behind a horizontal scroll. Wiring it in on each
-                         * document load is additive and idempotent — see
-                         * [A2aPanelMobileShell].
-                         */
                         override fun onPageFinished(view: WebView?, url: String?) {
                             super.onPageFinished(view, url)
-                            A2aPanelMobileShell.applyTo(view)
                         }
 
                         override fun onReceivedError(
@@ -242,7 +198,7 @@ fun A2aPanelWebView(
                             // see A2aLoginCallback. Runs before the policy so
                             // it never leaves the app.
                             if (request?.isForMainFrame == true) {
-                                A2aLoginCallback.rewrite(url, gatewayPort)?.let { rewritten ->
+                                A2aLoginCallback.rewrite(url, panelPort)?.let { rewritten ->
                                     view?.loadUrl(rewritten)
                                     return true
                                 }
@@ -299,7 +255,7 @@ fun A2aPanelWebView(
                                 context,
                                 popupHost,
                                 onExternalLink,
-                                gatewayPort,
+                                panelPort,
                                 loginProfile,
                                 incognitoLogin,
                             )
@@ -444,36 +400,3 @@ internal object A2aPanelNav {
     }
 }
 
-/**
- * Registers the a2a panel's document-start script without ever letting a
- * WebView rejection kill the host process.
- *
- * [T-android-a2a-origin-rule-crash] The registration runs inside WebView
- * startup, where an exception thrown through the WebViewCompat call chain
- * crashes the whole `:a2a` process and leaves the panel permanently
- * closed. Two known throws are both recovery-free — the onPageFinished
- * wiring already covers them, so the correct behavior is degrade + report,
- * never propagate:
- *
- *  - an origin rule the installed WebView rejects (Chromium 156+ throws
- *    `IllegalArgumentException` for match-pattern-shaped rules such as
- *    `&#42;://127.0.0.1/&#42;`), and
- *  - a WebView that does not implement the feature at all
- *    (`UnsupportedOperationException` from
- *    [androidx.webkit.WebViewCompat.addDocumentStartJavaScript]'s feature
- *    check).
- *
- * [onFailure] runs outside the recovery path too, so a failure reporter
- * that itself throws still cannot resurrect the original exception —
- * returns `false` either way. Returns `true` when [register] completed.
- */
-internal fun registerDocumentStartSafely(
-    register: () -> Unit,
-    onFailure: (Throwable) -> Unit,
-): Boolean = runCatching { register() }.fold(
-    onSuccess = { true },
-    onFailure = { e ->
-        runCatching { onFailure(e) }
-        false
-    },
-)
