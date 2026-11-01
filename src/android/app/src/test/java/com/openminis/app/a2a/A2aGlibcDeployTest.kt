@@ -72,12 +72,16 @@ class A2aGlibcDeployTest {
         return block
     }
 
-    private fun gzipTar(entries: List<ByteArray>): ByteArray {
+    private fun plainTar(entries: List<ByteArray>): ByteArray {
         val body = ByteArrayOutputStream()
         for (e in entries) body.write(e)
         body.write(ByteArray(1024)) // two end blocks
+        return body.toByteArray()
+    }
+
+    private fun gzipTar(entries: List<ByteArray>): ByteArray {
         val gz = ByteArrayOutputStream()
-        GZIPOutputStream(gz).use { it.write(body.toByteArray()) }
+        GZIPOutputStream(gz).use { it.write(plainTar(entries)) }
         return gz.toByteArray()
     }
 
@@ -98,6 +102,43 @@ class A2aGlibcDeployTest {
             File(staging, "glibc/ld-linux-aarch64.so.1").readBytes().contentEquals(payload),
         )
         assertTrue(A2aGlibcDeploy.verify(staging, expected).isEmpty())
+    }
+
+    @Test fun `a plain tar without gzip deploys exactly like the gzipped one`() {
+        val payload = "plain pipeline runtime".toByteArray()
+        val tar = plainTar(
+            listOf(
+                header("glibc/ld-linux-aarch64.so.1", payload.size, '0') + payload +
+                    ByteArray(512 - (payload.size % 512)),
+            ),
+        )
+        val expected = A2aGlibcDeploy.expectedEntries(ByteArrayInputStream(tar))
+        assertEquals(mapOf("glibc/ld-linux-aarch64.so.1" to payload.size.toLong()), expected)
+
+        val staging = tmp.newFolder("staging-plain")
+        assertTrue(A2aGlibcDeploy.extract(ByteArrayInputStream(tar), staging, null).isEmpty())
+        assertTrue(
+            File(staging, "glibc/ld-linux-aarch64.so.1").readBytes().contentEquals(payload),
+        )
+        assertTrue(A2aGlibcDeploy.verify(staging, expected).isEmpty())
+    }
+
+    @Test fun `openArchive passes plain streams through and unwraps gzip`() {
+        val plain = plainTar(listOf(header("glibc/ld", 0, '0')))
+        val passthrough = A2aGlibcDeploy.openArchive(ByteArrayInputStream(plain))
+        assertTrue(passthrough.readBytes().contentEquals(plain))
+
+        val gz = gzipTar(listOf(header("glibc/ld", 0, '0')))
+        val unwrapped = A2aGlibcDeploy.openArchive(ByteArrayInputStream(gz))
+        assertTrue(unwrapped.readBytes().contentEquals(plain))
+    }
+
+    @Test fun `openArchive survives empty and one-byte streams`() {
+        val empty = A2aGlibcDeploy.openArchive(ByteArrayInputStream(ByteArray(0)))
+        assertTrue(empty.readBytes().isEmpty())
+
+        val one = A2aGlibcDeploy.openArchive(ByteArrayInputStream(byteArrayOf(0x1f)))
+        assertTrue(one.readBytes().contentEquals(byteArrayOf(0x1f)))
     }
 
     @Test fun `verify flags a truncated extraction before the swap`() {
