@@ -263,12 +263,18 @@ jobs:
           mkdir -p native-artifacts/assets
           base="https://github.com/${A2A_PLUGIN_REPO}/releases/download"
           tagv="${A2A_TAG#v}"
+          # Upstream web packs live under a sibling tag: "web-" + the
+          # already-v-prefixed release tag (e.g. A2A_TAG=v3.3.0-beta.6 ->
+          # web-v3.3.0-beta.6). Prepending "web-v" again yields
+          # "web-vv..." which does not exist and fails with 404.
+          echo "fetching ${base}/${A2A_TAG}/agent2api-providers-${tagv}-aarch64-unknown-linux-gnu.zip"
           curl -fsSL --retry 5 --retry-delay 2 --retry-all-errors \
             -o native-artifacts/assets/a2a-providers.zip \
             "${base}/${A2A_TAG}/agent2api-providers-${tagv}-aarch64-unknown-linux-gnu.zip"
+          echo "fetching ${base}/web-${A2A_TAG}/agent2api-web-providers-${tagv}-aarch64-unknown-linux-gnu.zip"
           curl -fsSL --retry 5 --retry-delay 2 --retry-all-errors \
             -o native-artifacts/assets/a2a-web-providers.zip \
-            "${base}/web-v${A2A_TAG}/agent2api-web-providers-${tagv}-aarch64-unknown-linux-gnu.zip"
+            "${base}/web-${A2A_TAG}/agent2api-web-providers-${tagv}-aarch64-unknown-linux-gnu.zip"
           echo "${A2A_PROVIDERS_SHA}  native-artifacts/assets/a2a-providers.zip" | sha256sum -c -
           echo "${A2A_WEB_SHA}  native-artifacts/assets/a2a-web-providers.zip" | sha256sum -c -
 
