@@ -93,6 +93,13 @@ if [ ! -d "$PREFIX" ] || [ ! -f "$(find "$PREFIX" -name ld-linux-aarch64.so.1 2>
     sed -i -E "s/^# ${GLIBC_CFG} is not set/${GLIBC_CFG}=y/" .config
     grep -q "^${GLIBC_CFG}=y$" .config \
         || { echo "failed to pin glibc $GLIBC_VER in .config" >&2; exit 1; }
+    # ct-ng 1.29 selects glibc by the version string as well: the V_*
+    # booleans are kconfig legacy and do_libc_get consumes
+    # CT_GLIBC_VERSION, so the booleans alone leave the sample default
+    # (newest) in charge of the actual download.
+    sed -i -E "s|^#? ?CT_GLIBC_VERSION=.*|CT_GLIBC_VERSION=\"$GLIBC_VER\"|" .config
+    grep -q "^CT_GLIBC_VERSION=\"$GLIBC_VER\"$" .config \
+        || { echo "failed to pin glibc $GLIBC_VER version string" >&2; exit 1; }
     # Pin gcc the same way: the 1.29.0 sample defaults to the newest
     # gcc (16.x), which multiplies build time on 2-core runners and is
     # unproven on the 22.04 host toolchain. 12.5 keeps the runtime in
