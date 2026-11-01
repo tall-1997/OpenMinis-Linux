@@ -87,10 +87,11 @@ class RootfsManagerInstrumentedTest {
 
     @Test
     fun installIfNeededExtractsRootfsFromAssets() = runBlocking {
-        // This test requires ubuntu-base.tar.gz in assets.
+        // This test requires the embedded rootfs (ubuntu-base.tgz, or the
+        // legacy ubuntu-base.tar.gz/.tar names) in assets.
         // Skip if not present (CI or pre-asset-download)
-        if (!hasAsset("ubuntu-base.tar.gz")) {
-            println("SKIP: ubuntu-base.tar.gz not in assets")
+        if (!rootfsAssetPresent()) {
+            println("SKIP: rootfs asset not in assets")
             return@runBlocking
         }
 
@@ -121,8 +122,8 @@ class RootfsManagerInstrumentedTest {
 
     @Test
     fun installIfNeededIsIdempotent() = runBlocking {
-        if (!hasAsset("ubuntu-base.tar.gz")) {
-            println("SKIP: ubuntu-base.tar.gz not in assets")
+        if (!rootfsAssetPresent()) {
+            println("SKIP: rootfs asset not in assets")
             return@runBlocking
         }
 
@@ -140,8 +141,8 @@ class RootfsManagerInstrumentedTest {
 
     @Test
     fun installIfNeededCleansPartialInstall() = runBlocking {
-        if (!hasAsset("ubuntu-base.tar.gz")) {
-            println("SKIP: ubuntu-base.tar.gz not in assets")
+        if (!rootfsAssetPresent()) {
+            println("SKIP: rootfs asset not in assets")
             return@runBlocking
         }
 
@@ -223,8 +224,8 @@ class RootfsManagerInstrumentedTest {
 
     @Test
     fun resetDeletesAndReinstalls() = runBlocking {
-        if (!hasAsset("ubuntu-base.tar.gz")) {
-            println("SKIP: ubuntu-base.tar.gz not in assets")
+        if (!rootfsAssetPresent()) {
+            println("SKIP: rootfs asset not in assets")
             return@runBlocking
         }
 
@@ -242,8 +243,8 @@ class RootfsManagerInstrumentedTest {
 
     @Test
     fun resetKeepsUserDataWhenRequested() = runBlocking {
-        if (!hasAsset("ubuntu-base.tar.gz")) {
-            println("SKIP: ubuntu-base.tar.gz not in assets")
+        if (!rootfsAssetPresent()) {
+            println("SKIP: rootfs asset not in assets")
             return@runBlocking
         }
 
@@ -332,6 +333,10 @@ class RootfsManagerInstrumentedTest {
     }
 
     // ==================== Helpers ====================
+
+    /** The embedded rootfs under any name an APK may carry (.tgz now, legacy .tar.gz/.tar). */
+    private fun rootfsAssetPresent(): Boolean =
+        hasAsset("ubuntu-base.tgz") || hasAsset("ubuntu-base.tar.gz") || hasAsset("ubuntu-base.tar")
 
     private fun hasAsset(name: String): Boolean {
         return try {

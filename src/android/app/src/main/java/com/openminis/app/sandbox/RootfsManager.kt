@@ -111,14 +111,10 @@ class RootfsManager private constructor(private val context: Context) {
             staging.deleteRecursively()
             staging.mkdirs()
 
-            // Extract rootfs from assets.
-            // AAPT may decompress .tar.gz → .tar automatically, so try both names.
-            val assetName = try {
-                context.assets.open(ROOTFS_ASSET).close()
-                ROOTFS_ASSET
-            } catch (_: java.io.FileNotFoundException) {
-                ROOTFS_ASSET_TAR
-            }
+            // Extract rootfs from assets: .tgz first, then the legacy names.
+            val assetName = listOf(ROOTFS_ASSET, ROOTFS_ASSET_GZ, ROOTFS_ASSET_TAR)
+                .firstOrNull { runCatching { context.assets.open(it).close() }.isSuccess }
+                ?: ROOTFS_ASSET
 
             // Asset size for progress calculation — compressed length (for .gz)
             // or uncompressed length (for .tar). openFd() fails for 0-length
@@ -137,7 +133,7 @@ class RootfsManager private constructor(private val context: Context) {
                 val progressStream = ProgressInputStream(rawAsset, assetTotal) { fraction ->
                     _installState.value = RootfsInstallState.Extracting(fraction)
                 }
-                if (assetName.endsWith(".gz")) {
+                if (assetName.endsWith(".gz") || assetName.endsWith(".tgz")) {
                     GZIPInputStream(progressStream).use { gzipStream ->
                         extractTar(gzipStream, staging)
                     }
@@ -1751,7 +1747,11 @@ class RootfsManager private constructor(private val context: Context) {
         private const val MAX_PIP_WORLD_RETRY_STRIKES = 3
         private const val MAX_DPKG_WORLD_RETRY_STRIKES = 3
         private const val ARCH = "aarch64"
-        private const val ROOTFS_ASSET = "ubuntu-base.tar.gz"
+        // [T-apk-size-rootfs] .tgz (not .tar.gz): AGP decompresses *.gz assets at
+        // packaging time, so the old name embedded a 180 MiB .tar (deflated to
+        // 54 MiB). Legacy names stay as fallbacks for older APKs.
+        private const val ROOTFS_ASSET = "ubuntu-base.tgz"
+        private const val ROOTFS_ASSET_GZ = "ubuntu-base.tar.gz"
         private const val ROOTFS_ASSET_TAR = "ubuntu-base.tar"
         private const val DISTRO = "ubuntu-noble"
         private const val PROOT_ASSET = "proot-aarch64"

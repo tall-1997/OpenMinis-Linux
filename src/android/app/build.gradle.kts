@@ -243,7 +243,11 @@ android {
     }
 
     androidResources {
-        noCompress += listOf("tar.gz", "proot-aarch64", "gz")
+        // [T-apk-size-rootfs] "tgz" is the rootfs asset's shipped name: AGP
+        // auto-decompresses *.gz assets at packaging time (the old .tar.gz
+        // name put a 180 MiB .tar in the APK), and .tgz is also stored
+        // uncompressed — deflating an already-gzipped blob gains nothing.
+        noCompress += listOf("tar.gz", "proot-aarch64", "gz", "tgz")
     }
 
     packaging {
