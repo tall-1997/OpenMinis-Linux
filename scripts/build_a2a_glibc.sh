@@ -37,24 +37,40 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 # --- toolchain deps (crosstool-ng builds gcc+glibc+binutils from source) ---
-# crosstool-ng lives in `universe`, which GitHub's ubuntu-22.04 image does
-# not always enable. Add it when the package is not resolvable, then retry.
+# There is no crosstool-ng package in Ubuntu jammy (any pocket), so it is
+# bootstrapped from the pinned release tarball below. The host packages are
+# its build/runtime deps (bootstrap needs autoconf/automake/libtool).
+CTNG_VERSION=1.29.0
+CTNG_TARBALL="crosstool-ng-$CTNG_VERSION.tar.xz"
+CTNG_SRC=/tmp/a2a-ctng-src
+
 $SUDO apt-get update -qq
-if ! apt-cache show crosstool-ng >/dev/null 2>&1; then
-    CODENAME="$(. /etc/os-release && echo "$VERSION_CODENAME")"
-    echo "deb http://archive.ubuntu.com/ubuntu $CODENAME universe" |
-        $SUDO tee /etc/apt/sources.list.d/crosstool-ng-universe.list >/dev/null
-    $SUDO apt-get update -qq
-fi
 $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-    crosstool-ng bison flex texinfo gawk gperf help2man \
+    autoconf automake libtool libtool-bin \
+    bison flex texinfo gawk gperf help2man \
     libncurses-dev rsync unzip bzip2 xz-utils file >/dev/null
 
-CTNG_VERSION="$(ct-ng version | head -1 | sed 's/.*crosstool-ng \([^ ]*\).*/\1/')"
-GLIBC_PKG_DIR="/usr/lib/crosstool-ng/packages/glibc"
-GLIBC_VER="$(ls "$GLIBC_PKG_DIR" | sort -V | tail -1)"
-if [ -z "$GLIBC_VER" ]; then
-    echo "no glibc package dir under $GLIBC_PKG_DIR" >&2
+if ! command -v ct-ng >/dev/null 2>&1; then
+    rm -rf "$CTNG_SRC"
+    mkdir -p "$CTNG_SRC"
+    curl -fsSL --retry 5 --retry-delay 2 --retry-all-errors \
+        -o "$CTNG_SRC/$CTNG_TARBALL" \
+        "https://github.com/crosstool-ng/crosstool-ng/releases/download/crosstool-ng-$CTNG_VERSION/$CTNG_TARBALL"
+    tar xf "$CTNG_SRC/$CTNG_TARBALL" -C "$CTNG_SRC"
+    cd "$CTNG_SRC/crosstool-ng-$CTNG_VERSION"
+    ./bootstrap
+    ./configure --prefix=/usr/local
+    make -j"$(nproc)"
+    $SUDO make install
+fi
+
+GLIBC_PKG_DIR="/usr/local/share/crosstool-ng/packages/glibc"
+# The patch targets one specific glibc release; derive that version from
+# the patch file name instead of picking the newest directory, so the
+# patch always lands where it applies.
+GLIBC_VER="$(find "$PATCH_DIR" -maxdepth 1 -name 'glibc-*.patch' 2>/dev/null | sed 's/.*glibc-\([0-9.]*\).*/\1/' | sort -V | tail -1)"
+if [ -z "$GLIBC_VER" ] || [ ! -d "$GLIBC_PKG_DIR/$GLIBC_VER" ]; then
+    echo "glibc $GLIBC_VER not supported by crosstool-ng $CTNG_VERSION" >&2
     exit 1
 fi
 echo "crosstool-ng $CTNG_VERSION, glibc $GLIBC_VER"
@@ -69,6 +85,24 @@ if [ ! -d "$PREFIX" ] || [ ! -f "$(find "$PREFIX" -name ld-linux-aarch64.so.1 2>
     mkdir -p "$WORK"
     cd "$WORK"
     ct-ng aarch64-unknown-linux-gnu >/dev/null
+    # Pin the glibc release to the version the path patch targets: turn
+    # off every release option, then switch exactly ours back on. The
+    # sample default would silently drift to whatever ct-ng ships newest.
+    GLIBC_CFG="CT_GLIBC_V_${GLIBC_VER//./_}"
+    sed -i -E "s/^CT_GLIBC_V_2_[0-9_]+=y/# \\0/" .config
+    sed -i -E "s/^# ${GLIBC_CFG} is not set/${GLIBC_CFG}=y/" .config
+    grep -q "^${GLIBC_CFG}=y$" .config \
+        || { echo "failed to pin glibc $GLIBC_VER in .config" >&2; exit 1; }
+    # Pin gcc the same way: the 1.29.0 sample defaults to the newest
+    # gcc (16.x), which multiplies build time on 2-core runners and is
+    # unproven on the 22.04 host toolchain. 12.5 keeps the runtime in
+    # the same libstdc++ generation as the previous ct-ng 1.24 chain.
+    # (gcc is the one package 1.29 selects via the version string, not
+    # a CT_GCC_V_* boolean — all of those sit commented out.)
+    GCC_VER=12.5.0
+    sed -i -E "s|^#? ?CT_GCC_VERSION=.*|CT_GCC_VERSION=\"$GCC_VER\"|" .config
+    grep -q "^CT_GCC_VERSION=\"$GCC_VER\"$" .config \
+        || { echo "failed to pin gcc $GCC_VER in .config" >&2; exit 1; }
     # Trim what a plugin runtime never needs; keep the sysroot full.
     sed -i \
         -e 's|^CT_PREFIX_DIR=.*|CT_PREFIX_DIR="/tmp/a2a-ctng"|' \

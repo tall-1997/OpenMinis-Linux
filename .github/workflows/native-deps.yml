@@ -238,15 +238,20 @@ jobs:
       - name: Restore a2a glibc toolchain
         uses: actions/cache@v4
         with:
-          # crosstool-ng prefix + extracted runtime. The script skips the
-          # ~30 min toolchain build when the prefix (and its loader) is
-          # restored; extraction + packaging still run every time so the
-          # retarget verification is never skipped. Exact key, no
-          # restore-keys: the patch retargets compile-time paths, so any
-          # script/patch change must rebuild from scratch.
+          # crosstool-ng prefix + its own install tree + extracted
+          # runtime. ct-ng itself is bootstrapped from source by the
+          # script (~8 min cold), so its /usr/local install rides the
+          # cache too. The script skips the ~30 min toolchain build when
+          # the prefix (and its loader) is restored; extraction +
+          # packaging still run every time so the retarget verification
+          # is never skipped. Exact key, no restore-keys: the patch
+          # retargets compile-time paths, so any script/patch change
+          # must rebuild from scratch.
           path: |
             /tmp/a2a-ctng
             /tmp/a2a-glibc-build/out
+            /usr/local/bin/ct-ng
+            /usr/local/share/crosstool-ng
           key: a2a-glibc-${{ runner.os }}-${{ hashFiles('scripts/build_a2a_glibc.sh', 'scripts/a2a-glibc/**') }}
 
       - name: Build a2a glibc runtime
