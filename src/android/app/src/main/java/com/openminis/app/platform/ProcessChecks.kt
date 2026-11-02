@@ -19,8 +19,8 @@ import java.io.File
  * abstract socket, opening the database, booting PRoot, …).
  *
  * [isMainProcess] is the generic answer; it costs one small file read and is
- * safe to call at the very top of `onCreate`. Sub-processes (`:a2a`, `:acra`,
- * any future ones) inherit the "minimal boot" path instead of rediscovering
+ * safe to call at the very top of `onCreate`. Sub-processes (`:acra`, any
+ * future one) inherit the "minimal boot" path instead of rediscovering
  * the collision the hard way.
  */
 object ProcessChecks {
@@ -56,12 +56,12 @@ object ProcessChecks {
 
     /**
      * Convenience for `Application.onCreate`: true when this process must skip
-     * the main-process boot ([T-android-a2a-process-crash]).
+     * the main-process boot.
      *
      * Everything the main process owns — the sandbox's single-instance
      * abstract socket, PRoot, the database, the repositories, the WebView data
      * directory — collides or double-boots if a second process runs the same
-     * init, so `android:process` components (`:a2a` panel, any future one) get
+     * init, so any `android:process` component gets
      * a minimal boot instead. ACRA is armed in `attachBaseContext`, so crash
      * capture works in every process either way.
      */

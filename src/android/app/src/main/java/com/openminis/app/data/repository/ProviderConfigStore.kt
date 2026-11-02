@@ -11,6 +11,7 @@ import com.openminis.app.data.model.ProviderType
 import com.openminis.app.data.model.VoiceProviderTemplate
 import com.openminis.app.data.model.isVoiceTemplateSeedShape
 import com.openminis.app.provider.BuiltinFreeLane
+import java.io.File
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -309,6 +310,50 @@ internal class ProviderConfigStore(
     }
 
     /**
+     * Removes the provider rows of built-in lanes this build no longer ships
+     * ([BuiltinLaneRetirement]), and reclaims what those lanes left on disk.
+     *
+     * Why a boot pass and not a one-off script: the descriptor leaves
+     * [BuiltinFreeLanes.ALL] with the code, so an install that used such a lane
+     * keeps a provider row pointed at a loopback port nothing binds — every
+     * refresh fails, the model picker offers models that cannot answer, and the
+     * only way out is deleting it by hand. The row is recognised by id only,
+     * because everything else about the lane is already gone.
+     *
+     * The removal goes through [ProviderRepository.removeInstance] rather than
+     * hand-rolled list surgery: that call already carries the full cleanup
+     * (model rows, group members, agent-loop membership, tombstones,
+     * credentials, OAuth tokens, the voice-shadow flag, the last-used pointer,
+     * thinking rules). A second implementation is how those bugs come back.
+     */
+    internal fun purgeRetiredBuiltInLanes() {
+        val doomed = synchronized(repo.configLock) {
+            repo.ensureConfigLoaded()
+            BuiltinLaneRetirement.instancesToPurge(repo.workingCopy())
+        }
+        doomed.forEach { runCatching { repo.removeInstance(it) } }
+        purgeRetiredBuiltInLaneFiles()
+    }
+
+    /**
+     * Deletes the retired lane's deployed payload and its preference store.
+     *
+     * The payload is the expensive half — a glibc runtime and two upstream packs
+     * (~15 MiB) under `<filesDir>/builtin-plugins/a2a` — and it outlives the row:
+     * a user who started the gateway once but never added the provider instance
+     * still carries it. Both steps are idempotent and cheap on every later boot
+     * (a missing directory and an empty prefs map), so no "already purged" flag
+     * has to be kept in sync with reality.
+     */
+    private fun purgeRetiredBuiltInLaneFiles() {
+        runCatching { File(context.filesDir, "builtin-plugins/a2a").deleteRecursively() }
+        runCatching {
+            val legacy = context.getSharedPreferences("a2a_gateway", Context.MODE_PRIVATE)
+            if (legacy.all.isNotEmpty()) legacy.edit().clear().apply()
+        }
+    }
+
+    /**
      * Seeds every built-in keyless free lane on launch.
      *
      * Credentials live outside the config, so each seeded lane's key is written
@@ -318,6 +363,9 @@ internal class ProviderConfigStore(
      */
     internal fun seedBuiltInFreeLanes() = synchronized(repo.configLock) {
         if (!repo._configLoaded.value) return@synchronized
+        // Retirement first, seeding second: a build that dropped a lane must
+        // delete its stale row before the seed pass decides what is missing.
+        purgeRetiredBuiltInLanes()
         val config = repo.workingCopy()
         val seeded = FreeLaneBootstrap.ensureSeeded(config) { loadApiKey(it) }
         if (seeded.isEmpty()) return@synchronized

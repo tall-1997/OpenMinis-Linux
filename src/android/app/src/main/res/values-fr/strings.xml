@@ -1696,35 +1696,10 @@
     <string name="dev_suite_assemble">Assembler</string>
     <string name="dev_suite_start_install">Démarrage de l\'installation</string>
     <string name="dev_suite_interrupted">Installation interrompue</string>
-    <string name="builtin_plugin_a2a_name">Passerelle Agent2API (locale)</string>
-    <string name="builtin_plugin_a2a_summary">Proxy local compatible OpenAI multi-fournisseurs · ajoutez des comptes dans son panneau web · loopback uniquement</string>
     <string name="builtin_plugin_install">Installer</string>
     <string name="builtin_plugin_retry">Réessayer</string>
     <string name="builtin_plugin_open_panel">Panneau</string>
 
-    <!-- [T-android-a2a-native] a2a gateway management page -->
-<string name="a2a_desktop_bridge_footer">Certaines actions du panneau (import/export de comptes, export des journaux, sauvegarde complète) utilisent le pont bureau du moteur et sont indisponibles sur cet appareil. Les comptes s\'ajoutent dans le panneau ; les données SQLite résident dans le dossier privé de l\'app.</string>
-<string name="a2a_incognito_login_title">Connexion incognito</string>
-<string name="a2a_incognito_login_subtitle">Chaque connexion s\'exécute dans un profil de navigateur jetable : cookies, stockage et cache sont effacés à la fermeture de la fenêtre. La session du panneau n\'est pas touchée.</string>
-<string name="a2a_view_gateway_log">Journal de la passerelle</string>
-<string name="a2a_log_filter_login">Connexion / sécurité uniquement</string>
-<string name="a2a_log_empty">Aucune ligne de journal pour l\'instant.</string>
-<string name="a2a_panel_isolated_hint">S\'exécute dans une session isolée dans l\'app : les connexions ici sont séparées du navigateur de l\'appareil, plusieurs comptes n\'entrent jamais en conflit.</string>
-    <string name="a2a_start_gateway">Démarrer la passerelle</string>
-    <string name="a2a_status_running">En cours d\'exécution</string>
-    <string name="a2a_panel_address">Adresse du panneau</string>
-    <string name="a2a_panel_not_installed">La passerelle n\'est pas encore déployée : l\'ouverture du panneau l\'installe automatiquement.</string>
-    <string name="a2a_panel_needs_start">Démarrez la passerelle pour ouvrir son panneau web.</string>
-    <string name="a2a_panel_load_failed">Échec du chargement du panneau.</string>
-    <string name="a2a_panel_page_title">Panneau Agent2API</string>
-    <string name="a2a_login_window_title">Se connecter</string>
-    <string name="a2a_login_address_title">Adresse actuelle</string>
-    <string name="a2a_login_address_hint">Si cette page ne peut pas s\'ouvrir (par exemple un rappel vers un port de bouclage local), la connexion a peut-être déjà abouti. Copiez cette adresse et collez-la dans le champ de rappel du panneau.</string>
-    <string name="a2a_login_copy_address">Copier l\'adresse</string>
-    <string name="a2a_panel_starting">Démarrage de la passerelle…</string>
-    <string name="a2a_open_panel_and_start">Démarrer et ouvrir le panneau</string>
-    <string name="a2a_close">Fermer</string>
-    <string name="a2a_open_in_browser">Ouvrir dans le navigateur</string>
     <string name="dev_suite_no_space">Stockage insuffisant : environ %1$d GB nécessaires, %2$d GB disponibles</string>
     <string name="dev_suite_skipped_dep">Ignoré : %1$s n\'a pas été installé</string>
     <string name="dev_suite_remove_confirm">Retirer %1$s du sandbox ? Les fichiers téléchargés et les liens de commandes sont supprimés ; les paquets apt restent installés.</string>

@@ -233,15 +233,7 @@ jobs:
           mkdir -p src/android/app/src/main/assets src/android/app/src/main/jniLibs/arm64-v8a src/android/app/libs
           cp /tmp/native-deps/assets/proot-aarch64 src/android/app/src/main/assets/
           cp /tmp/native-deps/jniLibs/arm64-v8a/libproot.so src/android/app/src/main/jniLibs/arm64-v8a/
-          cp /tmp/native-deps/jniLibs/arm64-v8a/liba2a.so src/android/app/src/main/jniLibs/arm64-v8a/
           cp /tmp/native-deps/libs/rclone.aar src/android/app/libs/rclone.aar
-          # The a2a glibc runtime + the two upstream provider packs ship as
-          # APK assets — [A2aInstaller] deploys them into the gateway home.
-          for f in a2a-glibc.tar.gz a2a-providers.zip a2a-web-providers.zip; do
-            src=$(find /tmp/native-deps -name "$f" -type f -print -quit)
-            test -n "$src" && test -s "$src"
-            cp "$src" "src/android/app/src/main/assets/$f"
-          done
           find /usr/local/lib/android/sdk/ndk/${ANDROID_NDK}/toolchains/llvm/prebuilt -path '*sysroot/usr/lib/aarch64-linux-android' -type d -print0 | while IFS= read -r -d '' d; do cp /tmp/native-deps/libunwind.a "$d/libunwind.a"; done
 
       - name: Install sandbox assets

@@ -246,9 +246,8 @@ class MinisApp : Application(), ImageLoaderFactory {
         // it just lets the in-app log/crash list find filesDir/logs.
         AppLogger.primeContext(this)
 
-        // [T-android-a2a-process-crash] Application subclasses run in EVERY
-        // process: sub-processes (`:a2a` panel, future ones) get the minimal
-        // boot — ACRA is armed in attachBaseContext, the rest is main-only.
+        // Application subclasses run in EVERY process: a sub-process gets the
+        // minimal boot — ACRA is armed in attachBaseContext, the rest is main-only.
         if (ProcessChecks.shouldSkipMainInit(this)) return
         com.openminis.app.crash.LaunchPhaseProbes.startLaunchScan(this, appCoroutineScopes.io)
         com.openminis.app.crash.LaunchPhaseProbes.startDbVersionProbe(this, appCoroutineScopes.io)
@@ -626,11 +625,6 @@ class MinisApp : Application(), ImageLoaderFactory {
         // ConnectivityManager callback so shells inside the sandbox see fresh
         // DNS servers after Wi-Fi ↔ cellular swaps or VPN toggles.
         networkMonitor.start(this)
-
-        // [T-android-a2a-native] Gateway-owned scheduled tasks (sign-ins, cron) only
-        // run while the gateway serves — cold-boot restore when the user left it
-        // enabled (adopts a serving orphan too). Off main; failure → lastError.
-        kotlin.concurrent.thread(name = "a2a-autostart") { runCatching { com.openminis.app.a2a.A2aGateway.maybeAutoStart(this@MinisApp) } }
 
         // Register global /var/minis/{memory,skills,shared} bind mounts up-front
         // so direct file I/O tools (file_read) resolve these paths even before

@@ -30,15 +30,6 @@
 
 Test-only dependencies: JUnit 4.13.2 (**EPL-1.0**), MockWebServer 4.12.0 (**Apache-2.0**), kotlinx-coroutines-test 1.9.0 (**Apache-2.0**), org.json 20231013 (**Public Domain / JSON License**).
 
-## Bundled gateway — a2a / Agent2API
-
-a2a 功能随包分发上游 Agent2API 的 web 面板与网关二进制；源码不 vendor 进本仓库，CI 按 `v3.0.8`（commit `68d0a4e4`）拉取构建，tag 漂移会直接失败。
-
-| Component | Version / Source | License | Notes |
-|---|---|---|---|
-| [Agent2API](https://github.com/aimod-cc/Agent2API) web UI | `v3.0.8` | **MIT** | `app/src/main/assets/builtin_plugins/a2a-ui.zip`，首次启用时解到 app 私有目录 |
-| Agent2API gateway (`agent2api-server`) | `v3.0.8` | **MIT** | CI 交叉编译为 `jniLibs/arm64-v8a/liba2a.so`，由 app 进程托管运行（不进 PRoot） |
-
 ## Bundled web/UI assets
 
 | Asset | Location | License |

@@ -339,7 +339,7 @@ class QuickActivity : ComponentActivity() {
                         IconButton(onClick = { finish() }) {
                             Icon(
                                 Icons.Outlined.Close,
-                                contentDescription = stringResource(R.string.a2a_close),
+                                contentDescription = stringResource(R.string.common_close),
                                 tint = colors.onSurfaceVariant,
                             )
                         }
@@ -372,7 +372,7 @@ class QuickActivity : ComponentActivity() {
                     ) {
                         Spacer(Modifier.weight(1f))
                         TextButton(onClick = { finish() }) {
-                            Text(stringResource(R.string.a2a_close))
+                            Text(stringResource(R.string.common_close))
                         }
                         Spacer(Modifier.width(8.dp))
                         IconButton(
@@ -425,7 +425,7 @@ class QuickActivity : ComponentActivity() {
             IconButton(onClick = { stagedImages.clear() }, modifier = Modifier.size(20.dp)) {
                 Icon(
                     Icons.Outlined.Close,
-                    contentDescription = stringResource(R.string.a2a_close),
+                    contentDescription = stringResource(R.string.common_close),
                     tint = colors.onSurfaceVariant,
                     modifier = Modifier.size(14.dp),
                 )
