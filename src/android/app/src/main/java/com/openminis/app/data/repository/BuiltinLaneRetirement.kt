@@ -25,9 +25,28 @@ internal object BuiltinLaneRetirement {
 
     /**
      * Instance ids present in [config] that a retired lane owns, in config
-     * order. User-built providers are never candidates: only ids recorded in
-     * [BuiltinFreeLanes.RETIRED_IDS] match.
+     * order. Two retirement channels:
+     *
+     * - [BuiltinFreeLanes.RETIRED_IDS]: lanes whose whole build-shipment is
+     *   gone (a2a) — remembered by id because no descriptor survives.
+     * - Built-in-prefixed rows absent from [activeInstanceIds]: manifest lanes
+     *   the current manifest no longer lists. The active set is the lane list
+     *   that last seeded successfully (or its persisted snapshot when the
+     *   latest manifest download failed), so an unreadable manifest can never
+     *   retire a lane, while a valid one that drops an entry retires exactly
+     *   that entry on the next boot.
+     *
+     * User-built providers are never candidates: they do not carry the
+     * `builtin-` prefix and are never in either channel.
      */
-    fun instancesToPurge(config: ProviderConfig): List<String> =
-        config.instances.map { it.id }.filter { it in BuiltinFreeLanes.RETIRED_IDS }
+    fun instancesToPurge(
+        config: ProviderConfig,
+        activeInstanceIds: Set<String> = BuiltinFreeLanes.ALL_INSTANCE_IDS,
+    ): List<String> = config.instances.map { it.id }.filter { id ->
+        when {
+            id in BuiltinFreeLanes.RETIRED_IDS -> true
+            id.startsWith("builtin-") && id !in activeInstanceIds -> true
+            else -> false
+        }
+    }
 }

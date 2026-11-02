@@ -50,13 +50,20 @@ internal object FreeLaneBootstrap {
      *
      * [apiKeyOf] reads the credential store for one instance id. Defaulted to
      * "nothing" so tests need no store; the repository passes its own loader.
+     *
+     * [builtins] is the lane list to seed, defaulting to the compiled-in set.
+     * The repository passes the manifest-synthesised list (compiled lanes plus
+     * manifest lanes) so a manifest entry seeds through the exact same
+     * machinery — tombstones, clash suffixes, credential writing — with no new
+     * seeding path to keep in sync.
      */
     fun ensureSeeded(
         config: ProviderConfig,
+        builtins: List<BuiltinFreeLane> = BuiltinFreeLanes.ALL,
         apiKeyOf: (String) -> String? = { null },
     ): List<BuiltinFreeLane> {
         val seeded = mutableListOf<BuiltinFreeLane>()
-        for (builtin in BuiltinFreeLanes.ALL) {
+        for (builtin in builtins) {
             if (config.instances.any { belongsTo(builtin, it, apiKeyOf(it.id)) }) continue
             if (InstanceRemoval.wasRemovedByUser(config, builtin.instanceId)) continue
             config.instances.add(builtin.instance(labelFor(config, builtin)))

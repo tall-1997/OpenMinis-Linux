@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "lanes": [
+    {
+      "id": "zen",
+      "behavior": "zen",
+      "instanceId": "builtin-opencode-zen",
+      "label": "OpenCode Zen (Free)",
+      "baseURL": "https://opencode.ai/zen/v1",
+      "credentialConvention": "fixed",
+      "credentialValue": "public",
+      "offlineSeedIds": ["deepseek-v4.1-flash-free", "big-pickle"]
+    },
+    {
+      "id": "kilo",
+      "behavior": "kilo",
+      "instanceId": "builtin-kilo",
+      "label": "Kilo (Free)",
+      "baseURL": "https://api.kilo.ai/api/gateway",
+      "credentialConvention": "none",
+      "offlineSeedIds": ["kilo-auto/free", "nvidia/nemotron-3.5-lightning:free"]
+    }
+  ]
+}
