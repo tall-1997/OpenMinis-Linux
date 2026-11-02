@@ -882,6 +882,15 @@
     <string name="provider_detail_label">Label</string>
     <string name="provider_detail_manual_bearer_token">Manual na Bearer Token</string>
     <string name="provider_detail_use_a_static_bearer_token_instead_of_the">Gumamit ng static na bearer token sa halip na OAuth sign-in flow. </string>
+    <string name="provider_detail_pool_header">Grupo ng Account</string>
+    <string name="provider_detail_pool_footer">Awtomatikong umiikot ang mga karagdagang API key. Kapag na-limit o tinanggihan ang isang key, papalamig ito at ang susunod na key ang sasalo. Ang unang key ang pangunahin.</string>
+    <string name="provider_detail_pool_add_hint">I-paste ang isang API key</string>
+    <string name="provider_detail_pool_add">Idagdag</string>
+    <string name="provider_detail_pool_duplicate">Nasa grupo na ang key na iyon</string>
+    <string name="provider_detail_pool_remove">Alisin ang key</string>
+    <string name="provider_detail_pool_remove_confirm">Aalisin ang key na ito sa grupo. Kapag inalis ang unang key, ang susunod ang magiging pangunahin.</string>
+    <string name="provider_detail_pool_slot_primary">Pangunahin</string>
+    <string name="provider_detail_pool_slot_extra">Reserba</string>
     <string name="provider_detail_custom_api_base">Custom na API Base</string>
     <string name="provider_detail_auto_append_v1">Awtomatikong idagdag ang /v1</string>
     <string name="provider_detail_custom_user_agent">Custom na User-Agent</string>

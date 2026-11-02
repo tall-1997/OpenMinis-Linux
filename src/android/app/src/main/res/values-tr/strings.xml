@@ -882,6 +882,15 @@
     <string name="provider_detail_label">Etiket</string>
     <string name="provider_detail_manual_bearer_token">Elle Girilen Bearer Token</string>
     <string name="provider_detail_use_a_static_bearer_token_instead_of_the">OAuth ile oturum açma akışı yerine sabit bir bearer token kullanın. </string>
+    <string name="provider_detail_pool_header">Hesap Havuzu</string>
+    <string name="provider_detail_pool_footer">Ek API anahtarları otomatik olarak dönüşümlü kullanılır. Bir anahtar limite takılır veya reddedilirse soğumaya alınır ve sıradaki anahtar devreye girer. İlk anahtar birincildir.</string>
+    <string name="provider_detail_pool_add_hint">API anahtarı yapıştır</string>
+    <string name="provider_detail_pool_add">Ekle</string>
+    <string name="provider_detail_pool_duplicate">Bu anahtar zaten havuzda</string>
+    <string name="provider_detail_pool_remove">Anahtarı kaldır</string>
+    <string name="provider_detail_pool_remove_confirm">Bu anahtar havuzdan kaldırılacak. İlk anahtar kaldırılırsa sıradaki anahtar birincil olur.</string>
+    <string name="provider_detail_pool_slot_primary">Birincil</string>
+    <string name="provider_detail_pool_slot_extra">Yedek</string>
     <string name="provider_detail_custom_api_base">Özel API Adresi</string>
     <string name="provider_detail_auto_append_v1">/v1 sonekini otomatik ekle</string>
     <string name="provider_detail_custom_user_agent">Özel User-Agent</string>

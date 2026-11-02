@@ -882,6 +882,15 @@
     <string name="provider_detail_label">Libellé</string>
     <string name="provider_detail_manual_bearer_token">Jeton Bearer manuel</string>
     <string name="provider_detail_use_a_static_bearer_token_instead_of_the">Utilisez un jeton bearer statique au lieu du flux de connexion OAuth.</string>
+    <string name="provider_detail_pool_header">Groupe de comptes</string>
+    <string name="provider_detail_pool_footer">Les clés API supplémentaires alternent automatiquement. Quand une clé atteint la limite ou est rejetée, elle refroidit et la suivante prend le relais. La première clé est la principale.</string>
+    <string name="provider_detail_pool_add_hint">Coller une clé API</string>
+    <string name="provider_detail_pool_add">Ajouter</string>
+    <string name="provider_detail_pool_duplicate">Cette clé est déjà dans le groupe</string>
+    <string name="provider_detail_pool_remove">Retirer la clé</string>
+    <string name="provider_detail_pool_remove_confirm">Cette clé sera retirée du groupe. Retirer la première clé promeut la suivante comme principale.</string>
+    <string name="provider_detail_pool_slot_primary">Principale</string>
+    <string name="provider_detail_pool_slot_extra">Secours</string>
     <string name="provider_detail_custom_api_base">URL API personnalisée</string>
     <string name="provider_detail_auto_append_v1">Ajouter automatiquement /v1</string>
     <string name="provider_detail_custom_user_agent">User-Agent personnalisé</string>

@@ -882,6 +882,15 @@
     <string name="provider_detail_label">ラベル</string>
     <string name="provider_detail_manual_bearer_token">手動Bearerトークン</string>
     <string name="provider_detail_use_a_static_bearer_token_instead_of_the">OAuth ログインフローではなく、静的なベアラートークンを使用します。</string>
+    <string name="provider_detail_pool_header">アカウントプール</string>
+    <string name="provider_detail_pool_footer">追加のAPIキーは自動でローテーションされます。キーが上限に達するか拒否されると冷却され、次のキーが使われます。最初のキーがプライマリです。</string>
+    <string name="provider_detail_pool_add_hint">APIキーを貼り付け</string>
+    <string name="provider_detail_pool_add">追加</string>
+    <string name="provider_detail_pool_duplicate">そのキーはすでにプールにあります</string>
+    <string name="provider_detail_pool_remove">キーを削除</string>
+    <string name="provider_detail_pool_remove_confirm">このキーはプールから削除されます。最初のキーを削除すると、次のキーがプライマリになります。</string>
+    <string name="provider_detail_pool_slot_primary">プライマリ</string>
+    <string name="provider_detail_pool_slot_extra">バックアップ</string>
     <string name="provider_detail_custom_api_base">カスタムAPIベース</string>
     <string name="provider_detail_auto_append_v1">/v1 を自動的に付加</string>
     <string name="provider_detail_custom_user_agent">カスタム User-Agent</string>

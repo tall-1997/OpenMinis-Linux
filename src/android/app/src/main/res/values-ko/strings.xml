@@ -882,6 +882,15 @@
     <string name="provider_detail_label">라벨</string>
     <string name="provider_detail_manual_bearer_token">수동 Bearer Token</string>
     <string name="provider_detail_use_a_static_bearer_token_instead_of_the">OAuth 로그인 플로 대신 정적 베어러 토큰을 사용합니다.</string>
+    <string name="provider_detail_pool_header">계정 풀</string>
+    <string name="provider_detail_pool_footer">추가 API 키는 자동으로 교대로 사용됩니다. 키가 한도에 걸리거나 거부되면 쿨다운되고 다음 키가 사용됩니다. 첫 번째 키가 기본 키입니다.</string>
+    <string name="provider_detail_pool_add_hint">API 키 붙여넣기</string>
+    <string name="provider_detail_pool_add">추가</string>
+    <string name="provider_detail_pool_duplicate">해당 키는 이미 풀에 있습니다</string>
+    <string name="provider_detail_pool_remove">키 제거</string>
+    <string name="provider_detail_pool_remove_confirm">이 키는 풀에서 제거됩니다. 첫 번째 키를 제거하면 다음 키가 기본 키가 됩니다.</string>
+    <string name="provider_detail_pool_slot_primary">기본</string>
+    <string name="provider_detail_pool_slot_extra">백업</string>
     <string name="provider_detail_custom_api_base">사용자 정의 API 주소</string>
     <string name="provider_detail_auto_append_v1">/v1 자동 추가</string>
     <string name="provider_detail_custom_user_agent">사용자 지정 User-Agent</string>

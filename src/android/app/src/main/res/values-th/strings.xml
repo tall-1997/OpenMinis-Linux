@@ -882,6 +882,15 @@
     <string name="provider_detail_label">ป้ายกำกับ</string>
     <string name="provider_detail_manual_bearer_token">Bearer Token แบบกำหนดเอง</string>
     <string name="provider_detail_use_a_static_bearer_token_instead_of_the">ใช้ bearer token แบบคงที่แทนขั้นตอนเข้าสู่ระบบด้วย OAuth </string>
+    <string name="provider_detail_pool_header">กลุ่มบัญชี</string>
+    <string name="provider_detail_pool_footer">คีย์ API พิเศษหมุนเวียนใช้โดยอัตโนมัติ เมื่อคีย์ใดถึงขีดจำกัดหรือถูกปฏิเสธ คีย์นั้นจะพักตัวและคีย์ถัดไปจะทำงานแทน คีย์แรกคือคีย์หลัก</string>
+    <string name="provider_detail_pool_add_hint">วางคีย์ API</string>
+    <string name="provider_detail_pool_add">เพิ่ม</string>
+    <string name="provider_detail_pool_duplicate">คีย์นั้นอยู่ในกลุ่มแล้ว</string>
+    <string name="provider_detail_pool_remove">ลบคีย์</string>
+    <string name="provider_detail_pool_remove_confirm">คีย์นี้จะถูกลบออกจากกลุ่ม หากลบคีย์แรก คีย์ถัดไปจะกลายเป็นคีย์หลัก</string>
+    <string name="provider_detail_pool_slot_primary">หลัก</string>
+    <string name="provider_detail_pool_slot_extra">สำรอง</string>
     <string name="provider_detail_custom_api_base">API Base ที่กำหนดเอง</string>
     <string name="provider_detail_auto_append_v1">เติม /v1 อัตโนมัติ</string>
     <string name="provider_detail_custom_user_agent">User-Agent ที่กำหนดเอง</string>

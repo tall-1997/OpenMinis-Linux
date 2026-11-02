@@ -86,10 +86,9 @@ fun ProviderDetailScreen(
     val config by providerRepository.config.collectAsStateWithLifecycle()
     val instance = config.instances.find { it.id == instanceId }
     var showDeleteDialog by remember { mutableStateOf(false) }
-    // T143: long-press → confirm delete on a single model entry. Built-in entries (entry.isCustom == false) skip the gesture because the repo
-    // re-creates them from ProviderType.builtInModels on next refresh anyway —
-    // mirrors DebugProviderMutationMethods note "Built-in entries can't be
-    // deleted — set isHidden=true instead".
+    // T143: long-press → confirm delete on a model entry. Built-ins (entry.isCustom == false) skip the gesture — the repo re-creates them from
+    // ProviderType.builtInModels on next refresh anyway ("Built-in entries
+    // can't be deleted — set isHidden=true instead").
     var entryToDelete by remember { mutableStateOf<com.openminis.app.data.model.ModelEntry?>(null) }
     // [T-android-model-row-hide-action] Id of the entry whose long-press menu is
     // open. Keyed by id rather than holding the ModelEntry so the menu re-reads
@@ -103,13 +102,10 @@ fun ProviderDetailScreen(
     var label by remember { mutableStateOf(instance.label) }
     val labelChanged = label != instance.label
 
-    // [T-android-provider-apikey-save-stale] Hold the stored API key in Compose
-    // state, NOT as a plain val that re-reads EncryptedSharedPreferences on every
-    // recomposition. saveApiKey() writes with .apply() (async); a recomposition
-    // right after Save (isEditingKey=false) would re-read prefs before the write
-    // flushed and show the OLD key, making Save look like a no-op. Keeping it in
-    // remember + updating it synchronously in onSave reflects the just-saved
-    // value immediately, independent of the async flush.
+    // [T-android-provider-apikey-save-stale] Hold the stored key in Compose
+    // state: saveApiKey() writes with .apply() (async), so a recomposition
+    // right after Save could re-read prefs before the flush and show the OLD
+    // key. remember + synchronous update in onSave shows the new value now.
     var storedKey by remember(instanceId) { mutableStateOf(providerRepository.loadApiKey(instanceId) ?: "") }
     var isEditingKey by remember { mutableStateOf(false) }
     var editKeyValue by remember { mutableStateOf("") }
@@ -165,15 +161,10 @@ fun ProviderDetailScreen(
         }
 
         // ─── Credential / API Key ───────────────────────────────────
-        val isOAuthProvider =
-            instance.credentialType == com.openminis.app.data.model.ProviderCredential.oauth
+        val isOAuthProvider = instance.credentialType == com.openminis.app.data.model.ProviderCredential.oauth
         SettingsSection(
             header = if (isOAuthProvider) stringResource(R.string.add_provider_credential) else stringResource(R.string.provider_list_api_key),
-            footer = if (isOAuthProvider) {
-                "OAuth tokens are stored securely in encrypted storage."
-            } else {
-                null
-            },
+            footer = if (isOAuthProvider) "OAuth tokens are stored securely in encrypted storage." else null,
         ) {
             SettingsCardBlock {
                 if (isOAuthProvider) {
@@ -200,12 +191,9 @@ fun ProviderDetailScreen(
                             keyVisible = false
                         },
                         onSave = {
-                            // [T-key-clear-entry] A blank save now DELETES the key
-                            // (the button is enabled whenever a stored key exists).
-                            // This is the same UX dead-end aaafd51 fixed for key
-                            // pools: save was disabled on blank text, so a
-                            // misconfigured non-OAuth credential could never be
-                            // cleared, only re-typed.
+                            // [T-key-clear-entry] Blank save DELETES the key
+                            // (enabled whenever a stored key exists) — the
+                            // dead-end aaafd51 fixed for key pools.
                             if (editKeyValue.isBlank()) {
                                 providerRepository.deleteApiKey(instanceId)
                                 storedKey = ""
@@ -225,6 +213,17 @@ fun ProviderDetailScreen(
                     )
                 }
             }
+        }
+
+        // ─── Account Pool [T-credential-pool-x] ─────────────────────
+        // Multi-key rotation; OAuth rotates a single token instead.
+        if (instance.credentialType != com.openminis.app.data.model.ProviderCredential.oauth) {
+            AccountPoolSection(
+                instance = instance,
+                storedKey = storedKey,
+                providerRepository = providerRepository,
+                onStoredKeyChanged = { storedKey = it },
+            )
         }
 
         // Manual Bearer Token (OAuth providers only — proxy override)

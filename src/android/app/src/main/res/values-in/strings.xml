@@ -887,6 +887,15 @@
     <string name="provider_detail_label">Label</string>
     <string name="provider_detail_manual_bearer_token">Bearer Token Manual</string>
     <string name="provider_detail_use_a_static_bearer_token_instead_of_the">Gunakan bearer token statis alih-alih alur masuk OAuth. </string>
+    <string name="provider_detail_pool_header">Grup Akun</string>
+    <string name="provider_detail_pool_footer">Kunci API tambahan bergilir otomatis. Saat kunci mencapai batas atau ditolak, kunci itu didinginkan dan kunci berikutnya mengambil alih. Kunci pertama adalah yang utama.</string>
+    <string name="provider_detail_pool_add_hint">Tempel kunci API</string>
+    <string name="provider_detail_pool_add">Tambah</string>
+    <string name="provider_detail_pool_duplicate">Kunci itu sudah ada di grup</string>
+    <string name="provider_detail_pool_remove">Hapus kunci</string>
+    <string name="provider_detail_pool_remove_confirm">Kunci ini akan dihapus dari grup. Menghapus kunci pertama menjadikan kunci berikutnya yang utama.</string>
+    <string name="provider_detail_pool_slot_primary">Utama</string>
+    <string name="provider_detail_pool_slot_extra">Cadangan</string>
     <string name="provider_detail_custom_api_base">API Base Kustom</string>
     <string name="provider_detail_auto_append_v1">Tambahkan /v1 otomatis</string>
     <string name="provider_detail_custom_user_agent">User-Agent Kustom</string>
