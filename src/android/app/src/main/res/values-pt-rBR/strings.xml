@@ -882,6 +882,15 @@
     <string name="provider_detail_label">Rótulo</string>
     <string name="provider_detail_manual_bearer_token">Token Bearer manual</string>
     <string name="provider_detail_use_a_static_bearer_token_instead_of_the">Use um token Bearer fixo em vez do fluxo de login por OAuth. </string>
+    <string name="provider_detail_pool_header">Grupo de contas</string>
+    <string name="provider_detail_pool_footer">Chaves de API extras alternam automaticamente. Quando uma chave atinge o limite ou é rejeitada, ela esfria e a próxima assume. A primeira chave é a principal.</string>
+    <string name="provider_detail_pool_add_hint">Colar uma chave de API</string>
+    <string name="provider_detail_pool_add">Adicionar</string>
+    <string name="provider_detail_pool_duplicate">Essa chave já está no grupo</string>
+    <string name="provider_detail_pool_remove">Remover chave</string>
+    <string name="provider_detail_pool_remove_confirm">Esta chave será removida do grupo. Remover a primeira chave promove a próxima para principal.</string>
+    <string name="provider_detail_pool_slot_primary">Principal</string>
+    <string name="provider_detail_pool_slot_extra">Reserva</string>
     <string name="provider_detail_custom_api_base">URL base da API personalizada</string>
     <string name="provider_detail_auto_append_v1">Acrescentar /v1 automaticamente</string>
     <string name="provider_detail_custom_user_agent">User-Agent personalizado</string>

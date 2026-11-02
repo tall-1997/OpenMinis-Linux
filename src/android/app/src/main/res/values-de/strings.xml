@@ -882,6 +882,15 @@
     <string name="provider_detail_label">Bezeichnung</string>
     <string name="provider_detail_manual_bearer_token">Manuelles Bearer Token</string>
     <string name="provider_detail_use_a_static_bearer_token_instead_of_the">Statisches Bearer-Token statt des OAuth-Anmeldevorgangs verwenden.</string>
+    <string name="provider_detail_pool_header">Kontopool</string>
+    <string name="provider_detail_pool_footer">Zusätzliche API-Schlüssel rotieren automatisch. Wenn ein Schlüssel das Limit erreicht oder abgelehnt wird, kühlt er ab und der nächste Schlüssel übernimmt. Der erste Schlüssel ist der primäre.</string>
+    <string name="provider_detail_pool_add_hint">API-Schlüssel einfügen</string>
+    <string name="provider_detail_pool_add">Hinzufügen</string>
+    <string name="provider_detail_pool_duplicate">Dieser Schlüssel ist bereits im Pool</string>
+    <string name="provider_detail_pool_remove">Schlüssel entfernen</string>
+    <string name="provider_detail_pool_remove_confirm">Dieser Schlüssel wird aus dem Pool entfernt. Beim Entfernen des ersten Schlüssels wird der nächste zum primären Schlüssel.</string>
+    <string name="provider_detail_pool_slot_primary">Primär</string>
+    <string name="provider_detail_pool_slot_extra">Backup</string>
     <string name="provider_detail_custom_api_base">Benutzerdefinierte API-Basis</string>
     <string name="provider_detail_auto_append_v1">/v1 automatisch anhängen</string>
     <string name="provider_detail_custom_user_agent">Eigener User-Agent</string>

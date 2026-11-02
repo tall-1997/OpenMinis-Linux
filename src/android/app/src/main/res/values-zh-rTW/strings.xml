@@ -942,6 +942,15 @@
     <string name="provider_detail_label">標籤</string>
     <string name="provider_detail_manual_bearer_token">手動 Bearer Token</string>
     <string name="provider_detail_use_a_static_bearer_token_instead_of_the">使用靜態 bearer token,而不是 OAuth 登入流程。</string>
+    <string name="provider_detail_pool_header">帳號池</string>
+    <string name="provider_detail_pool_footer">備用 API 金鑰自動輪替使用。當某把金鑰觸發限流或被拒絕時，它會進入冷卻，由下一把金鑰接替。第一把金鑰為主用。</string>
+    <string name="provider_detail_pool_add_hint">貼上 API 金鑰</string>
+    <string name="provider_detail_pool_add">新增</string>
+    <string name="provider_detail_pool_duplicate">該金鑰已在池中</string>
+    <string name="provider_detail_pool_remove">移除金鑰</string>
+    <string name="provider_detail_pool_remove_confirm">該金鑰將從池中移除。移除第一把金鑰後，下一把將成為主用。</string>
+    <string name="provider_detail_pool_slot_primary">主用</string>
+    <string name="provider_detail_pool_slot_extra">備用</string>
     <string name="provider_detail_custom_api_base">自定義 API 地址</string>
     <string name="provider_detail_auto_append_v1">自動附加 /v1</string>
     <string name="provider_detail_custom_user_agent">自訂 User-Agent</string>

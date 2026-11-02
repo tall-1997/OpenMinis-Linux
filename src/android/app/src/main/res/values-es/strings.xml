@@ -882,6 +882,15 @@
     <string name="provider_detail_label">Etiqueta</string>
     <string name="provider_detail_manual_bearer_token">Bearer token manual</string>
     <string name="provider_detail_use_a_static_bearer_token_instead_of_the">Usa un bearer token estático en lugar del flujo de inicio de sesión con OAuth. </string>
+    <string name="provider_detail_pool_header">Grupo de cuentas</string>
+    <string name="provider_detail_pool_footer">Las claves API adicionales rotan automáticamente. Cuando una clave alcanza el límite o se rechaza, se enfría y la siguiente toma el relevo. La primera clave es la principal.</string>
+    <string name="provider_detail_pool_add_hint">Pegar una clave API</string>
+    <string name="provider_detail_pool_add">Añadir</string>
+    <string name="provider_detail_pool_duplicate">Esa clave ya está en el grupo</string>
+    <string name="provider_detail_pool_remove">Eliminar clave</string>
+    <string name="provider_detail_pool_remove_confirm">Esta clave se eliminará del grupo. Al eliminar la primera, la siguiente pasa a ser la principal.</string>
+    <string name="provider_detail_pool_slot_primary">Principal</string>
+    <string name="provider_detail_pool_slot_extra">Respaldo</string>
     <string name="provider_detail_custom_api_base">API base personalizada</string>
     <string name="provider_detail_auto_append_v1">Agregar /v1 automáticamente</string>
     <string name="provider_detail_custom_user_agent">User-Agent personalizado</string>

@@ -1173,6 +1173,15 @@
     <string name="provider_detail_label">标签</string>
     <string name="provider_detail_manual_bearer_token">手动 Bearer Token</string>
     <string name="provider_detail_use_a_static_bearer_token_instead_of_the">使用静态 bearer token,而不是 OAuth 登录流程。</string>
+    <string name="provider_detail_pool_header">账号池</string>
+    <string name="provider_detail_pool_footer">备用 API 密钥自动轮换使用。当某把密钥触发限流或被拒绝时，它会进入冷却，由下一把密钥接替。第一把密钥为主用。</string>
+    <string name="provider_detail_pool_add_hint">粘贴 API 密钥</string>
+    <string name="provider_detail_pool_add">添加</string>
+    <string name="provider_detail_pool_duplicate">该密钥已在池中</string>
+    <string name="provider_detail_pool_remove">移除密钥</string>
+    <string name="provider_detail_pool_remove_confirm">该密钥将从池中移除。移除第一把密钥后，下一把将成为主用。</string>
+    <string name="provider_detail_pool_slot_primary">主用</string>
+    <string name="provider_detail_pool_slot_extra">备用</string>
     <string name="provider_detail_custom_api_base">自定义 API 地址</string>
     <string name="provider_detail_auto_append_v1">自动追加 /v1</string>
     <string name="provider_detail_custom_user_agent">自定义 User-Agent</string>

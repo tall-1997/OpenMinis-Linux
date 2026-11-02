@@ -884,6 +884,15 @@
     <string name="provider_detail_label">Метка</string>
     <string name="provider_detail_manual_bearer_token">Ручной Bearer-токен</string>
     <string name="provider_detail_use_a_static_bearer_token_instead_of_the">Использовать статический Bearer-токен вместо входа через OAuth. </string>
+    <string name="provider_detail_pool_header">Пул аккаунтов</string>
+    <string name="provider_detail_pool_footer">Дополнительные ключи API чередуются автоматически. Когда ключ упирается в лимит или отклоняется, он остывает, и подключается следующий. Первый ключ — основной.</string>
+    <string name="provider_detail_pool_add_hint">Вставьте ключ API</string>
+    <string name="provider_detail_pool_add">Добавить</string>
+    <string name="provider_detail_pool_duplicate">Этот ключ уже в пуле</string>
+    <string name="provider_detail_pool_remove">Удалить ключ</string>
+    <string name="provider_detail_pool_remove_confirm">Ключ будет удалён из пула. При удалении первого ключа следующий становится основным.</string>
+    <string name="provider_detail_pool_slot_primary">Основной</string>
+    <string name="provider_detail_pool_slot_extra">Резервный</string>
     <string name="provider_detail_custom_api_base">Свой базовый URL API</string>
     <string name="provider_detail_auto_append_v1">Автодобавление /v1</string>
     <string name="provider_detail_custom_user_agent">Свой User-Agent</string>

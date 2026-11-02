@@ -1277,6 +1277,15 @@
     <string name="provider_detail_label">Label</string>
     <string name="provider_detail_manual_bearer_token">Manual Bearer Token</string>
     <string name="provider_detail_use_a_static_bearer_token_instead_of_the">Use a static bearer token instead of the OAuth sign-in flow. </string>
+    <string name="provider_detail_pool_header">Account Pool</string>
+    <string name="provider_detail_pool_footer">Extra API keys rotate automatically. When a key hits rate limits or is rejected, it cools down and the next key serves. The first key is the primary.</string>
+    <string name="provider_detail_pool_add_hint">Paste an API key</string>
+    <string name="provider_detail_pool_add">Add</string>
+    <string name="provider_detail_pool_duplicate">That key is already in the pool</string>
+    <string name="provider_detail_pool_remove">Remove key</string>
+    <string name="provider_detail_pool_remove_confirm">This key will be removed from the pool. Removing the first key promotes the next one to primary.</string>
+    <string name="provider_detail_pool_slot_primary">Primary</string>
+    <string name="provider_detail_pool_slot_extra">Backup</string>
     <string name="provider_detail_custom_api_base">Custom API Base</string>
     <string name="provider_detail_auto_append_v1">Auto-append /v1</string>
     <string name="provider_detail_custom_user_agent">Custom User-Agent</string>

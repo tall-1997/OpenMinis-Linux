@@ -883,6 +883,15 @@
     <string name="provider_detail_label">Etichetă</string>
     <string name="provider_detail_manual_bearer_token">Token Bearer introdus manual</string>
     <string name="provider_detail_use_a_static_bearer_token_instead_of_the">Folosește un token Bearer static în locul autentificării prin OAuth. </string>
+    <string name="provider_detail_pool_header">Grup de conturi</string>
+    <string name="provider_detail_pool_footer">Cheile API suplimentare alternează automat. Când o cheie atinge limita sau este respinsă, se răcește și următoarea preia. Prima cheie este cea principală.</string>
+    <string name="provider_detail_pool_add_hint">Lipește o cheie API</string>
+    <string name="provider_detail_pool_add">Adaugă</string>
+    <string name="provider_detail_pool_duplicate">Cheia este deja în grup</string>
+    <string name="provider_detail_pool_remove">Elimină cheia</string>
+    <string name="provider_detail_pool_remove_confirm">Această cheie va fi eliminată din grup. Eliminarea primei chei o promovează pe următoarea ca principală.</string>
+    <string name="provider_detail_pool_slot_primary">Principală</string>
+    <string name="provider_detail_pool_slot_extra">Rezervă</string>
     <string name="provider_detail_custom_api_base">Adresă API personalizată</string>
     <string name="provider_detail_auto_append_v1">Adaugă automat /v1</string>
     <string name="provider_detail_custom_user_agent">User-Agent personalizat</string>

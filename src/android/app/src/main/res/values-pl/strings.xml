@@ -884,6 +884,15 @@
     <string name="provider_detail_label">Etykieta</string>
     <string name="provider_detail_manual_bearer_token">Ręczny token Bearer</string>
     <string name="provider_detail_use_a_static_bearer_token_instead_of_the">Użyj statycznego tokenu Bearer zamiast logowania przez OAuth. </string>
+    <string name="provider_detail_pool_header">Pula kont</string>
+    <string name="provider_detail_pool_footer">Dodatkowe klucze API zmieniają się automatycznie. Gdy klucz trafi na limit lub zostanie odrzucony, wchodzi w chłodzenie i przejmuje go następny. Pierwszy klucz jest główny.</string>
+    <string name="provider_detail_pool_add_hint">Wklej klucz API</string>
+    <string name="provider_detail_pool_add">Dodaj</string>
+    <string name="provider_detail_pool_duplicate">Ten klucz jest już w puli</string>
+    <string name="provider_detail_pool_remove">Usuń klucz</string>
+    <string name="provider_detail_pool_remove_confirm">Ten klucz zostanie usunięty z puli. Usunięcie pierwszego klucza awansuje następny na główny.</string>
+    <string name="provider_detail_pool_slot_primary">Główny</string>
+    <string name="provider_detail_pool_slot_extra">Zapasowy</string>
     <string name="provider_detail_custom_api_base">Niestandardowy adres API</string>
     <string name="provider_detail_auto_append_v1">Automatycznie dodawaj /v1</string>
     <string name="provider_detail_custom_user_agent">Niestandardowy User-Agent</string>
