@@ -3,6 +3,7 @@ package com.openminis.app.provider
 import com.openminis.app.data.model.ProviderCredential
 import com.openminis.app.data.model.ProviderInstance
 import com.openminis.app.data.model.ProviderType
+import com.openminis.app.logging.AppLogger
 
 /**
  * Everything the config layer needs to seed one built-in keyless lane.
@@ -25,8 +26,22 @@ internal data class BuiltinFreeLane(
      * `usableApiKey` returns "" rather than null for it.
      */
     val apiKey: String,
+    /**
+     * How this lane's credential is meant to be used. Compile-time lanes state
+     * theirs explicitly ([FIXED] for Zen's placeholder, [NONE] for Kilo's
+     * token-rejecting upstream); manifest lanes carry the parsed value over.
+     */
+    val credentialConvention: CredentialConvention = CredentialConvention.FIXED,
 ) {
     val baseURL: String get() = lane.defaultBaseURL
+
+    /**
+     * True when this lane rotates user-supplied account tokens (M2 pool).
+     * [FIXED] lanes write one placeholder for everyone and pooling is
+     * meaningless; [NONE] lanes reject any token, so offering the pool would
+     * only produce a stream of 401s the user caused themselves.
+     */
+    val poolEligible: Boolean get() = credentialConvention == CredentialConvention.ACCOUNT_TOKEN
 
     fun instance(labelToUse: String = label): ProviderInstance = ProviderInstance(
         id = instanceId,
@@ -59,6 +74,7 @@ internal object BuiltinFreeLanes {
         instanceId = "builtin-opencode-zen",
         label = "OpenCode Zen (Free)",
         apiKey = ZenFreeLane.API_KEY,
+        credentialConvention = CredentialConvention.FIXED,
     )
 
     val KILO = BuiltinFreeLane(
@@ -71,9 +87,66 @@ internal object BuiltinFreeLanes {
         // Kilo rejects any token it cannot validate, including an empty one, so
         // nothing is written to the credential store for this lane at all.
         apiKey = "",
+        credentialConvention = CredentialConvention.NONE,
     )
 
     val ALL: List<BuiltinFreeLane> = listOf(ZEN, KILO)
+
+    /** Instance ids this build seeds, used to dedupe manifest-synthesised lanes. */
+    val ALL_INSTANCE_IDS: Set<String> = ALL.map { it.instanceId }.toSet()
+
+    /**
+     * The full lane list for this device: the compiled-in lanes plus every
+     * manifest entry that synthesises cleanly. Manifest entries whose
+     * `instanceId` collides with a compiled-in lane are dropped (the
+     * compiled-in descriptor is the one historical references are keyed by),
+     * and an entry naming a compiled behaviour under a different instance id
+     * is refused — a lane id like "zen" is bound to its instance id forever,
+     * because the recovery channel resurrects it by that id alone.
+     */
+    fun fromManifest(entries: List<ManifestLaneEntry>): List<BuiltinFreeLane> {
+        if (entries.isEmpty()) return ALL
+        val seen = ALL_INSTANCE_IDS.toMutableSet()
+        val extra = mutableListOf<BuiltinFreeLane>()
+        for (entry in entries) {
+            val builtin = entry.toBuiltin() ?: continue
+            if (!seen.add(builtin.instanceId)) continue
+            extra.add(builtin)
+        }
+        return ALL + extra
+    }
+
+    /** Behaviour + descriptor synthesis for one manifest entry, or null when refused. */
+    internal fun ManifestLaneEntry.toBuiltin(): BuiltinFreeLane? {
+        val lane: FreeLane = when (behavior) {
+            FreeLaneManifest.BEHAVIOR_ZEN -> {
+                if (instanceId != ZEN.instanceId) {
+                    AppLogger.warning("BuiltinFreeLanes", "manifest 'zen' entry bound to '$instanceId', compiled-in id is '${ZEN.instanceId}' — refused")
+                    return null
+                }
+                ZenFreeLane
+            }
+            FreeLaneManifest.BEHAVIOR_KILO -> {
+                if (instanceId != KILO.instanceId) {
+                    AppLogger.warning("BuiltinFreeLanes", "manifest 'kilo' entry bound to '$instanceId', compiled-in id is '${KILO.instanceId}' — refused")
+                    return null
+                }
+                KiloFreeLane
+            }
+            FreeLaneManifest.BEHAVIOR_OPENAI_COMPAT -> ManifestLane(this)
+            else -> return null
+        }
+        return BuiltinFreeLane(
+            lane = lane,
+            instanceId = instanceId,
+            label = label,
+            apiKey = when (credentialConvention) {
+                CredentialConvention.FIXED -> credentialValue
+                CredentialConvention.NONE, CredentialConvention.ACCOUNT_TOKEN -> ""
+            },
+            credentialConvention = credentialConvention,
+        )
+    }
 
     /**
      * Instance ids of built-in lanes earlier builds seeded and this build no

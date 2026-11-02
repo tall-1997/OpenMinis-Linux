@@ -11,6 +11,9 @@ import com.openminis.app.data.model.ProviderType
 import com.openminis.app.data.model.VoiceProviderTemplate
 import com.openminis.app.data.model.isVoiceTemplateSeedShape
 import com.openminis.app.provider.BuiltinFreeLane
+import com.openminis.app.provider.BuiltinFreeLanes
+import com.openminis.app.provider.FreeLaneHealth
+import com.openminis.app.provider.FreeLaneManifest
 import java.io.File
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -331,10 +334,12 @@ internal class ProviderConfigStore(
      * credentials, OAuth tokens, the voice-shadow flag, the last-used pointer,
      * thinking rules). A second implementation is how those bugs come back.
      */
-    internal fun purgeRetiredBuiltInLanes() {
+    internal fun purgeRetiredBuiltInLanes(
+        activeInstanceIds: Set<String> = BuiltinFreeLanes.ALL_INSTANCE_IDS,
+    ) {
         val doomed = synchronized(repo.configLock) {
             repo.ensureConfigLoaded()
-            BuiltinLaneRetirement.instancesToPurge(repo.workingCopy())
+            BuiltinLaneRetirement.instancesToPurge(repo.workingCopy(), activeInstanceIds)
         }
         doomed.forEach { runCatching { repo.removeInstance(it) } }
         purgeRetiredBuiltInLaneFiles()
@@ -359,7 +364,10 @@ internal class ProviderConfigStore(
     }
 
     /**
-     * Seeds every built-in keyless free lane on launch.
+     * Seeds every built-in keyless free lane on launch — the compiled-in set
+     * plus whatever the manifest ([FreeLaneManifest]) synthesises. A lane
+     * introduced or dropped by the manifest is therefore a data change, not a
+     * release.
      *
      * Credentials live outside the config, so each seeded lane's key is written
      * here, not by the bootstrap. A lane the user deleted on purpose carries a
@@ -368,14 +376,38 @@ internal class ProviderConfigStore(
      */
     internal fun seedBuiltInFreeLanes() = synchronized(repo.configLock) {
         if (!repo._configLoaded.value) return@synchronized
+        val manifest = FreeLaneManifest.load(context)
+        val lanes = BuiltinFreeLanes.fromManifest(manifest.entries)
+        // The active set is what retirement vetoes against. It must reflect a
+        // manifest that actually ruled — when the remote copy failed to parse,
+        // the persisted snapshot keeps manifest lanes alive; when it parsed,
+        // lanes it dropped leave the set and retire on this very purge.
+        val activeIds = lanes.map { it.instanceId }.toSet() +
+            if (!manifest.remoteOk) FreeLaneManifest.loadActiveIds(context) else emptySet()
         // Retirement first, seeding second: a build that dropped a lane must
         // delete its stale row before the seed pass decides what is missing.
-        purgeRetiredBuiltInLanes()
+        purgeRetiredBuiltInLanes(activeIds)
+        // Health scopes for manifest lanes so a restart never scrubs their
+        // evidence as "a lane nothing ships any more".
+        FreeLaneHealth.registerLanes(lanes.map { it.lane.id }.toSet())
         val config = repo.workingCopy()
-        val seeded = FreeLaneBootstrap.ensureSeeded(config) { loadApiKey(it) }
+        val seeded = FreeLaneBootstrap.ensureSeeded(config, lanes) { loadApiKey(it) }
+        FreeLaneManifest.saveActiveIds(context, activeIds)
         if (seeded.isEmpty()) return@synchronized
         repo.saveConfig(config)
         seeded.forEach { if (it.apiKey.isNotEmpty()) saveApiKey(it.instanceId, it.apiKey) }
+    }
+
+    /**
+     * Persists a refreshed manifest (only when it parses) and re-runs the seed
+     * pass so a lane the refresh introduces is live without a restart, and a
+     * lane it drops retires on the next boot. Returns true when the payload was
+     * accepted; a refused payload changes nothing at all.
+     */
+    internal fun installRefreshedFreeLaneManifest(json: String): Boolean = synchronized(repo.configLock) {
+        if (!FreeLaneManifest.saveRefreshed(context, json)) return@synchronized false
+        seedBuiltInFreeLanes()
+        true
     }
 
     /**

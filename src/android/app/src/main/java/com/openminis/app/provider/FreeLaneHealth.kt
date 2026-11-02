@@ -153,6 +153,15 @@ internal object FreeLaneHealth {
     private var prefs: SharedPreferences? = null
     private val memory = mutableMapOf<String, Long>()
 
+    /**
+     * Lane ids beyond the compiled-in set, registered at seed time from the
+     * manifest ([FreeLaneManifest]). [initialize] drops stored entries whose
+     * scope names a lane nothing ships any more; without this registry a
+     * manifest lane would be scrubbed from disk on the very boot that seeded
+     * it, because the compiled-in [FreeLanes.LANE_IDS] never heard of it.
+     */
+    private val registeredLanes = mutableSetOf<String>()
+
     private fun key(lane: String, id: String) = "$lane:$id"
 
     fun initialize(context: Context?) {
@@ -166,7 +175,7 @@ internal object FreeLaneHealth {
             // asked about lanes in FreeLanes.all. Dropping them here keeps the
             // store honest across a lane retirement instead of carrying keys for
             // a lane that no longer exists until each one's TTL expires.
-            val live = onDisk.filterKeys { scopeOf(it) in FreeLanes.LANE_IDS }
+            val live = onDisk.filterKeys { isLiveLane(scopeOf(it)) }
             if (live.size != onDisk.size) {
                 AppLogger.info(TAG, "dropped ${onDisk.size - live.size} entries of retired lanes")
             }
@@ -187,7 +196,21 @@ internal object FreeLaneHealth {
 
     /** See the class doc: an unknown prefix is a legacy Zen id, not a lane. */
     private fun scopeLegacyKey(stored: String): String =
-        if (scopeOf(stored) in FreeLanes.LANE_IDS) stored else key(FreeLanes.ZEN_ID, stored)
+        if (isLiveLane(scopeOf(stored))) stored else key(FreeLanes.ZEN_ID, stored)
+
+    private fun isLiveLane(scope: String): Boolean =
+        scope in FreeLanes.LANE_IDS || scope in registeredLanes
+
+    /**
+     * Replaces the known lane set with [ids] (callers pass the full current
+     * list; compiled-in lanes may be included, they are always live anyway).
+     * A lane id that drops out of the set has retired: its scope stops being
+     * live and [initialize] scrubs its entries on the next boot.
+     */
+    fun registerLanes(ids: Set<String>) {
+        registeredLanes.clear()
+        registeredLanes.addAll(ids)
+    }
 
     /** The lane scope of a stored key (`"lane:id"`), or "" for a flat legacy id. */
     private fun scopeOf(stored: String): String = stored.substringBefore(':', missingDelimiterValue = "")
@@ -248,6 +271,7 @@ internal object FreeLaneHealth {
     /** Test seams. */
     internal fun resetForTest() {
         memory.clear()
+        registeredLanes.clear()
         prefs?.edit()?.remove(KEY_DEAD)?.apply()
     }
 
