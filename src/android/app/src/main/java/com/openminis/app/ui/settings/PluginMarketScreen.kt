@@ -99,10 +99,6 @@ fun PluginMarketScreen(
             onPendingInstallConsumed = { pendingSuiteId = null },
         )
 
-        // [T-builtin-gateway-native] Builtin gateways are app infrastructure,
-        // not market listings: the a2a gateway lives in Settings under its
-        // own entry. Nothing gateway-shaped renders here.
-
         SettingsSection(
             header = stringResource(R.string.plugin_market_section_online),
             footer = stringResource(R.string.plugin_market_footer_online) + "\n" +

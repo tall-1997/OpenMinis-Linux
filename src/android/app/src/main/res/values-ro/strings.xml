@@ -1700,35 +1700,10 @@
     <string name="dev_suite_assemble">Asamblează</string>
     <string name="dev_suite_start_install">Se pornește instalarea</string>
     <string name="dev_suite_interrupted">Instalare întreruptă</string>
-    <string name="builtin_plugin_a2a_name">Gateway Agent2API (local)</string>
-    <string name="builtin_plugin_a2a_summary">Proxy local compatibil OpenAI cu mai mulți furnizori · adaugă conturi în panoul web · doar loopback</string>
     <string name="builtin_plugin_install">Instalează</string>
     <string name="builtin_plugin_retry">Reîncearcă</string>
     <string name="builtin_plugin_open_panel">Panou</string>
 
-    <!-- [T-android-a2a-native] a2a gateway management page -->
-<string name="a2a_desktop_bridge_footer">Unele acțiuni din panou (import/export conturi, export jurnale, backup complet DB) folosesc puntea desktop a motorului și nu sunt disponibile pe acest dispozitiv. Conturile se adaugă în panou; datele SQLite se află în folderul privat al aplicației.</string>
-<string name="a2a_incognito_login_title">Autentificare incognito</string>
-<string name="a2a_incognito_login_subtitle">Fiecare autentificare rulează într-un profil de browser temporar — cookie-urile, stocarea și cache-ul sunt șterse la închiderea ferestrei. Sesiunea panoului nu este afectată.</string>
-<string name="a2a_view_gateway_log">Jurnal gateway</string>
-<string name="a2a_log_filter_login">Doar autentificare / securitate</string>
-<string name="a2a_log_empty">Încă nu există linii de jurnal.</string>
-<string name="a2a_panel_isolated_hint">Rulează într-o sesiune izolată în aplicație: autentificările de aici sunt separate de browserul dispozitivului, mai multe conturi nu intră niciodată în conflict.</string>
-    <string name="a2a_start_gateway">Pornește gateway-ul</string>
-    <string name="a2a_status_running">În execuție</string>
-    <string name="a2a_panel_address">Adresa panoului</string>
-    <string name="a2a_panel_not_installed">Gateway-ul nu este încă implementat — deschiderea panoului îl instalează automat.</string>
-    <string name="a2a_panel_needs_start">Pornește gateway-ul pentru a-i deschide panoul web.</string>
-    <string name="a2a_panel_load_failed">Panoul nu s-a putut încărca.</string>
-    <string name="a2a_panel_page_title">Panou Agent2API</string>
-    <string name="a2a_login_window_title">Conectare</string>
-    <string name="a2a_login_address_title">Adresa curentă</string>
-    <string name="a2a_login_address_hint">Dacă această pagină nu se poate deschide (de exemplu, un callback către un port de buclă locală), autentificarea s-ar putea să fi fost finalizată. Copiază această adresă și lipește-o în câmpul de callback al panoului.</string>
-    <string name="a2a_login_copy_address">Copiază adresa</string>
-    <string name="a2a_panel_starting">Se pornește gateway-ul…</string>
-    <string name="a2a_open_panel_and_start">Pornește și deschide panoul</string>
-    <string name="a2a_close">Închide</string>
-    <string name="a2a_open_in_browser">Deschide în browser</string>
     <string name="dev_suite_no_space">Spațiu insuficient: sunt necesari aproximativ %1$d GB, disponibil %2$d GB</string>
     <string name="dev_suite_skipped_dep">Omis: %1$s nu a fost instalat</string>
     <string name="dev_suite_remove_confirm">Eliminați %1$s din sandbox? Fișierele descărcate și legăturile de comandă sunt șterse; pachetele apt rămân instalate.</string>

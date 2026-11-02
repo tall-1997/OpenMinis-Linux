@@ -25,16 +25,6 @@ internal data class BuiltinFreeLane(
      * `usableApiKey` returns "" rather than null for it.
      */
     val apiKey: String,
-    /**
-     * False when the instance must NOT appear on first launch — when the lane
-     * only works after an explicit user action (e.g. starting the a2a gateway
-     * from its settings entry, which auto-seeds on first run). Auto-seeding
-     * such a lane would show a provider row whose every refresh fails until
-     * the user takes that action. The explicit channels (add-provider
-     * preset, recovery row, post-install restore) still seed it, because
-     * those are the user asking for it.
-     */
-    val seedOnBootstrap: Boolean = true,
 ) {
     val baseURL: String get() = lane.defaultBaseURL
 
@@ -83,21 +73,21 @@ internal object BuiltinFreeLanes {
         apiKey = "",
     )
 
-    val A2A = BuiltinFreeLane(
-        lane = Agent2ApiFreeLane,
-        // Same no-`-free`-suffix rule as Kilo's id.
-        instanceId = "builtin-a2a-gateway",
-        label = Agent2ApiFreeLane.DISPLAY_NAME,
-        // Loopback only and no auth challenge, so no credential is written.
-        apiKey = "",
-        // The row is dead weight until the a2a gateway is installed and
-        // started from its own settings entry
-        // (com.openminis.app.a2a.A2aGateway — a first-class feature now,
-        // not a market row).
-        seedOnBootstrap = false,
-    )
+    val ALL: List<BuiltinFreeLane> = listOf(ZEN, KILO)
 
-    val ALL: List<BuiltinFreeLane> = listOf(ZEN, KILO, A2A)
+    /**
+     * Instance ids of built-in lanes earlier builds seeded and this build no
+     * longer ships — the local a2a gateway, whose process, payload and lane all
+     * left the APK.
+     *
+     * These ids are load-bearing precisely because the descriptor is gone: an
+     * install that ever enabled that lane still carries a provider row pointed at
+     * a loopback port nothing binds any more, plus the models the row listed. The
+     * boot purge ([com.openminis.app.data.repository.BuiltinLaneRetirement])
+     * reads this list to remove exactly those rows, and nothing else: an id that
+     * is not listed here is a lane we still ship or a provider the user built.
+     */
+    val RETIRED_IDS: Set<String> = setOf("builtin-a2a-gateway")
 
     fun byInstanceId(instanceId: String): BuiltinFreeLane? =
         ALL.firstOrNull { it.instanceId == instanceId }

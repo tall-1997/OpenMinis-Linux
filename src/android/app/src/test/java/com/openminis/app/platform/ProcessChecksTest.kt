@@ -14,7 +14,7 @@ import org.junit.Test
  * bug: the process guard in `MinisApp.onCreate` uses the same name to decide
  * whether to bind the sandbox's single-instance abstract socket, and getting
  * it wrong in a sub-process is exactly the crash this ladder exists to
- * prevent ([T-android-a2a-process-crash]).
+ * prevent.
  */
 class ProcessChecksTest {
 
@@ -27,12 +27,12 @@ class ProcessChecksTest {
         )
     }
 
-    /** A `android:process=":a2a"` component gets "<package>:a2a". */
+    /** A `android:process=":panel"` component gets "<package>:panel". */
     @Test
     fun subProcessName() {
         assertEquals(
-            "com.openminis.linux:a2a",
-            parseProcessName("com.openminis.linux:a2a\u0000".toByteArray()),
+            "com.openminis.linux:panel",
+            parseProcessName("com.openminis.linux:panel\u0000".toByteArray()),
         )
     }
 

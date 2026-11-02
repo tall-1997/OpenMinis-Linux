@@ -495,12 +495,8 @@ fun AppNavigation(
                 onAboutClick = { navController.safeNavigate(Routes.ABOUT) },
                 onMountedFoldersClick = { navController.safeNavigate(Routes.MOUNTED_FOLDERS) },
                 onSharedFoldersClick = { navController.safeNavigate(Routes.SHARED_FOLDERS) },
-                onA2aClick = { navController.safeNavigate(Routes.A2A) },
             )
         }
-
-        // [T-android-a2a-native] The two agent gateways (see GatewayRoutes.kt).
-        gatewayRoutes(navController)
 
         // [T-android-nav-split] Destination groups with no cross-domain
         // coupling live in their own NavGraphBuilder extensions (the

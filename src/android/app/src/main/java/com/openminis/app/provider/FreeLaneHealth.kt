@@ -161,7 +161,17 @@ internal object FreeLaneHealth {
         prefs = app.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val onDisk = readDisk(prefs)
         if (onDisk.isNotEmpty()) {
-            onDisk.forEach { (k, at) -> memory.putIfAbsent(k, at) }
+            // A lane that stops shipping leaves its scoped entries behind, and
+            // nothing can ever read them again: isDead/recordFailure are only
+            // asked about lanes in FreeLanes.all. Dropping them here keeps the
+            // store honest across a lane retirement instead of carrying keys for
+            // a lane that no longer exists until each one's TTL expires.
+            val live = onDisk.filterKeys { scopeOf(it) in FreeLanes.LANE_IDS }
+            if (live.size != onDisk.size) {
+                AppLogger.info(TAG, "dropped ${onDisk.size - live.size} entries of retired lanes")
+            }
+            live.forEach { (k, at) -> memory.putIfAbsent(k, at) }
+            if (live.size != onDisk.size) writeDisk()
             return
         }
         // First run after the rename: adopt the flat Zen-only store, scoping
@@ -176,10 +186,11 @@ internal object FreeLaneHealth {
     }
 
     /** See the class doc: an unknown prefix is a legacy Zen id, not a lane. */
-    private fun scopeLegacyKey(stored: String): String {
-        val prefix = stored.substringBefore(':', missingDelimiterValue = "")
-        return if (prefix in FreeLanes.LANE_IDS) stored else key(FreeLanes.ZEN_ID, stored)
-    }
+    private fun scopeLegacyKey(stored: String): String =
+        if (scopeOf(stored) in FreeLanes.LANE_IDS) stored else key(FreeLanes.ZEN_ID, stored)
+
+    /** The lane scope of a stored key (`"lane:id"`), or "" for a flat legacy id. */
+    private fun scopeOf(stored: String): String = stored.substringBefore(':', missingDelimiterValue = "")
 
     fun isDead(lane: String, id: String): Boolean {
         val k = key(lane, id)
