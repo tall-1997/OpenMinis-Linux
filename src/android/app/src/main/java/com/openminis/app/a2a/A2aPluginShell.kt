@@ -96,7 +96,23 @@ object A2aPluginShell {
         val gnu = File(entry.path + GNU_SUFFIX)
         if (gnu.isFile) {
             // Wrapped before: the script already owns the entry name.
-            return !isElf(entry)
+            if (!isElf(entry)) return true
+            // Half-wrapped: the rename landed but the script write never
+            // did (the app died between the two steps). The binary is safe
+            // in `.gnu` — rewrite the script to heal. Answering false here
+            // (the old shape) left the raw 0644 ELF in place, so the
+            // gateway spawned it straight into EACCES on every boot with
+            // no recovery path short of a reinstall.
+            AppLogger.warning(TAG, "healing half-wrapped entry: ${entry.path}")
+            return try {
+                writeScript(entry, home, gnu)
+                true
+            } catch (t: Throwable) {
+                // No rollback: the binary lives in `.gnu`, the next ensure
+                // pass simply retries the script write.
+                AppLogger.warning(TAG, "heal failed for ${entry.path}: ${t.message}")
+                false
+            }
         }
         if (!isElf(entry)) {
             // Not a raw glibc binary and not wrapped by us — e.g. a pack
@@ -104,16 +120,12 @@ object A2aPluginShell {
             AppLogger.info(TAG, "entry not a plain ELF, left as-is: ${entry.path}")
             return true
         }
-        val loader = File(File(home, "glibc"), LOADER).path
-        val script = shellScript(loader, File(home, "glibc").path, gnu.path)
         if (!entry.renameTo(gnu)) {
             AppLogger.warning(TAG, "cannot rename entry for wrapping: ${entry.path}")
             return false
         }
         return try {
-            entry.writeText(script)
-            entry.setExecutable(true, false)
-            AppLogger.info(TAG, "wrapped glibc plugin: ${entry.path}")
+            writeScript(entry, home, gnu)
             true
         } catch (t: Throwable) {
             // Roll the binary back so the pack stays exactly as shipped.
@@ -122,6 +134,19 @@ object A2aPluginShell {
             AppLogger.warning(TAG, "wrap failed, rolled back ${entry.path}: ${t.message}")
             false
         }
+    }
+
+    /**
+     * Writes the launcher script over the entry name and marks it +x.
+     * Throws on failure so each caller picks its own recovery: a first
+     * wrap rolls the binary back, a half-wrapped heal is simply retried.
+     */
+    private fun writeScript(entry: File, home: File, gnu: File) {
+        val loader = File(File(home, "glibc"), LOADER).path
+        val script = shellScript(loader, File(home, "glibc").path, gnu.path)
+        entry.writeText(script)
+        entry.setExecutable(true, false)
+        AppLogger.info(TAG, "wrapped glibc plugin: ${entry.path}")
     }
 
     /**
