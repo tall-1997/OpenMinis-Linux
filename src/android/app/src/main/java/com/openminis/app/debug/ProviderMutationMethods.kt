@@ -595,6 +595,12 @@ internal object ProviderMutationMethods {
 
     private fun parseStrategy(s: String): RoutingStrategy = when (s) {
         "loadBalance" -> RoutingStrategy.loadBalance
+        // [T-routing-strategy-x] Debug RPC parity with the settings UI.
+        "roundRobin" -> RoutingStrategy.roundRobin
+        "weighted" -> RoutingStrategy.weighted
+        "leastUsed" -> RoutingStrategy.leastUsed
+        "quotaWindow" -> RoutingStrategy.quotaWindow
+        "smart" -> RoutingStrategy.smart
         else -> RoutingStrategy.fallback
     }
 

@@ -7,6 +7,7 @@ import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMMessage
 import com.openminis.app.data.model.isPureVideoGenerator
 import com.openminis.app.data.CapabilityRouter
+import com.openminis.app.data.GroupRoutingState
 import com.openminis.app.provider.LLMProvider
 import com.openminis.app.provider.ProviderFactory
 import com.openminis.app.service.SessionActivityTracker
@@ -180,7 +181,18 @@ internal fun ChatViewModel.sendMessage(
         // while buildSystemPrompt injected the persona of entry B for the
         // rest of the session. Resolve the target WITHOUT touching VM state
         // and build a local provider for this turn only.
-        resolveGroupTargetEntry(groupIdForCaps, _activeEntryId.value, neededCaps)?.let { (target, reason) ->
+        // [T-routing-strategy-x] smart routing input: a long text turn or
+        // any attachment counts as complex and goes to the strong (first)
+        // member; a short plain-text turn rides the budget (last) member.
+        // Cheap on purpose — no tokenizer, just the user-visible text.
+        val complexTurn = trimmed.length >= GroupRoutingState.SMART_COMPLEX_CHARS ||
+            currentAttachments.isNotEmpty()
+        resolveGroupTargetEntry(
+            groupIdForCaps,
+            _activeEntryId.value,
+            neededCaps,
+            complexRequest = complexTurn,
+        )?.let { (target, reason) ->
             reason?.let { SessionActivityTracker.updateToolStatus(it.take(80)) }
             val instance = providerRepository.instance(target.providerInstanceId)
             // Non-null by construction (availableMemberEntries required a

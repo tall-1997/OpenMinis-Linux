@@ -62,7 +62,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.stringResource
 import com.openminis.app.data.model.ModelGroup
-import com.openminis.app.data.model.RoutingStrategy
 import com.openminis.app.data.repository.ProviderRepository
 import com.openminis.app.R
 import com.openminis.app.ui.components.MinisOutlinedButton
@@ -76,6 +75,7 @@ import com.openminis.app.ui.components.SectionDesign
 import com.openminis.app.ui.components.SectionDivider
 import com.openminis.app.ui.components.SectionFooter
 import com.openminis.app.ui.components.SectionHeader
+import com.openminis.app.ui.RoutingStrategyUi
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ModelGroupsScreen(
@@ -878,10 +878,7 @@ private fun GroupRow(
     }
     val isPrimary = config.defaultPrimaryGroupId == group.id
     val isSub = config.defaultSubGroupId == group.id
-    val strategyLabel = when (group.strategy) {
-        RoutingStrategy.fallback -> stringResource(R.string.model_group_detail_fallback)
-        RoutingStrategy.loadBalance -> stringResource(R.string.model_group_detail_load_balance)
-    }
+    val strategyLabel = stringResource(RoutingStrategyUi.titleRes(group.strategy))
     // [T-disabled-provider-via-group-android] Count members whose provider
     // instance is currently enabled — that's what the runtime resolver
     // will actually consider. When every member sits behind a disabled

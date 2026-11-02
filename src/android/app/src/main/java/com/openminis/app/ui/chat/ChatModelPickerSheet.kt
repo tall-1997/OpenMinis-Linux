@@ -83,6 +83,7 @@ import com.openminis.app.ui.components.PickerSectionCard
 import com.openminis.app.ui.components.PickerSectionHeader
 import com.openminis.app.ui.components.PickerSelectionMark
 import com.openminis.app.ui.components.PickerSheetShell
+import com.openminis.app.ui.RoutingStrategyUi
 /**
  * Fuzzy match: substring first, then all query chars appear in order.
  * Matches iOS SessionModelPicker.fuzzyMatch.
@@ -225,10 +226,9 @@ internal fun ModelPickerSheet(
                         val isSelected = group.id == selectedGroupId
                         val isDefault = group.id == defaultPrimaryGroupId
                         val isExpanded = expandedGroupIds.contains(group.id)
-                        val strategyLabel = when (group.strategy) {
-                            RoutingStrategy.fallback -> "FB"
-                            RoutingStrategy.loadBalance -> "LB"
-                        }
+                        // [T-routing-strategy-x] Exhaustive badge source shared
+                        // with the group list — five new strategies, one helper.
+                        val strategyLabel = RoutingStrategyUi.shortBadge(group.strategy)
                         // Resolve entry: try memberEntryIds first, fallback to activeEntryId ONLY if this group is selected
                         // SystemVoiceEntries fallback: voice groups are
                         // seeded with "__builtin_system_speech__/…"

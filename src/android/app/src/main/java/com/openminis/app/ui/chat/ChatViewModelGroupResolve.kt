@@ -1,10 +1,10 @@
 package com.openminis.app.ui.chat
 
 import com.openminis.app.data.CapabilityRouter
+import com.openminis.app.data.GroupRoutingState
 import com.openminis.app.data.ModelCapability
 import com.openminis.app.data.model.ModelEntry
 import com.openminis.app.data.model.ModelGroup
-import com.openminis.app.data.model.RoutingStrategy
 import com.openminis.app.provider.ProviderFactory
 import com.openminis.app.service.SessionActivityTracker
 
@@ -16,6 +16,8 @@ import com.openminis.app.service.SessionActivityTracker
  *
  * @param sessionKey loadBalance hash key (real session id when present) —
  *        kept stable per session so re-entering a chat never reshuffles.
+ * @param complexRequest smart-routing input: true when the turn is long or
+ *        carries attachments (routes to the first/strong member).
  * @return the target entry plus the routing reason (for status reporting),
  *         or null when every member is gone.
  */
@@ -25,33 +27,31 @@ internal fun pickGroupTarget(
     preferredEntryId: String?,
     needed: Set<ModelCapability>,
     sessionKey: String,
+    complexRequest: Boolean = false,
 ): Pair<ModelEntry, String?>? {
     val decision = CapabilityRouter.decide(available, needed, preferredEntryId)
     val members = decision.members
     if (members.isEmpty()) return null
 
-    // preferredEntryId comes from a prior session binding ("user picked
-    // this entry inside the group last time"). Honor it only if it is
-    // still available; otherwise fall through to the strategy so the
-    // session can still proceed on a now-degraded group.
-    val targetEntry = members.firstOrNull { it.id == preferredEntryId }
-        ?: when (group.strategy) {
-            // [T-android-group-resolve-skip-uncredentialed] Honor the
-            // group's routing strategy, which initial selection previously
-            // ignored entirely — loadBalance silently behaved as fallback.
-            // Hashing the session id keeps the choice STABLE for a given
-            // session (re-entering it must not reshuffle the model) while
-            // spreading distinct sessions across members, matching iOS.
-            RoutingStrategy.loadBalance ->
-                members[
-                    Math.floorMod(
-                        sessionKey.hashCode(),
-                        members.size,
-                    ),
-                ]
-            RoutingStrategy.fallback -> members.first()
-        }
-    return targetEntry to decision.reason
+    // [T-routing-strategy-x] Delegate the strategy math to GroupRoutingState
+    // (pure, test-pinned): fallback/loadBalance keep their pre-x behavior
+    // including the preferredEntryId session binding; the five new
+    // strategies ignore the binding by design — a round-robin/weight/quota
+    // schedule is exactly what a session binding would defeat.
+    val pick = GroupRoutingState.pick(
+        group = group,
+        members = members,
+        preferredEntryId = preferredEntryId,
+        sessionKey = sessionKey,
+        complexRequest = complexRequest,
+    ) ?: return null
+    // Error-path bookkeeping: the agent loop cools down "the member that
+    // just 429'd" via GroupRoutingState.servingEntry(group.id).
+    GroupRoutingState.noteServing(group.id, pick.entry.id)
+    val reason = listOfNotNull(decision.reason, pick.reason)
+        .joinToString("; ")
+        .ifBlank { null }
+    return pick.entry to reason
 }
 
 /**
@@ -77,6 +77,7 @@ internal fun ChatViewModel.resolveGroupTargetEntry(
     groupId: String,
     preferredEntryId: String? = null,
     needed: Set<ModelCapability> = emptySet(),
+    complexRequest: Boolean = false,
 ): Pair<ModelEntry, String?>? {
     val group = providerRepository.group(groupId) ?: return null
     // [T-android-group-resolve-skip-uncredentialed] FILTER FIRST, THEN
@@ -106,6 +107,7 @@ internal fun ChatViewModel.resolveGroupTargetEntry(
         preferredEntryId,
         needed,
         realSessionId.ifEmpty { sessionId },
+        complexRequest,
     )
 }
 
