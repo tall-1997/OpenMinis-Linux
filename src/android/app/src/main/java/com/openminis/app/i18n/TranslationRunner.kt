@@ -7,6 +7,7 @@ import com.openminis.app.data.model.LLMMessage
 import com.openminis.app.data.model.ModelEntry
 import com.openminis.app.data.model.ProviderInstance
 import com.openminis.app.data.model.ThinkingLevel
+import com.openminis.app.data.repository.requestCredential
 import com.openminis.app.provider.ProviderFactory
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -54,7 +55,7 @@ object TranslationRunner {
             ?: return TranslationOutcome.Failed(context.getString(R.string.translate_set_in_defaults))
         val instance = repo.instance(entry.providerInstanceId)
             ?: return TranslationOutcome.Failed(context.getString(R.string.translate_no_model))
-        val key = repo.usableApiKey(instance)
+        val key = repo.requestCredential(instance)?.first
             ?: return TranslationOutcome.Failed(context.getString(R.string.translate_no_model))
         val target = lang.trim().ifBlank { TranslationPrefs.lang(context) }
         return try {

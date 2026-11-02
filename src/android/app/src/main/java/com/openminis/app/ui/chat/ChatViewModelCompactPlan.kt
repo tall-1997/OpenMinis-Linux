@@ -1,5 +1,6 @@
 package com.openminis.app.ui.chat
 
+import com.openminis.app.data.repository.requestCredential
 import com.openminis.app.provider.ProviderFactory
 import com.openminis.app.ui.chat.ChatViewModel.CompactAttempt
 
@@ -17,7 +18,7 @@ internal fun ChatViewModel.compactStagePlan(): List<CompactAttempt> {
     val fallbacks = providerRepository.resolveCompactFallbackCandidates()
         .filter { it.second.model.id != sessionModel.id }
         .mapNotNull { (instance, entry) ->
-            val apiKey = runCatching { providerRepository.usableApiKey(instance) }.getOrNull()
+            val apiKey = runCatching { providerRepository.requestCredential(instance)?.first }.getOrNull()
             val provider = apiKey?.let {
                 runCatching { ProviderFactory.create(instance, it, entry.model, context) }.getOrNull()
             } ?: return@mapNotNull null

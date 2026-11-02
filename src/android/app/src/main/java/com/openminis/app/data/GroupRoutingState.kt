@@ -5,6 +5,7 @@ import com.openminis.app.data.model.ModelGroup
 import com.openminis.app.data.model.LLMError
 import com.openminis.app.data.model.RoutingStrategy
 import com.openminis.app.data.repository.ProviderRepository
+import com.openminis.app.data.repository.markCredentialCooled
 
 /**
  * [T-routing-strategy-x] Process-scoped routing state + the pure per-call
@@ -62,6 +63,12 @@ object GroupRoutingState {
     // anything about the provider that produced the error.
     private val servingEntry = mutableMapOf<String, String>()
 
+    // [T-credential-pool-x] groupId -> provider instanceId most recently
+    // picked by this process, so the error path can cool the credential
+    // slot of "the provider instance that just 429'd" (see
+    // GroupRoutingState.markCredentialCooldownFor).
+    private val servingInstance = mutableMapOf<String, String>()
+
     /** Test hook only: drop all process state. */
     fun resetForTest() {
         roundRobinCursors.clear()
@@ -69,6 +76,7 @@ object GroupRoutingState {
         quotaRemaining.clear()
         servingCounts.clear()
         servingEntry.clear()
+        servingInstance.clear()
     }
 
     /**
@@ -87,8 +95,44 @@ object GroupRoutingState {
         servingCounts[entryId] = (servingCounts[entryId] ?: 0) + 1
     }
 
+    /**
+     * [T-credential-pool-x] Record which provider INSTANCE serves the group
+     * right now — the credential-cooldown analogue of [noteServing].  The
+     * entry alone cannot identify the pool slot: a group member entry only
+     * points at the provider instance, and the credential pick already
+     * happened inside it.
+     */
+    fun noteServingInstance(groupId: String, instanceId: String) {
+        servingInstance[groupId] = instanceId
+    }
+
+    /**
+     * [T-credential-pool-x] Error-path cooldown for the credential the
+     * serving instance last picked.  No-op when the group never recorded an
+     * instance or the error is not a quota/key signal.
+     */
+    fun markCredentialCooldownFor(groupId: String?, error: LLMError, repository: ProviderRepository) {
+        val instanceId = groupId?.let { servingInstance(it) } ?: return
+        repository.markCredentialCooled(instanceId, error)
+    }
+
+    /**
+     * [T-credential-pool-x] Entry + credential cooldown in one step — the
+     * single call path from the agent loop's 429/容量 error branch.
+     */
+    fun markRoutingCooldownFor(groupId: String?, error: LLMError, repository: ProviderRepository) {
+        markServingCooldownFor(groupId, error)
+        markCredentialCooldownFor(groupId, error, repository)
+    }
+
     /** The entry this process most recently picked for [groupId], if any. */
     fun servingEntry(groupId: String): String? = servingEntry[groupId]
+
+    /**
+     * [T-credential-pool-x] The provider instanceId this process most
+     * recently picked for [groupId], if any.
+     */
+    fun servingInstance(groupId: String): String? = servingInstance[groupId]
 
     /**
      * Pure selection over [members] (already filtered by capability and

@@ -8,6 +8,7 @@ import com.openminis.app.data.model.LLMMessage
 import com.openminis.app.data.model.isPureVideoGenerator
 import com.openminis.app.data.CapabilityRouter
 import com.openminis.app.data.GroupRoutingState
+import com.openminis.app.data.repository.requestCredential
 import com.openminis.app.provider.LLMProvider
 import com.openminis.app.provider.ProviderFactory
 import com.openminis.app.service.SessionActivityTracker
@@ -199,7 +200,12 @@ internal fun ChatViewModel.sendMessage(
             // credential); guard anyway so a mid-send config change degrades
             // to the user's provider instead of crashing.
             if (instance != null) {
-                val apiKey = providerRepository.usableApiKey(instance) ?: ""
+                // [T-credential-pool-x] Per-send rotation: pick from the
+                // active pool so a 429 on this turn cools the correct slot
+                // while the next turn rotates to the next key.
+                val credential = providerRepository.requestCredential(instance)
+                GroupRoutingState.noteServingInstance(groupIdForCaps, instance.id)
+                val apiKey = credential?.first ?: ""
                 provider = ProviderFactory.create(instance, apiKey, target.model, context)
             }
         }

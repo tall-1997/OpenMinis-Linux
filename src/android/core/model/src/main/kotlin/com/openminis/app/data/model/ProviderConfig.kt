@@ -292,6 +292,13 @@ data class ProviderInstance(
     // Favorites: pinned instances render in a dedicated section at the top of
     // the provider list. Default false so older JSON still deserializes.
     var pinned: Boolean = false,
+    // [T-credential-pool-x] Multi-account quota sharing: the pool spot this
+    // instance draws from (0-based index into the credential pool). When
+    // quotaGroupId matches another instance's, a 429 / invalid-key cooling
+    // on one side skips the SAME spot on the other — the sibling is known
+    // to be out of quota too, so spending a request on it would fail the
+    // same way. Both null by default: older JSON round-trips unchanged.
+    var quotaGroupId: String? = null,
 
 ) {
     /** Returns the effective API base URL, applying v1 suffix if configured. */

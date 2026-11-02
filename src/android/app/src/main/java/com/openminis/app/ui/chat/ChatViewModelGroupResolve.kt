@@ -5,6 +5,7 @@ import com.openminis.app.data.GroupRoutingState
 import com.openminis.app.data.ModelCapability
 import com.openminis.app.data.model.ModelEntry
 import com.openminis.app.data.model.ModelGroup
+import com.openminis.app.data.repository.requestCredential
 import com.openminis.app.provider.ProviderFactory
 import com.openminis.app.service.SessionActivityTracker
 
@@ -128,7 +129,11 @@ internal fun ChatViewModel.applyGroupEntry(
     // Non-null by construction: availableMemberEntries already required a
     // credential. An OAuth instance has no API key to pass — the factory
     // reads its token from storage — so "" is the correct argument there.
-    val apiKey = providerRepository.usableApiKey(instance) ?: ""
+    // [T-credential-pool-x] Pick from the rotation pool; the record lets
+    // the error path cool exactly the credential slot this send used.
+    val credential = providerRepository.requestCredential(instance)
+    GroupRoutingState.noteServingInstance(groupId, instance.id)
+    val apiKey = credential?.first ?: ""
 
     currentModel = targetEntry.model
     _modelName.value = targetEntry.model.displayName

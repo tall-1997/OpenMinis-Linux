@@ -437,6 +437,15 @@ data class BackupSecrets(
         val oauthToken: String? = null,
         val oauthEmail: String? = null,
         val oauthGcpProject: String? = null,
+        // [T-credential-pool-x] Backup surface for the credential pool.
+        // poolKeys[0] is the PRIMARY (already exported as `apiKey` above);
+        // `pooledKeys` carries ONLY the extra keys (indices 1..n), each
+        // base64-encoded like `apiKey`.  When present, the exporter MUST
+        // strip everything that is already in `apiKey` (size-1 pool) so
+        // older importers that ignore this key get the primary and still
+        // work.
+        val pooledKeys: List<String> = emptyList(),
+        val quotaGroupId: String? = null,
     ) {
         val isEmpty: Boolean
             get() = apiKey == null && manualOAuthToken == null &&

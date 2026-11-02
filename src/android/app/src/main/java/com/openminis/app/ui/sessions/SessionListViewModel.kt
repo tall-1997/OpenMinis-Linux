@@ -576,10 +576,10 @@ class SessionListViewModel(
         var lastError: Exception? = null
         for (entry in candidates) {
             val instance = providerRepository.instance(entry.providerInstanceId) ?: continue
-            // [T-android-keyless-provider-selection] usableApiKey: a keyless
-            // self-hosted provider is a valid candidate, and `loadApiKey`
-            // silently skipped it here. See QuickTestSheet for the rationale.
-            var apiKey = providerRepository.usableApiKey(instance) ?: continue
+            // [T-credential-pool-x] Title suggestion is a send; rotate the pool so
+            // a 429'd slot cools precisely and the next candidate walks to a
+            // fresh key. Keyless self-hosted stays a candidate ("" forfeit).
+            var apiKey = providerRepository.requestCredential(instance)?.first ?: continue
             if (instance.credentialType == com.openminis.app.data.model.ProviderCredential.oauth) {
                 try {
                     val manager = com.openminis.app.auth.OAuthManager.forInstance(context, instance)
@@ -855,9 +855,8 @@ class SessionListViewModel(
                 var lastError: Exception? = null
                 for (entry in candidates) {
                     val instance = providerRepository.instance(entry.providerInstanceId) ?: continue
-                    // [T-android-keyless-provider-selection] usableApiKey —
-                    // see the note in runGroupSuggestion above.
-                    var apiKey = providerRepository.usableApiKey(instance) ?: continue
+                    // [T-credential-pool-x] Title regeneration — rotate the pool.
+                    var apiKey = providerRepository.requestCredential(instance)?.first ?: continue
 
                     // Refresh OAuth token if needed
                     if (instance.credentialType == com.openminis.app.data.model.ProviderCredential.oauth) {

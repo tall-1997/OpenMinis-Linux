@@ -162,7 +162,7 @@
     "src/android/app/src/main/java/com/openminis/app/ui/sandbox/FilePreviewScreen.kt": 1271,
     "src/android/app/src/main/java/com/openminis/app/ui/sandbox/MirrorSettingsScreen.kt": 863,
     "src/android/app/src/main/java/com/openminis/app/ui/sessions/SessionListScreen.kt": 3296,
-    "src/android/app/src/main/java/com/openminis/app/ui/sessions/SessionListViewModel.kt": 1201,
+    "src/android/app/src/main/java/com/openminis/app/ui/sessions/SessionListViewModel.kt": 1200,
     "src/android/app/src/main/java/com/openminis/app/ui/settings/AddProviderScreen.kt": 906,
     "src/android/app/src/main/java/com/openminis/app/ui/settings/AppearanceScreen.kt": 946,
     "src/android/app/src/main/java/com/openminis/app/ui/settings/CheckUpdateSection.kt": 810,

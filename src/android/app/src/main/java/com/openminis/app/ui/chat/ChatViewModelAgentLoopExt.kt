@@ -1164,7 +1164,7 @@ internal suspend fun ChatViewModel.runAgentLoop(
                     (actual.detail.contains("[429]") ||
                         com.openminis.app.provider.HttpRetryAfter.isPermanentCapacityBody(actual.detail))
                 if (isRateLimit || isPermanentCapacity)
-                    GroupRoutingState.markServingCooldownFor(_selectedGroupId.value, actual)
+                    GroupRoutingState.markRoutingCooldownFor(_selectedGroupId.value, actual, providerRepository)
                 // Auto-retry on transient network/5xx/transient errors on the SAME provider
                 // Same-provider retry for network / 5xx / 429 (honour Retry-After),
                 // then fall back to the next group member.

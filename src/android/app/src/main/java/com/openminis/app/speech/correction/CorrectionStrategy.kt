@@ -6,6 +6,7 @@ import com.openminis.app.data.model.LLMMessage
 import com.openminis.app.data.model.ModelEntry
 import com.openminis.app.data.model.ThinkingLevel
 import com.openminis.app.data.repository.ProviderRepository
+import com.openminis.app.data.repository.requestCredential
 import com.openminis.app.provider.ProviderFactory
 
 /** Result of one correction attempt. */
@@ -61,9 +62,10 @@ class LlmCorrectionStrategy(
 
         val instance = repository.instance(entry.providerInstanceId)
             ?: throw CorrectionError.NoModelAvailable
-        // [T-android-keyless-provider-selection] usableApiKey — a keyless
-        // self-hosted correction model is usable. See QuickTestSheet.
-        val apiKey = repository.usableApiKey(instance) ?: throw CorrectionError.NoModelAvailable
+        // [T-credential-pool-x] Rotation pick per correction request — a keyless
+        // self-hosted model returns "" via the pool-forfeit path and stays
+        // usable. See QuickTestSheet.
+        val apiKey = repository.requestCredential(instance)?.first ?: throw CorrectionError.NoModelAvailable
         val provider = ProviderFactory.create(instance, apiKey, entry.model, this.context)
 
         // [T-android-voice-correction-diag] Name the resolved model BEFORE the
