@@ -1,5 +1,6 @@
 package com.openminis.app.ui.chat
 
+import com.openminis.app.data.repository.requestCredential
 import com.openminis.app.provider.LLMProvider
 import com.openminis.app.provider.ProviderFactory
 
@@ -58,7 +59,9 @@ private fun ChatViewModel.resolveNextFallbackProvider(): LLMProvider? {
         // notion as buildFallbackProviders — OAuth members belong in the
         // single-step chain too.
         if (!providerRepository.hasAnyCredential(instance)) continue
-        val apiKey = providerRepository.usableApiKey(instance) ?: ""
+        // [T-credential-pool-x] Rotate pooled credentials on each fallback
+        // attempt so a chain of failures walks the multi-account pool.
+        val apiKey = providerRepository.requestCredential(instance)?.first ?: ""
 
         currentModel = entry.model
         _modelName.value = entry.model.displayName

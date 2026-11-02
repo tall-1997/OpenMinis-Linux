@@ -6,6 +6,7 @@ import com.openminis.app.data.model.ModelEntry
 import com.openminis.app.data.model.ProviderInstance
 import com.openminis.app.data.model.hasImageInput
 import com.openminis.app.data.repository.ProviderRepository
+import com.openminis.app.data.repository.requestCredential
 import com.openminis.app.provider.ProviderFactory
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withTimeout
@@ -223,9 +224,11 @@ object VisionGroupResolver {
         mimeType: String,
         instruction: String,
     ): String {
-        // [T-empty-key-compat-endpoints] usableApiKey returns "" for keyless
-        // third-party compatible endpoints, so they stay routable for vision.
-        val apiKey = repo.usableApiKey(instance) ?: throw IllegalStateException("no credential")
+        // [T-empty-key-compat-endpoints] requestCredential (pool-first, key
+        // fallback) returns "" for keyless third-party compatible endpoints,
+        // so they stay routable for vision. Pool rotation per vision call
+        // distributes key usage across the vision config stream.
+        val apiKey = repo.requestCredential(instance)?.first ?: throw IllegalStateException("no credential")
         // Guard: only route to a model that actually declares image input.
         if (!entry.model.hasImageInput) throw IllegalStateException("model is not vision-capable")
         val provider = ProviderFactory.create(instance, apiKey, entry.model, context)

@@ -56,6 +56,7 @@ import com.openminis.app.data.model.LLMMediaAttachment
 import com.openminis.app.data.model.ModelEntry
 import com.openminis.app.data.model.normalizeModalityName
 import com.openminis.app.data.repository.ProviderRepository
+import com.openminis.app.data.repository.requestCredential
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.provider.ProviderFactory
 import com.openminis.app.provider.openai.OpenAIProvider
@@ -456,11 +457,12 @@ internal suspend fun performTest(
     // refresh path had (f2be9a834); the credential decision belongs to the
     // server, not to a pre-flight null check.
     //
-    // `usableApiKey` substitutes "" exactly where an empty key is a valid
+    // `requestCredential` substitutes "" exactly where an empty key is a valid
     // configuration (`ProviderInstance.allowsEmptyAPIKey`) and still returns
     // null for an official endpoint with no key, so providers that genuinely
-    // require one keep failing fast with the same message.
-    val apiKey = providerRepository.usableApiKey(instance)
+    // require one keep failing fast with the same message. Pool-first: Quick
+    // Test doubles as a live check of whatever slot the rotation picks.
+    val apiKey = providerRepository.requestCredential(instance)?.first
         ?: return@withContext failure("No API key configured for this provider.")
 
     // [T-android-provider-voice] Speech tests route through the VoiceProvider

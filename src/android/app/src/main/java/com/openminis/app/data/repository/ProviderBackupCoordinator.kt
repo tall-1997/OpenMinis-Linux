@@ -217,6 +217,18 @@ internal class ProviderBackupCoordinator(
             Base64.encodeToString(s.toByteArray(), Base64.NO_WRAP)
 
         val apiKey = host.loadApiKey(instance.id)?.let(::b64)
+        // [T-credential-pool-x] Extra pooled keys ride along as
+        // `pooledKeys` (base64 each, same encoding as apiKey). Slot 0 of
+        // the pool IS the primary key, which is already exported as
+        // `apiKey` above, so only indices 1..n travel here; a single-key
+        // instance (pool off) exports an empty list — old importers that
+        // ignore the field still get the primary and keep working.
+        val pooledKeys = if (apiKey != null) {
+            ProviderCredentialPool(context).keys(instance.id)
+                .drop(1)
+                .filter { it.isNotBlank() }
+                .map(::b64)
+        } else emptyList()
         val manualOAuth = com.openminis.app.auth.OAuthManager
             .forInstance(context, instance)?.loadManualBearerToken()
             ?.takeIf { it.isNotEmpty() }?.let(::b64)
@@ -244,6 +256,8 @@ internal class ProviderBackupCoordinator(
             oauthToken = oauthToken,
             oauthEmail = oauthEmail,
             oauthGcpProject = oauthGcpProject,
+            pooledKeys = pooledKeys,
+            quotaGroupId = instance.quotaGroupId,
         )
         return if (secret.isEmpty) null else secret
     }
@@ -297,6 +311,42 @@ internal class ProviderBackupCoordinator(
                     if (mgr.exportOAuthString("gcp_project") != it) {
                         mgr.importOAuthString("gcp_project", it); wrote = true
                     }
+                }
+            }
+        }
+        // [T-credential-pool-x] Rebuild the rotation pool from the backup:
+        // slot 0 is the primary key (restored above or kept as-is) and the
+        // extras come from `pooledKeys`. A backup without extras leaves the
+        // local pool untouched — restores merge credentials, they do not
+        // wipe local pool state that the backup never saw.
+        val primary = host.loadApiKey(instance.id)
+        if (primary != null) {
+            val extras = secret.pooledKeys
+                .mapNotNull(::deb64)
+                .filter { it.isNotBlank() && it != primary }
+            if (extras.isNotEmpty()) {
+                val pool = ProviderCredentialPool(context)
+                val next = (listOf(primary) + extras).distinct()
+                if (next != pool.keys(instance.id)) {
+                    pool.setKeys(instance.id, next)
+                    wrote = true
+                }
+            }
+        }
+        // [T-credential-pool-x] Quota-group membership is configuration, but
+        // it travels in the secrets file so an instance restored from a
+        // backup lands in the same cooling group as its siblings.
+        secret.quotaGroupId?.takeIf { it.isNotBlank() }?.let { group ->
+            if (instance.quotaGroupId != group) {
+                val cfg = host.workingCopy()
+                val idx = cfg.instances.indexOfFirst { it.id == instance.id }
+                if (idx >= 0) {
+                    // copy() + replace in the list: the working copy shares
+                    // the live ProviderInstance objects, so mutate the slot
+                    // rather than the shared instance.
+                    cfg.instances[idx] = cfg.instances[idx].copy(quotaGroupId = group)
+                    host.saveConfig(cfg)
+                    wrote = true
                 }
             }
         }

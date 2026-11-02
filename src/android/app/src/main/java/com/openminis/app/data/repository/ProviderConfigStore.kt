@@ -91,6 +91,11 @@ internal class ProviderConfigStore(
 
     private val _credentialRevision = MutableStateFlow(0L); val credentialRevision: StateFlow<Long> = _credentialRevision.asStateFlow()
 
+    // [T-credential-pool-x] Multi-account credential pool: N ≥ 2 API keys per
+    // instance, round-robin pick + per-index cooldown. Storage lives in the
+    // same encrypted provider_secrets prefs as the single key.
+    private val credentialPool by lazy { ProviderCredentialPool(context) }
+
     // ── [T-android-save-off-main-thread] Single-threaded persistence pipeline ──
     //
     // `saveConfig` used to run the whole serialize → 5-table clear+bulk-upsert →
@@ -474,6 +479,13 @@ internal class ProviderConfigStore(
     // API Key management
     fun saveApiKey(instanceId: String, key: String) {
         encryptedPrefs.edit().putString("apikey_$instanceId", key).apply()
+        // [T-credential-pool-x] Slot 0 of the pool IS the primary key — an
+        // edit of the main key must propagate so the pool keeps rotating
+        // over what the user actually configured.
+        val currentPool = credentialPool.keys(instanceId)
+        if (currentPool.isNotEmpty() && currentPool[0] != key) {
+            credentialPool.setKeys(instanceId, listOf(key) + currentPool.drop(1))
+        }
         _credentialRevision.value = _credentialRevision.value + 1
         // [T-android-provider-memo] The memo keys on the credential fingerprint;
         // a rotated token already yields a new entry. Drop this instance's
@@ -504,10 +516,88 @@ internal class ProviderConfigStore(
 
     fun deleteApiKey(instanceId: String) {
         encryptedPrefs.edit().remove("apikey_$instanceId").apply()
+        // [T-credential-pool-x] Deleting the credential wipes the whole
+        // pool — a "clear" is a clear, not a partial removal.
+        credentialPool.setKeys(instanceId, emptyList())
         _credentialRevision.value = _credentialRevision.value + 1
         // [T-key-cache-invalidate] 删 key 同样要让 ProviderFactory 的
         // memo 缓存失效 —— 否则已构造的 provider 继续用旧 key 存活，
         // 删 key 后重加同实例仍是旧 key 生效。
         com.openminis.app.provider.ProviderFactory.invalidateInstance(instanceId)
+    }
+
+    // ── [T-credential-pool-x] Multi-account credential pool API ─────────
+
+    /** The pooled keys for [instanceId] in order (empty when pool off). */
+    fun poolKeys(instanceId: String): List<String> = credentialPool.keys(instanceId)
+
+    /**
+     * Add [key] as an extra account.  The first add seeds slot 0 from the
+     * legacy single key.  Duplicates and pools that would stay below the
+     * 2-key minimum are rejected (false).  Successful adds bump the
+     * credential revision and invalidate the instance memo so the next
+     * request builds a provider from a fresh rotation.
+     */
+    fun addPoolKey(instanceId: String, key: String): Boolean {
+        if (key.isBlank()) return false
+        val current = credentialPool.keys(instanceId)
+        val next = poolAfterAdd(current, loadApiKey(instanceId), key)
+        if (next.size < 2) return false
+        credentialPool.setKeys(instanceId, next)
+        _credentialRevision.value = _credentialRevision.value + 1
+        com.openminis.app.provider.ProviderFactory.invalidateInstance(instanceId)
+        return true
+    }
+
+    /**
+     * Remove pooled key [index].  Collapsing below 2 keys clears the pool
+     * and the survivor (when any) is promoted into the primary slot.
+     */
+    fun removePoolKey(instanceId: String, index: Int): Boolean {
+        val current = credentialPool.keys(instanceId)
+        if (index !in current.indices) return false
+        val removal = poolAfterRemove(current, index)
+        credentialPool.setKeys(instanceId, removal.keys)
+        removal.primaryOverride?.let {
+            encryptedPrefs.edit().putString("apikey_$instanceId", it).apply()
+        }
+        _credentialRevision.value = _credentialRevision.value + 1
+        com.openminis.app.provider.ProviderFactory.invalidateInstance(instanceId)
+        return true
+    }
+
+    /**
+     * [T-credential-pool-x] Request the credential the routing layers should
+     * use for [instance]: (key, index) from the rotation pool when active,
+     * otherwise the legacy single key with index -1.  Null only when the
+     * instance has no usable credential at all (existing skip semantics).
+     */
+    fun requestCredential(instance: ProviderInstance): Pair<String, Int>? {
+        if (instance.credentialType == com.openminis.app.data.model.ProviderCredential.apiKey) {
+            val pooled = credentialPool.pick(instance.id)
+            if (pooled != null) return pooled
+        }
+        return usableApiKey(instance)?.let { it to -1 }
+    }
+
+    /**
+     * [T-credential-pool-x] Error-path cooldown: park the key this instance
+     * last served with (per [ProviderCredentialPool.lastPick]) and, when the
+     * instance declares a [com.openminis.app.data.model.ProviderInstance.quotaGroupId],
+     * the SAME slot of every sibling instance in that group — a sibling is
+     * known to be out of quota / revoked too, so routing to it would burn a
+     * request that fails the same way.
+     */
+    fun markCredentialCooled(instanceId: String, error: com.openminis.app.data.model.LLMError) {
+        val coolFor = credentialCooldownFor(error) ?: return
+        val lastIndex = credentialPool.lastPick(instanceId) ?: return
+        credentialPool.markCooled(instanceId, lastIndex, System.currentTimeMillis() + coolFor)
+        val instance = repo.instance(instanceId) ?: return
+        val quotaGroup = instance.quotaGroupId?.takeIf { it.isNotBlank() } ?: return
+        for (other in repo.config.value.instances) {
+            if (other.id == instanceId) continue
+            if (other.quotaGroupId != quotaGroup) continue
+            credentialPool.markCooled(other.id, lastIndex, System.currentTimeMillis() + coolFor)
+        }
     }
 }

@@ -6,6 +6,7 @@ import com.openminis.app.data.model.LLMMessage
 import com.openminis.app.data.repository.findFolderByName
 import com.openminis.app.data.repository.listFolders
 import com.openminis.app.data.repository.setFolderIfUnfiled
+import com.openminis.app.data.repository.requestCredential
 import com.openminis.app.data.model.ModelEntry
 import com.openminis.app.data.model.ThinkingLevel
 import com.openminis.app.logging.AppLogger
@@ -501,10 +502,11 @@ private fun ChatViewModel.titleCandidateChain(): List<TitleCandidate> {
  */
 private fun ChatViewModel.buildTitleProviderForEntry(entry: ModelEntry): LLMProvider? {
     val instance = providerRepository.instance(entry.providerInstanceId) ?: return null
-    // [T-android-keyless-provider-selection] usableApiKey — a keyless
-    // self-hosted sub-model is usable; loadApiKey returned null and made
-    // title generation silently fall back. See QuickTestSheet.
-    var apiKey = providerRepository.usableApiKey(instance) ?: return null
+    // [T-credential-pool-x] Title generation is a send — rotate through the
+    // pool so a 429 on this attempt cools the right slot and the next title
+    // attempt skips it. Keyless self-hosted sub-models: requestCredential
+    // returns "" (via usableApiKey) which is the pool-forfeit path.
+    var apiKey = providerRepository.requestCredential(instance)?.first ?: return null
 
     // [T-android-titlegen-oauth-refresh] Refresh the OAuth token before
     // building the provider — matches the manual Regenerate path

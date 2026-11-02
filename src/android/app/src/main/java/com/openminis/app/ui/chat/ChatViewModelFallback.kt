@@ -1,5 +1,6 @@
 package com.openminis.app.ui.chat
 
+import com.openminis.app.data.repository.requestCredential
 import com.openminis.app.provider.LLMProvider
 import com.openminis.app.provider.ProviderFactory
 import com.openminis.app.ui.chat.ChatViewModel.FallbackCandidate
@@ -34,7 +35,11 @@ internal fun ChatViewModel.buildFallbackProviders(primaryProvider: LLMProvider):
         // fallback candidate; usableApiKey alone reads only the API-key
         // slot and dropped every OAuth member from the chain.
         if (!providerRepository.hasAnyCredential(instance)) continue
-        val apiKey = providerRepository.usableApiKey(instance) ?: ""
+        // [T-credential-pool-x] Rotate pooled credentials per fallback
+        // relay so distinct bucket keys accumulate instead of repeating
+        // the same key (provider memo still dedupes identical picks with
+        // the sameBucket gate below).
+        val apiKey = providerRepository.requestCredential(instance)?.first ?: ""
         val p = try {
             ProviderFactory.create(instance, apiKey, entry.model, context)
         } catch (_: Exception) { continue }

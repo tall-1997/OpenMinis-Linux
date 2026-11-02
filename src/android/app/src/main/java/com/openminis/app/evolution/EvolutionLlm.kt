@@ -4,6 +4,7 @@ import android.content.Context
 import com.openminis.app.data.model.LLMMessage
 import com.openminis.app.data.model.ThinkingLevel
 import com.openminis.app.data.repository.ProviderRepository
+import com.openminis.app.data.repository.requestCredential
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.provider.ProviderFactory
 import kotlinx.coroutines.withTimeout
@@ -58,7 +59,7 @@ class EvolutionLlm(
             !e.isHidden && enabled.containsKey(e.providerInstanceId)
         } ?: return null
         val instance = enabled[entry.providerInstanceId] ?: return null
-        val key = providerRepository.usableApiKey(instance) ?: return null
+        val key = providerRepository.requestCredential(instance)?.first ?: return null
         val provider = runCatching {
             ProviderFactory.create(instance, key, entry.model, context)
         }.getOrNull() ?: return null

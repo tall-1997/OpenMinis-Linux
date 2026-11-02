@@ -5,6 +5,7 @@ import com.openminis.app.data.model.LLMError
 import com.openminis.app.data.model.ModelEntry
 import com.openminis.app.data.model.hasImageInput
 import com.openminis.app.data.repository.MultiAgentSettings
+import com.openminis.app.data.repository.requestCredential
 import com.openminis.app.provider.LLMProvider
 import com.openminis.app.provider.ProviderFactory
 import com.openminis.app.provider.effectiveMaxThinkingLevel
@@ -34,9 +35,8 @@ import kotlin.random.Random
 
 /** Per-retry backoff (seconds). Index 0 = wait before attempt 2, etc. */
 // [T-subagent-429-selfheal] The ladder used to be {2, 5} — sized for a
-// transient stream blip, not a provider rate-limit window, which is typically
-// 60s. With three attempts the whole retry budget was spent in ten seconds, so
-// a 429 during a concurrent wave still surfaced as a dead lane.
+// transient blip, not a provider rate-limit window (~60s): three attempts
+// spent the retry budget in ten seconds, surfacing 429s in waves as dead lanes.
 private val SUBAGENT_BACKOFF_S = intArrayOf(2, 5, 15, 30)
 
 /** Ceiling on one backoff wait, even when Retry-After asks for longer. */
@@ -1044,7 +1044,7 @@ private fun pickRetryEntry(
 
 internal fun ChatViewModel.providerForModelEntry(entry: ModelEntry): LLMProvider? {
         val instance = providerRepository.instance(entry.providerInstanceId) ?: return null
-        var apiKey = providerRepository.usableApiKey(instance) ?: return null
+        var apiKey = providerRepository.requestCredential(instance)?.first ?: return null // rotation pick; every lane advances the pool
         if (instance.credentialType == com.openminis.app.data.model.ProviderCredential.oauth) {
             try {
                 val manager = com.openminis.app.auth.OAuthManager.forInstance(context, instance)
