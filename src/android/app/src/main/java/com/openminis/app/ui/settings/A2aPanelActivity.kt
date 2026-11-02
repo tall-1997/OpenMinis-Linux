@@ -40,7 +40,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.openminis.app.R
 import com.openminis.app.a2a.A2aGateway
+import com.openminis.app.a2a.A2aGatewayProcess
 import com.openminis.app.a2a.A2aLoginProfiles
+import com.openminis.app.a2a.A2aPluginShell
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.ui.browser.BrowserExternalSchemeHandler
 import com.openminis.app.ui.browser.BrowserExternalSchemeHandler.Origin
@@ -141,7 +143,26 @@ class A2aPanelActivity : ComponentActivity() {
                 }
                 bootError = error
                 boot = if (error == null) PanelBoot.READY else PanelBoot.FAILED
-                if (error != null) AppLogger.warning(TAG, "panel boot failed: $error")
+                if (error != null) {
+                    AppLogger.warning(TAG, "panel boot failed: $error")
+                } else {
+                    // The panel can install a pack while the gateway is
+                    // already serving; the app's install-time wrap ran
+                    // before that pack existed, and the engine has no wrap
+                    // hook of its own. Re-run the idempotent wrap on every
+                    // panel open so a freshly installed pack gets its
+                    // launcher before the next spawn. Fire-and-forget:
+                    // the WebView must not wait on a disk pass.
+                    withContext(Dispatchers.IO) {
+                        runCatching {
+                            A2aPluginShell.ensure(
+                                A2aGatewayProcess.homeDir(activityContext.filesDir.path),
+                            )
+                        }.onFailure {
+                            AppLogger.warning(TAG, "post-boot plugin wrap failed: ${it.message}")
+                        }
+                    }
+                }
             }
             Surface(modifier = Modifier.fillMaxSize()) {
                 Column(modifier = Modifier.fillMaxSize()) {

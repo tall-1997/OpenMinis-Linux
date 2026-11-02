@@ -83,7 +83,8 @@ class A2aGatewayTest {
         // Binary present, panel not deployed yet.
         assertFalse(A2aGateway.isInstalled(context))
         // Full home layout: panel entry, glibc loader, both pack version
-        // dirs and the registry — the same five gates isDeployed checks.
+        // dirs with their manifest+entry, and the registry — the same
+        // gates isDeployed checks.
         val home = File(context.filesDir, "builtin-plugins/${A2aGateway.ID}")
         File(home, "ui/index.html").apply {
             parentFile.mkdirs()
@@ -93,13 +94,53 @@ class A2aGatewayTest {
             parentFile.mkdirs()
             writeText("loader")
         }
-        File(home, "data/plugins/${A2aInstaller.PROVIDER_PACK_ID}/${A2aInstaller.VERSION}").mkdirs()
-        File(home, "data/plugins/${A2aInstaller.WEB_PACK_ID}/${A2aInstaller.VERSION}").mkdirs()
+        packLayout(home, A2aInstaller.PROVIDER_PACK_ID, "bin/agent2api-providers")
+        packLayout(home, A2aInstaller.WEB_PACK_ID, "bin/agent2api-web-providers")
         File(home, "data/plugins/plugins.json").apply {
             parentFile.mkdirs()
             writeText("{}")
         }
         assertTrue(A2aGateway.isInstalled(context))
+    }
+
+    @Test fun `isInstalled is false when a pack entry vanished`() {
+        // A half-deployed pack dir (entry missing — the binary was renamed
+        // or never landed) must not read as installed forever: install
+        // would be skipped and every spawn fails with EACCES/ENOENT.
+        val nativeDir = File(context.cacheDir, "native").apply { mkdirs() }
+        File(nativeDir, "liba2a.so").apply {
+            writeText("elf")
+            setExecutable(true)
+        }
+        context.applicationInfo.nativeLibraryDir = nativeDir.path
+        val home = File(context.filesDir, "builtin-plugins/${A2aGateway.ID}")
+        File(home, "ui/index.html").apply {
+            parentFile.mkdirs()
+            writeText("<html></html>")
+        }
+        File(home, "glibc/${A2aPluginShell.LOADER}").apply {
+            parentFile.mkdirs()
+            writeText("loader")
+        }
+        packLayout(home, A2aInstaller.PROVIDER_PACK_ID, "bin/agent2api-providers")
+        // Web pack version dir exists but its entry never landed.
+        File(home, "data/plugins/${A2aInstaller.WEB_PACK_ID}/${A2aInstaller.VERSION}").mkdirs()
+        File(home, "data/plugins/plugins.json").apply {
+            parentFile.mkdirs()
+            writeText("{}")
+        }
+        assertFalse(A2aGateway.isInstalled(context))
+    }
+
+    /** A pack version dir with a manifest that maps the given entry path. */
+    private fun packLayout(home: File, id: String, entry: String) {
+        File(home, "data/plugins/$id/${A2aInstaller.VERSION}/$entry").apply {
+            parentFile.mkdirs()
+            writeText("elf")
+        }
+        File(home, "data/plugins/$id/${A2aInstaller.VERSION}/pack.json").writeText(
+            """{"entry": {"aarch64-unknown-linux-gnu": "$entry"}}""",
+        )
     }
 
     @Test fun `enable flag persists in a2a's own prefs, not the plugin stores`() {

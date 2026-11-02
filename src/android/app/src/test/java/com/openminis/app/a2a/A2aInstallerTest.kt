@@ -1,6 +1,7 @@
 package com.openminis.app.a2a
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -159,6 +160,57 @@ class A2aInstallerTest {
     @Test fun `splitPackObjects returns empty for malformed documents`() {
         assertTrue(A2aInstaller.splitPackObjects("").isEmpty())
         assertTrue(A2aInstaller.splitPackObjects("{\"other\": 1}").isEmpty())
+    }
+
+    @Test fun `makeExecutableIfElf marks an extracted ELF payload executable`() {
+        // The upstream pack ships bin/agent2api-providers as an ELF. The zip
+        // carries no usable unix mode (Windows-built archives have none, and
+        // the JVM ZipEntry exposes none either), so extraction must decide
+        // from content — a 0644 entry dies with EACCES before the wrapper.
+        val dir = File(System.getProperty("java.io.tmpdir"), "a2a-exec-${System.nanoTime()}")
+        dir.mkdirs()
+        try {
+            val elf = File(dir, "agent2api-providers")
+            elf.writeBytes(
+                byteArrayOf(0x7f, 'E'.code.toByte(), 'L'.code.toByte(), 'F'.code.toByte()) +
+                    ByteArray(60),
+            )
+            assertFalse(elf.canExecute())
+
+            A2aInstaller.makeExecutableIfElf(elf)
+
+            assertTrue(elf.canExecute())
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test fun `makeExecutableIfElf leaves non-ELF payloads alone`() {
+        val dir = File(System.getProperty("java.io.tmpdir"), "a2a-noexec-${System.nanoTime()}")
+        dir.mkdirs()
+        try {
+            val html = File(dir, "index.html")
+            html.writeText("<html></html>")
+            A2aInstaller.makeExecutableIfElf(html)
+            assertFalse(html.canExecute())
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test fun `makeExecutableIfElf ignores a missing or empty file`() {
+        val dir = File(System.getProperty("java.io.tmpdir"), "a2a-missing-${System.nanoTime()}")
+        dir.mkdirs()
+        try {
+            // No throw: a vanished staging entry must not take the deploy down.
+            A2aInstaller.makeExecutableIfElf(File(dir, "nope"))
+            val empty = File(dir, "empty")
+            empty.writeBytes(ByteArray(0))
+            A2aInstaller.makeExecutableIfElf(empty)
+            assertFalse(empty.canExecute())
+        } finally {
+            dir.deleteRecursively()
+        }
     }
 
     @Test fun `glibcAssetOf probes gz first and falls back to the plain tar name`() {

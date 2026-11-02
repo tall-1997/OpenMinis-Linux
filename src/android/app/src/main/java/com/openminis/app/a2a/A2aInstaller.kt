@@ -104,7 +104,32 @@ object A2aInstaller {
         if (!File(home, "glibc/${A2aPluginShell.LOADER}").isFile) return false
         if (!packVersionDir(home, PROVIDER_PACK_ID).isDirectory) return false
         if (!packVersionDir(home, WEB_PACK_ID).isDirectory) return false
+        // A version dir alone is not a spawnable pack: the entry (script
+        // or binary) must exist. A half-deployed pack would otherwise read
+        // as installed forever — install is skipped, every spawn fails.
+        if (A2aPluginShell.entryFor(packVersionDir(home, PROVIDER_PACK_ID))?.isFile != true) {
+            return false
+        }
+        if (A2aPluginShell.entryFor(packVersionDir(home, WEB_PACK_ID))?.isFile != true) {
+            return false
+        }
         return File(home, "data/plugins/plugins.json").isFile
+    }
+
+    /**
+     * Gives an extracted ELF its owner-exec bit. Zip metadata is the wrong
+     * axis here: archives built on Windows carry no unix mode, and the JVM's
+     * [java.util.zip.ZipEntry] exposes none, so a metadata gate silently
+     * leaves `bin/…` at 0644 and the gateway dies with EACCES before the
+     * wrapper can rename anything. Content is the invariant — an ELF header
+     * means the file is meant to be executed. The tar deploy keeps modes on
+     * its own, so this only repairs the zip path.
+     */
+    internal fun makeExecutableIfElf(file: File) {
+        if (!A2aPluginShell.isElf(file)) return
+        if (!file.setExecutable(true, false)) {
+            AppLogger.warning("A2aInstaller", "chmod +x failed for ${file.name}")
+        }
     }
 
     private fun binaryPresent(context: Context): Boolean {
@@ -302,6 +327,11 @@ object A2aInstaller {
                     } else {
                         target.parentFile?.mkdirs()
                         target.outputStream().buffered().use { out -> stream.copyTo(out) }
+                        // The upstream zip ships bin/… as ELF binaries but
+                        // its archive metadata is not a reliable mode source
+                        // (Windows-built zips carry none). Content decides:
+                        // an ELF header gets the exec bit the spawn needs.
+                        makeExecutableIfElf(target)
                     }
                     entry = stream.nextEntry
                 }

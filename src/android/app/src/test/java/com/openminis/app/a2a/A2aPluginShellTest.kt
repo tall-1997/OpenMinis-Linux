@@ -65,6 +65,28 @@ class A2aPluginShellTest {
         assertEquals(gnuMtime, File(entry.path + A2aPluginShell.GNU_SUFFIX).lastModified())
     }
 
+    @Test fun `wrapEntry heals a half-wrapped entry left raw with a gnu sibling`() {
+        // The rename-to-.gnu landed but the script write never did (kill
+        // between the two steps). The old code saw the .gnu sibling and
+        // answered false forever — the gateway then spawned the raw ELF
+        // (0644 from the zip) and died with EACCES on every boot.
+        val home = tmp.newFolder("home")
+        File(home, "glibc").mkdirs()
+        File(home, "glibc/${A2aPluginShell.LOADER}").writeText("loader")
+        val entry = tmp.newFolder("pack").resolve("entry")
+        fakeElf(entry)
+        val gnu = File(entry.path + A2aPluginShell.GNU_SUFFIX)
+        fakeElf(gnu)
+        val gnuBytesBefore = gnu.readBytes()
+
+        assertTrue(A2aPluginShell.wrapEntry(entry, home))
+        assertTrue(entry.readText().startsWith("#!/system/bin/sh"))
+        assertTrue(entry.canExecute())
+        // The real binary is untouched: still the original ELF bytes.
+        assertTrue(A2aPluginShell.isElf(gnu))
+        assertTrue(gnu.readBytes().contentEquals(gnuBytesBefore))
+    }
+
     @Test fun `wrapEntry leaves non-ELF entries alone`() {
         val home = tmp.newFolder("home")
         val entry = tmp.newFolder("pack").resolve("entry")
