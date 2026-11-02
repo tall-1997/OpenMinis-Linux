@@ -72,6 +72,7 @@ import com.openminis.app.ui.components.MinisButton
 import com.openminis.app.ui.components.MinisOutlinedButton
 import com.openminis.app.ui.components.MinisTextButton
 import com.openminis.app.ui.components.SectionTextField
+import com.openminis.app.ui.RoutingStrategyUi
 import kotlin.math.roundToInt
 
 /**
@@ -213,28 +214,23 @@ fun ModelGroupDetailScreen(
             item {
                 SettingsSection(
                     header = stringResource(R.string.model_group_detail_routing_strategy),
-                    footer = when (strategy) {
-                        RoutingStrategy.fallback -> stringResource(R.string.model_group_detail_routing_fallback_footer)
-                        RoutingStrategy.loadBalance -> stringResource(R.string.model_group_detail_routing_load_balance_footer)
-                    },
+                    footer = stringResource(RoutingStrategyUi.footerRes(strategy)),
                 ) {
-                    SettingsChoiceRow(
-                        title = stringResource(R.string.model_group_detail_fallback),
-                        selected = strategy == RoutingStrategy.fallback,
-                        onSelect = {
-                            strategy = RoutingStrategy.fallback
-                            providerRepository.updateGroup(group.copy(strategy = RoutingStrategy.fallback))
-                        },
-                    )
-                    SettingsChoiceRow(
-                        title = stringResource(R.string.model_group_detail_load_balance),
-                        selected = strategy == RoutingStrategy.loadBalance,
-                        onSelect = {
-                            strategy = RoutingStrategy.loadBalance
-                            providerRepository.updateGroup(group.copy(strategy = RoutingStrategy.loadBalance))
-                        },
-                        showDivider = false,
-                    )
+                    // [T-routing-strategy-x] All seven strategies share one
+                    // choice-row template; labels live in RoutingStrategyUi so
+                    // group rows and this editor can never disagree. Only the
+                    // last row drops its divider.
+                    RoutingStrategy.entries.forEach { candidate ->
+                        SettingsChoiceRow(
+                            title = stringResource(RoutingStrategyUi.titleRes(candidate)),
+                            selected = strategy == candidate,
+                            onSelect = {
+                                strategy = candidate
+                                providerRepository.updateGroup(group.copy(strategy = candidate))
+                            },
+                            showDivider = candidate != RoutingStrategy.smart,
+                        )
+                    }
                 }
             }
 

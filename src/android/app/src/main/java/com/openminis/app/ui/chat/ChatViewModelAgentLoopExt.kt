@@ -3,6 +3,7 @@ package com.openminis.app.ui.chat
 import android.util.Log
 import androidx.lifecycle.viewModelScope
 import com.openminis.app.R
+import com.openminis.app.data.GroupRoutingState
 import com.openminis.app.data.ToolLimitPrefs
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMError
@@ -660,16 +661,14 @@ internal suspend fun ChatViewModel.runAgentLoop(
                         ),
                     )
                 })
-                // [T-first-event-watchdog] A hung relay below the provider
-                // never throws — the stream below will cancel itself and surface
-                // a TransientError, letting the existing retry chain take over.
-                val firstEventTimeoutMs = if ((if (currentModelSupportsReasoning) _thinkingLevel.value else ThinkingLevel.OFF).isEnabled) 90_000L else 45_000L
-                // [T-stream-stall-watchdog] Phase 2: once the stream is alive,
-                // silence longer than twice the first-event budget means
-                // progress stopped, not that it is slow to start. Derived from
-                // the existing constant so there is no second number to tune
-                // per vendor, and it replaces a 600s transport read timeout as
-                // the only bound on a mid-stream stall.
+                // [T-first-event-watchdog] A hung relay never throws — this stream
+                // cancels itself and surfaces a TransientError for the retry chain.
+                // [T-routing-strategy-x] First-token budget via GroupRoutingState so the main loop and the group-chat lane agree.
+                val firstEventTimeoutMs = GroupRoutingState.resolveFirstEventTimeoutMs(providerRepository,
+                    _selectedGroupId.value,
+                    (if (currentModelSupportsReasoning) _thinkingLevel.value else ThinkingLevel.OFF).isEnabled)
+                // [T-stream-stall-watchdog] Phase 2: silence past twice the first-event
+                // budget means the stream stalled, not started slow.
                 val streamIdleTimeoutMs = firstEventTimeoutMs * 2
                 currentProvider.streamMessage(
                     applyRequestImageBudget(requestHistory),
@@ -1149,9 +1148,8 @@ internal suspend fun ChatViewModel.runAgentLoop(
                     // [T-first-event-watchdog] The operator cancels itself; nothing to clean here.
                 }
             } catch (e: QueuedPromptInterrupt) {
-                // [T-android-queued-message-interrupt-thinking] Deliberate
-                // cut, NOT a provider failure — must precede the generic
-                // Exception catch so retry/fallback never sees it.
+                // [T-android-queued-message-interrupt-thinking] Deliberate cut,
+                // NOT a provider failure — must precede the generic catch.
                 settleInterruptedThinkingTurn(turn, allToolBlocks, generationRunId)
                 stallResumeContext = null
                 queuedPromptInterrupted = true
@@ -1165,6 +1163,8 @@ internal suspend fun ChatViewModel.runAgentLoop(
                 val isPermanentCapacity = actual is com.openminis.app.data.model.LLMError.ProviderError &&
                     (actual.detail.contains("[429]") ||
                         com.openminis.app.provider.HttpRetryAfter.isPermanentCapacityBody(actual.detail))
+                if (isRateLimit || isPermanentCapacity)
+                    GroupRoutingState.markServingCooldownFor(_selectedGroupId.value, actual)
                 // Auto-retry on transient network/5xx/transient errors on the SAME provider
                 // Same-provider retry for network / 5xx / 429 (honour Retry-After),
                 // then fall back to the next group member.

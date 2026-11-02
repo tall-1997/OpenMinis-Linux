@@ -147,6 +147,16 @@ enum class ThinkingLevel {
 enum class RoutingStrategy {
     fallback,
     loadBalance,
+    // [T-routing-strategy-x] Five additional scheduling strategies. Wire
+    // values are name-based (kotlinx.serialization default) so iOS export /
+    // import round-trips them as opaque strings; older builds degrade any
+    // unknown name to `fallback` via decodePersistedEnum / GroupsCollection's
+    // runCatching guards.
+    roundRobin,
+    weighted,
+    leastUsed,
+    quotaWindow,
+    smart,
 }
 
 /**
@@ -199,6 +209,33 @@ data class ModelGroup(
     // restores the previous value instead of snapping back to 128K. Default
     // null lets old JSON deserialize cleanly (kotlinx.serialization).
     var lastContextLimitTokens: Int? = null,
+    // [T-routing-strategy-x] Per-group scheduling knobs for the five new
+    // strategies. All optional with safe defaults so pre-x persisted JSON
+    // and Room rows deserialize cleanly (kotlinx.serialization fills the
+    // declared defaults when the keys are absent).
+    //
+    // - memberWeights: entryId -> integer weight for `weighted` routing.
+    //   Members absent from the map count as weight 1; weights below 1 are
+    //   clamped to 1. `weighted` with an empty map degrades to a uniform
+    //   wheel.
+    // - firstTokenTimeoutMs: per-group override for the first-event
+    //   watchdog budget. null = keep the default budget (45s chat / 90s
+    //   reasoning).
+    // - quotaWindow*: a rolling usage allowance for `quotaWindow` routing.
+    //   remaining = sends left in the current window; total = the refill
+    //   value; periodMs = window length; resetAt = epoch ms when the window
+    //   resets (UI sets it to "now + period" whenever the user edits the
+    //   total or remaining). While the counter is > 0 the primary (first)
+    //   member serves and each pick pre-deducts one; at 0 the router skips
+    //   the primary channel and serves the next member until resetAt, so a
+    //   spent daily free-tier channel degrades to the backup instead of
+    //   stalling the whole group.
+    var memberWeights: Map<String, Int> = emptyMap(),
+    var firstTokenTimeoutMs: Int? = null,
+    var quotaWindowRemaining: Int? = null,
+    var quotaWindowTotal: Int? = null,
+    var quotaWindowPeriodMs: Long? = null,
+    var quotaWindowResetAt: Long? = null,
 )
 
 @Serializable

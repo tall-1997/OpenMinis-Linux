@@ -1,6 +1,7 @@
 package com.openminis.app.ui.chat
 
 import androidx.lifecycle.viewModelScope
+import com.openminis.app.data.GroupRoutingState
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMMessage
 import com.openminis.app.data.model.LLMStreamChunk
@@ -159,8 +160,7 @@ internal suspend fun ChatViewModel.runGroupChat(provider: LLMProvider, closing: 
                 spoken.add(0, GroupChat.Line(hostName, opening))
             }
         }
-        // [group-chat-debate] 排队可视化：先给全员预建“排队中”气泡，
-        // 轮到谁谁变思考态，队列一眼可见；没被轮到的（关门截断）收尾清掉。
+        // [group-chat-debate] 排队可视化：预建全员“排队中”气泡，轮到谁谁变思考态，没被轮到的收尾清掉。
         val queuedText = context.getString(com.openminis.app.R.string.group_chat_queued)
         val queueIds = speakers.associate { it.name to UUID.randomUUID().toString() }
         for (member in speakers) {
@@ -180,8 +180,7 @@ internal suspend fun ChatViewModel.runGroupChat(provider: LLMProvider, closing: 
         }
         clearGroupQueue(queueIds)
 
-        // [group-chat-debate] 答辩轮：按序补刀（可多点、500 字内、可 PASS）。
-        // 收敛规则：整圈没人有新观点（全 PASS）即停；上限 4 圈兜底；关门立即停。
+        // [group-chat-debate] 答辩轮：按序补刀（可多点、500 字内、可 PASS）；整圈没人有新观点即停，上限 4 圈兜底，关门立即停。
         var debateRound = 0
         while (debateRound < 4 && !groupChatCloseRequested) {
             debateRound++
@@ -217,10 +216,8 @@ internal suspend fun ChatViewModel.runGroupChat(provider: LLMProvider, closing: 
                 )
             }
         } catch (e: TimeoutCancellationException) {
-            // [T-groupchat-host-deadline] A stalled summary must not wedge the
-            // close flow — fall into the failure branch below, which now also
-            // force-disables the group chat so the session is never stuck
-            // "closing" with the request flag held true.
+            // [T-groupchat-host-deadline] A stalled summary must not wedge the close flow:
+            // the failure branch force-disables the group chat, never stuck "closing".
             null
         }
         if (!summary.isNullOrBlank()) {
@@ -411,14 +408,18 @@ private suspend fun ChatViewModel.speakVisible(
     bubbleId: String? = null,
 ): String {
     if (groupChatCloseRequested && allowPass) return ""
-    // [group-chat-debate] 排队可视化：外部预建的“排队中”气泡可传入复用，
-    // 轮到该成员时同一气泡从排队态平滑切换到思考态。
+    // [T-routing-strategy-x] Group-level first-token budget, same resolver as the main agent loop.
+    val groupFirstTokenMs = GroupRoutingState.firstTokenOverrideMs(
+        providerRepository, _selectedGroupId.value,
+    )
+    // [group-chat-debate] 排队可视化：外部预建的“排队中”气泡可传入复用，轮到该成员时同一气泡平滑切换到思考态。
     val id = bubbleId ?: UUID.randomUUID().toString()
     if (!deferBubble) upsertGroupBubble(id, speaker, placeholder, analyzing = true, vendor = vendor)
     val text = try {
         var spoken = speakModel(
             provider, system, user, tools, toolGate, thinkingLevel,
             stopWhenClosing = allowPass, maxTokens = maxTokens,
+            firstTokenTimeoutMs = groupFirstTokenMs,
         ) { block ->
             showGroupStatus(id, speaker, vendor, block)
         }
@@ -432,6 +433,7 @@ private suspend fun ChatViewModel.speakVisible(
                 thinkingLevel = thinkingLevel,
                 stopWhenClosing = false,
                 maxTokens = maxTokens,
+                firstTokenTimeoutMs = groupFirstTokenMs,
             ) { block ->
                 showGroupStatus(id, speaker, vendor, block)
             }
@@ -451,8 +453,7 @@ private suspend fun ChatViewModel.speakVisible(
                 vendor = vendor,
             )
         } else if (!deferBubble) {
-            // [group-chat-empty-fix] 空白发言不再静默删气泡：留痕，让“过程可见结果为空”
-            // 可以被看见和排查。
+            // [group-chat-empty-fix] 空白发言不再静默删气泡：留痕，让“过程可见结果为空”可被排查。
             upsertGroupBubble(
                 id,
                 speaker,
@@ -490,13 +491,13 @@ internal suspend fun ChatViewModel.speakModel(
     thinkingLevel: com.openminis.app.data.model.ThinkingLevel,
     stopWhenClosing: Boolean,
     maxTokens: Int = 4096,
+    firstTokenTimeoutMs: Long? = null,
     onStatus: suspend (AssistantBlock) -> Unit,
 ): String {
     val history = mutableListOf(LLMMessage(role = LLMMessage.Role.USER, content = user))
     val report = StringBuilder()
     var lastThinking = ""
-    // [group-chat-empty-fix] 轮次上限 3→6，另加 3 分钟总时长兜底：工具密集的发言
-    // 以前跑满 3 轮就只剩思考兑底。思考档不降级，靠预算和记账给正文留位置。
+    // [group-chat-empty-fix] 轮次上限 3→6，另加 3 分钟总时长兜底：以前工具密集的发言跑满 3 轮只剩思考兑底；思考档不降级，靠预算记账给正文留位置。
     val deadline = android.os.SystemClock.elapsedRealtime() + 180_000L
     var round = 0
     while (round < 6 && android.os.SystemClock.elapsedRealtime() < deadline) {
@@ -508,10 +509,10 @@ internal suspend fun ChatViewModel.speakModel(
         val thinking = StringBuilder()
         val calls = mutableListOf<Triple<String, String, JSONObject>>()
         var lastStatusAt = 0L
-        // [T-stream-stall-watchdog] Same two-phase bound as the main agent
-        // loop: a group speaker whose stream goes quiet mid-sentence must not
-        // wedge the round for the length of a transport read timeout.
-        val firstEventTimeoutMs = if (thinkingLevel.isEnabled) 90_000L else 45_000L
+        // [T-stream-stall-watchdog] Same two-phase bound as the main agent loop: a speaker
+        // whose stream goes quiet mid-sentence must not wedge the round for a read timeout.
+        // [T-routing-strategy-x] Group-level firstTokenTimeoutMs override, resolved once in speakVisible and passed down.
+        val firstEventTimeoutMs = firstTokenTimeoutMs ?: if (thinkingLevel.isEnabled) 90_000L else 45_000L
         provider.streamMessage(
             messages = history,
             systemPrompt = system,
@@ -585,8 +586,7 @@ internal suspend fun ChatViewModel.speakModel(
 }
 
 /**
- * [group-chat-debate] 清掉仍是排队/思考态的占位气泡（被关门截断、没轮到发言的成员）。
- * 已定型（正文/PASS/留痕）的气泡不受影响。
+ * [group-chat-debate] 清掉仍是排队/思考态的占位气泡（被关门截断、没轮到发言的成员）；已定型的不受影响。
  */
 private suspend fun ChatViewModel.clearGroupQueue(ids: Map<String, String>) {
     withContext(Dispatchers.Main) {
