@@ -34,7 +34,7 @@ class ChatRepository(
     internal val filesDir: File? = null,
     // [T-msg-version-archive] Optional so JVM tests that never truncate keep
     // constructing with the old three-arg shape.
-    private val versionDao: MessageVersionDao? = null,
+    internal val versionDao: MessageVersionDao? = null,
     // [T-archive-truncate-txn] DB handle for the archive+truncate transaction; null → sequential fallback.
     private val db: AppDatabase? = null,
 ) {
@@ -531,7 +531,12 @@ class ChatRepository(
         return result
     }
 
-    suspend fun deleteMessagesAfter(sessionId: String, keepCount: Int) {
+    /**
+     * @return true when the rows were deleted (or when the version store is
+     * absent and the raw delete ran); false when archiving failed and the
+     * truncation was aborted with the rows kept.
+     */
+    suspend fun deleteMessagesAfter(sessionId: String, keepCount: Int): Boolean {
         // [T-msg-version-archive] Snapshot the doomed rows into
         // message_versions BEFORE deleting them — re-generating a reply must
         // archive the old version, not destroy it (cuplivo parity).
@@ -544,7 +549,7 @@ class ChatRepository(
         val vdao = versionDao
         if (vdao == null) {
             dao.deleteMessagesAfter(sessionId, keepCount)
-            return
+            return true
         }
         val archived = runCatching { archiveVersionsFor(vdao, sessionId, keepCount) }
         val versions = archived.getOrNull()
@@ -554,7 +559,7 @@ class ChatRepository(
                 "[T-msg-version-archive] archiving failed; truncation ABORTED so no message is lost without its archive: " +
                     "${archived.exceptionOrNull()?.message}",
             )
-            return
+            return false
         }
         val dbRef = db
         if (dbRef != null) {
@@ -566,6 +571,7 @@ class ChatRepository(
             if (versions.isNotEmpty()) vdao.insertAll(versions)
             dao.deleteMessagesAfter(sessionId, keepCount)
         }
+        return true
     }
 
     private suspend fun archiveVersionsFor(
@@ -577,18 +583,10 @@ class ChatRepository(
         if (doomed.isEmpty()) return emptyList()
         val nowMs = System.currentTimeMillis()
         // [T-archive-batch-version-index] ONE grouped MAX instead of one
-        // `SELECT MAX(version_index) … WHERE message_id = ?` per doomed row: a
-        // regenerate-from-turn-1 truncation archives the whole tail (~290 rows
-        // observed) and ran ~290 individual queries inside the single
-        // archive+truncate transaction.
-        //
-        // Scoping by session_id is equivalent to the old global lookup: a
-        // version row's session_id is copied from its source message, a message
-        // id belongs to exactly one session (session forks mint new ids, a
-        // backup re-import writes the same id back into the same session), and
-        // ids are random UUIDs. `doomed` is read off `messages`, whose PK is the
-        // id, so each message appears once and the per-message counter needs no
-        // in-batch bumping.
+        // `SELECT MAX(version_index) WHERE message_id=?` per doomed row (~290
+        // rows in a turn-1 truncation = ~290 queries before). Scoping by
+        // session_id equals the old global lookup: a message id belongs to
+        // exactly one session (forks/backup re-import mint the same ids).
         val baseIndexes = vdao.maxVersionIndexesForSession(sessionId)
             .associate { it.messageId to it.maxIndex }
         return doomed.map { it.toVersionEntity(baseIndexes[it.id] ?: 0, nowMs) }
@@ -598,11 +596,11 @@ class ChatRepository(
      * Single-row archive with a fresh lookup — the trimmed-row snapshot in
      * [updateMessageParts], where there is no batch to amortise.
      */
-    private suspend fun MessageEntity.toVersionEntity(vdao: MessageVersionDao, nowMs: Long): MessageVersionEntity =
+    internal suspend fun MessageEntity.toVersionEntity(vdao: MessageVersionDao, nowMs: Long): MessageVersionEntity =
         toVersionEntity(vdao.maxVersionIndex(id), nowMs)
 
     /** [baseVersionIndex] is the message's current highest archived version. */
-    private fun MessageEntity.toVersionEntity(baseVersionIndex: Int, nowMs: Long): MessageVersionEntity =
+    internal fun MessageEntity.toVersionEntity(baseVersionIndex: Int, nowMs: Long): MessageVersionEntity =
         MessageVersionEntity(
             id = UUID.randomUUID().toString(),
             messageId = id,

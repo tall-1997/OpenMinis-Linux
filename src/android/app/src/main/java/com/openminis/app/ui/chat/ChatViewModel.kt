@@ -31,6 +31,7 @@ import com.openminis.app.data.model.hasImageInput
 import com.openminis.app.data.model.ThinkingLevel
 import com.openminis.app.R
 import com.openminis.app.data.repository.ChatRepository
+import com.openminis.app.data.repository.deleteAfterWithPairRepair
 import com.openminis.app.data.repository.MemoryRepository
 import com.openminis.app.data.repository.ProviderRepository
 import com.openminis.app.data.repository.MultiAgentSettingsRepository
@@ -4459,22 +4460,16 @@ class ChatViewModel(
                 for (i in 0 until cutPartIdx) keptArr.put(srcArr.get(i))
 
                 if (cutPartIdx == 0) {
-                    // Nothing precedes the target in its DB row — trimming would
-                    // leave an empty assistant row. Drop the whole row instead
-                    // (keepCount = its sort_order). The UI degenerate guard
-                    // above normally catches this, but a merged-bubble layout
-                    // could route a first-in-row tool_use here; handle it so we
-                    // never persist a phantom empty assistant message.
-                    chatRepository.deleteMessagesAfter(sid, row.sortOrder)
+                    // Nothing precedes the target in its DB row — trimming would leave
+                    // an empty row, so drop it; the pair-repair pass runs in the same call.
+                    chatRepository.deleteAfterWithPairRepair(sid, row.sortOrder)
                     Log.i(TAG, "rerunFromToolBlock cut at row start (empty trim) tuId=${targetToolUseId.take(12)} keepCount=${row.sortOrder} row=${row.id.take(8)}")
                 } else {
-                    // Delete every row after the trimmed assistant row, then
-                    // rewrite the trimmed row in place. deleteMessagesAfter
-                    // keeps rows with sort_order < keepCount, so keepCount =
-                    // thisRow.sortOrder + 1 drops the following tool_result row
-                    // + all later turns while keeping (then overwriting) this one.
-                    chatRepository.deleteMessagesAfter(sid, row.sortOrder + 1)
-                    chatRepository.updateMessageParts(row.id, keptArr.toString())
+                    // Cut after the trimmed row (keepCount = sortOrder + 1): drops
+                    // the tool_result row + later turns, then persists the trim via
+                    // a keptOverride — repaired for parts whose results died too.
+                    chatRepository.deleteAfterWithPairRepair(sid, row.sortOrder + 1,
+                        keptOverrides = listOf(row.id to keptArr.toString()))
                     Log.i(TAG, "rerunFromToolBlock sub-message cut tuId=${targetToolUseId.take(12)} keepCount=${row.sortOrder + 1} partIdx=$cutPartIdx trimmedRow=${row.id.take(8)}")
                 }
 
@@ -4653,7 +4648,7 @@ class ChatViewModel(
             }
             val anchorSortOrder = anchor.getOrNull()
             if (anchorSortOrder != null) {
-                chatRepository.deleteMessagesAfter(sid, anchorSortOrder + 1)
+                chatRepository.deleteAfterWithPairRepair(sid, anchorSortOrder + 1)
             } else {
                 AppLogger.warning(
                     TAG,
