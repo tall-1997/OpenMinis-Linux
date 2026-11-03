@@ -45,7 +45,7 @@ class SessionGoalMigrationTest {
     }
 
     @Test fun migration19To20CreatesUsablePersistentGoalsTable() {
-        AppDatabase.MIGRATION_19_20.migrate(supportDb)
+        AppMigrations.MIGRATION_19_20.migrate(supportDb)
         supportDb.execSQL(
             "INSERT INTO session_goals (session_id, objective, status, tokens_used, elapsed_ms, blocked_count, created_at, updated_at) " +
                 "VALUES ('session','ship feature','active',12,500,0,1,2)",
@@ -58,12 +58,12 @@ class SessionGoalMigrationTest {
     }
 
     @Test fun migration20To19KeepsGoalData() {
-        AppDatabase.MIGRATION_19_20.migrate(supportDb)
+        AppMigrations.MIGRATION_19_20.migrate(supportDb)
         supportDb.execSQL(
             "INSERT INTO session_goals (session_id, objective, status, tokens_used, elapsed_ms, blocked_count, created_at, updated_at) " +
                 "VALUES ('session','keep me','active',0,0,0,1,1)",
         )
-        AppDatabase.MIGRATION_20_19.migrate(supportDb)
+        AppMigrations.MIGRATION_20_19.migrate(supportDb)
         supportDb.query("SELECT objective FROM session_goals WHERE session_id='session'").use { cursor ->
             assertTrue(cursor.moveToFirst())
             assertEquals("keep me", cursor.getString(0))

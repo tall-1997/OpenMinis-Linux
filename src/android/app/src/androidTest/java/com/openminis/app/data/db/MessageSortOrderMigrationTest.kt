@@ -59,7 +59,7 @@ class MessageSortOrderMigrationTest {
     }
 
     @Test fun migrationRenumbersDuplicatesDeterministicallyAndEnforcesUniqueCursor() {
-        AppDatabase.MIGRATION_20_21.migrate(db)
+        AppMigrations.MIGRATION_20_21.migrate(db)
         db.query("SELECT id, sort_order FROM messages WHERE session_id='s' ORDER BY sort_order").use { c ->
             val rows = mutableListOf<Pair<String, Int>>()
             while (c.moveToNext()) rows += c.getString(0) to c.getInt(1)

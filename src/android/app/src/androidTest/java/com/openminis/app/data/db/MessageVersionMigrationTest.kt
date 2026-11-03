@@ -151,7 +151,7 @@ class MessageVersionMigrationTest {
 
     @Test
     fun migration21To22CreatesUsableMessageVersionsTable() {
-        AppDatabase.MIGRATION_21_22.migrate(supportDb)
+        AppMigrations.MIGRATION_21_22.migrate(supportDb)
         // The table must exist before anything is inserted into it.
         val tableExists = supportDb.query(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='message_versions'",
@@ -176,7 +176,7 @@ class MessageVersionMigrationTest {
 
     @Test
     fun migration21To22CascadesOnSessionDelete() {
-        AppDatabase.MIGRATION_21_22.migrate(supportDb)
+        AppMigrations.MIGRATION_21_22.migrate(supportDb)
         insertSession("s1")
         supportDb.execSQL(
             "INSERT INTO message_versions (id, message_id, session_id, version_index, role, " +
@@ -195,8 +195,8 @@ class MessageVersionMigrationTest {
 
     @Test
     fun migration22To21DropsTable() {
-        AppDatabase.MIGRATION_21_22.migrate(supportDb)
-        AppDatabase.MIGRATION_22_21.migrate(supportDb)
+        AppMigrations.MIGRATION_21_22.migrate(supportDb)
+        AppMigrations.MIGRATION_22_21.migrate(supportDb)
         val exists = supportDb.query(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='message_versions'",
         ).use { cursor -> cursor.moveToFirst() }

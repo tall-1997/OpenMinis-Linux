@@ -37,10 +37,34 @@ import sys
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
-APP_DB = os.path.join(
+DB_DIR = os.path.join(
     REPO,
-    "src/android/app/src/main/java/com/openminis/app/data/db/AppDatabase.kt",
+    "src/android/app/src/main/java/com/openminis/app/data/db",
 )
+
+# The package holds two independent Room databases, and their migration lists
+# reuse the same MIGRATION_a_b names for different schemas (ProviderDatabase's
+# 3→4 creates provider_thinking_rules; AppDatabase's 3→4 creates
+# compact_markers). Blanket-scanning the directory therefore lets one database
+# overwrite the other's replay. Name AppDatabase's migration sources explicitly;
+# a missing entry fails loudly instead of silently replaying the wrong schema.
+APP_DB_SOURCES = ("AppDatabase.kt", "AppMigrations.kt")
+
+
+def load_migration_sources():
+    """AppDatabase's migration text, from every file that contributes DDL.
+
+    Migrations were split out of AppDatabase.kt into AppMigrations.kt when the
+    class hit the file-size cap; the gate follows the code rather than pinning
+    a single filename.
+    """
+    missing = [n for n in APP_DB_SOURCES if not os.path.exists(os.path.join(DB_DIR, n))]
+    if missing:
+        raise SystemExit(
+            "schema drift: migration sources missing: %s — update APP_DB_SOURCES"
+            % ", ".join(missing)
+        )
+    return "\n".join(open(os.path.join(DB_DIR, n), encoding="utf-8").read() for n in APP_DB_SOURCES)
 SCHEMAS_DIR = os.path.join(REPO, "src/android/app/schemas/com.openminis.app.data.db.AppDatabase")
 
 # MIGRATION_A_B = object : Migration(A, B) { ... }
@@ -219,7 +243,7 @@ def newest_and_oldest():
 
 
 def main():
-    source = open(APP_DB, encoding="utf-8").read()
+    source = load_migration_sources()
     sqls = migration_sqls(source)
     replayed = replay(sqls)
     (oldest, _), (expected, newest_path) = newest_and_oldest()

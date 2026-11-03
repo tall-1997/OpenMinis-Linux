@@ -100,7 +100,7 @@ class AutomationMigrationTest {
 
     @Test
     fun migration22To23CreatesBothTables() {
-        AppDatabase.MIGRATION_22_23.migrate(supportDb)
+        AppMigrations.MIGRATION_22_23.migrate(supportDb)
         assertTrue("MIGRATION_22_23 must create automation_rules", tableExists("automation_rules"))
         assertTrue("MIGRATION_22_23 must create automation_runs", tableExists("automation_runs"))
         val rules = columnNames("automation_rules")
@@ -115,7 +115,7 @@ class AutomationMigrationTest {
 
     @Test
     fun migration22To23BuildsTheHistoryIndexRoomExpects() {
-        AppDatabase.MIGRATION_22_23.migrate(supportDb)
+        AppMigrations.MIGRATION_22_23.migrate(supportDb)
         val (cols, unique) = indexOn("automation_runs", "index_automation_runs_rule_id_fired_at")
             ?: error("index_automation_runs_rule_id_fired_at not created by MIGRATION_22_23")
         assertEquals(
@@ -128,7 +128,7 @@ class AutomationMigrationTest {
 
     @Test
     fun migration22To23ThenInsertAndQueryRoundTrip() {
-        AppDatabase.MIGRATION_22_23.migrate(supportDb)
+        AppMigrations.MIGRATION_22_23.migrate(supportDb)
         supportDb.execSQL(
             "INSERT INTO automation_runs (rule_id, fired_at, outcome, session_id, preview) " +
                 "VALUES ('r1', 100, 'fired', 's1', 'p')",
@@ -145,13 +145,13 @@ class AutomationMigrationTest {
 
     @Test
     fun migration23To22KeepsRows() {
-        AppDatabase.MIGRATION_22_23.migrate(supportDb)
+        AppMigrations.MIGRATION_22_23.migrate(supportDb)
         supportDb.execSQL(
             "INSERT INTO automation_runs (rule_id, fired_at, outcome) VALUES ('r1', 100, 'fired')",
         )
         // MIGRATION_23_22 is intentionally a no-op: older builds ignore extra
         // tables, and the rows must survive a version round trip.
-        AppDatabase.MIGRATION_23_22.migrate(supportDb)
+        AppMigrations.MIGRATION_23_22.migrate(supportDb)
         supportDb.query(
             "SELECT COUNT(*) FROM automation_runs WHERE rule_id='r1'",
         ).use { c ->

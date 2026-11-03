@@ -128,7 +128,7 @@ class MessageAttributionMigrationTest {
                 "VALUES ('m1','s1','assistant','[]',100,'{\"inputTokens\":7}',0)"
         )
 
-        applyMigration(AppDatabase.MIGRATION_11_12)
+        applyMigration(AppMigrations.MIGRATION_11_12)
 
         db.rawQuery("SELECT token_usage, model_id FROM messages WHERE id='m1'", null).use { c ->
             assertTrue("the pre-existing row must still be there", c.moveToFirst())
@@ -142,7 +142,7 @@ class MessageAttributionMigrationTest {
     /** The four columns must exist and be writable after upgrading. */
     @Test
     fun upgrade11To12_addsWritableSnapshotColumns() {
-        applyMigration(AppDatabase.MIGRATION_11_12)
+        applyMigration(AppMigrations.MIGRATION_11_12)
 
         assertTrue(
             columnNames().containsAll(
@@ -179,10 +179,10 @@ class MessageAttributionMigrationTest {
             "INSERT INTO messages (id, session_id, role, parts_json, created_at, token_usage, sort_order) " +
                 "VALUES ('m1','s1','assistant','[]',100,'{\"inputTokens\":7}',0)"
         )
-        applyMigration(AppDatabase.MIGRATION_11_12)
+        applyMigration(AppMigrations.MIGRATION_11_12)
         db.execSQL("UPDATE messages SET model_id='grok-4.5' WHERE id='m1'")
 
-        applyMigration(AppDatabase.MIGRATION_12_11)
+        applyMigration(AppMigrations.MIGRATION_12_11)
 
         db.rawQuery("SELECT COUNT(*) FROM messages", null).use { c ->
             assertTrue(c.moveToFirst())
@@ -205,8 +205,8 @@ class MessageAttributionMigrationTest {
      */
     @Test
     fun downgrade12To11_oldStyleInsertStillWorks() {
-        applyMigration(AppDatabase.MIGRATION_11_12)
-        applyMigration(AppDatabase.MIGRATION_12_11)
+        applyMigration(AppMigrations.MIGRATION_11_12)
+        applyMigration(AppMigrations.MIGRATION_12_11)
 
         db.execSQL(
             "INSERT INTO messages (id, session_id, role, parts_json, created_at, sort_order) " +
@@ -223,8 +223,8 @@ class MessageAttributionMigrationTest {
     /** `SELECT *` (used by Room DAOs) must tolerate the extra columns. */
     @Test
     fun downgrade12To11_selectStarStillReadsOldColumns() {
-        applyMigration(AppDatabase.MIGRATION_11_12)
-        applyMigration(AppDatabase.MIGRATION_12_11)
+        applyMigration(AppMigrations.MIGRATION_11_12)
+        applyMigration(AppMigrations.MIGRATION_12_11)
         db.execSQL(
             "INSERT INTO messages (id, session_id, role, parts_json, created_at, sort_order) " +
                 "VALUES ('m3','s3','user','[]',5,0)"
