@@ -1981,4 +1981,12 @@
     <string name="mcp_approval_executed">実行済み</string>
     <string name="mcp_approval_needs_server">サーバー停止中 — 実行するには起動してください</string>
     <string name="mcp_approval_restart_notice">再起動により承認待ち %1$d 件が失効しました</string>
+    <string name="context_saver_title">コンテキスト節約</string>
+    <string name="context_saver_footer">リクエストが大きくなると、直近の数件を除く古いツール出力を1行のプレースホルダーに畳みます。削除は行いません。畳んだ結果は保存先パスを保持するか、ツールの再実行を促します。</string>
+    <string name="context_saver_off">オフ</string>
+    <string name="context_saver_balanced">バランス</string>
+    <string name="context_saver_aggressive">積極的</string>
+    <string name="token_usage_section_context_saver">コンテキスト節約</string>
+    <string name="token_usage_saver_folded">畳んだツール結果</string>
+    <string name="token_usage_saver_saved">今回の節約</string>
 </resources>

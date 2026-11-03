@@ -1984,4 +1984,12 @@
     <string name="mcp_approval_executed">Çalıştırıldı</string>
     <string name="mcp_approval_needs_server">Sunucu durdu — çalıştırmak için başlatın</string>
     <string name="mcp_approval_restart_notice">Yeniden başlatma %1$d bekleyen onayı geçersiz kıldı</string>
+    <string name="context_saver_title">Bağlam tasarrufu</string>
+    <string name="context_saver_footer">İstek büyüdüğünde son sonuçların ötesindeki eski araç çıktılarını tek satırlık yer tutuculara katlar. Hiçbir şey silinmez - katlanan sonuç dosya yolunu korur veya aracı yeniden çalıştırmayı söyler.</string>
+    <string name="context_saver_off">Kapalı</string>
+    <string name="context_saver_balanced">Dengeli</string>
+    <string name="context_saver_aggressive">Agresif</string>
+    <string name="token_usage_section_context_saver">Bağlam tasarrufu</string>
+    <string name="token_usage_saver_folded">Katlanan araç sonuçları</string>
+    <string name="token_usage_saver_saved">Bu turda tasarruf</string>
 </resources>

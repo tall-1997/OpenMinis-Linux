@@ -1984,4 +1984,12 @@
     <string name="mcp_approval_executed">เรียกใช้แล้ว</string>
     <string name="mcp_approval_needs_server">เซิร์ฟเวอร์หยุดอยู่ — เริ่มเพื่อเรียกใช้</string>
     <string name="mcp_approval_restart_notice">การรีสตาร์ทล้างคำอนุมัติที่รอดำเนินการ %1$d รายการ</string>
+    <string name="context_saver_title">ประหยัดบริบท</string>
+    <string name="context_saver_footer">พับเอาต์พุตเครื่องมือเก่าที่อยู่เกินผลลัพธ์ล่าสุดให้เป็นตัวยึดบรรทัดเดียวเมื่อคำขอใหญ่ขึ้น ไม่มีการลบใด ๆ ผลลัพธ์ที่พับแล้วยังคงพาธไฟล์หรือบอกให้เรียกเครื่องมือใหม่</string>
+    <string name="context_saver_off">ปิด</string>
+    <string name="context_saver_balanced">สมดุล</string>
+    <string name="context_saver_aggressive">เชิงรุก</string>
+    <string name="token_usage_section_context_saver">ประหยัดบริบท</string>
+    <string name="token_usage_saver_folded">ผลลัพธ์ที่พับแล้ว</string>
+    <string name="token_usage_saver_saved">ประหยัดในเทิร์นนี้</string>
 </resources>

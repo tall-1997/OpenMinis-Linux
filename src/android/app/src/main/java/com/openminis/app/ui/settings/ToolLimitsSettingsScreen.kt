@@ -1,13 +1,22 @@
 package com.openminis.app.ui.settings
 
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.openminis.app.R
+import com.openminis.app.data.ContextSaverPrefs
 import com.openminis.app.data.ToolLimitPrefs
 
 @Composable
@@ -26,6 +35,10 @@ fun ToolLimitsSettingsScreen(onBack: () -> Unit) {
     val automatic = remember(revision) { ToolLimitPrefs.autoConcurrency() }
     val heavy = remember(revision) { ToolLimitPrefs.heavyConcurrency() }
     val queue = remember(revision) { ToolLimitPrefs.queueTimeoutSec() }
+    // [T-tool-result-aging] Independent prefs object, so it carries its own
+    // revision counter rather than piggy-backing on the tool-limit one.
+    val saverRevision by ContextSaverPrefs.revision.collectAsStateWithLifecycle()
+    val saverMode = remember(saverRevision) { ContextSaverPrefs.mode() }
 
     // Nested under multi-agent (and the tool-limits deep link), not a
     // first-level settings page. 1.36.16 keeps the back arrow here; 1.36.37
@@ -115,7 +128,42 @@ fun ToolLimitsSettingsScreen(onBack: () -> Unit) {
                 showDivider = false,
             )
         }
+        // [T-tool-result-aging] History-side token saver. A segmented control
+        // (not a stepper): three qualitative levels, matching iOS
+        // UISegmentedControl rhythm and keeping the row count flat.
+        SettingsSection(
+            header = stringResource(R.string.context_saver_title),
+            footer = stringResource(R.string.context_saver_footer),
+        ) {
+            SingleChoiceSegmentedButtonRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+            ) {
+                saverModes.forEachIndexed { index, mode ->
+                    SegmentedButton(
+                        selected = saverMode == mode,
+                        onClick = { ContextSaverPrefs.setMode(mode) },
+                        shape = SegmentedButtonDefaults.itemShape(index, saverModes.size),
+                    ) {
+                        Text(text = stringResource(saverModeLabel(mode)), maxLines = 1)
+                    }
+                }
+            }
+        }
     }
+}
+
+private val saverModes = listOf(
+    ContextSaverPrefs.Mode.OFF,
+    ContextSaverPrefs.Mode.BALANCED,
+    ContextSaverPrefs.Mode.AGGRESSIVE,
+)
+
+private fun saverModeLabel(mode: ContextSaverPrefs.Mode): Int = when (mode) {
+    ContextSaverPrefs.Mode.OFF -> R.string.context_saver_off
+    ContextSaverPrefs.Mode.AGGRESSIVE -> R.string.context_saver_aggressive
+    ContextSaverPrefs.Mode.BALANCED -> R.string.context_saver_balanced
 }
 
 @Composable

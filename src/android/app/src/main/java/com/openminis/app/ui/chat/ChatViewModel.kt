@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.compose.foundation.lazy.LazyListState
+import com.openminis.app.agent.ContextSaverRuntime
 import com.openminis.app.agent.ToolLoopDetector
 import com.openminis.app.browser.BrowserActionInput
 import com.openminis.app.browser.BrowserTabPool
@@ -3359,21 +3360,14 @@ class ChatViewModel(
     /**
      * [T-android-compact-orphan-toolcall] The outgoing history, with tool
      * call/result pairing repaired. Every request goes through here — see
-     * [dropOrphanedToolParts] for why the sweep exists and what it can and
-     * cannot fix.
+     * [dropOrphanedToolParts] for why the sweep exists and what it cannot fix.
      */
     internal fun effectiveAgentHistory(): List<LLMMessage> {
         val repaired = dropOrphanedToolParts(effectiveAgentHistoryUncounted())
-        val steered = if (personaHistorySteering) {
-            com.openminis.app.agent.PersonaPromptLogic.applyHistorySteering(repaired)
-        } else {
-            repaired
-        }
-        // Rows trimmed out of the model window stay as a clipped excerpt.
-        // A compact summary, when present, still replaces the older prefix;
-        // this digest covers what this process actually dropped.
+        val steered = if (personaHistorySteering) com.openminis.app.agent.PersonaPromptLogic.applyHistorySteering(repaired) else repaired
+        // Rows trimmed out of the window stay as a clipped excerpt; the digest covers what this process dropped.
         // [T-message-transformers] 发送前清洗 assistant 文本里的思考残留。
-        return HistoryDigest.inject(
+        val cleaned = HistoryDigest.inject(
             steered,
             HistoryDigest.render(llmDigestLines, llmDigestOmitted),
         ).map { msg ->
@@ -3381,6 +3375,8 @@ class ChatViewModel(
                 msg.copy(content = com.openminis.app.agent.MessageTransformerChain.apply(msg.content))
             } else msg
         }
+        // [T-tool-result-aging] Fold tool output the model already consumed.
+        return ContextSaverRuntime.age(cleaned, currentModelContextWindow ?: 0, _lastTurnContextTokens.value)
     }
 
     // dropOrphanedToolParts lives in ChatViewModelHistoryExt.kt

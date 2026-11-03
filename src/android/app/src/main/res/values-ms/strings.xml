@@ -1984,4 +1984,12 @@
     <string name="mcp_approval_executed">Dilaksanakan</string>
     <string name="mcp_approval_needs_server">Pelayan tidak berjalan — mulakan untuk menjalankan</string>
     <string name="mcp_approval_restart_notice">Mula semula membatalkan %1$d kelulusan belum selesai</string>
+    <string name="context_saver_title">Jimat konteks</string>
+    <string name="context_saver_footer">Melipat output alat lama di luar beberapa hasil terakhir menjadi pemegang tempat satu baris apabila permintaan membesar. Tiada apa dipadam - hasil terlipat mengekalkan laluan fail atau memberitahu untuk menjalankan semula alat.</string>
+    <string name="context_saver_off">Mati</string>
+    <string name="context_saver_balanced">Seimbang</string>
+    <string name="context_saver_aggressive">Agresif</string>
+    <string name="token_usage_section_context_saver">Jimat konteks</string>
+    <string name="token_usage_saver_folded">Hasil alat terlipat</string>
+    <string name="token_usage_saver_saved">Dijimat giliran ini</string>
 </resources>

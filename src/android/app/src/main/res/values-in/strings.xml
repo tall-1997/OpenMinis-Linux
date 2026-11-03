@@ -1989,4 +1989,12 @@
     <string name="mcp_approval_executed">Dijalankan</string>
     <string name="mcp_approval_needs_server">Server tidak berjalan — mulai untuk menjalankan</string>
     <string name="mcp_approval_restart_notice">Restart membatalkan %1$d persetujuan tertunda</string>
+    <string name="context_saver_title">Hemat konteks</string>
+    <string name="context_saver_footer">Melipat keluaran alat lama di luar beberapa hasil terakhir menjadi placeholder satu baris saat permintaan membesar. Tidak ada yang dihapus - hasil terlipat menyimpan jalur berkasnya atau menyarankan menjalankan ulang alat.</string>
+    <string name="context_saver_off">Mati</string>
+    <string name="context_saver_balanced">Seimbang</string>
+    <string name="context_saver_aggressive">Agresif</string>
+    <string name="token_usage_section_context_saver">Hemat konteks</string>
+    <string name="token_usage_saver_folded">Hasil alat terlipat</string>
+    <string name="token_usage_saver_saved">Dihemat giliran ini</string>
 </resources>

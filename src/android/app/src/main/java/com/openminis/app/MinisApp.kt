@@ -262,12 +262,11 @@ class MinisApp : Application(), ImageLoaderFactory {
         // never pass through a ViewModel.
         com.openminis.app.data.FastModePrefs.prime(this)
 
-        // Warm the auto-compact flag the same way: the pre-send context check
-        // and the in-chat one-tap opt-in both read it from places that have no
-        // Activity context.
+        // The pre-send context check and the in-chat opt-in read this with no Activity context.
         com.openminis.app.data.AutoCompactPrefs.prime(this)
         com.openminis.app.data.PlanDiscussionPrefs.prime(this)
         com.openminis.app.data.ToolLimitPrefs.prime(this)
+        com.openminis.app.data.ContextSaverPrefs.prime(this) // [T-tool-result-aging] send path reads it per request
         com.openminis.app.security.SecurityGateHolder.load(this)
 
         // T283: install NDK signal handler for native crashes (SIGSEGV/

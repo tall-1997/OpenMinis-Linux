@@ -1992,4 +1992,12 @@
     <string name="mcp_approval_executed">Выполнено</string>
     <string name="mcp_approval_needs_server">Сервер остановлен — запустите для выполнения</string>
     <string name="mcp_approval_restart_notice">Перезапуск отменил %1$d ожидающих подтверждений</string>
+    <string name="context_saver_title">Экономия контекста</string>
+    <string name="context_saver_footer">Сворачивает старый вывод инструментов, кроме последних результатов, в однострочные заглушки, когда запрос разрастается. Ничего не удаляется: свёрнутый результат сохраняет путь к файлу или предлагает повторный запуск инструмента.</string>
+    <string name="context_saver_off">Выкл.</string>
+    <string name="context_saver_balanced">Сбалансированно</string>
+    <string name="context_saver_aggressive">Агрессивно</string>
+    <string name="token_usage_section_context_saver">Экономия контекста</string>
+    <string name="token_usage_saver_folded">Свёрнутые результаты</string>
+    <string name="token_usage_saver_saved">Сэкономлено за ход</string>
 </resources>

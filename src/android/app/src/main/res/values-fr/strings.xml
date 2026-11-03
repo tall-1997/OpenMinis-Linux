@@ -1984,4 +1984,12 @@
     <string name="mcp_approval_executed">Exécuté</string>
     <string name="mcp_approval_needs_server">Serveur arrêté — démarrez-le pour exécuter</string>
     <string name="mcp_approval_restart_notice">Le redémarrage a annulé %1$d approbation(s) en attente</string>
+    <string name="context_saver_title">Économie de contexte</string>
+    <string name="context_saver_footer">Regroupe les anciennes sorties d\'outil au-delà des derniers résultats en une ligne dès que la requête grossit. Rien n\'est supprimé : un résultat regroupé garde son chemin de fichier ou indique de relancer l\'outil.</string>
+    <string name="context_saver_off">Désactivé</string>
+    <string name="context_saver_balanced">Équilibré</string>
+    <string name="context_saver_aggressive">Agressif</string>
+    <string name="token_usage_section_context_saver">Économie de contexte</string>
+    <string name="token_usage_saver_folded">Résultats regroupés</string>
+    <string name="token_usage_saver_saved">Économisé ce tour</string>
 </resources>

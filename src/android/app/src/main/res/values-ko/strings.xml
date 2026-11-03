@@ -1981,4 +1981,12 @@
     <string name="mcp_approval_executed">실행됨</string>
     <string name="mcp_approval_needs_server">서버 중지됨 — 실행하려면 시작하세요</string>
     <string name="mcp_approval_restart_notice">재시작으로 대기 중인 승인 %1$d개가 무효화되었습니다</string>
+    <string name="context_saver_title">컨텍스트 절약</string>
+    <string name="context_saver_footer">요청이 커지면 최근 몇 개를 제외한 오래된 도구 출력을 한 줄 자리표시자로 접습니다. 삭제하지 않으며, 접힌 결과는 저장 경로를 유지하거나 도구 재실행을 안내합니다.</string>
+    <string name="context_saver_off">끔</string>
+    <string name="context_saver_balanced">균형</string>
+    <string name="context_saver_aggressive">적극적</string>
+    <string name="token_usage_section_context_saver">컨텍스트 절약</string>
+    <string name="token_usage_saver_folded">접힌 도구 결과</string>
+    <string name="token_usage_saver_saved">이번 턴 절약</string>
 </resources>

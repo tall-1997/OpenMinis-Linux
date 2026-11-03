@@ -2753,4 +2753,12 @@
     <string name="mcp_approval_executed">Executed</string>
     <string name="mcp_approval_needs_server">Server not running — start it to run this</string>
     <string name="mcp_approval_restart_notice">Restart cleared %1$d pending approval(s)</string>
+    <string name="context_saver_title">Context Saver</string>
+    <string name="context_saver_footer">Folds tool output older than the last few results into one-line placeholders once a request gets large. Nothing is deleted - a folded result keeps its spill file path or says to re-run the tool.</string>
+    <string name="context_saver_off">Off</string>
+    <string name="context_saver_balanced">Balanced</string>
+    <string name="context_saver_aggressive">Aggressive</string>
+    <string name="token_usage_section_context_saver">Context Saver</string>
+    <string name="token_usage_saver_folded">Folded tool results</string>
+    <string name="token_usage_saver_saved">Saved this turn</string>
 </resources>

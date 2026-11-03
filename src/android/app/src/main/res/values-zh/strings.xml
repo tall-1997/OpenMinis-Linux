@@ -2564,4 +2564,12 @@
     <string name="mcp_approval_executed">已执行</string>
     <string name="mcp_approval_needs_server">服务器未运行 — 启动后才能执行</string>
     <string name="mcp_approval_restart_notice">重启后有 %1$d 项待批准已失效</string>
+    <string name="context_saver_title">上下文节约</string>
+    <string name="context_saver_footer">请求变大后，把最近几条之外的旧工具输出折叠成一行占位，节省上下文。不删除任何内容——折叠结果保留落盘路径，或提示重新调用工具。</string>
+    <string name="context_saver_off">关闭</string>
+    <string name="context_saver_balanced">均衡</string>
+    <string name="context_saver_aggressive">激进</string>
+    <string name="token_usage_section_context_saver">上下文节约</string>
+    <string name="token_usage_saver_folded">已折叠工具结果</string>
+    <string name="token_usage_saver_saved">本轮节省</string>
 </resources>

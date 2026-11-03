@@ -1984,4 +1984,12 @@
     <string name="mcp_approval_executed">Ejecutado</string>
     <string name="mcp_approval_needs_server">Servidor detenido — inícialo para ejecutar</string>
     <string name="mcp_approval_restart_notice">El reinicio descartó %1$d aprobación(es) pendiente(s)</string>
+    <string name="context_saver_title">Ahorro de contexto</string>
+    <string name="context_saver_footer">Pliega las salidas de herramientas antiguas más allá de los últimos resultados en marcadores de una línea cuando la petición crece. No se elimina nada: el resultado plegado conserva su ruta de archivo o indica volver a ejecutar la herramienta.</string>
+    <string name="context_saver_off">Desactivado</string>
+    <string name="context_saver_balanced">Equilibrado</string>
+    <string name="context_saver_aggressive">Agresivo</string>
+    <string name="token_usage_section_context_saver">Ahorro de contexto</string>
+    <string name="token_usage_saver_folded">Resultados plegados</string>
+    <string name="token_usage_saver_saved">Ahorrado este turno</string>
 </resources>
