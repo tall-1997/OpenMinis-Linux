@@ -21,7 +21,7 @@ import kotlinx.coroutines.launch
  * destroy the user's entire chat history), so an unmatched downgrade means the
  * app throws at first database access and simply will not start.
  *
- * [AppDatabase.MIGRATION_12_11] handles the 12 → 11 case, and the same no-op
+ * [AppMigrations.MIGRATION_12_11] handles the 12 → 11 case, and the same no-op
  * pattern extends to any future ADD COLUMN / ADD TABLE change. But it cannot
  * cover everything: renames, drops, type changes and — most dangerously —
  * changes to the MEANING of existing data have no safe automatic downgrade,
@@ -110,7 +110,7 @@ object DatabaseVersionGuard {
      * On-disk schema versions whose jump down to [CODE_DB_VERSION] is covered
      * END-TO-END by registered downgrade migrations that keep the file openable
      * for the older build (pure no-ops that leave extra columns/tables in
-     * place, or index drops like [AppDatabase.MIGRATION_16_15] — anything that
+     * place, or index drops like [AppMigrations.MIGRATION_16_15] — anything that
      * lands the schema exactly on the older build's expected shape).
      *
      * Membership in this set is what makes [evaluate] return PROCEED instead
@@ -121,7 +121,7 @@ object DatabaseVersionGuard {
      * below, and an on-disk version ≤ CODE_DB_VERSION is an upgrade, never a
      * downgrade. The previous expression — `onDiskVersion == 12 &&
      * CODE_DB_VERSION == 11` — encoded the same answer for the v11 build that
-     * shipped [AppDatabase.MIGRATION_12_11], but as a constant comparison that
+     * shipped [AppMigrations.MIGRATION_12_11], but as a constant comparison that
      * rotted to permanently-false the moment 1.31 bumped past 11 and nobody
      * could extend it. When a future version V > CODE_DB_VERSION ships a
      * verified no-op/keep-compatible downgrade chain back to CODE_DB_VERSION,

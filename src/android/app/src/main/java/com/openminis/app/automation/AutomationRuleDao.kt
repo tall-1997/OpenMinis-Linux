@@ -1,5 +1,7 @@
 package com.openminis.app.automation
 
+import com.openminis.app.data.db.AppMigrations
+
 import androidx.room.ColumnInfo
 import androidx.room.Dao
 import androidx.room.Entity
@@ -40,7 +42,7 @@ data class AutomationRuleEntity(
  *  "started" (agent dispatched, updated to ok/error on completion),
  *  "ok", "error: …", "skipped_steps_todo", "skipped_rate_limit".
  *
- * The `(rule_id, fired_at)` index is also created by [AppDatabase.MIGRATION_22_23]
+ * The `(rule_id, fired_at)` index is also created by [AppMigrations.MIGRATION_22_23]
  * — it backs both the per-rule newest-first history and the rolling-24h
  * rate-limit COUNT. It MUST stay declared here: Room validates the migrated
  * schema against this entity on every upgrade, and an index present on disk

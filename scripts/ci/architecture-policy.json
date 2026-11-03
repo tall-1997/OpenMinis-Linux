@@ -173,6 +173,6 @@
     "src/android/app/src/main/java/com/openminis/app/ui/settings/SkillsManagementScreen.kt": 1223,
     "src/android/app/src/main/java/com/openminis/app/ui/settings/SoulSettingsScreen.kt": 926,
     "src/android/app/src/main/java/com/openminis/app/ui/settings/backup/BackupAndRestoreScreen.kt": 1798,
-    "src/android/app/src/main/java/com/openminis/app/ui/settings/backup/BackupViewModel.kt": 1066
+    "src/android/app/src/main/java/com/openminis/app/ui/settings/backup/BackupViewModel.kt": 1065
   }
 }

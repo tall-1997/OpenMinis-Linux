@@ -1810,6 +1810,19 @@
     <string name="backup_creds_kept">Your existing API keys were kept — the backup\'s keys matched credentials already on this device, so nothing needed to be overwritten.</string>
     <string name="backup_creds_none">This backup was created without API keys, so restored providers have no credentials — enter each API key or sign in again before use.</string>
     <string name="backup_done">Done</string>
+    <!-- Undo a restore (checkpoint taken before importing) -->
+    <string name="backup_undo_title">Undo This Restore</string>
+    <string name="backup_undo_body">A copy of your data was saved just before restoring. Undoing puts every file the restore changed back the way it was, then relaunches the app.</string>
+    <string name="backup_undo_action">Undo restore</string>
+    <string name="backup_undo_confirm_title">Undo this restore?</string>
+    <string name="backup_undo_confirm_body">Everything this restore wrote will be removed and replaced with the copy taken immediately before it. The app restarts when it finishes.</string>
+    <string name="backup_undo_confirm_action">Undo and restart</string>
+    <string name="backup_undo_kept_title">Restore Checkpoints</string>
+    <string name="backup_undo_kept_body">A checkpoint is saved before every restore. The newest %1$d stay on this device.</string>
+    <string name="backup_undo_partial">Undoing restores everything except a few folders that were too large to copy: %1$s.</string>
+    <string name="backup_undo_partial_short">partial</string>
+    <string name="backup_undo_discard">Discard</string>
+    <string name="backup_undo_failed">Undo failed: %1$s</string>
     <!-- Rclone destinations -->
     <string name="backup_dest_title">Backup Destinations</string>
     <string name="backup_dest_saved">Saved Destinations</string>

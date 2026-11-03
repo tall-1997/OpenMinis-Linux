@@ -33,9 +33,19 @@ import java.io.File
  */
 class SchemaMigrationDriftTest {
 
-    private val appDbFile = resolveRepoFile(
-        "src/main/java/com/openminis/app/data/db/AppDatabase.kt",
-        "src/android/app/src/main/java/com/openminis/app/data/db/AppDatabase.kt",
+    /**
+     * Migrations span more than one file: AppDatabase.kt hit the file-size cap,
+     * so the MIGRATION_a_b objects moved into AppMigrations.kt. Replay has to
+     * read every contributing source — pinning a single filename kept working
+     * right up until the split, then silently saw zero DDL and reported 11
+     * phantom drift items. Mirrors APP_DB_SOURCES in
+     * scripts/ci/check_schema_drift.py; a missing entry fails loudly rather
+     * than replaying a half-empty chain.
+     */
+    private val appDbSources = listOf("AppDatabase.kt", "AppMigrations.kt")
+    private val dbDir = resolveRepoFile(
+        "src/main/java/com/openminis/app/data/db",
+        "src/android/app/src/main/java/com/openminis/app/data/db",
     )
     private val schemaDir = resolveRepoFile(
         "schemas/com.openminis.app.data.db.AppDatabase",
@@ -255,8 +265,13 @@ class SchemaMigrationDriftTest {
 
     @Test
     fun `migration chain replays cleanly against the newest exported schema`() {
-        require(appDbFile.isFile) { "missing ${appDbFile.absolutePath}" }
-        val source = appDbFile.readText()
+        val sources = appDbSources.map { File(dbDir, it) }
+        sources.forEach {
+            require(it.isFile) { "missing ${it.absolutePath} — update appDbSources" }
+        }
+        // Joined with a newline so the last literal of one file can never be
+        // glued onto the first token of the next one.
+        val source = sources.joinToString("\n") { it.readText() }
         val sqls = migrationSqls(source)
         val replayed = replay(sqls)
 

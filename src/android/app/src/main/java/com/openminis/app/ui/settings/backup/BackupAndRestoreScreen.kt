@@ -844,9 +844,11 @@ private fun RestoreTab(
         ActivityResultContracts.OpenDocument(),
     ) { uri -> if (uri != null) vm.loadPackage(uri) }
 
-    // Report replaces everything once a restore finishes.
+    // Report replaces everything once a restore finishes; the undo point for
+    // the run just completed belongs under it, not in a settings sub-page.
     if (report != null) {
         RestoreReport(report!!, onDone = { vm.dismissReport() })
+        RestoreUndoSection(vm)
         return
     }
 
@@ -972,12 +974,9 @@ private fun RestoreTab(
                 label = stringResource(R.string.backup_choose_server),
                 enabled = !running,
                 // [T-android-restore-server-list] ALWAYS the same destination: a "Restore from Server" list page. It used to branch on whether any server existed — a dialog when there was one,
-                // and with none a dialog whose entire content was "no servers configured" over a lone Cancel: a dead end that named the problem and then refused to solve it, on the one screen
-                // where the user had already said what they wanted.
-                //
-                // One unconditional destination is what makes the empty state stop being special. That page lists the servers with an Add Server entry always at the end, so "none configured" is just
-                // the case where the list happens to be empty — the entry the
-                // user needs is in the same place either way. Matches iOS.
+                // ... and with none a dead-end dialog that only named the problem.
+                // One unconditional destination fixes the empty state: the Add
+                // Server entry is always at the end of that page. Matches iOS.
                 onClick = onChooseRestoreServer,
                 showDivider = false,
             )
@@ -999,6 +998,7 @@ private fun RestoreTab(
                 onDismiss = { browsing = null; vm.clearServerPackages() },
             )
         }
+        RestoreUndoHistorySection(vm)
         return
     }
 

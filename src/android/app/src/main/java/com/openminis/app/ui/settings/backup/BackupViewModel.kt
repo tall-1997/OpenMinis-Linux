@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.openminis.app.backup.BackupCategory
+import com.openminis.app.backup.BackupUndoController
 import com.openminis.app.backup.BackupExporter
 import com.openminis.app.backup.BackupHistory
 import com.openminis.app.backup.BackupLogCompaction
@@ -25,18 +26,17 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
- * [T-android-backup-ui] Drives the Backup & Restore screen — the Android analog
- * of iOS `BackupRunController` + the export/restore state held by
- * BackupSettingsView / BackupRestoreView. One instance per screen; serialises
- * to BackupExporter / BackupImporter (which are themselves process-serialised).
- *
- * Phase 2 delivers the local path only: export → Android share / Save-to-Files
- * (SAF); restore ← SAF-picked `.minisbak`. rclone remote destinations are
- * Phase 3.
+ * [T-android-backup-ui] Drives the Backup & Restore screen — Android analog of
+ * iOS `BackupRunController` + BackupSettingsView state. One instance per
+ * screen, serialised over BackupExporter / BackupImporter; local path only,
+ * rclone destinations live in their own screens.
  */
 class BackupViewModel(app: Application) : AndroidViewModel(app) {
 
     private val db get() = AppDatabase.getInstance(getApplication())
+
+    /** [T-backup-undo-bridge] Snapshot/rollback around a restore; see that class. */
+    internal val undo = BackupUndoController(app, { db }, viewModelScope)
 
     // -- Export state -----------------------------------------------------
 
@@ -1009,6 +1009,8 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             try {
                 val report = withContext(Dispatchers.IO) {
+                    // [T-backup-undo-store] Snapshot before the importer writes.
+                    undo.capture(cats)
                     BackupImporter(getApplication(), db).import(
                         pending.extractedRoot,
                         BackupImporter.Options(categories = cats, passphrase = passphrase),
@@ -1040,10 +1042,7 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
         return restored.ifEmpty { BackupCategory.backupable.toSet() }
     }
 
-    /** Bytes as "32.0 MB", for a message rather than a UI row. */
-    // [T-android-human-bytes-one-place] Deliberately NOT a second formatter:
-    // this function used to duplicate BackupAndRestoreScreen.humanBytes with a
-    // different unit label for the same divisors. Both now read the same one.
+    /** [T-android-human-bytes-one-place] One formatter only; see [humanBytes]. */
     private fun humanBytesPlain(bytes: Long): String = humanBytes(bytes)
 
     companion object {
