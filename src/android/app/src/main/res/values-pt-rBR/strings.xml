@@ -1984,4 +1984,12 @@
     <string name="mcp_approval_executed">Executado</string>
     <string name="mcp_approval_needs_server">Servidor parado — inicie para executar</string>
     <string name="mcp_approval_restart_notice">A reinicialização descartou %1$d aprovação(ões) pendente(s)</string>
+    <string name="context_saver_title">Economia de contexto</string>
+    <string name="context_saver_footer">Dobra saídas antigas de ferramentas além dos últimos resultados em marcadores de uma linha quando a solicitação cresce. Nada é excluído - o resultado dobrado mantém o caminho do arquivo ou indica executar a ferramenta novamente.</string>
+    <string name="context_saver_off">Desligado</string>
+    <string name="context_saver_balanced">Equilibrado</string>
+    <string name="context_saver_aggressive">Agressivo</string>
+    <string name="token_usage_section_context_saver">Economia de contexto</string>
+    <string name="token_usage_saver_folded">Resultados dobrados</string>
+    <string name="token_usage_saver_saved">Economizado nesta rodada</string>
 </resources>

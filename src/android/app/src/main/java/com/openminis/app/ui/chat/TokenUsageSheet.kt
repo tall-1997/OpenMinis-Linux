@@ -28,6 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openminis.app.R
+import com.openminis.app.agent.ContextSaverRuntime
 import com.openminis.app.i18n.uppercaseForDisplay
 
 /**
@@ -58,6 +59,8 @@ fun TokenUsageSheet(
     val thinking = remember { viewModel.thinkingInfo() }
     // [T-cache-hit-rate] 最近一轮的缓存命中率（0..1，无真实 usage 时为 null）。
     val lastCacheHitRate by viewModel.lastCacheHitRate.collectAsStateWithLifecycle()
+    // [T-tool-result-aging] Latest fold stats from the send path.
+    val saver by ContextSaverRuntime.stats.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
         // Recompute the context rows on open: contextUsage is a snapshot that
@@ -138,6 +141,19 @@ fun TokenUsageSheet(
 
             StatSection(title = stringResource(R.string.token_usage_section_agent_loop)) {
                 StatRow(stringResource(R.string.token_usage_total_loops), (s?.loopCount ?: 0).toString())
+            }
+            // [T-tool-result-aging] What the history-side saver actually did on
+            // the most recent request. Zero rows read "—" instead of 0 so an
+            // untouched short session looks untouched rather than broken.
+            StatSection(title = stringResource(R.string.token_usage_section_context_saver)) {
+                StatRow(
+                    stringResource(R.string.token_usage_saver_folded),
+                    if (saver.aged > 0) saver.aged.toString() else "—",
+                )
+                StatRow(
+                    stringResource(R.string.token_usage_saver_saved),
+                    if (saver.savedChars > 0) "≈" + formatTokens(saver.savedChars / ContextSaverRuntime.CHARS_PER_TOKEN) else "—",
+                )
             }
         }
     }

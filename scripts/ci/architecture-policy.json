@@ -109,7 +109,7 @@
   ],
   "baseline": {
     "src/android/app/src/main/java/com/openminis/app/MainActivity.kt": 849,
-    "src/android/app/src/main/java/com/openminis/app/MinisApp.kt": 1043,
+    "src/android/app/src/main/java/com/openminis/app/MinisApp.kt": 1042,
     "src/android/app/src/main/java/com/openminis/app/agent/PersonaPromptLibrary.kt": 858,
     "src/android/app/src/main/java/com/openminis/app/backup/BackupExporter.kt": 877,
     "src/android/app/src/main/java/com/openminis/app/backup/BackupImporter.kt": 1166,
@@ -146,7 +146,7 @@
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatModelPickerSheet.kt": 822,
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatScreen.kt": 5639,
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatToolDetailUI.kt": 1474,
-    "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatViewModel.kt": 6226,
+    "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatViewModel.kt": 6222,
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatViewModelAgentLoopExt.kt": 2085,
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatViewModelGroupChatExt.kt": 820,
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatViewModelSubAgentExt.kt": 1061,

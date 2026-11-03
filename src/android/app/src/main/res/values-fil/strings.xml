@@ -1984,4 +1984,12 @@
     <string name="mcp_approval_executed">Naipatupad</string>
     <string name="mcp_approval_needs_server">Hindi tumatakbo ang server — simulan ito para patakbuhin</string>
     <string name="mcp_approval_restart_notice">Naalis ng restart ang %1$d nakabinbing approval</string>
+    <string name="context_saver_title">Tipid sa konteksto</string>
+    <string name="context_saver_footer">Pinipiga ang lumang output ng tool na lampas sa huling mga resulta sa isang linyang placeholder kapag lumaki ang kahilingan. Walang binubura - pinapanatili ng nakatuping resulta ang path ng file o nagtuturo na patakbuhin muli ang tool.</string>
+    <string name="context_saver_off">Naka-off</string>
+    <string name="context_saver_balanced">Balanseng</string>
+    <string name="context_saver_aggressive">Agresibo</string>
+    <string name="token_usage_section_context_saver">Tipid sa konteksto</string>
+    <string name="token_usage_saver_folded">Nakuping resulta ng tool</string>
+    <string name="token_usage_saver_saved">Natipid ngayong turn</string>
 </resources>

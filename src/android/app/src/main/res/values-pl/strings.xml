@@ -1992,4 +1992,12 @@
     <string name="mcp_approval_executed">Wykonano</string>
     <string name="mcp_approval_needs_server">Serwer zatrzymany — uruchom go, aby wykonać</string>
     <string name="mcp_approval_restart_notice">Restart unieważnił %1$d oczekujących zgód</string>
+    <string name="context_saver_title">Oszczędzanie kontekstu</string>
+    <string name="context_saver_footer">Zwija stare wyjścia narzędzi poza ostatnimi wynikami w jednoliniowe placeholdery, gdy żądanie rośnie. Nic nie jest usuwane - zwinięty wynik zachowuje ścieżkę pliku lub wskazuje ponowne uruchomienie narzędzia.</string>
+    <string name="context_saver_off">Wyłączone</string>
+    <string name="context_saver_balanced">Zrównoważone</string>
+    <string name="context_saver_aggressive">Agresywne</string>
+    <string name="token_usage_section_context_saver">Oszczędzanie kontekstu</string>
+    <string name="token_usage_saver_folded">Zwinięte wyniki narzędzi</string>
+    <string name="token_usage_saver_saved">Zaoszczędzono w tej turze</string>
 </resources>
