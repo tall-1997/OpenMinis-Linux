@@ -89,10 +89,14 @@ internal suspend fun ChatViewModel.truncateBeforeEdit(messageId: String): Boolea
     // effectiveAgentHistory() injects the digest on EVERY turn, so the model
     // kept seeing the pre-edit content long after the DB row was gone. That is
     // exactly the "编辑后旧内容残留在模型上下文中" symptom.
-    // The user-initiated compact summary (_compactSummary) is a different store
-    // and stays: it condenses turns that still exist.
+    // The user-initiated compact marker is resolved separately now, by the
+    // same staleness rule: a marker whose folded range this cut disturbed is
+    // reverted, one over untouched rows keeps its summary.
     llmDigestLines.clear()
     llmDigestOmitted = 0
+    // [T-m6-compact-marker-staleness] Same reason as deleteFromMessage: an
+    // edited turn inside a folded range invalidates that marker's summary.
+    reconcileCompactMarkersAfterTruncation(sid)
     AppLogger.info(
         ChatViewModel.TAG_STREAM,
         "✏️ truncateBeforeEdit cutoffSortOrder=$cutoffSortOrder remaining=${remaining.size} (digest cleared)"
