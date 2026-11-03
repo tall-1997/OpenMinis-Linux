@@ -627,6 +627,19 @@
     <string name="log_section_logging">Pengelogan</string>
     <string name="log_section_logging_footer">Apabila didayakan, seluruh output konsol dirakam ke fail log harian dalam storan peribadi aplikasi.</string>
     <string name="log_enable_switch">Dayakan Pengelogan</string>
+
+    <string name="logcat_panel_title">Log langsung</string>
+    <string name="logcat_panel_entry">Panel log langsung</string>
+    <string name="logcat_panel_entry_sub">Lihat strim logcat aplikasi ini dalam masa nyata</string>
+    <string name="logcat_panel_search_hint">Tapis tag atau mesej</string>
+    <string name="logcat_panel_pause">Jeda</string>
+    <string name="logcat_panel_resume">Sambung</string>
+    <string name="logcat_panel_clear">Kosongkan</string>
+    <string name="logcat_panel_copy">Salin yang kelihatan</string>
+    <string name="logcat_panel_empty">Belum ada baris — menunggu output</string>
+    <string name="logcat_panel_paused_badge">Dijeda</string>
+    <string name="logcat_panel_line_count">%1$d baris</string>
+    <string name="logcat_panel_dropped">%1$d baris lama dibuang</string>
     <string name="log_section_files">Fail Log</string>
     <string name="log_section_files_footer">Ketik sesebuah fail untuk melihat kandungannya. Log diputar setiap hari.</string>
     <string name="log_no_files">Tiada fail log</string>

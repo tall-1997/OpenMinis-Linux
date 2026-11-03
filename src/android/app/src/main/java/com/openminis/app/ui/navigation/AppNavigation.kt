@@ -52,8 +52,6 @@ import com.openminis.app.ui.settings.SkillsManagementScreen
 import com.openminis.app.data.repository.EnvVarRepository
 import com.openminis.app.data.repository.MemoryRepository
 import com.openminis.app.data.repository.SkillRepository
-import com.openminis.app.ui.settings.LogDetailScreen
-import com.openminis.app.ui.settings.LogManagementScreen
 import com.openminis.app.ui.settings.MemoryFileEditScreen
 import com.openminis.app.ui.settings.MemoryManagementScreen
 import com.openminis.app.ui.settings.OffloadPermissionScreen
@@ -927,25 +925,7 @@ fun AppNavigation(
             AboutScreen(onBack = { navController.safePopBackStack() })
         }
 
-        composable(Routes.LOGS) {
-            LogManagementScreen(
-                onBack = { navController.safePopBackStack() },
-                onLogFileClick = { fileName ->
-                    navController.safeNavigate(Routes.logDetail(fileName))
-                },
-            )
-        }
-
-        composable(
-            route = Routes.LOG_DETAIL,
-            arguments = listOf(navArgument("fileName") { type = NavType.StringType }),
-        ) { backStackEntry ->
-            val fileName = backStackEntry.arguments?.getString("fileName") ?: return@composable
-            LogDetailScreen(
-                fileName = fileName,
-                onBack = { navController.safePopBackStack() },
-            )
-        }
+        logsRoutes(navController)
 
         composable(Routes.ONBOARDING_MODELS) {
             OnboardingModelSelectionScreen(

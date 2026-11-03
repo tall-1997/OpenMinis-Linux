@@ -627,6 +627,19 @@
     <string name="log_section_logging">Registro</string>
     <string name="log_section_logging_footer">Cuando está activado, toda la salida de consola se guarda en archivos de registro diarios en el almacenamiento privado de la app.</string>
     <string name="log_enable_switch">Activar registro</string>
+
+    <string name="logcat_panel_title">Registro en vivo</string>
+    <string name="logcat_panel_entry">Panel de registro en vivo</string>
+    <string name="logcat_panel_entry_sub">Ver el flujo de logcat de esta app en tiempo real</string>
+    <string name="logcat_panel_search_hint">Filtrar etiqueta o mensaje</string>
+    <string name="logcat_panel_pause">Pausar</string>
+    <string name="logcat_panel_resume">Reanudar</string>
+    <string name="logcat_panel_clear">Borrar</string>
+    <string name="logcat_panel_copy">Copiar visibles</string>
+    <string name="logcat_panel_empty">Aún no hay líneas — esperando salida</string>
+    <string name="logcat_panel_paused_badge">En pausa</string>
+    <string name="logcat_panel_line_count">%1$d líneas</string>
+    <string name="logcat_panel_dropped">%1$d líneas anteriores descartadas</string>
     <string name="log_section_files">Archivos de registro</string>
     <string name="log_section_files_footer">Toca un archivo para ver su contenido. Los registros rotan a diario.</string>
     <string name="log_no_files">Sin archivos de registro</string>

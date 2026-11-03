@@ -627,6 +627,19 @@
     <string name="log_section_logging">로깅</string>
     <string name="log_section_logging_footer">활성화하면 모든 콘솔 출력이 앱의 비공개 저장소에 일일 로그 파일로 캡처됩니다.</string>
     <string name="log_enable_switch">로깅 활성화</string>
+
+    <string name="logcat_panel_title">실시간 로그</string>
+    <string name="logcat_panel_entry">실시간 로그 패널</string>
+    <string name="logcat_panel_entry_sub">이 앱의 logcat 스트림을 실시간으로 보기</string>
+    <string name="logcat_panel_search_hint">태그 또는 메시지 필터</string>
+    <string name="logcat_panel_pause">일시정지</string>
+    <string name="logcat_panel_resume">계속</string>
+    <string name="logcat_panel_clear">지우기</string>
+    <string name="logcat_panel_copy">보이는 항목 복사</string>
+    <string name="logcat_panel_empty">아직 로그가 없습니다 — 출력 대기 중</string>
+    <string name="logcat_panel_paused_badge">일시정지됨</string>
+    <string name="logcat_panel_line_count">%1$d줄</string>
+    <string name="logcat_panel_dropped">오래된 %1$d줄 버림</string>
     <string name="log_section_files">로그 파일</string>
     <string name="log_section_files_footer">파일을 누르면 내용이 표시됩니다. 로그는 매일 순환됩니다.</string>
     <string name="log_no_files">로그 파일 없음</string>

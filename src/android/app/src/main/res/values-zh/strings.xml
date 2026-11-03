@@ -874,6 +874,19 @@
     <string name="log_section_logging">日志</string>
     <string name="log_section_logging_footer">启用后，所有控制台输出将每天捕获到应用私有存储中的日志文件。</string>
     <string name="log_enable_switch">启用日志</string>
+
+    <string name="logcat_panel_title">实时日志</string>
+    <string name="logcat_panel_entry">实时日志面板</string>
+    <string name="logcat_panel_entry_sub">实时查看本应用的 logcat 输出</string>
+    <string name="logcat_panel_search_hint">过滤标签或内容</string>
+    <string name="logcat_panel_pause">暂停</string>
+    <string name="logcat_panel_resume">继续</string>
+    <string name="logcat_panel_clear">清空</string>
+    <string name="logcat_panel_copy">复制可见</string>
+    <string name="logcat_panel_empty">还没有日志行——等待输出</string>
+    <string name="logcat_panel_paused_badge">已暂停</string>
+    <string name="logcat_panel_line_count">%1$d 行</string>
+    <string name="logcat_panel_dropped">已丢弃 %1$d 行较早日志</string>
     <string name="log_section_files">日志文件</string>
     <string name="log_section_files_footer">点击文件查看内容。日志每天轮转。</string>
     <string name="log_no_files">无日志文件</string>

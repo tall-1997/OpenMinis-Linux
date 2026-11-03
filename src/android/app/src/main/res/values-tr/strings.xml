@@ -627,6 +627,19 @@
     <string name="log_section_logging">Günlük Kaydı</string>
     <string name="log_section_logging_footer">Etkinleştirildiğinde tüm konsol çıktısı, uygulamanın özel depolama alanındaki günlük dosyalarına kaydedilir.</string>
     <string name="log_enable_switch">Günlük Kaydını Etkinleştir</string>
+
+    <string name="logcat_panel_title">Canlı günlük</string>
+    <string name="logcat_panel_entry">Canlı günlük paneli</string>
+    <string name="logcat_panel_entry_sub">Bu uygulamanın logcat akışını gerçek zamanlı izle</string>
+    <string name="logcat_panel_search_hint">Etiket veya mesajı filtrele</string>
+    <string name="logcat_panel_pause">Duraklat</string>
+    <string name="logcat_panel_resume">Devam et</string>
+    <string name="logcat_panel_clear">Temizle</string>
+    <string name="logcat_panel_copy">Görünenleri kopyala</string>
+    <string name="logcat_panel_empty">Henüz satır yok — çıktı bekleniyor</string>
+    <string name="logcat_panel_paused_badge">Duraklatıldı</string>
+    <string name="logcat_panel_line_count">%1$d satır</string>
+    <string name="logcat_panel_dropped">%1$d eski satır atıldı</string>
     <string name="log_section_files">Günlük Dosyaları</string>
     <string name="log_section_files_footer">İçeriğini görmek için bir dosyaya dokunun. Günlükler her gün yenilenir.</string>
     <string name="log_no_files">Günlük dosyası yok</string>

@@ -627,6 +627,19 @@
     <string name="log_section_logging">ロギング</string>
     <string name="log_section_logging_footer">有効時、すべてのコンソール出力がアプリのプライベートストレージ内の日次ログファイルに記録されます。</string>
     <string name="log_enable_switch">ログを有効化</string>
+
+    <string name="logcat_panel_title">ライブログ</string>
+    <string name="logcat_panel_entry">ライブログパネル</string>
+    <string name="logcat_panel_entry_sub">このアプリの logcat ストリームをリアルタイムで表示</string>
+    <string name="logcat_panel_search_hint">タグまたはメッセージで絞り込む</string>
+    <string name="logcat_panel_pause">一時停止</string>
+    <string name="logcat_panel_resume">再開</string>
+    <string name="logcat_panel_clear">消去</string>
+    <string name="logcat_panel_copy">表示中をコピー</string>
+    <string name="logcat_panel_empty">まだ行がありません — 出力を待機中</string>
+    <string name="logcat_panel_paused_badge">一時停止中</string>
+    <string name="logcat_panel_line_count">%1$d 行</string>
+    <string name="logcat_panel_dropped">古い %1$d 行を破棄</string>
     <string name="log_section_files">ログファイル</string>
     <string name="log_section_files_footer">ファイルをタップして内容を表示。ログは毎日ローテーションされます。</string>
     <string name="log_no_files">ログファイルなし</string>

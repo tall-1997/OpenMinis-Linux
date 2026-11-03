@@ -683,6 +683,19 @@
     <string name="log_section_logging">記錄功能</string>
     <string name="log_section_logging_footer">啟用後，所有主控台輸出都會擷取到應用程式私有儲存空間中的每日記錄檔。</string>
     <string name="log_enable_switch">啟用記錄</string>
+
+    <string name="logcat_panel_title">即時日誌</string>
+    <string name="logcat_panel_entry">即時日誌面板</string>
+    <string name="logcat_panel_entry_sub">即時檢視本應用的 logcat 輸出</string>
+    <string name="logcat_panel_search_hint">過濾標籤或內容</string>
+    <string name="logcat_panel_pause">暫停</string>
+    <string name="logcat_panel_resume">繼續</string>
+    <string name="logcat_panel_clear">清空</string>
+    <string name="logcat_panel_copy">複製可見</string>
+    <string name="logcat_panel_empty">尚無日誌列——等待輸出</string>
+    <string name="logcat_panel_paused_badge">已暫停</string>
+    <string name="logcat_panel_line_count">%1$d 列</string>
+    <string name="logcat_panel_dropped">已捨棄 %1$d 列較早日誌</string>
     <string name="log_section_files">記錄檔</string>
     <string name="log_section_files_footer">點擊檔案即可檢視內容。記錄每日輪替。</string>
     <string name="log_no_files">沒有記錄檔</string>

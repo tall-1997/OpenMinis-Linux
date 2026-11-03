@@ -627,6 +627,19 @@
     <string name="log_section_logging">Journalisation</string>
     <string name="log_section_logging_footer">Lorsque activé, toutes les sorties console sont enregistrées dans des fichiers journaliers privés.</string>
     <string name="log_enable_switch">Activer les journaux</string>
+
+    <string name="logcat_panel_title">Journal en direct</string>
+    <string name="logcat_panel_entry">Panneau de journal en direct</string>
+    <string name="logcat_panel_entry_sub">Suivre le flux logcat de cette app en temps réel</string>
+    <string name="logcat_panel_search_hint">Filtrer l\'étiquette ou le message</string>
+    <string name="logcat_panel_pause">Suspendre</string>
+    <string name="logcat_panel_resume">Reprendre</string>
+    <string name="logcat_panel_clear">Effacer</string>
+    <string name="logcat_panel_copy">Copier le visible</string>
+    <string name="logcat_panel_empty">Aucune ligne pour l\'instant — en attente de sortie</string>
+    <string name="logcat_panel_paused_badge">En pause</string>
+    <string name="logcat_panel_line_count">%1$d lignes</string>
+    <string name="logcat_panel_dropped">%1$d lignes plus anciennes ignorées</string>
     <string name="log_section_files">Fichiers de log</string>
     <string name="log_section_files_footer">Appuyez sur un fichier pour voir son contenu. Rotation quotidienne des logs.</string>
     <string name="log_no_files">Aucun fichier de log</string>
