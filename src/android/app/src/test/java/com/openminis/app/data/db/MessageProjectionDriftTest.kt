@@ -8,11 +8,14 @@ import org.junit.Test
 /**
  * [T-android-message-projection-drift] Every full-row `messages` projection
  * must list the SAME 19 columns in the same order. The list lives in four
- * places: three Room `@Query` literals in ChatDao (annotations cannot
- * reference Kotlin constants) and [RawQuerySql.MESSAGE_PAGE_SELECT], which
- * builds its tail from `MESSAGE_TAIL_COLUMNS`. Adding a column to the entity
+ * places: three Room `@Query` literals across ChatDao.kt / ChatTruncationDao.kt
+ * (annotations cannot reference Kotlin constants) and [RawQuerySql.MESSAGE_PAGE_SELECT],
+ * which builds its tail from `MESSAGE_TAIL_COLUMNS`. Adding a column to the entity
  * without touching all four used to be silent — Room would map the missing
  * one to null at runtime. This test makes the drift a failure instead.
+ * The two source files are the same pair the DAO split carved out
+ * (ChatTruncationDao.kt holds the truncation queries), so a file move that
+ * drops a projection from one side still fails loudly here.
  */
 class MessageProjectionDriftTest {
 
@@ -35,11 +38,12 @@ class MessageProjectionDriftTest {
 
     @Test
     fun `every full-row projection in ChatDao lists the canonical columns`() {
-        val daoSource = ProductionSources.read("data/db/ChatDao.kt")
+        val daoSource = ProductionSources.read("data/db/ChatDao.kt") +
+            ProductionSources.read("data/db/ChatTruncationDao.kt")
         val projections = FULL_ROW_PROJECTION.findAll(daoSource).toList()
         assertTrue(
-            "expected ≥3 full-row projections in ChatDao, found ${projections.size} — " +
-                "did the extraction regex rot?",
+            "expected ≥3 full-row projections across ChatDao.kt/ChatTruncationDao.kt, " +
+                "found ${projections.size} — did the extraction regex rot?",
             projections.size >= 3,
         )
         projections.forEachIndexed { i, match ->

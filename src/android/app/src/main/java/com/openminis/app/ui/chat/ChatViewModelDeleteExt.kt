@@ -2,6 +2,7 @@ package com.openminis.app.ui.chat
 
 import androidx.lifecycle.viewModelScope
 import com.openminis.app.logging.AppLogger
+import com.openminis.app.data.repository.deleteAfterWithPairRepair
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -39,9 +40,11 @@ fun ChatViewModel.deleteFromMessage(messageId: String) {
     val index = messages.indexOfFirst { it.id == messageId }
     if (index < 0) return
 
-    // Snapshot what's about to go so any memory_write tool blocks inside
-    // can be revoked — otherwise the on-disk daily log keeps entries from
-    // messages the user just deleted.
+    // [T-m6-no-memory-cascade] NO revoke here: dsh P1-5 defines delete as
+    // non-cascading — the daily log / memory files are snapshot products of
+    // the turns that wrote them and are not walked back when a message is
+    // deleted. (Retry keeps its revoke: that path re-runs the turn and the
+    // rewrite supersedes the entry, whereas delete leaves nothing behind.)
     val deletedMessages = messages.subList(index, messages.size).toList()
 
     // Truncate the UI to everything BEFORE the target message, and drop
@@ -63,15 +66,19 @@ fun ChatViewModel.deleteFromMessage(messageId: String) {
         _streamingById.value = _streamingById.value.filterKeys { it in keptIds }
     }
 
-    revokeMemoryWritesInDeletedMessages(deletedMessages)
-
     val sid = activeSessionId ?: return
     viewModelScope.launch {
         val target = messages[index]
         val cutoffSortOrder = resolveDeleteCutoffSortOrder(sid, messages, index, target)
-        if (cutoffSortOrder >= 0) {
-            chatRepository.deleteMessagesAfter(sid, cutoffSortOrder)
-        }
+
+        // [T-m6-pair-removal] Delete + orphan repair in ONE repository pass:
+        // the doomed rows must be snapshotted before they're deleted, and the
+        // repair is only applied when the delete succeeds (an archive failure
+        // aborts both, leaving the session untouched). A surviving tool_use
+        // whose result row died would otherwise replay as a dangling call.
+        val partsStripped = if (cutoffSortOrder >= 0) {
+            chatRepository.deleteAfterWithPairRepair(sid, cutoffSortOrder)
+        } else 0
 
         // Rebuild agentHistory from what survived, so the next turn is
         // built on the truncated conversation rather than a stale list.
@@ -99,7 +106,8 @@ fun ChatViewModel.deleteFromMessage(messageId: String) {
         AppLogger.info(
             ChatViewModel.TAG,
             "deleteFromMessage: cut at sortOrder=$cutoffSortOrder, " +
-                "${deletedMessages.size} message(s) removed, ${tail.size} remain",
+                "${deletedMessages.size} message(s) removed, ${tail.size} remain, " +
+                "$partsStripped orphaned tool part(s) stripped",
         )
     }
 }

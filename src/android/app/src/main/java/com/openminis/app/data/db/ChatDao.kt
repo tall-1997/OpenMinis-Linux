@@ -15,7 +15,7 @@ import kotlinx.coroutines.flow.Flow
  * row already stores a stub. A small inline row is safe to return. Everything
  * else returns the preview written by migration 19 or the next write.
  */
-private const val SAFE_MESSAGE_FROM = """
+internal const val SAFE_MESSAGE_FROM = """
 SELECT id, session_id, role,
 CASE
   WHEN body_ref IS NOT NULL THEN parts_json
@@ -123,7 +123,7 @@ data class SessionTailRow(
 )
 
 @Dao
-interface ChatDao : MessageHeadDao {
+interface ChatDao : MessageHeadDao, ChatTruncationDao {
     // Sessions
     @Query("SELECT * FROM sessions ORDER BY updated_at DESC")
     fun observeSessions(): Flow<List<ChatSessionEntity>>
@@ -338,21 +338,6 @@ interface ChatDao : MessageHeadDao {
         limit: Int,
     ): List<MessageSortAnchor>
 
-    @Query("""
-        $SAFE_MESSAGE_FROM
-        WHERE session_id = :sessionId
-          AND sort_order >= :startInclusive
-          AND sort_order < :endExclusive
-        ORDER BY sort_order ASC, created_at ASC, id ASC
-        LIMIT :limit
-    """)
-    suspend fun loadMessagesFromSortOrder(
-        sessionId: String,
-        startInclusive: Int,
-        endExclusive: Int,
-        limit: Int,
-    ): List<MessageEntity>
-
     /** Preview text only. Digest construction must not select parts_json. */
     @Query("""
         SELECT role, preview, sort_order FROM messages
@@ -456,26 +441,6 @@ interface ChatDao : MessageHeadDao {
 
     @Query("DELETE FROM messages WHERE session_id = :sessionId")
     suspend fun deleteMessages(sessionId: String)
-
-    @Query("DELETE FROM messages WHERE session_id = :sessionId AND sort_order >= :keepCount")
-    suspend fun deleteMessagesAfter(sessionId: String, keepCount: Int)
-
-    /**
-     * [T-msg-version-archive] Raw rows (no preview substitution) that
-     * [deleteMessagesAfter] is about to remove, so the caller can archive
-     * them into `message_versions` first.
-     */
-    // NOTE: explicit column list (never SELECT *) — ResourceBoundaryTest
-    // forbids star/raw projections on the messages table. All columns are
-    // listed because the archived version needs the full row.
-    @Query(
-        "SELECT id, session_id, role, parts_json, created_at, token_usage, sort_order, " +
-            "reasoning_content, stream_interrupt_count, updated_at, error_info, " +
-            "model_id, model_display_name, provider_type, provider_instance_id, " +
-            "body_bytes, body_ref, body_sha, preview " +
-            "FROM messages WHERE session_id = :sessionId AND sort_order >= :cutoff ORDER BY sort_order ASC"
-    )
-    suspend fun rowsFrom(sessionId: String, cutoff: Int): List<MessageEntity>
 
     @Query("SELECT token_usage FROM messages WHERE session_id = :sessionId AND token_usage IS NOT NULL")
     suspend fun tokenUsages(sessionId: String): List<String>
@@ -613,18 +578,6 @@ interface ChatDao : MessageHeadDao {
 
     @Query("SELECT id, body_bytes, body_ref FROM messages WHERE id = :id")
     suspend fun bodyMeta(id: String): MessageBodyMeta?
-
-    // [T-archive-trimmed-parts] Full-row read for archiving a row that is
-    // about to be rewritten in place (updateMessageParts). Same explicit
-    // projection as rowsFrom — never SELECT * (ResourceBoundaryTest).
-    @Query(
-        "SELECT id, session_id, role, parts_json, created_at, token_usage, sort_order, " +
-            "reasoning_content, stream_interrupt_count, updated_at, error_info, " +
-            "model_id, model_display_name, provider_type, provider_instance_id, " +
-            "body_bytes, body_ref, body_sha, preview " +
-            "FROM messages WHERE id = :id"
-    )
-    suspend fun messageById(id: String): MessageEntity?
 
     @Query("SELECT substr(COALESCE(preview, parts_json), 1, 65536) FROM messages WHERE id = :id")
     suspend fun messagePartsJson(id: String): String?

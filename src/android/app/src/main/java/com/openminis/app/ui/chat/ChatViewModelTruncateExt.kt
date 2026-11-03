@@ -1,6 +1,7 @@
 package com.openminis.app.ui.chat
 
 import com.openminis.app.logging.AppLogger
+import com.openminis.app.data.repository.deleteAfterWithPairRepair
 
 /**
  * T187: drop the message at [messageId] *and* every later message
@@ -23,7 +24,6 @@ internal suspend fun ChatViewModel.truncateBeforeEdit(messageId: String): Boolea
     val index = messages.indexOfFirst { it.id == messageId }
     if (index < 0) return true
 
-    val deletedMessages = messages.subList(index, messages.size).toList()
     val sid = realSessionId.takeIf { it.isNotEmpty() } ?: sessionId
     // [T-delete-anchor-by-id] Anchor the truncation by the edited message's
     // DB row id, NOT by visible-user ordinal. The old ordinal walk counted a
@@ -33,7 +33,7 @@ internal suspend fun ChatViewModel.truncateBeforeEdit(messageId: String): Boolea
     // session tail (2026-10-14 incident). ChatMessage.id IS the DB row id.
     //
     // Resolved BEFORE anything is mutated: on a failed lookup this returns
-    // false without touching the UI, the memory log or the DB, so the caller
+    // false without touching the UI or the DB, so the caller
     // can drop the edit and the session is left exactly as it was.
     val edited = messages[index]
     val anchorIds = listOf(edited.id) + edited.sourceDbIds
@@ -62,7 +62,9 @@ internal suspend fun ChatViewModel.truncateBeforeEdit(messageId: String): Boolea
     // did NOT crash — the next `+` copies the view into a plain ArrayList
     // before anything can invalidate it. So this line is hardening, not the
     // proven cause of the reported CME. See the long note on `uiMessages`.
-    // (`deletedMessages` above already copies; this line did not.)
+    // (`messages.subList` above is copied only where needed; `kept` below
+    // exists because storing a live subList VIEW as `_messages.value` was
+    // the documented CME hazard.)
     val kept = messages.subList(0, index).toList()
     _messages.value = kept
     if (_streamingById.value.isNotEmpty()) {
@@ -70,10 +72,14 @@ internal suspend fun ChatViewModel.truncateBeforeEdit(messageId: String): Boolea
         retainStreamFlushStates(keptIds)
         _streamingById.value = _streamingById.value.filterKeys { it in keptIds }
     }
-    revokeMemoryWritesInDeletedMessages(deletedMessages)
-
+    // [T-m6-no-memory-cascade] No revoke here — same dsh P1-5 rule as
+    // deleteFromMessage: memory files are snapshot products and an edit
+    // (truncate + resend) does not walk them back.
+    // [T-m6-pair-removal] Delete + orphan repair in one repository pass
+    // (see deleteAfterWithPairRepair): the edit cut can separate a
+    // tool_use from its tool_result carrier row.
     if (cutoffSortOrder >= 0) {
-        chatRepository.deleteMessagesAfter(sid, cutoffSortOrder)
+        chatRepository.deleteAfterWithPairRepair(sid, cutoffSortOrder)
     } else {
         AppLogger.warning(
             ChatViewModel.TAG_STREAM,
