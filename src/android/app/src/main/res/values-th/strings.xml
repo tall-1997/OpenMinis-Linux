@@ -627,6 +627,19 @@
     <string name="log_section_logging">การบันทึกล็อก</string>
     <string name="log_section_logging_footer">เมื่อเปิดใช้ ผลลัพธ์ทั้งหมดของคอนโซลจะถูกบันทึกลงไฟล์ล็อกรายวันในพื้นที่จัดเก็บส่วนตัวของแอป</string>
     <string name="log_enable_switch">เปิดใช้การบันทึกล็อก</string>
+
+    <string name="logcat_panel_title">บันทึกสด</string>
+    <string name="logcat_panel_entry">แผงบันทึกสด</string>
+    <string name="logcat_panel_entry_sub">ดูสตรีม logcat ของแอปนี้แบบเรียลไทม์</string>
+    <string name="logcat_panel_search_hint">กรองแท็กหรือข้อความ</string>
+    <string name="logcat_panel_pause">หยุดชั่วคราว</string>
+    <string name="logcat_panel_resume">ดำเนินการต่อ</string>
+    <string name="logcat_panel_clear">ล้าง</string>
+    <string name="logcat_panel_copy">คัดลอกที่มองเห็น</string>
+    <string name="logcat_panel_empty">ยังไม่มีบรรทัด — กำลังรอเอาต์พุต</string>
+    <string name="logcat_panel_paused_badge">หยุดชั่วคราวอยู่</string>
+    <string name="logcat_panel_line_count">%1$d บรรทัด</string>
+    <string name="logcat_panel_dropped">ทิ้ง %1$d บรรทัดเก่า</string>
     <string name="log_section_files">ไฟล์ล็อก</string>
     <string name="log_section_files_footer">แตะที่ไฟล์เพื่อดูเนื้อหา ระบบจะหมุนเวียนล็อกทุกวัน</string>
     <string name="log_no_files">ไม่มีไฟล์ล็อก</string>

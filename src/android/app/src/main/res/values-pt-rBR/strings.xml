@@ -627,6 +627,19 @@
     <string name="log_section_logging">Registro de logs</string>
     <string name="log_section_logging_footer">Quando ativado, toda a saída do console é gravada em arquivos de registro diários no armazenamento privado do app.</string>
     <string name="log_enable_switch">Ativar o registro de logs</string>
+
+    <string name="logcat_panel_title">Log ao vivo</string>
+    <string name="logcat_panel_entry">Painel de log ao vivo</string>
+    <string name="logcat_panel_entry_sub">Acompanhe o fluxo logcat deste app em tempo real</string>
+    <string name="logcat_panel_search_hint">Filtrar tag ou mensagem</string>
+    <string name="logcat_panel_pause">Pausar</string>
+    <string name="logcat_panel_resume">Retomar</string>
+    <string name="logcat_panel_clear">Limpar</string>
+    <string name="logcat_panel_copy">Copiar visíveis</string>
+    <string name="logcat_panel_empty">Nenhuma linha ainda — aguardando saída</string>
+    <string name="logcat_panel_paused_badge">Pausado</string>
+    <string name="logcat_panel_line_count">%1$d linhas</string>
+    <string name="logcat_panel_dropped">%1$d linhas antigas descartadas</string>
     <string name="log_section_files">Arquivos de registro</string>
     <string name="log_section_files_footer">Toque em um arquivo para ver o conteúdo. Os registros são rotacionados diariamente.</string>
     <string name="log_no_files">Nenhum arquivo de registro</string>

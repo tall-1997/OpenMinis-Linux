@@ -153,6 +153,8 @@ object Routes {
     const val USAGE_STATS = "usage_stats"
     const val LOGS = "logs"
     const val LOG_DETAIL = "log_detail/{fileName}"
+    /** [T-logcat-panel] In-app live view of this process's logcat stream. */
+    const val LOGCAT_PANEL = "logcat_panel"
     const val APPEARANCE = "appearance"
     const val BACKGROUND = "background"
     const val ABOUT = "about"

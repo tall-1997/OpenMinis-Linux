@@ -627,6 +627,19 @@
     <string name="log_section_logging">Pag-log</string>
     <string name="log_section_logging_footer">Kapag naka-enable, iniimbak ang lahat ng output ng console sa mga daily log file sa pribadong storage ng app.</string>
     <string name="log_enable_switch">I-enable ang Pag-log</string>
+
+    <string name="logcat_panel_title">Live na log</string>
+    <string name="logcat_panel_entry">Panel ng live na log</string>
+    <string name="logcat_panel_entry_sub">Panoorin ang logcat stream ng app na ito nang real time</string>
+    <string name="logcat_panel_search_hint">I-filter ang tag o mensahe</string>
+    <string name="logcat_panel_pause">I-pause</string>
+    <string name="logcat_panel_resume">Ituloy</string>
+    <string name="logcat_panel_clear">I-clear</string>
+    <string name="logcat_panel_copy">Kopyahin ang nakikita</string>
+    <string name="logcat_panel_empty">Wala pang linya — naghihintay ng output</string>
+    <string name="logcat_panel_paused_badge">Naka-pause</string>
+    <string name="logcat_panel_line_count">%1$d linya</string>
+    <string name="logcat_panel_dropped">%1$d lumang linya ang itinapon</string>
     <string name="log_section_files">Mga Log File</string>
     <string name="log_section_files_footer">I-tap ang isang file para makita ang laman nito. Araw-araw nagpapalit ang mga log.</string>
     <string name="log_no_files">Walang log file</string>

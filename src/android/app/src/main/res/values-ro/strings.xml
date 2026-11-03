@@ -628,6 +628,19 @@
     <string name="log_section_logging">Jurnalizare</string>
     <string name="log_section_logging_footer">Când este activată, toată ieșirea consolei este salvată în fișiere de jurnal zilnice, în stocarea privată a aplicației.</string>
     <string name="log_enable_switch">Activează jurnalizarea</string>
+
+    <string name="logcat_panel_title">Jurnal live</string>
+    <string name="logcat_panel_entry">Panou jurnal live</string>
+    <string name="logcat_panel_entry_sub">Urmărește fluxul logcat al acestei aplicații în timp real</string>
+    <string name="logcat_panel_search_hint">Filtrează eticheta sau mesajul</string>
+    <string name="logcat_panel_pause">Pauză</string>
+    <string name="logcat_panel_resume">Reia</string>
+    <string name="logcat_panel_clear">Golește</string>
+    <string name="logcat_panel_copy">Copiază ce se vede</string>
+    <string name="logcat_panel_empty">Încă nicio linie — se așteaptă ieșire</string>
+    <string name="logcat_panel_paused_badge">În pauză</string>
+    <string name="logcat_panel_line_count">%1$d linii</string>
+    <string name="logcat_panel_dropped">%1$d linii vechi eliminate</string>
     <string name="log_section_files">Fișiere de jurnal</string>
     <string name="log_section_files_footer">Atinge un fișier pentru a-i vedea conținutul. Jurnalele se rotesc zilnic.</string>
     <string name="log_no_files">Niciun fișier de jurnal</string>

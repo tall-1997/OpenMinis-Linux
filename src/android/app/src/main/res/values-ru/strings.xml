@@ -629,6 +629,19 @@
     <string name="log_section_logging">Журналирование</string>
     <string name="log_section_logging_footer">Когда включено, весь вывод консоли записывается в ежедневные файлы журналов в приватном хранилище приложения.</string>
     <string name="log_enable_switch">Включить журналирование</string>
+
+    <string name="logcat_panel_title">Живой журнал</string>
+    <string name="logcat_panel_entry">Панель живого журнала</string>
+    <string name="logcat_panel_entry_sub">Смотреть поток logcat этого приложения в реальном времени</string>
+    <string name="logcat_panel_search_hint">Фильтр по тегу или тексту</string>
+    <string name="logcat_panel_pause">Пауза</string>
+    <string name="logcat_panel_resume">Продолжить</string>
+    <string name="logcat_panel_clear">Очистить</string>
+    <string name="logcat_panel_copy">Копировать видимое</string>
+    <string name="logcat_panel_empty">Строк пока нет — ждём вывод</string>
+    <string name="logcat_panel_paused_badge">На паузе</string>
+    <string name="logcat_panel_line_count">%1$d строк</string>
+    <string name="logcat_panel_dropped">Отброшено %1$d старых строк</string>
     <string name="log_section_files">Файлы журналов</string>
     <string name="log_section_files_footer">Нажмите на файл, чтобы просмотреть его содержимое. Журналы ротируются ежедневно.</string>
     <string name="log_no_files">Нет файлов журналов</string>

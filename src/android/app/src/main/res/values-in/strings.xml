@@ -632,6 +632,19 @@
     <string name="log_section_logging">Pencatatan Log</string>
     <string name="log_section_logging_footer">Jika aktif, seluruh keluaran konsol disimpan ke berkas log harian di penyimpanan privat aplikasi.</string>
     <string name="log_enable_switch">Aktifkan Pencatatan Log</string>
+
+    <string name="logcat_panel_title">Log langsung</string>
+    <string name="logcat_panel_entry">Panel log langsung</string>
+    <string name="logcat_panel_entry_sub">Lihat aliran logcat aplikasi ini secara real time</string>
+    <string name="logcat_panel_search_hint">Filter tag atau pesan</string>
+    <string name="logcat_panel_pause">Jeda</string>
+    <string name="logcat_panel_resume">Lanjutkan</string>
+    <string name="logcat_panel_clear">Hapus</string>
+    <string name="logcat_panel_copy">Salin yang terlihat</string>
+    <string name="logcat_panel_empty">Belum ada baris — menunggu output</string>
+    <string name="logcat_panel_paused_badge">Dijeda</string>
+    <string name="logcat_panel_line_count">%1$d baris</string>
+    <string name="logcat_panel_dropped">%1$d baris lama dibuang</string>
     <string name="log_section_files">Berkas Log</string>
     <string name="log_section_files_footer">Ketuk sebuah berkas untuk melihat isinya. Log diputar setiap hari.</string>
     <string name="log_no_files">Tidak ada berkas log</string>

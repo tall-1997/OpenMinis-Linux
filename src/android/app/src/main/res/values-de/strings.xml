@@ -627,6 +627,19 @@
     <string name="log_section_logging">Protokollierung</string>
     <string name="log_section_logging_footer">Wenn aktiviert, werden alle Konsolenausgaben in tägliche Logdateien im privaten App-Speicher geschrieben.</string>
     <string name="log_enable_switch">Protokollierung aktivieren</string>
+
+    <string name="logcat_panel_title">Live-Protokoll</string>
+    <string name="logcat_panel_entry">Live-Protokollfenster</string>
+    <string name="logcat_panel_entry_sub">Den logcat-Stream dieser App in Echtzeit ansehen</string>
+    <string name="logcat_panel_search_hint">Tag oder Nachricht filtern</string>
+    <string name="logcat_panel_pause">Pause</string>
+    <string name="logcat_panel_resume">Fortsetzen</string>
+    <string name="logcat_panel_clear">Leeren</string>
+    <string name="logcat_panel_copy">Sichtbare kopieren</string>
+    <string name="logcat_panel_empty">Noch keine Zeilen — warte auf Ausgabe</string>
+    <string name="logcat_panel_paused_badge">Pausiert</string>
+    <string name="logcat_panel_line_count">%1$d Zeilen</string>
+    <string name="logcat_panel_dropped">%1$d ältere Zeilen verworfen</string>
     <string name="log_section_files">Logdateien</string>
     <string name="log_section_files_footer">Auf eine Datei tippen, um den Inhalt anzuzeigen. Logs werden täglich rotiert.</string>
     <string name="log_no_files">Keine Logdateien</string>

@@ -71,6 +71,7 @@ import java.io.RandomAccessFile
 fun LogManagementScreen(
     onBack: () -> Unit,
     onLogFileClick: (fileName: String) -> Unit = {},
+    onOpenLogcat: () -> Unit = {},
 ) {
     val context = LocalContext.current
     // T-logs-perf: capped, separated daily/crash lists. Pre-T-logs-perf the screen called AppLogger.listLogFiles() + totalSize() synchronously on
@@ -163,6 +164,7 @@ fun LogManagementScreen(
                     AppLogger.setEnabled(context, it)
                 },
                 onLogFileClick = onLogFileClick,
+                onOpenLogcat = onOpenLogcat,
                 onDeleteAll = { showDeleteAllConfirm = true },
             )
         }
@@ -204,6 +206,7 @@ private fun LogsBody(
     loggingEnabled: Boolean,
     onToggleLogging: (Boolean) -> Unit,
     onLogFileClick: (fileName: String) -> Unit,
+    onOpenLogcat: () -> Unit,
     onDeleteAll: () -> Unit,
 ) {
     val anyFiles = dailyLogs.isNotEmpty() || crashLogs.isNotEmpty()
@@ -221,17 +224,11 @@ private fun LogsBody(
             .verticalScroll(rememberScrollState()),
     ) {
         // ── Logging ─────────────────────────────────────────────────────
-        SettingsSection(
-            header = stringResource(R.string.log_section_logging),
-            footer = stringResource(R.string.log_section_logging_footer),
-        ) {
-            SettingsSwitchRow(
-                title = stringResource(R.string.log_enable_switch),
-                checked = loggingEnabled,
-                onCheckedChange = onToggleLogging,
-                showDivider = false,
-            )
-        }
+        LoggingSection(
+            loggingEnabled = loggingEnabled,
+            onToggleLogging = onToggleLogging,
+            onOpenLogcat = onOpenLogcat,
+        )
 
         // [T-stream-trace-live] 轨迹录制开关与回放入口。
         SettingsSection(
