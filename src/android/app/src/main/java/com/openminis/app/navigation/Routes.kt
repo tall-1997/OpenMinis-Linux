@@ -175,6 +175,10 @@ object Routes {
     // [T-android-scheduled-tasks-run-records] per-task execution log.
     const val SCHEDULED_TASK_RUNS = "scheduled_tasks/runs/{taskId}"
     fun scheduledTaskRuns(taskId: String): String = "scheduled_tasks/runs/$taskId"
+    /** [T-m8-knowledge-workbench] Notes list (tabs: notes / graph / trash). */
+    const val KNOWLEDGE = "knowledge"
+    const val KNOWLEDGE_EDITOR = "knowledge_editor/{noteId}"
+    fun knowledgeEditor(noteId: String) = "knowledge_editor/$noteId"
 
     fun logDetail(fileName: String) = "log_detail/$fileName"
     fun sessionStorageDetail(sessionId: String) = "session_storage/$sessionId"
