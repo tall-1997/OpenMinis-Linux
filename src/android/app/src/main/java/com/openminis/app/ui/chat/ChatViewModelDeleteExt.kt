@@ -78,16 +78,18 @@ fun ChatViewModel.deleteFromMessage(messageId: String) {
         val tail = awaitBoundedHistoryRebuild(sid)
         // Drop the auto-trim digest too. llmDigestLines summarizes rows that
         // trimAgentHistory evicted from the model window; after a truncation
-        // some of those rows no longer exist (the user just deleted them) and
-        // the window boundary moved, so their summaries are stale memory of
-        // content the user asked to forget. effectiveAgentHistory() injects
-        // this digest on every turn, which is exactly the "deleted but still
-        // in context" leak. The user-initiated compact summary is a different
-        // store (_compactSummary) and is left alone: it condenses turns that
-        // still exist. The digest re-accumulates naturally as the rebuilt
-        // window trims again.
+        // some of those rows no longer exist and the window boundary moved, so
+        // their summaries are stale memory of content the user asked to forget
+        // — effectiveAgentHistory() injects them on every turn, which is
+        // exactly the "deleted but still in context" leak. The compact marker
+        // gets the same treatment via reconcile*: a marker whose folded range
+        // the cut disturbed is reverted, markers over untouched rows survive.
         llmDigestLines.clear()
         llmDigestOmitted = 0
+        // [T-m6-compact-marker-staleness] The cut may have removed the row a
+        // compact marker anchors on — drop those markers before the next
+        // compaction can fold their summary (deleted content) back in.
+        reconcileCompactMarkersAfterTruncation(sid)
         // Refresh the session's last-message preview; otherwise the
         // session list keeps quoting a message that no longer exists.
         // An empty remainder clears it rather than leaving the stale text.
