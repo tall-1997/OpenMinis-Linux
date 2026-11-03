@@ -83,6 +83,13 @@ class McpApprovalExecutor(
     fun execute(op: Operation, taskRoot: String, ctx: SourceContext): ExecResult {
         checkSource(op, ctx).let { if (!it.ok) return it }
 
+        // The executor's job is to run *business* tools. A phone_* target would
+        // re-enter the approval machinery (and could chain approvals), so it is
+        // rejected before dispatch.
+        if (op.tool.startsWith("phone_")) {
+            return ExecResult.ofError(ErrorCode.INVALID_NAME, "operations may not target approval tools ('${op.tool}')")
+        }
+
         val arguments = runCatching { JSONObject(op.argumentsJson) }.getOrNull()
             ?: return ExecResult.ofError(ErrorCode.ARGUMENTS_TOO_LARGE, "arguments are not valid JSON")
 

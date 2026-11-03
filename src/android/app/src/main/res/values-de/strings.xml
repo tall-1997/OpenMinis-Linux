@@ -1956,4 +1956,20 @@
     <string name="settings_app_notes_clear_message">Alle vom Agenten aufgezeichneten Notizen werden gelöscht. Dies kann nicht rückgängig gemacht werden.</string>
     <string name="settings_app_notes_clear_ok">Löschen</string>
     <string name="settings_app_notes_cancel">Abbrechen</string>
+
+    <!-- MCP approval inbox -->
+    <string name="mcp_approvals_section">Ausstehende Freigaben</string>
+    <string name="mcp_approval_approve">Genehmigen</string>
+    <string name="mcp_approval_deny">Ablehnen</string>
+    <string name="mcp_approval_run">Ausführen</string>
+    <string name="mcp_approval_source_bound">An eine Quelldatei gebunden — im übermittelnden Client ausführen</string>
+    <string name="mcp_approval_waiting">Wartet</string>
+    <string name="mcp_approval_task_active">Aktiv</string>
+    <string name="mcp_approval_approved">Genehmigt</string>
+    <string name="mcp_approval_revoked">Widerrufen</string>
+
+    <!-- MCP approval inbox: executed + offline states -->
+    <string name="mcp_approval_executed">Ausgeführt</string>
+    <string name="mcp_approval_needs_server">Server läuft nicht — zum Ausführen starten</string>
+    <string name="mcp_approval_restart_notice">Neustart hat %1$d ausstehende Genehmigung(en) verworfen</string>
 </resources>

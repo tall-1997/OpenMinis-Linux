@@ -1960,4 +1960,20 @@
     <string name="settings_app_notes_clear_message">Toate notele înregistrate de agent vor fi șterse. Acțiunea nu poate fi anulată.</string>
     <string name="settings_app_notes_clear_ok">Șterge</string>
     <string name="settings_app_notes_cancel">Anulare</string>
+
+    <!-- MCP approval inbox -->
+    <string name="mcp_approvals_section">Aprobări în așteptare</string>
+    <string name="mcp_approval_approve">Aprobă</string>
+    <string name="mcp_approval_deny">Refuză</string>
+    <string name="mcp_approval_run">Rulează</string>
+    <string name="mcp_approval_source_bound">Legat de un fișier sursă — rulează din clientul care l-a trimis</string>
+    <string name="mcp_approval_waiting">În așteptare</string>
+    <string name="mcp_approval_task_active">Activ</string>
+    <string name="mcp_approval_approved">Aprobat</string>
+    <string name="mcp_approval_revoked">Revocat</string>
+
+    <!-- MCP approval inbox: executed + offline states -->
+    <string name="mcp_approval_executed">Executat</string>
+    <string name="mcp_approval_needs_server">Server oprit — pornește-l pentru a rula</string>
+    <string name="mcp_approval_restart_notice">Repornirea a anulat %1$d aprobări în așteptare</string>
 </resources>

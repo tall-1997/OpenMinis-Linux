@@ -1956,4 +1956,20 @@
     <string name="settings_app_notes_clear_message">Toutes les notes enregistrées par l\'agent seront supprimées. Action irréversible.</string>
     <string name="settings_app_notes_clear_ok">Effacer</string>
     <string name="settings_app_notes_cancel">Annuler</string>
+
+    <!-- MCP approval inbox -->
+    <string name="mcp_approvals_section">Approbations en attente</string>
+    <string name="mcp_approval_approve">Approuver</string>
+    <string name="mcp_approval_deny">Refuser</string>
+    <string name="mcp_approval_run">Exécuter</string>
+    <string name="mcp_approval_source_bound">Lié à un fichier source — à exécuter depuis le client émetteur</string>
+    <string name="mcp_approval_waiting">En attente</string>
+    <string name="mcp_approval_task_active">Actif</string>
+    <string name="mcp_approval_approved">Approuvé</string>
+    <string name="mcp_approval_revoked">Révoqué</string>
+
+    <!-- MCP approval inbox: executed + offline states -->
+    <string name="mcp_approval_executed">Exécuté</string>
+    <string name="mcp_approval_needs_server">Serveur arrêté — démarrez-le pour exécuter</string>
+    <string name="mcp_approval_restart_notice">Le redémarrage a annulé %1$d approbation(s) en attente</string>
 </resources>

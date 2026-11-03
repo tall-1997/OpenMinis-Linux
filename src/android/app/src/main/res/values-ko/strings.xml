@@ -1953,4 +1953,20 @@
     <string name="settings_app_notes_clear_message">에이전트가 기록한 앱 메모가 모두 삭제되며 되돌릴 수 없습니다.</string>
     <string name="settings_app_notes_clear_ok">지우기</string>
     <string name="settings_app_notes_cancel">취소</string>
+
+    <!-- MCP approval inbox -->
+    <string name="mcp_approvals_section">대기 중인 승인</string>
+    <string name="mcp_approval_approve">승인</string>
+    <string name="mcp_approval_deny">거부</string>
+    <string name="mcp_approval_run">실행</string>
+    <string name="mcp_approval_source_bound">소스 파일에 바인딩됨 — 제출한 클라이언트에서 실행</string>
+    <string name="mcp_approval_waiting">대기 중</string>
+    <string name="mcp_approval_task_active">진행 중</string>
+    <string name="mcp_approval_approved">승인됨</string>
+    <string name="mcp_approval_revoked">취소됨</string>
+
+    <!-- MCP approval inbox: executed + offline states -->
+    <string name="mcp_approval_executed">실행됨</string>
+    <string name="mcp_approval_needs_server">서버 중지됨 — 실행하려면 시작하세요</string>
+    <string name="mcp_approval_restart_notice">재시작으로 대기 중인 승인 %1$d개가 무효화되었습니다</string>
 </resources>

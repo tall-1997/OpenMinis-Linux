@@ -1961,4 +1961,20 @@
     <string name="settings_app_notes_clear_message">Semua catatan yang dicatat agen akan dihapus dan tidak dapat dipulihkan.</string>
     <string name="settings_app_notes_clear_ok">Hapus</string>
     <string name="settings_app_notes_cancel">Batal</string>
+
+    <!-- MCP approval inbox -->
+    <string name="mcp_approvals_section">Persetujuan tertunda</string>
+    <string name="mcp_approval_approve">Setujui</string>
+    <string name="mcp_approval_deny">Tolak</string>
+    <string name="mcp_approval_run">Jalankan</string>
+    <string name="mcp_approval_source_bound">Terikat ke file sumber — jalankan dari klien pengirim</string>
+    <string name="mcp_approval_waiting">Menunggu</string>
+    <string name="mcp_approval_task_active">Aktif</string>
+    <string name="mcp_approval_approved">Disetujui</string>
+    <string name="mcp_approval_revoked">Dicabut</string>
+
+    <!-- MCP approval inbox: executed + offline states -->
+    <string name="mcp_approval_executed">Dijalankan</string>
+    <string name="mcp_approval_needs_server">Server tidak berjalan — mulai untuk menjalankan</string>
+    <string name="mcp_approval_restart_notice">Restart membatalkan %1$d persetujuan tertunda</string>
 </resources>

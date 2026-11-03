@@ -2,6 +2,10 @@ package com.openminis.app.mcp.server
 
 import android.content.Context
 import android.util.Log
+import com.openminis.app.mcp.server.approval.McpApprovalManager
+import com.openminis.app.mcp.server.approval.McpApprovalRpc
+import com.openminis.app.mcp.server.approval.McpApprovalStore
+import com.openminis.app.sandbox.SessionWorkspace
 import com.openminis.app.security.SecurityGateHolder
 import com.openminis.app.security.PermissionMode
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,6 +42,13 @@ object McpServerManager {
     private var configStore: McpServerConfigStore? = null
     private var server: McpHttpServer? = null
     private var dispatcher: McpToolDispatcher? = null
+
+    /**
+     * [T-mcp-approval] Approval runtime shared by the tool surface and the
+     * approvals UI. Created on first start; the backing prefs outlive restarts.
+     */
+    @Volatile
+    private var approvals: McpApprovalManager? = null
 
     /** Port the running server actually bound (configured port + fallback offset). */
     @Volatile
@@ -76,6 +87,11 @@ object McpServerManager {
 
         // shell policy (auto/strict) maps onto the gate's PermissionMode; read
         // live per request so a settings toggle takes effect without restarting.
+        val approvalRuntime = approvals ?: McpApprovalManager(ctx).also { approvals = it }
+        // Restart semantics: a new server generation revokes every outstanding
+        // grant — nothing is resumed and nothing is replayed across a restart.
+        val epoch = approvalRuntime.bumpEpoch()
+        Log.i(TAG, "mcp approval epoch -> $epoch (all outstanding grants revoked)")
         val d = McpToolDispatcher(
             context = ctx,
             gate = SecurityGateHolder.gate,
@@ -85,6 +101,7 @@ object McpServerManager {
                     else -> PermissionMode.ALLOW_ALL
                 }
             },
+            approvalManager = approvalRuntime,
         )
         dispatcher = d
         var started: McpHttpServer? = null
@@ -119,6 +136,9 @@ object McpServerManager {
                 Log.w(TAG, "port $effectivePort in use; built-in MCP server fell back to $boundPort")
             }
             Log.i(TAG, "server started on port $boundPort")
+            // [T-mcp-approval] Publish the address for stdio bridges; the guest
+            // path is /var/minis/shared/mcp/endpoint.json. Best effort only.
+            McpEndpointFile.advertise(ctx.filesDir, boundPort)
             return true
         }
         _state.value = ServerState(Status.ERROR, s.lastError ?: "failed to start")
@@ -142,6 +162,8 @@ object McpServerManager {
         server = null
         dispatcher = null
         actualPortField = null
+        // [T-mcp-approval] Stop advertising the port the moment nothing listens.
+        context?.let { McpEndpointFile.withdraw(it.filesDir) }
     }
 
     private fun publishState(server: McpHttpServer) {
@@ -166,6 +188,34 @@ object McpServerManager {
     }
 
     fun currentPort(): Int = configStore?.config?.value?.port ?: McpHttpServer.DEFAULT_PORT
+
+    /**
+     * Approval runtime for the in-process approvals UI. Null before the first
+     * [init]; the manager itself is created on first [start] and survives
+     * stop/start so the UI can still show revoked state while the server is off.
+     */
+    fun approvalManager(): McpApprovalManager? = approvals
+
+    /**
+     * Execution handle for the approvals UI: null until the server runs once
+     * (the executor is bound to a live dispatcher). A grant that outlives the
+     * server is visible but not runnable — restarting revokes it anyway.
+     */
+    fun approvalSurface(): McpApprovalRpc? = dispatcher?.approvalSurface()
+
+    /** Eagerly create the runtime so the approvals UI works before the server is started. */
+    @Synchronized
+    fun ensureApprovalRuntime(): McpApprovalManager? {
+        val ctx = context ?: return null
+        // `/var/minis/...` only resolves inside the PRoot mount, so the store
+        // translates through the same resolver the shell bind uses. Set here
+        // (not in the object initializer) so unit tests keep the literal
+        // prefix and no static state leaks across test classes.
+        McpApprovalStore.taskRootHostResolver = { guest ->
+            SessionWorkspace.resolveGuestPath(ctx.filesDir, "", guest)?.path ?: guest
+        }
+        return approvals ?: McpApprovalManager(ctx).also { approvals = it }
+    }
 
     /** Port the running server actually bound (may differ from [currentPort] after a fallback). Null when not running. */
     fun actualPort(): Int? = actualPortField.takeIf { _state.value.status == Status.RUNNING }

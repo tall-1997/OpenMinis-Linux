@@ -83,6 +83,21 @@ class McpApprovalStoreTest {
     }
 
     @Test
+    fun `unknown operation status degrades to revoked not to a grant`() {
+        val tampered = McpApprovalStore.serialize(fullState())
+            .replace("\"APPROVED\"", "\"FROM_THE_FUTURE\"")
+        val parsed = McpApprovalStore.parse(tampered)
+        assertNotNull(parsed)
+        // Fail-closed: a status this build does not understand must not read
+        // back as WAITING (which a user could then approve). Executed rows are
+        // the only ones allowed to keep a grant, so op-1 lands on REVOKED too.
+        assertEquals(
+            McpApprovalCore.OperationStatus.REVOKED,
+            parsed?.operations?.getValue("op-1")?.status,
+        )
+    }
+
+    @Test
     fun `generated ids are valid and unique`() {
         val seen = mutableSetOf<String>()
         repeat(500) {
@@ -101,11 +116,32 @@ class McpApprovalStoreTest {
             // have left the shared prefix at a temp dir (class order is not
             // guaranteed).
             McpApprovalStore.taskRootPrefix = McpApprovalStore.TASK_ROOT_PREFIX
-            assertEquals("/var/minis/mcp-tasks/abc/", McpApprovalStore.taskRootFor("abc"))
+            assertEquals("/var/minis/shared/mcp-tasks/abc/", McpApprovalStore.taskRootFor("abc"))
             McpApprovalStore.taskRootPrefix = "/tmp/mcp-test/"
             assertEquals("/tmp/mcp-test/abc/", McpApprovalStore.taskRootFor("abc"))
         } finally {
             McpApprovalStore.taskRootPrefix = old
+        }
+    }
+
+    @Test
+    fun `host task root is the literal path until a resolver is injected`() {
+        val oldPrefix = McpApprovalStore.taskRootPrefix
+        val oldResolver = McpApprovalStore.taskRootHostResolver
+        try {
+            McpApprovalStore.taskRootPrefix = McpApprovalStore.TASK_ROOT_PREFIX
+            McpApprovalStore.taskRootHostResolver = null
+            // No resolver: guest and host path are identical, so unit tests and
+            // scratch layouts keep working without an Android Context.
+            assertEquals(McpApprovalStore.taskRootFor("abc"), McpApprovalStore.hostTaskRootFor("abc"))
+            // Resolver injected: the write path follows the guest mount while
+            // the advertised path stays the one a client can open.
+            McpApprovalStore.taskRootHostResolver = { guest -> guest.replace("/var/minis/", "/data/files/minis-global/") }
+            assertEquals("/data/files/minis-global/shared/mcp-tasks/abc/", McpApprovalStore.hostTaskRootFor("abc"))
+            assertEquals("/var/minis/shared/mcp-tasks/abc/", McpApprovalStore.taskRootFor("abc"))
+        } finally {
+            McpApprovalStore.taskRootPrefix = oldPrefix
+            McpApprovalStore.taskRootHostResolver = oldResolver
         }
     }
 

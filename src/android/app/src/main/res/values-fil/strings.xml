@@ -1956,4 +1956,20 @@
     <string name="settings_app_notes_clear_message">Mabubura lahat ng tala ng agent at hindi na maibabalik.</string>
     <string name="settings_app_notes_clear_ok">Burahin</string>
     <string name="settings_app_notes_cancel">Kanselahin</string>
+
+    <!-- MCP approval inbox -->
+    <string name="mcp_approvals_section">Mga pending na approval</string>
+    <string name="mcp_approval_approve">Aprubahan</string>
+    <string name="mcp_approval_deny">Tanggihan</string>
+    <string name="mcp_approval_run">Patakbuhin</string>
+    <string name="mcp_approval_source_bound">Nakatali sa source file — patakbuhin mula sa client na nagsumite</string>
+    <string name="mcp_approval_waiting">Naghihintay</string>
+    <string name="mcp_approval_task_active">Aktibo</string>
+    <string name="mcp_approval_approved">Aprubado</string>
+    <string name="mcp_approval_revoked">Binawi</string>
+
+    <!-- MCP approval inbox: executed + offline states -->
+    <string name="mcp_approval_executed">Naipatupad</string>
+    <string name="mcp_approval_needs_server">Hindi tumatakbo ang server — simulan ito para patakbuhin</string>
+    <string name="mcp_approval_restart_notice">Naalis ng restart ang %1$d nakabinbing approval</string>
 </resources>

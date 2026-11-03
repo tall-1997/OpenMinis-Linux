@@ -167,7 +167,7 @@
     "src/android/app/src/main/java/com/openminis/app/ui/settings/AppearanceScreen.kt": 946,
     "src/android/app/src/main/java/com/openminis/app/ui/settings/CheckUpdateSection.kt": 810,
     "src/android/app/src/main/java/com/openminis/app/ui/settings/LogManagementScreen.kt": 837,
-    "src/android/app/src/main/java/com/openminis/app/ui/settings/MCPIntegrationsScreen.kt": 1149,
+    "src/android/app/src/main/java/com/openminis/app/ui/settings/MCPIntegrationsScreen.kt": 1147,
     "src/android/app/src/main/java/com/openminis/app/ui/settings/ModelGroupsScreen.kt": 981,
     "src/android/app/src/main/java/com/openminis/app/ui/settings/ProviderDetailScreen.kt": 1198,
     "src/android/app/src/main/java/com/openminis/app/ui/settings/SkillsManagementScreen.kt": 1223,

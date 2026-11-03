@@ -56,13 +56,19 @@ class McpApprovalManager internal constructor(private val store: McpApprovalStor
 
     // -- run phase -----------------------------------------------------------
 
-    fun submitRun(taskId: String, operationId: String, tool: String, argumentsJson: String): Outcome =
+    fun submitRun(
+        taskId: String,
+        operationId: String,
+        requestId: String,
+        tool: String,
+        argumentsJson: String,
+    ): Outcome =
         transact {
             McpApprovalCore.submitRun(
                 state = it,
                 taskId = taskId,
                 operationId = operationId,
-                requestId = McpApprovalCore.requestIdFor(taskId, tool, argumentsJson),
+                requestId = requestId,
                 tool = tool,
                 argumentsJson = argumentsJson,
                 nowMs = now,
@@ -83,6 +89,17 @@ class McpApprovalManager internal constructor(private val store: McpApprovalStor
 
     fun markExecuted(operationId: String): Outcome =
         transact { McpApprovalCore.markExecuted(it, operationId) }
+
+    /**
+     * Restart semantics: every call opens a new epoch, which revokes every
+     * outstanding grant. Called from McpServerManager.start() so an app or
+     * server restart can never resume a stale approval.
+     */
+    fun bumpEpoch(): Long = synchronized(this) {
+        val next = McpApprovalCore.bumpEpoch(load())
+        persist(next)
+        next.epoch
+    }
 
     /** Housekeeping; returns the pruned state and the ids of removed operations. */
     fun pruneExpired(): Pair<State, Set<String>> = synchronized(this) {
@@ -105,10 +122,13 @@ class McpApprovalManager internal constructor(private val store: McpApprovalStor
 
     fun taskRootFor(taskId: String): String = McpApprovalStore.taskRootFor(taskId)
 
+    /** Host directory behind [taskRootFor]: what actually gets written. */
+    fun hostTaskRootFor(taskId: String): String = McpApprovalStore.hostTaskRootFor(taskId)
+
     /** Best-effort delete of a task directory after cleanup/prune. */
     fun deleteTaskDirectory(taskId: String): Boolean =
         runCatching {
-            val dir = java.io.File(McpApprovalStore.taskRootFor(taskId))
+            val dir = java.io.File(McpApprovalStore.hostTaskRootFor(taskId))
             if (dir.exists()) {
                 dir.deleteRecursively()
                 true

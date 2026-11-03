@@ -2038,4 +2038,20 @@
     <string name="settings_app_notes_clear_message">Agent 記錄的全部 App 經驗都會被刪除，且無法復原。</string>
     <string name="settings_app_notes_clear_ok">清空</string>
     <string name="settings_app_notes_cancel">取消</string>
+
+    <!-- MCP approval inbox -->
+    <string name="mcp_approvals_section">待核准</string>
+    <string name="mcp_approval_approve">核准</string>
+    <string name="mcp_approval_deny">拒絕</string>
+    <string name="mcp_approval_run">執行</string>
+    <string name="mcp_approval_source_bound">已綁定來源檔案 — 請在提交它的用戶端執行</string>
+    <string name="mcp_approval_waiting">等待中</string>
+    <string name="mcp_approval_task_active">進行中</string>
+    <string name="mcp_approval_approved">已核准</string>
+    <string name="mcp_approval_revoked">已撤銷</string>
+
+    <!-- MCP approval inbox: executed + offline states -->
+    <string name="mcp_approval_executed">已執行</string>
+    <string name="mcp_approval_needs_server">伺服器未執行 — 啟動後才能執行</string>
+    <string name="mcp_approval_restart_notice">重新啟動後有 %1$d 項待批准已失效</string>
 </resources>

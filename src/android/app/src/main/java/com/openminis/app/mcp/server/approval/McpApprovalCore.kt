@@ -48,7 +48,7 @@ object McpApprovalCore {
     private val ID_PATTERN = Regex("[A-Za-z0-9._-]{1,64}")
 
     enum class TaskStatus { PENDING, ACTIVE, REVOKED }
-    enum class OperationStatus { WAITING, APPROVED }
+    enum class OperationStatus { WAITING, APPROVED, REVOKED }
 
     enum class ErrorCode {
         INVALID_ID, INVALID_NAME,
@@ -117,13 +117,29 @@ object McpApprovalCore {
     fun createTask(state: State, taskId: String, name: String, nowMs: Long): Outcome {
         if (!validId(taskId)) return err(ErrorCode.INVALID_ID, "taskId must match [A-Za-z0-9._-]{1,64}")
         if (name.isBlank()) return err(ErrorCode.INVALID_NAME, "task name must not be blank")
-        if (state.tasks.containsKey(taskId)) return err(ErrorCode.TASK_ALREADY_EXISTS, "task '$taskId' already exists")
+        val existing = state.tasks[taskId]
+        // Same-id reuse is refused only inside one generation. A row left over
+        // from a previous epoch is already dead (the restart revoked it), so a
+        // client that re-walks the flow with its usual task ids must not be
+        // pushed into inventing new ones forever.
+        if (existing != null && existing.epoch == state.epoch) {
+            return err(ErrorCode.TASK_ALREADY_EXISTS, "task '$taskId' already exists")
+        }
+        val staleOps = state.operations.filterValues { it.taskId == taskId }
         val task = Task(taskId, name, TaskStatus.PENDING, state.epoch, nowMs)
-        return ok(state.copy(tasks = state.tasks + (taskId to task)))
+        return ok(
+            state.copy(
+                tasks = state.tasks + (taskId to task),
+                operations = state.operations - staleOps.keys,
+            ),
+        )
     }
 
     fun approveTask(state: State, taskId: String): Outcome {
         val task = state.tasks[taskId] ?: return err(ErrorCode.TASK_NOT_FOUND, "task '$taskId' not found")
+        // Generation check first: a task created before a restart is not a task
+        // this run may activate, whatever its row status says.
+        if (task.epoch != state.epoch) return err(ErrorCode.EPOCH_MISMATCH, "task '$taskId' belongs to epoch ${task.epoch}")
         if (task.status != TaskStatus.PENDING) return err(ErrorCode.TASK_NOT_ACTIVE, "task '$taskId' is ${task.status}")
         return ok(state.copy(tasks = state.tasks + (taskId to task.copy(status = TaskStatus.ACTIVE))))
     }
@@ -189,9 +205,9 @@ object McpApprovalCore {
         operationFingerprint: String? = null,
     ): Outcome {
         val op = state.operations[operationId] ?: return err(ErrorCode.OPERATION_NOT_FOUND, "operation '$operationId' not found")
-        if (op.status != OperationStatus.WAITING) return err(ErrorCode.OPERATION_NOT_WAITING, "operation '$operationId' is ${op.status}")
         val task = state.tasks[op.taskId] ?: return err(ErrorCode.TASK_NOT_FOUND, "task '${op.taskId}' not found")
         if (task.epoch != state.epoch) return err(ErrorCode.EPOCH_MISMATCH, "task '${op.taskId}' belongs to epoch ${task.epoch}")
+        if (op.status != OperationStatus.WAITING) return err(ErrorCode.OPERATION_NOT_WAITING, "operation '$operationId' is ${op.status}")
         if (task.status != TaskStatus.ACTIVE) return err(ErrorCode.TASK_NOT_ACTIVE, "task '${op.taskId}' is ${task.status}")
         if (operationFingerprint != null && operationFingerprint.length > 128) {
             return err(ErrorCode.INVALID_ID, "operationFingerprint must be ≤128 chars")
@@ -218,9 +234,12 @@ object McpApprovalCore {
         if (state.executedOperationIds.contains(operationId)) {
             return err(ErrorCode.ALREADY_EXECUTED, "operation '$operationId' was already executed")
         }
-        if (op.status != OperationStatus.APPROVED) return err(ErrorCode.OPERATION_NOT_WAITING, "operation '$operationId' is ${op.status}")
+        // Restart wins over row state: a grant revoked by an epoch bump must
+        // report *why* it is gone (the client re-walks the flow) instead of
+        // looking like a run that was never approved.
         val task = state.tasks[op.taskId] ?: return err(ErrorCode.TASK_NOT_FOUND, "task '${op.taskId}' not found")
         if (task.epoch != state.epoch) return err(ErrorCode.EPOCH_MISMATCH, "task '${op.taskId}' belongs to epoch ${task.epoch}")
+        if (op.status != OperationStatus.APPROVED) return err(ErrorCode.OPERATION_NOT_WAITING, "operation '$operationId' is ${op.status}")
         val approvedAt = op.approvedAtMs ?: return err(ErrorCode.OPERATION_NOT_WAITING, "operation '$operationId' has no approval time")
         if (nowMs - approvedAt > APPROVAL_TTL_MS) {
             return err(ErrorCode.APPROVAL_EXPIRED, "approval for '$operationId' expired")
@@ -293,7 +312,20 @@ object McpApprovalCore {
      * Callers reconnect and must walk the approval flow again — nothing is
      * restored and nothing is replayed.
      */
-    fun bumpEpoch(state: State): State = state.copy(epoch = state.epoch + 1)
+    fun bumpEpoch(state: State): State = state.copy(
+        epoch = state.epoch + 1,
+        // Every task row becomes REVOKED too: the whole generation is gone, and
+        // leaving rows behind would stack a dead card per restart in the UI.
+        tasks = state.tasks.mapValues { (_, task) -> task.copy(status = TaskStatus.REVOKED) },
+        // Grants never survive a restart. Every grant that has not been
+        // executed becomes REVOKED — the approvals UI can then say "lost to a
+        // restart" instead of showing an approved row that only fails at
+        // execute time. Executed rows keep APPROVED: their result is still
+        // replayable. The epoch bump stays as the authoritative refusal.
+        operations = state.operations.mapValues { (id, op) ->
+            if (id in state.executedOperationIds) op else op.copy(status = OperationStatus.REVOKED)
+        },
+    )
 
     /**
      * Housekeeping: drop APPROVED operations past their TTL and WAITING
@@ -305,8 +337,20 @@ object McpApprovalCore {
             when (op.status) {
                 OperationStatus.WAITING -> nowMs - op.createdAtMs < WAITING_PRUNE_MS
                 OperationStatus.APPROVED -> op.approvedAtMs?.let { nowMs - it < APPROVAL_TTL_MS } ?: false
+                // A revoked grant is dead weight the moment a restart writes it,
+                // but the approvals UI needs a while to explain what happened —
+                // it ages out on the same clock as an unanswered run.
+                OperationStatus.REVOKED -> nowMs - op.createdAtMs < WAITING_PRUNE_MS
             }
         }
-        return state.copy(operations = kept)
+        // Dead task rows age out on the same clock, otherwise every restart
+        // would leave one more unreachable row in the store. Live-generation
+        // rows and the idempotency table stay put.
+        val taskIdsWithOps = kept.values.mapTo(HashSet()) { it.taskId }
+        val keptTasks = state.tasks.filterValues { task ->
+            task.taskId in taskIdsWithOps || task.epoch == state.epoch ||
+                nowMs - task.createdAtMs < WAITING_PRUNE_MS
+        }
+        return state.copy(operations = kept, tasks = keptTasks)
     }
 }
