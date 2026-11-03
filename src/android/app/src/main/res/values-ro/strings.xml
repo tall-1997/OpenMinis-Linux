@@ -272,7 +272,10 @@
     <string name="settings_storage_subtitle">Gestionează sistemul de fișiere Ubuntu și răsfoiește fișierele</string>
     <string name="settings_section_permissions">Permisiuni</string>
     <string name="settings_permissions_subtitle">Controlează accesul Agentului la funcțiile sensibile pentru confidențialitate</string>
-    <string name="settings_section_logs">Jurnale</string>
+        <!-- [T-m8-knowledge-workbench] settings entry -->
+    <string name="settings_section_knowledge">Banc de lucru cunoștințe</string>
+    <string name="settings_knowledge_subtitle">Notițe, graf legat și istoric versionat</string>
+<string name="settings_section_logs">Jurnale</string>
     <string name="settings_logs_subtitle">Vizualizează și exportă jurnalele aplicației</string>
     <string name="settings_section_about">Despre</string>
     <string name="settings_about_minis">Despre Minis Ultra</string>
@@ -2009,4 +2012,39 @@
     <string name="token_usage_section_context_saver">Economie de context</string>
     <string name="token_usage_saver_folded">Rezultate pliate</string>
     <string name="token_usage_saver_saved">Economisit în acest tur</string>
+    <!-- [T-m8-knowledge-workbench] knowledge workbench strings -->
+    <string name="knowledge_title">Bază de cunoștințe</string>
+    <string name="knowledge_tab_notes">Notițe</string>
+    <string name="knowledge_tab_graph">Graf</string>
+    <string name="knowledge_tab_trash">Coș</string>
+    <string name="knowledge_search_hint">Caută titlu, conținut sau etichete</string>
+    <string name="knowledge_empty">Nu există încă notițe. Atinge + pentru a crea una sau leagă notițele cu [[Titlul notiței]] în conținut.</string>
+    <string name="knowledge_graph_empty">Leagă cel puțin două notițe între ele pentru a genera un graf.</string>
+    <string name="knowledge_graph_hint">Atinge un nod pentru a deschide notița</string>
+    <string name="knowledge_trash_empty">Coșul este gol</string>
+    <string name="knowledge_trashed_at">Ștearsă la %1$s</string>
+    <string name="knowledge_restore">Restaurează</string>
+    <string name="knowledge_purge">Șterge definitiv</string>
+    <string name="knowledge_purge_confirm_title">Ștergi definitiv această notiță?</string>
+    <string name="knowledge_purge_expired">Curăță expiratele</string>
+    <string name="knowledge_purge_expired_confirm_title">Curăți toate notițele expirate?</string>
+    <string name="knowledge_purge_expired_confirm_body">Notițele șterse cu peste 30 de zile în urmă vor fi șterse definitiv.</string>
+    <string name="knowledge_note_new">Notiță nouă</string>
+    <string name="knowledge_note_edit">Editează notița</string>
+    <string name="knowledge_title_label">Titlu</string>
+    <string name="knowledge_body_label">Conținut</string>
+    <string name="knowledge_body_hint">Leagă notițele cu [[Altă notiță]]</string>
+    <string name="knowledge_tags_label">Etichete (separate prin virgule)</string>
+    <string name="knowledge_tags_hint">de ex. muncă, idei</string>
+    <string name="knowledge_save">Salvează</string>
+    <string name="knowledge_versions_title">Istoric versiuni</string>
+    <string name="knowledge_version_row">v%1$d · %2$s</string>
+    <string name="knowledge_trash">Mută în coș</string>
+    <string name="knowledge_trash_confirm_title">Muți în coș?</string>
+    <string name="knowledge_trash_confirm_body">Notița rămâne 30 de zile în coș înainte de ștergerea automată.</string>
+    <string name="knowledge_snack_created">Notiță creată</string>
+    <string name="knowledge_snack_trashed">Mutată în coș</string>
+    <string name="knowledge_snack_restored">Restaurată</string>
+    <string name="knowledge_snack_purged">Ștearsă definitiv</string>
+    <string name="knowledge_snack_imported">Importată</string>
 </resources>

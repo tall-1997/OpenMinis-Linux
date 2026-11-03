@@ -271,7 +271,10 @@
     <string name="settings_storage_subtitle">Ubuntu-Rootfs verwalten und Dateien durchsuchen</string>
     <string name="settings_section_permissions">Berechtigungen</string>
     <string name="settings_permissions_subtitle">Zugriff von Minis Ultra Agent auf datenschutzrelevante Funktionen steuern</string>
-    <string name="settings_section_logs">Logs</string>
+        <!-- [T-m8-knowledge-workbench] settings entry -->
+    <string name="settings_section_knowledge">Wissenswerkbank</string>
+    <string name="settings_knowledge_subtitle">Notizen, verknüpfter Graph und versionierte Verläufe</string>
+<string name="settings_section_logs">Logs</string>
     <string name="settings_logs_subtitle">App-Logs ansehen und exportieren</string>
     <string name="settings_section_about">Über</string>
     <string name="settings_about_minis">Über Minis Ultra</string>
@@ -2005,4 +2008,39 @@
     <string name="token_usage_section_context_saver">Kontext-Sparmodus</string>
     <string name="token_usage_saver_folded">Gefaltete Tool-Ergebnisse</string>
     <string name="token_usage_saver_saved">Diese Runde gespart</string>
+    <!-- [T-m8-knowledge-workbench] knowledge workbench strings -->
+    <string name="knowledge_title">Wissensbasis</string>
+    <string name="knowledge_tab_notes">Notizen</string>
+    <string name="knowledge_tab_graph">Graph</string>
+    <string name="knowledge_tab_trash">Papierkorb</string>
+    <string name="knowledge_search_hint">Titel, Text oder Tags durchsuchen</string>
+    <string name="knowledge_empty">Noch keine Notizen. Tippe auf +, um eine zu erstellen, oder verlinke Notizen mit [[Notiztitel]] im Text.</string>
+    <string name="knowledge_graph_empty">Verlinke mindestens zwei Notizen miteinander, um einen Graphen zu erstellen.</string>
+    <string name="knowledge_graph_hint">Tippe auf einen Knoten, um die Notiz zu öffnen</string>
+    <string name="knowledge_trash_empty">Der Papierkorb ist leer</string>
+    <string name="knowledge_trashed_at">Gelöscht am %1$s</string>
+    <string name="knowledge_restore">Wiederherstellen</string>
+    <string name="knowledge_purge">Endgültig löschen</string>
+    <string name="knowledge_purge_confirm_title">Diese Notiz endgültig löschen?</string>
+    <string name="knowledge_purge_expired">Abgelaufene löschen</string>
+    <string name="knowledge_purge_expired_confirm_title">Alle abgelaufenen Notizen löschen?</string>
+    <string name="knowledge_purge_expired_confirm_body">Notizen, die vor mehr als 30 Tagen gelöscht wurden, werden endgültig entfernt.</string>
+    <string name="knowledge_note_new">Neue Notiz</string>
+    <string name="knowledge_note_edit">Notiz bearbeiten</string>
+    <string name="knowledge_title_label">Titel</string>
+    <string name="knowledge_body_label">Text</string>
+    <string name="knowledge_body_hint">Notizen mit [[Andere Notiz]] verlinken</string>
+    <string name="knowledge_tags_label">Tags (durch Kommas getrennt)</string>
+    <string name="knowledge_tags_hint">z. B. Arbeit, Ideen</string>
+    <string name="knowledge_save">Speichern</string>
+    <string name="knowledge_versions_title">Versionsverlauf</string>
+    <string name="knowledge_version_row">v%1$d · %2$s</string>
+    <string name="knowledge_trash">In den Papierkorb</string>
+    <string name="knowledge_trash_confirm_title">In den Papierkorb verschieben?</string>
+    <string name="knowledge_trash_confirm_body">Die Notiz bleibt 30 Tage im Papierkorb und wird dann automatisch gelöscht.</string>
+    <string name="knowledge_snack_created">Notiz erstellt</string>
+    <string name="knowledge_snack_trashed">In den Papierkorb verschoben</string>
+    <string name="knowledge_snack_restored">Wiederhergestellt</string>
+    <string name="knowledge_snack_purged">Endgültig gelöscht</string>
+    <string name="knowledge_snack_imported">Importiert</string>
 </resources>

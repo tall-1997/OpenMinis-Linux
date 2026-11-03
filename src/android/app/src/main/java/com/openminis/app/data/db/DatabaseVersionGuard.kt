@@ -59,7 +59,7 @@ object DatabaseVersionGuard {
      * treated the user's own database as "from a newer build" and blocked
      * opening. Keep this equal to `@Database(version=...)`.
      */
-    const val CODE_DB_VERSION = 24 // messages(role, created_at) index 23 -> 24
+    const val CODE_DB_VERSION = 25 // knowledge_notes + versions tables 24 -> 25
 
     /** Filename must match the one passed to `Room.databaseBuilder`. */
     private const val DB_NAME = "minis.db"

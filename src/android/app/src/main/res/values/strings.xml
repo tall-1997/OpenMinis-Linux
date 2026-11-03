@@ -527,7 +527,10 @@
     <string name="settings_permissions_subtitle">System privileges and per-tool access: accessibility, Shizuku, host su, privacy level. Agent permission for each tool is set on this page.</string>
     <string name="chat_menu_perm_yoyo">YOYO · full auto</string>
     <string name="chat_menu_perm_ask">Approval · confirm actions</string>
-    <string name="settings_section_logs">Logs</string>
+        <!-- [T-m8-knowledge-workbench] settings entry -->
+    <string name="settings_section_knowledge">Knowledge Workbench</string>
+    <string name="settings_knowledge_subtitle">Notes, linked graph and versioned history</string>
+<string name="settings_section_logs">Logs</string>
     <string name="settings_logs_subtitle">View and export app logs</string>
     <string name="settings_section_about">About</string>
     <string name="settings_about_minis">About Minis Ultra</string>
@@ -2774,4 +2777,39 @@
     <string name="token_usage_section_context_saver">Context Saver</string>
     <string name="token_usage_saver_folded">Folded tool results</string>
     <string name="token_usage_saver_saved">Saved this turn</string>
+    <!-- [T-m8-knowledge-workbench] knowledge workbench strings -->
+    <string name="knowledge_title">Knowledge Workbench</string>
+    <string name="knowledge_tab_notes">Notes</string>
+    <string name="knowledge_tab_graph">Graph</string>
+    <string name="knowledge_tab_trash">Trash</string>
+    <string name="knowledge_search_hint">Search title, body or tags</string>
+    <string name="knowledge_empty">No notes yet. Tap + to create one, or link notes with [[Note Title]] in the body.</string>
+    <string name="knowledge_graph_empty">Link at least two notes to each other to build a graph.</string>
+    <string name="knowledge_graph_hint">Tap a node to open the note</string>
+    <string name="knowledge_trash_empty">Trash is empty</string>
+    <string name="knowledge_trashed_at">Trashed %1$s</string>
+    <string name="knowledge_restore">Restore</string>
+    <string name="knowledge_purge">Purge</string>
+    <string name="knowledge_purge_confirm_title">Purge this note?</string>
+    <string name="knowledge_purge_expired">Purge expired</string>
+    <string name="knowledge_purge_expired_confirm_title">Purge all expired notes?</string>
+    <string name="knowledge_purge_expired_confirm_body">Notes trashed more than 30 days ago will be permanently deleted.</string>
+    <string name="knowledge_note_new">New note</string>
+    <string name="knowledge_note_edit">Edit note</string>
+    <string name="knowledge_title_label">Title</string>
+    <string name="knowledge_body_label">Body</string>
+    <string name="knowledge_body_hint">Link notes with [[Another Note]]</string>
+    <string name="knowledge_tags_label">Tags (comma separated)</string>
+    <string name="knowledge_tags_hint">e.g. work, ideas</string>
+    <string name="knowledge_save">Save</string>
+    <string name="knowledge_versions_title">Version history</string>
+    <string name="knowledge_version_row">v%1$d · %2$s</string>
+    <string name="knowledge_trash">Move to trash</string>
+    <string name="knowledge_trash_confirm_title">Move to trash?</string>
+    <string name="knowledge_trash_confirm_body">The note stays in trash for 30 days before auto-purge.</string>
+    <string name="knowledge_snack_created">Note created</string>
+    <string name="knowledge_snack_trashed">Moved to trash</string>
+    <string name="knowledge_snack_restored">Restored</string>
+    <string name="knowledge_snack_purged">Purged</string>
+    <string name="knowledge_snack_imported">Imported</string>
 </resources>

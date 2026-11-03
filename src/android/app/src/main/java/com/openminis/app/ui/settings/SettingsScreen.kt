@@ -21,6 +21,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.BatteryFull
 import androidx.compose.material.icons.outlined.BugReport
@@ -102,6 +103,9 @@ fun SettingsScreen(
     onUsageClick: () -> Unit = {},
     onAppearanceClick: () -> Unit = {},
     onLogsClick: () -> Unit = {},
+    // [T-m8-knowledge-workbench] Entry for the knowledge workbench hub.
+    // Default no-op so older callers/tests don't need retrofitting.
+    onKnowledgeClick: () -> Unit = {},
     // T219-2: Mount External Folders entry. Default no-op for any caller
     // that hasn't wired the route yet.
     onMountedFoldersClick: () -> Unit = {},
@@ -335,6 +339,18 @@ fun SettingsScreen(
                     title = stringResource(R.string.bg_section_header),
                     subtitle = stringResource(R.string.bg_section_subtitle),
                     onClick = onBackgroundClick,
+                    showDivider = false,
+                )
+            }
+
+            // -- Knowledge Workbench --
+            SettingsSection(header = stringResource(R.string.settings_section_knowledge)) {
+                SettingsRow(
+                    icon = Icons.Outlined.AutoStories,
+                    iconColor = IosBlue,
+                    title = stringResource(R.string.settings_section_knowledge),
+                    subtitle = stringResource(R.string.settings_knowledge_subtitle),
+                    onClick = onKnowledgeClick,
                     showDivider = false,
                 )
             }

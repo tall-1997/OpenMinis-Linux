@@ -479,6 +479,51 @@ internal object AppMigrations {
         }
     }
 
+    val MIGRATION_24_25 = object : Migration(24, 25) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """CREATE TABLE IF NOT EXISTS `knowledge_notes` (
+                    `id` TEXT NOT NULL,
+                    `title` TEXT NOT NULL,
+                    `body_md` TEXT NOT NULL,
+                    `status` TEXT NOT NULL,
+                    `tags_json` TEXT NOT NULL,
+                    `links_json` TEXT NOT NULL,
+                    `search_text` TEXT NOT NULL,
+                    `dedupe_hash` TEXT NOT NULL,
+                    `created_at` INTEGER NOT NULL,
+                    `updated_at` INTEGER NOT NULL,
+                    `trashed_at` INTEGER NOT NULL,
+                    PRIMARY KEY(`id`)
+                )""".trimIndent()
+            )
+            db.execSQL(
+                """CREATE TABLE IF NOT EXISTS `knowledge_note_versions` (
+                    `note_id` TEXT NOT NULL,
+                    `version` INTEGER NOT NULL,
+                    `body_at` INTEGER NOT NULL,
+                    PRIMARY KEY(`note_id`, `version`),
+                    FOREIGN KEY(`note_id`) REFERENCES `knowledge_notes`(`id`)
+                        ON UPDATE NO ACTION ON DELETE CASCADE
+                )""".trimIndent()
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_knowledge_notes_status_updated_at` " +
+                    "ON `knowledge_notes` (`status`, `updated_at`)"
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_knowledge_notes_dedupe_hash` " +
+                    "ON `knowledge_notes` (`dedupe_hash`)"
+            )
+        }
+    }
+
+    val MIGRATION_25_24 = object : Migration(25, 24) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // Keep the tables. Older builds ignore extra tables.
+        }
+    }
+
     val MIGRATION_16_17 = object : Migration(16, 17) {
         override fun migrate(db: SupportSQLiteDatabase) {
             db.addColumnIfMissing("sessions", "permission_mode", "TEXT")
@@ -539,5 +584,7 @@ internal object AppMigrations {
     MIGRATION_23_22,
     MIGRATION_23_24,
     MIGRATION_24_23,
+    MIGRATION_24_25,
+    MIGRATION_25_24,
     )
 }

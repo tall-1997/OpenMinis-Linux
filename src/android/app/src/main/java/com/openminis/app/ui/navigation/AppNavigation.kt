@@ -23,6 +23,7 @@ import com.openminis.app.MinisApp
 import com.openminis.app.deeplink.DeepLinkAction
 import com.openminis.app.deeplink.DeepLinkCoordinator
 import com.openminis.app.ui.browser.BrowserSheet
+import com.openminis.app.ui.knowledge.KnowledgeWorkbenchViewModel
 import com.openminis.app.ui.settings.KEY_LAUNCH_SESSION
 import com.openminis.app.ui.settings.getAppearancePrefs
 import androidx.navigation.NavHostController
@@ -62,9 +63,8 @@ import com.openminis.app.sandbox.TerminalSession
 import com.openminis.app.ui.terminal.TerminalScreen
 import com.openminis.app.ui.onboarding.OnboardingModelSelectionScreen
 
-// T342: Material 3 motion easing curves. Compose-Material3 (1.3.x) ships
-// `MotionScheme` only in 1.4-alpha; mirror the spec values directly so we
-// don't take a dependency-bump tax just for two CubicBezierEasing instances.
+// T342: Material 3 motion easing curves. m3.material.io ships MotionScheme
+// only in 1.4-alpha; mirror the spec values directly, no dependency bump.
 // Source: m3.material.io/styles/motion/easing-and-duration/tokens-specs
 private val EmphasizedDecelerate = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1.0f)
 private val EmphasizedAccelerate = CubicBezierEasing(0.3f, 0.0f, 0.8f, 0.15f)
@@ -84,13 +84,13 @@ fun AppNavigation(
 
     // T219-5: use the application-scoped singleton from MinisApp so UI
     // add/remove shares state with PRootKernel and the lifecycle re-probe
-    // path. Pre-T219-5 this `remember { MountedFoldersStore(...) }` created
-    // a SECOND independent instance — UI list updated but PRoot never
-    // saw the change because PRootKernel.mountedFoldersStore pointed at
-    // the application-scoped singleton in MinisApp.
+    // path. Pre-T219-5 a `remember { MountedFoldersStore(...) }` here made
+    // a SECOND instance — UI updated but PRoot never saw the change.
     val mountedFoldersStore = remember {
         (context.applicationContext as com.openminis.app.MinisApp).mountedFoldersStore
     }
+
+    val knowledgeViewModel = remember { KnowledgeWorkbenchViewModel(context.applicationContext) }
 
     // Handle initial deep link after composition
     LaunchedEffect(initialDeepLink) {
@@ -100,14 +100,11 @@ fun AppNavigation(
             }
             is DeepLinkAction.OpenSession -> {
                 // T-double-chat-fix: on process-death recreation NavController
-                // auto-restores [SESSION_LIST, chat/<id>] AND MainActivity
-                // synthesizes an OpenSession deep-link from saved state. A
-                // bare navigate() pushed a SECOND chat entry, forcing the
-                // user to press back twice. launchSingleTop collapses the
-                // duplicate; popUpTo(SESSION_LIST, saveState=true) +
-                // restoreState=true preserves chat-screen state across the
-                // hop. When the synthesized deep-link is a no-op (chat
-                // already on top) launchSingleTop short-circuits.
+                // auto-restores the stack AND MainActivity synthesizes an
+                // OpenSession deep-link; bare navigate() then pushes a SECOND
+                // chat entry. launchSingleTop collapses the duplicate,
+                // popUpTo(SESSION_LIST, saveState=true) + restoreState=true
+                // preserves chat state, and a no-op deep-link short-circuits.
                 navController.safeNavigate(Routes.chat(initialDeepLink.sessionId)) {
                     popUpTo(Routes.SESSION_LIST) {
                         inclusive = false
@@ -490,6 +487,7 @@ fun AppNavigation(
                 onBrowserSettings = { navController.safeNavigate(Routes.HOME_BROWSER_SETTINGS) },
 
                 onLogsClick = { navController.safeNavigate(Routes.LOGS) },
+                onKnowledgeClick = { navController.safeNavigate(Routes.KNOWLEDGE) },
                 onAboutClick = { navController.safeNavigate(Routes.ABOUT) },
                 onMountedFoldersClick = { navController.safeNavigate(Routes.MOUNTED_FOLDERS) },
                 onSharedFoldersClick = { navController.safeNavigate(Routes.SHARED_FOLDERS) },
@@ -926,6 +924,7 @@ fun AppNavigation(
         }
 
         logsRoutes(navController)
+        knowledgeNavGraph(navController, knowledgeViewModel)
 
         composable(Routes.ONBOARDING_MODELS) {
             OnboardingModelSelectionScreen(

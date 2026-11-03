@@ -136,10 +136,9 @@ class MinisApp : Application(), ImageLoaderFactory {
 
     /**
      * [T-android-safemode-lateinit-crash-147] True when the app-layer
-     * dependencies are usable. Prefer this over
-     * `CrashFrequencyDetector.isSafeMode()`, which flips back to false the
-     * moment the user dismisses the crash dialog while the repositories stay
-     * unassigned forever (that mismatch was the b72dc591 crash loop).
+     * dependencies are usable. Prefer this over `CrashFrequencyDetector.isSafeMode()`,
+     * which flips back to false the moment the user dismisses the crash dialog
+     * while the repositories stay unassigned forever (that mismatch was the b72dc591 crash loop).
      */
     fun subsystemsReady(): Boolean = subsystemsInitialized
 
@@ -150,6 +149,7 @@ class MinisApp : Application(), ImageLoaderFactory {
     val skillRepository: SkillRepository get() = appContainer.requireSkillRepository()
     val mcpRepository: MCPRepository get() = appContainer.requireMcpRepository()
     val memoryRepository: MemoryRepository get() = appContainer.requireMemoryRepository()
+    val knowledgeNoteRepository get() = appContainer.requireKnowledgeNoteRepository()
     val evolutionEngine: EvolutionEngine? get() = appContainer.evolutionEngine
     val webAppShortcutRepository: WebAppShortcutRepository
         get() = checkNotNull(appContainer.webAppShortcutRepository)
@@ -204,12 +204,10 @@ class MinisApp : Application(), ImageLoaderFactory {
 
     override fun attachBaseContext(base: Context) {
         super.attachBaseContext(base)
-        // T283: install ACRA before any app-level singleton runs so a crash anywhere
-        // from onCreate forward is captured. CrashFileSender (registered via
-        // META-INF/services/org.acra.sender.ReportSenderFactory) writes
-        // filesDir/logs/crash-<stamp>.log — same dir + .log extension that
-        // AppLogger.listLogFiles filters for, so reports surface in LogManagementScreen
-        // with no extra UI.
+        // T283: install ACRA before any app-level singleton runs so a crash
+        // anywhere from onCreate forward is captured. CrashFileSender writes
+        // filesDir/logs/crash-<stamp>.log — AppLogger.listLogFiles filters for
+        // it, so reports surface in LogManagementScreen with no extra UI.
         ACRA.init(
             this,
             CoreConfigurationBuilder()
@@ -491,9 +489,10 @@ class MinisApp : Application(), ImageLoaderFactory {
                 skillRepository = skillRepository,
             )
         }.onFailure { Log.e("MinisApp", "evolution init failed", it) }.getOrNull()
-        // Possibly null (runCatching-guarded); EvolutionHooks readers tolerate null.
+        // Possibly null (runCatching-guarded); readers tolerate null.
         AppGraph.installEvolutionEngine(appContainer.evolutionEngine)
         appContainer.webAppShortcutRepository = WebAppShortcutRepository(database.webAppShortcutDao())
+        appContainer.wireKnowledgeNoteRepository(database)
         MinisAppAsyncInit.startWarmup(appContainer)
 
         // T-android-safemode-lateinit-crash: every repository the UI layer
