@@ -98,14 +98,14 @@ class McpApprovalRpcTest {
     }
 
     private fun createActiveTask(h: Harness, taskId: String = "task-1") {
-        val (_, err) = call(h, "phone_task_create", JSONObject().put("taskId", taskId).put("name", "demo"))
+        val (_, err) = call(h, "phone_task_request", JSONObject().put("taskId", taskId).put("name", "demo"))
         assertTrue("create failed: $err", err == null)
         val (_, err2) = call(h, "phone_task_approve", JSONObject().put("taskId", taskId))
         assertTrue("approve failed: $err2", err2 == null)
     }
 
     private fun submit(h: Harness, taskId: String = "task-1", opId: String = "op-1"): JSONObject {
-        val (res, err) = call(h, "phone_task_request", JSONObject()
+        val (res, err) = call(h, "phone_local_run", JSONObject()
             .put("taskId", taskId)
             .put("operationId", opId)
             .put("tool", "shell_exec")
@@ -297,9 +297,82 @@ class McpApprovalRpcTest {
         assertTrue("revoke failed: $err", err == null)
         assertEquals("REVOKED", res!!.optString("status"))
         // Requests under a revoked task are refused.
-        val (_, err2) = call(h, "phone_task_request", JSONObject()
+        val (_, err2) = call(h, "phone_local_run", JSONObject()
             .put("taskId", "task-1").put("operationId", "op-x").put("tool", "shell_exec").put("arguments", "{}"))
         assertEquals(McpApprovalCore.ErrorCode.TASK_NOT_ACTIVE.name, err2!!.optJSONObject("data").optString("approvalCode"))
+    }
+
+    @Test
+    fun `phone_local_run rejects a requestId that does not match the content`() {
+        val h = harness()
+        createActiveTask(h)
+        val (res, err) = call(h, "phone_local_run", JSONObject()
+            .put("taskId", "task-1")
+            .put("operationId", "op-1")
+            .put("requestId", "deadbeef")
+            .put("tool", "shell_exec")
+            .put("arguments", """{"command":"echo hi"}"""))
+        assertTrue(res == null)
+        assertEquals(McpApprovalCore.ErrorCode.REQUEST_ID_MISMATCH.name, err!!.optJSONObject("data").optString("approvalCode"))
+    }
+
+    @Test
+    fun `only the request run and execute methods are externally callable`() {
+        val h = harness()
+        val external = listOf(
+            "phone_task_request",
+            "phone_local_run",
+            "phone_operation_execute",
+            "phone_task_status",
+        )
+        external.forEach { assertTrue(it, h.rpc.isExternalMethod(it)) }
+        // Approval is a phone-only action: an external caller never grants itself permission.
+        listOf(
+            "phone_task_approve",
+            "phone_task_approve_op",
+            "phone_task_revoke",
+            "phone_task_list",
+            "phone_task_cancel",
+            "phone_task_cleanup",
+            "phone_task_delete",
+        ).forEach { assertFalse(it, h.rpc.isExternalMethod(it)) }
+    }
+
+    @Test
+    fun `task status answers for a whole task with every operation`() {
+        val h = harness()
+        createActiveTask(h)
+        submit(h)
+        submit(h, opId = "op-2")
+        call(h, "phone_task_approve_op", JSONObject().put("operationId", "op-2"))
+        call(h, "phone_operation_execute", JSONObject().put("operationId", "op-2"))
+
+        val (st, err) = call(h, "phone_task_status", JSONObject().put("taskId", "task-1"))
+        assertTrue("status failed: $err", err == null)
+        assertEquals("task-1", st!!.optString("taskId"))
+        assertEquals("ACTIVE", st.optString("status"))
+        val ops = st.optJSONArray("operations")
+        assertEquals(2, ops.length())
+        // Order is (createdAtMs, operationId), so the list is deterministic for a client.
+        val first = ops.optJSONObject(0)
+        val second = ops.optJSONObject(1)
+        assertEquals("op-1", first.optString("operationId"))
+        assertEquals("WAITING", first.optString("status"))
+        assertFalse(first.optBoolean("executed"))
+        assertEquals("op-2", second.optString("operationId"))
+        assertTrue(second.optBoolean("executed"))
+        assertEquals("APPROVED", second.optString("status"))
+        assertTrue(second.optLong("approvedAtMs") > 0L)
+        File(McpApprovalStore.taskRootFor("task-1")).deleteRecursively()
+    }
+
+    @Test
+    fun `task status needs an id and reports unknown tasks`() {
+        val h = harness()
+        val (_, err) = call(h, "phone_task_status", JSONObject())
+        assertEquals(McpApprovalCore.ErrorCode.INVALID_ID.name, err!!.optJSONObject("data").optString("approvalCode"))
+        val (_, err2) = call(h, "phone_task_status", JSONObject().put("taskId", "missing"))
+        assertEquals(McpApprovalCore.ErrorCode.TASK_NOT_FOUND.name, err2!!.optJSONObject("data").optString("approvalCode"))
     }
 
     @Test

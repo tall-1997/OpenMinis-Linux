@@ -131,4 +131,48 @@ internal object McpToolSchemas {
         put("filter", prop("string"))
         put("limit", prop("integer"))
     })
+
+    // ── Three-phase approval flow ──────────────────────────────────────────
+
+    val phoneTaskRequest = "Step 1 of 3 of the phone approval flow: announce a task. " +
+        "Returns a taskId in PENDING state; nothing runs until the user approves the task " +
+        "on the phone. Poll phone_task_status before submitting runs."
+
+    val phoneTaskRequestSchema = schema("name", props = JSONObject().apply {
+        put("name", prop("string", "Human-readable task name shown in the approval sheet."))
+        put("taskId", prop("string", "Optional client-chosen id ([A-Za-z0-9._-]{1,64}); generated when omitted."))
+    })
+
+    val phoneLocalRun = "Step 2 of 3: submit one run under an approved task. " +
+        "requestId is the content hash of (taskId, tool, arguments) — pass it to pin the payload; " +
+        "the server recomputes and rejects any mismatch. The run waits in WAITING state until the " +
+        "user approves that exact content on the phone."
+
+    val phoneLocalRunSchema = schema("taskId", "tool", props = JSONObject().apply {
+        put("taskId", prop("string", "Active task id from phone_task_request."))
+        put("tool", prop("string", "Tool to run (shell_exec, file_write, ...)."))
+        put("arguments", JSONObject().put("type", "object").put("description", "Tool arguments object."))
+        put("operationId", prop("string", "Optional client-chosen operation id; generated when omitted."))
+        put("requestId", prop("string", "Content hash from a previous attempt; recomputed and verified when supplied."))
+    })
+
+    val phoneOperationExecute = "Step 3 of 3: execute an operation the user already approved. " +
+        "Idempotent by operationId — a repeated call returns the stored result without re-running the tool. " +
+        "Fails when the approval expired (10 min), the task was revoked, or a bound fingerprint/source hash is missing."
+
+    val phoneOperationExecuteSchema = schema("operationId", props = JSONObject().apply {
+        put("operationId", prop("string"))
+        put("operationFingerprint", prop("string", "Fingerprint bound at approval time, when one was set."))
+        put("sourceFileHash", prop("string", "SHA-256 of the source evidence file, when the approval bound one."))
+        put("sourceFilePath", prop("string", "Host path of the source evidence file (hashed server-side)."))
+    })
+
+    val phoneTaskStatus = "Read-only status, at either level: pass 'taskId' for the task plus all of its " +
+        "operations (each with its approval status and whether it already ran), or 'operationId' for one " +
+        "operation. Poll this instead of re-submitting runs; it never executes anything and never mutates state."
+
+    val phoneTaskStatusSchema = schema(props = JSONObject().apply {
+        put("taskId", prop("string", "Task id from phone_task_request."))
+        put("operationId", prop("string", "Operation id from phone_local_run."))
+    })
 }

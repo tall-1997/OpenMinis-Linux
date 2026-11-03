@@ -1964,4 +1964,20 @@
     <string name="settings_app_notes_clear_message">Все заметки, записанные агентом, будут удалены безвозвратно.</string>
     <string name="settings_app_notes_clear_ok">Удалить</string>
     <string name="settings_app_notes_cancel">Отмена</string>
+
+    <!-- MCP approval inbox -->
+    <string name="mcp_approvals_section">Ожидающие одобрения</string>
+    <string name="mcp_approval_approve">Одобрить</string>
+    <string name="mcp_approval_deny">Отклонить</string>
+    <string name="mcp_approval_run">Выполнить</string>
+    <string name="mcp_approval_source_bound">Привязано к исходному файлу — запускать из отправившего клиента</string>
+    <string name="mcp_approval_waiting">Ожидание</string>
+    <string name="mcp_approval_task_active">Активно</string>
+    <string name="mcp_approval_approved">Одобрено</string>
+    <string name="mcp_approval_revoked">Отозвано</string>
+
+    <!-- MCP approval inbox: executed + offline states -->
+    <string name="mcp_approval_executed">Выполнено</string>
+    <string name="mcp_approval_needs_server">Сервер остановлен — запустите для выполнения</string>
+    <string name="mcp_approval_restart_notice">Перезапуск отменил %1$d ожидающих подтверждений</string>
 </resources>

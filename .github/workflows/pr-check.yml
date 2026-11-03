@@ -155,3 +155,13 @@ jobs:
       # tool exists. Runs on every event (tree state, not diff state).
       - name: Announced tools are in the core schema
         run: python3 scripts/ci/check_announced_tools.py
+
+      # [T-mcp-stdio-bridge] The stdio bridge exists twice on purpose: the
+      # source under scripts/mcp (what the suite drives) and the copy installed
+      # into the guest default mount (what a client actually spawns). Drift
+      # between them means a bridge nobody tested is the one clients run, so
+      # the gate runs the suite and then diffs the generated copies.
+      - name: MCP stdio bridge (tests + asset sync)
+        run: |
+          python3 scripts/mcp/test_minis_mcp_stdio.py
+          python3 scripts/mcp/sync_stdio_to_assets.py --check

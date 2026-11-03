@@ -29,8 +29,14 @@ class McpApprovalStore internal constructor(private val prefs: SharedPreferences
         private const val PREFS = "mcp_approvals"
         private const val KEY_STATE = "state"
 
-        /** Default prefix for the task working directory: /var/minis/mcp-tasks/<taskId>/ */
-        const val TASK_ROOT_PREFIX = "/var/minis/mcp-tasks/"
+        /**
+         * Default task root: `/var/minis/shared/mcp-tasks/<taskId>/`.
+         *
+         * Shared rather than session-private because two processes read it: the
+         * phone writes `result.json`, the PRoot-side client reads it back, and
+         * only the shared mount is bound into the guest.
+         */
+        const val TASK_ROOT_PREFIX = "/var/minis/shared/mcp-tasks/"
 
         /**
          * Active task root prefix. Production keeps the [TASK_ROOT_PREFIX]
@@ -41,7 +47,24 @@ class McpApprovalStore internal constructor(private val prefs: SharedPreferences
         @Volatile
         var taskRootPrefix: String = TASK_ROOT_PREFIX
 
+        /**
+         * Guest→host translation for the task root. The phone cannot open a
+         * `/var/minis/...` path itself — the prefix only exists inside the
+         * PRoot mount — so production injects
+         * `SessionWorkspace.resolveGuestPath`, the same resolver the shell
+         * bind uses. Null keeps the literal prefix (unit tests, scratch dirs).
+         */
+        @Volatile
+        var taskRootHostResolver: ((String) -> String)? = null
+
+        /** Guest-visible task root: the path clients see in RPC payloads. */
         fun taskRootFor(taskId: String): String = taskRootPrefix + taskId + "/"
+
+        /** Host directory the phone actually writes into. */
+        fun hostTaskRootFor(taskId: String): String {
+            val guest = taskRootFor(taskId)
+            return taskRootHostResolver?.invoke(guest) ?: guest
+        }
 
         private val RANDOM = SecureRandom()
 
@@ -116,7 +139,7 @@ class McpApprovalStore internal constructor(private val prefs: SharedPreferences
                     requestId = o.optString("requestId"),
                     tool = o.optString("tool"),
                     argumentsJson = o.optString("argumentsJson"),
-                    status = enumOf<OperationStatus>(o.optString("status")),
+                    status = enumOfOr(o.optString("status"), OperationStatus.REVOKED),
                     createdAtMs = o.optLong("createdAtMs"),
                     approvedAtMs = if (o.has("approvedAtMs")) o.getLong("approvedAtMs") else null,
                     sourceFileHash = if (o.has("sourceFileHash")) o.getString("sourceFileHash") else null,
@@ -131,6 +154,15 @@ class McpApprovalStore internal constructor(private val prefs: SharedPreferences
 
         private inline fun <reified T : Enum<T>> enumOf(name: String): T =
             enumValues<T>().firstOrNull { it.name == name } ?: enumValues<T>().first()
+
+        /**
+         * Fail-closed variant: an unknown stored value degrades to [fallback]
+         * instead of "the first enum constant". Used where the first constant
+         * is the permissive one (a grant), so a corrupt row can never be read
+         * back as something the user may act on.
+         */
+        private inline fun <reified T : Enum<T>> enumOfOr(name: String, fallback: T): T =
+            enumValues<T>().firstOrNull { it.name == name } ?: fallback
     }
 
     @Volatile

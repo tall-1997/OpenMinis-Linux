@@ -1956,4 +1956,20 @@
     <string name="settings_app_notes_clear_message">โน้ตทั้งหมดที่เอเจนต์บันทึกไว้จะถูกลบและกู้คืนไม่ได้</string>
     <string name="settings_app_notes_clear_ok">ล้าง</string>
     <string name="settings_app_notes_cancel">ยกเลิก</string>
+
+    <!-- MCP approval inbox -->
+    <string name="mcp_approvals_section">การอนุมัติที่รอดำเนินการ</string>
+    <string name="mcp_approval_approve">อนุมัติ</string>
+    <string name="mcp_approval_deny">ปฏิเสธ</string>
+    <string name="mcp_approval_run">เรียกใช้</string>
+    <string name="mcp_approval_source_bound">ผูกกับไฟล์ต้นทาง — เรียกใช้จากไคลเอนต์ที่ส่งมา</string>
+    <string name="mcp_approval_waiting">กำลังรอ</string>
+    <string name="mcp_approval_task_active">กำลังดำเนินการ</string>
+    <string name="mcp_approval_approved">อนุมัติแล้ว</string>
+    <string name="mcp_approval_revoked">เพิกถอนแล้ว</string>
+
+    <!-- MCP approval inbox: executed + offline states -->
+    <string name="mcp_approval_executed">เรียกใช้แล้ว</string>
+    <string name="mcp_approval_needs_server">เซิร์ฟเวอร์หยุดอยู่ — เริ่มเพื่อเรียกใช้</string>
+    <string name="mcp_approval_restart_notice">การรีสตาร์ทล้างคำอนุมัติที่รอดำเนินการ %1$d รายการ</string>
 </resources>

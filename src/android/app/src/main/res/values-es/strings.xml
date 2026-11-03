@@ -1956,4 +1956,20 @@
     <string name="settings_app_notes_clear_message">Se eliminarán todas las notas registradas por el agente. No se puede deshacer.</string>
     <string name="settings_app_notes_clear_ok">Borrar</string>
     <string name="settings_app_notes_cancel">Cancelar</string>
+
+    <!-- MCP approval inbox -->
+    <string name="mcp_approvals_section">Aprobaciones pendientes</string>
+    <string name="mcp_approval_approve">Aprobar</string>
+    <string name="mcp_approval_deny">Denegar</string>
+    <string name="mcp_approval_run">Ejecutar</string>
+    <string name="mcp_approval_source_bound">Vinculado a un archivo de origen: ejecútalo desde el cliente que lo envió</string>
+    <string name="mcp_approval_waiting">En espera</string>
+    <string name="mcp_approval_task_active">Activo</string>
+    <string name="mcp_approval_approved">Aprobado</string>
+    <string name="mcp_approval_revoked">Revocado</string>
+
+    <!-- MCP approval inbox: executed + offline states -->
+    <string name="mcp_approval_executed">Ejecutado</string>
+    <string name="mcp_approval_needs_server">Servidor detenido — inícialo para ejecutar</string>
+    <string name="mcp_approval_restart_notice">El reinicio descartó %1$d aprobación(es) pendiente(s)</string>
 </resources>

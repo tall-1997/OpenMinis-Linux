@@ -1,10 +1,14 @@
 package com.openminis.app.mcp.server
 
 import android.content.Context
+import com.openminis.app.mcp.server.approval.McpApprovalExecutor
+import com.openminis.app.mcp.server.approval.McpApprovalManager
+import com.openminis.app.mcp.server.approval.McpApprovalRpc
 import com.openminis.app.mcp.server.tools.McpToolDeps
 import com.openminis.app.mcp.server.tools.McpToolShared
 import com.openminis.app.mcp.server.tools.McpToolSpec
 import com.openminis.app.mcp.server.tools.McpToolSchemas
+import com.openminis.app.mcp.server.tools.approvalToolSpecs
 import com.openminis.app.mcp.server.tools.appsTools
 import com.openminis.app.mcp.server.tools.deviceTools
 import com.openminis.app.mcp.server.tools.fileTools
@@ -30,14 +34,40 @@ import org.json.JSONObject
  *   to an error result, never a crash.
  * @param gate the security gate every command goes through.
  * @param shellMode supplies the current permission mode (ALLOW_ALL / STRICT).
+ * @param approvalManager when present, the three `phone_*` approval tools are
+ *   registered and the approved-operation executor runs tools through this
+ *   same dispatcher.
  */
 class McpToolDispatcher(
     private val context: Context?,
     private val gate: SecurityGate,
     private val shellMode: () -> PermissionMode,
+    approvalManager: McpApprovalManager? = null,
 ) : McpServerCore.ToolDispatcher {
 
     private val deps = McpToolDeps(context, gate, shellMode)
+
+    /**
+     * Executor runs business tools through this dispatcher. Lazy so `this` is
+     * fully constructed before the executor captures it, and so a dispatcher
+     * without an approval runtime never allocates one.
+     */
+    private val approvalExecutor: McpApprovalExecutor? by lazy {
+        approvalManager?.let { McpApprovalExecutor(this) }
+    }
+
+    private val approvalRpc: McpApprovalRpc? by lazy {
+        val executor = approvalExecutor ?: return@lazy null
+        approvalManager?.let { McpApprovalRpc(it, executor) }
+    }
+
+    /**
+     * [T-mcp-approval-ui] In-process handle on the approval surface. The
+     * approvals sheet executes an approved run through this same instance the
+     * external clients talk to, so both paths share one gate + one executor.
+     * Null while no approval runtime is wired (server never started).
+     */
+    fun approvalSurface(): McpApprovalRpc? = approvalRpc
 
     private val tools: List<McpToolSpec> = buildList {
         addAll(deviceTools(deps))
@@ -46,6 +76,10 @@ class McpToolDispatcher(
         addAll(fileTools(deps))
         addAll(scheduleTools(deps))
         addAll(appsTools(deps))
+        // Approval tools appear only when a runtime exists: advertising a tool
+        // whose handler has no store behind it is the defect the announced-tool
+        // gate exists for.
+        addAll(approvalToolSpecs(approvalRpc))
     }
 
     private val byName: Map<String, McpToolSpec> = tools.associateBy { it.name }

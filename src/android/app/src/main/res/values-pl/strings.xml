@@ -1964,4 +1964,20 @@
     <string name="settings_app_notes_clear_message">Wszystkie notatki zapisane przez agenta zostaną usunięte. Nie można tego cofnąć.</string>
     <string name="settings_app_notes_clear_ok">Usuń</string>
     <string name="settings_app_notes_cancel">Anuluj</string>
+
+    <!-- MCP approval inbox -->
+    <string name="mcp_approvals_section">Oczekujące zatwierdzenia</string>
+    <string name="mcp_approval_approve">Zatwierdź</string>
+    <string name="mcp_approval_deny">Odrzuć</string>
+    <string name="mcp_approval_run">Uruchom</string>
+    <string name="mcp_approval_source_bound">Powiązane z plikiem źródłowym — uruchom w kliencie, który je zgłosił</string>
+    <string name="mcp_approval_waiting">Oczekuje</string>
+    <string name="mcp_approval_task_active">Aktywne</string>
+    <string name="mcp_approval_approved">Zatwierdzono</string>
+    <string name="mcp_approval_revoked">Odwołano</string>
+
+    <!-- MCP approval inbox: executed + offline states -->
+    <string name="mcp_approval_executed">Wykonano</string>
+    <string name="mcp_approval_needs_server">Serwer zatrzymany — uruchom go, aby wykonać</string>
+    <string name="mcp_approval_restart_notice">Restart unieważnił %1$d oczekujących zgód</string>
 </resources>

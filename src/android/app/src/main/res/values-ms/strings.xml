@@ -1956,4 +1956,20 @@
     <string name="settings_app_notes_clear_message">Semua nota yang direkodkan ejen akan dipadamkan dan tidak dapat dikembalikan.</string>
     <string name="settings_app_notes_clear_ok">Kosongkan</string>
     <string name="settings_app_notes_cancel">Batal</string>
+
+    <!-- MCP approval inbox -->
+    <string name="mcp_approvals_section">Kelulusan menunggu</string>
+    <string name="mcp_approval_approve">Luluskan</string>
+    <string name="mcp_approval_deny">Tolak</string>
+    <string name="mcp_approval_run">Jalankan</string>
+    <string name="mcp_approval_source_bound">Terikat pada fail sumber — jalankan dari klien penghantar</string>
+    <string name="mcp_approval_waiting">Menunggu</string>
+    <string name="mcp_approval_task_active">Aktif</string>
+    <string name="mcp_approval_approved">Diluluskan</string>
+    <string name="mcp_approval_revoked">Dibatalkan</string>
+
+    <!-- MCP approval inbox: executed + offline states -->
+    <string name="mcp_approval_executed">Dilaksanakan</string>
+    <string name="mcp_approval_needs_server">Pelayan tidak berjalan — mulakan untuk menjalankan</string>
+    <string name="mcp_approval_restart_notice">Mula semula membatalkan %1$d kelulusan belum selesai</string>
 </resources>

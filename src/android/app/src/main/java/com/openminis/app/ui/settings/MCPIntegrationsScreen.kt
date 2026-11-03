@@ -58,12 +58,7 @@ import com.openminis.app.mcp.server.McpServerConfigStore
 import com.openminis.app.mcp.server.McpServerManager
 import com.openminis.app.ui.components.DialogTextField
 import com.openminis.app.ui.components.MinisTextButton
-/**
- * MCP Integrations management screen. Mirrors [SkillsManagementScreen]:
- * a section of server rows (toggle + name + transport summary + transport
- * icon), an add bottom-sheet with Form / Import-JSON tabs, and a delete
- * confirmation dialog. Strings are English-keyed in strings.xml.
- */
+/** MCP integrations: server rows, add/edit sheet, built-in server + approval inbox. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MCPIntegrationsScreen(
@@ -205,6 +200,9 @@ fun MCPIntegrationsScreen(
                 showDivider = false,
             )
         }
+        // [T-mcp-approval-ui] Decision inbox for waiting clients; silent when idle.
+        val approvalRuntime = remember { McpServerManager.ensureApprovalRuntime() }
+        McpApprovalSection(approvalRuntime) { McpServerManager.approvalSurface() }
         Spacer(Modifier.height(24.dp))
     }
 

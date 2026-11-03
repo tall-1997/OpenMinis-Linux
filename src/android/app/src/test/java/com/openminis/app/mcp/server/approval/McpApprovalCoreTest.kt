@@ -272,6 +272,31 @@ class McpApprovalCoreTest {
     }
 
     @Test
+    fun `epoch bump marks outstanding grants revoked but keeps executed rows`() {
+        // Executed: the row keeps its grant so a reconnect can replay the result.
+        val executed = ok(McpApprovalCore.markExecuted(happyState(), "op-1"))
+        val bumped = McpApprovalCore.bumpEpoch(executed)
+        assertEquals(
+            McpApprovalCore.OperationStatus.APPROVED,
+            bumped.operations.getValue("op-1").status,
+        )
+        // Never executed: revoked outright, never left looking approved.
+        val pending = happyState(operationId = "op-2")
+        val bumped2 = McpApprovalCore.bumpEpoch(pending)
+        assertEquals(
+            McpApprovalCore.OperationStatus.REVOKED,
+            bumped2.operations.getValue("op-2").status,
+        )
+    }
+
+    @Test
+    fun `revoked operation cannot be approved after a restart`() {
+        val bumped = McpApprovalCore.bumpEpoch(happyState())
+        val r = McpApprovalCore.approveOperation(bumped, "op-1", T0 + 5_000)
+        assertEquals(ErrorCode.EPOCH_MISMATCH, errCode(r))
+    }
+
+    @Test
     fun `approval expires after TTL`() {
         val s = happyState(approvedAtMs = T0)
         val within = McpApprovalCore.canExecute(s, "op-1", T0 + McpApprovalCore.APPROVAL_TTL_MS - 1)
@@ -410,5 +435,117 @@ class McpApprovalCoreTest {
         assertTrue(s.executedOperationIds.contains("op-1"))
         assertEquals(McpApprovalCore.ErrorCode.TASK_NOT_FOUND,
             (McpApprovalCore.deleteTask(s, "task-1") as Outcome.Err).code)
+    }
+
+    // -- restart / revocation ------------------------------------------------
+
+    @Test
+    fun `revoked operations age out on the waiting clock`() {
+        var s = happyState(approvedAtMs = T0)
+        s = McpApprovalCore.bumpEpoch(s)
+        // Same instant: the UI still gets to explain what happened.
+        assertEquals(McpApprovalCore.OperationStatus.REVOKED, s.operations.getValue("op-1").status)
+        assertEquals(1, McpApprovalCore.pruneExpired(s, T0 + 1).operations.size)
+        // Past WAITING_PRUNE_MS a revoked grant is dropped like an unanswered run.
+        val later = T0 + McpApprovalCore.WAITING_PRUNE_MS + 1
+        assertTrue(McpApprovalCore.pruneExpired(s, later).operations.isEmpty())
+        // While a never-approved run with the same age also goes away.
+        assertTrue(McpApprovalCore.pruneExpired(State(epoch = 1L), later).operations.isEmpty())
+    }
+
+    @Test
+    fun `approved operations still prune on the approval clock after a revoke`() {
+        val s = happyState(approvedAtMs = T0 + 1_000)
+        val fresh = McpApprovalCore.pruneExpired(s, T0 + 2_000)
+        assertEquals(1, fresh.operations.size)
+        val stale = McpApprovalCore.pruneExpired(s, T0 + 1_000 + McpApprovalCore.APPROVAL_TTL_MS + 1)
+        assertTrue(stale.operations.isEmpty())
+    }
+
+    @Test
+    fun `an unapproved run is not pruned by the approval clock`() {
+        var s = happyState(approvedAtMs = T0)
+        // op-2 never gets an approval timestamp; it lives on the waiting clock,
+        // so a long gap must not drop it before WAITING_PRUNE_MS.
+        val args = """{"command":"echo slow"}"""
+        s = ok(McpApprovalCore.submitRun(
+            s, "task-1", "op-2", McpApprovalCore.requestIdFor("task-1", "shell_exec", args),
+            "shell_exec", args, T0,
+        ))
+        val pastTtl = McpApprovalCore.pruneExpired(s, T0 + McpApprovalCore.APPROVAL_TTL_MS + 1)
+        assertTrue(pastTtl.operations.containsKey("op-2"))
+    }
+
+    @Test
+    fun `approving a task from a previous generation is refused`() {
+        var s = ok(McpApprovalCore.createTask(State(), "task-1", "demo", T0))
+        s = McpApprovalCore.bumpEpoch(s)
+        assertEquals(ErrorCode.EPOCH_MISMATCH, errCode(McpApprovalCore.approveTask(s, "task-1")))
+        // The restart already retired the row, and the refused call adds nothing.
+        assertEquals(McpApprovalCore.TaskStatus.REVOKED, s.tasks.getValue("task-1").status)
+    }
+
+    @Test
+    fun `restart retires every task row`() {
+        var s = happyState()
+        val args = """{"command":"echo slow"}"""
+        s = ok(McpApprovalCore.createTask(s, "task-2", "second", T0))
+        s = ok(McpApprovalCore.approveTask(s, "task-2"))
+        s = ok(
+            McpApprovalCore.submitRun(
+                s, "task-2", "op-2", McpApprovalCore.requestIdFor("task-2", "shell_exec", args),
+                "shell_exec", args, T0,
+            ),
+        )
+        s = McpApprovalCore.bumpEpoch(s)
+        // Every row is retired, not just the ones with a grant attached.
+        for (id in listOf("task-1", "task-2")) {
+            assertEquals(id, McpApprovalCore.TaskStatus.REVOKED, s.tasks.getValue(id).status)
+        }
+    }
+
+    @Test
+    fun `a stale task id can be reused after a restart`() {
+        var s = happyState()
+        s = McpApprovalCore.bumpEpoch(s)
+        // A client that re-walks the flow keeps using its usual ids: the dead
+        // generation must not turn that id into a permanent dead end.
+        s = ok(McpApprovalCore.createTask(s, "task-1", "again", T0 + 10))
+        val task = s.tasks.getValue("task-1")
+        assertEquals(McpApprovalCore.TaskStatus.PENDING, task.status)
+        assertEquals(s.epoch, task.epoch)
+        // Old operations do not leak into the fresh task.
+        assertFalse(s.operations.containsKey("op-1"))
+        assertTrue(s.operations.isEmpty())
+        // The new generation's happy path still works end to end.
+        s = ok(McpApprovalCore.approveTask(s, "task-1"))
+        assertEquals(McpApprovalCore.TaskStatus.ACTIVE, s.tasks.getValue("task-1").status)
+    }
+
+    @Test
+    fun `same generation duplicate ids stay refused`() {
+        val s = ok(McpApprovalCore.createTask(State(), "task-1", "demo", T0))
+        assertEquals(ErrorCode.TASK_ALREADY_EXISTS, errCode(McpApprovalCore.createTask(s, "task-1", "demo", T0 + 1)))
+    }
+
+    @Test
+    fun `dead task rows age out of the store`() {
+        var s = happyState()
+        s = McpApprovalCore.bumpEpoch(s)
+        // Fresh: the UI can still show the restart explanation.
+        assertTrue(McpApprovalCore.pruneExpired(s, T0 + 1).tasks.containsKey("task-1"))
+        // Old: the row is unreachable forever, so the store reclaims it.
+        val later = T0 + McpApprovalCore.WAITING_PRUNE_MS + 1
+        assertTrue(McpApprovalCore.pruneExpired(s, later).tasks.isEmpty())
+    }
+
+    @Test
+    fun `restart reason wins over row status on every decision path`() {
+        var s = happyState(approvedAtMs = T0)
+        s = McpApprovalCore.bumpEpoch(s)
+        // Both approve and execute report the generation, not "not waiting":
+        // the client's retry logic keys off the difference.
+        assertEquals(ErrorCode.EPOCH_MISMATCH, errCode(McpApprovalCore.approveOperation(s, "op-1", T0)))
+        assertEquals(ErrorCode.EPOCH_MISMATCH, errCode(McpApprovalCore.canExecute(s, "op-1", T0)))
     }
 }

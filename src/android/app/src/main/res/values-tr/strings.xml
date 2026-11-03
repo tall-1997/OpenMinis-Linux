@@ -1956,4 +1956,20 @@
     <string name="settings_app_notes_clear_message">Ajanın kaydettiği tüm notlar silinecek. Bu işlem geri alınamaz.</string>
     <string name="settings_app_notes_clear_ok">Temizle</string>
     <string name="settings_app_notes_cancel">İptal</string>
+
+    <!-- MCP approval inbox -->
+    <string name="mcp_approvals_section">Bekleyen onaylar</string>
+    <string name="mcp_approval_approve">Onayla</string>
+    <string name="mcp_approval_deny">Reddet</string>
+    <string name="mcp_approval_run">Çalıştır</string>
+    <string name="mcp_approval_source_bound">Kaynak dosyaya bağlı — gönderen istemciden çalıştırın</string>
+    <string name="mcp_approval_waiting">Bekliyor</string>
+    <string name="mcp_approval_task_active">Etkin</string>
+    <string name="mcp_approval_approved">Onaylandı</string>
+    <string name="mcp_approval_revoked">İptal edildi</string>
+
+    <!-- MCP approval inbox: executed + offline states -->
+    <string name="mcp_approval_executed">Çalıştırıldı</string>
+    <string name="mcp_approval_needs_server">Sunucu durdu — çalıştırmak için başlatın</string>
+    <string name="mcp_approval_restart_notice">Yeniden başlatma %1$d bekleyen onayı geçersiz kıldı</string>
 </resources>

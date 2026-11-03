@@ -2724,4 +2724,20 @@
     <string name="settings_app_notes_clear_message">Every note the agent recorded about your apps will be deleted. This cannot be undone.</string>
     <string name="settings_app_notes_clear_ok">Clear</string>
     <string name="settings_app_notes_cancel">Cancel</string>
+
+    <!-- MCP approval inbox -->
+    <string name="mcp_approvals_section">Pending approvals</string>
+    <string name="mcp_approval_approve">Approve</string>
+    <string name="mcp_approval_deny">Deny</string>
+    <string name="mcp_approval_run">Run</string>
+    <string name="mcp_approval_source_bound">Bound to a source file — run it from the client that submitted it</string>
+    <string name="mcp_approval_waiting">Waiting</string>
+    <string name="mcp_approval_task_active">Active</string>
+    <string name="mcp_approval_approved">Approved</string>
+    <string name="mcp_approval_revoked">Revoked</string>
+
+    <!-- MCP approval inbox: executed + offline states -->
+    <string name="mcp_approval_executed">Executed</string>
+    <string name="mcp_approval_needs_server">Server not running — start it to run this</string>
+    <string name="mcp_approval_restart_notice">Restart cleared %1$d pending approval(s)</string>
 </resources>
