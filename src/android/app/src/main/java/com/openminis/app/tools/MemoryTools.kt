@@ -1,5 +1,7 @@
 package com.openminis.app.tools
 
+import com.openminis.app.data.authority.MemoryAuthority
+import com.openminis.app.data.authority.MemoryOrigin
 import com.openminis.app.data.repository.MemoryRepository
 import org.json.JSONObject
 
@@ -25,8 +27,19 @@ object MemoryTools {
         val toolTitle: String = "",
     )
 
+    /**
+     * Tool-access gate ([MemoryAuthority.canAccessTool]): a recall path
+     * must never write. `origin` is [MemoryOrigin.AGENT] for normal tool
+     * dispatch; future interface/recall call sites pass their own.
+     */
+    fun guardAccess(origin: MemoryOrigin, toolName: String): Boolean =
+        MemoryAuthority.canAccessTool(origin, toolName)
+
     fun executeMemoryWrite(inputJson: String, repository: MemoryRepository): ToolResult {
         return try {
+            if (!guardAccess(MemoryOrigin.AGENT, "memory_write")) {
+                return ToolResult("Error: memory_write is not permitted from this origin", false)
+            }
             val obj = JSONObject(inputJson)
             val content = obj.optString("content", "")
             val toolTitle = obj.optString("tool_title", "memory_write")

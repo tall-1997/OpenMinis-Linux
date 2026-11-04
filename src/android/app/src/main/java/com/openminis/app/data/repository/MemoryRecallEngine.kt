@@ -1,6 +1,10 @@
 package com.openminis.app.data.repository
 
 import android.content.Context
+import com.openminis.app.data.authority.InstructionUse
+import com.openminis.app.data.authority.MemoryAuthority
+import com.openminis.app.data.authority.MemoryTrust
+import com.openminis.app.data.authority.MemoryOrigin
 import android.util.Log
 import java.io.File
 import java.time.LocalDate
@@ -270,7 +274,7 @@ class MemoryRecallEngine(
     /** Format the hit list as a system-prompt fragment (mirrors XINCODE format). */
     fun formatAsPromptFragment(hits: List<RecallHit>): String {
         if (hits.isEmpty()) return ""
-        return buildString {
+        val body = buildString {
             append("## Recalled relevant memories (keyword FTS, no embeddings)\n")
             for (hit in hits) {
                 if (hit.archived) append("[archived] ")
@@ -279,5 +283,11 @@ class MemoryRecallEngine(
                 acceptRecall(hit.source, hit.line)
             }
         }
+        return MemoryAuthority.withEnvelope(
+            body,
+            MemoryTrust.UNVERIFIED_CANDIDATE,
+            MemoryOrigin.AUTOMATIC_RECALL,
+            use = InstructionUse.REFERENCE_DATA,
+        )
     }
 }
