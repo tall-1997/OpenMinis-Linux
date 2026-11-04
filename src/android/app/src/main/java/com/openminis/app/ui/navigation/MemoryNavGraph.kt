@@ -5,29 +5,24 @@ import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import com.openminis.app.data.repository.MemoryRepository
 import com.openminis.app.navigation.Routes
-import com.openminis.app.ui.settings.MemoryCenterScreen
 import com.openminis.app.ui.settings.MemoryManagementScreen
 
 /**
- * [T-memory-center] Destinations for persistent memory.
+ * [T-memory-center] The memory destination.
  *
- * Extracted from `AppNavigation` for the architecture ratchet (that file is at
- * its line ceiling and may only shrink), and because the two destinations belong
- * together: the hub is the only entry point, the file manager is one step in.
+ * "Memory" opens the diary/file page directly. An intermediate hub with two rows
+ * and a paragraph was tried first and read as an empty menu, so the knowledge
+ * workbench moved to the bottom of this page instead — one landing page, one
+ * secondary destination, no peer entry in the drawer.
+ *
+ * Lives here rather than in `AppNavigation` because that file is at its line
+ * ceiling and may only shrink.
  */
 internal fun NavGraphBuilder.memoryNavGraph(
     navController: NavController,
     memoryRepository: MemoryRepository?,
 ) {
     composable(Routes.MEMORY) {
-        MemoryCenterScreen(
-            onBack = { navController.safePopBackStack() },
-            onOpenFiles = { navController.safeNavigate(Routes.MEMORY_FILES) },
-            onOpenKnowledge = { navController.safeNavigate(Routes.KNOWLEDGE) },
-        )
-    }
-
-    composable(Routes.MEMORY_FILES) {
         if (memoryRepository != null) {
             MemoryManagementScreen(
                 memoryRepository = memoryRepository,
@@ -36,6 +31,7 @@ internal fun NavGraphBuilder.memoryNavGraph(
                     navController.safeNavigate(Routes.memoryFileEdit(fileName, isGlobal))
                 },
                 onEvolutionClick = { navController.safeNavigate(Routes.EVOLUTION) },
+                onOpenKnowledge = { navController.safeNavigate(Routes.KNOWLEDGE) },
             )
         }
     }

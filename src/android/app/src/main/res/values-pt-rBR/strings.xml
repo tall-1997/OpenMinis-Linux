@@ -2043,4 +2043,12 @@
     <string name="knowledge_snack_restored">Restaurada</string>
     <string name="knowledge_snack_purged">Excluída permanentemente</string>
     <string name="knowledge_snack_imported">Importada</string>
+    <string name="memory_center_overview">Visão geral</string>
+    <string name="memory_center_stat_memory">Arquivos de memória</string>
+    <string name="memory_center_stat_notes">Notas de conhecimento</string>
+    <string name="memory_center_stat_recalls">Entradas recuperadas</string>
+    <string name="memory_center_stat_failures">Repetições bloqueadas</string>
+    <string name="memory_center_stat_sediments">Resumos de compactação</string>
+    <string name="memory_center_stats_footer">Contado no dispositivo inteiro; reabra esta tela para atualizar.</string>
+    <string name="memory_section_diary_footer">Registros diários na pasta de memória desta sessão. Os três mais recentes são injetados por inteiro; os dias anteriores aparecem como um índice pesquisável.</string>
 </resources>

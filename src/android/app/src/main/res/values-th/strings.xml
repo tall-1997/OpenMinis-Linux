@@ -2043,4 +2043,12 @@
     <string name="knowledge_snack_restored">กู้คืนแล้ว</string>
     <string name="knowledge_snack_purged">ลบถาวรแล้ว</string>
     <string name="knowledge_snack_imported">นำเข้าแล้ว</string>
+    <string name="memory_center_overview">ภาพรวม</string>
+    <string name="memory_center_stat_memory">ไฟล์ความจำ</string>
+    <string name="memory_center_stat_notes">บันทึกความรู้</string>
+    <string name="memory_center_stat_recalls">รายการที่ถูกเรียกคืน</string>
+    <string name="memory_center_stat_failures">การทำซ้ำที่ถูกบล็อก</string>
+    <string name="memory_center_stat_sediments">สรุปการบีบอัด</string>
+    <string name="memory_center_stats_footer">นับทั้งอุปกรณ์ เปิดหน้านี้อีกครั้งเพื่อรีเฟรช</string>
+    <string name="memory_section_diary_footer">บันทึกรายวันในโฟลเดอร์ความจำของเซสชันนี้ สามรายการล่าสุดถูกแทรกทั้งหมด ส่วนวันที่เก่ากว่าจะแสดงเป็นดัชนีที่ค้นหาได้</string>
 </resources>

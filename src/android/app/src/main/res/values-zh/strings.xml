@@ -22,7 +22,7 @@
     <string name="memory_persona_scope_builtin">默认人格</string>
     <string name="memory_persona_scope_global">全局选择</string>
     <string name="memory_section_diary">记忆日记</string>
-    <string name="memory_section_diary_footer">本会话记忆目录下的每日日志，最近两天会被注入。</string>
+    <string name="memory_section_diary_footer">本会话记忆目录下的每日日志：最近三份完整注入，更早的日期以索引列出，需要细节时可再用 memory_get 检索。</string>
     <string name="memory_section_diagnostic">诊断</string>
     <string name="memory_section_diagnostic_footer">本会话上次实际发送的系统提示词全文，已遮蔽密钥。</string>
     <string name="memory_row_snapshot">系统提示词组装快照</string>
@@ -2623,4 +2623,11 @@
     <string name="knowledge_snack_restored">已恢复</string>
     <string name="knowledge_snack_purged">已彻底删除</string>
     <string name="knowledge_snack_imported">已导入</string>
+    <string name="memory_center_overview">概览</string>
+    <string name="memory_center_stat_memory">记忆文件</string>
+    <string name="memory_center_stat_notes">知识笔记</string>
+    <string name="memory_center_stat_recalls">被召回条目</string>
+    <string name="memory_center_stat_failures">已拦截的重复</string>
+    <string name="memory_center_stat_sediments">压缩摘要</string>
+    <string name="memory_center_stats_footer">统计范围为本设备；重新打开此页即可刷新。</string>
 </resources>

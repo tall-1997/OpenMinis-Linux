@@ -2047,4 +2047,12 @@
     <string name="knowledge_snack_restored">Restaurată</string>
     <string name="knowledge_snack_purged">Ștearsă definitiv</string>
     <string name="knowledge_snack_imported">Importată</string>
+    <string name="memory_center_overview">Dintr-o privire</string>
+    <string name="memory_center_stat_memory">Fișiere de memorie</string>
+    <string name="memory_center_stat_notes">Notițe de cunoștințe</string>
+    <string name="memory_center_stat_recalls">Intrări rechemate</string>
+    <string name="memory_center_stat_failures">Repetări blocate</string>
+    <string name="memory_center_stat_sediments">Rezumate de compactare</string>
+    <string name="memory_center_stats_footer">Numărate pe întregul dispozitiv; redeschide acest ecran pentru actualizare.</string>
+    <string name="memory_section_diary_footer">Jurnalele zilnice din folderul de memorie al acestei sesiuni. Cele mai recente trei sunt injectate integral; zilele mai vechi apar ca un index în care poți căuta.</string>
 </resources>

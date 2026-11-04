@@ -2043,4 +2043,12 @@
     <string name="knowledge_snack_restored">Dipulihkan</string>
     <string name="knowledge_snack_purged">Dipadam kekal</string>
     <string name="knowledge_snack_imported">Diimport</string>
+    <string name="memory_center_overview">Sepintas lalu</string>
+    <string name="memory_center_stat_memory">Fail memori</string>
+    <string name="memory_center_stat_notes">Nota pengetahuan</string>
+    <string name="memory_center_stat_recalls">Entri dipanggil</string>
+    <string name="memory_center_stat_failures">Ulangan disekat</string>
+    <string name="memory_center_stat_sediments">Ringkasan pemadatan</string>
+    <string name="memory_center_stats_footer">Dikira pada keseluruhan peranti; buka semula skrin ini untuk menyegarkan.</string>
+    <string name="memory_section_diary_footer">Log harian dalam folder memori sesi ini. Tiga yang terbaharu dimasukkan sepenuhnya; hari lebih lama disenaraikan sebagai indeks yang boleh anda cari.</string>
 </resources>

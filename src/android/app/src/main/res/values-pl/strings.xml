@@ -2050,4 +2050,12 @@
     <string name="knowledge_snack_restored">Przywrócono</string>
     <string name="knowledge_snack_purged">Usunięto trwale</string>
     <string name="knowledge_snack_imported">Zaimportowano</string>
+    <string name="memory_center_overview">W skrócie</string>
+    <string name="memory_center_stat_memory">Pliki pamięci</string>
+    <string name="memory_center_stat_notes">Notatki wiedzy</string>
+    <string name="memory_center_stat_recalls">Przywołane wpisy</string>
+    <string name="memory_center_stat_failures">Zablokowane powtórzenia</string>
+    <string name="memory_center_stat_sediments">Podsumowania kompakcji</string>
+    <string name="memory_center_stats_footer">Liczone dla całego urządzenia; otwórz ponownie ten ekran, aby odświeżyć.</string>
+    <string name="memory_section_diary_footer">Dzienniki dzienne w folderze pamięci tej sesji. Trzy najnowsze są wstawiane w całości; starsze dni są wymienione jako indeks, który można przeszukiwać.</string>
 </resources>

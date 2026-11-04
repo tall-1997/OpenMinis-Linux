@@ -2040,4 +2040,12 @@
     <string name="knowledge_snack_restored">復元しました</string>
     <string name="knowledge_snack_purged">完全に削除しました</string>
     <string name="knowledge_snack_imported">インポートしました</string>
+    <string name="memory_center_overview">概要</string>
+    <string name="memory_center_stat_memory">メモリファイル</string>
+    <string name="memory_center_stat_notes">ナレッジノート</string>
+    <string name="memory_center_stat_recalls">呼び出された項目</string>
+    <string name="memory_center_stat_failures">ブロックされた繰り返し</string>
+    <string name="memory_center_stat_sediments">圧縮の要約</string>
+    <string name="memory_center_stats_footer">端末全体の集計です。再表示すると更新されます。</string>
+    <string name="memory_section_diary_footer">このセッションのメモリフォルダーの日次ログです。直近 3 日分は全文が挿入され、それ以前の日付は検索できる索引として一覧されます。</string>
 </resources>

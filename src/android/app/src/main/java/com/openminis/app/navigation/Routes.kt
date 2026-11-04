@@ -132,10 +132,8 @@ object Routes {
     /** [P2-git-panel] Git panel over the session workspace (status / commit / history / diff). */
     const val GIT_PANEL = "git_panel/{sessionId}"
     fun gitPanel(sessionId: String) = "git_panel/${android.net.Uri.encode(sessionId)}"
-    /** [T-memory-center] The single persistent-memory hub (also the deep link target). */
+    /** [T-memory-center] Memory page (file list + knowledge entry); also the deep-link target. */
     const val MEMORY = "memory"
-    /** [T-memory-center] The file list/editor, reached from the hub. */
-    const val MEMORY_FILES = "memory_files"
     /** [T-mcp-integration-android] MCP Integrations management screen. */
     const val MCP = "mcp"
     const val MCP_TOOLS = "mcp_tools/{serverId}"

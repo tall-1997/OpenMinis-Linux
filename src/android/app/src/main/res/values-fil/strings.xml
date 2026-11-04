@@ -2043,4 +2043,12 @@
     <string name="knowledge_snack_restored">Naibalik</string>
     <string name="knowledge_snack_purged">Permanenteng tinanggal</string>
     <string name="knowledge_snack_imported">Na-import</string>
+    <string name="memory_center_overview">Sa isang tingin</string>
+    <string name="memory_center_stat_memory">Mga file ng memorya</string>
+    <string name="memory_center_stat_notes">Mga tala ng kaalaman</string>
+    <string name="memory_center_stat_recalls">Mga naalala na entry</string>
+    <string name="memory_center_stat_failures">Mga naka-block na pag-uulit</string>
+    <string name="memory_center_stat_sediments">Mga buod ng compaction</string>
+    <string name="memory_center_stats_footer">Binilang sa buong device; buksan muli ang screen na ito para i-refresh.</string>
+    <string name="memory_section_diary_footer">Mga pang-araw-araw na log sa memory folder ng session na ito. Ang tatlong pinakabago ay buong isinasama; ang mas lumang mga araw ay nakalista bilang index na maaari mong hanapin.</string>
 </resources>

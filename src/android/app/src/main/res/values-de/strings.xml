@@ -2043,4 +2043,12 @@
     <string name="knowledge_snack_restored">Wiederhergestellt</string>
     <string name="knowledge_snack_purged">Endgültig gelöscht</string>
     <string name="knowledge_snack_imported">Importiert</string>
+    <string name="memory_center_overview">Auf einen Blick</string>
+    <string name="memory_center_stat_memory">Speicherdateien</string>
+    <string name="memory_center_stat_notes">Wissensnotizen</string>
+    <string name="memory_center_stat_recalls">Abgerufene Einträge</string>
+    <string name="memory_center_stat_failures">Blockierte Wiederholungen</string>
+    <string name="memory_center_stat_sediments">Kompaktierungs-Zusammenfassungen</string>
+    <string name="memory_center_stats_footer">Geräteweit gezählt; zum Aktualisieren diesen Bildschirm erneut öffnen.</string>
+    <string name="memory_section_diary_footer">Tagesprotokolle im Speicherordner dieser Sitzung. Die drei neuesten werden vollständig eingefügt; ältere Tage erscheinen als durchsuchbarer Index.</string>
 </resources>
