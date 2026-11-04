@@ -9,15 +9,16 @@ import java.io.File
  * [T-memory-index] A table of contents for diary days that are NOT injected
  * verbatim.
  *
- * The prompt used to carry at most [MemoryRepository.MAX_RECENT_FILES] diary
- * files, so anything older was simply invisible: still on disk, still readable by
- * `memory_get`, but the model had no way to know it existed. In a chat that
- * spans weeks this reads exactly like "memory was lost".
+ * The prompt carries at most [MemoryRepository.MAX_RECENT_FILES] diary days
+ * verbatim — and the budget may admit fewer — so anything not carried is
+ * indexed here instead of invisible: still on disk, still readable by
+ * `memory_get`, and now discoverable. In a chat that spans weeks this used
+ * to read exactly like "memory was lost".
  *
- * The fix is not a bigger window — that just moves the token bill. It is an
- * index: one line per older day (date, entry count, first line). The model can
- * then decide to fetch the detail, which is the same index+fetch split every
- * large-context system converges on.
+ * The fix is not a bigger window alone — that just moves the token bill. It
+ * is an index: one line per non-verbatim day (date, entry count, first
+ * line). The model can then decide to fetch the detail, which is the same
+ * index+fetch split every large-context system converges on.
  *
  * Two scopes feed it:
  *  - the session's own diary directory, always;
@@ -55,15 +56,18 @@ object MemoryIndex {
     /**
      * Rows for every diary day outside the verbatim window.
      *
-     * [excludeNewest] skips the newest N dates, which the prompt already carries
-     * in full; indexing them twice would waste budget and invite contradictions.
-     * On a date present in both scopes the session copy wins — it is the one the
-     * verbatim window would have shown.
+     * [excludeDates] are the dates the prompt already carries verbatim —
+     * excluded by identity, not by position. The verbatim window reads only
+     * this chat's directory while this index spans both scopes, so a
+     * count-based drop could skip a shared-only day the prompt never showed
+     * (invisible) and double-list a session day it did. On a date present in
+     * both scopes the session copy wins — it is the one the verbatim window
+     * would have shown.
      */
     fun rows(
         sessionDir: File?,
         sharedDir: File?,
-        excludeNewest: Int,
+        excludeDates: Set<String>,
         maxRows: Int = MAX_ROWS,
     ): List<Row> {
         val byDate = LinkedHashMap<String, Row>()
@@ -78,7 +82,7 @@ object MemoryIndex {
             }
         }
         val sorted = byDate.values.sortedByDescending { it.date }
-        return sorted.drop(excludeNewest.coerceAtLeast(0)).take(maxRows)
+        return sorted.filter { it.date !in excludeDates }.take(maxRows)
     }
 
     private fun rowFor(file: File, date: String, shared: Boolean): Row? {
@@ -130,13 +134,13 @@ object MemoryIndex {
     fun fragment(
         sessionDir: File?,
         sharedDir: File?,
-        excludeNewest: Int,
+        excludeDates: Set<String>,
         maxRows: Int = MAX_ROWS,
     ): String? {
-        val rows = rows(sessionDir, sharedDir, excludeNewest, maxRows)
+        val rows = rows(sessionDir, sharedDir, excludeDates, maxRows)
         if (rows.isEmpty()) return null
         // Recompute the omitted count so the block can say how much it hid.
-        val total = rows(sessionDir, sharedDir, excludeNewest, Int.MAX_VALUE).size
+        val total = rows(sessionDir, sharedDir, excludeDates, Int.MAX_VALUE).size
         val body = render(rows, (total - rows.size).coerceAtLeast(0)) ?: return null
         return MemoryAuthority.withEnvelope(
             body,

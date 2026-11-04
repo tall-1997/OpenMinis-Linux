@@ -17,8 +17,8 @@ import com.openminis.app.util.IsoTime
  *   - GLOBAL.md: read-only for agent, user-maintained via Settings
  *   - YYYY-MM-DD.md: daily logs with timestamped entries, agent writes via memory_write
  *   - memory_get: fuzzy keyword search across files
- *   - loadGlobalMemoryFragment() / loadRecentDailyMemoryFragment(): emit
- *     two separate text blocks for the system prompt (mirrors iOS exactly)
+ *   - loadGlobalMemoryFragment() / loadRecentDailyFragments(): emit the
+ *     global and per-day daily-log blocks for the system prompt
  */
 class MemoryRepository(private val memoryDir: File) {
 
@@ -120,7 +120,17 @@ class MemoryRepository(private val memoryDir: File) {
                 com.openminis.app.logging.AppLogger.warning(TAG, "ensureGlobalExists failed: ${t.message}")
             }
         }
-        internal const val MAX_INJECT_LINES = 200
+        // [T-memory-prompt-budget] Tiered per-day verbatim caps for daily-log
+        // injection: today gets MAX_INJECT_LINES, older days in the window
+        // get MAX_INJECT_LINES_OLDER. 50 + 6*15 lines is roughly 15-17K chars
+        // at the ~100 chars/line measured on real logs, sized so the whole
+        // 7-day window fits inside MemoryPromptBudget.DEFAULT_BUDGET_CHARS
+        // next to the standing fragments. The old single 200-line cap (an
+        // iOS mirror) let three files alone ask for ~60K, so the budget
+        // silently truncated the block — the real cause of "the model only
+        // remembers two days".
+        internal const val MAX_INJECT_LINES = 50
+        internal const val MAX_INJECT_LINES_OLDER = 15
         // memory_get full-dump (no keywords): cap at 500 lines — matches iOS
         // `maxTotalLines = 500` in AIChatViewModel+MemoryTools.swift.
         private const val MAX_DUMP_LINES = 500
@@ -130,7 +140,10 @@ class MemoryRepository(private val memoryDir: File) {
         // and align on the 60 magnitude as the line budget.
         private const val MAX_SEARCH_LINES = 60
         internal const val MAX_LOOKBACK_DAYS = 30
-        internal const val MAX_RECENT_FILES = 3
+        // [P5] Verbatim daily window: 7 days (was 3). Days the budget cannot
+        // admit drop to a MemoryIndex table-of-contents row instead of
+        // vanishing — see MemoryAssembly for the two-pass guarantee.
+        internal const val MAX_RECENT_FILES = 7
 
         /**
          * [XSessionDiag] Vocabulary that suggests an injected daily log describes
@@ -440,8 +453,8 @@ class MemoryRepository(private val memoryDir: File) {
     fun loadLearnedPrefsFragment(scene: SceneTag = SceneTag.GENERAL): String? =
         fragments.loadLearnedPrefsFragment(scene)
 
-    fun loadRecentDailyMemoryFragment(): String? =
-        fragments.loadRecentDailyMemoryFragment()
+    internal fun loadRecentDailyFragments(): List<MemoryAssembly.DailyFragment> =
+        fragments.loadRecentDailyFragments()
 
     // -- File Management (for Settings UI) --
 

@@ -42,7 +42,7 @@ class MemoryIndexTest {
     fun sessionAndSharedDaysAreMergedNewestFirst() {
         diary(sessionDir, "2026-11-01", "session note")
         diary(sharedDir, "2026-10-30", "shared note")
-        val rows = MemoryIndex.rows(sessionDir, sharedDir, excludeNewest = 0)
+        val rows = MemoryIndex.rows(sessionDir, sharedDir, excludeDates = emptySet())
         assertEquals(listOf("2026-11-01", "2026-10-30"), rows.map { it.date })
         assertEquals(listOf(false, true), rows.map { it.shared })
     }
@@ -52,7 +52,7 @@ class MemoryIndexTest {
         diary(sessionDir, "2026-11-03", "a")
         diary(sessionDir, "2026-11-02", "b")
         diary(sessionDir, "2026-11-01", "c")
-        val rows = MemoryIndex.rows(sessionDir, sharedDir, excludeNewest = 2)
+        val rows = MemoryIndex.rows(sessionDir, sharedDir, excludeDates = setOf("2026-11-03", "2026-11-02"))
         assertEquals(listOf("2026-11-01"), rows.map { it.date })
     }
 
@@ -60,7 +60,7 @@ class MemoryIndexTest {
     fun theSessionCopyWinsOnTheSameDate() {
         diary(sessionDir, "2026-11-01", "session version")
         diary(sharedDir, "2026-11-01", "shared version")
-        val rows = MemoryIndex.rows(sessionDir, sharedDir, excludeNewest = 0)
+        val rows = MemoryIndex.rows(sessionDir, sharedDir, excludeDates = emptySet())
         assertEquals(1, rows.size)
         assertFalse("the session row replaces the shared one", rows.single().shared)
         assertTrue(rows.single().preview.contains("session version"))
@@ -69,7 +69,7 @@ class MemoryIndexTest {
     @Test
     fun entryCountAndPreviewAreExtracted() {
         diary(sessionDir, "2026-11-01", "first line", "second line")
-        val row = MemoryIndex.rows(sessionDir, sharedDir, excludeNewest = 0).single()
+        val row = MemoryIndex.rows(sessionDir, sharedDir, excludeDates = emptySet()).single()
         assertEquals(2, row.entries)
         assertEquals("first line", row.preview)
     }
@@ -78,13 +78,13 @@ class MemoryIndexTest {
     fun nonDiaryAndEmptyFilesAreIgnored() {
         File(sessionDir, "GLOBAL.md").writeText("rules")
         File(sessionDir, "2026-11-01.md").writeText("   ")
-        assertTrue(MemoryIndex.rows(sessionDir, sharedDir, excludeNewest = 0).isEmpty())
+        assertTrue(MemoryIndex.rows(sessionDir, sharedDir, excludeDates = emptySet()).isEmpty())
     }
 
     @Test
     fun rowsAreCappedAndTheOmittedCountIsReported() {
         for (day in 1..10) diary(sessionDir, "2026-10-%02d".format(day), "note $day")
-        val rows = MemoryIndex.rows(sessionDir, sharedDir, excludeNewest = 0, maxRows = 4)
+        val rows = MemoryIndex.rows(sessionDir, sharedDir, excludeDates = emptySet(), maxRows = 4)
         assertEquals(4, rows.size)
         val rendered = MemoryIndex.render(rows, omitted = 6)!!
         assertTrue(rendered.contains("6 older day(s) not listed"))
@@ -93,17 +93,28 @@ class MemoryIndexTest {
     @Test
     fun sharedRowsAreLabelledAsShared() {
         diary(sharedDir, "2026-10-30", "from another chat")
-        val rendered = MemoryIndex.render(MemoryIndex.rows(sessionDir, sharedDir, 0))!!
+        val rendered = MemoryIndex.render(MemoryIndex.rows(sessionDir, sharedDir, emptySet()))!!
         assertTrue(rendered.contains("shared"))
     }
 
     @Test
     fun fragmentIsEnvelopedAndNullWhenThereIsNothing() {
-        assertNull(MemoryIndex.fragment(sessionDir, sharedDir, excludeNewest = 0))
+        assertNull(MemoryIndex.fragment(sessionDir, sharedDir, excludeDates = emptySet()))
         diary(sessionDir, "2026-10-30", "note")
-        val fragment = MemoryIndex.fragment(sessionDir, sharedDir, excludeNewest = 0)!!
+        val fragment = MemoryIndex.fragment(sessionDir, sharedDir, excludeDates = emptySet())!!
         assertTrue(fragment.startsWith("[MEMORY_REFERENCE"))
         assertTrue(fragment.contains("2026-10-30"))
         assertTrue(fragment.contains("memory_get"))
+    }
+
+    @Test
+    fun exclusionIsByIdentityNotPosition() {
+        // The verbatim window reads only the session dir; a count-based drop
+        // would exclude the newest dates of the session+shared union and make
+        // this shared-only day — never injected verbatim — invisible.
+        diary(sessionDir, "2026-11-05", "session day")
+        diary(sharedDir, "2026-11-06", "shared day, newer than the window")
+        val rows = MemoryIndex.rows(sessionDir, sharedDir, excludeDates = setOf("2026-11-05"))
+        assertEquals(listOf("2026-11-06"), rows.map { it.date })
     }
 }

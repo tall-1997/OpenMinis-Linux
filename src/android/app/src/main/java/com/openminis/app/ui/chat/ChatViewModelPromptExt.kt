@@ -291,25 +291,16 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
     val sessionGlobal = if ("session-global" in keptInstructionKeys) {
         sessionMem?.loadGlobalMemoryFragment(sessionScoped = true)
     } else null
-    val dailyMemoryFragment = sessionMem?.loadRecentDailyMemoryFragment()
-    // [T-memory-index] Table of contents for the diary days outside the verbatim
-    // window (this chat + the shared directory). Without it anything older than
-    // the newest few files is invisible; the model cannot miss what it never
-    // knew existed.
-    val dailyIndexFragment = if (memoryOn) {
-        com.openminis.app.data.repository.MemoryIndex.fragment(
-            sessionDir = com.openminis.app.sandbox.SessionWorkspace
-                .memoryDir(context.filesDir, memorySessionId),
-            sharedDir = com.openminis.app.data.repository.MemoryIndex.sharedDir(context.filesDir),
-            excludeNewest = com.openminis.app.data.repository.MemoryRepository.MAX_RECENT_FILES,
-        )
-    } else null
-    // [T-memory-prompt-budget] One budget for the whole memory block, admitted
-    // narrowest-scope-first, so a long GLOBAL.md can never displace this chat's
-    // own rules. Null when memory is off or nothing was admitted.
-    val memoryAllocation = if (memoryOn) {
-        com.openminis.app.data.repository.MemoryPromptBudget.allocate(
-            listOfNotNull(
+    val dailyFragments = sessionMem?.loadRecentDailyFragments().orEmpty()
+    // [T-memory-window] Two-pass assembly: the per-day verbatim window and
+    // the MemoryIndex TOC together cover every diary day exactly once. Pass 1
+    // finds which days the budget admits verbatim; pass 2 rebuilds the TOC
+    // against exactly those dates, so a day the budget drops lands in the TOC
+    // instead of vanishing — the root fix for "the model only remembers two
+    // days".
+    val memoryAssembly = if (memoryOn) {
+        com.openminis.app.data.repository.MemoryAssembly.assemble(
+            standing = listOfNotNull(
                 projectRulesFragment?.let {
                     com.openminis.app.data.repository.MemoryPromptBudget.Fragment(
                         "project-rules", it,
@@ -331,23 +322,22 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
                         truncatable = true,
                     )
                 },
-                dailyMemoryFragment?.let {
-                    com.openminis.app.data.repository.MemoryPromptBudget.Fragment(
-                        "daily", it,
-                        com.openminis.app.data.repository.MemoryPromptBudget.PRIORITY_DAILY,
-                        truncatable = true,
-                    )
-                },
-                dailyIndexFragment?.let {
-                    com.openminis.app.data.repository.MemoryPromptBudget.Fragment(
-                        "daily-index", it,
-                        com.openminis.app.data.repository.MemoryPromptBudget.PRIORITY_INDEX,
-                        truncatable = false,
-                    )
-                },
             ),
-        )
+            daily = dailyFragments,
+            header = com.openminis.app.data.repository.MemoryAssembly.DAILY_BLOCK_HEADER,
+        ) { excludeDates ->
+            com.openminis.app.data.repository.MemoryIndex.fragment(
+                sessionDir = com.openminis.app.sandbox.SessionWorkspace
+                    .memoryDir(context.filesDir, memorySessionId),
+                sharedDir = com.openminis.app.data.repository.MemoryIndex.sharedDir(context.filesDir),
+                excludeDates = excludeDates,
+            )
+        }
     } else null
+    // [T-memory-prompt-budget] One budget for the whole memory block, admitted
+    // narrowest-scope-first, so a long GLOBAL.md can never displace this chat's
+    // own rules. Null when memory is off or nothing was admitted.
+    val memoryAllocation = memoryAssembly?.allocation
     val globalMemoryFragment = memoryAllocation?.rendered
     // [T-memory-recall] Lightweight FTS recall: search ALL historical memory
     // entries for keywords from the latest user message, inject top-4 hits.
