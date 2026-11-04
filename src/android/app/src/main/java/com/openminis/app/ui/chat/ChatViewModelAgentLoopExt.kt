@@ -295,17 +295,12 @@ internal suspend fun ChatViewModel.runAgentLoop(
         sanitizeAgentHistory()
 
         // Context window management: offload large tool outputs in older
-        // messages to disk when the policy threshold for this model's
-        // context window is crossed. Stubs in agentHistory still tell the
-        // model where to file_read the original content. Mirrors iOS
-        // AIChatViewModel.swift:4549.
-        // [T-anthropic-context-window] Use contextWindowTokens (heuristic-
-        // backed) instead of the raw nullable field, so offload triggers at
-        // the correct fraction for heuristic-only Claude/Gemini models (1M)
-        // rather than never firing when contextWindow is unset.
+        // messages to disk when this model's window threshold is crossed;
+        // stubs in agentHistory still tell the model where to file_read.
+        // [T-anthropic-context-window] Heuristic-backed contextWindowTokens
+        // so offload triggers for heuristic-only 1M Claude/Gemini models.
         // [T-context-window-live-read] Live read per loop turn — a stale
-        // snapshot inside a long-running agent turn is exactly the iOS
-        // fcc22b66 item-3 bug.
+        // snapshot inside a long turn is exactly the iOS fcc22b66 item-3 bug.
         effectiveContextWindowTokens()?.takeIf { it > 0 }?.let { window ->
             offloadContextIfNeeded(
                 contextWindow = window,
@@ -315,12 +310,10 @@ internal suspend fun ChatViewModel.runAgentLoop(
 
         // [T-android-auto-compact-inloop] In-loop context guard (iOS
         // f70ac173). checkContextBeforeSend only runs at the SEND entry
-        // point, so a single turn that fans out into many tool iterations
-        // could blow past the thresholds mid-loop. Offload alone can't
-        // recover when the bulk is the model's own text, and the turn would
-        // slam into the provider's context ceiling.
-        //
-        // Runs AFTER offload so it judges the post-offload size.
+        // point, so a single turn fanning out into many tool iterations
+        // could blow past the thresholds mid-loop; offload alone can't
+        // recover when the bulk is the model's own text. Runs AFTER offload
+        // so it judges the post-offload size.
         when (inLoopContextCheck(inLoopCompactions)) {
             ChatViewModel.InLoopContextAction.PROCEED -> {}
             ChatViewModel.InLoopContextAction.COMPACTED -> {
@@ -485,19 +478,16 @@ internal suspend fun ChatViewModel.runAgentLoop(
             }
         }
 
-        // Mark where this turn's blocks start in allToolBlocks so we can persist
-        // only the NEW parts from this turn (not the full accumulated history).
-        // Matches iOS's per-turn RawMessage persistence.
+        // Mark where this turn's blocks start in allToolBlocks so we persist
+        // only the NEW parts from this turn. Matches iOS's per-turn RawMessage persistence.
         val turnStartedAtMs = System.currentTimeMillis()
         val turnStartBlockIndex = allToolBlocks.size
         // T307: per-delta StringBuilder for the running turn text + the
-        // currently-open trailing text block, so GROWTH is amortised — the
-        // snapshot itself is still an O(message length) String per publish
-        // (see `messageTextSnapshot` below for the exact cadence and what
-        // would be needed to get rid of it). `currentTextBlockSb` mirrors the
-        // trailing text block's growing content; reset to a fresh builder
-        // whenever a new text block opens (which happens after a tool_use /
-        // thinking break interrupts the text run).
+        // currently-open trailing text block, so GROWTH is amortised. The
+        // snapshot is still O(message length) per publish (see
+        // `messageTextSnapshot` below). `currentTextBlockSb` mirrors the
+        // trailing block's growing content; reset when a new text block
+        // opens (after a tool_use / thinking break).
         val turnTextSb = StringBuilder()
         // [T-android-stream-snapshot-helper] The single source for the bubble
         // text published mid-turn: the cross-turn prefix + THIS turn's streamed
@@ -636,6 +626,15 @@ internal suspend fun ChatViewModel.runAgentLoop(
                 }
                 val goalMount = com.openminis.app.goal.goalMount(requestGoalState, goalManager::continuationPrompt)
                 goalMountedForCurrentRequest = goalMount.canContinue
+                // [T-p1-instruction-snapshot] Freeze the instruction values this request is built on; real deltas append to the event stream.
+                val goalSessionForSnapshot = realSessionId.ifEmpty { sessionId }
+                withContext(Dispatchers.IO) {
+                    com.openminis.app.data.instruction.InstructionStateStore(chatRepository.db).observeAndCommit(goalSessionForSnapshot, buildMap {
+                        putAll(com.openminis.app.data.instruction.InstructionStateStore.goalInstructionValues(requestGoalState))
+                        sessionMemoryRepo().loadGlobalMemoryFragment(sessionScoped = false)?.let { put(com.openminis.app.data.instruction.InstructionState.KEY_APP_GLOBAL, it) }
+                        sessionMemoryRepo().loadGlobalMemoryFragment(sessionScoped = true)?.let { put(com.openminis.app.data.instruction.InstructionState.KEY_SESSION_GLOBAL, it) }
+                    })
+                }
                 if (goalRunRequested && !goalMount.canContinue) {
                     withContext(Dispatchers.Main) {
                         updateAssistantMessage(assistantId, accumulatedText, false, allToolBlocks)

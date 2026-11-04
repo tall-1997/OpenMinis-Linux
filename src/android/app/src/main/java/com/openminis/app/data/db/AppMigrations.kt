@@ -555,6 +555,46 @@ internal object AppMigrations {
         }
     }
 
+    val MIGRATION_26_27 = object : Migration(26, 27) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // [T-p1-instruction-snapshot] Instruction snapshots (P1 of the
+            // memory rebuild): one frozen state row per session plus the
+            // append-only event stream. Mirrors opencode instruction-state.
+            db.execSQL(
+                """CREATE TABLE IF NOT EXISTS `instruction_states` (
+                    `sessionId` TEXT NOT NULL,
+                    `epochStartSeq` INTEGER NOT NULL,
+                    `throughSeq` INTEGER NOT NULL,
+                    `initialValuesJson` TEXT NOT NULL,
+                    `currentValuesJson` TEXT NOT NULL,
+                    `updatedAt` INTEGER NOT NULL,
+                    PRIMARY KEY(`sessionId`)
+                )""".trimIndent()
+            )
+            db.execSQL(
+                """CREATE TABLE IF NOT EXISTS `instruction_updates` (
+                    `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    `sessionId` TEXT NOT NULL,
+                    `seq` INTEGER NOT NULL,
+                    `isInitial` INTEGER NOT NULL,
+                    `deltaJson` TEXT,
+                    `renderedText` TEXT NOT NULL,
+                    `createdAt` INTEGER NOT NULL
+                )""".trimIndent()
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_instruction_updates_sessionId` " +
+                    "ON `instruction_updates` (`sessionId`)"
+            )
+        }
+    }
+
+    val MIGRATION_27_26 = object : Migration(27, 26) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // Keep the tables. Older builds ignore extra tables.
+        }
+    }
+
     val MIGRATION_16_17 = object : Migration(16, 17) {
         override fun migrate(db: SupportSQLiteDatabase) {
             db.addColumnIfMissing("sessions", "permission_mode", "TEXT")
@@ -619,5 +659,7 @@ internal object AppMigrations {
     MIGRATION_25_24,
     MIGRATION_25_26,
     MIGRATION_26_25,
+    MIGRATION_26_27,
+    MIGRATION_27_26,
     )
 }
