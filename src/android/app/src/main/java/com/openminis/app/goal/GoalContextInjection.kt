@@ -92,14 +92,21 @@ internal fun withGoalContext(
     var userIndex = requestHistory.indexOfLast { it.role == LLMMessage.Role.USER }
     // A previous Goal continuation is part of the bounded request history.
     // Do not treat that old block as the current mount: the persisted Goal
-    // may have changed status, budget, or objective since then.
-    if (userIndex >= 0 && requestHistory[userIndex].content.contains("<goal_context>")) {
+    // may have changed status, budget, or objective since then. The plan board
+    // rides on the same message (see [ChatViewModel.withGoalAndPlanContext]) and
+    // must be stripped on the same pass, or every turn stacks another copy.
+    if (userIndex >= 0 && requestHistory[userIndex].content.let {
+            it.contains("<goal_context>") || it.contains("<plan_board>")
+        }
+    ) {
         val user = requestHistory[userIndex]
         val withoutOldGoal = user.content
             .replace(Regex("\\n*<goal_context>.*?</goal_context>\\n*", setOf(RegexOption.DOT_MATCHES_ALL)), "")
+            .replace(Regex("\\n*<plan_board>.*?</plan_board>\\n*", setOf(RegexOption.DOT_MATCHES_ALL)), "")
             .trimEnd()
         val retainedParts = user.contentParts.dropLastWhile {
-            it is AgentContentPart.Text && it.text.contains("<goal_context>")
+            it is AgentContentPart.Text &&
+                (it.text.contains("<goal_context>") || it.text.contains("<plan_board>"))
         }
         requestHistory[userIndex] = user.copy(
             content = withoutOldGoal,
