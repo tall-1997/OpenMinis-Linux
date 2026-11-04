@@ -135,3 +135,25 @@ DSH 的源码在 `resources/app.asar`（182 MB 归档，未解包），本轮未
 | CJK 门禁 | `check_cjk_literals.py` | OK |
 
 关键行为已由测试固定：预算在紧张时先丢日记、保留 session/项目规则；项目 `AGENTS.override.md` 优先且空文件不遮蔽；召回命中按标题加权、片段以命中词居中；沉淀同内容不重复写。
+
+---
+
+## 第二轮：对照 DSH 的两处补齐
+
+拿到 `deepseek-ai/deepseek-harness` 与 `lxsfful/dsh-go` 的正确仓库后复核。DSH 的 `packages/context/agent-instructions/` 暴露了两条我们缺的性质（`agent-instructions-render.ts` 原文）：
+
+> `More specific instructions take precedence over broader ones. They do not override system, developer, or direct user instructions.`
+> `identical trimmed content renders once`
+> `an unobservable candidate preserves the last-good state of its group`
+
+第一条上一轮已对齐（注入顺序 + header 声明），后两条逐条补上：
+
+**1. 跨层内容去重**（`T-memory-instruction-dedupe`）
+同一段规则同时写进 `GLOBAL.md` 与 `AGENTS.md` 时，过去会把同一份指令连发两遍——既浪费 token，又让模型收到两个「权威来源」。新增 `InstructionDedupe.firstSeen`：在**正文**层面比较（不是渲染后的片段，因为每层都带自己的 header 与 envelope），空白归一化后相同即只保留一次；调用方按「作用域从窄到宽」传入，因此保留的是更具体的那一层。配套给 `MemoryFragmentBuilder` 加了 `loadGlobalMemoryBody`（独立的指纹 memo），让装配层不渲染也能拿到正文。
+
+**2. 读不到时保留 last-good**（`T-memory-project-rules-lastgood`）
+原来 `ProjectInstructionStore` 读取失败时返回 null 并清空缓存，一次瞬时 IO 错误就让项目规则静默缺席一轮——模型行为会无声改变。现在区分两种「没有」：**文件合法消失**（未归档、被删除）清空 memo；**读失败**返回同一路径的上一次好值，跨项目的旧值绝不顶替（`cachePath` 校验）。`resolve` 增加可注入 reader，让「读失败」这条路径能被测试覆盖。
+
+**dsh-go 的结论**：`lxsfful/dsh-go` 是 Flutter 客户端 + 构建期捆绑的 DSH 运行时（`runtime/lib/rtbuild.py`、`dsh-0.2.1-rc.4` lock）+ 原生桥接插件；记忆是第三方插件 `@furongjun1999/dsh-memory` 渲染成的 bot 作用域条目卡片（`BotMemoryCard`，带 owner 权限与就地编辑）。**它没有自己的记忆算法可抄**，可迁移的只是「条目化 + 条目级权限」这一产品形态，而片段级 authority envelope 已覆盖同等语义。
+
+**验证：** `com.openminis.app.data.**` 243 用例 0 失败；新增 `InstructionDedupeTest` 6 个、`ProjectInstructionStoreTest` 扩到 10 个（含 last-good 3 个）。

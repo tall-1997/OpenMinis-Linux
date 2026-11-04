@@ -256,19 +256,41 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
     // tool surface and SOUL.md is part of identity, both orthogonal
     // to the memory feature.
     val sessionMem = if (memoryOn) sessionMemoryRepo() else null
-    val standingGlobal = if (memoryOn) memoryRepository?.loadGlobalMemoryFragment() else null
+    val memorySessionId = com.openminis.app.sandbox.ExecutionCoordinator.ownerSessionId(
+        realSessionId.ifEmpty { sessionId },
+    )
     // [T-memory-project-rules] Project-scoped rules (AGENTS.md / AGENTS.override.md
     // in the project workspace) — the layer codex's agents_md.rs provides and this
     // app previously lacked. Unfiled sessions simply have none.
-    val projectRulesFragment = if (memoryOn) {
-        com.openminis.app.data.repository.ProjectInstructionStore.fragment(
-            context.filesDir,
-            com.openminis.app.sandbox.ExecutionCoordinator.ownerSessionId(
-                realSessionId.ifEmpty { sessionId },
+    val projectResolved = if (memoryOn) {
+        com.openminis.app.data.repository.ProjectInstructionStore
+            .resolve(context.filesDir, memorySessionId)
+    } else null
+    // [T-memory-instruction-dedupe] Bodies first, fragments second: rules copied
+    // verbatim across scopes are rendered once, kept as the narrowest scope. DSH
+    // does the same ("identical trimmed content renders once"); without it the
+    // model receives the same orders twice, from two different authorities.
+    val keptInstructionKeys = if (memoryOn) {
+        com.openminis.app.data.repository.InstructionDedupe.firstSeen(
+            listOf(
+                "project-rules" to projectResolved?.content,
+                "session-global" to sessionMem?.loadGlobalMemoryBody(sessionScoped = true),
+                "app-global" to memoryRepository?.loadGlobalMemoryBody(sessionScoped = false),
             ),
         )
+    } else {
+        emptySet()
+    }
+    val standingGlobal = if ("app-global" in keptInstructionKeys) {
+        memoryRepository?.loadGlobalMemoryFragment(sessionScoped = false)
     } else null
-    val sessionGlobal = sessionMem?.loadGlobalMemoryFragment(sessionScoped = true)
+    val projectRulesFragment = if ("project-rules" in keptInstructionKeys) {
+        com.openminis.app.data.repository.ProjectInstructionStore
+            .fragment(context.filesDir, memorySessionId)
+    } else null
+    val sessionGlobal = if ("session-global" in keptInstructionKeys) {
+        sessionMem?.loadGlobalMemoryFragment(sessionScoped = true)
+    } else null
     val dailyMemoryFragment = sessionMem?.loadRecentDailyMemoryFragment()
     // [T-memory-prompt-budget] One budget for the whole memory block, admitted
     // narrowest-scope-first, so a long GLOBAL.md can never displace this chat's

@@ -101,4 +101,50 @@ class ProjectInstructionStoreTest {
             ProjectInstructionStore.resolve(filesDir, sessionId)!!.content.length,
         )
     }
+
+    // ── [T-memory-project-rules-lastgood] unobservable file ─────────────────
+
+    @Test
+    fun unreadableFileKeepsTheLastGoodRender() {
+        val file = projectFile(ProjectInstructionStore.PROJECT_RULES_FILE)
+        file.writeText("use tabs\n")
+        ProjectInstructionStore.clearCacheForTest()
+        val good = ProjectInstructionStore.resolve(filesDir, sessionId)!!
+
+        // Change the file so the fingerprint no longer matches, then fail the read.
+        file.writeText("use tabs and spaces\n")
+        val transient = ProjectInstructionStore.resolve(filesDir, sessionId) {
+            throw java.io.IOException("simulated read failure")
+        }
+
+        assertEquals(
+            "a transient read failure must not drop the rules the model was following",
+            good.content,
+            transient?.content,
+        )
+    }
+
+    @Test
+    fun aFileThatNeverResolvedDoesNotInventAValue() {
+        projectFile(ProjectInstructionStore.PROJECT_RULES_FILE).writeText("use tabs\n")
+        ProjectInstructionStore.clearCacheForTest()
+        val failed = ProjectInstructionStore.resolve(filesDir, sessionId) {
+            throw java.io.IOException("simulated read failure")
+        }
+        assertNull("no last-good exists, so there is nothing to serve", failed)
+    }
+
+    @Test
+    fun deletingTheFileClearsTheMemo() {
+        val file = projectFile(ProjectInstructionStore.PROJECT_RULES_FILE)
+        file.writeText("use tabs\n")
+        ProjectInstructionStore.clearCacheForTest()
+        assertTrue(ProjectInstructionStore.resolve(filesDir, sessionId) != null)
+
+        file.delete()
+        assertNull(
+            "legitimate absence is not a read failure — the rules are simply gone",
+            ProjectInstructionStore.resolve(filesDir, sessionId),
+        )
+    }
 }

@@ -50,11 +50,17 @@ object ProjectInstructionStore {
     // did not change is pure waste. Key = path + mtime + length.
     @Volatile private var cacheKey: String? = null
     @Volatile private var cacheValue: Resolved? = null
+    /** Path the cached value came from — last-good is only ever served for the same file. */
+    @Volatile private var cachePath: String? = null
 
     /** Resolve the project rules for [sessionId], or null when the session is unfiled / has none. */
-    fun resolve(filesDir: File, sessionId: String): Resolved? {
-        val folderId = SessionWorkspace.folderIdFor(sessionId) ?: return null
-        if (!SessionWorkspace.isSafeId(folderId)) return null
+    fun resolve(
+        filesDir: File,
+        sessionId: String,
+        read: (File) -> String = { it.readText() },
+    ): Resolved? {
+        val folderId = SessionWorkspace.folderIdFor(sessionId) ?: return forget()
+        if (!SessionWorkspace.isSafeId(folderId)) return forget()
         val root = SessionWorkspace.projectBase(filesDir, folderId)
         val override = File(root, PROJECT_OVERRIDE_FILE)
         val base = File(root, PROJECT_RULES_FILE)
@@ -62,15 +68,25 @@ object ProjectInstructionStore {
         val chosen = when {
             override.isFile && override.length() > 0L -> override
             base.isFile && base.length() > 0L -> base
-            else -> return null
+            else -> return forget()
         }
         val key = "${chosen.absolutePath}:${chosen.lastModified()}:${chosen.length()}"
         if (key == cacheKey) return cacheValue
-        val text = runCatching { chosen.readText() }.getOrNull()
-        val resolved = text
+
+        val text = runCatching { read(chosen) }
+        if (text.isFailure) {
+            // [T-memory-project-rules-lastgood] An unobservable candidate keeps the
+            // last good render, mirroring DSH's `agent-instructions`. Dropping the
+            // rules because one read failed would silently change what the model is
+            // told to do; a stale render is the safer failure. Same file only — a
+            // previously resolved project's rules must never stand in for this one.
+            return if (cachePath == chosen.absolutePath) cacheValue else null
+        }
+        val resolved = text.getOrNull()
             ?.takeIf { it.isNotBlank() }
             ?.let { Resolved(chosen, it.take(MAX_CHARS), chosen.name) }
         cacheKey = key
+        cachePath = chosen.absolutePath
         cacheValue = resolved
         return resolved
     }
@@ -98,5 +114,14 @@ object ProjectInstructionStore {
     internal fun clearCacheForTest() {
         cacheKey = null
         cacheValue = null
+        cachePath = null
+    }
+
+    /** Legitimate absence (unfiled session, deleted file) clears the memo. */
+    private fun forget(): Resolved? {
+        cacheKey = null
+        cacheValue = null
+        cachePath = null
+        return null
     }
 }
