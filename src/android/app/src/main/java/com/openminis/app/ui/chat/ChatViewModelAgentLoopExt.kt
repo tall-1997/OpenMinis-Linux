@@ -637,7 +637,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     break
                 }
                 val requestHistory = ToolIdNormalization.normalizeMessages(
-                    com.openminis.app.goal.withGoalContext(
+                    withGoalAndPlanContext(
                     effectiveAgentHistory(),
                     goalMount.prompt,
                     appendNewUser = goalExecutionRun && turn == 0,

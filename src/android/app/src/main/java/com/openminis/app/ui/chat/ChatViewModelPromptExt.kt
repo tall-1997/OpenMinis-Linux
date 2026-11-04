@@ -333,21 +333,12 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
     // [T-memory-recall] Lightweight FTS recall: search ALL historical memory
     // entries for keywords from the latest user message, inject top-4 hits.
     // No embedding service: keyword density + recency + recall-count scoring.
-    val recalledMemoryFragment = if (memoryOn) {
-        // [T-memory-recall-io] Cached per memory directory: constructing a fresh
-        // engine per build re-read the recall-count sidecar on every turn.
-        val engine = com.openminis.app.data.repository.MemoryRecallEngineCache.forSession(
-            com.openminis.app.sandbox.SessionWorkspace.memoryDir(
-                context.filesDir,
-                com.openminis.app.sandbox.ExecutionCoordinator.ownerSessionId(
-                    realSessionId.ifEmpty { sessionId },
-                ),
-            ),
-        )
-        val query = _messages.value.lastOrNull { it.role == "user" && !it.isQueued }?.content.orEmpty()
-        val hits = engine?.recall(query) ?: emptyList()
-        engine?.formatAsPromptFragment(hits) ?: ""
-    } else null
+    // [T-memory-recall-live] Recall moved out of the run-level system prompt and
+    // into per-turn injection (see [liveRecallPrompt]). Computed once per RUN, the
+    // query was the last user message — which does not change during a long tool
+    // loop — so the fragment stayed frozen for up to maxTurns while the subtask
+    // moved on. Null here keeps the dynamic-tail assembly byte-shape unchanged.
+    val recalledMemoryFragment: String? = null
     // Standing, user-approved evolution rules. Not gated by memoryOn (same as SOUL.md).
     // [P1-20] Scene classification is memoized on its exact input triple
     // (category/title/latest-user-sample) — see ChatViewModel.learnedSceneTag.
@@ -367,7 +358,7 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
             "projectRulesChars=${projectRulesFragment?.length ?: 0} " +
             "memoryBudget=${memoryAllocation?.describe() ?: "off"} " +
             "globalChars=${globalMemoryFragment?.length ?: 0} " +
-            "recallChars=${recalledMemoryFragment?.length ?: 0}",
+            "recall=perTurn",
     )
 
     var stablePrefixLen = -1

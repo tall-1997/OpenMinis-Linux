@@ -93,6 +93,11 @@ internal suspend fun ChatViewModel.executeTool(
     // — they always fall through to shell_execute or the offload
     // bridge, which is now where checkPermission runs.
     val canonical = com.openminis.app.security.ToolAliases.canonical(name)
+    // [T-known-failure] A call that already failed twice with these exact
+    // arguments is refused by code, not by the model remembering. Any argument
+    // change produces a different fingerprint and runs normally.
+    com.openminis.app.tools.ToolFailureMemory
+        .refusalFor(context, activeSessionId, canonical, argsJson)?.let { return it }
     val gated = com.openminis.app.security.SecurityGateHolder.intercept(
         context, canonical, argsJson, activeSessionId,
     )

@@ -525,6 +525,12 @@ private suspend fun ChatViewModel.runPlannedCall(
     }
     Log.d("ToolChain[VM]", "[turn=${ctx.turn}] executeTool START name=${call.name} args=${call.argsStr.take(200)}")
     val result = executeTool(call.name, call.argsStr, call.id, ctx.allToolBlocks, ctx.assistantId, ctx.accumulatedText)
+    // [T-known-failure] Feed the outcome back into the failure ledger the dispatch
+    // gate reads: a success clears the record, a failure arms it for the next
+    // identical call. Fire-and-forget; never affects the result the model sees.
+    com.openminis.app.tools.ToolFailureMemory.recordOutcome(
+        context, activeSessionId, call.name, call.argsStr, result.success, result.output,
+    )
     currentCoroutineContext().ensureActive()
     Log.d("ToolChain[VM]", "[turn=${ctx.turn}] executeTool END name=${call.name} success=${result.success} title=${result.toolTitle} outputLen=${result.output.length} output=${result.output.take(200)}")
     executedParts[call.id] = finalizePlannedCall(ctx, call, result)
