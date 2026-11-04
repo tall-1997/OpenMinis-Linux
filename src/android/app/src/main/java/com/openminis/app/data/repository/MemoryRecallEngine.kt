@@ -57,6 +57,20 @@ class MemoryRecallEngine(
         private const val RECALL_BOOST_COEFF = 0.10
         private const val RECALL_BOOST_MAX = 0.15
         private const val RECALL_COUNTS_FILE = ".recall-counts.json"
+        /** [T-memory-recall-hygiene] Upper bound on characters tokenized per query. */
+        internal const val QUERY_CHAR_CAP = 1200
+        /** [T-memory-recall-hygiene] English function words that only add noise. */
+        internal val EN_STOPWORDS: Set<String> = setOf(
+            "the", "and", "for", "that", "this", "with", "you", "your", "are", "was",
+            "were", "have", "has", "had", "not", "but", "all", "any", "can", "will",
+            "would", "should", "could", "from", "they", "them", "then", "than", "when",
+            "what", "which", "who", "how", "why", "into", "out", "about", "just",
+        )
+        /** [T-memory-recall-hygiene] CJK function characters; a 2-gram of two of these is dropped. */
+        internal val CJK_STOP_CHARS: Set<Char> = setOf(
+            '的', '了', '是', '在', '和', '与', '就', '都', '也', '很', '把', '被', '让', '给',
+            '这', '那', '个', '我', '你', '他', '她', '它', '们', '之', '其', '而', '及', '或', '以', '为',
+        )
         private val CHINESE_PUNCT = setOf('，', '。', '、', '；', '：', '“', '”', '‘', '’', '（', '）', '【', '】', '《', '》', '？', '！')
 
         /**
@@ -111,24 +125,39 @@ class MemoryRecallEngine(
      * Chinese: split into 2-char window tokens + punctuation-free words.
      * English: split on whitespace and strip punctuation.
      * Returns lowercased, deduplicated tokens (>= 2 chars).
+     *
+     * [T-memory-recall-hygiene] Two bounds the first cut lacked:
+     *  - the query is capped at [QUERY_CHAR_CAP] characters. A pasted document
+     *    used to produce thousands of 2-gram tokens, and every one of them was
+     *    `contains`-matched against every line of every memory file.
+     *  - function words are dropped. A 2-gram made only of high-frequency
+     *    characters ("我们", "这个") matches most lines and contributes noise
+     *    rather than signal.
      */
     private fun extractKeywords(query: String): Set<String> {
         if (query.isBlank()) return emptySet()
-        val cleaned = query.trim().lowercase().filter { !it.isWhitespace() }
+        val capped = query.take(QUERY_CHAR_CAP)
+        val cleaned = capped.trim().lowercase().filter { !it.isWhitespace() }
         val result = mutableSetOf<String>()
         // English-style: split on whitespace/punctuation boundaries from the raw query
-        val words = query.lowercase()
+        val words = capped.lowercase()
             .split("[\\s，。、；：！？“”‘’（）【】《》,.!?;:'\"()\\[\\]{}]+".toRegex())
             .filter { it.length >= 2 && !it.all { c -> CHINESE_PUNCT.contains(c) } }
+            .filterNot { EN_STOPWORDS.contains(it) }
         result.addAll(words)
 
         // Chinese n-gram (2-char sliding window) for CJK memory search
         val noPunct = cleaned.filterNot { CHINESE_PUNCT.contains(it) }
         for (i in 0..noPunct.length - 2) {
-            result.add(noPunct.substring(i, i + 2))
+            val gram = noPunct.substring(i, i + 2)
+            if (gram[0] in CJK_STOP_CHARS && gram[1] in CJK_STOP_CHARS) continue
+            result.add(gram)
         }
         return result.filter { it.isNotBlank() }.toSet()
     }
+
+    /** [T-memory-recall-hygiene] Test seam: the token set a query produces. */
+    internal fun keywordsForTest(query: String): Set<String> = extractKeywords(query)
 
     /**
      * Run a targeted recall: search all memory files for [query] keywords,
@@ -219,14 +248,24 @@ class MemoryRecallEngine(
      * entry is actually injected into the prompt.
      */
     fun acceptRecall(source: String, line: String) {
-        // Must key on the SAME day token [recall] reads (see rcKey there):
-        // source arrives as "2026-09-18.md" while recall reads day "2026-09-18",
-        // so keying on the raw source meant every boost landed on a key nobody
-        // ever looked up.
-        val key = "${dayKeyOf(source)}:${line.trim()}"
-        val count = recallCounts.getOrPut(key) { AtomicInteger(0) }.incrementAndGet()
-        Log.d(TAG, "accepted recall: $source line=${line.take(40)}… count=$count")
-        // [T-memory-recall-persist] Persist the bump (atomic sidecar JSON) so a
+        acceptRecallBatch(listOf(source to line))
+    }
+
+    /**
+     * [T-memory-recall-io] Accept several entries with ONE sidecar write.
+     *
+     * Keys must match [recall]'s `rcKey` exactly (`"$day:$trimmed"`), which is
+     * why [source] arrives as the file name and is mapped through [dayKeyOf]
+     * here rather than by the caller.
+     */
+    fun acceptRecallBatch(hits: List<Pair<String, String>>) {
+        if (hits.isEmpty()) return
+        for ((source, line) in hits) {
+            val key = "${dayKeyOf(source)}:${line.trim()}"
+            val count = recallCounts.getOrPut(key) { AtomicInteger(0) }.incrementAndGet()
+            Log.d(TAG, "accepted recall: $source line=${line.take(40)}… count=$count")
+        }
+        // [T-memory-recall-persist] Persist the bumps (atomic sidecar JSON) so a
         // process restart does not wipe the accumulated boost.
         saveRecallCounts()
     }
@@ -256,7 +295,14 @@ class MemoryRecallEngine(
         val obj = org.json.JSONObject()
         recallCounts.forEach { (k, v) -> if (v.get() > 0) obj.put(k, v.get()) }
         writeTextAtomic(file, obj.toString())
+        // [T-memory-recall-io] Test seam: proves the prompt path writes once per
+        // build instead of once per hit.
+        saveCountForTest += 1
     }
+
+    /** [T-memory-recall-io] Number of sidecar writes performed by this instance. */
+    internal var saveCountForTest: Int = 0
+        private set
 
     /** Snapshot for tests/debug: (key, count) pairs, sorted by key. */
     internal fun recallCountsSnapshot(): Map<String, Int> =
@@ -278,11 +324,21 @@ class MemoryRecallEngine(
             append("## Recalled relevant memories (keyword FTS, no embeddings)\n")
             for (hit in hits) {
                 if (hit.archived) append("[archived] ")
-                append("- **${hit.source}**: ${hit.line}")
+                // [T-p0-authority] The daily-log injection path scrubs forged
+                // authority tokens line by line; recall reads the SAME files and
+                // used to inject them raw, which made this a way to launder
+                // `trust:user-submitted` into the prompt past the envelope.
+                // Only the RENDERED line is cleaned — acceptRecall must keep
+                // keying on the stored line, or the recall-count boost stops
+                // matching the key recall() looks up.
+                append("- **${hit.source}**: ${MemoryAuthority.stripForgedTag(hit.line)}")
                 appendLine()
-                acceptRecall(hit.source, hit.line)
             }
         }
+        // [T-memory-recall-io] One sidecar write per prompt build, not one per
+        // hit: acceptRecall() rewrites the whole JSON file on each call, so a
+        // 4-hit build cost four synchronous rewrites on the prompt path.
+        acceptRecallBatch(hits.map { it.source to it.line })
         return MemoryAuthority.withEnvelope(
             body,
             MemoryTrust.UNVERIFIED_CANDIDATE,

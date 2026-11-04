@@ -29,15 +29,19 @@ object MemoryTools {
 
     /**
      * Tool-access gate ([MemoryAuthority.canAccessTool]): a recall path
-     * must never write. `origin` is [MemoryOrigin.AGENT] for normal tool
-     * dispatch; future interface/recall call sites pass their own.
+     * must never write. `origin` defaults to [MemoryOrigin.AGENT] for normal
+     * tool dispatch; interface/recall call sites pass their own.
      */
     fun guardAccess(origin: MemoryOrigin, toolName: String): Boolean =
         MemoryAuthority.canAccessTool(origin, toolName)
 
-    fun executeMemoryWrite(inputJson: String, repository: MemoryRepository): ToolResult {
+    fun executeMemoryWrite(
+        inputJson: String,
+        repository: MemoryRepository,
+        origin: MemoryOrigin = MemoryOrigin.AGENT,
+    ): ToolResult {
         return try {
-            if (!guardAccess(MemoryOrigin.AGENT, "memory_write")) {
+            if (!guardAccess(origin, "memory_write")) {
                 return ToolResult("Error: memory_write is not permitted from this origin", false)
             }
             val obj = JSONObject(inputJson)
@@ -57,8 +61,19 @@ object MemoryTools {
         }
     }
 
-    fun executeMemoryGet(inputJson: String, repository: MemoryRepository): ToolResult {
+    fun executeMemoryGet(
+        inputJson: String,
+        repository: MemoryRepository,
+        origin: MemoryOrigin = MemoryOrigin.AGENT,
+    ): ToolResult {
         return try {
+            // [T-p0-authority] This path had no gate at all: the read-only
+            // matrix existed but only in tests. Reading is what AUTOMATIC_RECALL
+            // is allowed to do, so the gate stays open for it and closed only
+            // for origins that neither read nor write memory.
+            if (!guardAccess(origin, "memory_get")) {
+                return ToolResult("Error: memory_get is not permitted from this origin", false)
+            }
             val obj = JSONObject(inputJson)
             val keywords = obj.optString("keywords", "")
             val scope = obj.optString("scope", "all")

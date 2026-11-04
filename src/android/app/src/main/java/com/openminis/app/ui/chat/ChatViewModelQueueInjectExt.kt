@@ -256,7 +256,7 @@ internal fun ChatViewModel.settleInterruptedThinkingTurn(
             durationMs = settleThinkingDurationMs(allToolBlocks[thinkIdx]),
         )
     }
-    com.openminis.app.agent.GenerationRunStore.finish(context, generationRunId, ok = true)
+    com.openminis.app.agent.GenerationRunLifecycle.succeeded(context, generationRunId)
     if (_autoRetryAttempt.value != 0 || _autoRetryCountdown.value != 0) {
         _autoRetryAttempt.value = 0
         _autoRetryCountdown.value = 0

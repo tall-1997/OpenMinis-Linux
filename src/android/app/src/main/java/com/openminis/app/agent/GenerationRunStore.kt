@@ -59,8 +59,15 @@ object GenerationRunStore {
         trim(dir(context))
     }
 
-    /** Runs that were RUNNING when the process died — crash candidates. */
-    fun abandoned(context: Context): List<Run> {
+    /**
+     * Runs still marked [Status.RUNNING] — nobody has closed them yet.
+     *
+     * This is the raw predicate behind [abandoned], exposed separately because
+     * the two callers mean different things by it: the launch scan reads it as
+     * "the process died mid-run", while the run wrapper reads it as "this run
+     * escaped without a verdict". Same rows, opposite conclusions.
+     */
+    fun running(context: Context): List<Run> {
         val dir = dir(context)
         if (!dir.exists()) return emptyList()
         return dir.listFiles()?.mapNotNull { read(it) }
@@ -68,6 +75,9 @@ object GenerationRunStore {
             ?.sortedBy { it.startedAtMs }
             ?: emptyList()
     }
+
+    /** Runs that were RUNNING when the process died — crash candidates. */
+    fun abandoned(context: Context): List<Run> = running(context)
 
     fun markAbandoned(context: Context, runId: String) {
         val file = File(dir(context), "$runId.json")

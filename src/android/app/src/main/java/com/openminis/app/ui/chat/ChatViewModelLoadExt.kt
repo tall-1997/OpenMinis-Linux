@@ -703,6 +703,9 @@ internal fun ChatViewModel.loadSession() {
             }
             refreshContextUsage()
         }
+        // [T-p1-instruction-snapshot] Log-only: replay the frozen instruction
+        // events and report drift. Never gates the load.
+        checkInstructionSnapshotDrift()
         } finally {
             // T201: open the gate even on early `return@launch` (draft path,
             // missing-session path) and on exception, so the init-time

@@ -266,7 +266,9 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
     // entries for keywords from the latest user message, inject top-4 hits.
     // No embedding service: keyword density + recency + recall-count scoring.
     val recalledMemoryFragment = if (memoryOn) {
-        val engine = com.openminis.app.data.repository.MemoryRecallEngine.fromDir(
+        // [T-memory-recall-io] Cached per memory directory: constructing a fresh
+        // engine per build re-read the recall-count sidecar on every turn.
+        val engine = com.openminis.app.data.repository.MemoryRecallEngineCache.forSession(
             com.openminis.app.sandbox.SessionWorkspace.memoryDir(
                 context.filesDir,
                 com.openminis.app.sandbox.ExecutionCoordinator.ownerSessionId(

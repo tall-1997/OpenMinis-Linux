@@ -119,4 +119,50 @@ class InLoopContextPolicyTest {
             p.check(39_000, 40_000),
         )
     }
+
+    // ── [T-compact-buffer] explicit token headroom ──────────────────────────
+
+    @Test
+    fun `an explicit buffer overrides the percentage`() {
+        val p = ContextPolicy.forContextWindow(200_000, compactPercent = 90, bufferTokens = 30_000)
+        assertEquals(170_000, p.compactThreshold)
+    }
+
+    @Test
+    fun `a buffer wider than the window clamps to the earliest allowed threshold`() {
+        // Never compact at zero: the 50% floor applies exactly as it does for
+        // the percentage form.
+        val p = ContextPolicy.forContextWindow(200_000, bufferTokens = 500_000)
+        assertEquals(100_000, p.compactThreshold)
+    }
+
+    @Test
+    fun `a tiny buffer clamps to the latest allowed threshold`() {
+        // Nor never compact at all: the 95% ceiling still applies.
+        val p = ContextPolicy.forContextWindow(200_000, bufferTokens = 1)
+        assertEquals(190_000, p.compactThreshold)
+    }
+
+    @Test
+    fun `a null buffer keeps every tier's existing threshold`() {
+        assertEquals(180_000, ContextPolicy.forContextWindow(200_000, bufferTokens = null).compactThreshold)
+        assertEquals(180_000, ContextPolicy.forContextWindow(200_000).compactThreshold)
+        assertEquals(90_000, ContextPolicy.forContextWindow(100_000).compactThreshold)
+    }
+
+    @Test
+    fun `the buffer also applies to the small window tier`() {
+        val p = ContextPolicy.forContextWindow(40_000, bufferTokens = 10_000)
+        assertEquals(30_000, p.compactThreshold)
+    }
+
+    @Test
+    fun `tiny windows ignore the buffer and stay exhausted only`() {
+        val p = ContextPolicy.forContextWindow(16_000, bufferTokens = 4_000)
+        assertEquals(0, p.compactThreshold)
+        assertEquals(
+            ContextPolicy.CheckResult.EXHAUSTED,
+            p.check(15_900, 16_000),
+        )
+    }
 }
