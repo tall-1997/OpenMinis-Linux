@@ -430,6 +430,13 @@ class MemoryRepository(private val memoryDir: File) {
     fun loadGlobalMemoryFragment(sessionScoped: Boolean = false): String? =
         fragments.loadGlobalMemoryFragment(sessionScoped)
 
+    /**
+     * [T-memory-instruction-dedupe] Raw GLOBAL.md body, for cross-scope dedupe.
+     * See [MemoryFragmentBuilder.loadGlobalMemoryBody].
+     */
+    fun loadGlobalMemoryBody(sessionScoped: Boolean = false): String? =
+        fragments.loadGlobalMemoryBody(sessionScoped)
+
     fun loadLearnedPrefsFragment(scene: SceneTag = SceneTag.GENERAL): String? =
         fragments.loadLearnedPrefsFragment(scene)
 

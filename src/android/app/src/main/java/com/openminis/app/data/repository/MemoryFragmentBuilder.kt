@@ -50,6 +50,33 @@ internal class MemoryFragmentBuilder(
     @Volatile
     private var dailyFragCacheValue: String? = null
 
+    // [T-memory-instruction-dedupe] Raw GLOBAL.md body memo, keyed like the
+    // fragment cache. Dedupe compares bodies across scopes, and the rendered
+    // fragment is unusable for that: every scope prepends its own header and
+    // envelope. Kept separate so the fragment cache keeps its exact semantics.
+    @Volatile
+    private var globalBodyCacheKey: String? = null
+    @Volatile
+    private var globalBodyCacheValue: String? = null
+
+    /**
+     * [T-memory-instruction-dedupe] The raw `GLOBAL.md` text (no header, no
+     * envelope), or null when the file is missing / empty.
+     */
+    fun loadGlobalMemoryBody(sessionScoped: Boolean): String? {
+        val globalFile = File(memoryDir, MemoryRepository.GLOBAL_FILE)
+        val key = (if (sessionScoped) "S" else "G") + ":" + (fingerprint(globalFile) ?: "missing")
+        if (globalBodyCacheKey == key) return globalBodyCacheValue
+        val body = if (!globalFile.exists()) {
+            null
+        } else {
+            readTextResilient(globalFile, "global-rules")?.takeIf { it.isNotEmpty() }
+        }
+        globalBodyCacheKey = key
+        globalBodyCacheValue = body
+        return body
+    }
+
     /**
      * Loads the GLOBAL.md fragment for system-prompt injection. Mirrors iOS
      * `AIChatViewModel.loadGlobalMemoryFragment()`. Returns null if the file
