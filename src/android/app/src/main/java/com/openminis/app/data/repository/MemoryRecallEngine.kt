@@ -68,9 +68,6 @@ class MemoryRecallEngine(
         /** [T-memory-recall-hygiene] Upper bound on characters tokenized per query. */
         internal const val QUERY_CHAR_CAP = 1200
 
-        /** [T-memory-recall-multisource] Synthetic day key for knowledge-note hits. */
-        internal const val NOTE_DAY = "note"
-
         /** [T-memory-recall-caps] One hit line may not exceed this. */
         internal const val MAX_HIT_CHARS = 240
 
@@ -283,23 +280,7 @@ class MemoryRecallEngine(
                 hit.copy(archived = entryDay?.isBefore(cutoff) == true)
             }
 
-        // [T-memory-recall-multisource] Knowledge notes join the same ranking
-        // instead of being a separate feature the model has to know to query.
-        // Their scores come from the same keyword notion (title weighted double),
-        // so a strong note can outrank a weak diary line.
-        val noteHits = KnowledgeNoteIndex.search(keywords, RECALL_LIMIT).map { note ->
-            RecallHit(
-                source = "note:" + note.title.ifBlank { "(untitled)" },
-                line = note.excerpt,
-                day = NOTE_DAY,
-                score = note.score,
-                recallCount = 0,
-                archived = false,
-                scoreDetail = "note=${"%.1f".format(note.score)}",
-            )
-        }
-
-        val merged = (fileHits + noteHits).sortedByDescending { it.score }.take(RECALL_LIMIT)
+        val merged = fileHits.sortedByDescending { it.score }.take(RECALL_LIMIT)
         memo = query to merged
         return merged
     }

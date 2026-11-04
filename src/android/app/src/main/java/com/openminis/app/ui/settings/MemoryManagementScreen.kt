@@ -67,13 +67,6 @@ fun MemoryManagementScreen(
     onBack: () -> Unit,
     onFileClick: (fileName: String, isGlobal: Boolean) -> Unit = { _, _ -> },
     onEvolutionClick: () -> Unit = {},
-    /**
-     * [T-memory-center] The knowledge workbench hangs off the bottom of this page
-     * rather than sitting beside "Memory" in the drawer. Both surfaces manage
-     * persistent content, and a two-item landing page read as an empty menu; a
-     * secondary section here keeps this page the single way in.
-     */
-    onOpenKnowledge: () -> Unit = {},
 ) {
     var files by remember { mutableStateOf<List<MemoryRepository.MemoryFileInfo>>(emptyList()) }
     var deleteFileName by remember { mutableStateOf<String?>(null) }
@@ -100,12 +93,8 @@ fun MemoryManagementScreen(
         // on the main thread, even from a LaunchedEffect.
         files = withContext(Dispatchers.IO) { memoryRepository.listAllFiles() }
         stats = withContext(Dispatchers.IO) {
-            val notes = runCatching {
-                (context.applicationContext as? com.openminis.app.MinisApp)
-                    ?.knowledgeNoteRepository?.listActive()?.size
-            }.getOrNull() ?: 0
             runCatching {
-                com.openminis.app.data.repository.MemoryCenterStats.collect(context.filesDir, notes)
+                com.openminis.app.data.repository.MemoryCenterStats.collect(context.filesDir)
             }.getOrNull()
         }
     }
@@ -119,7 +108,6 @@ fun MemoryManagementScreen(
                 footer = stringResource(R.string.memory_center_stats_footer),
             ) {
                 MemoryStatRow(R.string.memory_center_stat_memory, snapshot.files)
-                MemoryStatRow(R.string.memory_center_stat_notes, snapshot.notes)
                 MemoryStatRow(R.string.memory_center_stat_recalls, snapshot.recalled)
                 MemoryStatRow(R.string.memory_center_stat_failures, snapshot.blockedRepeats)
                 MemoryStatRow(R.string.memory_center_stat_sediments, snapshot.sediments, showDivider = false)
@@ -197,18 +185,6 @@ fun MemoryManagementScreen(
         // [T-android-app-knowledge] The agent's app-experience notes live in
         // the memory domain (they ARE memory the agent recalls), not Settings.
         AppNotesSection()
-
-        // [T-memory-center] Secondary destination at the bottom of the page, so
-        // "Memory" stays the single entry point in the drawer instead of sharing
-        // the drawer with a peer "Knowledge Workbench" entry.
-        SettingsSection(header = stringResource(R.string.settings_section_knowledge)) {
-            SettingsRow(
-                title = stringResource(R.string.settings_section_knowledge),
-                subtitle = stringResource(R.string.settings_knowledge_subtitle),
-                onClick = onOpenKnowledge,
-                showDivider = false,
-            )
-        }
     }
 
     // Delete confirmation

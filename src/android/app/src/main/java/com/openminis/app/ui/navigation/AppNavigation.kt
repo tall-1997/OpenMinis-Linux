@@ -23,7 +23,6 @@ import com.openminis.app.MinisApp
 import com.openminis.app.deeplink.DeepLinkAction
 import com.openminis.app.deeplink.DeepLinkCoordinator
 import com.openminis.app.ui.browser.BrowserSheet
-import com.openminis.app.ui.knowledge.KnowledgeWorkbenchViewModel
 import com.openminis.app.ui.settings.KEY_LAUNCH_SESSION
 import com.openminis.app.ui.settings.getAppearancePrefs
 import androidx.navigation.NavHostController
@@ -89,8 +88,6 @@ fun AppNavigation(
     val mountedFoldersStore = remember {
         (context.applicationContext as com.openminis.app.MinisApp).mountedFoldersStore
     }
-
-    val knowledgeViewModel = remember { KnowledgeWorkbenchViewModel(context.applicationContext) }
 
     // Handle initial deep link after composition
     LaunchedEffect(initialDeepLink) {
@@ -487,9 +484,6 @@ fun AppNavigation(
                 onBrowserSettings = { navController.safeNavigate(Routes.HOME_BROWSER_SETTINGS) },
 
                 onLogsClick = { navController.safeNavigate(Routes.LOGS) },
-                // [T-memory-center] The knowledge workbench has no drawer entry of
-                // its own any more: it is reached from the memory hub, so users see
-                // one persistent-memory destination instead of two peers.
                 onAboutClick = { navController.safeNavigate(Routes.ABOUT) },
                 onMountedFoldersClick = { navController.safeNavigate(Routes.MOUNTED_FOLDERS) },
                 onSharedFoldersClick = { navController.safeNavigate(Routes.SHARED_FOLDERS) },
@@ -742,8 +736,8 @@ fun AppNavigation(
         }
 
         // [T-memory-center] One entry point for everything persistent; the file
-        // manager and the knowledge workbench hang off it. Extracted to
-        // MemoryNavGraph.kt to keep this file inside its line ceiling.
+        // manager hangs off it. Extracted to MemoryNavGraph.kt to keep this file
+        // inside its line ceiling.
         memoryNavGraph(navController, memoryRepository)
 
         // [T-mcp-integration-android] MCP Integrations management screen.
@@ -918,7 +912,6 @@ fun AppNavigation(
         }
 
         logsRoutes(navController)
-        knowledgeNavGraph(navController, knowledgeViewModel)
 
         composable(Routes.ONBOARDING_MODELS) {
             OnboardingModelSelectionScreen(
