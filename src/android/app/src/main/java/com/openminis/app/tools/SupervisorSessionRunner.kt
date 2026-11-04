@@ -69,6 +69,7 @@ object SupervisorSessionRunner {
         recovery: String? = null,
         onRound: RoundObserver = RoundObserver { _, _, _ -> },
         onTerminal: TerminalObserver = TerminalObserver { _, _ -> },
+        evidenceFileExists: ((String) -> Boolean)? = null,
     ): Outcome {
         val machine = SupervisorChat.TurnMachine(maxWorkerTurns)
         var acceptance: List<String> = emptyList()
@@ -77,6 +78,18 @@ object SupervisorSessionRunner {
         var bounceNote: String? = null
         var bounces = 0
         var calls = 0
+        val reports = StringBuilder()
+
+        // The evidence gate verifies the ## Delivery section of a DONE
+        // message against every worker report this session produced and
+        // the injected file-existence answer; null disables the gate.
+        val evidenceGate: ((String) -> SupervisorEvidence.Check)? = evidenceFileExists?.let { exists ->
+            { text: String ->
+                val claim = SupervisorEvidence.parseDelivery(text)
+                    ?: return@let SupervisorEvidence.Check.Fail(listOf("missing ## Delivery section"))
+                SupervisorEvidence.verify(claim, exists, reports.toString())
+            }
+        }
 
         /** Null when the supervisor call budget is spent: the caller ends the session. */
         suspend fun supervisorTurn(prompt: String): String? {
@@ -144,6 +157,7 @@ object SupervisorSessionRunner {
                                 )
                                 machine.onWorkerReport()
                                 lastReport = report
+                                reports.append(report).append('\n')
                                 onRound.onRound(
                                     machine.workerTurns,
                                     lastInstructionDigest,
@@ -163,7 +177,8 @@ object SupervisorSessionRunner {
                     }
                 }
                 // A DONE verdict: the machine owns the transition rules.
-                val phase = machine.onSupervisorMessage(text, acceptance)
+                val strikesBefore = machine.evidenceStrikes
+                val phase = machine.onSupervisorMessage(text, acceptance, evidenceGate)
                 when (phase) {
                     SupervisorChat.Phase.DONE -> {
                         return terminal(
@@ -172,19 +187,29 @@ object SupervisorSessionRunner {
                         )
                     }
                     SupervisorChat.Phase.FAILED -> {
-                        val reason = if (machine.forceClosed()) {
-                            "worker turn budget exhausted (${machine.workerTurns} turns)"
-                        } else {
-                            "second rubber-stamped DONE without acceptance evidence"
+                        val reason = when {
+                            machine.forceClosed() ->
+                                "worker turn budget exhausted (${machine.workerTurns} turns)"
+                            machine.evidenceStrikes >= 2 ->
+                                "second delivery-evidence failure"
+                            else ->
+                                "second rubber-stamped DONE without acceptance evidence"
                         }
                         return terminal(SupervisorRunStore.STATE_FAILED, reason)
                     }
                     else -> {
-                        // Rubber-stamp strike: re-review with the bounce note.
+                        // A bounce: either rubber-stamp or delivery-evidence.
+                        val evidenceRejected = machine.evidenceStrikes > strikesBefore
+                        val note = if (evidenceRejected) {
+                            val fail = evidenceGate?.invoke(text) as? SupervisorEvidence.Check.Fail
+                            fail?.let { SupervisorEvidence.bounceNote(it) }
+                                ?: SupervisorPrompts.bounceRubberStamp(acceptance)
+                        } else {
+                            SupervisorPrompts.bounceRubberStamp(acceptance)
+                        }
                         prompt = SupervisorPrompts.reviewTurn(
                             objective, lastReport, acceptance, inbox.drain(),
-                            machine.workerTurns, maxWorkerTurns,
-                            SupervisorPrompts.bounceRubberStamp(acceptance),
+                            machine.workerTurns, maxWorkerTurns, note,
                         )
                     }
                 }

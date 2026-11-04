@@ -36,7 +36,7 @@ class ChatRepository(
     // constructing with the old three-arg shape.
     internal val versionDao: MessageVersionDao? = null,
     // [T-archive-truncate-txn] DB handle for the archive+truncate transaction; null → sequential fallback.
-    private val db: AppDatabase? = null,
+    internal val db: AppDatabase? = null,
 ) {
     internal fun searchDao(): com.openminis.app.data.db.ChatSearchDao = checkNotNull(db).chatSearchDao()
 

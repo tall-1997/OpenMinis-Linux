@@ -86,9 +86,8 @@ object SupervisorPrompts {
             append(inboxSection)
             append(bounceSection)
             append(
-                "\n\nworker 回合预算：已用 $workerTurns / $maxWorkerTurns。" +
-                    "逐条复核报告：全部通过就单独一行 DONE: <总结>（引用验收标准原词）；" +
-                    "否则发下一条修正指令（信封格式）。",
+                "\n\nworker 回合预算：已用 $workerTurns / $maxWorkerTurns。逐条复核报告：全部通过就单独一行 DONE: <总结>（引用验收标准原词）；否则发下一条修正指令（信封格式）。" +
+                    "在给出 DONE 之前先验证关键证据确实存在：当报告声称产出了文件/目录/命令/数据时，用已授予的 shell/file/read 工具实际抽查一次（存在性、内容、运行结果），并把验证写进总结（例如「Verified: xxx 存在，内容与报告一致」）。",
             )
         }
     }
@@ -101,22 +100,21 @@ object SupervisorPrompts {
     /** Bounce note when a DONE verdict cited no acceptance evidence. */
     fun bounceRubberStamp(acceptance: List<String>): String {
         val terms = acceptance.joinToString("、")
-        return "你的 DONE 没有引用任何验收标准的原词，被判定为橡皮图章。" +
-            "请重新复核后要么引用证据（$terms），要么发下一条修正指令。"
+        return "你的 DONE 没有引用任何验收标准的原词，被判定为橡皮图章。请重新复核后要么引用证据（$terms），要么发下一条修正指令。"
     }
 
     /** Final prompt when the worker-turn budget is exhausted. */
     fun capReached(objective: String, workerTurns: Int): String {
-        return "目标：${objective.trim()}\n\nworker 回合预算已耗尽（$workerTurns 轮）。" +
-            "请基于已有报告单独一行 DONE: <总结当前实际达成的部分>（引用验收标准原词）。这是收尾，不再有下一轮。"
+        return "目标：${objective.trim()}\n\nworker 回合预算已耗尽（$workerTurns 轮）。这是收尾，不再有下一轮。" +
+            "请先抽查关键证据：当报告声称产出了文件/目录/命令/数据时，用已授予的 shell/file/read 工具实际抽查一次（存在性、内容、运行结果），" +
+            "然后单独一行 DONE: <当前实际达成的总结>（引用验收标准原词，并说明哪些已验证、哪些未验证）。"
     }
 
     /** Recovery intro folded into the first turn after an interrupted run. */
     fun recoveryIntro(record: SupervisorRunStore.RunRecord): String {
         val lastDigest = record.rounds.lastOrNull()?.reportDigest.orEmpty()
         return "上次运行被中断：已执行 ${record.workerTurns} 轮 worker 回合。" +
-            "最后一份报告摘要：\n${lastDigest.trim().ifEmpty { "（无报告）" }}\n" +
-            "请从中断处继续：先复核已完成的部分，再发下一条指令。"
+            "最后一份报告摘要：\n${lastDigest.trim().ifEmpty { "（无报告）" }}\n请从中断处继续：先复核已完成的部分，再发下一条指令。"
     }
 
     /**
