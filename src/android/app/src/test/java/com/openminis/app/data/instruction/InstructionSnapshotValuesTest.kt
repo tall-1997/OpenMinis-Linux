@@ -96,4 +96,32 @@ class InstructionSnapshotValuesTest {
         )
         assertTrue(values.getValue(InstructionState.KEY_GOAL).contains("ship it"))
     }
+
+    // ── [T-memory-project-rules] the third instruction layer ────────────────
+
+    @Test
+    fun projectRulesAreFrozenUnderTheirOwnKey() {
+        val values = InstructionSnapshotValues.of(
+            goalValues = emptyMap(),
+            appGlobalFragment = "APP",
+            sessionGlobalFragment = "SESSION",
+            memoryEnabled = true,
+            projectRulesFragment = "PROJECT",
+        )
+        assertEquals("PROJECT", values.getValue(InstructionState.KEY_PROJECT_RULES))
+        assertEquals("APP", values.getValue(InstructionState.KEY_APP_GLOBAL))
+        assertEquals("SESSION", values.getValue(InstructionState.KEY_SESSION_GLOBAL))
+    }
+
+    @Test
+    fun projectRulesAreDroppedAlongWithTheOtherGlobalsWhenMemoryIsOff() {
+        val values = InstructionSnapshotValues.of(
+            goalValues = emptyMap(),
+            appGlobalFragment = "APP",
+            sessionGlobalFragment = "SESSION",
+            memoryEnabled = false,
+            projectRulesFragment = "PROJECT",
+        )
+        assertTrue(values.isEmpty())
+    }
 }

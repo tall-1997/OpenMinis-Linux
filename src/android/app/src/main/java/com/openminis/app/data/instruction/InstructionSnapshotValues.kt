@@ -28,6 +28,7 @@ object InstructionSnapshotValues {
         appGlobalFragment: String?,
         sessionGlobalFragment: String?,
         memoryEnabled: Boolean,
+        projectRulesFragment: String? = null,
     ): Map<String, String> {
         val values = LinkedHashMap<String, String>()
         values.putAll(goalValues)
@@ -36,6 +37,10 @@ object InstructionSnapshotValues {
         // instead would be read as a removal by InstructionState.sanitizeValues.
         appGlobalFragment?.takeIf { it.isNotBlank() }?.let {
             values[InstructionState.KEY_APP_GLOBAL] = it
+        }
+        // [T-memory-project-rules] Third layer: project-scoped rules.
+        projectRulesFragment?.takeIf { it.isNotBlank() }?.let {
+            values[InstructionState.KEY_PROJECT_RULES] = it
         }
         sessionGlobalFragment?.takeIf { it.isNotBlank() }?.let {
             values[InstructionState.KEY_SESSION_GLOBAL] = it

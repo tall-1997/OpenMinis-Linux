@@ -706,6 +706,9 @@ internal fun ChatViewModel.loadSession() {
         // [T-p1-instruction-snapshot] Log-only: replay the frozen instruction
         // events and report drift. Never gates the load.
         checkInstructionSnapshotDrift()
+        // [T-memory-recall-multisource] Fill/refresh the note mirror recall reads
+        // from. TTL-bounded and failure-tolerant.
+        refreshKnowledgeNoteIndex()
         } finally {
             // T201: open the gate even on early `return@launch` (draft path,
             // missing-session path) and on exception, so the init-time

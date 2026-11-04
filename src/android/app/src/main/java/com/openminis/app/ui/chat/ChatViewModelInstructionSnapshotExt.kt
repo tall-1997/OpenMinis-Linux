@@ -31,14 +31,25 @@ internal suspend fun ChatViewModel.commitInstructionSnapshot(goalValues: Map<Str
     val sessionIdForSnapshot = realSessionId.ifEmpty { sessionId }
     withContext(Dispatchers.IO) {
         val appGlobal = memoryRepository?.loadGlobalMemoryFragment(sessionScoped = false)
+        // [T-memory-project-rules] Third layer, so a project-rule edit shows up in
+        // the instruction event stream like any other instruction change.
+        val projectRules = com.openminis.app.data.repository.ProjectInstructionStore
+            .fragment(context.filesDir, sessionIdForSnapshot)
         val sessionGlobal = sessionMemoryRepo().loadGlobalMemoryFragment(sessionScoped = true)
-        val values = InstructionSnapshotValues.of(goalValues, appGlobal, sessionGlobal, memoryEnabled)
+        val values = InstructionSnapshotValues.of(
+            goalValues = goalValues,
+            appGlobalFragment = appGlobal,
+            sessionGlobalFragment = sessionGlobal,
+            memoryEnabled = memoryEnabled,
+            projectRulesFragment = projectRules,
+        )
         // `sameSource` must stay false: true means both keys resolved to one
         // file, i.e. the app-wide fragment was not read from its own directory.
         AppLogger.info(
             "InstructionSnapshot",
             "[T-p1-instruction-snapshot] session=$sessionIdForSnapshot enabled=$memoryEnabled " +
-                "appChars=${appGlobal?.length ?: 0} sessionChars=${sessionGlobal?.length ?: 0} " +
+                "appChars=${appGlobal?.length ?: 0} projectChars=${projectRules?.length ?: 0} " +
+                "sessionChars=${sessionGlobal?.length ?: 0} " +
                 "sameSource=${appGlobal != null && appGlobal == sessionGlobal}",
         )
         InstructionStateStore(database).observeAndCommit(sessionIdForSnapshot, values)
