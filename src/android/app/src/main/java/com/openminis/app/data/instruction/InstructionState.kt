@@ -34,11 +34,18 @@ object InstructionState {
     const val KEY_APP_GLOBAL = "app-global"
     const val KEY_SESSION_GLOBAL = "session-global"
 
+    /**
+     * [T-memory-project-rules] Project-scoped rules (`AGENTS.md` /
+     * `AGENTS.override.md` in the project workspace). Third instruction layer,
+     * between the app-wide file and the session file.
+     */
+    const val KEY_PROJECT_RULES = "project-rules"
+
     /** Longest single frozen value we commit verbatim (guards event-row size). */
     const val RENDER_VALUE_LIMIT = 240
 
     /** Keys an instruction-value map may contain; anything else is dropped. */
-    val KNOWN_KEYS = setOf(KEY_GOAL, KEY_APP_GLOBAL, KEY_SESSION_GLOBAL)
+    val KNOWN_KEYS = setOf(KEY_GOAL, KEY_APP_GLOBAL, KEY_SESSION_GLOBAL, KEY_PROJECT_RULES)
 
     data class InstructionDelta(
         val changes: Map<String, String?>,

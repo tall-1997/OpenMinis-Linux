@@ -59,6 +59,15 @@ class MemoryRecallEngine(
         private const val RECALL_COUNTS_FILE = ".recall-counts.json"
         /** [T-memory-recall-hygiene] Upper bound on characters tokenized per query. */
         internal const val QUERY_CHAR_CAP = 1200
+
+        /** [T-memory-recall-multisource] Synthetic day key for knowledge-note hits. */
+        internal const val NOTE_DAY = "note"
+
+        /** [T-memory-recall-caps] One hit line may not exceed this. */
+        internal const val MAX_HIT_CHARS = 240
+
+        /** [T-memory-recall-caps] The whole recall fragment may not exceed this (~600 tokens). */
+        internal const val MAX_FRAGMENT_CHARS = 2400
         /** [T-memory-recall-hygiene] English function words that only add noise. */
         internal val EN_STOPWORDS: Set<String> = setOf(
             "the", "and", "for", "that", "this", "with", "you", "your", "are", "was",
@@ -108,6 +117,10 @@ class MemoryRecallEngine(
 
     /** recallCount — persisted to a JSON sidecar so the boost survives restarts. */
     private val recallCounts = ConcurrentHashMap<String, AtomicInteger>()
+
+    /** [T-memory-recall-memo] (query, hits) of the most recent recall, or null. */
+    @Volatile
+    private var memo: Pair<String, List<RecallHit>>? = null
 
     data class RecallHit(
         val source: String,      // "GLOBAL.md" or "2026-09-18.md"
@@ -160,12 +173,30 @@ class MemoryRecallEngine(
     internal fun keywordsForTest(query: String): Set<String> = extractKeywords(query)
 
     /**
+     * [T-memory-recall-caps] Scrub forged authority tokens, then clip.
+     *
+     * Only the RENDERED line is cleaned: acceptRecall must keep keying on the
+     * stored line, or the recall-count boost stops matching the key recall()
+     * looks up (the same class of bug the acceptRecall KDoc records).
+     */
+    private fun clipForPrompt(line: String): String {
+        val safe = MemoryAuthority.stripForgedTag(line)
+        return if (safe.length <= MAX_HIT_CHARS) safe else safe.take(MAX_HIT_CHARS) + "…"
+    }
+
+    /**
      * Run a targeted recall: search all memory files for [query] keywords,
      * score, and return the top [RECALL_LIMIT] hits.
      */
     fun recall(query: String): List<RecallHit> {
         val keywords = extractKeywords(query)
         if (keywords.isEmpty()) return emptyList()
+        // [T-memory-recall-memo] Prompt assembly can run more than once for the
+        // same user message (retry, model fallback, queue drain). The file scan is
+        // the expensive part, so the last (query -> hits) pair is reused when the
+        // query is byte-identical. Single-entry on purpose: memory usage stays O(1)
+        // and a changed message naturally misses the memo.
+        memo?.let { (memoedQuery, memoedHits) -> if (memoedQuery == query) return memoedHits }
 
         val today = LocalDate.now()
         val files = scanMemoryFiles()
@@ -230,7 +261,7 @@ class MemoryRecallEngine(
         // pipeline dropped them BEFORE the map() that set the flag, so
         // `archived` was always false and old memories silently vanished.
         val cutoff = today.minusDays(ARCHIVE_AFTER_DAYS)
-        return candidates
+        val fileHits = candidates
             .map { hit ->
                 val entryDay = runCatching {
                     LocalDate.parse(hit.day, DateTimeFormatter.ISO_LOCAL_DATE)
@@ -238,8 +269,26 @@ class MemoryRecallEngine(
                 // "global" (unparseable) entries are never archived.
                 hit.copy(archived = entryDay?.isBefore(cutoff) == true)
             }
-            .sortedByDescending { it.score }
-            .take(RECALL_LIMIT)
+
+        // [T-memory-recall-multisource] Knowledge notes join the same ranking
+        // instead of being a separate feature the model has to know to query.
+        // Their scores come from the same keyword notion (title weighted double),
+        // so a strong note can outrank a weak diary line.
+        val noteHits = KnowledgeNoteIndex.search(keywords, RECALL_LIMIT).map { note ->
+            RecallHit(
+                source = "note:" + note.title.ifBlank { "(untitled)" },
+                line = note.excerpt,
+                day = NOTE_DAY,
+                score = note.score,
+                recallCount = 0,
+                archived = false,
+                scoreDetail = "note=${"%.1f".format(note.score)}",
+            )
+        }
+
+        val merged = (fileHits + noteHits).sortedByDescending { it.score }.take(RECALL_LIMIT)
+        memo = query to merged
+        return merged
     }
 
     /**
@@ -320,25 +369,24 @@ class MemoryRecallEngine(
     /** Format the hit list as a system-prompt fragment (mirrors XINCODE format). */
     fun formatAsPromptFragment(hits: List<RecallHit>): String {
         if (hits.isEmpty()) return ""
+        val included = ArrayList<RecallHit>(hits.size)
         val body = buildString {
             append("## Recalled relevant memories (keyword FTS, no embeddings)\n")
             for (hit in hits) {
+                // [T-memory-recall-caps] Budget the whole fragment, not just one
+                // hit: a single enormous diary line used to be able to fill the
+                // block on its own. `length` is this StringBuilder's size.
+                if (length >= MAX_FRAGMENT_CHARS) break
                 if (hit.archived) append("[archived] ")
-                // [T-p0-authority] The daily-log injection path scrubs forged
-                // authority tokens line by line; recall reads the SAME files and
-                // used to inject them raw, which made this a way to launder
-                // `trust:user-submitted` into the prompt past the envelope.
-                // Only the RENDERED line is cleaned — acceptRecall must keep
-                // keying on the stored line, or the recall-count boost stops
-                // matching the key recall() looks up.
-                append("- **${hit.source}**: ${MemoryAuthority.stripForgedTag(hit.line)}")
+                append("- **${hit.source}**: ${clipForPrompt(hit.line)}")
                 appendLine()
+                included += hit
             }
         }
         // [T-memory-recall-io] One sidecar write per prompt build, not one per
         // hit: acceptRecall() rewrites the whole JSON file on each call, so a
         // 4-hit build cost four synchronous rewrites on the prompt path.
-        acceptRecallBatch(hits.map { it.source to it.line })
+        acceptRecallBatch(included.map { it.source to it.line })
         return MemoryAuthority.withEnvelope(
             body,
             MemoryTrust.UNVERIFIED_CANDIDATE,

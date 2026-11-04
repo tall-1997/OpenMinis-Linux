@@ -290,6 +290,30 @@ private inline fun ChatViewModel.compactAllImpl(
             // resolve the boundary on the very next outgoing turn.
             // Mirrors iOS `cachedLatestMarker = marker`.
             _cachedLatestMarker = marker
+            // [T-compact-metadata] codex records `retained_image_count` /
+            // `compaction_summary_tokens` next to its summary; these are the
+            // equivalents worth auditing. Logged rather than stored so the marker
+            // schema does not grow a diagnostics column.
+            AppLogger.info(
+                ChatViewModel.TAG,
+                "[CompactMeta] summaryChars=${summary.length} summaryTokens=${summary.length / 4} " +
+                    "compacted=${toCompact.size} keepTurns=${ChatViewModel.COMPACT_KEEP_RECENT_USER_TURNS} " +
+                    "detachedTail=${DETACHED_TAIL_MESSAGES} chunks=${marker.summaryChunks?.length ?: 0}",
+            )
+            // [T-memory-sediment] Leave a searchable trace of what this compaction
+            // folded away. Gated on the memory toggle, de-duplicated by payload.
+            if (_memoryEnabled.value) {
+                runCatching {
+                    val written = com.openminis.app.data.repository.MemorySediment
+                        .recordCompaction(sessionMemoryRepo(), summary, toCompact.size)
+                    if (written != null) {
+                        AppLogger.info(ChatViewModel.TAG, "[CompactMeta] sediment: $written")
+                    }
+                }.onFailure {
+                    // Never let a memory side-effect fail a successful compaction.
+                    AppLogger.warning(ChatViewModel.TAG, "[CompactMeta] sediment failed: ${it.message}")
+                }
+            }
             // [T-android-compact-delivery] Verify the marker actually
             // delivers: the next outgoing projection must resolve the
             // boundary (anchor found in agentHistory). A marker that

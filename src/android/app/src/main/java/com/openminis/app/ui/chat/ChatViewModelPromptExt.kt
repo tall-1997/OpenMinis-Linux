@@ -257,11 +257,57 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
     // to the memory feature.
     val sessionMem = if (memoryOn) sessionMemoryRepo() else null
     val standingGlobal = if (memoryOn) memoryRepository?.loadGlobalMemoryFragment() else null
-    val sessionGlobal = sessionMem?.loadGlobalMemoryFragment(sessionScoped = true)
-    val globalMemoryFragment = if (memoryOn) {
-        listOfNotNull(standingGlobal, sessionGlobal).joinToString("\n\n").ifBlank { null }
+    // [T-memory-project-rules] Project-scoped rules (AGENTS.md / AGENTS.override.md
+    // in the project workspace) — the layer codex's agents_md.rs provides and this
+    // app previously lacked. Unfiled sessions simply have none.
+    val projectRulesFragment = if (memoryOn) {
+        com.openminis.app.data.repository.ProjectInstructionStore.fragment(
+            context.filesDir,
+            com.openminis.app.sandbox.ExecutionCoordinator.ownerSessionId(
+                realSessionId.ifEmpty { sessionId },
+            ),
+        )
     } else null
+    val sessionGlobal = sessionMem?.loadGlobalMemoryFragment(sessionScoped = true)
     val dailyMemoryFragment = sessionMem?.loadRecentDailyMemoryFragment()
+    // [T-memory-prompt-budget] One budget for the whole memory block, admitted
+    // narrowest-scope-first, so a long GLOBAL.md can never displace this chat's
+    // own rules. Null when memory is off or nothing was admitted.
+    val memoryAllocation = if (memoryOn) {
+        com.openminis.app.data.repository.MemoryPromptBudget.allocate(
+            listOfNotNull(
+                projectRulesFragment?.let {
+                    com.openminis.app.data.repository.MemoryPromptBudget.Fragment(
+                        "project-rules", it,
+                        com.openminis.app.data.repository.MemoryPromptBudget.PRIORITY_PROJECT,
+                        truncatable = false,
+                    )
+                },
+                sessionGlobal?.let {
+                    com.openminis.app.data.repository.MemoryPromptBudget.Fragment(
+                        "session-global", it,
+                        com.openminis.app.data.repository.MemoryPromptBudget.PRIORITY_SESSION,
+                        truncatable = false,
+                    )
+                },
+                standingGlobal?.let {
+                    com.openminis.app.data.repository.MemoryPromptBudget.Fragment(
+                        "app-global", it,
+                        com.openminis.app.data.repository.MemoryPromptBudget.PRIORITY_APP,
+                        truncatable = true,
+                    )
+                },
+                dailyMemoryFragment?.let {
+                    com.openminis.app.data.repository.MemoryPromptBudget.Fragment(
+                        "daily", it,
+                        com.openminis.app.data.repository.MemoryPromptBudget.PRIORITY_DAILY,
+                        truncatable = true,
+                    )
+                },
+            ),
+        )
+    } else null
+    val globalMemoryFragment = memoryAllocation?.rendered
     // [T-memory-recall] Lightweight FTS recall: search ALL historical memory
     // entries for keywords from the latest user message, inject top-4 hits.
     // No embedding service: keyword density + recency + recall-count scoring.
@@ -296,8 +342,10 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
             "memoryEnabled=$memoryOn " +
             "personaChars=${identitySection.length} " +
             "worldBookChars=${worldBookFragment.length} " +
+            "projectRulesChars=${projectRulesFragment?.length ?: 0} " +
+            "memoryBudget=${memoryAllocation?.describe() ?: "off"} " +
             "globalChars=${globalMemoryFragment?.length ?: 0} " +
-            "dailyChars=${dailyMemoryFragment?.length ?: 0} recallChars=${recalledMemoryFragment?.length ?: 0}",
+            "recallChars=${recalledMemoryFragment?.length ?: 0}",
     )
 
     var stablePrefixLen = -1
@@ -314,10 +362,6 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
         if (globalMemoryFragment != null) {
             append("\n\n")
             append(globalMemoryFragment)
-        }
-        if (dailyMemoryFragment != null) {
-            append("\n\n")
-            append(dailyMemoryFragment)
         }
         // ---- stable / dynamic boundary: see the header comment ----
         stablePrefixLen = length
