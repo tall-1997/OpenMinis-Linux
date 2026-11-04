@@ -487,7 +487,9 @@ fun AppNavigation(
                 onBrowserSettings = { navController.safeNavigate(Routes.HOME_BROWSER_SETTINGS) },
 
                 onLogsClick = { navController.safeNavigate(Routes.LOGS) },
-                onKnowledgeClick = { navController.safeNavigate(Routes.KNOWLEDGE) },
+                // [T-memory-center] The knowledge workbench has no drawer entry of
+                // its own any more: it is reached from the memory hub, so users see
+                // one persistent-memory destination instead of two peers.
                 onAboutClick = { navController.safeNavigate(Routes.ABOUT) },
                 onMountedFoldersClick = { navController.safeNavigate(Routes.MOUNTED_FOLDERS) },
                 onSharedFoldersClick = { navController.safeNavigate(Routes.SHARED_FOLDERS) },
@@ -739,18 +741,10 @@ fun AppNavigation(
             )
         }
 
-        composable(Routes.MEMORY) {
-            if (memoryRepository != null) {
-                MemoryManagementScreen(
-                    memoryRepository = memoryRepository,
-                    onBack = { navController.safePopBackStack() },
-                    onFileClick = { fileName, isGlobal ->
-                        navController.safeNavigate(Routes.memoryFileEdit(fileName, isGlobal))
-                    },
-                    onEvolutionClick = { navController.safeNavigate(Routes.EVOLUTION) },
-                )
-            }
-        }
+        // [T-memory-center] One entry point for everything persistent; the file
+        // manager and the knowledge workbench hang off it. Extracted to
+        // MemoryNavGraph.kt to keep this file inside its line ceiling.
+        memoryNavGraph(navController, memoryRepository)
 
         // [T-mcp-integration-android] MCP Integrations management screen.
         composable(Routes.MCP) {

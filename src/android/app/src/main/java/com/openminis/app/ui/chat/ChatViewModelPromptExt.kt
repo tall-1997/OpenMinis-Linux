@@ -292,6 +292,18 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
         sessionMem?.loadGlobalMemoryFragment(sessionScoped = true)
     } else null
     val dailyMemoryFragment = sessionMem?.loadRecentDailyMemoryFragment()
+    // [T-memory-index] Table of contents for the diary days outside the verbatim
+    // window (this chat + the shared directory). Without it anything older than
+    // the newest few files is invisible; the model cannot miss what it never
+    // knew existed.
+    val dailyIndexFragment = if (memoryOn) {
+        com.openminis.app.data.repository.MemoryIndex.fragment(
+            sessionDir = com.openminis.app.sandbox.SessionWorkspace
+                .memoryDir(context.filesDir, memorySessionId),
+            sharedDir = com.openminis.app.data.repository.MemoryIndex.sharedDir(context.filesDir),
+            excludeNewest = com.openminis.app.data.repository.MemoryRepository.MAX_RECENT_FILES,
+        )
+    } else null
     // [T-memory-prompt-budget] One budget for the whole memory block, admitted
     // narrowest-scope-first, so a long GLOBAL.md can never displace this chat's
     // own rules. Null when memory is off or nothing was admitted.
@@ -324,6 +336,13 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
                         "daily", it,
                         com.openminis.app.data.repository.MemoryPromptBudget.PRIORITY_DAILY,
                         truncatable = true,
+                    )
+                },
+                dailyIndexFragment?.let {
+                    com.openminis.app.data.repository.MemoryPromptBudget.Fragment(
+                        "daily-index", it,
+                        com.openminis.app.data.repository.MemoryPromptBudget.PRIORITY_INDEX,
+                        truncatable = false,
                     )
                 },
             ),

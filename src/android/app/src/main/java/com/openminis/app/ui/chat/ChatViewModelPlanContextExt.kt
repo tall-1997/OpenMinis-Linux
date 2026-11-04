@@ -52,12 +52,15 @@ internal fun ChatViewModel.liveRecallPrompt(): String? {
     val query = (recentUser + "\n" + recentAssistant).trim()
     if (query.length < MIN_QUERY_CHARS) return null
     val engine = com.openminis.app.data.repository.MemoryRecallEngineCache.forSession(
-        com.openminis.app.sandbox.SessionWorkspace.memoryDir(
+        memoryDir = com.openminis.app.sandbox.SessionWorkspace.memoryDir(
             context.filesDir,
             com.openminis.app.sandbox.ExecutionCoordinator.ownerSessionId(
                 realSessionId.ifEmpty { sessionId },
             ),
         ),
+        // [T-memory-shared-recall] The app-wide directory joins recall, so a
+        // lesson recorded in another chat is reachable from this one.
+        sharedDir = com.openminis.app.data.repository.MemoryIndex.sharedDir(context.filesDir),
     ) ?: return null
     val hits = engine.recall(query)
     if (hits.isEmpty()) return null

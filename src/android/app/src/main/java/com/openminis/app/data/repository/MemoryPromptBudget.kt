@@ -38,6 +38,8 @@ object MemoryPromptBudget {
     internal const val PRIORITY_APP = 30
     internal const val PRIORITY_LEARNED = 40
     internal const val PRIORITY_DAILY = 50
+    /** [T-memory-index] Points at older days rather than carrying them. */
+    internal const val PRIORITY_INDEX = 60
 
     data class Fragment(
         /** Stable identity used in logs and tests ("app-global", "session-global", …). */
