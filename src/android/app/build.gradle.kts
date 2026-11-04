@@ -81,6 +81,28 @@ val gitSha: String =
  */
 val gitDirty: Boolean = gitOutput(listOf("status", "--porcelain")).isNotEmpty()
 
+/**
+ * [T-rolling-version] App version, with an optional CI-only fourth component.
+ *
+ * Rolling builds (a push to `main`) are published to the same `android-latest`
+ * pre-release forever, so without this two APKs a hundred merges apart looked
+ * identical on the device. The CI passes the merge PR number as
+ * `MINIS_VERSION_SUFFIX`, producing e.g. `2.0.82.233`.
+ *
+ * Tag/release builds never set the variable, so a versioned release keeps the
+ * plain three-component name — that is also what the updater compares, so the
+ * suffix must stay out of it.
+ *
+ * `minisBaseVersionName` is parsed by `.github/workflows/android-apk.yml`, so keep
+ * the assignment on one line and spelled exactly like this.
+ */
+val minisBaseVersionName = "2.0.82"
+val minisVersionName: String = System.getenv("MINIS_VERSION_SUFFIX")
+    ?.trim()
+    ?.takeIf { it.isNotEmpty() }
+    ?.let { "$minisBaseVersionName.$it" }
+    ?: minisBaseVersionName
+
 android {
     namespace = "com.openminis.app"
     // [T-android-dynamic-island] Bumped 35→36 so the Android 16 (Baklava)
@@ -101,7 +123,11 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = 282
-        versionName = "2.0.82"
+        // [T-rolling-version] Rolling builds (push to main) carry the merge PR
+        // number as a fourth component, e.g. 2.0.82.233, so a sideloaded APK can
+        // be traced back to the change that produced it. Tag/release builds keep
+        // the plain three-component version — see [minisVersionName].
+        versionName = minisVersionName
 
         // [T-build-provenance] versionCode alone could not identify a build:
         // it stayed 220 across 11 commits, so "which commit is this APK?" was
