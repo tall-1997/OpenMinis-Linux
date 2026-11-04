@@ -2047,4 +2047,5 @@
     <string name="memory_center_stat_failures">차단된 반복</string>
     <string name="memory_center_stat_sediments">압축 요약</string>
     <string name="memory_center_stats_footer">이 기기 전체 기준입니다. 이 화면을 다시 열면 갱신됩니다.</string>
+    <string name="memory_section_diary_footer">이 세션의 메모리 폴더에 있는 일별 로그입니다. 최근 3개는 전체가 삽입되고, 그 이전 날짜는 검색할 수 있는 색인으로 나열됩니다.</string>
 </resources>

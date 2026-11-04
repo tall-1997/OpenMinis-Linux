@@ -2057,4 +2057,5 @@
     <string name="memory_center_stat_failures">Zablokowane powtórzenia</string>
     <string name="memory_center_stat_sediments">Podsumowania kompakcji</string>
     <string name="memory_center_stats_footer">Liczone dla całego urządzenia; otwórz ponownie ten ekran, aby odświeżyć.</string>
+    <string name="memory_section_diary_footer">Dzienniki dzienne w folderze pamięci tej sesji. Trzy najnowsze są wstawiane w całości; starsze dni są wymienione jako indeks, który można przeszukiwać.</string>
 </resources>

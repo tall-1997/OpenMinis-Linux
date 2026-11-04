@@ -2058,4 +2058,5 @@
     <string name="memory_center_stat_failures">Заблокированные повторы</string>
     <string name="memory_center_stat_sediments">Сводки сжатия</string>
     <string name="memory_center_stats_footer">Подсчитано по всему устройству; откройте экран заново для обновления.</string>
+    <string name="memory_section_diary_footer">Ежедневные журналы в папке памяти этой сессии. Три последних вставляются целиком; более ранние дни показываются как индекс для поиска.</string>
 </resources>

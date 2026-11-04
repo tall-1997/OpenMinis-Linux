@@ -1,46 +1,28 @@
 package com.openminis.app.ui.navigation
 
-import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
-import com.openminis.app.MinisApp
-import com.openminis.app.data.repository.MemoryCenterStats
 import com.openminis.app.data.repository.MemoryRepository
 import com.openminis.app.navigation.Routes
-import com.openminis.app.ui.settings.MemoryCenterScreen
 import com.openminis.app.ui.settings.MemoryManagementScreen
 
 /**
- * [T-memory-center] Destinations for persistent memory.
+ * [T-memory-center] The memory destination.
  *
- * Extracted from `AppNavigation` for the architecture ratchet (that file is at
- * its line ceiling and may only shrink), and because the two destinations belong
- * together: the hub is the only entry point, the file manager is one step in.
+ * "Memory" opens the diary/file page directly. An intermediate hub with two rows
+ * and a paragraph was tried first and read as an empty menu, so the knowledge
+ * workbench moved to the bottom of this page instead — one landing page, one
+ * secondary destination, no peer entry in the drawer.
+ *
+ * Lives here rather than in `AppNavigation` because that file is at its line
+ * ceiling and may only shrink.
  */
 internal fun NavGraphBuilder.memoryNavGraph(
     navController: NavController,
     memoryRepository: MemoryRepository?,
 ) {
     composable(Routes.MEMORY) {
-        val context = LocalContext.current
-        MemoryCenterScreen(
-            onBack = { navController.safePopBackStack() },
-            onOpenFiles = { navController.safeNavigate(Routes.MEMORY_FILES) },
-            onOpenKnowledge = { navController.safeNavigate(Routes.KNOWLEDGE) },
-            // [T-memory-center-stats] Note count comes from Room; the rest is a
-            // bounded filesystem walk. Wrapped so a half-initialised AppGraph
-            // shows "no numbers" instead of crashing the hub.
-            loadStats = {
-                val notes = runCatching {
-                    (context.applicationContext as? MinisApp)?.knowledgeNoteRepository?.listActive()?.size
-                }.getOrNull() ?: 0
-                MemoryCenterStats.collect(context.filesDir, notes)
-            },
-        )
-    }
-
-    composable(Routes.MEMORY_FILES) {
         if (memoryRepository != null) {
             MemoryManagementScreen(
                 memoryRepository = memoryRepository,
@@ -49,6 +31,7 @@ internal fun NavGraphBuilder.memoryNavGraph(
                     navController.safeNavigate(Routes.memoryFileEdit(fileName, isGlobal))
                 },
                 onEvolutionClick = { navController.safeNavigate(Routes.EVOLUTION) },
+                onOpenKnowledge = { navController.safeNavigate(Routes.KNOWLEDGE) },
             )
         }
     }

@@ -20,6 +20,50 @@ DIARY_FOOTER = {
 }
 
 NEW_KEYS = [
+    # Changed value, not a new key in `values`, but the L10n gate reads the diff
+    # of `values/strings.xml` and treats any `+<string name=...>` line as added —
+    # so a copy tweak obliges every locale to carry the key too.
+    ("memory_section_diary_footer", {
+        "values": "Daily logs in this session's memory folder. The three most recent "
+                  "are injected in full; older days are listed as an index you can search.",
+        "values-de": "Tagesprotokolle im Speicherordner dieser Sitzung. Die drei neuesten "
+                     "werden vollständig eingefügt; ältere Tage erscheinen als durchsuchbarer Index.",
+        "values-es": "Registros diarios en la carpeta de memoria de esta sesión. Se insertan "
+                     "completos los tres más recientes; los días anteriores aparecen como un "
+                     "índice que puedes buscar.",
+        "values-fil": "Mga pang-araw-araw na log sa memory folder ng session na ito. Ang tatlong "
+                      "pinakabago ay buong isinasama; ang mas lumang mga araw ay nakalista bilang "
+                      "index na maaari mong hanapin.",
+        "values-fr": "Journaux quotidiens du dossier mémoire de cette session. Les trois plus "
+                     "récents sont injectés en entier ; les jours plus anciens apparaissent sous "
+                     "forme d'un index consultable.",
+        "values-in": "Log harian di folder memori sesi ini. Tiga yang terbaru dimasukkan "
+                     "sepenuhnya; hari yang lebih lama terdaftar sebagai indeks yang dapat Anda cari.",
+        "values-ja": "このセッションのメモリフォルダーの日次ログです。直近 3 日分は全文が挿入され、"
+                     "それ以前の日付は検索できる索引として一覧されます。",
+        "values-ko": "이 세션의 메모리 폴더에 있는 일별 로그입니다. 최근 3개는 전체가 삽입되고, "
+                     "그 이전 날짜는 검색할 수 있는 색인으로 나열됩니다.",
+        "values-ms": "Log harian dalam folder memori sesi ini. Tiga yang terbaharu dimasukkan "
+                     "sepenuhnya; hari lebih lama disenaraikan sebagai indeks yang boleh anda cari.",
+        "values-pl": "Dzienniki dzienne w folderze pamięci tej sesji. Trzy najnowsze są wstawiane "
+                     "w całości; starsze dni są wymienione jako indeks, który można przeszukiwać.",
+        "values-pt-rBR": "Registros diários na pasta de memória desta sessão. Os três mais "
+                         "recentes são injetados por inteiro; os dias anteriores aparecem como um "
+                         "índice pesquisável.",
+        "values-ro": "Jurnalele zilnice din folderul de memorie al acestei sesiuni. Cele mai "
+                     "recente trei sunt injectate integral; zilele mai vechi apar ca un index în "
+                     "care poți căuta.",
+        "values-ru": "Ежедневные журналы в папке памяти этой сессии. Три последних вставляются "
+                     "целиком; более ранние дни показываются как индекс для поиска.",
+        "values-th": "บันทึกรายวันในโฟลเดอร์ความจำของเซสชันนี้ สามรายการล่าสุดถูกแทรกทั้งหมด "
+                     "ส่วนวันที่เก่ากว่าจะแสดงเป็นดัชนีที่ค้นหาได้",
+        "values-tr": "Bu oturumun bellek klasöründeki günlük kayıtlar. En son üçü tam olarak "
+                     "eklenir; daha eski günler aranabilir bir dizin olarak listelenir.",
+        "values-zh": "本会话记忆目录下的每日日志：最近三份完整注入，更早的日期以索引列出，"
+                     "需要细节时可再用 memory_get 检索。",
+        "values-zh-rTW": "本工作階段記憶資料夾中的每日日誌：最近三份完整注入，較早日期會以"
+                         "可搜尋的索引列出。",
+    }),
     ("memory_center_overview", {
         "values": "At a glance",
         "values-de": "Auf einen Blick",

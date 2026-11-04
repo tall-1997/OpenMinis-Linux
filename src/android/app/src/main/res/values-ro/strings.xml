@@ -2054,4 +2054,5 @@
     <string name="memory_center_stat_failures">Repetări blocate</string>
     <string name="memory_center_stat_sediments">Rezumate de compactare</string>
     <string name="memory_center_stats_footer">Numărate pe întregul dispozitiv; redeschide acest ecran pentru actualizare.</string>
+    <string name="memory_section_diary_footer">Jurnalele zilnice din folderul de memorie al acestei sesiuni. Cele mai recente trei sunt injectate integral; zilele mai vechi apar ca un index în care poți căuta.</string>
 </resources>

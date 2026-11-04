@@ -2050,4 +2050,5 @@
     <string name="memory_center_stat_failures">การทำซ้ำที่ถูกบล็อก</string>
     <string name="memory_center_stat_sediments">สรุปการบีบอัด</string>
     <string name="memory_center_stats_footer">นับทั้งอุปกรณ์ เปิดหน้านี้อีกครั้งเพื่อรีเฟรช</string>
+    <string name="memory_section_diary_footer">บันทึกรายวันในโฟลเดอร์ความจำของเซสชันนี้ สามรายการล่าสุดถูกแทรกทั้งหมด ส่วนวันที่เก่ากว่าจะแสดงเป็นดัชนีที่ค้นหาได้</string>
 </resources>

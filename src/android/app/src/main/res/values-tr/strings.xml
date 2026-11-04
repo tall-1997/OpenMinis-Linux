@@ -2050,4 +2050,5 @@
     <string name="memory_center_stat_failures">Engellenen tekrarlar</string>
     <string name="memory_center_stat_sediments">Sıkıştırma özetleri</string>
     <string name="memory_center_stats_footer">Tüm cihaz genelinde sayılır; yenilemek için bu ekranı yeniden açın.</string>
+    <string name="memory_section_diary_footer">Bu oturumun bellek klasöründeki günlük kayıtlar. En son üçü tam olarak eklenir; daha eski günler aranabilir bir dizin olarak listelenir.</string>
 </resources>

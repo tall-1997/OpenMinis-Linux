@@ -2050,4 +2050,5 @@
     <string name="memory_center_stat_failures">Répétitions bloquées</string>
     <string name="memory_center_stat_sediments">Résumés de compactage</string>
     <string name="memory_center_stats_footer">Compté sur tout l\'appareil ; rouvrez cet écran pour actualiser.</string>
+    <string name="memory_section_diary_footer">Journaux quotidiens du dossier mémoire de cette session. Les trois plus récents sont injectés en entier ; les jours plus anciens apparaissent sous forme d\'un index consultable.</string>
 </resources>
