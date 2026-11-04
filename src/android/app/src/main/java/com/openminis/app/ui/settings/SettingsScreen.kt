@@ -21,7 +21,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
-import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.BatteryFull
 import androidx.compose.material.icons.outlined.BugReport
@@ -103,9 +102,6 @@ fun SettingsScreen(
     onUsageClick: () -> Unit = {},
     onAppearanceClick: () -> Unit = {},
     onLogsClick: () -> Unit = {},
-    // [T-memory-center] The knowledge workbench is no longer a settings peer of
-    // Memory: it is reached from the memory hub, so there is one entry point for
-    // everything persistent instead of two competing ones.
     // T219-2: Mount External Folders entry. Default no-op for any caller
     // that hasn't wired the route yet.
     onMountedFoldersClick: () -> Unit = {},

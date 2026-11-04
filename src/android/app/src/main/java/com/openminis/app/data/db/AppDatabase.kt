@@ -20,13 +20,11 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         MessageVersionEntity::class,
         com.openminis.app.automation.AutomationRuleEntity::class,
         com.openminis.app.automation.AutomationRunEntity::class,
-        KnowledgeNoteEntity::class,
-        KnowledgeNoteVersionEntity::class,
         ProjectExperienceEntity::class,
         com.openminis.app.data.instruction.InstructionStateEntity::class,
         com.openminis.app.data.instruction.InstructionUpdateEntity::class,
     ],
-    version = 27, // keep DatabaseVersionGuard.CODE_DB_VERSION in lockstep
+    version = 28, // keep DatabaseVersionGuard.CODE_DB_VERSION in lockstep
     // [T-android-downgrade-compat] Kept ON so MigrationTestHelper and CI can
     // validate migrations against the committed schema json. Note the honest
     // scope: src/android/app/schemas/…AppDatabase/ currently holds 12, 14, 15,
@@ -44,8 +42,6 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun codeIndexDao(): CodeIndexDao
     abstract fun goalDao(): GoalDao
     abstract fun messageVersionDao(): MessageVersionDao
-    abstract fun knowledgeNoteDao(): KnowledgeNoteDao
-    abstract fun knowledgeNoteVersionDao(): KnowledgeNoteVersionDao
     abstract fun projectExperienceDao(): ProjectExperienceDao
     abstract fun instructionStateDao(): com.openminis.app.data.instruction.InstructionStateDao
     abstract fun automationRuleDao(): com.openminis.app.automation.AutomationRuleDao

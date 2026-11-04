@@ -11,9 +11,7 @@ import com.openminis.app.ui.settings.MemoryManagementScreen
  * [T-memory-center] The memory destination.
  *
  * "Memory" opens the diary/file page directly. An intermediate hub with two rows
- * and a paragraph was tried first and read as an empty menu, so the knowledge
- * workbench moved to the bottom of this page instead — one landing page, one
- * secondary destination, no peer entry in the drawer.
+ * and a paragraph was tried first and read as an empty menu.
  *
  * Lives here rather than in `AppNavigation` because that file is at its line
  * ceiling and may only shrink.
@@ -31,7 +29,6 @@ internal fun NavGraphBuilder.memoryNavGraph(
                     navController.safeNavigate(Routes.memoryFileEdit(fileName, isGlobal))
                 },
                 onEvolutionClick = { navController.safeNavigate(Routes.EVOLUTION) },
-                onOpenKnowledge = { navController.safeNavigate(Routes.KNOWLEDGE) },
             )
         }
     }

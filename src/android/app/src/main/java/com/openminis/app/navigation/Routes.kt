@@ -132,7 +132,7 @@ object Routes {
     /** [P2-git-panel] Git panel over the session workspace (status / commit / history / diff). */
     const val GIT_PANEL = "git_panel/{sessionId}"
     fun gitPanel(sessionId: String) = "git_panel/${android.net.Uri.encode(sessionId)}"
-    /** [T-memory-center] Memory page (file list + knowledge entry); also the deep-link target. */
+    /** [T-memory-center] Memory page (file list); also the deep-link target. */
     const val MEMORY = "memory"
     /** [T-mcp-integration-android] MCP Integrations management screen. */
     const val MCP = "mcp"
@@ -176,10 +176,6 @@ object Routes {
     // [T-android-scheduled-tasks-run-records] per-task execution log.
     const val SCHEDULED_TASK_RUNS = "scheduled_tasks/runs/{taskId}"
     fun scheduledTaskRuns(taskId: String): String = "scheduled_tasks/runs/$taskId"
-    /** [T-m8-knowledge-workbench] Notes list (tabs: notes / graph / trash). */
-    const val KNOWLEDGE = "knowledge"
-    const val KNOWLEDGE_EDITOR = "knowledge_editor/{noteId}"
-    fun knowledgeEditor(noteId: String) = "knowledge_editor/$noteId"
 
     fun logDetail(fileName: String) = "log_detail/$fileName"
     fun sessionStorageDetail(sessionId: String) = "session_storage/$sessionId"

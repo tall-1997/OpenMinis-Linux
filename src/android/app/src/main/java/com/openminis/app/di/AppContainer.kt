@@ -5,7 +5,6 @@ import com.openminis.app.data.db.AppDatabase
 import com.openminis.app.data.repository.BackgroundSettingsRepository
 import com.openminis.app.data.repository.ChatRepository
 import com.openminis.app.data.repository.EnvVarRepository
-import com.openminis.app.data.repository.KnowledgeNoteRepository
 import com.openminis.app.data.repository.MCPRepository
 import com.openminis.app.data.repository.MemoryRepository
 import com.openminis.app.data.repository.MultiAgentSettingsRepository
@@ -64,9 +63,6 @@ class AppContainer(val scopes: AppCoroutineScopes) {
     @Volatile
     var mountedFoldersStore: MountedFoldersStore? = null
 
-    @Volatile
-    var knowledgeNoteRepository: KnowledgeNoteRepository? = null
-
     fun requireChatRepository() = checkNotNull(chatRepository)
     fun requireProviderRepository() = checkNotNull(providerRepository)
     fun requireEnvVarRepository() = checkNotNull(envVarRepository)
@@ -76,12 +72,4 @@ class AppContainer(val scopes: AppCoroutineScopes) {
     fun requireBackgroundSettingsRepository() = checkNotNull(backgroundSettingsRepository)
     fun requireMultiAgentSettingsRepository() = checkNotNull(multiAgentSettingsRepository)
     fun requireMountedFoldersStore() = checkNotNull(mountedFoldersStore)
-    fun requireKnowledgeNoteRepository() = checkNotNull(knowledgeNoteRepository)
-
-    /** [T-m8-knowledge-workbench] Wire the note repo once the DB is built. */
-    fun wireKnowledgeNoteRepository(db: AppDatabase) {
-        knowledgeNoteRepository = KnowledgeNoteRepository(
-            db.knowledgeNoteDao(), db.knowledgeNoteVersionDao(),
-        )
-    }
 }

@@ -36,7 +36,6 @@ object MemoryCenterStats {
 
     data class Snapshot(
         val files: Int,
-        val notes: Int,
         /** Distinct entries the recall engines have served at least once. */
         val recalled: Int,
         /** Tool calls the known-failure gate is currently blocking. */
@@ -45,7 +44,7 @@ object MemoryCenterStats {
         val sediments: Int,
     )
 
-    fun collect(filesDir: File, noteCount: Int): Snapshot {
+    fun collect(filesDir: File): Snapshot {
         val shared = File(filesDir, MemoryIndex.SHARED_DIR)
         val sharedFiles = shared.listFiles()?.filter { it.isFile && it.extension == "md" }.orEmpty()
 
@@ -83,7 +82,6 @@ object MemoryCenterStats {
 
         return Snapshot(
             files = sharedFiles.size,
-            notes = noteCount,
             recalled = recalled,
             blockedRepeats = blockedRepeats,
             sediments = sediments,

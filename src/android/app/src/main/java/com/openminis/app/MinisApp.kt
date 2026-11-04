@@ -149,7 +149,6 @@ class MinisApp : Application(), ImageLoaderFactory {
     val skillRepository: SkillRepository get() = appContainer.requireSkillRepository()
     val mcpRepository: MCPRepository get() = appContainer.requireMcpRepository()
     val memoryRepository: MemoryRepository get() = appContainer.requireMemoryRepository()
-    val knowledgeNoteRepository get() = appContainer.requireKnowledgeNoteRepository()
     val evolutionEngine: EvolutionEngine? get() = appContainer.evolutionEngine
     val webAppShortcutRepository: WebAppShortcutRepository
         get() = checkNotNull(appContainer.webAppShortcutRepository)
@@ -492,7 +491,6 @@ class MinisApp : Application(), ImageLoaderFactory {
         // Possibly null (runCatching-guarded); readers tolerate null.
         AppGraph.installEvolutionEngine(appContainer.evolutionEngine)
         appContainer.webAppShortcutRepository = WebAppShortcutRepository(database.webAppShortcutDao())
-        appContainer.wireKnowledgeNoteRepository(database)
         MinisAppAsyncInit.startWarmup(appContainer)
 
         // T-android-safemode-lateinit-crash: every repository the UI layer
