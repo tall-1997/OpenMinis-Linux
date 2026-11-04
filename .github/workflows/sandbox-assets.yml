@@ -47,17 +47,28 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           ASSET_NAME: ubuntu-base-${{ hashFiles('scripts/prepare_android_sandbox.sh') }}.tar.gz
+          # [T-sandbox-asset-name] Uploads made before the hashed-name fix stored
+          # the tarball under its local basename, so every fetch missed and every
+          # cache eviction paid a full qemu rebuild. Accepting the legacy name
+          # once keeps such an asset usable; the publish step below prunes it, so
+          # this fallback cannot serve a stale rootfs indefinitely.
+          LEGACY_NAME: ubuntu-base.tar.gz
         run: |
           set -euo pipefail
           mkdir -p src/android/app/src/main/assets
+          DEST=src/android/app/src/main/assets/ubuntu-base.tar.gz
           if gh release download sandbox-assets --repo "$GITHUB_REPOSITORY" \
-              --pattern "$ASSET_NAME" \
-              --output src/android/app/src/main/assets/ubuntu-base.tar.gz 2>/dev/null \
-              && gzip -t src/android/app/src/main/assets/ubuntu-base.tar.gz; then
+              --pattern "$ASSET_NAME" --output "$DEST" 2>/dev/null \
+              && gzip -t "$DEST"; then
             echo "asset store hit: $ASSET_NAME"
             echo "restored=true" >> "$GITHUB_OUTPUT"
+          elif gh release download sandbox-assets --repo "$GITHUB_REPOSITORY" \
+              --pattern "$LEGACY_NAME" --output "$DEST" 2>/dev/null \
+              && gzip -t "$DEST"; then
+            echo "asset store hit (legacy name): $LEGACY_NAME"
+            echo "restored=true" >> "$GITHUB_OUTPUT"
           else
-            rm -f src/android/app/src/main/assets/ubuntu-base.tar.gz
+            rm -f "$DEST"
             echo "asset store miss: $ASSET_NAME"
             echo "restored=false" >> "$GITHUB_OUTPUT"
           fi
@@ -88,10 +99,18 @@ jobs:
           gh release view sandbox-assets >/dev/null 2>&1 || \
             gh release create sandbox-assets --title "Sandbox asset store" \
               --notes "CI asset store for the prebuilt rootfs. Replaces Actions-cache entries evicted by the 10 GB repo quota; named by prepare_android_sandbox.sh hash."
-          gh release upload sandbox-assets \
-            "src/android/app/src/main/assets/ubuntu-base.tar.gz#$ASSET_NAME" --clobber
+          # [T-sandbox-asset-name] `gh release upload path#name` renames only on
+          # newer clients; runners shipped an older one, so assets landed under
+          # the local basename, the hashed-name fetch never matched, and every
+          # cache eviction cost a 30-45 min qemu rebuild. Copy to the final name
+          # and upload that — no rename syntax involved, works on every version.
+          cp src/android/app/src/main/assets/ubuntu-base.tar.gz "/tmp/$ASSET_NAME"
+          gh release upload sandbox-assets "/tmp/$ASSET_NAME" --clobber
+          # Prune every other ubuntu-base asset, including the legacy plain name
+          # (grep '^ubuntu-base' rather than '^ubuntu-base-', which the plain name
+          # does not match).
           for f in $(gh release view sandbox-assets --json assets --jq '.assets[].name' \
-              | grep '^ubuntu-base-.*\.tar\.gz$' | grep -v "^${ASSET_NAME}$" || true); do
+              | grep '^ubuntu-base' | grep -v "^${ASSET_NAME}$" || true); do
             echo "pruning stale asset: $f"
             gh release delete-asset sandbox-assets "$f" --yes || true
           done

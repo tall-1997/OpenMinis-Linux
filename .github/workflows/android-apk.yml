@@ -293,6 +293,27 @@ jobs:
             exit 1
           fi
 
+      # [T-rolling-version] Rolling builds all overwrite the same `android-latest`
+      # pre-release, so two APKs a hundred merges apart were indistinguishable on
+      # the device. Stamp the merge PR number (the `(#233)` in the squash subject)
+      # as a fourth version component: 2.0.82 -> 2.0.82.233.
+      #
+      # Tag builds skip this step, so a versioned release keeps the plain
+      # three-component version the updater compares against.
+      - name: Compute rolling version suffix
+        if: github.ref == 'refs/heads/main'
+        env:
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          SUFFIX=$(printf '%s\n' "$COMMIT_MSG" \
+            | sed -n 's/.*(#\([0-9][0-9]*\)).*/\1/p' | head -1)
+          if [ -n "$SUFFIX" ]; then
+            echo "MINIS_VERSION_SUFFIX=$SUFFIX" >> "$GITHUB_ENV"
+            echo "rolling version suffix: .$SUFFIX"
+          else
+            echo "no merge-PR suffix in the commit subject; keeping the plain version"
+          fi
+
       - name: Assemble release APK
         working-directory: src/android
         env:
@@ -367,7 +388,13 @@ jobs:
         id: appver
         run: |
           CODE=$(sed -n 's/.*versionCode = \([0-9][0-9]*\).*/\1/p' src/android/app/build.gradle.kts | head -1)
-          NAME=$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' src/android/app/build.gradle.kts | head -1)
+          NAME=$(sed -n 's/.*minisBaseVersionName = "\(.*\)".*/\1/p' src/android/app/build.gradle.kts | head -1)
+          # [T-rolling-version] Reflect what the APK actually carries. The build
+          # reads the suffix from the environment, so the release body has to
+          # append it here too or the notes would disagree with the artifact.
+          if [ -n "${MINIS_VERSION_SUFFIX:-}" ] && [ -n "$NAME" ]; then
+            NAME="$NAME.$MINIS_VERSION_SUFFIX"
+          fi
           echo "code=$CODE" >> "$GITHUB_OUTPUT"
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
           echo "app versionName=$NAME versionCode=$CODE"
