@@ -2043,4 +2043,11 @@
     <string name="knowledge_snack_restored">Geri yüklendi</string>
     <string name="knowledge_snack_purged">Kalıcı olarak silindi</string>
     <string name="knowledge_snack_imported">İçe aktarıldı</string>
+    <string name="memory_center_overview">Bir bakışta</string>
+    <string name="memory_center_stat_memory">Bellek dosyaları</string>
+    <string name="memory_center_stat_notes">Bilgi notları</string>
+    <string name="memory_center_stat_recalls">Geri çağrılan kayıtlar</string>
+    <string name="memory_center_stat_failures">Engellenen tekrarlar</string>
+    <string name="memory_center_stat_sediments">Sıkıştırma özetleri</string>
+    <string name="memory_center_stats_footer">Tüm cihaz genelinde sayılır; yenilemek için bu ekranı yeniden açın.</string>
 </resources>

@@ -2051,4 +2051,11 @@
     <string name="knowledge_snack_restored">Восстановлено</string>
     <string name="knowledge_snack_purged">Удалено навсегда</string>
     <string name="knowledge_snack_imported">Импортировано</string>
+    <string name="memory_center_overview">Кратко</string>
+    <string name="memory_center_stat_memory">Файлы памяти</string>
+    <string name="memory_center_stat_notes">Заметки знаний</string>
+    <string name="memory_center_stat_recalls">Вызванные записи</string>
+    <string name="memory_center_stat_failures">Заблокированные повторы</string>
+    <string name="memory_center_stat_sediments">Сводки сжатия</string>
+    <string name="memory_center_stats_footer">Подсчитано по всему устройству; откройте экран заново для обновления.</string>
 </resources>

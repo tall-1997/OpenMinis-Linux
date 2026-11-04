@@ -2043,4 +2043,11 @@
     <string name="knowledge_snack_restored">Restaurée</string>
     <string name="knowledge_snack_purged">Supprimée définitivement</string>
     <string name="knowledge_snack_imported">Importée</string>
+    <string name="memory_center_overview">En un coup d\'œil</string>
+    <string name="memory_center_stat_memory">Fichiers de mémoire</string>
+    <string name="memory_center_stat_notes">Notes de connaissance</string>
+    <string name="memory_center_stat_recalls">Entrées rappelées</string>
+    <string name="memory_center_stat_failures">Répétitions bloquées</string>
+    <string name="memory_center_stat_sediments">Résumés de compactage</string>
+    <string name="memory_center_stats_footer">Compté sur tout l\'appareil ; rouvrez cet écran pour actualiser.</string>
 </resources>

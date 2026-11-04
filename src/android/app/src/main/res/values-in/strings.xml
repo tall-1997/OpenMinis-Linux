@@ -2048,4 +2048,11 @@
     <string name="knowledge_snack_restored">Dipulihkan</string>
     <string name="knowledge_snack_purged">Dihapus permanen</string>
     <string name="knowledge_snack_imported">Diimpor</string>
+    <string name="memory_center_overview">Sekilas</string>
+    <string name="memory_center_stat_memory">File memori</string>
+    <string name="memory_center_stat_notes">Catatan pengetahuan</string>
+    <string name="memory_center_stat_recalls">Entri yang dipanggil</string>
+    <string name="memory_center_stat_failures">Pengulangan yang diblokir</string>
+    <string name="memory_center_stat_sediments">Ringkasan pemadatan</string>
+    <string name="memory_center_stats_footer">Dihitung di seluruh perangkat; buka ulang layar ini untuk menyegarkan.</string>
 </resources>

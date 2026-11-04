@@ -2125,4 +2125,11 @@
     <string name="knowledge_snack_restored">已還原</string>
     <string name="knowledge_snack_purged">已永久刪除</string>
     <string name="knowledge_snack_imported">已匯入</string>
+    <string name="memory_center_overview">概覽</string>
+    <string name="memory_center_stat_memory">記憶檔案</string>
+    <string name="memory_center_stat_notes">知識筆記</string>
+    <string name="memory_center_stat_recalls">被召回條目</string>
+    <string name="memory_center_stat_failures">已攔截的重複</string>
+    <string name="memory_center_stat_sediments">壓縮摘要</string>
+    <string name="memory_center_stats_footer">統計範圍為本裝置；重新開啟此頁即可重新整理。</string>
 </resources>

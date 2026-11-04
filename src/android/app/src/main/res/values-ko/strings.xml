@@ -2040,4 +2040,11 @@
     <string name="knowledge_snack_restored">복원했습니다</string>
     <string name="knowledge_snack_purged">완전히 삭제했습니다</string>
     <string name="knowledge_snack_imported">가져왔습니다</string>
+    <string name="memory_center_overview">한눈에 보기</string>
+    <string name="memory_center_stat_memory">메모리 파일</string>
+    <string name="memory_center_stat_notes">지식 노트</string>
+    <string name="memory_center_stat_recalls">호출된 항목</string>
+    <string name="memory_center_stat_failures">차단된 반복</string>
+    <string name="memory_center_stat_sediments">압축 요약</string>
+    <string name="memory_center_stats_footer">이 기기 전체 기준입니다. 이 화면을 다시 열면 갱신됩니다.</string>
 </resources>

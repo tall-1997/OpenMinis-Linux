@@ -23,12 +23,19 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.openminis.app.R
 import com.openminis.app.ui.components.MinisCenterTopBar
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * [T-memory-center] The single entry point for everything persistent.
@@ -38,10 +45,9 @@ import com.openminis.app.ui.components.MinisCenterTopBar
  * content, and nothing told them which one to use. The fix is not a new feature
  * but an ordering — one hub, then a deliberate choice.
  *
- * Deliberately built from EXISTING string resources: adding a key here would
- * require translating it into all 17 shipped locales, and the copy for these
- * destinations already exists. Statistics can be added later without changing
- * the navigation shape.
+ * Deliberately built from existing string resources where possible: every new
+ * key must be translated into all 17 shipped locales (the L10n gate enforces it),
+ * so the overview block is the only part that added keys.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -49,7 +55,18 @@ internal fun MemoryCenterScreen(
     onBack: () -> Unit,
     onOpenFiles: () -> Unit,
     onOpenKnowledge: () -> Unit,
+    loadStats: suspend () -> com.openminis.app.data.repository.MemoryCenterStats.Snapshot,
 ) {
+    // [T-memory-center-stats] Numbers make the hub answer "is my memory working",
+    // not just "where do I tap". Loaded once per visit, off the main thread; a
+    // failed walk leaves the block out rather than showing zeros that look real.
+    var stats by remember {
+        mutableStateOf<com.openminis.app.data.repository.MemoryCenterStats.Snapshot?>(null)
+    }
+    LaunchedEffect(Unit) {
+        stats = withContext(Dispatchers.IO) { runCatching { loadStats() }.getOrNull() }
+    }
+
     Scaffold(
         topBar = {
             MinisCenterTopBar(
@@ -79,6 +96,24 @@ internal fun MemoryCenterScreen(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
             )
 
+            // [T-memory-center-stats] Omitted entirely while loading or when the
+            // walk failed — zeros would read as "nothing in memory" and be wrong.
+            stats?.let { snapshot ->
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                SectionHeader(text = stringResource(R.string.memory_center_overview))
+                StatRow(stringResource(R.string.memory_center_stat_memory), snapshot.files)
+                StatRow(stringResource(R.string.memory_center_stat_notes), snapshot.notes)
+                StatRow(stringResource(R.string.memory_center_stat_recalls), snapshot.recalled)
+                StatRow(stringResource(R.string.memory_center_stat_failures), snapshot.blockedRepeats)
+                StatRow(stringResource(R.string.memory_center_stat_sediments), snapshot.sediments)
+                Text(
+                    text = stringResource(R.string.memory_center_stats_footer),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                )
+            }
+
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
             HubRow(
@@ -105,6 +140,25 @@ private fun SectionHeader(text: String) {
         color = MaterialTheme.colorScheme.primary,
         modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp),
     )
+}
+
+/** One label/count pair in the overview block. */
+@Composable
+private fun StatRow(label: String, value: Int) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(text = label, style = MaterialTheme.typography.bodyMedium)
+        Text(
+            text = value.toString(),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
 }
 
 @Composable
