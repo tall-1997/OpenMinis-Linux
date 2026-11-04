@@ -29,13 +29,25 @@ object MemoryRecallEngineCache {
     /**
      * The engine for [memoryDir], created on first use. Returns null only when
      * the directory cannot be prepared (`fromDir`'s contract).
+     *
+     * [sharedDir] adds the app-wide `minis-global/memory` scope
+     * ([T-memory-shared-recall]); the cache key includes it, so a session that
+     * gains or loses the shared scope does not keep a stale engine.
      */
-    fun forSession(memoryDir: File): MemoryRecallEngine? {
-        val key = runCatching { memoryDir.canonicalPath }.getOrElse { memoryDir.absolutePath }
+    fun forSession(memoryDir: File, sharedDir: File? = null): MemoryRecallEngine? {
+        val sessionPath = runCatching { memoryDir.canonicalPath }.getOrElse { memoryDir.absolutePath }
+        val sharedPath = sharedDir?.let { dir ->
+            runCatching { dir.canonicalPath }.getOrElse { dir.absolutePath }
+        }
+        val key = "$sessionPath|${sharedPath ?: "-"}"
         synchronized(engines) {
             engines[key]?.let { return it }
         }
-        val engine = MemoryRecallEngine.fromDir(memoryDir) ?: return null
+        val engine = MemoryRecallEngine(
+            memoryDirProvider = { memoryDir },
+            sharedDirProvider = sharedDir?.let { dir -> { dir } },
+        )
+        engine.loadRecallCounts()
         synchronized(engines) {
             // Re-check: another thread may have inserted while we were building.
             engines[key]?.let { return it }

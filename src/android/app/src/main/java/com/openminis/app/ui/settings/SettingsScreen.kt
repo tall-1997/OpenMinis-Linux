@@ -103,9 +103,9 @@ fun SettingsScreen(
     onUsageClick: () -> Unit = {},
     onAppearanceClick: () -> Unit = {},
     onLogsClick: () -> Unit = {},
-    // [T-m8-knowledge-workbench] Entry for the knowledge workbench hub.
-    // Default no-op so older callers/tests don't need retrofitting.
-    onKnowledgeClick: () -> Unit = {},
+    // [T-memory-center] The knowledge workbench is no longer a settings peer of
+    // Memory: it is reached from the memory hub, so there is one entry point for
+    // everything persistent instead of two competing ones.
     // T219-2: Mount External Folders entry. Default no-op for any caller
     // that hasn't wired the route yet.
     onMountedFoldersClick: () -> Unit = {},
@@ -339,18 +339,6 @@ fun SettingsScreen(
                     title = stringResource(R.string.bg_section_header),
                     subtitle = stringResource(R.string.bg_section_subtitle),
                     onClick = onBackgroundClick,
-                    showDivider = false,
-                )
-            }
-
-            // -- Knowledge Workbench --
-            SettingsSection(header = stringResource(R.string.settings_section_knowledge)) {
-                SettingsRow(
-                    icon = Icons.Outlined.AutoStories,
-                    iconColor = IosBlue,
-                    title = stringResource(R.string.settings_section_knowledge),
-                    subtitle = stringResource(R.string.settings_knowledge_subtitle),
-                    onClick = onKnowledgeClick,
                     showDivider = false,
                 )
             }

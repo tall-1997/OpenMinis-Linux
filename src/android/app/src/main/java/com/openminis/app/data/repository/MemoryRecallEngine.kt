@@ -45,6 +45,14 @@ import kotlin.math.log2
  */
 class MemoryRecallEngine(
     private val memoryDirProvider: () -> File,
+    /**
+     * [T-memory-shared-recall] Optional second scope: the app-wide
+     * `minis-global/memory` directory. When present, recall covers experience
+     * recorded in other chats too, with the session's own file winning on a
+     * filename collision. Null keeps the engine scoped to one directory, which is
+     * what the existing tests and call sites expect.
+     */
+    private val sharedDirProvider: (() -> File?)? = null,
 ) {
 
     companion object {
@@ -91,7 +99,8 @@ class MemoryRecallEngine(
         fun fromDir(memoryDir: File): MemoryRecallEngine? {
             if (!memoryDir.exists()) memoryDir.mkdirs()
             if (!memoryDir.isDirectory) return null
-            return MemoryRecallEngine { memoryDir }.also { it.loadRecallCounts() }
+            return MemoryRecallEngine(memoryDirProvider = { memoryDir })
+                .also { it.loadRecallCounts() }
         }
 
         fun fromContext(context: Context): MemoryRecallEngine? {
@@ -107,7 +116,11 @@ class MemoryRecallEngine(
                 add(File("/var/minis/memory"))
             }
             val memoryDir = candidates.firstOrNull { it.isDirectory }
-            return if (memoryDir != null) MemoryRecallEngine { memoryDir } else null
+            return if (memoryDir != null) {
+                MemoryRecallEngine(memoryDirProvider = { memoryDir })
+            } else {
+                null
+            }
         }
 
         /** "GLOBAL.md" ⇒ "global", "2026-09-18.md" ⇒ "2026-09-18". */
@@ -359,11 +372,26 @@ class MemoryRecallEngine(
 
     private fun scanMemoryFiles(): List<File> {
         val memoryDir = memoryDirProvider()
-        if (!memoryDir.isDirectory) return emptyList()
-        return memoryDir.listFiles()
-            ?.filter { it.isFile && (it.extension == "md" || it.name == "GLOBAL.md") }
-            ?.sortedByDescending { it.lastModified() }
-            ?: emptyList()
+        val session = if (memoryDir.isDirectory) {
+            memoryDir.listFiles()
+                ?.filter { it.isFile && (it.extension == "md" || it.name == "GLOBAL.md") }
+                .orEmpty()
+        } else {
+            emptyList()
+        }
+        // [T-memory-shared-recall] Shared scope: same filename means the session
+        // copy wins, because that is the one the verbatim window shows.
+        val sharedDir = sharedDirProvider?.invoke()
+        val shared = if (sharedDir != null && sharedDir.isDirectory) {
+            sharedDir.listFiles()
+                ?.filter { it.isFile && (it.extension == "md" || it.name == "GLOBAL.md") }
+                .orEmpty()
+        } else {
+            emptyList()
+        }
+        val sessionNames = session.mapTo(HashSet()) { it.name }
+        return (session + shared.filter { it.name !in sessionNames })
+            .sortedByDescending { it.lastModified() }
     }
 
     /** Format the hit list as a system-prompt fragment (mirrors XINCODE format). */
