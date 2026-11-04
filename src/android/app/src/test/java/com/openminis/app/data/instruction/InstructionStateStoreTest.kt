@@ -124,4 +124,29 @@ class InstructionStateStoreTest {
     fun nullGoalYieldsEmptyValues() {
         assertTrue(InstructionStateStore.goalInstructionValues(null).isEmpty())
     }
+
+    /**
+     * [T-p1-instruction-snapshot] The read side, against real SQLite: the
+     * append-only stream must reconstruct exactly the frozen `currentValues`.
+     * This is the contract that makes the snapshot usable for recovery at all.
+     */
+    @Test
+    fun replayOfTheEventStreamReproducesTheFrozenState() = runBlocking {
+        val store = store()
+        store.observeAndCommit("s1", mapOf(InstructionState.KEY_GOAL to "g1"))
+        store.observeAndCommit("s1", mapOf(InstructionState.KEY_GOAL to "g2"))
+        store.observeAndCommit(
+            "s1",
+            mapOf(InstructionState.KEY_GOAL to "g2", InstructionState.KEY_APP_GLOBAL to "rules"),
+        )
+        // Removal-only change: the goal key disappears from the sources.
+        store.observeAndCommit("s1", mapOf(InstructionState.KEY_APP_GLOBAL to "rules"))
+
+        val state = db.instructionStateDao().stateFor("s1")!!
+        val replay = InstructionReplay.rebuild(state.initialValuesJson, store.allUpdates("s1"))
+
+        assertEquals(InstructionState.parseValues(state.currentValuesJson), replay.values)
+        assertEquals(InstructionReplay.STOP_COMPLETE, replay.stopReason)
+        assertEquals(3, replay.applied)
+    }
 }

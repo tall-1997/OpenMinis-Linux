@@ -3,21 +3,34 @@ package com.openminis.app.ui.chat
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMMessage
 
-    /**
-     * Result of a bounded walk-back. `priorIdx` is the agentHistory index
-     * the caller should use as the start of preAnchor; `null` means even
-     * the first user turn including anchor would exceed `maxMessages`, so
-     * preAnchor should be empty.
-     *
-     * Mirrors iOS `WalkBackResult` in AIChatViewModel.swift (8b76cd74).
-     */
-    internal data class WalkBackResult(
-        val priorIdx: Int?,
-        val userTextTurnsFound: Int,
-        val messageCount: Int,
-        /** "userTextTargetMet" | "messageCapWouldExceed" | "reachedStart" | "invalidAnchor" */
-        val stopReason: String,
-    )
+/**
+ * Result of a bounded walk-back. `priorIdx` is the agentHistory index
+ * the caller should use as the start of preAnchor; `null` means even
+ * the first user turn including anchor would exceed `maxMessages`, so
+ * preAnchor should be empty.
+ *
+ * Mirrors iOS `WalkBackResult` in AIChatViewModel.swift (8b76cd74).
+ */
+internal data class WalkBackResult(
+    val priorIdx: Int?,
+    val userTextTurnsFound: Int,
+    val messageCount: Int,
+    /** "userTextTargetMet" | "messageCapWouldExceed" | "tokenBudgetWouldExceed" | "reachedStart" | "invalidAnchor" */
+    val stopReason: String,
+)
+
+/**
+ * The bounded walk-back rule, lifted out of the ViewModel so it can be tested
+ * with plain lists. [ChatViewModel.walkBackUserTurnsBounded] is the production
+ * entry point and passes `agentHistory` straight through.
+ */
+internal object WalkBack {
+
+    internal const val STOP_USER_TEXT_TARGET_MET = "userTextTargetMet"
+    internal const val STOP_MESSAGE_CAP_WOULD_EXCEED = "messageCapWouldExceed"
+    internal const val STOP_TOKEN_BUDGET_WOULD_EXCEED = "tokenBudgetWouldExceed"
+    internal const val STOP_REACHED_START = "reachedStart"
+    internal const val STOP_INVALID_ANCHOR = "invalidAnchor"
 
     /**
      * Walk back from `anchorIdx` toward 0, deciding ONLY at user-message
@@ -27,25 +40,35 @@ import com.openminis.app.data.model.LLMMessage
      *   `maxMessages` (cap reason — don't split a user/assistant/tool round
      *   in the middle, otherwise a tool_use would be orphaned without its
      *   tool_result), OR
+     * - [maxEstimatedTokens] is set and the slice would exceed it
+     *   ([T-compact-keep-budget] — the token axis opencode's `keep` models;
+     *   message-turn counts alone let a few huge tool results blow past the
+     *   budget), OR
      * - we hit index 0 (start of history).
      *
      * Port of iOS `walkBackUserTurnsBounded` (AIChatViewModel.swift, 8b76cd74).
      */
-internal fun ChatViewModel.walkBackUserTurnsBounded(
+    fun bounded(
+        history: List<LLMMessage>,
         anchorIdx: Int,
         maxUserTextTurns: Int,
         maxMessages: Int,
+        maxEstimatedTokens: Int? = null,
     ): WalkBackResult {
-        if (anchorIdx < 0 || anchorIdx >= agentHistory.size) {
-            return WalkBackResult(null, 0, 0, "invalidAnchor")
+        if (anchorIdx < 0 || anchorIdx >= history.size) {
+            return WalkBackResult(null, 0, 0, STOP_INVALID_ANCHOR)
         }
         var acceptedPriorIdx: Int? = null
         var acceptedUserTextTurns = 0
         var acceptedMessageCount = 0
+        // Prefix sums over the candidate window make the token check O(1) per
+        // iteration instead of re-walking the slice. Only built when a budget
+        // is actually supplied, so the default path stays allocation-free.
+        val tokenPrefix: IntArray? = maxEstimatedTokens?.let { buildTokenPrefix(history, anchorIdx) }
 
         var i = anchorIdx
         while (i >= 0) {
-            val msg = agentHistory[i]
+            val msg = history[i]
             if (msg.role != LLMMessage.Role.USER) {
                 i -= 1
                 continue
@@ -72,8 +95,20 @@ internal fun ChatViewModel.walkBackUserTurnsBounded(
                     priorIdx = acceptedPriorIdx,
                     userTextTurnsFound = acceptedUserTextTurns,
                     messageCount = acceptedMessageCount,
-                    stopReason = "messageCapWouldExceed",
+                    stopReason = STOP_MESSAGE_CAP_WOULD_EXCEED,
                 )
+            }
+            if (tokenPrefix != null && maxEstimatedTokens != null) {
+                // Token cost of the slice [i .. anchorIdx].
+                val candidateTokens = tokenPrefix[anchorIdx + 1] - tokenPrefix[i]
+                if (candidateTokens > maxEstimatedTokens) {
+                    return WalkBackResult(
+                        priorIdx = acceptedPriorIdx,
+                        userTextTurnsFound = acceptedUserTextTurns,
+                        messageCount = acceptedMessageCount,
+                        stopReason = STOP_TOKEN_BUDGET_WOULD_EXCEED,
+                    )
+                }
             }
             // Accept this user as the new tentative priorIdx.
             acceptedPriorIdx = i
@@ -87,7 +122,7 @@ internal fun ChatViewModel.walkBackUserTurnsBounded(
                         priorIdx = acceptedPriorIdx,
                         userTextTurnsFound = acceptedUserTextTurns,
                         messageCount = acceptedMessageCount,
-                        stopReason = "userTextTargetMet",
+                        stopReason = STOP_USER_TEXT_TARGET_MET,
                     )
                 }
             }
@@ -97,7 +132,49 @@ internal fun ChatViewModel.walkBackUserTurnsBounded(
             priorIdx = acceptedPriorIdx,
             userTextTurnsFound = acceptedUserTextTurns,
             messageCount = acceptedMessageCount,
-            stopReason = "reachedStart",
+            stopReason = STOP_REACHED_START,
         )
     }
 
+    /** `prefix[n]` = estimated tokens of `history[0 until n]`, for `n <= anchorIdx + 1`. */
+    private fun buildTokenPrefix(history: List<LLMMessage>, anchorIdx: Int): IntArray {
+        val prefix = IntArray(anchorIdx + 2)
+        for (idx in 0..anchorIdx) {
+            prefix[idx + 1] = prefix[idx] + estimateMessageTokens(history[idx])
+        }
+        return prefix
+    }
+
+    /**
+     * [T-compact-keep-budget] Coarse per-message token estimate (chars / 4).
+     *
+     * Deliberately the same approximation the send path already logs
+     * (`approxTokens = chars / 4`) and that `CompactAttempt.maxOutFor` uses, so
+     * the budget decision and the reported context size cannot disagree by
+     * using two different rulers.
+     */
+    fun estimateMessageTokens(msg: LLMMessage): Int {
+        var chars = msg.content.length
+        for (part in msg.contentParts) {
+            when (part) {
+                is AgentContentPart.Text -> chars += part.text.length
+                is AgentContentPart.ToolResult -> chars += part.content.length
+                else -> Unit
+            }
+        }
+        return (chars / 4).coerceAtLeast(1)
+    }
+}
+
+internal fun ChatViewModel.walkBackUserTurnsBounded(
+    anchorIdx: Int,
+    maxUserTextTurns: Int,
+    maxMessages: Int,
+    maxEstimatedTokens: Int? = null,
+): WalkBackResult = WalkBack.bounded(
+    history = agentHistory,
+    anchorIdx = anchorIdx,
+    maxUserTextTurns = maxUserTextTurns,
+    maxMessages = maxMessages,
+    maxEstimatedTokens = maxEstimatedTokens,
+)

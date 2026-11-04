@@ -34,7 +34,7 @@ import org.json.JSONObject
  */
 private val TRUNCATED_FINISH_REASONS = setOf("length", "max_tokens")
 
-internal suspend fun ChatViewModel.runAgentLoop(
+internal suspend fun ChatViewModel.runAgentLoopBody(
     provider: LLMProvider,
     systemPrompt: String?,
     fallbackProviders: List<ChatViewModel.FallbackCandidate> = emptyList(),
@@ -63,12 +63,11 @@ internal suspend fun ChatViewModel.runAgentLoop(
     var loopModelEpoch = snapshotModelSelectionEpoch()
     AppLogger.info(ChatViewModel.TAG_STREAM, "runAgentLoop ENTER provider=${provider.javaClass.simpleName} historySize=${agentHistory.size}")
     // [T-generation-run] 每轮生成落账：崩溃后可定位半截流归属哪个会话/模型。
-    // 成功时 finish(DONE)；失败路径不落 FINISH，留 RUNNING 由
-    // GenerationRunStore.abandoned() 在下次启动扫描时标记。
-    val generationRunId = com.openminis.app.agent.GenerationRunStore.start(
-        context,
-        activeSessionId,
-        provider.model.displayName,
+    // 成功时 succeeded()；失败路径不落 FINISH，留 RUNNING 由
+    // GenerationRunLifecycle.closeOpen()（runAgentLoop 包裹层）或下次启动扫描收尾。
+    val runAnchor = agentHistory.lastOrNull { it.dbMessageId != null }?.dbMessageId.orEmpty()
+    val generationRunId = com.openminis.app.agent.GenerationRunLifecycle.start(
+        context, activeSessionId, provider.model.displayName, runAnchor,
     )
     // [T-android-mem-probe-trust] Send-path context shape. The existing
     // `messages-shape` probe only runs on session LOAD, so the 2026-08-15
@@ -626,15 +625,10 @@ internal suspend fun ChatViewModel.runAgentLoop(
                 }
                 val goalMount = com.openminis.app.goal.goalMount(requestGoalState, goalManager::continuationPrompt)
                 goalMountedForCurrentRequest = goalMount.canContinue
-                // [T-p1-instruction-snapshot] Freeze the instruction values this request is built on; real deltas append to the event stream.
-                val goalSessionForSnapshot = realSessionId.ifEmpty { sessionId }
-                withContext(Dispatchers.IO) {
-                    com.openminis.app.data.instruction.InstructionStateStore(chatRepository.db).observeAndCommit(goalSessionForSnapshot, buildMap {
-                        putAll(com.openminis.app.data.instruction.InstructionStateStore.goalInstructionValues(requestGoalState))
-                        sessionMemoryRepo().loadGlobalMemoryFragment(sessionScoped = false)?.let { put(com.openminis.app.data.instruction.InstructionState.KEY_APP_GLOBAL, it) }
-                        sessionMemoryRepo().loadGlobalMemoryFragment(sessionScoped = true)?.let { put(com.openminis.app.data.instruction.InstructionState.KEY_SESSION_GLOBAL, it) }
-                    })
-                }
+                // [T-p1-instruction-snapshot] Freeze the instruction values this request is built on.
+                commitInstructionSnapshot(
+                    com.openminis.app.data.instruction.InstructionStateStore.goalInstructionValues(requestGoalState),
+                )
                 if (goalRunRequested && !goalMount.canContinue) {
                     withContext(Dispatchers.Main) {
                         updateAssistantMessage(assistantId, accumulatedText, false, allToolBlocks)
@@ -1134,7 +1128,7 @@ internal suspend fun ChatViewModel.runAgentLoop(
                 lastFileToolInputMs = 0L
                 lastOtherToolInputMs = 0L
                 collectDone = true
-                com.openminis.app.agent.GenerationRunStore.finish(context, generationRunId, ok = true)
+                com.openminis.app.agent.GenerationRunLifecycle.succeeded(context, generationRunId)
                 // [T-stall-resume] The stream attempt succeeded — no resume
                 // context should leak into a later turn.
                 stallResumeContext = null
@@ -2007,6 +2001,9 @@ internal suspend fun ChatViewModel.runAgentLoop(
             ChatViewModel.TAG_STREAM,
             "runAgentLoop EXIT — hit turn cap=$maxTurns, finalizing as resumable",
         )
+        // [T-generation-run] Not a clean finish — close the ledger so the
+        // launch scan reserves ABANDONED for a process that actually died.
+        com.openminis.app.agent.GenerationRunLifecycle.failed(context, generationRunId)
         withContext(Dispatchers.Main) {
             finalizeAtTurnLimit(assistantId, accumulatedText, allToolBlocks, loopResumeEpoch)
         }

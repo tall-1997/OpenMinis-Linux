@@ -58,13 +58,28 @@ data class ContextPolicy(
          *     doomed to hit the ceiling; `[T-compact-small-window-auto]`.
          *   - `64K–128K` / `≥128K` → offload + compact at [compactPercent] of the window
          *     (default 90).
+         *
+         * [bufferTokens] is the explicit-headroom form of the same decision
+         * (`[T-compact-buffer]`): the room to keep free below the model limit,
+         * mirroring opencode's `buffer`. It overrides the percentage but is
+         * clamped into the same 50..95% band, so a misconfigured buffer can
+         * neither compact on every turn (tiny headroom) nor never compact
+         * (headroom wider than the window). Default `null` keeps every tier's
+         * existing numbers byte-identical.
          */
         fun forContextWindow(
             contextWindow: Int,
             compactPercent: Int = AutoCompactPrefs.DEFAULT_THRESHOLD_PERCENT,
+            bufferTokens: Int? = null,
         ): ContextPolicy {
             val pct = compactPercent.coerceIn(50, 95)
-            val compactAt = (contextWindow.toLong() * pct / 100L).toInt().coerceAtLeast(1)
+            val percentThreshold = (contextWindow.toLong() * pct / 100L).toInt().coerceAtLeast(1)
+            val bufferedThreshold = bufferTokens?.let { buffer ->
+                (contextWindow.toLong() - buffer.toLong())
+                    .coerceIn(contextWindow.toLong() * 50 / 100, contextWindow.toLong() * 95 / 100)
+                    .toInt()
+                    .coerceAtLeast(1)
+            }
             return when {
             contextWindow < 32_000 -> ContextPolicy(
                 offloadThreshold = 0,
@@ -83,21 +98,21 @@ data class ContextPolicy(
                 // here only guaranteed the window ceiling gets hit instead.
                 // Compaction now fires BEFORE the offload line so the heavy
                 // tool payloads get folded while there is still headroom.
-                compactThreshold = contextWindow - 15_000,
+                compactThreshold = bufferedThreshold ?: (contextWindow - 15_000),
                 exhaustedOnly = false,
                 manualCompactAllowed = true,
             )
             contextWindow < 128_000 -> ContextPolicy(
                 offloadThreshold = contextWindow - 20_000,
                 offloadTarget = contextWindow - 30_000,
-                compactThreshold = compactAt,
+                compactThreshold = bufferedThreshold ?: percentThreshold,
                 exhaustedOnly = false,
                 manualCompactAllowed = true,
             )
             else -> ContextPolicy(
                 offloadThreshold = contextWindow - 40_000,
                 offloadTarget = contextWindow - 60_000,
-                compactThreshold = compactAt,
+                compactThreshold = bufferedThreshold ?: percentThreshold,
                 exhaustedOnly = false,
                 manualCompactAllowed = true,
             )

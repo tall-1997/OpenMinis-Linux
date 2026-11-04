@@ -91,11 +91,29 @@ class InstructionStateStore(
     suspend fun currentValues(sessionId: String): Map<String, String>? =
         dao?.stateFor(sessionId)?.let { InstructionState.parseValues(it.currentValuesJson) }
 
-    /** Most recent frozen update events, oldest first. */
+    /**
+     * The earliest [limit] frozen events for [sessionId], oldest first.
+     *
+     * Named for what the SQL does: `ORDER BY seq ASC LIMIT n` returns the OLDEST
+     * rows, not the newest. Replay needs that end of the stream; callers wanting
+     * "the most recent event" must read `MAX(seq)` instead.
+     */
     suspend fun recentUpdates(sessionId: String, limit: Int): List<InstructionUpdateEntity> =
         dao?.updatesFor(sessionId, limit) ?: emptyList()
 
+    /**
+     * Every frozen event for [sessionId], oldest first, capped at
+     * [UPDATE_REPLAY_CAP]. The cap bounds cold-open cost: instruction events are
+     * rare (one per real instruction change), so a session hitting it has far
+     * bigger problems than a truncated replay.
+     */
+    suspend fun allUpdates(sessionId: String): List<InstructionUpdateEntity> =
+        dao?.updatesFor(sessionId, UPDATE_REPLAY_CAP) ?: emptyList()
+
     companion object {
+        /** Upper bound on rows read by [allUpdates]. */
+        const val UPDATE_REPLAY_CAP = 500
+
         /**
          * Goal instruction value: the semantic instruction fields only.
          * A null goal (cleared) yields an empty map, which observe() turns
