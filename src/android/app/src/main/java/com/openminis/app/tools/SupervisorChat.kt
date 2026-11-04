@@ -183,6 +183,10 @@ object SupervisorChat {
         var rubberStampStrikes: Int = 0
             private set
 
+        /** Delivery-evidence rejections so far; two fails the session. */
+        var evidenceStrikes: Int = 0
+            private set
+
         private var capClosed = false
 
         /** True when the session was force-closed by the worker-turn cap (not by rubber-stamp failure). */
@@ -195,23 +199,51 @@ object SupervisorChat {
          * phase. A rubber-stamped DONE stays in review with a strike; the
          * second one fails. Any other message starts a worker turn —
          * unless the cap is exhausted, which force-closes the session.
+         *
+         * When [evidenceGate] is supplied, a DONE that passes the
+         * rubber-stamp check must also pass the gate (which verifies the
+         * message's `## Delivery` section against disk and the report
+         * corpus); a gate failure earns an evidence strike and a second
+         * one fails the session. Existing callers that pass no gate keep
+         * the old two-rule shape unchanged.
          */
-        fun onSupervisorMessage(text: String, acceptance: List<String>): Phase {
+        fun onSupervisorMessage(
+            text: String,
+            acceptance: List<String>,
+            evidenceGate: ((String) -> SupervisorEvidence.Check)? = null,
+        ): Phase {
             if (phase == Phase.DONE || phase == Phase.FAILED || phase == Phase.USER_HALTED) {
                 return phase
             }
             val verdict = parseDone(text, acceptance)
             if (verdict != null) {
-                if (!isRubberStamp(verdict, acceptance)) {
-                    phase = Phase.DONE
+                if (isRubberStamp(verdict, acceptance)) {
+                    rubberStampStrikes += 1
+                    if (rubberStampStrikes >= MAX_RUBBER_STAMP_STRIKES) {
+                        phase = Phase.FAILED
+                    } else {
+                        phase = Phase.REVIEWING
+                    }
                     return phase
                 }
-                rubberStampStrikes += 1
-                if (rubberStampStrikes >= MAX_RUBBER_STAMP_STRIKES) {
-                    phase = Phase.FAILED
-                } else {
-                    phase = Phase.REVIEWING
+                if (evidenceGate != null) {
+                    when (evidenceGate(text)) {
+                        is SupervisorEvidence.Check.Pass -> {
+                            phase = Phase.DONE
+                            return phase
+                        }
+                        is SupervisorEvidence.Check.Fail -> {
+                            evidenceStrikes += 1
+                            if (evidenceStrikes >= MAX_EVIDENCE_STRIKES) {
+                                phase = Phase.FAILED
+                            } else {
+                                phase = Phase.REVIEWING
+                            }
+                            return phase
+                        }
+                    }
                 }
+                phase = Phase.DONE
                 return phase
             }
             if (workerTurns >= maxWorkerTurns) {
@@ -242,6 +274,8 @@ object SupervisorChat {
     }
 
     private const val MAX_RUBBER_STAMP_STRIKES = 2
+
+    private const val MAX_EVIDENCE_STRIKES = 2
 
     /**
      * Inbox for user interjections in a supervisor-worker session.

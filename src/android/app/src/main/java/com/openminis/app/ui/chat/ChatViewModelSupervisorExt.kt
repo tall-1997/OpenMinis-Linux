@@ -3,7 +3,11 @@ package com.openminis.app.ui.chat
 import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.model.ModelEntry
 import com.openminis.app.data.model.hasImageInput
+import com.openminis.app.data.repository.projectExperienceRecall
+import com.openminis.app.data.repository.recordProjectExperience
+import com.openminis.app.logging.AppLogger
 import com.openminis.app.provider.effectiveMaxThinkingLevel
+import com.openminis.app.sandbox.SessionWorkspace
 import com.openminis.app.tools.AgentTools
 import com.openminis.app.tools.SubAgentKind
 import com.openminis.app.tools.SubAgentRunner
@@ -348,6 +352,11 @@ private suspend fun ChatViewModel.runSupervisorSession(
     var workerRound = 0
     SupervisorUiHost.update(sessionId, SupervisorUiHost.Phase.INSTRUCTING, objective, 0)
 
+    // [T-m9-supervisor-experience] Recall per-session tool experience once,
+    // before any seat exists, so the supervisor's first turn already sees
+    // the empirically grounded tool choices from earlier rounds.
+    val experienceRecall = chatRepository.projectExperienceRecall(sessionId)
+
     val supervisorSeat = SupervisorSessionRunner.Seat { user, system, _ ->
         upsertGroupBubble(supervisorBubbleId, SUPERVISOR_SPEAKER, "", analyzing = true)
         val text = WritePathGuard.withPaths(listOf(WritePathGuard.NO_WRITE)) {
@@ -381,12 +390,18 @@ private suspend fun ChatViewModel.runSupervisorSession(
                 tools = SupervisorSeats.workerTools(supervisorBaseTools(workerEntry)),
                 maxTokens = (workerEntry.model.maxOutputTokens ?: 4096).coerceIn(256, 8192),
                 executeTool = { name, json ->
-                    if (SubAgentKind.blocks(SubAgentKind.WORKER, name)) {
+                    val result = if (SubAgentKind.blocks(SubAgentKind.WORKER, name)) {
                         ToolExecutionResult("Error: WORKER sub-agent cannot use $name.", false)
                     } else {
                         grepSourceToolResult(name, json)
                             ?: executeTool(name, json, "")
                     }
+                    // [T-m9-supervisor-experience] Fold this executed call into
+                    // the session's tool profile; a failed fold never blocks the
+                    // tool result itself.
+                    runCatching { chatRepository.recordProjectExperience(sessionId, name, result.success) }
+                        .onFailure { AppLogger.warning("recordProjectExperience failed", "for $name: ${it.message}") }
+                    result
                 },
                 kind = SubAgentKind.WORKER,
                 writePaths = writePaths,
@@ -403,11 +418,14 @@ private suspend fun ChatViewModel.runSupervisorSession(
         objective = objective,
         contextDigest = contextDigest,
         maxWorkerTurns = maxWorkerTurns,
-        supervisorSystem = SupervisorPrompts.supervisorSystem(supervisorEntry.model.displayName),
+        supervisorSystem = SupervisorPrompts.supervisorSystem(supervisorEntry.model.displayName) + experienceRecall,
         supervisor = supervisorSeat,
         worker = workerSeat,
         inbox = inbox,
         recovery = recoveryIntro,
+        evidenceFileExists = { path ->
+            SessionWorkspace.resolveGuestPath(context.filesDir, sessionId, path)?.exists() ?: false
+        },
         onRound = { n, instructionDigest, reportDigest ->
             SupervisorRunStore.appendRound(sessionId, context, n, instructionDigest, reportDigest)
         },

@@ -524,6 +524,37 @@ internal object AppMigrations {
         }
     }
 
+    val MIGRATION_25_26 = object : Migration(25, 26) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // [T-m9-supervisor-experience] Per-session tool experience rows
+            // used by the Supervisor-Worker recall/evidence wiring.
+            db.execSQL(
+                """CREATE TABLE IF NOT EXISTS `project_experience` (
+                    `id` TEXT NOT NULL,
+                    `session_id` TEXT NOT NULL,
+                    `tool_name` TEXT NOT NULL,
+                    `used_count` INTEGER NOT NULL,
+                    `success_count` INTEGER NOT NULL,
+                    `failure_count` INTEGER NOT NULL,
+                    `first_used_at` INTEGER NOT NULL,
+                    `last_used_at` INTEGER NOT NULL,
+                    `fingerprint` TEXT NOT NULL,
+                    PRIMARY KEY(`id`)
+                )""".trimIndent()
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_project_experience_session_id` " +
+                    "ON `project_experience` (`session_id`)"
+            )
+        }
+    }
+
+    val MIGRATION_26_25 = object : Migration(26, 25) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // Keep the table. Older builds ignore extra tables.
+        }
+    }
+
     val MIGRATION_16_17 = object : Migration(16, 17) {
         override fun migrate(db: SupportSQLiteDatabase) {
             db.addColumnIfMissing("sessions", "permission_mode", "TEXT")
@@ -586,5 +617,7 @@ internal object AppMigrations {
     MIGRATION_24_23,
     MIGRATION_24_25,
     MIGRATION_25_24,
+    MIGRATION_25_26,
+    MIGRATION_26_25,
     )
 }
