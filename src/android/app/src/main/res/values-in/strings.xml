@@ -277,8 +277,6 @@
     <string name="settings_section_permissions">Izin</string>
     <string name="settings_permissions_subtitle">Kontrol akses Agen ke fitur sensitif privasi</string>
         <!-- [T-m8-knowledge-workbench] settings entry -->
-    <string name="settings_section_knowledge">Ruang Kerja Pengetahuan</string>
-    <string name="settings_knowledge_subtitle">Catatan, grafik tertaut, dan riwayat berversi</string>
 <string name="settings_section_logs">Log</string>
     <string name="settings_logs_subtitle">Lihat dan ekspor log aplikasi</string>
     <string name="settings_section_about">Tentang</string>
@@ -2013,39 +2011,4 @@
     <string name="token_usage_section_context_saver">Hemat konteks</string>
     <string name="token_usage_saver_folded">Hasil alat terlipat</string>
     <string name="token_usage_saver_saved">Dihemat giliran ini</string>
-    <!-- [T-m8-knowledge-workbench] knowledge workbench strings -->
-    <string name="knowledge_title">Basis Pengetahuan</string>
-    <string name="knowledge_tab_notes">Catatan</string>
-    <string name="knowledge_tab_graph">Graf</string>
-    <string name="knowledge_tab_trash">Sampah</string>
-    <string name="knowledge_search_hint">Cari judul, isi, atau tag</string>
-    <string name="knowledge_empty">Belum ada catatan. Ketuk + untuk membuat, atau tautkan catatan dengan [[Judul Catatan]] di isi.</string>
-    <string name="knowledge_graph_empty">Tautkan setidaknya dua catatan untuk membuat graf.</string>
-    <string name="knowledge_graph_hint">Ketuk node untuk membuka catatan</string>
-    <string name="knowledge_trash_empty">Sampah kosong</string>
-    <string name="knowledge_trashed_at">Dihapus pada %1$s</string>
-    <string name="knowledge_restore">Pulihkan</string>
-    <string name="knowledge_purge">Hapus permanen</string>
-    <string name="knowledge_purge_confirm_title">Hapus catatan ini secara permanen?</string>
-    <string name="knowledge_purge_expired">Bersihkan kedaluwarsa</string>
-    <string name="knowledge_purge_expired_confirm_title">Bersihkan semua catatan kedaluwarsa?</string>
-    <string name="knowledge_purge_expired_confirm_body">Catatan yang dihapus lebih dari 30 hari lalu akan dihapus permanen.</string>
-    <string name="knowledge_note_new">Catatan baru</string>
-    <string name="knowledge_note_edit">Edit catatan</string>
-    <string name="knowledge_title_label">Judul</string>
-    <string name="knowledge_body_label">Isi</string>
-    <string name="knowledge_body_hint">Tautkan catatan dengan [[Catatan Lain]]</string>
-    <string name="knowledge_tags_label">Tag (dipisah koma)</string>
-    <string name="knowledge_tags_hint">mis. kerja, ide</string>
-    <string name="knowledge_save">Simpan</string>
-    <string name="knowledge_versions_title">Riwayat versi</string>
-    <string name="knowledge_version_row">v%1$d · %2$s</string>
-    <string name="knowledge_trash">Pindah ke sampah</string>
-    <string name="knowledge_trash_confirm_title">Pindah ke sampah?</string>
-    <string name="knowledge_trash_confirm_body">Catatan bertahan 30 hari di sampah sebelum dihapus otomatis.</string>
-    <string name="knowledge_snack_created">Catatan dibuat</string>
-    <string name="knowledge_snack_trashed">Dipindah ke sampah</string>
-    <string name="knowledge_snack_restored">Dipulihkan</string>
-    <string name="knowledge_snack_purged">Dihapus permanen</string>
-    <string name="knowledge_snack_imported">Diimpor</string>
 </resources>

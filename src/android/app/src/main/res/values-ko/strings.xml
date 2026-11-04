@@ -272,8 +272,6 @@
     <string name="settings_section_permissions">권한</string>
     <string name="settings_permissions_subtitle">프라이버시 관련 기능에 대한 Agent의 접근을 제어</string>
         <!-- [T-m8-knowledge-workbench] settings entry -->
-    <string name="settings_section_knowledge">지식 워크벤치</string>
-    <string name="settings_knowledge_subtitle">메모, 연결된 그래프, 버전 기록</string>
 <string name="settings_section_logs">로그</string>
     <string name="settings_logs_subtitle">앱 로그 보기 및 내보내기</string>
     <string name="settings_section_about">정보</string>
@@ -2005,39 +2003,4 @@
     <string name="token_usage_section_context_saver">컨텍스트 절약</string>
     <string name="token_usage_saver_folded">접힌 도구 결과</string>
     <string name="token_usage_saver_saved">이번 턴 절약</string>
-    <!-- [T-m8-knowledge-workbench] knowledge workbench strings -->
-    <string name="knowledge_title">지식 베이스</string>
-    <string name="knowledge_tab_notes">노트</string>
-    <string name="knowledge_tab_graph">그래프</string>
-    <string name="knowledge_tab_trash">휴지통</string>
-    <string name="knowledge_search_hint">제목, 본문 또는 태그 검색</string>
-    <string name="knowledge_empty">아직 노트가 없습니다. +를 눌러 만들거나 본문에서 [[노트 제목]]으로 노트를 연결하세요.</string>
-    <string name="knowledge_graph_empty">그래프를 만들려면 노트 두 개 이상을 서로 연결하세요.</string>
-    <string name="knowledge_graph_hint">노드를 눌러 노트 열기</string>
-    <string name="knowledge_trash_empty">휴지통이 비어 있습니다</string>
-    <string name="knowledge_trashed_at">삭제일: %1$s</string>
-    <string name="knowledge_restore">복원</string>
-    <string name="knowledge_purge">완전 삭제</string>
-    <string name="knowledge_purge_confirm_title">이 노트를 완전히 삭제할까요?</string>
-    <string name="knowledge_purge_expired">만료 항목 정리</string>
-    <string name="knowledge_purge_expired_confirm_title">만료된 노트를 모두 정리할까요?</string>
-    <string name="knowledge_purge_expired_confirm_body">30일 전에 삭제된 노트는 영구적으로 삭제됩니다.</string>
-    <string name="knowledge_note_new">새 노트</string>
-    <string name="knowledge_note_edit">노트 편집</string>
-    <string name="knowledge_title_label">제목</string>
-    <string name="knowledge_body_label">본문</string>
-    <string name="knowledge_body_hint">[[다른 노트]]로 연결 만들기</string>
-    <string name="knowledge_tags_label">태그(쉼표로 구분)</string>
-    <string name="knowledge_tags_hint">예: 업무, 아이디어</string>
-    <string name="knowledge_save">저장</string>
-    <string name="knowledge_versions_title">버전 기록</string>
-    <string name="knowledge_version_row">v%1$d · %2$s</string>
-    <string name="knowledge_trash">휴지통으로 이동</string>
-    <string name="knowledge_trash_confirm_title">휴지통으로 이동할까요?</string>
-    <string name="knowledge_trash_confirm_body">노트는 자동 삭제 전까지 30일 동안 휴지통에 보관됩니다.</string>
-    <string name="knowledge_snack_created">노트를 만들었습니다</string>
-    <string name="knowledge_snack_trashed">휴지통으로 이동했습니다</string>
-    <string name="knowledge_snack_restored">복원했습니다</string>
-    <string name="knowledge_snack_purged">완전히 삭제했습니다</string>
-    <string name="knowledge_snack_imported">가져왔습니다</string>
 </resources>

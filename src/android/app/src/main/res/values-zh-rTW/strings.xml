@@ -319,8 +319,6 @@
     <string name="settings_section_permissions">權限</string>
     <string name="settings_permissions_subtitle">系統權限與逐工具存取：無障礙、Shizuku、主機 su、隱私等級；各工具的 Agent 權限在此頁逐項設定。</string>
         <!-- [T-m8-knowledge-workbench] settings entry -->
-    <string name="settings_section_knowledge">知識工作台</string>
-    <string name="settings_knowledge_subtitle">筆記、關聯圖譜與版本歷史</string>
 <string name="settings_section_logs">記錄</string>
     <string name="settings_logs_subtitle">檢視並匯出應用程式記錄</string>
     <string name="settings_section_about">關於</string>
@@ -2090,39 +2088,4 @@
     <string name="token_usage_section_context_saver">上下文節約</string>
     <string name="token_usage_saver_folded">已折疊工具結果</string>
     <string name="token_usage_saver_saved">本輪節省</string>
-    <!-- [T-m8-knowledge-workbench] knowledge workbench strings -->
-    <string name="knowledge_title">知識工作台</string>
-    <string name="knowledge_tab_notes">筆記</string>
-    <string name="knowledge_tab_graph">圖譜</string>
-    <string name="knowledge_tab_trash">垃圾桶</string>
-    <string name="knowledge_search_hint">搜尋標題、內文或標籤</string>
-    <string name="knowledge_empty">還沒有筆記。點右下角 + 新增，或在內文裡用 [[筆記標題]] 互相連結。</string>
-    <string name="knowledge_graph_empty">至少兩條互相連結的筆記才會產生圖譜。</string>
-    <string name="knowledge_graph_hint">點節點開啟筆記</string>
-    <string name="knowledge_trash_empty">垃圾桶是空的</string>
-    <string name="knowledge_trashed_at">刪除於 %1$s</string>
-    <string name="knowledge_restore">還原</string>
-    <string name="knowledge_purge">永久刪除</string>
-    <string name="knowledge_purge_confirm_title">永久刪除這條筆記？</string>
-    <string name="knowledge_purge_expired">清理過期</string>
-    <string name="knowledge_purge_expired_confirm_title">清理所有過期筆記？</string>
-    <string name="knowledge_purge_expired_confirm_body">垃圾桶中刪除超過 30 天的筆記將被永久刪除，無法還原。</string>
-    <string name="knowledge_note_new">新增筆記</string>
-    <string name="knowledge_note_edit">編輯筆記</string>
-    <string name="knowledge_title_label">標題</string>
-    <string name="knowledge_body_label">內文</string>
-    <string name="knowledge_body_hint">用 [[另一條筆記]] 建立連結</string>
-    <string name="knowledge_tags_label">標籤（逗號分隔）</string>
-    <string name="knowledge_tags_hint">例如：工作, 想法</string>
-    <string name="knowledge_save">儲存</string>
-    <string name="knowledge_versions_title">版本歷史</string>
-    <string name="knowledge_version_row">v%1$d · %2$s</string>
-    <string name="knowledge_trash">移入垃圾桶</string>
-    <string name="knowledge_trash_confirm_title">移到垃圾桶？</string>
-    <string name="knowledge_trash_confirm_body">筆記會在垃圾桶保留 30 天，之後自動清理。</string>
-    <string name="knowledge_snack_created">已建立筆記</string>
-    <string name="knowledge_snack_trashed">已移入垃圾桶</string>
-    <string name="knowledge_snack_restored">已還原</string>
-    <string name="knowledge_snack_purged">已永久刪除</string>
-    <string name="knowledge_snack_imported">已匯入</string>
 </resources>

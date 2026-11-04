@@ -595,6 +595,60 @@ internal object AppMigrations {
         }
     }
 
+    val MIGRATION_27_28 = object : Migration(27, 28) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // [T-p6-remove-knowledge-workbench] The knowledge workbench
+            // shipped in #224 is being retired. Its two tables hold only
+            // user-authored notes that never fed any other subsystem, so
+            // the upgrade path drops them outright.
+            db.execSQL("DROP TABLE IF EXISTS `knowledge_note_versions`")
+            db.execSQL("DROP TABLE IF EXISTS `knowledge_notes`")
+        }
+    }
+
+    val MIGRATION_28_27 = object : Migration(28, 27) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // Recreate the tables so a v27 build can read a v28 database.
+            // Rows are gone — the downgrade is schema-only, mirroring the
+            // keep-compatible philosophy of the other downgrade steps.
+            // Column shapes mirror the v27 schema JSON exactly.
+            db.execSQL(
+                """CREATE TABLE IF NOT EXISTS `knowledge_notes` (
+                    `id` TEXT NOT NULL,
+                    `title` TEXT NOT NULL,
+                    `body_md` TEXT NOT NULL,
+                    `status` TEXT NOT NULL,
+                    `tags_json` TEXT NOT NULL,
+                    `links_json` TEXT NOT NULL,
+                    `search_text` TEXT NOT NULL,
+                    `dedupe_hash` TEXT NOT NULL,
+                    `created_at` INTEGER NOT NULL,
+                    `updated_at` INTEGER NOT NULL,
+                    `trashed_at` INTEGER NOT NULL,
+                    PRIMARY KEY(`id`)
+                )""".trimIndent()
+            )
+            db.execSQL(
+                """CREATE TABLE IF NOT EXISTS `knowledge_note_versions` (
+                    `note_id` TEXT NOT NULL,
+                    `version` INTEGER NOT NULL,
+                    `body_at` INTEGER NOT NULL,
+                    PRIMARY KEY(`note_id`, `version`),
+                    FOREIGN KEY(`note_id`) REFERENCES `knowledge_notes`(`id`)
+                    ON UPDATE NO ACTION ON DELETE CASCADE
+                )""".trimIndent()
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_knowledge_notes_status_updated_at` " +
+                    "ON `knowledge_notes` (`status`, `updated_at`)"
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_knowledge_notes_dedupe_hash` " +
+                    "ON `knowledge_notes` (`dedupe_hash`)"
+            )
+        }
+    }
+
     val MIGRATION_16_17 = object : Migration(16, 17) {
         override fun migrate(db: SupportSQLiteDatabase) {
             db.addColumnIfMissing("sessions", "permission_mode", "TEXT")
@@ -661,5 +715,7 @@ internal object AppMigrations {
     MIGRATION_26_25,
     MIGRATION_26_27,
     MIGRATION_27_26,
+    MIGRATION_27_28,
+    MIGRATION_28_27,
     )
 }

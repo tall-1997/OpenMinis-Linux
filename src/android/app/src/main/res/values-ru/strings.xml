@@ -274,8 +274,6 @@
     <string name="settings_section_permissions">Разрешения</string>
     <string name="settings_permissions_subtitle">Управление доступом Агента к функциям, связанным с приватностью</string>
         <!-- [T-m8-knowledge-workbench] settings entry -->
-    <string name="settings_section_knowledge">Мастерская знаний</string>
-    <string name="settings_knowledge_subtitle">Заметки, связанный граф и история версий</string>
 <string name="settings_section_logs">Журналы</string>
     <string name="settings_logs_subtitle">Просмотр и экспорт журналов приложения</string>
     <string name="settings_section_about">О приложении</string>
@@ -2016,39 +2014,4 @@
     <string name="token_usage_section_context_saver">Экономия контекста</string>
     <string name="token_usage_saver_folded">Свёрнутые результаты</string>
     <string name="token_usage_saver_saved">Сэкономлено за ход</string>
-    <!-- [T-m8-knowledge-workbench] knowledge workbench strings -->
-    <string name="knowledge_title">База знаний</string>
-    <string name="knowledge_tab_notes">Заметки</string>
-    <string name="knowledge_tab_graph">Граф</string>
-    <string name="knowledge_tab_trash">Корзина</string>
-    <string name="knowledge_search_hint">Поиск по заголовку, тексту или тегам</string>
-    <string name="knowledge_empty">Заметок пока нет. Нажмите +, чтобы создать, или свяжите заметки через [[Название заметки]] в тексте.</string>
-    <string name="knowledge_graph_empty">Свяжите хотя бы две заметки друг с другом, чтобы построить граф.</string>
-    <string name="knowledge_graph_hint">Нажмите на узел, чтобы открыть заметку</string>
-    <string name="knowledge_trash_empty">Корзина пуста</string>
-    <string name="knowledge_trashed_at">Удалено: %1$s</string>
-    <string name="knowledge_restore">Восстановить</string>
-    <string name="knowledge_purge">Удалить навсегда</string>
-    <string name="knowledge_purge_confirm_title">Удалить эту заметку навсегда?</string>
-    <string name="knowledge_purge_expired">Очистить просроченные</string>
-    <string name="knowledge_purge_expired_confirm_title">Очистить все просроченные заметки?</string>
-    <string name="knowledge_purge_expired_confirm_body">Заметки, удалённые более 30 дней назад, будут удалены навсегда.</string>
-    <string name="knowledge_note_new">Новая заметка</string>
-    <string name="knowledge_note_edit">Изменить заметку</string>
-    <string name="knowledge_title_label">Заголовок</string>
-    <string name="knowledge_body_label">Текст</string>
-    <string name="knowledge_body_hint">Свяжите заметки через [[Другая заметка]]</string>
-    <string name="knowledge_tags_label">Теги (через запятую)</string>
-    <string name="knowledge_tags_hint">напр. работа, идеи</string>
-    <string name="knowledge_save">Сохранить</string>
-    <string name="knowledge_versions_title">История версий</string>
-    <string name="knowledge_version_row">v%1$d · %2$s</string>
-    <string name="knowledge_trash">В корзину</string>
-    <string name="knowledge_trash_confirm_title">Переместить в корзину?</string>
-    <string name="knowledge_trash_confirm_body">Заметка остаётся в корзине 30 дней до автоматического удаления.</string>
-    <string name="knowledge_snack_created">Заметка создана</string>
-    <string name="knowledge_snack_trashed">Перемещено в корзину</string>
-    <string name="knowledge_snack_restored">Восстановлено</string>
-    <string name="knowledge_snack_purged">Удалено навсегда</string>
-    <string name="knowledge_snack_imported">Импортировано</string>
 </resources>

@@ -272,8 +272,6 @@
     <string name="settings_section_permissions">Mga Pahintulot</string>
     <string name="settings_permissions_subtitle">Kontrolin ang access ng Agent sa mga sensitibong feature</string>
         <!-- [T-m8-knowledge-workbench] settings entry -->
-    <string name="settings_section_knowledge">Knowledge Workbench</string>
-    <string name="settings_knowledge_subtitle">Mga tala, naka-link na graph, at versioned na kasaysayan</string>
 <string name="settings_section_logs">Mga Log</string>
     <string name="settings_logs_subtitle">Tingnan at i-export ang mga log ng app</string>
     <string name="settings_section_about">Tungkol Dito</string>
@@ -2008,39 +2006,4 @@
     <string name="token_usage_section_context_saver">Tipid sa konteksto</string>
     <string name="token_usage_saver_folded">Nakuping resulta ng tool</string>
     <string name="token_usage_saver_saved">Natipid ngayong turn</string>
-    <!-- [T-m8-knowledge-workbench] knowledge workbench strings -->
-    <string name="knowledge_title">Knowledge Base</string>
-    <string name="knowledge_tab_notes">Mga Tala</string>
-    <string name="knowledge_tab_graph">Graph</string>
-    <string name="knowledge_tab_trash">Basura</string>
-    <string name="knowledge_search_hint">Maghanap ng pamagat, teksto o tag</string>
-    <string name="knowledge_empty">Wala pang mga tala. I-tap ang + upang gumawa, o i-link ang mga tala gamit ang [[Pamagat ng Tala]] sa teksto.</string>
-    <string name="knowledge_graph_empty">I-link ang hindi bababa sa dalawang tala sa isa\'t isa upang makagawa ng graph.</string>
-    <string name="knowledge_graph_hint">I-tap ang node upang buksan ang tala</string>
-    <string name="knowledge_trash_empty">Walang laman ang basura</string>
-    <string name="knowledge_trashed_at">Tinanggal noong %1$s</string>
-    <string name="knowledge_restore">Ibalik</string>
-    <string name="knowledge_purge">Permanenteng tanggalin</string>
-    <string name="knowledge_purge_confirm_title">Permanenteng tanggalin ang talang ito?</string>
-    <string name="knowledge_purge_expired">Linisin ang nag-expire</string>
-    <string name="knowledge_purge_expired_confirm_title">Linisin ang lahat ng nag-expire na tala?</string>
-    <string name="knowledge_purge_expired_confirm_body">Ang mga talang tinanggal mahigit 30 araw na ang nakalipas ay permanenteng mabubura.</string>
-    <string name="knowledge_note_new">Bagong tala</string>
-    <string name="knowledge_note_edit">I-edit ang tala</string>
-    <string name="knowledge_title_label">Pamagat</string>
-    <string name="knowledge_body_label">Teksto</string>
-    <string name="knowledge_body_hint">I-link ang mga tala gamit ang [[Ibang Tala]]</string>
-    <string name="knowledge_tags_label">Mga tag (pinaghihiwalay ng kuwit)</string>
-    <string name="knowledge_tags_hint">hal. trabaho, ideya</string>
-    <string name="knowledge_save">I-save</string>
-    <string name="knowledge_versions_title">Kasaysayan ng bersyon</string>
-    <string name="knowledge_version_row">v%1$d · %2$s</string>
-    <string name="knowledge_trash">Ilipat sa basura</string>
-    <string name="knowledge_trash_confirm_title">Ilipat sa basura?</string>
-    <string name="knowledge_trash_confirm_body">Mananatili ang tala sa basura nang 30 araw bago awtomatikong mabura.</string>
-    <string name="knowledge_snack_created">Nagawa ang tala</string>
-    <string name="knowledge_snack_trashed">Inilipat sa basura</string>
-    <string name="knowledge_snack_restored">Naibalik</string>
-    <string name="knowledge_snack_purged">Permanenteng tinanggal</string>
-    <string name="knowledge_snack_imported">Na-import</string>
 </resources>

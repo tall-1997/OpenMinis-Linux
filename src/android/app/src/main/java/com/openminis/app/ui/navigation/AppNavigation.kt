@@ -23,7 +23,6 @@ import com.openminis.app.MinisApp
 import com.openminis.app.deeplink.DeepLinkAction
 import com.openminis.app.deeplink.DeepLinkCoordinator
 import com.openminis.app.ui.browser.BrowserSheet
-import com.openminis.app.ui.knowledge.KnowledgeWorkbenchViewModel
 import com.openminis.app.ui.settings.KEY_LAUNCH_SESSION
 import com.openminis.app.ui.settings.getAppearancePrefs
 import androidx.navigation.NavHostController
@@ -89,8 +88,6 @@ fun AppNavigation(
     val mountedFoldersStore = remember {
         (context.applicationContext as com.openminis.app.MinisApp).mountedFoldersStore
     }
-
-    val knowledgeViewModel = remember { KnowledgeWorkbenchViewModel(context.applicationContext) }
 
     // Handle initial deep link after composition
     LaunchedEffect(initialDeepLink) {
@@ -487,7 +484,6 @@ fun AppNavigation(
                 onBrowserSettings = { navController.safeNavigate(Routes.HOME_BROWSER_SETTINGS) },
 
                 onLogsClick = { navController.safeNavigate(Routes.LOGS) },
-                onKnowledgeClick = { navController.safeNavigate(Routes.KNOWLEDGE) },
                 onAboutClick = { navController.safeNavigate(Routes.ABOUT) },
                 onMountedFoldersClick = { navController.safeNavigate(Routes.MOUNTED_FOLDERS) },
                 onSharedFoldersClick = { navController.safeNavigate(Routes.SHARED_FOLDERS) },
@@ -924,7 +920,6 @@ fun AppNavigation(
         }
 
         logsRoutes(navController)
-        knowledgeNavGraph(navController, knowledgeViewModel)
 
         composable(Routes.ONBOARDING_MODELS) {
             OnboardingModelSelectionScreen(
