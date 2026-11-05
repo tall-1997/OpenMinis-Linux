@@ -279,6 +279,9 @@ internal suspend fun ChatViewModel.executeTool(
         // the stage re-injected into every request.
         com.openminis.app.tools.AgentReportTool.NAME ->
             com.openminis.app.tools.AgentReportTool.execute(argsJson, activeSessionId, context)
+        // [T-task-mandate] The written boundary dispatches are checked against.
+        com.openminis.app.tools.TaskMandateTool.NAME ->
+            com.openminis.app.tools.TaskMandateTool.execute(argsJson, activeSessionId, context)
         // [T-subagent-background] Inspect / wait for / collect detached waves.
         // Suspends only for op=await, which polls the registry under a bounded
         // timeout; every other op returns immediately.
