@@ -109,3 +109,26 @@ internal fun ChatViewModel.workReportPrompt(): String? =
  */
 internal fun ChatViewModel.inFlightLanesPrompt(): String? =
     com.openminis.app.tools.SubAgentBatchRegistry.renderInFlight(activeSessionId, context)
+
+/**
+ * [T-job-awareness] Background jobs for this chat, from the registry.
+ *
+ * Null when nothing was ever started, so a chat that never ran a job pays
+ * nothing for this block.
+ */
+internal fun ChatViewModel.backgroundJobsPrompt(): String? {
+    val jobs = runCatching {
+        com.openminis.app.sandbox.jobs.JobRegistry.list(activeSessionId)
+    }.getOrDefault(emptyList())
+    if (jobs.isEmpty()) return null
+    return BackgroundJobsPrompt.render(
+        jobs.map { job ->
+            BackgroundJobsPrompt.Row(
+                id = job.id,
+                state = job.state.name,
+                exitCode = job.exitCode,
+                command = job.command,
+            )
+        },
+    )
+}
