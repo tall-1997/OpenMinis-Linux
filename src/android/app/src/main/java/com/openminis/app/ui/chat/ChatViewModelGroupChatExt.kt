@@ -191,8 +191,8 @@ internal suspend fun ChatViewModel.runGroupChat(provider: LLMProvider, closing: 
             if (spoken.size == before) break
         }
     }
-
     if (wantsClose || groupChatCloseRequested) {
+        recordDiscussionOutcome(spoken, hostName)
         val summary = try {
             withTimeout(GROUP_CHAT_HOST_TIMEOUT_MS) {
                 speakVisible(
