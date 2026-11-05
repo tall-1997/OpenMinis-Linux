@@ -138,12 +138,16 @@ class ToolResultAgingTest {
         val history = listOf(msg(toolUse, err), msg(result("call_2", 4_000)), msg(result("call_3", 4_000)))
         val plan = ToolResultAging.age(history, keepRecent = 1, minChars = 1_200)
         // 3 live results, keep the newest 1 → both older ones fold.
-        assertEquals(2, plan.agedCount)
+        // [T-age-only-recoverable] Errors never fold: only call_2 is aged.
+        assertEquals(1, plan.agedCount)
 
-        val folded = plan.messages[0].contentParts[1] as AgentContentPart.ToolResult
-        assertEquals("call_1", folded.id)
-        assertEquals("shell_execute", folded.name)
-        assertTrue(folded.isError)
+        val keptError = plan.messages[0].contentParts[1] as AgentContentPart.ToolResult
+        assertEquals("call_1", keptError.id)
+        assertEquals("shell_execute", keptError.name)
+        assertTrue(keptError.isError)
+        assertEquals("boom\n".repeat(2_000), keptError.content)
+
+        val folded = plan.messages[1].contentParts[0] as AgentContentPart.ToolResult
         assertTrue(ToolResultAging.isAged(folded.content))
 
         // The tool_use that pairs with it is untouched and still first.
@@ -288,7 +292,7 @@ class ToolResultAgingTest {
 
     @Test
     fun `aggressive folds more than balanced on the same history`() {
-        val history = (1..8).map { msg(result("r$it", 1_000)) }
+        val history = (1..8).map { msg(result("r$it", 4_000)) }
         val balanced = ToolResultAging.age(
             history,
             keepRecent = ContextSaverPrefs.Mode.BALANCED.keepRecent,
@@ -301,7 +305,8 @@ class ToolResultAgingTest {
         )
         // 1_000-char results sit under BALANCED's 1_200 floor → nothing folds;
         // AGGRESSIVE's 400 floor folds all but its newest 3.
-        assertEquals(0, balanced.agedCount)
+        // 8 x 4k results (recoverable floor) -> BALANCED keeps 6, AGGRESSIVE keeps 3.
+        assertEquals(2, balanced.agedCount)
         assertEquals(5, aggressive.agedCount)
     }
 }
