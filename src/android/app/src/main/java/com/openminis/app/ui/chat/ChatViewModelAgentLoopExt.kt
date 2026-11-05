@@ -1017,22 +1017,20 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     }
                 }
                 is LLMStreamChunk.Usage -> {
-                    lastUsage = chunk.usage
-                    // Update context token count for next turn's dynamicMaxTokens()
-                    // and publish to _lastTurnContextTokens so the ContextPolicy
-                    // gate in [checkContextBeforeSend] can see the latest pressure
-                    // without a DB round-trip.
-                    if (chunk.usage.latestContextTokens > 0) {
-                        lastContextTokens = chunk.usage.latestContextTokens
-                    } else if (chunk.usage.inputTokens > 0) {
-                        // Fallback when a provider omits latestContextTokens: inputTokens is
-                        // now fresh-only (cached portion subtracted in the parser), so add the
-                        // cache back to recover the true context size — otherwise a high
-                        // cache-hit turn would under-report context pressure and skip offload.
-                        lastContextTokens = chunk.usage.inputTokens +
-                            (chunk.usage.cacheReadInputTokens ?: 0) +
-                            (chunk.usage.cacheCreationInputTokens ?: 0)
-                    }
+                    // PROGRESSIVE usage: keep max per field (trailing partial chunk must not erase cache/context).
+                    val prev = lastUsage
+                    val cur = chunk.usage
+                    lastUsage = if (prev == null) cur else cur.copy(
+                        inputTokens = maxOf(prev.inputTokens, cur.inputTokens),
+                        outputTokens = maxOf(prev.outputTokens, cur.outputTokens),
+                        cacheReadInputTokens = maxOf(prev.cacheReadInputTokens ?: 0, cur.cacheReadInputTokens ?: 0).takeIf { it > 0 },
+                        cacheCreationInputTokens = maxOf(prev.cacheCreationInputTokens ?: 0, cur.cacheCreationInputTokens ?: 0).takeIf { it > 0 },
+                        latestContextTokens = maxOf(prev.latestContextTokens, cur.latestContextTokens),
+                    )
+                    val effective = lastUsage ?: cur
+                    if (effective.latestContextTokens > 0) lastContextTokens = effective.latestContextTokens
+                    else if (effective.inputTokens > 0) lastContextTokens = effective.inputTokens +
+                        (effective.cacheReadInputTokens ?: 0) + (effective.cacheCreationInputTokens ?: 0)
                     if (lastContextTokens > 0) {
                         _lastTurnContextTokens.value = lastContextTokens
                         // [T-token-usage-calibration] 用真实 usage 校准估算器。
