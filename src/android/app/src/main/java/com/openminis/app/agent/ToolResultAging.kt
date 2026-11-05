@@ -52,6 +52,23 @@ object ToolResultAging {
     /** Results shorter than this are not worth a placeholder header. */
     const val DEFAULT_MIN_CHARS = 1_200
 
+    /**
+     * [T-age-only-recoverable] Size at or above which a result is certainly
+     * spilled to disk by [com.openminis.app.tools.ToolOutputSpill], so its full
+     * text stays reachable through a path instead of a re-run.
+     * Keep in lockstep with `ToolOutputSpill.LIMIT`.
+     */
+    const val SPILL_LIMIT_CHARS = 16_000
+
+    /**
+     * [T-age-only-recoverable] Floor for an unsplilled result: from here on the
+     * saving (>= ~1.3k tokens re-sent on every remaining step) outweighs the cost
+     * of a possible re-run, so a medium result may still be folded. Anything
+     * smaller is kept verbatim — folding 1-4k would risk a 10s round-trip to save
+     * a few hundred tokens.
+     */
+    const val UNSPILLED_FOLD_FLOOR_CHARS = 4_000
+
     /** Bytes of the original kept as a "what was in it" headline. */
     private const val HEADLINE_CHARS = 160
 
@@ -152,6 +169,16 @@ object ToolResultAging {
             for (pi in partIdxs) {
                 val old = parts[pi] as? AgentContentPart.ToolResult ?: continue
                 if (old.content.length <= minChars) continue
+                // [T-age-only-recoverable] Fold only what the model can get back.
+                // Errors are never folded: the message IS the diagnostic and a
+                // re-run may not reproduce it. Everything else must be reachable —
+                // via a spill path, by being large enough to have been spilled, or
+                // by being large enough that the saving dwarfs a re-run.
+                if (old.isError) continue
+                val recoverable = READABLE_PATH.find(old.content) != null ||
+                    old.content.length >= SPILL_LIMIT_CHARS ||
+                    old.content.length >= UNSPILLED_FOLD_FLOOR_CHARS
+                if (!recoverable) continue
                 val folded = placeholder(old.name, old.content, old.isError)
                 // Subtract-only guard: never let the "saving" grow the payload.
                 if (folded.length >= old.content.length) continue
