@@ -88,6 +88,7 @@ internal fun ChatViewModel.withGoalAndPlanContext(
     // once in the transcript does not.
     val blocks = listOfNotNull(
         workReportPrompt(),
+        inFlightLanesPrompt(),
         planBoardPrompt(),
         liveRecallPrompt(),
         prompt,
@@ -104,3 +105,13 @@ internal fun ChatViewModel.withGoalAndPlanContext(
  */
 internal fun ChatViewModel.workReportPrompt(): String? =
     com.openminis.app.tools.AgentReportStore.stagePrompt(activeSessionId, context)
+
+/**
+ * [T-lane-awareness] Lanes that are still working, rendered from the registry.
+ *
+ * Structural for the same reason as the board and the stage: a dispatch that
+ * only exists in an old tool result is gone after compaction, and the model then
+ * cannot tell work already handed out from work nobody picked up.
+ */
+internal fun ChatViewModel.inFlightLanesPrompt(): String? =
+    com.openminis.app.tools.SubAgentBatchRegistry.renderInFlight(activeSessionId, context)
