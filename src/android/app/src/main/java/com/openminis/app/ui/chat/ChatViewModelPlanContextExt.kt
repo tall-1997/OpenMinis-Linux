@@ -86,11 +86,17 @@ internal fun ChatViewModel.withGoalAndPlanContext(
     // [T-work-report] The structured stage rides here too: same reason as the
     // board — a rendered-from-store block survives compaction, a status written
     // once in the transcript does not.
+    //
+    // [T-prompt-precedence] Levels are explicit: the three store-rendered blocks
+    // are facts the host enforces (1), the caller's prompt keeps its own level,
+    // and recall is framed as external evidence (5) with one rule line above it.
+    val recall = liveRecallPrompt()?.let { PromptPrecedence.frame(PromptLevel.EXTERNAL, it) }
     val blocks = listOfNotNull(
+        PromptPrecedence.ruleFor(recall != null),
         workReportPrompt(),
         inFlightLanesPrompt(),
         planBoardPrompt(),
-        liveRecallPrompt(),
+        recall,
         prompt,
     )
     val combined = blocks.joinToString("\n\n").takeIf { it.isNotBlank() }
