@@ -28,6 +28,7 @@ internal object PromptParts {
     val KEYS = listOf(
         "runtime/work_report",
         "runtime/in_flight",
+        "runtime/jobs",
         "runtime/plan_board",
         "runtime/recall",
     )
@@ -42,6 +43,7 @@ internal object PromptParts {
     internal fun of(vm: ChatViewModel): List<PromptPart> = listOf(
         PromptPart("runtime/work_report", PromptLevel.TOOL_ENFORCED) { vm.workReportPrompt() },
         PromptPart("runtime/in_flight", PromptLevel.TOOL_ENFORCED) { vm.inFlightLanesPrompt() },
+        PromptPart("runtime/jobs", PromptLevel.TOOL_ENFORCED) { vm.backgroundJobsPrompt() },
         PromptPart("runtime/plan_board", PromptLevel.TOOL_ENFORCED) { vm.planBoardPrompt() },
         PromptPart("runtime/recall", PromptLevel.EXTERNAL) { vm.liveRecallPrompt() },
     )

@@ -16,7 +16,7 @@ class PromptPartsTest {
     @Test
     fun theRegistryOrderIsStable() {
         assertEquals(
-            listOf("runtime/work_report", "runtime/in_flight", "runtime/plan_board", "runtime/recall"),
+            listOf("runtime/work_report", "runtime/in_flight", "runtime/jobs", "runtime/plan_board", "runtime/recall"),
             PromptParts.KEYS,
         )
     }
