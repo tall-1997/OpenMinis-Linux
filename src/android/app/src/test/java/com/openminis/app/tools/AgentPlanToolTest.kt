@@ -490,6 +490,75 @@ class AgentPlanToolTest {
         assertEquals(100, decoded.size)
     }
 
+    // ── [T-plan-receipt-diet] receipts confirm, the snapshot carries ──
+
+    @Test
+    fun addReceiptConfirmsIdAndTitleWithoutEchoingTheBoard() {
+        AgentPlanStore.clear(sidA, null)
+        AgentPlanStore.add(sidA, null, "old item", "X".repeat(300))
+        val result = AgentPlanTool.execute(
+            """{"op":"add","title":"fresh","description":"${"Y".repeat(300)}"}""",
+            sidA, null,
+        )
+        assertTrue(result.output, result.success)
+        // The id now round-trips from the receipt's braces alone: the board
+        // itself no longer rides inside the receipt.
+        val id = Regex("\\{([^}]+)}").findAll(result.output).first().groupValues[1]
+        assertTrue(id.isNotBlank())
+        assertTrue(result.output, result.output.contains("fresh"))
+        assertFalse(result.output, result.output.contains("old item"))
+        assertFalse(result.output, result.output.contains("X".repeat(50)))
+        assertFalse(result.output, result.output.contains("Y".repeat(50)))
+        assertFalse(result.output, result.output.contains("plans: "))
+    }
+
+    @Test
+    fun updateAndRemoveReceiptsStayCompact() {
+        AgentPlanStore.clear(sidA, null)
+        val p = AgentPlanStore.add(sidA, null, "target", "D".repeat(300))
+        val u = AgentPlanTool.execute("""{"op":"update","id":"${p.id}","status":"done"}""", sidA, null)
+        assertTrue(u.output, u.success)
+        assertFalse(u.output, u.output.contains("D".repeat(50)))
+        assertFalse(u.output, u.output.contains("plans: "))
+        val r = AgentPlanTool.execute("""{"op":"remove","id":"${p.id}"}""", sidA, null)
+        assertTrue(r.output, r.success)
+        assertFalse(r.output, r.output.contains("plans: "))
+    }
+
+    @Test
+    fun replaceReceiptListsTitlesWithoutDescriptionsOrUuids() {
+        AgentPlanStore.clear(sidA, null)
+        val result = AgentPlanTool.execute(
+            """{"op":"replace","plans":[{"title":"one","description":"${"A".repeat(300)}"},{"title":"two"}]}""",
+            sidA, null,
+        )
+        assertTrue(result.output, result.success)
+        assertTrue(result.output, result.output.contains("two"))
+        assertFalse(result.output, result.output.contains("A".repeat(50)))
+        assertFalse(result.output, result.output.contains("{"))
+    }
+
+    @Test
+    fun receiptsCarryTheProgressLine() {
+        AgentPlanStore.clear(sidA, null)
+        AgentPlanStore.add(sidA, null, "a")
+        AgentPlanStore.add(sidA, null, "b")
+        val result = AgentPlanTool.execute("""{"op":"add","title":"c"}""", sidA, null)
+        assertTrue(result.output, result.output.contains("(0/3 done)"))
+    }
+
+    @Test
+    fun snapshotDropsDescriptionsOfDoneItemsButKeepsOpenOnes() {
+        AgentPlanStore.clear(sidA, null)
+        val done = AgentPlanStore.add(sidA, null, "landed", "DONEDESC")
+        AgentPlanStore.add(sidA, null, "open", "OPENDESC")
+        AgentPlanStore.update(sidA, null, done.id, status = "done")
+        val snapshot = AgentPlanStore.boardSnapshotPrompt(AgentPlanStore.list(sidA, null))
+        assertNotNull(snapshot)
+        assertFalse(snapshot!!, snapshot.contains("DONEDESC"))
+        assertTrue(snapshot, snapshot.contains("OPENDESC"))
+    }
+
     private companion object {
         const val FIXED_NOW = 1_700_000_000_000L
     }

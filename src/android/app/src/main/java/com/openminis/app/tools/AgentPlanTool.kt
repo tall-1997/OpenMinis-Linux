@@ -369,7 +369,11 @@ object AgentPlanStore {
             append("Current plan board. Advance it with agent_plan — target an item by its number (update id=\"2\", status=\"done\"), by its title, or rebuild the whole board with op=replace; the user sees it live:\n")
             plans.forEachIndexed { i, p ->
                 append("${i + 1}. [${p.status}] ${p.title}")
-                if (p.description.isNotBlank()) append(" — ${p.description}")
+                // [T-plan-snapshot-diet] A landed item's description is
+                // history, not working state: this snapshot rides every
+                // turn, so done rows carry their title only. Open rows keep
+                // the description — it is the spec the model works from next.
+                if (p.description.isNotBlank() && p.status != "done") append(" — ${p.description}")
                 append("\n")
             }
             append("</plan_board>")
@@ -429,6 +433,20 @@ object AgentPlanTool {
         propertyOrdering = listOf("tool_title", "op", "id", "title", "description", "status", "position", "plans"),
     )
 
+    /**
+     * [T-plan-receipt-diet] One-line board progress for change receipts.
+     * Receipts used to echo the full render (every uuid and description) on
+     * every mutation while the board itself already rides every turn in the
+     * plan_board snapshot; a receipt now confirms what changed (id + title)
+     * plus this line — O(1) in board size, no board echo.
+     */
+    private fun progressLine(sessionId: String, context: Context?): String {
+        val plans = AgentPlanStore.list(sessionId, context)
+        if (plans.isEmpty()) return "(board empty)"
+        val done = plans.count { it.status == "done" }
+        return "(${done}/${plans.size} done)"
+    }
+
     fun execute(argsJson: String, sessionId: String = "__default__", context: Context? = null): ToolExecutionResult {
         val toolTitle = runCatching { JSONObject(argsJson).optString("tool_title", NAME) }.getOrDefault(NAME)
         return try {
@@ -437,17 +455,17 @@ object AgentPlanTool {
             when (op) {
                 "add" -> {
                     val p = AgentPlanStore.add(sessionId, context, args.optString("title"), args.optString("description"), args.optString("status", "pending"), args.optString("id").takeIf { it.isNotBlank() })
-                    ToolExecutionResult("Added ${p.id}: ${AgentPlanStore.render(sessionId, context)}", true, toolTitle = toolTitle)
+                    ToolExecutionResult("Added {${p.id}}: ${p.title} ${progressLine(sessionId, context)}", true, toolTitle = toolTitle)
                 }
                 "update" -> {
                     val ref = args.optString("id")
                     val p = AgentPlanStore.update(sessionId, context, ref, args.optString("title").takeIf { it.isNotBlank() }, if (args.has("description")) args.optString("description") else null, args.optString("status").takeIf { it.isNotBlank() }, if (args.has("position")) args.optInt("position") else null)
                         ?: return ToolExecutionResult("Error: plan item not found for \"$ref\". Current board: ${AgentPlanStore.render(sessionId, context)}", false, toolTitle = toolTitle)
-                    ToolExecutionResult("Updated ${p.id}: ${AgentPlanStore.render(sessionId, context)}", true, toolTitle = toolTitle)
+                    ToolExecutionResult("Updated {${p.id}}: ${p.title} [${p.status}] ${progressLine(sessionId, context)}", true, toolTitle = toolTitle)
                 }
                 "remove" -> {
                     val ref = args.optString("id")
-                    if (AgentPlanStore.remove(sessionId, context, ref)) ToolExecutionResult(AgentPlanStore.render(sessionId, context), true, toolTitle = toolTitle)
+                    if (AgentPlanStore.remove(sessionId, context, ref)) ToolExecutionResult("Removed: ${ref} ${progressLine(sessionId, context)}", true, toolTitle = toolTitle)
                     else ToolExecutionResult("Error: plan item not found for \"$ref\". Current board: ${AgentPlanStore.render(sessionId, context)}", false, toolTitle = toolTitle)
                 }
                 "clear" -> { AgentPlanStore.clear(sessionId, context); ToolExecutionResult("(plan list cleared)", true, toolTitle = toolTitle) }
@@ -460,7 +478,8 @@ object AgentPlanTool {
                         items += AgentPlanStore.PlanInput(id = e.optString("id"), title = e.optString("title"), description = e.optString("description"), status = e.optString("status", "pending"))
                     }
                     AgentPlanStore.replace(sessionId, context, items)
-                    ToolExecutionResult(AgentPlanStore.render(sessionId, context), true, toolTitle = toolTitle)
+                    val titles = items.take(10).joinToString(", ") { it.title } + if (items.size > 10) " +${items.size - 10} more" else ""
+                    ToolExecutionResult("Replaced plans: ${items.size} items — $titles ${progressLine(sessionId, context)}", true, toolTitle = toolTitle)
                 }
                 else -> ToolExecutionResult(AgentPlanStore.render(sessionId, context), true, toolTitle = toolTitle)
             }
