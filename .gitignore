@@ -27,13 +27,9 @@ render.experimental.xml
 # Keystore files
 *.jks
 *.keystore
-# The Minis Ultra upload key is a signing secret and must NOT be tracked. It
-# used to live at src/android/release.keystore; a checked-in private key lets
-# anyone publish updates with this project's upgrade identity. Copy the
-# keystore locally and supply it via MINIS_UPLOAD_STORE_FILE + the MINIS_UPLOAD_*
-# password/alias secrets (CI does this from repository secrets); app/build.gradle.kts
-# falls back to src/android/release.keystore locally so assembleRelease still
-# works after a clean clone of a private fork.
+# Default Minis Ultra upload key — tracked so CI and local release APKs
+# share one certificate (UpdateChecker). Override with MINIS_UPLOAD_*.
+!src/android/release.keystore
 # [T-signing-secret-untracked] The password file is NOT tracked: a plaintext
 # credential next to a tracked private key lets anyone sign an APK with this
 # project's upgrade identity. Copy signing.properties.example and fill it in
