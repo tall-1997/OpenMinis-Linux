@@ -3254,6 +3254,7 @@ fun ChatScreen(
                         }
                     }
                     if (canResume && !isStreaming && error == null && !lastAssistantHasError) {
+                    item(key = "__work_stage__", contentType = "work_stage") { WorkStageBanner(sessionId) }
                         item(key = "__resume_banner__", contentType = "resume_banner") {
                             ResumeBanner(onResume = {
                                 viewModel.resume()
@@ -5613,19 +5614,6 @@ private data class HistoryEdgeVisible(
     val oldestEdge: Boolean,
 )
 
-@Composable
-private fun HistoryPageEdge(text: String, onClick: () -> Unit) {
-    Text(
-        text = text,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 16.dp),
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        textAlign = TextAlign.Center,
-    )
-}
 
 // [T-android-split-chat] Message rows, assistant blocks, tool detail, composer
 // widgets, model picker and misc views live in their own Chat*UI / ChatMiscViews
