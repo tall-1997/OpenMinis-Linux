@@ -83,22 +83,10 @@ internal fun ChatViewModel.withGoalAndPlanContext(
     prompt: String?,
     appendNewUser: Boolean = false,
 ): List<LLMMessage> {
-    // [T-work-report] The structured stage rides here too: same reason as the
-    // board — a rendered-from-store block survives compaction, a status written
-    // once in the transcript does not.
-    //
-    // [T-prompt-precedence] Levels are explicit: the three store-rendered blocks
-    // are facts the host enforces (1), the caller's prompt keeps its own level,
-    // and recall is framed as external evidence (5) with one rule line above it.
-    val recall = liveRecallPrompt()?.let { PromptPrecedence.frame(PromptLevel.EXTERNAL, it) }
-    val blocks = listOfNotNull(
-        PromptPrecedence.ruleFor(recall != null),
-        workReportPrompt(),
-        inFlightLanesPrompt(),
-        planBoardPrompt(),
-        recall,
-        prompt,
-    )
+    // [T-prompt-parts] One registry decides what is injected, at which level and
+    // in which order; this function only appends the caller's own text last.
+    val parts = PromptParts.render(PromptParts.validate(PromptParts.of(this)))
+    val blocks = parts + listOfNotNull(prompt)
     val combined = blocks.joinToString("\n\n").takeIf { it.isNotBlank() }
     return withGoalContext(history, combined, appendNewUser)
 }
