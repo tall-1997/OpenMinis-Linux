@@ -95,6 +95,22 @@ class ContextSaverRuntimeTest {
     }
 
     @Test
+    fun `absolute ceiling fires on a wide window where the relative trigger cannot`() {
+        ContextSaverRuntime.modeOverride = ContextSaverPrefs.Mode.BALANCED
+        // A 200k window puts the window-relative trigger far above 48k tokens, so
+        // before [T-absolute-age-ceiling] a 48k-token request was never folded —
+        // exactly the real session in the 2026-11-05 log (prompt_tokens=48,440,
+        // 138 tool results, +4.5s to first token).
+        val wide = 200_000
+        val history = history(20) // 20 x 8000 chars ≈ 53k tokens
+        val out = ContextSaverRuntime.age(history, windowTokens = wide, reportedTokens = 0)
+        assertTrue(
+            "history above the absolute ceiling must fold even when far below the window",
+            agedCount(out) > 0,
+        )
+    }
+
+    @Test
     fun `off mode is a no-op at any size`() {
         ContextSaverRuntime.modeOverride = ContextSaverPrefs.Mode.OFF
         val history = history(30)

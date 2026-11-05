@@ -57,6 +57,25 @@ object ContextSaverRuntime {
     const val CHARS_PER_TOKEN = 3L
 
     /**
+     * [T-absolute-age-ceiling] Floor that makes aging fire even on a huge window.
+     *
+     * The window-relative trigger assumes "big request" means "close to the
+     * model's ceiling". On a 200K-window model a 48K-token request is 24% of the
+     * window, so the trigger never fires — and the request keeps carrying every
+     * historical tool result verbatim, forever. Measured on a real session
+     * (2026-11-05 log): `prompt_tokens=48,440`, `toolResultParts=138`,
+     * first token at +4.5s after headers, ~20 output tokens/s. Nothing was
+     * folded because the threshold was window-relative and the window was wide.
+     *
+     * Per-step prompt size is what prefill latency scales with, so the cap has to
+     * be absolute: once the history alone is this large, folding old results pays
+     * for itself on every remaining step of the turn. 24k tokens leaves room for
+     * the recent results the model is actually working from (BALANCED keeps the
+     * newest [com.openminis.app.data.ContextSaverPrefs.Mode.keepRecent] verbatim).
+     */
+    const val ABSOLUTE_AGE_TOKENS = 24_000
+
+    /**
      * Apply the configured saving level to [history] for one outgoing request.
      *
      * @param windowTokens the model's effective context window (0 = unknown).
@@ -70,12 +89,14 @@ object ContextSaverRuntime {
             return history
         }
         val trigger = ContextSaverPrefs.triggerTokens(mode, windowTokens)
-        if (reportedTokens < trigger) {
-            val floorTokens = (ToolResultAging.totalChars(history) / CHARS_PER_TOKEN).toInt()
-            if (floorTokens < trigger) {
-                publish(Stats(mode = mode.id, triggerTokens = trigger))
-                return history
-            }
+        val floorTokens = (ToolResultAging.totalChars(history) / CHARS_PER_TOKEN).toInt()
+        // [T-absolute-age-ceiling] Three ways in: the API reported a big request,
+        // the history alone is above the window-relative trigger, or it is above
+        // the absolute ceiling (which fires on wide windows where the relative
+        // trigger can never be met).
+        if (reportedTokens < trigger && floorTokens < trigger && floorTokens < ABSOLUTE_AGE_TOKENS) {
+            publish(Stats(mode = mode.id, triggerTokens = trigger))
+            return history
         }
         val plan = ToolResultAging.age(history, mode.keepRecent, mode.minChars)
         publish(
