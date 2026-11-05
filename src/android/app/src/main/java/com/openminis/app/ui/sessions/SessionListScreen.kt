@@ -726,11 +726,11 @@ fun SessionListScreen(
         topBar = {
             MinisCenterTopBar(
                 title = {
-                    Text(
-                            stringResource(R.string.app_name),
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 20.sp,
-                        )
+                    // [FEAT-261021-07, iOS a6e6c10d1] Title + the Tailscale /
+                    // proxy pills under it (NetworkStatusPills.kt); the pills
+                    // drop out entirely while no Tailscale or proxy is
+                    // configured, leaving the plain title as before.
+                    HomeTitleWithNetworkPills(title = stringResource(R.string.app_name))
                 },
                 navigationIcon = {
                     IconButton(onClick = onSettingsClick) {

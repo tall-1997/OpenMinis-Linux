@@ -220,9 +220,9 @@ internal class OpenAIRequestBodies(
                             }
                         }
                         val textParts = msg.contentParts.filterIsInstance<AgentContentPart.Text>()
-                        if (textParts.isNotEmpty()) {
-                            obj.put("content", textParts.joinToString("") { it.text })
-                        }
+                        // [T-openai-assistant-empty-content] Always emit "content":
+                        // omitting it on a tool_calls-only turn 400s strict gateways.
+                        obj.put("content", textParts.joinToString("") { it.text })
                         val toolUseParts = msg.contentParts.filterIsInstance<AgentContentPart.ToolUse>()
                         if (toolUseParts.isNotEmpty()) {
                             val toolCallsArr = JSONArray()

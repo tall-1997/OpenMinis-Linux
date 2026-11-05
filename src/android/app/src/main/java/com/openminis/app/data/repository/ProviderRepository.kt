@@ -95,13 +95,7 @@ class ProviderRepository(
     // Model-catalog TTL bookkeeping (mark/stale/invalidate) moved to
     // [ModelCatalogCache]; public invalidation stays reachable via the facade.
 
-    /**
-     * Clear the stored `lastFetchAt` for [instanceId] so the next
-     * background-refresh sweep refreshes it immediately. Called when instance
-     * config changes in ways that could alter the set of available models
-     * (e.g. base URL rewrite, credential swap). Mirrors iOS's implicit
-     * invalidation on `updateInstance` / `removeInstance`.
-     */
+    /** Clear `lastFetchAt` for [instanceId] so the next background refresh sweeps it immediately (config changes that alter the model set). */
     fun invalidateModelCache(instanceId: String) =
         catalogCache.invalidateModelCache(instanceId)
 
@@ -121,12 +115,7 @@ class ProviderRepository(
         kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO,
     )
 
-    /**
-     * Completes once the initial off-thread load has emitted (or determined
-     * there's nothing persisted). Lets startup consumers that genuinely need
-     * the config (e.g. the daily model refresh) wait instead of racing the
-     * empty placeholder.
-     */
+    /** Completes once the initial off-thread load has emitted; lets startup consumers wait instead of racing the empty placeholder. */
     // internal (was private): ProviderConfigStore.ensureConfigLoaded completes it.
     internal val configLoadComplete = kotlinx.coroutines.CompletableDeferred<Unit>()
 
@@ -1482,8 +1471,13 @@ class ProviderRepository(
         catalogCache.refreshAllModelsIfNeeded(scope)
 
     // API Key management — implementations in [ProviderConfigStore].
-    fun saveApiKey(instanceId: String, key: String) =
+    fun saveApiKey(instanceId: String, key: String) {
         configStore.saveApiKey(instanceId, key)
+        // [port-upstream-1.16][T-provider-quota] A new key is a new quota
+        // subject: forget any "no credential" note so the provider page's
+        // quota section can reappear without a restart.
+        com.openminis.app.quota.QuotaStore.credentialsChanged()
+    }
 
     fun loadApiKey(instanceId: String): String? =
         configStore.loadApiKey(instanceId)
@@ -1498,8 +1492,11 @@ class ProviderRepository(
     fun usableApiKey(instance: ProviderInstance): String? =
         configStore.usableApiKey(instance)
 
-    fun deleteApiKey(instanceId: String) =
+    fun deleteApiKey(instanceId: String) {
         configStore.deleteApiKey(instanceId)
+        // [port-upstream-1.16][T-provider-quota] The key's quota subject is gone.
+        com.openminis.app.quota.QuotaStore.credentialsChanged()
+    }
 
     private val backupCoordinator by lazy {
         ProviderBackupCoordinator(context, ProviderBackupHost())

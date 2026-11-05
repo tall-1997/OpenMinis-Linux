@@ -30,6 +30,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.coroutines.resume
+import kotlin.math.roundToInt
 
 // [T-android-provider-tts-readaloud] Read-aloud routed through the resolved Voice OUTPUT selection, falling back to the on-device engine.
 // Utterances flow through a [Channel] worker (ordered); [T-android-tts-prefetch] lookahead synthesizes the next sentence during the current one's playback. Text is sanitized via [VoiceTextSanitizer].
@@ -309,7 +310,24 @@ class ReadAloudPlayer(context: Context) {
 
     // -- internals --
 
+    /**
+     * [T-readaloud-volume-200] Per-utterance volume envelope. The boost is
+     * applied before the first sound and restored in [finally] so a boost can
+     * never outlive its utterance (stop / capture-pause / shutdown all cancel
+     * [speakOneInner]'s suspension, and a cancelled coroutine still runs its
+     * finally). Applies to both routes: MediaPlayer rides it via the stream,
+     * and the system TTS engine plays on STREAM_MUSIC too.
+     */
     private suspend fun speakOne(text: String, prefetched: PrefetchedAudio? = null) {
+        applyVolumeBoost()
+        try {
+            speakOneInner(text, prefetched)
+        } finally {
+            restoreVolumeBoost()
+        }
+    }
+
+    private suspend fun speakOneInner(text: String, prefetched: PrefetchedAudio? = null) {
         // [T-android-tts-prefetch] Audio already synthesized by the lookahead
         // during the previous sentence's playback: skip resolve + network
         // entirely and play. On failure the caller's serial path below never
@@ -574,6 +592,12 @@ class ReadAloudPlayer(context: Context) {
                 // Now a ROM that rejects the speed change still plays at 1×;
                 // only the speed is lost, never the audio.
                 mp.start()
+                // [T-readaloud-volume-200] The 0..1 part is MediaPlayer's own
+                // gain; anything above 1.0 rides the stream boost from
+                // [speakOne]'s applyVolumeBoost() (staying at 1.0 here — the
+                // player cannot exceed full scale on its own).
+                val vol = VoiceOutputState.volume.value
+                if (vol < 1.0f) mp.setVolume(vol, vol)
                 val speed = VoiceOutputState.speed.value
                 if (speed != 1.0f) {
                     runCatching {
@@ -616,6 +640,49 @@ class ReadAloudPlayer(context: Context) {
     private fun abandonAudioFocus() {
         focusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
         focusRequest = null
+    }
+
+    // -- read-aloud volume [T-readaloud-volume-200] --
+
+    /**
+     * Pre-boost STREAM_MUSIC index while a boosted utterance plays, or null.
+     * Anchored ONCE per utterance (a second [applyVolumeBoost] while boosted
+     * would compound the anchor and restore a louder-than-original volume).
+     */
+    private var boostedStreamFrom: Int? = null
+
+    /**
+     * Raise the music stream proportionally to the >100% part of
+     * [VoiceOutputState.volume]. Android has no per-app playback gain, so
+     * beyond MediaPlayer's 0..1 the only lever is the shared system stream —
+     * same trade-off iOS makes with AVAudioPlayer volume > 1 + session volume.
+     * Silent no-op at or below 100%, when the stream is already maxed, or when
+     * the ROM rejects the write.
+     */
+    private fun applyVolumeBoost() {
+        val v = VoiceOutputState.volume.value
+        if (v <= 1.0f || boostedStreamFrom != null) return
+        val max = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        val current = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+        val target = (current * v).roundToInt().coerceAtMost(max)
+        if (target <= current) return
+        runCatching {
+            // Flag 0: no OS volume HUD for a background TTS tweak.
+            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, target, 0)
+        }.onSuccess {
+            boostedStreamFrom = current
+        }.onFailure {
+            AppLogger.error(TAG, "stream volume boost rejected: $it")
+        }
+    }
+
+    /** Undo [applyVolumeBoost]. Idempotent; safe from a cancelled coroutine. */
+    private fun restoreVolumeBoost() {
+        val from = boostedStreamFrom ?: return
+        boostedStreamFrom = null
+        runCatching {
+            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, from, 0)
+        }
     }
 
     /**

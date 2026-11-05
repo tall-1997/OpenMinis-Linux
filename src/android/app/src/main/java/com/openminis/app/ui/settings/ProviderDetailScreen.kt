@@ -267,12 +267,7 @@ fun ProviderDetailScreen(
                     thickness = 0.5.dp,
                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
                 )
-                // Auto-append /v1 switch row — inline Row with heightIn=44dp
-                // so the row matches the URL-input row above and the save
-                // action below. SettingsSwitchRow's intrinsic 12dp padding
-                // around the 32dp Switch over-reported the height (~60dp),
-                // breaking the three-row rhythm in the Custom API base card
-                // (T231).
+                // Auto-append /v1 switch — heightIn=44dp matches the URL row; SettingsSwitchRow's padding over-reported height (T231).
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -295,14 +290,10 @@ fun ProviderDetailScreen(
                     thickness = 0.5.dp,
                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
                 )
-                // [T-provider-custom-user-agent] Custom User-Agent input —
-                // only for OpenAI-/Anthropic-compat (relay) protocols. Some
-                // gateways reject Minis' default UA and only allow official
-                // clients (e.g. Claude Code). Blank → default UA. Official
-                // direct OpenAI/Anthropic instances still see the field because
-                // protocol == openAI/anthropic; it's harmless there (the value
-                // is only injected when this instance has a custom base, and on
-                // the official path customUserAgent stays at its default null
+                // [T-provider-custom-user-agent] Custom UA for relay protocols only — some
+                // gateways reject Minis' default UA and allow official clients only.
+                // Blank → default UA; harmless on official direct paths (only injected
+                // with a custom base, and customUserAgent stays null there.
                 // unless the user typed one — applied verbatim if they do).
                 val showUserAgentField = instance.providerType == ProviderType.openAI ||
                     instance.providerType == ProviderType.anthropic
@@ -501,6 +492,12 @@ fun ProviderDetailScreen(
                 showDivider = false,
             )
         }
+
+        // [port-upstream-1.16][FEAT-261021-04, iOS ProviderNetworkRouteSection] this provider's route override.
+        ProviderNetworkRouteSection(instanceId = instance.id)
+        // ─── Quota [port-upstream-1.16] ─── after Status (upstream/iOS placement);
+        // hidden for disabled / no-credential instances, failures never block chat.
+        com.openminis.app.ui.quota.ProviderQuotaSection(instance = instance)
 
         // ─── Voice Service (dual visibility) ────────────────────────
         // [T-android-provider-voice] When this instance owns audio-modality

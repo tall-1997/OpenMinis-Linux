@@ -11,6 +11,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.ProcessLifecycleOwner
 import kotlin.math.roundToInt
 
 /**
@@ -98,6 +101,43 @@ internal fun rememberDecorClockConsumer() {
 internal val LocalDecorPhase = compositionLocalOf { 0f }
 
 /**
+ * [T-decor-background-gate] Process-lifecycle gate for the shared clock.
+ *
+ * When the app goes to background (process ON_STOP) decorative animation has
+ * no viewer, yet the frame loop would keep consuming frames in any still
+ * rendering surface and paying per-frame snapshot commits. Observing
+ * ProcessLifecycleOwner here (same pattern as SpeechRecognitionManager) freezes
+ * the loop: the gate drops out of `if (running)` in [DecorClockProvider] so the
+ * effect coroutine is cancelled — no frames requested, no recompositions, no
+ * phase writes. ON_START resumes it.
+ */
+@Composable
+private fun observeProcessBackgrounded(): Boolean {
+    var backgrounded by remember { mutableStateOf(false) }
+    DisposableEffect(Unit) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_STOP -> backgrounded = true
+                Lifecycle.Event.ON_START -> backgrounded = false
+                else -> {}
+            }
+        }
+        // runCatching: ProcessLifecycleOwner registration needs a live main
+        // looper; in previews or exotic hosts there is nothing to gate on and
+        // the clock should keep its pre-existing (always-on) behaviour.
+        runCatching {
+            ProcessLifecycleOwner.get().lifecycle.addObserver(observer)
+        }
+        onDispose {
+            runCatching {
+                ProcessLifecycleOwner.get().lifecycle.removeObserver(observer)
+            }
+        }
+    }
+    return backgrounded
+}
+
+/**
  * 在 App 根部包一层：起共享时钟并把相位下发给子树。
  *
  * [T-decor-consumer-gate] 帧循环由 [DecorClockConsumers.hasConsumers] 门控：
@@ -106,22 +146,35 @@ internal val LocalDecorPhase = compositionLocalOf { 0f }
  * `withFrameNanos` 的绝对时间线性推进，等价原 `infiniteRepeatable(tween(PERIOD,
  * LinearEasing), Restart)` 的取样，只有起停时机由消费者数量决定。
  *
+ * [T-decor-background-gate] App 进后台时循环同样被取消（见
+ * [observeProcessBackgrounded]）。恢复时循环不是从 0 重起而是接着离开时的相位：
+ * 与消费者门不同，后台暂停时消费者仍留在组合里（shimmer/转圈的位置都被读着），
+ * 从 0 重跳会肉眼可见，所以相位以增量累加保持连续。
+ *
  * 只有存在装饰动画时才值得付这个代价，所以它是个独立的包装而不是塞进
  * MinisTheme —— 预览/测试可以不带。
  */
 @Composable
 fun DecorClockProvider(content: @Composable () -> Unit) {
     val hasConsumers = DecorClockConsumers.hasConsumers
+    val backgrounded = observeProcessBackgrounded()
     var phase by remember { mutableStateOf(0f) }
-    if (hasConsumers) {
+    if (hasConsumers && !backgrounded) {
         LaunchedEffect(Unit) {
             val periodNanos = (DecorClock.PERIOD_SECONDS * 1_000_000_000f).toLong()
-            var start = 0L
+            // Delta accumulation (not absolute-now anchoring): the loop can be
+            // torn down and restarted by either gate (consumer count or process
+            // lifecycle), and each restart must continue from the current phase
+            // instead of snapping back to 0.
+            var elapsed = (phase * periodNanos).toLong()
+            var last = 0L
             while (true) {
                 withFrameNanos { now ->
-                    if (start == 0L) start = now
-                    val t = ((now - start) % periodNanos).toFloat() / periodNanos
-                    phase = if (t < 0f) t + 1f else t
+                    if (last != 0L) {
+                        elapsed = (elapsed + (now - last)) % periodNanos
+                    }
+                    last = now
+                    phase = elapsed.toFloat() / periodNanos
                 }
             }
         }

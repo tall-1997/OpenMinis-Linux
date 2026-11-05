@@ -30,15 +30,12 @@ object DebugMethodRegistry {
         val example: JSONObject,
     )
 
-    private fun ex(vararg pairs: Pair<String, Any?>): JSONObject {
-        val o = JSONObject()
-        for ((k, v) in pairs) o.put(k, v)
-        return o
-    }
+    private fun ex(vararg pairs: Pair<String, Any?>): JSONObject = JSONObject().apply { for ((k, v) in pairs) put(k, v) }
 
     val methods: List<MethodSpec> by lazy {
         buildList {
             addAll(BASE_METHODS)
+            addAll(NetDebugMethods.specs) // [port-upstream-1.16] debug.net.* specs (upstream: addAll(NetDebugMethods.specs))
             if (BuildConfig.DEBUG) addAll(DEBUG_ONLY_METHODS)
         }
     }

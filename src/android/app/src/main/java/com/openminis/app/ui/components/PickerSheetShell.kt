@@ -79,6 +79,11 @@ internal fun PickerSheetShell(
     searchText: String,
     onSearchTextChange: (String) -> Unit,
     onDismiss: () -> Unit,
+    // [T-model-picker-locate] Hoisted so a caller can drive the list (e.g.
+    // "locate current model" animateScrollToItem). Defaults to the shell's own
+    // state, so existing callers keep their behaviour.
+    listState: androidx.compose.foundation.lazy.LazyListState =
+        androidx.compose.foundation.lazy.rememberLazyListState(),
     content: LazyListScope.() -> Unit,
 ) {
     ModalBottomSheet(
@@ -207,6 +212,7 @@ internal fun PickerSheetShell(
             )
 
             LazyColumn(
+                state = listState,
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f, fill = false),

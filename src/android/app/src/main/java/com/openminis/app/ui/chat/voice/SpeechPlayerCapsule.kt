@@ -133,6 +133,8 @@ fun SpeechPlayerCapsule(
     val enabled by VoiceOutputState.isEnabled.collectAsStateWithLifecycle()
     val muted by VoiceOutputState.isMuted.collectAsStateWithLifecycle()
     val speed by VoiceOutputState.speed.collectAsStateWithLifecycle()
+    // [T-readaloud-volume-200] Loudness chip, mirrors the speed chip's cycle.
+    val volume by VoiceOutputState.volume.collectAsStateWithLifecycle()
     val speaking by VoiceOutputState.isSpeaking.collectAsStateWithLifecycle()
     val synthesizing by VoiceOutputState.isSynthesizing.collectAsStateWithLifecycle()
     val modelLabel by VoiceOutputState.activeModelLabel.collectAsStateWithLifecycle()
@@ -343,12 +345,14 @@ fun SpeechPlayerCapsule(
                         muted = muted,
                         synthesizing = synthesizing,
                         speed = speed,
+                        volume = volume,
                         modelLabel = modelLabel
                             ?: systemVoiceLabel
                             ?: stringResource(R.string.tts_capsule_system_engine),
                         onMuteToggle = { VoiceOutputState.setMuted(!muted); bumpIdle() },
                         onModelTap = { showModelPicker = true; bumpIdle() },
                         onSpeedTap = { VoiceOutputState.nextSpeed(); bumpIdle() },
+                        onVolumeTap = { VoiceOutputState.nextVolume(); bumpIdle() },
                         onClose = { VoiceOutputState.setEnabled(false) },
                     )
                 } else {
@@ -435,10 +439,12 @@ private fun ExpandedCapsule(
     muted: Boolean,
     synthesizing: Boolean,
     speed: Float,
+    volume: Float,
     modelLabel: String,
     onMuteToggle: () -> Unit,
     onModelTap: () -> Unit,
     onSpeedTap: () -> Unit,
+    onVolumeTap: () -> Unit,
     onClose: () -> Unit,
 ) {
     // [T-android-tts-capsule-height] Height is PINNED to the compact button's
@@ -516,6 +522,36 @@ private fun ExpandedCapsule(
                 VoiceOutputState.speedLabel(speed),
                 maxLines = 1,
                 color = if (speed > 1.0f) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                style = androidx.compose.ui.text.TextStyle(
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    lineHeight = 11.sp,
+                    platformStyle = androidx.compose.ui.text.PlatformTextStyle(
+                        includeFontPadding = false,
+                    ),
+                ),
+            )
+        }
+        Spacer(Modifier.width(10.dp))
+        // [T-readaloud-volume-200] Volume chip — cycles 100% → 150% → 200%.
+        // Same pinned-frame treatment as the speed chip so the capsule's 40dp
+        // height holds; only shown at 46dp wide when boosted text fits.
+        Box(
+            Modifier
+                .size(width = 50.dp, height = 22.dp)
+                .background(
+                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f),
+                    RoundedCornerShape(50),
+                )
+                .clickable(onClick = onVolumeTap),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                VoiceOutputState.volumeLabel(volume),
+                maxLines = 1,
+                color = if (volume > 1.0f) MaterialTheme.colorScheme.primary
                 else MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 style = androidx.compose.ui.text.TextStyle(
