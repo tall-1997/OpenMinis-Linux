@@ -12,6 +12,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -48,6 +49,14 @@ object AgentReportStore {
 
     /** Bumped on every mutation so UI projections can reload. */
     val version = MutableStateFlow(0L)
+
+    /**
+     * [T-attention-order] Session ids whose latest report still needs a person
+     * (answer, review, blocked, failed). Published at write time instead of
+     * polled: the session list would otherwise have to read one file per session
+     * to know which rows deserve the top slot.
+     */
+    val attentionSessions = MutableStateFlow<Set<String>>(emptySet())
 
     /** The status vocabulary. Order is the order shown to the model. */
     val STATUSES = listOf("progress", "waiting", "ready", "blocked", "failed", "dropped")
@@ -160,6 +169,7 @@ object AgentReportStore {
             reports.add(report)
             saveLocked(sessionId, context, reports)
         }
+        publishAttention(sessionId, report)
         return report
     }
 
@@ -173,6 +183,20 @@ object AgentReportStore {
 
     fun clear(sessionId: String, context: Context?) {
         lock(sessionId).withLock { saveLocked(sessionId, context, emptyList()) }
+        publishAttention(sessionId, null)
+    }
+
+    /** Keeps [attentionSessions] in step with the newest report. */
+    private fun publishAttention(sessionId: String, report: Report?) {
+        val stage = stageOf(report)
+        val needsPerson = report != null && (
+            stage == Stage.NEEDS_ANSWER || stage == Stage.NEEDS_REVIEW ||
+                stage == Stage.BLOCKED || stage == Stage.FAILED
+            )
+        val id = key(sessionId)
+        attentionSessions.update { current ->
+            if (needsPerson) current + id else current - id
+        }
     }
 
     /** Stage derivation. Null report means the session has not reported yet. */
