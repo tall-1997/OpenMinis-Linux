@@ -275,6 +275,7 @@
 | P0 Task 最小版 + 准入闸门 | `task_mandate` 声明边界，越界派发由宿主拒绝 | #245 | `711f09f2` |
 | P1-6 部件化（注册表半边） | `PromptPart`/`PromptParts` 统一顺序与层级 | #246 | `b7c9dee1` |
 | P2/G6 作业可见 | `runtime/jobs` 部件，明确不轮询 | #247 | `7ff5d474` |
+| P0 Attention（判定 + 接线） | `WorkStageBannerModel` 决定横幅与详情行；`WorkStageBanner` 接入消息列表 | #250 / #251 | `97f81a6e` / `517efdf0` |
 
 ## 判定为已存在或不适用
 
@@ -289,8 +290,21 @@
 
 | 条目 | 缺口 | 前置条件 |
 |---|---|---|
-| Attention UI | 三个 stage 仍只在提示词里，用户看不到 | 需先从 `ChatScreen.kt`（5632 行上限）抽出状态栏腾出行数，再新增 3 个字符串 × 17 语言 |
+| ~~Attention UI~~ | **已完成**：横幅已接入，无新增字符串（详情用模型原话） | — |
 | 部件覆盖与版本 | 只有注册表，没有"团队改某块 / 记录基于哪个版本 / 默认已更新" | 需与 `InstructionState` 快照联动 |
 | 事务收敛 | 多表写仍各自为政 | 需一次写路径审计 |
 | 面板三问 | 会话列表/记忆页未按"需要我 → 是否健康 → 历史"排序 | UI |
 | 作业事件唤醒 | 现为提示层可见，不是事件驱动唤醒 loop | 需改 agent loop 的挂起/恢复 |
+## 并行线兼容性核对（2026-11-05 晚）
+
+远端 main 同期出现两条不属于本次采纳工作的提交：
+
+- `057181a2` #249 fix(providers): Gemini usage stats — cache hit rate + 3.x thinking tokens
+- `81f88319` #252 看板噪声预算: 紧凑回执 + 快照瘦身 + 骑乘换燃料 + 冻结快照退役
+
+其中 #252 直接改 `boardSnapshotPrompt` 与 `planBoardPrompt`，与本次落地的 `PromptParts` 相邻。核对结果：
+
+- `:app:compileReleaseUnitTestKotlin` 通过
+- `com.openminis.app.ui.chat.*` 与 `com.openminis.app.tools.*` 用例全部通过
+
+结论：两条线目前兼容；`PromptParts` 只依赖 `planBoardPrompt()` 这个入口，不关心它内部从 `render()` 换成 `boardSnapshotPrompt()`。后续若 #252 继续调整该函数签名，需同步 `PromptParts.of()`。
