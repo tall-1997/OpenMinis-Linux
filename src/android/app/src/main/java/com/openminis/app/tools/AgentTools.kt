@@ -92,6 +92,8 @@ object AgentTools {
         add(DispatchAgentsTool.definition())
         add(WolfpackTool.definition())
         add(AgentPlanTool.definition())
+        // [T-work-report] Structured run status; re-injected as the session stage.
+        add(AgentReportTool.definition())
         if (mcpNativeEnabled) {
             add(McpNativeTool.definition())
         }

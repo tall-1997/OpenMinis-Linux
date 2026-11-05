@@ -262,11 +262,11 @@ internal suspend fun ChatViewModel.executeTool(
                 argsJson,
                 com.openminis.app.di.AppGraph.evolutionEngineOrNull(),
             )
-        com.openminis.app.tools.DispatchAgentsTool.NAME -> executeRunSubAgent(
+        com.openminis.app.tools.DispatchAgentsTool.NAME -> executeRunSubAgentDeduped(
             com.openminis.app.tools.DispatchAgentsTool.toSpawnArgs(argsJson, context),
             toolId, toolBlocks, assistantId, currentText,
         )
-        com.openminis.app.tools.WolfpackTool.NAME -> executeRunSubAgent(
+        com.openminis.app.tools.WolfpackTool.NAME -> executeRunSubAgentDeduped(
             com.openminis.app.tools.WolfpackTool.toSpawnArgs(argsJson),
             toolId, toolBlocks, assistantId, currentText,
         )
@@ -275,6 +275,10 @@ internal suspend fun ChatViewModel.executeTool(
             activeSessionId,
             context,
         )
+        // [T-work-report] Structured status for this run; also the data behind
+        // the stage re-injected into every request.
+        com.openminis.app.tools.AgentReportTool.NAME ->
+            com.openminis.app.tools.AgentReportTool.execute(argsJson, activeSessionId, context)
         // [T-subagent-background] Inspect / wait for / collect detached waves.
         // Suspends only for op=await, which polls the registry under a bounded
         // timeout; every other op returns immediately.
@@ -340,7 +344,7 @@ internal suspend fun ChatViewModel.executeTool(
         com.openminis.app.tools.PresentTool.NAME ->
             com.openminis.app.tools.PresentTool.execute(argsJson, activeSessionId, context)
         SubAgentKind.SPAWN_AGENT, SubAgentKind.RUN_SUBAGENT ->
-            executeRunSubAgent(argsJson, toolId, toolBlocks, assistantId, currentText)
+            executeRunSubAgentDeduped(argsJson, toolId, toolBlocks, assistantId, currentText)
         com.openminis.app.tools.WebSearchTool.NAME,
         com.openminis.app.tools.OcrTool.NAME,
         com.openminis.app.tools.ScreenTimeTool.NAME,

@@ -83,7 +83,24 @@ internal fun ChatViewModel.withGoalAndPlanContext(
     prompt: String?,
     appendNewUser: Boolean = false,
 ): List<LLMMessage> {
-    val blocks = listOfNotNull(planBoardPrompt(), liveRecallPrompt(), prompt)
+    // [T-work-report] The structured stage rides here too: same reason as the
+    // board — a rendered-from-store block survives compaction, a status written
+    // once in the transcript does not.
+    val blocks = listOfNotNull(
+        workReportPrompt(),
+        planBoardPrompt(),
+        liveRecallPrompt(),
+        prompt,
+    )
     val combined = blocks.joinToString("\n\n").takeIf { it.isNotBlank() }
     return withGoalContext(history, combined, appendNewUser)
 }
+
+/**
+ * [T-work-report] Current stage and last report, rebuilt from the store.
+ *
+ * Null before the first report, so a chat that has not used the tool pays nothing
+ * for it.
+ */
+internal fun ChatViewModel.workReportPrompt(): String? =
+    com.openminis.app.tools.AgentReportStore.stagePrompt(activeSessionId, context)
