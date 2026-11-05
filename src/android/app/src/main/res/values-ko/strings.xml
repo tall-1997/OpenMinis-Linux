@@ -2009,4 +2009,14 @@
     <string name="memory_center_stat_sediments">압축 요약</string>
     <string name="memory_center_stats_footer">이 기기 전체 기준입니다. 이 화면을 다시 열면 갱신됩니다.</string>
     <string name="memory_section_diary_footer">이 세션의 메모리 폴더에 있는 일별 로그입니다. 최근 3개는 전체가 삽입되고, 그 이전 날짜는 검색할 수 있는 색인으로 나열됩니다.</string>
+    <!-- [T-p9-revert] Three-stage revert: stage/clear/commit -->
+    <string name="chat_longpress_revert_to_here">여기까지 되돌리기</string>
+    <string name="chat_revert_done_toast">파일을 이 시점으로 되돌렸습니다</string>
+    <string name="chat_revert_empty_toast">이 메시지 이후 되돌릴 항목이 없습니다</string>
+    <string name="chat_revert_failed_toast">되돌리지 못했습니다 — 로그 확인</string>
+    <string name="chat_revert_cleared_toast">되돌리기를 취소했습니다</string>
+    <string name="chat_revert_banner_title">이 시점까지 되돌렸습니다</string>
+    <string name="chat_revert_banner_files">파일 %1$d개 복원됨</string>
+    <string name="chat_revert_banner_hint">메시지를 보내 유지하거나 되돌리기를 취소하세요.</string>
+    <string name="chat_revert_banner_undo">취소</string>
 </resources>

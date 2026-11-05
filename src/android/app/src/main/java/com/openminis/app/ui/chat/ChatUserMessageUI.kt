@@ -12,6 +12,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.FolderZip
 import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.VideoFile
 import androidx.compose.material.icons.automirrored.filled.Article
 import androidx.compose.foundation.background
@@ -89,6 +90,10 @@ internal fun UserMessageBubble(
     onCopy: () -> Unit = {},
     onRetry: (() -> Unit)? = {},
     onEdit: (() -> Unit)? = null,
+    // [T-p9-revert] Roll files back to this point and hide the tail until
+    // the next send commits the cut. Undoable from the banner. Null hides
+    // the action (streaming / queued, same gating as Edit).
+    onRevertToHere: (() -> Unit)? = null,
     // [T-android-delete-from-here] Delete this message and everything after
     // it. Null hides the action (streaming, or a host with no truncation
     // capability).
@@ -307,6 +312,17 @@ internal fun UserMessageBubble(
                         text = { Text(stringResource(R.string.chat_longpress_edit)) },
                         onClick = { showMenu = false; onEdit() },
                         leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                    )
+                }
+                // [T-p9-revert] Roll files back to this point; the tail hides
+                // until the next send commits it. Undoable from the banner,
+                // so it sits before the destructive Delete and carries no
+                // error tint. Same gating as Edit.
+                if (onRevertToHere != null) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.chat_longpress_revert_to_here)) },
+                        onClick = { showMenu = false; onRevertToHere() },
+                        leadingIcon = { Icon(Icons.Default.Restore, contentDescription = null, modifier = Modifier.size(18.dp)) },
                     )
                 }
                 // [T-android-delete-from-here] Removes this message and every

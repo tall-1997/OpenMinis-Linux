@@ -2019,4 +2019,14 @@
     <string name="memory_center_stat_sediments">Podsumowania kompakcji</string>
     <string name="memory_center_stats_footer">Liczone dla całego urządzenia; otwórz ponownie ten ekran, aby odświeżyć.</string>
     <string name="memory_section_diary_footer">Dzienniki dzienne w folderze pamięci tej sesji. Trzy najnowsze są wstawiane w całości; starsze dni są wymienione jako indeks, który można przeszukiwać.</string>
+    <!-- [T-p9-revert] Three-stage revert: stage/clear/commit -->
+    <string name="chat_longpress_revert_to_here">Cofnij do tego miejsca</string>
+    <string name="chat_revert_done_toast">Pliki przywrócone do tego miejsca</string>
+    <string name="chat_revert_empty_toast">Nic do cofnięcia po tej wiadomości</string>
+    <string name="chat_revert_failed_toast">Nie udało się cofnąć — sprawdź dzienniki</string>
+    <string name="chat_revert_cleared_toast">Cofnięcie anulowane</string>
+    <string name="chat_revert_banner_title">Przewinięto do tego miejsca</string>
+    <string name="chat_revert_banner_files">Przywrócono pliki: %1$d</string>
+    <string name="chat_revert_banner_hint">Wyślij wiadomość, aby zachować, lub cofnij.</string>
+    <string name="chat_revert_banner_undo">Cofnij</string>
 </resources>

@@ -2017,4 +2017,14 @@
     <string name="memory_center_stat_sediments">Ringkasan pemadatan</string>
     <string name="memory_center_stats_footer">Dihitung di seluruh perangkat; buka ulang layar ini untuk menyegarkan.</string>
     <string name="memory_section_diary_footer">Log harian di folder memori sesi ini. Tiga yang terbaru dimasukkan sepenuhnya; hari yang lebih lama terdaftar sebagai indeks yang dapat Anda cari.</string>
+    <!-- [T-p9-revert] Three-stage revert: stage/clear/commit -->
+    <string name="chat_longpress_revert_to_here">Kembalikan ke sini</string>
+    <string name="chat_revert_done_toast">File dikembalikan ke titik ini</string>
+    <string name="chat_revert_empty_toast">Tidak ada yang dikembalikan setelah pesan ini</string>
+    <string name="chat_revert_failed_toast">Gagal mengembalikan — lihat log</string>
+    <string name="chat_revert_cleared_toast">Pemunduran dibatalkan</string>
+    <string name="chat_revert_banner_title">Diputar balik ke titik ini</string>
+    <string name="chat_revert_banner_files">%1$d file dipulihkan</string>
+    <string name="chat_revert_banner_hint">Kirim pesan untuk menyimpan ini, atau batalkan.</string>
+    <string name="chat_revert_banner_undo">Batalkan</string>
 </resources>

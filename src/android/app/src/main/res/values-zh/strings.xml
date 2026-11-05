@@ -2591,4 +2591,14 @@
     <string name="memory_center_stat_failures">已拦截的重复</string>
     <string name="memory_center_stat_sediments">压缩摘要</string>
     <string name="memory_center_stats_footer">统计范围为本设备；重新打开此页即可刷新。</string>
+    <!-- [T-p9-revert] Three-stage revert: stage/clear/commit -->
+    <string name="chat_longpress_revert_to_here">回滚到此处</string>
+    <string name="chat_revert_done_toast">文件已回滚到此时间点</string>
+    <string name="chat_revert_empty_toast">此消息之后没有可回滚的内容</string>
+    <string name="chat_revert_failed_toast">回滚失败 — 请查看日志</string>
+    <string name="chat_revert_cleared_toast">已撤销回滚</string>
+    <string name="chat_revert_banner_title">已回滚到此处</string>
+    <string name="chat_revert_banner_files">已还原 %1$d 个文件</string>
+    <string name="chat_revert_banner_hint">发送消息以保留，或撤销回滚。</string>
+    <string name="chat_revert_banner_undo">撤销</string>
 </resources>

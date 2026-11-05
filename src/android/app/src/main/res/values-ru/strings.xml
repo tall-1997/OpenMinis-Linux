@@ -2020,4 +2020,14 @@
     <string name="memory_center_stat_sediments">Сводки сжатия</string>
     <string name="memory_center_stats_footer">Подсчитано по всему устройству; откройте экран заново для обновления.</string>
     <string name="memory_section_diary_footer">Ежедневные журналы в папке памяти этой сессии. Три последних вставляются целиком; более ранние дни показываются как индекс для поиска.</string>
+    <!-- [T-p9-revert] Three-stage revert: stage/clear/commit -->
+    <string name="chat_longpress_revert_to_here">Откатить до этого места</string>
+    <string name="chat_revert_done_toast">Файлы откатаны до этого места</string>
+    <string name="chat_revert_empty_toast">После этого сообщения нечего откатывать</string>
+    <string name="chat_revert_failed_toast">Не удалось откатить — см. журналы</string>
+    <string name="chat_revert_cleared_toast">Откат отменён</string>
+    <string name="chat_revert_banner_title">Отмотано до этого места</string>
+    <string name="chat_revert_banner_files">Восстановлено файлов: %1$d</string>
+    <string name="chat_revert_banner_hint">Отправьте сообщение, чтобы сохранить, или отмените откат.</string>
+    <string name="chat_revert_banner_undo">Отменить</string>
 </resources>

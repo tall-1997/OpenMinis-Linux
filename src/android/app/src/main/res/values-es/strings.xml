@@ -2012,4 +2012,14 @@
     <string name="memory_center_stat_sediments">Resúmenes de compactación</string>
     <string name="memory_center_stats_footer">Contado en todo el dispositivo; vuelve a abrir esta pantalla para actualizar.</string>
     <string name="memory_section_diary_footer">Registros diarios en la carpeta de memoria de esta sesión. Se insertan completos los tres más recientes; los días anteriores aparecen como un índice que puedes buscar.</string>
+    <!-- [T-p9-revert] Three-stage revert: stage/clear/commit -->
+    <string name="chat_longpress_revert_to_here">Revertir hasta aquí</string>
+    <string name="chat_revert_done_toast">Archivos revertidos hasta este punto</string>
+    <string name="chat_revert_empty_toast">Nada que revertir después de este mensaje</string>
+    <string name="chat_revert_failed_toast">No se pudo revertir — consulta los registros</string>
+    <string name="chat_revert_cleared_toast">Reversión deshecha</string>
+    <string name="chat_revert_banner_title">Rebobinado hasta este punto</string>
+    <string name="chat_revert_banner_files">%1$d archivo(s) restaurado(s)</string>
+    <string name="chat_revert_banner_hint">Envía un mensaje para mantener esto, o deshaz la reversión.</string>
+    <string name="chat_revert_banner_undo">Deshacer</string>
 </resources>

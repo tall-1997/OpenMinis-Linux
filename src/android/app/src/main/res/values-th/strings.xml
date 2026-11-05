@@ -2012,4 +2012,14 @@
     <string name="memory_center_stat_sediments">สรุปการบีบอัด</string>
     <string name="memory_center_stats_footer">นับทั้งอุปกรณ์ เปิดหน้านี้อีกครั้งเพื่อรีเฟรช</string>
     <string name="memory_section_diary_footer">บันทึกรายวันในโฟลเดอร์ความจำของเซสชันนี้ สามรายการล่าสุดถูกแทรกทั้งหมด ส่วนวันที่เก่ากว่าจะแสดงเป็นดัชนีที่ค้นหาได้</string>
+    <!-- [T-p9-revert] Three-stage revert: stage/clear/commit -->
+    <string name="chat_longpress_revert_to_here">ย้อนกลับมาที่จุดนี้</string>
+    <string name="chat_revert_done_toast">ย้อนไฟล์กลับมาที่จุดนี้แล้ว</string>
+    <string name="chat_revert_empty_toast">ไม่มีอะไรให้ย้อนหลังจากข้อความนี้</string>
+    <string name="chat_revert_failed_toast">ย้อนกลับไม่สำเร็จ — ดูบันทึก</string>
+    <string name="chat_revert_cleared_toast">ยกเลิกการย้อนกลับแล้ว</string>
+    <string name="chat_revert_banner_title">ย้อนกลับมาถึงจุดนี้แล้ว</string>
+    <string name="chat_revert_banner_files">กู้คืนไฟล์แล้ว %1$d รายการ</string>
+    <string name="chat_revert_banner_hint">ส่งข้อความเพื่อยืนยัน หรือยกเลิกการย้อนกลับ</string>
+    <string name="chat_revert_banner_undo">ยกเลิก</string>
 </resources>

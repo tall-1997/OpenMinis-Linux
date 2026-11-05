@@ -2012,4 +2012,14 @@
     <string name="memory_center_stat_sediments">Ringkasan pemadatan</string>
     <string name="memory_center_stats_footer">Dikira pada keseluruhan peranti; buka semula skrin ini untuk menyegarkan.</string>
     <string name="memory_section_diary_footer">Log harian dalam folder memori sesi ini. Tiga yang terbaharu dimasukkan sepenuhnya; hari lebih lama disenaraikan sebagai indeks yang boleh anda cari.</string>
+    <!-- [T-p9-revert] Three-stage revert: stage/clear/commit -->
+    <string name="chat_longpress_revert_to_here">Kembali ke sini</string>
+    <string name="chat_revert_done_toast">Fail dikembalikan ke titik ini</string>
+    <string name="chat_revert_empty_toast">Tiada apa yang dikembalikan selepas mesej ini</string>
+    <string name="chat_revert_failed_toast">Gagal dikembalikan — rujuk log</string>
+    <string name="chat_revert_cleared_toast">Pemunduran dibatalkan</string>
+    <string name="chat_revert_banner_title">Dikembalikan ke titik ini</string>
+    <string name="chat_revert_banner_files">%1$d fail dipulihkan</string>
+    <string name="chat_revert_banner_hint">Hantar mesej untuk menyimpan ini, atau batalkan.</string>
+    <string name="chat_revert_banner_undo">Batalkan</string>
 </resources>

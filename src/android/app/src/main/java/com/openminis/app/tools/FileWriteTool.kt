@@ -69,9 +69,17 @@ object FileWriteTool {
             // [T-file-checkpoint] Snapshot the CURRENT bytes before they are
             // replaced, so a bad rewrite is recoverable via file_checkpoint
             // restore. Best-effort — a capture failure must never block the
-            // write itself. Capture only fires when the file already exists;
-            // a create has nothing to lose and restore would just delete it.
-            if (!append && file.exists() && file.isFile) {
+            // write itself.
+            // [T-p9-revert-visibility] Capture fires for EVERY non-directory
+            // target, not just overwrites of existing files. A create records
+            // an existed=false entry — the only durable record that the file
+            // did NOT exist before this write, which is what lets a P9 revert
+            // delete the files a doomed window created; an append keeps the
+            // pre-append bytes so the same revert can strip what the window
+            // appended. The old gate (!append && exists) made creates and
+            // appends invisible to every rollback — the exact "created file
+            // survives a revert" hole P9 exists to close.
+            if (!file.isDirectory) {
                 FileCheckpointStore.capture(
                     context, sessionId, listOf(path),
                     label = "before file_write", source = "file_write",

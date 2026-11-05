@@ -2094,4 +2094,14 @@
     <string name="memory_center_stat_sediments">壓縮摘要</string>
     <string name="memory_center_stats_footer">統計範圍為本裝置；重新開啟此頁即可重新整理。</string>
     <string name="memory_section_diary_footer">本工作階段記憶資料夾中的每日日誌：最近三份完整注入，較早日期會以可搜尋的索引列出。</string>
+    <!-- [T-p9-revert] Three-stage revert: stage/clear/commit -->
+    <string name="chat_longpress_revert_to_here">回溯到此處</string>
+    <string name="chat_revert_done_toast">檔案已回溯到此時間點</string>
+    <string name="chat_revert_empty_toast">此訊息之後沒有可回溯的內容</string>
+    <string name="chat_revert_failed_toast">回溯失敗 — 請查看日誌</string>
+    <string name="chat_revert_cleared_toast">已取消回溯</string>
+    <string name="chat_revert_banner_title">已回溯到此處</string>
+    <string name="chat_revert_banner_files">已還原 %1$d 個檔案</string>
+    <string name="chat_revert_banner_hint">傳送訊息以保留，或取消回溯。</string>
+    <string name="chat_revert_banner_undo">復原</string>
 </resources>

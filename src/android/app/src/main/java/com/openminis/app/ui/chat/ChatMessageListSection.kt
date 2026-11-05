@@ -199,6 +199,12 @@ internal fun ChatFlatItemRow(
                                         inputFocusRequester.requestFocus()
                                     }
                                 }),
+                                // [T-p9-revert] Long-press → roll files back to
+                                // this point; the tail hides until the next send
+                                // commits the cut. Gated like Edit.
+                                onRevertToHere = if (isStreaming || item.message.isQueued) null else ({
+                                    safeMutate { viewModel.revertToHere(item.message.id) }
+                                }),
                                 onWithdraw = if (item.message.isQueued) {
                                     { safeMutate { viewModel.withdrawQueuedMessage(item.message.id) } }
                                 } else null,
@@ -223,6 +229,20 @@ internal fun ChatFlatItemRow(
                                     }
                                 },
                             )
+                            // [T-p9-revert] The staged-revert banner rides under
+                            // the boundary bubble: the tail is trimmed in memory,
+                            // so the boundary is the last visible row and the
+                            // banner lands exactly where history was rewound to.
+                            // Read as .value (not collectAsState): every registry
+                            // change is accompanied by a _messages change that
+                            // triggers the flat-items rebuild this branch rides on.
+                            val stagedRevert = viewModel.revertStageFlow.value
+                            if (stagedRevert != null && stagedRevert.boundaryMessageId == item.message.id) {
+                                ChatRevertBanner(
+                                    files = stagedRevert.fileCount,
+                                    onUndo = { viewModel.undoRevert() },
+                                )
+                            }
                             } // close UserBubble SideEffect + UserMessageBubble block
                             is FlatChatItem.AssistantHeader -> AssistantHeader(item.speakerName, item.speakerVendor)
                             // Assistant text renders ONLY here: the
