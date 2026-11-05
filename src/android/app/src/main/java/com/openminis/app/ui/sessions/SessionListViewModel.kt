@@ -174,9 +174,9 @@ class SessionListViewModel(
 
     // The list to actually show: search results when searching, otherwise all sessions
     val displayedSessions: StateFlow<List<ChatSessionEntity>> = combine(
-        _allSessions, searchResults, searchQuery, isSearchActive
-    ) { all, results, q, active ->
-        if (active && q.isNotBlank()) results else all
+        _allSessions, searchResults, searchQuery, isSearchActive, com.openminis.app.tools.AgentReportStore.attentionSessions
+    ) { all, results, q, active, attention ->
+        if (active && q.isNotBlank()) results else SessionOrdering.sorted(all, { SessionOrdering.Key(it.id, it.updatedAt, it.pinnedAt) }, attention)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     // ─── Session groups ("folders") ────────────────────────────────────────
