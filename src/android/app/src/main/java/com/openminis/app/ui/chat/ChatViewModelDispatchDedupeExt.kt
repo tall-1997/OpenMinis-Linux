@@ -25,6 +25,9 @@ internal suspend fun ChatViewModel.executeRunSubAgentDeduped(
     assistantId: String = "",
     currentText: String = "",
 ): ToolExecutionResult {
+    // [T-task-mandate] Checked before anything is spawned: a wave outside the
+    // declared scope is refused by the host, not argued with in the prompt.
+    scopeRefusal(argsJson)?.let { refusal -> return refusal }
     val fingerprint = SubAgentBatchRegistry.fingerprintOf(argsJson)
     val duplicate = SubAgentBatchRegistry.findLiveDuplicate(activeSessionId, context, fingerprint)
     if (duplicate != null) {
@@ -37,4 +40,35 @@ internal suspend fun ChatViewModel.executeRunSubAgentDeduped(
         )
     }
     return executeRunSubAgent(argsJson, toolId, toolBlocks, assistantId, currentText)
+}
+
+/**
+ * [T-task-mandate] Refuses a wave whose kinds fall outside the declared scope.
+ *
+ * Null when there is nothing to enforce: no mandate, or one with no scope, keeps
+ * the old behaviour so sessions that never opted in are unaffected.
+ */
+private fun ChatViewModel.scopeRefusal(argsJson: String): ToolExecutionResult? {
+    val mandate = runCatching {
+        com.openminis.app.tools.TaskMandateStore.get(activeSessionId, context)
+    }.getOrNull() ?: return null
+    if (!mandate.declared) return null
+    val kinds = runCatching { kindsOf(argsJson) }.getOrDefault(emptyList())
+    val offending = kinds.firstOrNull {
+        !com.openminis.app.tools.TaskMandateStore.allows(mandate, it)
+    } ?: return null
+    return ToolExecutionResult(
+        com.openminis.app.tools.TaskMandateStore.refusal(mandate, offending),
+        false,
+    )
+}
+
+/** Lane kinds in a spawn payload; a single-task payload has one. */
+private fun kindsOf(argsJson: String): List<String> {
+    val root = runCatching { org.json.JSONObject(argsJson) }.getOrNull() ?: return emptyList()
+    val tasks = root.optJSONArray("tasks")
+        ?: return listOf(root.optString("kind").ifBlank { "worker" })
+    return (0 until tasks.length()).map { index ->
+        tasks.optJSONObject(index)?.optString("kind")?.ifBlank { null } ?: "worker"
+    }
 }

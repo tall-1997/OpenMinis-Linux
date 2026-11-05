@@ -94,6 +94,8 @@ object AgentTools {
         add(AgentPlanTool.definition())
         // [T-work-report] Structured run status; re-injected as the session stage.
         add(AgentReportTool.definition())
+        // [T-task-mandate] Written boundary the host enforces on dispatch.
+        add(TaskMandateTool.definition())
         if (mcpNativeEnabled) {
             add(McpNativeTool.definition())
         }
