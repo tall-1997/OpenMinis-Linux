@@ -32,26 +32,27 @@ KIND_TO_TAG = {"string": "string", "plurals": "plurals", "array": "array"}
 
 
 def defined_names(values_dir):
-    """{kind: {name}} parsed from the default resource file of one module."""
+    """{kind: {name}} parsed from every default resource XML in one module.
+
+    Android merges every ``res/values/*.xml`` into one resource table, so a
+    string declared in ``strings_chat.xml`` (or any other split file) is just
+    as defined as one in ``strings.xml``. Scanning only ``strings.xml`` used to
+    report split-file declarations as dangling — e.g. the chat/settings/service
+    strings added alongside this check were flagged despite being defined.
+    """
     out = {"string": set(), "plurals": set(), "array": set()}
-    path = os.path.join(values_dir, "strings.xml")
-    if not os.path.exists(path):
+    if not os.path.isdir(values_dir):
         return None
-    with open(path, encoding="utf-8") as f:
-        src = f.read()
-    for tag, name in DEF.findall(src):
-        if tag == "string":
-            out["string"].add(name)
-        elif tag == "plurals":
-            out["plurals"].add(name)
-        else:
-            out["array"].add(name)
-    # Arrays also live in arrays.xml in some modules.
-    alt = os.path.join(values_dir, "arrays.xml")
-    if os.path.exists(alt):
-        with open(alt, encoding="utf-8") as f:
+    for fn in os.listdir(values_dir):
+        if not fn.endswith(".xml"):
+            continue
+        with open(os.path.join(values_dir, fn), encoding="utf-8") as f:
             for tag, name in DEF.findall(f.read()):
-                if tag != "string":
+                if tag == "string":
+                    out["string"].add(name)
+                elif tag == "plurals":
+                    out["plurals"].add(name)
+                else:
                     out["array"].add(name)
     return out
 
