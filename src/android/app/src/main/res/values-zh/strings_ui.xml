@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Shared UI-component strings (model pickers etc.), Chinese.
+    Mirrors values/strings_ui.xml key-for-key.
+-->
+<resources>
+    <!-- UnifiedModelPickerSheet: locate-to-current affordance -->
+    <string name="model_picker_locate_current">定位到当前模型</string>
+
+    <!-- UnifiedModelPickerSheet / ModelEntryPicker: hidden models section -->
+    <string name="model_picker_hidden_section">已隐藏模型 (%1$d)</string>
+
+    <!-- Long-press entry menu + delete confirmation -->
+    <string name="model_picker_entry_menu_delete">删除</string>
+    <string name="model_picker_delete_confirm_title">删除模型</string>
+    <string name="model_picker_delete_confirm_text">从服务商移除 %1$s？该模型将从所有选择器和分组中消失。</string>
+</resources>

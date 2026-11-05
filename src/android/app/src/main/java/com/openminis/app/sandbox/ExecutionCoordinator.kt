@@ -498,10 +498,26 @@ object ExecutionCoordinator {
      * a separate `unset`.
      *
      * Safe to call before PRoot has booted — it's a no-op in that case.
+     *
+     * [port-upstream-1.16] Signature and merge brought in line with upstream
+     * (OpenMinis/OpenMinis@main): [cleared] names the env keys the Settings >
+     * Network module set before and no longer does, and the Shell scope's
+     * variables (com.openminis.app.network.NetworkShellEnvironment) are merged
+     * over the system-proxy block — a Settings > Network "Shell" route wins,
+     * as it does when a shell is spawned. The default keeps existing callers
+     * (system proxy only) unchanged; with no Shell route configured,
+     * NetworkShellEnvironment.proxyVariables() is empty, so the block is
+     * exactly what it was before the Network domain landed.
      */
-    suspend fun broadcastProxyChange() {
+    suspend fun broadcastProxyChange(cleared: Set<String> = emptySet()) {
         if (!PRootKernel.isBooted) return
-        val env = PRootKernel.updateProxy(appContext)
+        // [port-upstream-1.16] Cleared keys go first so the system proxy's own
+        // HTTP(S)_PROXY / NO_PROXY, when set, take their place; a Shell route
+        // turned back to direct must not leave the entry's SOCKS URL behind in
+        // a running shell.
+        val env = cleared.associateWith { "" } +
+            PRootKernel.updateProxy(appContext) +
+            com.openminis.app.network.NetworkShellEnvironment.proxyVariables()
         for ((_, shell) in shells) {
             if (shell.isAlive) shell.applyEnvironment(env)
         }

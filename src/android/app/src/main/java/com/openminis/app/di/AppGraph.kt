@@ -203,6 +203,18 @@ object AppGraph {
     fun installEvolutionEngine(engine: EvolutionEngine?) = evolutionEngine.install(engine)
     fun evolutionEngineOrNull(): EvolutionEngine? = evolutionEngine.orNull()
 
+    /**
+     * [port-upstream-1.16] Upstream provider quota / balance store, started in
+     * MinisApp.onCreate. QuotaStore is a process-wide singleton object, so the
+     * slot carries the object reference itself — the install marks "started"
+     * for readers (agents, minis-config tooling) and guards against a second
+     * start call. Read via [quotaStoreOrNull] or directly through
+     * `QuotaAgentApi.snapshot` once installed.
+     */
+    private val quotaStore = Slot<com.openminis.app.quota.QuotaStore>("quotaStore")
+    fun installQuotaStore(store: com.openminis.app.quota.QuotaStore) = quotaStore.install(store)
+    fun quotaStoreOrNull(): com.openminis.app.quota.QuotaStore? = quotaStore.orNull()
+
     /** Env-var source for sandbox shells (was ExecutionCoordinator.envVarRepository). */
     private val executionEnvVarRepository = Slot<EnvVarRepository>("executionEnvVarRepository")
     fun installExecutionEnvVarRepository(repo: EnvVarRepository) = executionEnvVarRepository.install(repo)
@@ -217,6 +229,20 @@ object AppGraph {
     private val mountedFoldersStore = Slot<MountedFoldersStore>("mountedFoldersStore")
     fun installMountedFoldersStore(store: MountedFoldersStore) = mountedFoldersStore.install(store)
     fun mountedFoldersStoreOrNull(): MountedFoldersStore? = mountedFoldersStore.orNull()
+
+    /**
+     * [port-upstream-1.16] Settings > Network runtime bootstrap (upstream
+     * MinisApp.onCreate wires NetworkHub.init(this) plus a ProcessLifecycleOwner
+     * observer that drives NetworkHub.onForeground/onBackground — the 30 s
+     * entry health check and the status monitor only run while the app is in
+     * front). The installed handle is the lifecycle observer itself, so the
+     * slot records both that NetworkHub.init ran and that foreground tracking
+     * is registered; the once-semantics guard matches upstream's idempotent
+     * init and prevents a second wiring path from double-registering.
+     */
+    private val networkRuntime = Slot<androidx.lifecycle.LifecycleObserver>("networkRuntime")
+    fun installNetworkRuntime(observer: androidx.lifecycle.LifecycleObserver) = networkRuntime.install(observer)
+    fun networkRuntimeOrNull(): androidx.lifecycle.LifecycleObserver? = networkRuntime.orNull()
 
     /** Background nudge for pending config approvals (was ConfigConfirmationGate.backgroundNotifier). */
     private val configConfirmBackgroundNotifier =

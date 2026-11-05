@@ -119,8 +119,7 @@ fun AppNavigation(
                 )
                 navController.safeNavigate(Routes.ENV_VARS)
             }
-            // T183: any settings screen reachable by route string; the
-            // parser already resolved the path → route mapping.
+            // T183: any settings screen reachable by route string; the parser already resolved the path → route mapping.
             is DeepLinkAction.OpenSettingsScreen -> navController.safeNavigate(initialDeepLink.route)
             is DeepLinkAction.OpenPermissionSettings -> {
                 navController.safeNavigate(Routes.PERMISSIONS)
@@ -464,6 +463,7 @@ fun AppNavigation(
                 onModelGroupsClick = { navController.safeNavigate(Routes.MODEL_GROUPS) },
                 onRootfsClick = { navController.safeNavigate(Routes.STORAGE) },
                 onBackupClick = { navController.safeNavigate(Routes.BACKUP) },
+                onNetworkClick = { navController.safeNavigate(Routes.NETWORK) },
                 onEnvVarsClick = { navController.safeNavigate(Routes.ENV_VARS) },
                 onSkillsClick = { navController.safeNavigate(Routes.SKILLS) },
                 onMultiAgentClick = { navController.safeNavigate(Routes.MULTI_AGENT) },
@@ -611,6 +611,8 @@ fun AppNavigation(
             }
         }
 
+        networkDestinations(navController, providerRepository) // [port-upstream-1.16] NetworkNavEntries.kt
+
         composable(Routes.MULTI_AGENT) {
             com.openminis.app.ui.settings.MultiAgentSettingsScreen(
                 onBack = { navController.safePopBackStack() },
@@ -691,14 +693,10 @@ fun AppNavigation(
             Routes.TERMINAL,
             arguments = listOf(
                 androidx.navigation.navArgument("initCommand") {
-                    type = androidx.navigation.NavType.StringType
-                    nullable = true
-                    defaultValue = null
+                    type = androidx.navigation.NavType.StringType; nullable = true; defaultValue = null
                 },
                 androidx.navigation.navArgument("sessionId") {
-                    type = androidx.navigation.NavType.StringType
-                    nullable = true
-                    defaultValue = null
+                    type = androidx.navigation.NavType.StringType; nullable = true; defaultValue = null
                 },
             ),
         ) { backStackEntry ->
@@ -962,9 +960,7 @@ fun AppNavigation(
             route = Routes.SCHEDULED_TASK_EDIT,
             arguments = listOf(
                 navArgument("taskId") {
-                    type = NavType.StringType
-                    nullable = true
-                    defaultValue = null
+                    type = NavType.StringType; nullable = true; defaultValue = null
                 },
             ),
         ) { backStackEntry ->
@@ -983,6 +979,8 @@ fun AppNavigation(
     // into the child composable below; AppNavigation no longer reads the
     // preview state, so a preview open/close does not re-run this body.
     HtmlBrowserHost(htmlBrowserState)
+
+    NetworkOverlayHost(navController) // [port-upstream-1.16] NetworkNavEntries.kt
 }
 
 /**

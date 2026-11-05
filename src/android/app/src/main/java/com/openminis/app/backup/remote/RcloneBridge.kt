@@ -45,7 +45,68 @@ object RcloneBridge {
         Gomobile.rcloneInitialize()
         initialised = true
         applyGlobalOptions()
+        applyNetworkProxy() // [port-upstream-1.16] follow the Settings > Network Backup route from the first RPC
         AppLogger.info(TAG, "[Rclone] initialised")
+    }
+
+    /**
+     * [port-upstream-1.16] Settings > Network, "Backup" scope (upstream
+     * `RcloneBridge.applyNetworkProxy`).
+     *
+     * rclone's global HTTPProxy (fs/fshttp/http.go) is set to the local SOCKS5
+     * entry with the backup tag, or cleared when the route is direct or the
+     * entry is down. It covers HTTP-based backends (WebDAV, S3). A remote
+     * rclone already built keeps its transport until its fs cache entry
+     * expires. Never called with "" before a proxy was set, so an
+     * unconfigured app sends rclone exactly the options it did before.
+     *
+     * SFTP and FTP dial through rclone's own dialer, not an http.Transport, so
+     * HTTPProxy never reached them. The same entry is now their `socks_proxy`
+     * (rcloneSetSocks), and a change clears rclone's fs cache so built remotes
+     * reconnect on the new route. SMB has no proxy option in rclone and stays
+     * direct (upstream owner's decision, 2026-10-21).
+     */
+    @Synchronized
+    fun applyNetworkProxy() {
+        val ep = com.openminis.app.network.NetworkRuntime.endpoint(com.openminis.app.network.NetworkScope.BACKUP.tag)
+        applySocksProxy(ep?.let { "${it.tag}:${it.password}@${it.host}:${it.port}" } ?: "")
+        val proxy = ep?.let { "socks5://${it.tag}:${it.password}@${it.host}:${it.port}" } ?: ""
+        if (proxy == lastAppliedProxy) return
+        try {
+            rpcUnchecked("options/set", mapOf("main" to mapOf("HTTPProxy" to proxy)))
+            lastAppliedProxy = proxy
+            AppLogger.info(TAG, "[Net][Backup] rclone HTTPProxy ${if (proxy.isEmpty()) "cleared (direct)" else "-> local entry (backup)"}")
+        } catch (e: Exception) {
+            AppLogger.warning(TAG, "[Net][Backup] couldn't set rclone HTTPProxy: ${e.message}")
+        }
+    }
+
+    private var lastAppliedProxy = ""
+
+    /**
+     * SFTP / FTP `socks_proxy`: "user:pass@host:port", "" = unset (direct).
+     * Only calls Go when the value changes, so an unconfigured app never
+     * touches rclone's backend options. [port-upstream-1.16]
+     */
+    private fun applySocksProxy(socks: String) {
+        if (socks == lastAppliedSocks) return
+        val reply = runCatching { Gomobile.rcloneSetSocks(socks) }.getOrElse { "{\"ok\":false,\"error\":\"${it.javaClass.simpleName}\"}" }
+        if (!reply.startsWith("{\"ok\":true")) {
+            AppLogger.warning(TAG, "[Net][Backup] couldn't set rclone SFTP/FTP socks_proxy: $reply")
+            return
+        }
+        lastAppliedSocks = socks
+        val snap = com.openminis.app.network.NetworkRuntime.snapshot
+        AppLogger.info(TAG, "[Net][Backup] rclone SFTP/FTP socks_proxy " +
+            (if (socks.isEmpty()) "unset (direct)" else "-> backup:<password>@127.0.0.1:${snap.port} route=${snap.route(com.openminis.app.network.NetworkScope.BACKUP.tag).raw}") +
+            "; fs cache cleared")
+    }
+
+    private var lastAppliedSocks = ""
+
+    /** Re-applies the backup route after a Settings > Network change, only if rclone already runs. [port-upstream-1.16] */
+    fun applyNetworkProxyIfInitialised() {
+        if (initialised) applyNetworkProxy()
     }
 
     /** How long to wait for a server to accept a connection. */

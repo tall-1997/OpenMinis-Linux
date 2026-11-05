@@ -2,6 +2,7 @@ package com.openminis.app.speech
 
 import android.content.Context
 import android.content.SharedPreferences
+import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -29,6 +30,7 @@ object VoiceOutputState {
     private const val KEY_ENABLED = "readReplies"
     private const val KEY_MUTED = "readReplies.muted"
     private const val KEY_SPEED = "readReplies.speed"
+    private const val KEY_VOLUME = "readReplies.volume"
     private const val KEY_SYSTEM_VOICE = "readReplies.systemVoice"
     private const val KEY_SYSTEM_VOICE_LABEL = "readReplies.systemVoiceLabel"
 
@@ -45,6 +47,15 @@ object VoiceOutputState {
     /** Speed cycle, matching iOS `VoiceOutputPreferences.speedSteps`. */
     val SPEED_STEPS = floatArrayOf(1.0f, 1.25f, 1.5f, 2.0f)
 
+    /**
+     * [T-readaloud-volume-200] Read-aloud loudness cycle as a multiplier of the
+     * current media volume. 1.0 = untouched system volume. Above 1.0 the player
+     * pins MediaPlayer volume at max AND temporarily raises STREAM_MUSIC by the
+     * same factor (restored when playback ends) — Android has no per-app gain,
+     * so the stream is the only way past 100%.
+     */
+    val VOLUME_STEPS = floatArrayOf(1.0f, 1.5f, 2.0f)
+
     // @Volatile: init() runs from both ChatScreen's LaunchedEffect and
     // ReadAloudPlayer.init, and a player can be constructed off the main
     // thread — without it a caller could observe a half-published object.
@@ -59,6 +70,11 @@ object VoiceOutputState {
 
     private val _speed = MutableStateFlow(1.0f)
     val speed: StateFlow<Float> = _speed.asStateFlow()
+
+    // [T-readaloud-volume-200] 1.0f default = never touch the system stream
+    // unless the user asked for a boost.
+    private val _volume = MutableStateFlow(1.0f)
+    val volume: StateFlow<Float> = _volume.asStateFlow()
 
     /**
      * [T-android-tts-capsule-drag] Persisted drag offset in DP from the resting
@@ -175,6 +191,7 @@ object VoiceOutputState {
         _isEnabled.value = p.getBoolean(KEY_ENABLED, false)
         _isMuted.value = p.getBoolean(KEY_MUTED, false)
         _speed.value = p.getFloat(KEY_SPEED, 1.0f)
+        _volume.value = p.getFloat(KEY_VOLUME, 1.0f).coerceIn(1.0f, 2.0f)
         _systemVoiceName.value = p.getString(KEY_SYSTEM_VOICE, null)
         _systemVoiceLabel.value = p.getString(KEY_SYSTEM_VOICE_LABEL, null)
         // [T-android-tts-capsule-drag] Both keys must be present: a half-written
@@ -241,4 +258,21 @@ object VoiceOutputState {
 
     fun speedLabel(s: Float = _speed.value): String =
         if (s == s.toInt().toFloat()) "${s.toInt()}×" else "$s×"
+
+    // [T-readaloud-volume-200] Same cycle / persistence pattern as speed.
+    fun setVolume(value: Float) {
+        val clamped = value.coerceIn(1.0f, 2.0f)
+        if (_volume.value == clamped) return
+        _volume.value = clamped
+        prefs?.edit()?.putFloat(KEY_VOLUME, clamped)?.apply()
+    }
+
+    /** Cycle 100% → 150% → 200% → 100%. */
+    fun nextVolume() {
+        val idx = VOLUME_STEPS.indexOfFirst { kotlin.math.abs(it - _volume.value) < 0.001f }
+        setVolume(VOLUME_STEPS[(if (idx < 0) 0 else idx + 1) % VOLUME_STEPS.size])
+    }
+
+    fun volumeLabel(v: Float = _volume.value): String =
+        "${(v * 100).roundToInt()}%"
 }

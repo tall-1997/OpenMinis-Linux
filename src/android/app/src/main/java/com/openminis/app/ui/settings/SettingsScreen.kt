@@ -42,6 +42,7 @@ import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Psychology
 import androidx.compose.material.icons.outlined.TravelExplore
+import androidx.compose.material.icons.outlined.Wifi
 import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Shield
@@ -84,6 +85,8 @@ fun SettingsScreen(
     onModelGroupsClick: () -> Unit,
     onRootfsClick: () -> Unit = {},
     onBackupClick: () -> Unit = {},
+    // [port-upstream-1.16] Settings > Network (Routing / Tailscale / Proxies).
+    onNetworkClick: () -> Unit = {},
     onEnvVarsClick: () -> Unit = {},
     onSkillsClick: () -> Unit = {},
     onMultiAgentClick: () -> Unit = {},
@@ -307,6 +310,18 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_backup_restore),
                     subtitle = stringResource(R.string.settings_backup_restore_subtitle),
                     onClick = onBackupClick,
+                    showDivider = false,
+                )
+            }
+
+            // -- Network [port-upstream-1.16] --
+            SettingsSection(header = stringResource(R.string.settings_network_title)) {
+                SettingsRow(
+                    icon = Icons.Outlined.Wifi,
+                    iconColor = IosBlue,
+                    title = stringResource(R.string.settings_network_title),
+                    subtitle = stringResource(R.string.settings_network_subtitle),
+                    onClick = onNetworkClick,
                     showDivider = false,
                 )
             }

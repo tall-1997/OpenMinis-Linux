@@ -73,6 +73,11 @@ object Routes {
     const val MODEL_ENTRY_DETAIL = "model_entry/{instanceId}/{entryId}"
     const val ADD_CUSTOM_MODEL = "add_custom_model/{instanceId}"
     const val STORAGE = "storage"
+    // [port-upstream-1.16] Settings > Network pages, one route each (upstream
+    // Routes.NETWORK / NETWORK_TAILSCALE / NETWORK_PROXIES).
+    const val NETWORK = "network"
+    const val NETWORK_TAILSCALE = "network_tailscale"
+    const val NETWORK_PROXIES = "network_proxies"
     const val BACKUP = "backup"
     const val BACKUP_DESTINATIONS = "backup_destinations"
     const val BACKUP_HISTORY_DETAIL = "backup_history_detail"

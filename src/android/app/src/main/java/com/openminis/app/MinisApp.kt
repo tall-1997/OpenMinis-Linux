@@ -287,6 +287,13 @@ class MinisApp : Application(), ImageLoaderFactory {
             )
         }
         appContainer.providerRepository = ProviderRepository(this)
+        // [port-upstream-1.16] Upstream provider quota / balance cache
+        // (T-provider-quota): foreground-only refresh scheduler over the
+        // provider repository. Fails soft — a quota problem must never block
+        // normal chat, so it is started unguarded by design and all of its
+        // fetch paths already contain their own runCatching / gate logic.
+        com.openminis.app.quota.QuotaStore.start(this, providerRepository)
+        AppGraph.installQuotaStore(com.openminis.app.quota.QuotaStore)
         appContainer.envVarRepository = EnvVarRepository(this)
         // [T-android-safemode-lateinit-crash-147] SkillRepository parses third-party content; its init is guarded so construction cannot escape here.
         appContainer.skillRepository = SkillRepository(this)
@@ -415,6 +422,30 @@ class MinisApp : Application(), ImageLoaderFactory {
 
         // Start network monitoring (mirrors iOS); refreshes /etc/resolv.conf on connectivity changes.
         networkMonitor.start(this)
+
+        // [port-upstream-1.16] Settings > Network (Tailscale + proxies), the
+        // same wiring as upstream MinisApp.onCreate: init does nothing — no Go
+        // call, no listener — unless the user turned something on; on each
+        // return to the foreground, and every 30 s while in front, a published
+        // local entry is checked and restarted if it died (clients go direct
+        // meanwhile), and the Tailscale status is refreshed. The lifecycle
+        // observer is installed through AppGraph like the other startup
+        // handoffs, so double wiring is a hard error instead of a silent
+        // double-registration.
+        com.openminis.app.network.NetworkHub.init(this)
+        AppGraph.installNetworkRuntime(
+            object : androidx.lifecycle.DefaultLifecycleObserver {
+                override fun onStart(owner: androidx.lifecycle.LifecycleOwner) {
+                    com.openminis.app.network.NetworkHub.onForeground()
+                }
+
+                override fun onStop(owner: androidx.lifecycle.LifecycleOwner) {
+                    com.openminis.app.network.NetworkHub.onBackground()
+                }
+            }.also {
+                androidx.lifecycle.ProcessLifecycleOwner.get().lifecycle.addObserver(it)
+            },
+        )
 
         // Register global /var/minis/{memory,skills,shared} bind mounts so file tools resolve them pre-boot.
         PRootKernel.registerGlobalBindMounts(this)
@@ -645,6 +676,19 @@ class MinisApp : Application(), ImageLoaderFactory {
     /** Coil ImageLoader: MinisImageFetcher resolves `minis://`; SvgDecoder is required for res/raw vendor logos. */
     override fun newImageLoader(): ImageLoader =
         ImageLoader.Builder(this)
+            // [port-upstream-1.16] Remote images follow the default route in
+            // Settings > Network (upstream newImageLoader): Coil's own default
+            // is a plain OkHttpClient(); that same client sends every request
+            // while nothing is configured.
+            .callFactory {
+                val base = okhttp3.OkHttpClient()
+                okhttp3.Call.Factory { request ->
+                    com.openminis.app.network.NetworkHttp.client(
+                        com.openminis.app.network.NetworkHttp.DEFAULT_TAG,
+                        base,
+                    ).newCall(request)
+                }
+            }
             .components {
                 add(SvgDecoder.Factory())
                 add(MinisImageFetcher.Factory())

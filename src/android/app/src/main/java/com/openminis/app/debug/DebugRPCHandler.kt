@@ -75,6 +75,8 @@ class DebugRPCHandler(private val context: Context) {
     private suspend fun dispatch(method: String, params: JSONObject): Any {
         return when (method) {
             "rpc.discover" -> DebugMethodRegistry.discover()
+            // [port-upstream-1.16] debug.net.* drivers, same dispatch as upstream: every call goes through TailscaleNode/NetworkHub.
+            in NetDebugMethods.names -> NetDebugMethods.dispatch(context, method, params)
             "debug.appInfo" -> handleAppInfo()
             "debug.screenshot" -> handleScreenshot(params)
             "debug.ls" -> handleLS(params)
@@ -335,10 +337,7 @@ class DebugRPCHandler(private val context: Context) {
 
         val root = JSONObject()
         root.put("root", target.absolutePath)
-        root.put("entries",
-            if (recursive) listRecursive(target, target.absolutePath, maxDepth, 0)
-            else listFlat(target)
-        )
+        root.put("entries", if (recursive) listRecursive(target, target.absolutePath, maxDepth, 0) else listFlat(target))
         return root
     }
 

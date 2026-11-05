@@ -3,6 +3,7 @@ import com.openminis.app.ui.theme.m3Icon
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -108,7 +109,7 @@ enum class PickerModalityFilter {
  * the surrounding chrome (Scaffold + TopAppBar + confirm button) and
  * retains access to the LazyListState for reorder / scroll-to.
  */
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 fun LazyListScope.modelEntryPickerItems(
     instances: List<ProviderInstance>,
     availableEntries: List<ModelEntry>,
@@ -136,6 +137,18 @@ fun LazyListScope.modelEntryPickerItems(
     // Resolved by the Composable caller via stringResource (this extension is
     // not @Composable); mirrors iOS String(localized: "System").
     systemProviderLabel: String = "System",
+    // [T-model-picker-hidden-section] Entries flagged isHidden in
+    // ProviderRepository, for a collapsed "Hidden models (N)" section at the
+    // bottom (callers pre-filter them out of [availableEntries]). Empty
+    // (default) renders nothing. Expansion is tracked inside the existing
+    // [collapsedInstanceIds] set under a synthetic key — this extension is a
+    // LazyListScope, so it cannot remember() state itself.
+    hiddenEntries: List<ModelEntry> = emptyList(),
+    // [T-model-picker-longpress-delete] When provided, long-pressing a
+    // regular (non-System) entry row hands the entry to the caller, which
+    // owns the confirm dialog and the repository removal. Null (default)
+    // keeps the tap-only behaviour every existing caller had.
+    onDeleteEntry: ((ModelEntry) -> Unit)? = null,
 ) {
     val q = searchQuery.value.lowercase()
     val isSearching = searchQuery.value.isNotBlank()
@@ -332,7 +345,13 @@ fun LazyListScope.modelEntryPickerItems(
                             .padding(horizontal = 16.dp)
                             .background(MaterialTheme.colorScheme.surfaceContainer, rowShape)
                             .clip(rowShape)
-                            .clickable { onToggleSelection(entry.id) }
+                            // [T-model-picker-longpress-delete] combinedClickable
+                            // keeps tap = toggle; the long-press fires only when
+                            // the caller wired [onDeleteEntry].
+                            .combinedClickable(
+                                onClick = { onToggleSelection(entry.id) },
+                                onLongClick = onDeleteEntry?.let { cb -> { cb(entry) } },
+                            )
                             .padding(horizontal = 16.dp, vertical = 13.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -411,6 +430,93 @@ fun LazyListScope.modelEntryPickerItems(
                             HorizontalDivider(
                                 modifier = Modifier.padding(start = 52.dp, end = 16.dp),
                                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ── Hidden models ──
+    // [T-model-picker-hidden-section] Collapsed by default; expand state piggy-
+    // backs on [collapsedInstanceIds] under a synthetic key (no remember in a
+    // LazyListScope). Rows behave like any entry row: tap toggles selection,
+    // long-press (when [onDeleteEntry] is wired) deletes.
+    if (hiddenEntries.isNotEmpty()) {
+        val hiddenKey = "__hidden__"
+        val hiddenExpanded = hiddenKey !in collapsedInstanceIds.value
+        item(key = "header_$hiddenKey") {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 20.dp, end = 16.dp, top = 16.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    stringResource(R.string.model_picker_hidden_section, hiddenEntries.size),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                Box(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .background(
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f),
+                            CircleShape,
+                        )
+                        .clip(CircleShape)
+                        .clickable {
+                            collapsedInstanceIds.value = if (hiddenExpanded) {
+                                collapsedInstanceIds.value + hiddenKey
+                            } else {
+                                collapsedInstanceIds.value - hiddenKey
+                            }
+                        },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        if (hiddenExpanded) m3Icon(Icons.Default.KeyboardArrowUp)
+                        else m3Icon(Icons.Default.KeyboardArrowDown),
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+        if (hiddenExpanded) {
+            hiddenEntries.forEachIndexed { index, entry ->
+                item(key = "hidden_${entry.id}") {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                            .background(
+                                MaterialTheme.colorScheme.surfaceContainer,
+                                RoundedCornerShape(12.dp),
+                            )
+                            .clip(RoundedCornerShape(12.dp))
+                            .combinedClickable(
+                                onClick = { onToggleSelection(entry.id) },
+                                onLongClick = onDeleteEntry?.let { cb -> { cb(entry) } },
+                            )
+                            .padding(horizontal = 16.dp, vertical = 13.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        PickerSelectionMark(entry.id in selectedIds)
+                        Spacer(Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                entry.model.displayName,
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                            Text(
+                                entry.model.id,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                             )
                         }
                     }

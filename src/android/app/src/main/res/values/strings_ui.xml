@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Shared UI-component strings (model pickers etc.), split out of the main
+    strings.xml so picker copy can grow without churning the monolith file.
+    Every key here MUST have a matching entry in values-zh/strings_ui.xml.
+-->
+<resources>
+    <!-- UnifiedModelPickerSheet: locate-to-current affordance -->
+    <string name="model_picker_locate_current">Locate current model</string>
+
+    <!-- UnifiedModelPickerSheet / ModelEntryPicker: hidden models section -->
+    <string name="model_picker_hidden_section">Hidden models (%1$d)</string>
+
+    <!-- Long-press entry menu + delete confirmation -->
+    <string name="model_picker_entry_menu_delete">Delete</string>
+    <string name="model_picker_delete_confirm_title">Delete model</string>
+    <string name="model_picker_delete_confirm_text">Remove %1$s from its provider? It will disappear from every picker and group.</string>
+</resources>

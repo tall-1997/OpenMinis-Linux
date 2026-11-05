@@ -38,7 +38,10 @@ object ToolLimitPrefs {
     // with no way to raise it, while the sub-agent cap sat one screen away.
     // Floor 50 keeps the guard meaningful (multi-step tool loops need room);
     // ceiling 1000 still bounds a runaway model burning tokens forever.
-    const val DEFAULT_MAIN_MAX_TURNS = 200
+    // Default 500: long autonomous tasks (research/ports) routinely exceed
+    // 200 turns; 500 keeps them untruncated while the 1000 ceiling still
+    // guards a runaway model.
+    const val DEFAULT_MAIN_MAX_TURNS = 500
     const val MIN_MAIN_MAX_TURNS = 50
     const val MAX_MAIN_MAX_TURNS = 1_000
     const val MAIN_TURNS_STEP = 10

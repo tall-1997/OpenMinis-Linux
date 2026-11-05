@@ -63,6 +63,16 @@ fun AddModelsToGroupScreen(
     val availableEntries = config.modelEntries.filter {
         !it.isHidden && it.id !in existingIds
     }
+    // [T-model-picker-hidden-section] Hidden entries stay reachable in the
+    // picker's collapsed section (and can still be added to the group).
+    val hiddenEntries = config.modelEntries.filter {
+        it.isHidden && it.id !in existingIds &&
+            (modalityFilter == null || modalityFilter.matches(it.model))
+    }
+    // [T-model-picker-longpress-delete] Long-press → confirm → remove the
+    // entry from the provider config entirely (ProviderRepository.removeEntry
+    // cascades group membership + agent-loop pins).
+    var entryToDelete by remember { mutableStateOf<com.openminis.app.data.model.ModelEntry?>(null) }
 
     val searchQuery = remember { mutableStateOf("") }
     var selectedIds by remember { mutableStateOf(setOf<String>()) }
@@ -138,6 +148,8 @@ fun AddModelsToGroupScreen(
                 modalityFilter = modalityFilter,
                 excludeIds = existingIds,
                 systemProviderLabel = systemProviderLabel,
+                hiddenEntries = hiddenEntries,
+                onDeleteEntry = { entryToDelete = it },
             )
         }
     }
@@ -147,6 +159,25 @@ fun AddModelsToGroupScreen(
             entry = entry,
             providerRepository = providerRepository,
             onDismiss = { quickTestEntry = null },
+        )
+    }
+
+    // [T-model-picker-longpress-delete] Same destructive confirm as the
+    // unified picker — deleting removes the entry everywhere, not just here.
+    entryToDelete?.let { entry ->
+        com.openminis.app.ui.components.MinisAlertDialog(
+            onDismissRequest = { entryToDelete = null },
+            title = stringResource(R.string.model_picker_delete_confirm_title),
+            text = stringResource(
+                R.string.model_picker_delete_confirm_text,
+                entry.model.displayName.ifBlank { entry.model.id },
+            ),
+            confirmText = stringResource(R.string.common_delete),
+            isDestructive = true,
+            onConfirm = {
+                providerRepository.removeEntry(entry.id)
+                entryToDelete = null
+            },
         )
     }
 }

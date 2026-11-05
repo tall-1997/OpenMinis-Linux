@@ -100,14 +100,14 @@ object MarkdownParser {
     enum class Alignment { LEFT, CENTER, RIGHT }
 
     /**
-     * Top-level entry: extract math, run the standard block parser on the
-     * placeholder-substituted text, then run the math-restore pass that
-     * promotes single-math paragraphs to MathBlock. Inline math placeholders
-     * stay in the paragraph text so the inline pass can render them via
-     * KaTeX. Mirrors iOS MarkdownMathExtractor.extract → cmark → restore.
-     */
+     * Top-level entry: normalize simple inline HTML ([MarkdownInlineHtml]),
+     * extract math, run the standard block parser on the placeholder-
+     * substituted text, then run the math-restore pass that promotes
+     * single-math paragraphs to MathBlock. Inline math placeholders stay in
+     * the paragraph text so the inline pass can render them via KaTeX.
+     * Mirrors iOS extract -> cmark -> restore. */
     fun parseWithMath(markdown: String): ParseResult {
-        val (cleaned, spans) = extractMath(markdown)
+        val (cleaned, spans) = extractMath(MarkdownInlineHtml.normalize(markdown))
         val rawBlocks = parse(cleaned)
         val restored = restoreMath(rawBlocks, spans)
         return ParseResult(restored, spans)
@@ -669,7 +669,7 @@ object MarkdownParser {
      * or inline code, mirroring the main loop's rules. A closer inside the mask
      * is rejected.
      */
-    private fun buildCodeMask(chars: String): BooleanArray {
+    internal fun buildCodeMask(chars: String): BooleanArray { // internal: MarkdownInlineHtml shares this mask
         val n = chars.length
         val mask = BooleanArray(n)
         var i = 0

@@ -22,14 +22,15 @@ class ToolLimitPrefsTest {
      * [T-main-session-turn-cap] The main agent loop's runaway guard is a
      * user setting now, not a hardcoded 200. Unprimed reads (unit tests,
      * early app startup) must fall back to the shipped default so behavior
-     * is unchanged until the user touches the slider.
+     * is unchanged until the user touches the slider. Default is 500 since
+     * [T-main-session-turn-cap-500]: long autonomous runs exceeded 200 turns.
      */
     @Test
     fun mainSessionTurnCapClampsAndDefaults() {
-        assertEquals(200, ToolLimitPrefs.DEFAULT_MAIN_MAX_TURNS)
+        assertEquals(500, ToolLimitPrefs.DEFAULT_MAIN_MAX_TURNS)
         assertEquals(ToolLimitPrefs.MIN_MAIN_MAX_TURNS, ToolLimitPrefs.clampMainTurns(1))
         assertEquals(ToolLimitPrefs.MAX_MAIN_MAX_TURNS, ToolLimitPrefs.clampMainTurns(9_000))
-        assertEquals(200, ToolLimitPrefs.clampMainTurns(200))
+        assertEquals(500, ToolLimitPrefs.clampMainTurns(500))
         // Unprimed prefs: the getter must return the default, not crash.
         assertEquals(ToolLimitPrefs.DEFAULT_MAIN_MAX_TURNS, ToolLimitPrefs.mainSessionMaxTurns())
         // The loop's legacy const must stay pinned to the same default so
