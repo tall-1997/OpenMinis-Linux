@@ -1017,21 +1017,39 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     }
                 }
                 is LLMStreamChunk.Usage -> {
-                    lastUsage = chunk.usage
+                    // Streaming providers emit PROGRESSIVE usage chunks (Gemini 3.x:
+                    // 2-4 per stream, with the cache fields only in the final one), so
+                    // keep the largest value per field — a trailing partial chunk must
+                    // not erase a cache hit or a context reading already reported.
+                    val prev = lastUsage
+                    val cur = chunk.usage
+                    lastUsage = if (prev == null) cur else cur.copy(
+                        inputTokens = maxOf(prev.inputTokens, cur.inputTokens),
+                        outputTokens = maxOf(prev.outputTokens, cur.outputTokens),
+                        cacheReadInputTokens = maxOf(
+                            prev.cacheReadInputTokens ?: 0, cur.cacheReadInputTokens ?: 0,
+                        ).takeIf { it > 0 },
+                        cacheCreationInputTokens = maxOf(
+                            prev.cacheCreationInputTokens ?: 0, cur.cacheCreationInputTokens ?: 0,
+                        ).takeIf { it > 0 },
+                        latestContextTokens = maxOf(prev.latestContextTokens, cur.latestContextTokens),
+                    )
                     // Update context token count for next turn's dynamicMaxTokens()
                     // and publish to _lastTurnContextTokens so the ContextPolicy
                     // gate in [checkContextBeforeSend] can see the latest pressure
-                    // without a DB round-trip.
-                    if (chunk.usage.latestContextTokens > 0) {
-                        lastContextTokens = chunk.usage.latestContextTokens
-                    } else if (chunk.usage.inputTokens > 0) {
+                    // without a DB round-trip. Read the MERGED usage so a trailing
+                    // partial chunk cannot lower an already-reported context size.
+                    val effective = lastUsage ?: cur
+                    if (effective.latestContextTokens > 0) {
+                        lastContextTokens = effective.latestContextTokens
+                    } else if (effective.inputTokens > 0) {
                         // Fallback when a provider omits latestContextTokens: inputTokens is
                         // now fresh-only (cached portion subtracted in the parser), so add the
                         // cache back to recover the true context size — otherwise a high
                         // cache-hit turn would under-report context pressure and skip offload.
-                        lastContextTokens = chunk.usage.inputTokens +
-                            (chunk.usage.cacheReadInputTokens ?: 0) +
-                            (chunk.usage.cacheCreationInputTokens ?: 0)
+                        lastContextTokens = effective.inputTokens +
+                            (effective.cacheReadInputTokens ?: 0) +
+                            (effective.cacheCreationInputTokens ?: 0)
                     }
                     if (lastContextTokens > 0) {
                         _lastTurnContextTokens.value = lastContextTokens

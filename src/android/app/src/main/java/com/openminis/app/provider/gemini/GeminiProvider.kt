@@ -526,11 +526,47 @@ class GeminiProvider(
         }
     }
 
+    /**
+     * Parse Gemini's `usageMetadata` into [LLMUsage].
+     *
+     * Mirrors iOS `GeminiWireFormat.usage(from:)` — every rule is pinned by live
+     * traffic (gemini-3.5/3.6/3.8-flash) plus the Vertex sample in the PR tests:
+     *  - `promptTokenCount` is the FULL input (a warm call reported the same 50898
+     *    as the cold one while also reporting cachedContentTokenCount=40930), so
+     *    the cached part is subtracted locally to keep inputTokens fresh-only.
+     *  - `cachedContentTokenCount` is ABSENT on a miss (not 0) and may cover only
+     *    part of the prompt, so it is surfaced only when > 0.
+     *  - On 3.x `totalTokenCount == prompt + candidates + thoughts` (thinking is NOT
+     *    inside candidatesTokenCount — one measured turn reported 30 candidates vs
+     *    766 thoughts). 2.5-and-earlier fold thoughts INTO candidates, so the total
+     *    identity decides whether to add them; when `totalTokenCount` is missing we
+     *    keep the historical candidates-only reading.
+     *  - Streaming emits PROGRESSIVE usage chunks; a metadata object without any
+     *    token counts (e.g. a trafficType-only preamble) is dropped instead of being
+     *    reported as a zeroed measurement.
+     */
     private fun extractUsage(json: JSONObject): LLMUsage? {
         val usage = json.optJSONObject("usageMetadata") ?: return null
+        val hasPrompt = usage.has("promptTokenCount")
+        val hasCandidates = usage.has("candidatesTokenCount")
+        val hasCached = usage.has("cachedContentTokenCount")
+        if (!hasPrompt && !hasCandidates && !hasCached) return null
+
+        val prompt = usage.optInt("promptTokenCount", 0)
+        val candidates = usage.optInt("candidatesTokenCount", 0)
+        val cacheRead = usage.optInt("cachedContentTokenCount", 0).takeIf { it > 0 }
+        val freshInput = cacheRead?.let { (prompt - it).takeIf { d -> d >= 0 } } ?: prompt
+
+        val thoughts = usage.optInt("thoughtsTokenCount", 0)
+        val total = usage.optInt("totalTokenCount", -1)
+        val thoughtsAreSeparate = thoughts > 0 && total >= prompt + candidates + thoughts
+        val output = if (thoughtsAreSeparate) candidates + thoughts else candidates
+
         return LLMUsage(
-            inputTokens = usage.optInt("promptTokenCount", 0),
-            outputTokens = usage.optInt("candidatesTokenCount", 0),
+            inputTokens = freshInput,
+            outputTokens = output,
+            cacheReadInputTokens = cacheRead,
+            latestContextTokens = prompt,
         )
     }
 
