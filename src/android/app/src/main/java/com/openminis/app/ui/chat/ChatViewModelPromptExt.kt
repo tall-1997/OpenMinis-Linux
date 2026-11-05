@@ -399,7 +399,6 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
                     null
                 },
                 taskAnchor = taskAnchorFragment(),
-                planFragment = planFragment(),
             ),
         )
     }
@@ -486,26 +485,6 @@ internal fun ChatViewModel.taskAnchorFragment(): String? = TaskAnchor.fragment(
         .firstOrNull { it.role == "user" && it.content.isNotBlank() }?.content,
 )
 
-/**
- * [T-plan-board-prompt] The live todo board, injected every turn in the
- * dynamic tail so the model sees current progress without a tool round-trip
- * and keeps advancing items with agent_plan. Keyed by the SAME
- * [ChatViewModel.activeSessionId] the tool path uses — prompt and store must
- * never disagree on which session's board they read. AgentPlanStore.list
- * throws on a corrupt board (by design, so the tool surfaces it); the prompt
- * path degrades to no fragment instead of bricking the request.
- *
- * An EMPTY board degrades to no fragment: the "create one" contract now
- * lives in the agent_plan tool description, which ships in the tool schema
- * every turn regardless of board state - the same channel desktop task tools
- * use - so the announcement can no longer vanish exactly when the board is
- * missing.
- */
-internal fun ChatViewModel.planFragment(): String? = runCatching {
-    val plans = com.openminis.app.tools.AgentPlanStore.list(activeSessionId, context)
-    com.openminis.app.tools.AgentPlanStore.boardSnapshotPrompt(plans)
-}.getOrNull()
-
 internal fun assembleDynamicTail(
     worldBookFragment: String,
     learnedPrefsFragment: String?,
@@ -513,7 +492,6 @@ internal fun assembleDynamicTail(
     runtimeContext: String,
     personalityReminder: String?,
     taskAnchor: String? = null,
-    planFragment: String? = null,
 ): String = buildString {
     if (worldBookFragment.isNotEmpty()) append(worldBookFragment)
     if (learnedPrefsFragment != null) {
@@ -531,14 +509,6 @@ internal fun assembleDynamicTail(
     if (taskAnchor != null && taskAnchor.isNotBlank()) {
         append("\n\n")
         append(taskAnchor)
-    }
-    // [T-plan-board-prompt] After the anchor, ahead of the runtime
-    // context: the plan fragment is per-turn state (the board mutates with
-    // every agent_plan call), so it can't live in the stable prefix — but it
-    // is more stable than the date line below it.
-    if (planFragment != null && planFragment.isNotBlank()) {
-        append("\n\n")
-        append(planFragment)
     }
     append(runtimeContext)
     if (personalityReminder != null) {

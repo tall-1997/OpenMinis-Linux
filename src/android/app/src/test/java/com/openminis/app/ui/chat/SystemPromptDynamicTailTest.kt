@@ -78,13 +78,13 @@ class SystemPromptDynamicTailTest {
     }
 
     /**
-     * [T-plan-mode-prompt-wiring] The plan fragment (mode flag + live board)
-     * sits after the task anchor and before the runtime context: it is
-     * per-turn session state, so it must live in the dynamic tail, but it is
-     * more byte-stable than the date line below it.
+     * [T-plan-board-live] The board has no system-prompt slot anymore: the
+     * frozen per-run copy duplicated the per-turn rider on the last user
+     * message (ChatViewModelPlanContextExt), so the anchor is the last
+     * stateful fragment before the runtime context.
      */
     @Test
-    fun planFragmentSitsBetweenTaskAnchorAndRuntimeContext() {
+    fun taskAnchorSitsDirectlyBeforeRuntimeContext() {
         val tail =
             assembleDynamicTail(
                 worldBookFragment = "",
@@ -93,26 +93,6 @@ class SystemPromptDynamicTailTest {
                 runtimeContext = renderRuntimeContext("d", "t", "l", 1),
                 personalityReminder = null,
                 taskAnchor = "ANCHOR",
-                planFragment = "<plan_board>BOARD</plan_board>",
-            )
-        val anchor = tail.indexOf("ANCHOR")
-        val plan = tail.indexOf("<plan_board>")
-        val runtime = tail.indexOf("Runtime context:")
-        assertTrue("anchor before plan fragment", anchor in 0 until plan)
-        assertTrue("plan fragment before runtime context", plan < runtime)
-    }
-
-    @Test
-    fun nullPlanFragmentLeavesNoSeparatorBehind() {
-        val tail =
-            assembleDynamicTail(
-                worldBookFragment = "",
-                learnedPrefsFragment = null,
-                recalledMemoryFragment = null,
-                runtimeContext = renderRuntimeContext("d", "t", "l", 1),
-                personalityReminder = null,
-                taskAnchor = "ANCHOR",
-                planFragment = null,
             )
         assertFalse(tail.contains("\n\n\n"))
         assertEquals(

@@ -18,14 +18,19 @@ import com.openminis.app.tools.AgentPlanStore
  * trimming can remove it. It is not a reminder in the prompt; it is data the
  * request carries.
  *
- * Injected only when the board is non-empty — an empty board would otherwise add
- * a "nothing planned" paragraph to every turn of every conversation.
+ * Injected only when the board has open work — an empty board would otherwise add
+ * a "nothing planned" paragraph to every turn of every conversation, and a
+ * fully-done board would re-announce landed work while the card retires.
  */
-internal fun ChatViewModel.planBoardPrompt(): String? {
-    val board = AgentPlanStore.list(activeSessionId, context)
-    if (board.isEmpty()) return null
-    return AgentPlanStore.render(activeSessionId, context)
-}
+internal fun ChatViewModel.planBoardPrompt(): String? = runCatching {
+    // [T-plan-snapshot-diet] Slim fuel: the snapshot strips uuids, drops
+    // landed descriptions and goes silent on empty/all-done boards, so the
+    // per-turn rider costs O(open work) instead of O(board). render() stays
+    // the on-demand full view behind op=list. list() throws on a corrupt
+    // board (by design, so the tool surfaces it); the prompt path degrades
+    // to no block instead of bricking the request.
+    AgentPlanStore.boardSnapshotPrompt(AgentPlanStore.list(activeSessionId, context))
+}.getOrNull()
 
 /**
  * [T-memory-recall-live] Recall recomputed per turn, not frozen per run.
