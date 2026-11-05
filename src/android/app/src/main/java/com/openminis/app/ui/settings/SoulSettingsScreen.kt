@@ -47,6 +47,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -117,7 +118,13 @@ fun SoulSettingsScreen(
     var lang by remember { mutableStateOf(SoulMetadata.DEFAULT.lang) }
     var pendingRestoreBody by remember { mutableStateOf<String?>(null) }
     var loaded by remember { mutableStateOf(false) }
-    var editingPromptId by remember { mutableStateOf<String?>(null) }
+    // [T-soul-editor-rememberable] The in-screen prompt editor is a
+    // screen-swap, not a nav-backstack entry, so `remember` lost the open
+    // editor on process death/configuration change (the user landed back on
+    // the list with edits gone). rememberSaveable keeps the id — and thus the
+    // editor — across recreation. A new nav route was considered and rejected
+    // as a structural change; the saveable id preserves the same behaviour.
+    var editingPromptId by rememberSaveable { mutableStateOf<String?>(null) }
     var importError by remember { mutableStateOf<String?>(null) }
     var pendingImport by remember { mutableStateOf<PersonaImportPreview.Ready?>(null) }
     var pendingDelete by remember { mutableStateOf<PersonaPromptEntry?>(null) }

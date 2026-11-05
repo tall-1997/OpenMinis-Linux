@@ -391,7 +391,7 @@ fun AutomationRuleEditScreen(
                             )
                             return@launch
                         }
-                        val result = vm.save(ruleId, spec, AutomationRuleTools.knownToolNames())
+                        val result = vm.save(ruleId, spec, AutomationRuleTools.knownToolNames(context))
                         if (result.isEmpty()) onBack() else problems = result
                     }
                 },

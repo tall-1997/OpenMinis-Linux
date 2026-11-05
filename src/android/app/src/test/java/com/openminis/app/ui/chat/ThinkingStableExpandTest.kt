@@ -111,14 +111,11 @@ class ThinkingStableExpandTest {
         )
     }
 
-    @Test
-    fun `legacy renderer folds the same phase signal`() {
-        val src = ProductionSources.read("ui/chat/ChatAssistantMessageUI.kt")
-        assertTrue(
-            "AssistantMessageView must use the same complete signal as the flat path",
-            "isStreaming = message.isStreaming && !hasReplyTextAfter(message.toolBlocks, index)," in src,
-        )
-    }
+    // NOTE: the "legacy renderer folds the same phase signal" test was
+    // removed together with the AssistantMessageView dead-code renderer it
+    // asserted against (unreachable — the flat FlatChatItem path is the only
+    // assistant renderer). ThinkingBlock itself still carries the
+    // hasReplyTextAfter contract, exercised via the builder test above.
 
     @Test
     fun `thinking content poll is gone - batcher paces recomposition`() {

@@ -4,8 +4,8 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.openminis.app.automation.AutomationEvents
 import com.openminis.app.automation.AutomationRuleEntity
-import com.openminis.app.automation.AutomationRuleManager
 import com.openminis.app.automation.AutomationRunEntity
 import com.openminis.app.automation.RuleSpec
 import com.openminis.app.logging.AppLogger
@@ -33,7 +33,10 @@ import kotlinx.coroutines.withContext
  */
 class AutomationRulesViewModel(private val appContext: Context) : ViewModel() {
 
-    private val manager = AutomationRuleManager(appContext)
+    // [P1-automation-hub] The process-wide hub (same instance the alarm
+    // receiver and the tools surface use) — a private instance here would run
+    // its own gate/debounce memory and re-register alarms behind the hub's back.
+    private val manager = AutomationEvents.manager(appContext)
 
     /** Bumped by [refresh] to retry DB binding after safe-mode recovery. */
     private val retry = MutableStateFlow(0)

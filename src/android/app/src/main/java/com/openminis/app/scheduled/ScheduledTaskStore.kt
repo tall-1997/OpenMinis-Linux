@@ -75,7 +75,7 @@ class ScheduledTaskStore(private val context: Context) {
      * [T-scheduled-binding-exact] The pin used to be tested with
      * `binding.contains(id)`. Entry ids are `instance/model`, so removing
      * `inst/gpt-4` also un-pinned every task bound to `inst/gpt-4o` — the same
-     * over-match [com.openminis.app.data.db.ChatDao.clearBindingReferencing]
+     * over-match [com.openminis.app.data.db.ChatDao.clearBindingsReferencing]
      * had, and it silently dropped the user's model choice. Match the parsed
      * `entryId` against the removed set instead (same JSON shape
      * [ScheduledAgentRunner] reads; the only writer,

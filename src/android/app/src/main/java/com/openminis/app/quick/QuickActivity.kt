@@ -1,9 +1,7 @@
 package com.openminis.app.quick
 
 import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
-import android.webkit.MimeTypeMap
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -12,7 +10,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -31,7 +28,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -41,7 +37,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -53,31 +48,27 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.openminis.app.R
 import com.openminis.app.logging.AppLogger
-import com.openminis.app.session.InputAttachment
 import com.openminis.app.ui.settings.KEY_DYNAMIC_COLOR
 import com.openminis.app.ui.settings.KEY_FONT_APP_BASE
 import com.openminis.app.ui.settings.KEY_THEME_MODE
 import com.openminis.app.ui.settings.fontScaleForLevel
 import com.openminis.app.ui.settings.getAppearancePrefs
 import com.openminis.app.ui.theme.MinisTheme
-import java.io.File
 
 /**
  * [E-batch-quick-invocation] The summon-anywhere half-screen panel.
  *
- * Entries: floating ball (tap / double tap), quick-settings tile, the system
- * share sheet (ACTION_SEND / ACTION_SEND_MULTIPLE) and the app itself. It is
+ * Entries: floating ball (tap / double tap), quick-settings tile and the app
+ * itself. The system share sheet is NOT an entry — the manifest declares no
+ * ACTION_SEND filter here (ShareReceiverActivity is the single share target,
+ * T157), and the formerly present (but unreachable) ACTION_SEND handling was
+ * removed [Wave3 #9]. It is
  * a translucent activity showing a bottom card — it never pulls the full
  * ChatViewModel; sending runs the prompt unattended through
  * [QuickPromptDispatcher] on the app's newest session and reports completion
  * via a system notification.
  *
  * Behaviour:
- *  - ACTION_SEND text lands in the composer pre-filled (image streams are not
- *    supported in v1 — a toast explains),
- *  - ACTION_SEND_MULTIPLE images are copied into the quick attachment
- *    directory (content grants die with the share, so the bytes are staged
- *    immediately) and travel with the prompt as [InputAttachment]s,
  *  - a plain re-open within [QuickPanelPolicy.RECENT_PANEL_MS] shows the
  *    outcome of the last panel send instead of a blank composer,
  *  - a ball double-tap opens the panel with the captured screen context
@@ -96,7 +87,9 @@ class QuickActivity : ComponentActivity() {
     // surviving in `pendingText` is acceptable for v1 — the reference behaves
     // the same way.
     private val composerText = mutableStateOf("")
-    private val stagedImages = mutableStateListOf<InputAttachment>()
+    // [Wave3 #9] stagedImages removed with the unreachable ACTION_SEND path:
+    // its only writer was handleSendMultiple (dead code), so the chip row and
+    // the send()-attachment plumbing were dead state as well.
     private val runningSessionId = mutableStateOf<String?>(null)
     private val sending = mutableStateOf(false)
 
@@ -147,12 +140,15 @@ class QuickActivity : ComponentActivity() {
     // Intent handling                                                     //
     // ------------------------------------------------------------------ //
 
+    // [Wave3 #9] The ACTION_SEND / ACTION_SEND_MULTIPLE branches are gone.
+    // The manifest deliberately declares NO send filter for this activity
+    // (AndroidManifest.xml: "Deliberately NO ACTION_SEND filter --
+    // ShareReceiverActivity is the single share target"), so both handlers
+    // were unreachable: QuickTileService starts this activity with an explicit
+    // no-action intent and the launcher tile does the same. The share-sheet
+    // flow lives in ShareReceiverActivity (T157 wildcard).
     private fun handleIntent(intent: Intent?) {
-        when (intent?.action) {
-            Intent.ACTION_SEND -> handleSend(intent)
-            Intent.ACTION_SEND_MULTIPLE -> handleSendMultiple(intent)
-            else -> handleSummon()
-        }
+        handleSummon()
     }
 
     /**
@@ -170,84 +166,6 @@ class QuickActivity : ComponentActivity() {
         }
     }
 
-    /** ACTION_SEND: text into the composer; stream payloads are not supported in v1. */
-    private fun handleSend(intent: Intent) {
-        appendShareText(
-            subject = intent.getStringExtra(Intent.EXTRA_SUBJECT),
-            text = intent.getStringExtra(Intent.EXTRA_TEXT)?.toString(),
-        )
-        @Suppress("DEPRECATION")
-        val stream = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
-        } else {
-            intent.getParcelableExtra(Intent.EXTRA_STREAM)
-        }
-        if (stream != null) {
-            toast(R.string.quick_share_image_unsupported)
-        }
-    }
-
-    /**
-     * ACTION_SEND_MULTIPLE: stage every stream into the quick attachment
-     * directory. Content URIs are only readable while the share grant lives,
-     * so the bytes are copied NOW, before the sending app's grant can expire.
-     */
-    private fun handleSendMultiple(intent: Intent) {
-        appendShareText(
-            subject = intent.getStringExtra(Intent.EXTRA_SUBJECT),
-            text = intent.getStringExtra(Intent.EXTRA_TEXT)?.toString(),
-        )
-        @Suppress("DEPRECATION")
-        val uris: List<Uri> = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java).orEmpty()
-        } else {
-            intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM).orEmpty()
-        }
-        for (uri in uris) {
-            val mime = contentResolver.getType(uri) ?: intent.type ?: ""
-            if (!QuickPanelPolicy.isImageMime(mime)) {
-                toast(R.string.quick_share_image_unsupported)
-                continue
-            }
-            stageImage(uri, mime)?.let { stagedImages.add(it) }
-        }
-    }
-
-    private fun appendShareText(subject: String?, text: String?) {
-        val extracted = QuickPanelPolicy.extractShareText(subject, text)
-        if (extracted.isEmpty()) return
-        composerText.value =
-            if (composerText.value.isBlank()) extracted
-            else composerText.value + "\n" + extracted
-    }
-
-    /** Copy [uri] into the quick attachment directory. Returns the attachment, or null on failure. */
-    private fun stageImage(uri: Uri, mime: String): InputAttachment? {
-        val dir = attachmentDir()
-        val ext = MimeTypeMap.getSingleton().getExtensionFromMimeType(mime.substringBefore(';'))
-            ?: uri.lastPathSegment?.substringAfterLast('.', "")?.takeIf { it.length in 1..5 }
-            ?: "png"
-        val dest = File(dir, "quick-img-${System.currentTimeMillis()}-${(0..999).random()}.$ext")
-        return try {
-            contentResolver.openInputStream(uri)?.use { input ->
-                dest.outputStream().use { output -> input.copyTo(output) }
-            } ?: return null
-            InputAttachment(
-                fileName = dest.name,
-                uri = Uri.fromFile(dest),
-                mimeType = mime.substringBefore(';'),
-                kind = InputAttachment.Kind.IMAGE,
-            )
-        } catch (t: Throwable) {
-            AppLogger.warning("QuickActivity", "stageImage($uri) failed: ${t.message}")
-            dest.delete()
-            null
-        }
-    }
-
-    private fun attachmentDir(): File =
-        File(getFilesDir(), ATTACHMENT_DIR).apply { if (!exists()) mkdirs() }
-
     // ------------------------------------------------------------------ //
     // Sending                                                             //
     // ------------------------------------------------------------------ //
@@ -255,11 +173,10 @@ class QuickActivity : ComponentActivity() {
     private fun send() {
         if (sending.value) return
         val raw = composerText.value.trim()
-        if (raw.isEmpty() && stagedImages.isEmpty()) return
+        if (raw.isEmpty()) return
         sending.value = true
         val prompt: String = raw
-        val attachments = stagedImages.toList()
-        QuickPromptDispatcher.send(this, prompt, attachments) { sessionId ->
+        QuickPromptDispatcher.send(this, prompt, emptyList()) { sessionId ->
             sending.value = false
             if (sessionId == null) {
                 // Could not start (no provider / half-built app): keep the
@@ -268,7 +185,6 @@ class QuickActivity : ComponentActivity() {
             } else {
                 runningSessionId.value = sessionId
                 composerText.value = ""
-                stagedImages.clear()
                 // The dispatcher also records this; the panel keeps its own
                 // copy so the reopen window survives a quick close.
                 prefs.markPanelSession(sessionId)
@@ -298,7 +214,7 @@ class QuickActivity : ComponentActivity() {
     private fun QuickPanel() {
         val colors = MaterialTheme.colorScheme
         // Tap-outside dismisses only when nothing would be lost.
-        val dismissable = composerText.value.isBlank() && stagedImages.isEmpty() && runningSessionId.value == null
+        val dismissable = composerText.value.isBlank() && runningSessionId.value == null
         val dismissInteraction = remember { MutableInteractionSource() }
         Box(
             modifier = Modifier
@@ -345,9 +261,6 @@ class QuickActivity : ComponentActivity() {
                         }
                     }
 
-                    if (stagedImages.isNotEmpty()) {
-                        ImagesChip()
-                    }
                     runningSessionId.value?.let { RunningBanner(it) }
 
                     OutlinedTextField(
@@ -377,8 +290,7 @@ class QuickActivity : ComponentActivity() {
                         Spacer(Modifier.width(8.dp))
                         IconButton(
                             onClick = { send() },
-                            enabled = !sending.value &&
-                                (composerText.value.isNotBlank() || stagedImages.isNotEmpty()),
+                            enabled = !sending.value && composerText.value.isNotBlank(),
                             modifier = Modifier
                                 .size(44.dp)
                                 .clip(RoundedCornerShape(12.dp))
@@ -392,43 +304,6 @@ class QuickActivity : ComponentActivity() {
                         }
                     }
                 }
-            }
-        }
-    }
-
-    @Composable
-    private fun ImagesChip() {
-        val colors = MaterialTheme.colorScheme
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 8.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(colors.surfaceVariant)
-                .padding(horizontal = 10.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Icon(
-                Icons.Outlined.Image,
-                contentDescription = null,
-                tint = colors.onSurfaceVariant,
-                modifier = Modifier.size(14.dp),
-            )
-            Text(
-                text = stringResource(R.string.quick_panel_images_attached, stagedImages.size),
-                style = MaterialTheme.typography.bodySmall,
-                color = colors.onSurfaceVariant,
-                maxLines = 1,
-                modifier = Modifier.weight(1f),
-            )
-            IconButton(onClick = { stagedImages.clear() }, modifier = Modifier.size(20.dp)) {
-                Icon(
-                    Icons.Outlined.Close,
-                    contentDescription = stringResource(R.string.common_close),
-                    tint = colors.onSurfaceVariant,
-                    modifier = Modifier.size(14.dp),
-                )
             }
         }
     }
@@ -458,9 +333,5 @@ class QuickActivity : ComponentActivity() {
         }
         // sessionId identifies the conversation the banner deep-links into;
         // the link itself is built in openRunningSession().
-    }
-
-    companion object {
-        const val ATTACHMENT_DIR = "quick_attachments"
     }
 }

@@ -12,6 +12,19 @@ import com.openminis.app.data.model.ProviderConfig
  * round-trip). Callers should treat the return value as the new
  * authoritative state — using the in-memory pre-call object would
  * leak the legacy uuid form into [_config.value].
+ *
+ * [Wave3-fix-11] The DB half uses [ProviderConfigDao.replaceDiff] (writes only
+ * rows that actually changed) instead of the 5-table clear+replaceAll, which
+ * rewrote the entire provider config on every slot pick / pin toggle / endpoint
+ * stamp — all serialized behind the single persistence worker. The JSON mirror
+ * is still written on EVERY persist and still `commit()`ed, on purpose: it is
+ * the downgrade-compatibility copy AND its hash sits in the DB meta row, so a
+ * throttled or deferred mirror write would leave DB(hash=new) + disk(JSON=old),
+ * forcing the next cold start through the hash-mismatch repair path — costing
+ * a full DB round-trip to save one prefs commit — and dropping mirror
+ * fidelity for a downgraded build that reads only the JSON. The commit is
+ * 5–30 ms on the worker thread; the expensive half was the DB rewrite, and
+ * that is what replaceDiff removes.
  */
 internal suspend fun ProviderRepository.persistToDbAndMirror(config: ProviderConfig): ProviderConfig {
     // First serialize without the hash so the meta row reflects the
@@ -20,7 +33,7 @@ internal suspend fun ProviderRepository.persistToDbAndMirror(config: ProviderCon
     val mirrorStr = json.encodeToString(ProviderConfig.serializer(), config)
     val mirrorHash = hashJsonMirror(mirrorStr)
     val snapshot = config.toSnapshot(json, jsonSyncHash = mirrorHash)
-    providerDao.replaceAll(
+    providerDao.replaceDiff(
         instances = snapshot.instances,
         entries = snapshot.entries,
         groups = snapshot.groups,

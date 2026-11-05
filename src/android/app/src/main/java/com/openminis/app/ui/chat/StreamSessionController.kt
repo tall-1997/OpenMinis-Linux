@@ -22,7 +22,11 @@ import kotlinx.coroutines.launch
  * Set to false to restore the previous full-snapshot path verbatim (one-line
  * rollback); with the switch off every code path below behaves exactly as
  * before the optimization. A @Volatile var (not a const) so the equivalence
- * test can exercise both paths in one process; production never writes it.
+ * test can exercise both paths in one process; production never writes it —
+ * the ONLY writer is StreamingIncrementalPublishTest, which flips the switch
+ * per test to pin both paths. (This is why the var lives in production code
+ * while having no production writer: the guarded paths below are the
+ * kill-switch rollback.)
  */
 @Volatile
 internal var STREAM_INCREMENTAL_PUBLISH = true
@@ -97,14 +101,10 @@ internal class StreamSessionController(
     // length; the newline fast-path flushes immediately on a line break once
     // enough new chars have accumulated, gated to short docs so dense
     // box-drawing streams don't pin the flush rate to the per-token cadence.
-    fun streamFlushThrottleMs(len: Int): Long = when {
-        len < 500 -> 200L
-        len < 2_000 -> 300L
-        len < 32_000 -> 500L
-        len < 64_000 -> 1_000L
-        len < 128_000 -> 1_500L
-        else -> 2_000L
-    }
+    // [T-android-throttle-ladder-converge] Ladder body moved to
+    // [StreamingThrottle.ladderFor]; the flush surface uses the default 200ms
+    // first tier.
+    fun streamFlushThrottleMs(len: Int): Long = StreamingThrottle.ladderFor(len)
 
     fun updateAssistantMessage(
         id: String,
@@ -118,7 +118,7 @@ internal class StreamSessionController(
         // message list. This keeps the `messages` StateFlow reference stable
         // across the turn so ChatScreen's top-level reads
         // (`messages.any/.associate/.isNotEmpty/.lastOrNull`) don't trigger
-        // a full recompose of the 8980-line composable on every token.
+        // a full recompose of the screen-sized mega-composable on every token.
         //
         // On stream end (isStreaming=false), drain the accumulated delta
         // back into the canonical message in a single `_messages` emit, then

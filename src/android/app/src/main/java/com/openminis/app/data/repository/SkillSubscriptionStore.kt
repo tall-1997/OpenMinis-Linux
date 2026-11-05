@@ -2,13 +2,13 @@ package com.openminis.app.data.repository
 
 import android.content.Context
 import android.util.Log
+import com.openminis.app.util.Digest
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
-import java.security.MessageDigest
 import java.util.UUID
 
 /**
@@ -108,11 +108,8 @@ object SkillSubscriptionStore {
         }
     }
 
-    internal fun sha256Hex(text: String): String {
-        val md = MessageDigest.getInstance("SHA-256")
-        val digest = md.digest(text.toByteArray(Charsets.UTF_8))
-        return digest.joinToString("") { b -> "%02x".format(b) }
-    }
+    /** [T-sha256-single-source] Kept as a member for the existing test reference. */
+    internal fun sha256Hex(text: String): String = Digest.sha256Hex(text)
 
     internal fun pinMatches(pin: String?, actual: String): Boolean {
         val expected = pin?.trim()?.lowercase().orEmpty()

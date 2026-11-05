@@ -31,12 +31,8 @@ object McpServerCore {
 
     // ─── Data types ────────────────────────────────────────────────────────
 
-    data class Request(
-        val method: String,
-        val params: JSONObject?,
-        val headers: Map<String, String>,
-        val id: Any?, // null for notifications; may be Int, String, or null
-    )
+    // [P2-dead-code] data class Request removed with parseJsonRpc — its last
+    // constructor caller. The server routes via handle()'s explicit params.
 
     data class Response(
         val statusCode: Int,
@@ -220,76 +216,11 @@ object McpServerCore {
 
     // ─── HTTP parsing helpers ──────────────────────────────────────────────
 
-    /**
-     * Minimal HTTP/1.1 request parse. Supports POST with Content-Length only.
-     * Returns null if the request is incomplete or unparseable.
-     */
-    private val HTTP_METHODS = setOf("GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS", "PATCH")
-
-    fun parseHttpRequest(rawRequest: String): ParsedRequest? {
-        val lines = rawRequest.split("\r\n", "\n")
-        if (lines.isEmpty()) return null
-
-        val requestLine = lines[0].trim()
-        val parts = requestLine.split(" ")
-        if (parts.size < 2) return null
-        val method = parts[0].uppercase()
-        // A real request line always carries a known verb; anything else is
-        // garbage (or a port scan) and must not parse into a ParsedRequest.
-        if (method !in HTTP_METHODS) return null
-        val path = parts[1]
-
-        val headers = mutableMapOf<String, String>()
-        var i = 1
-        while (i < lines.size && lines[i].isNotBlank()) {
-            val headerLine = lines[i]
-            val colonIdx = headerLine.indexOf(':')
-            if (colonIdx > 0) {
-                val key = headerLine.substring(0, colonIdx).trim().lowercase()
-                val value = headerLine.substring(colonIdx + 1).trim()
-                headers[key] = value
-            }
-            i++
-        }
-
-        // Find body start (after blank line)
-        var body = ""
-        if (i < lines.size) {
-            // i points to the blank line, body starts at i+1
-            body = lines.subList(i + 1, lines.size).joinToString("\n")
-        }
-
-        val contentLength = headers["content-length"]?.toIntOrNull() ?: 0
-        if (contentLength > 0 && body.length > contentLength) {
-            body = body.substring(0, contentLength)
-        }
-
-        return ParsedRequest(method, path, headers, body, contentLength)
-    }
-
-    data class ParsedRequest(
-        val method: String,
-        val path: String,
-        val headers: Map<String, String>,
-        val body: String,
-        val contentLength: Int,
-    )
-
-    /**
-     * Extract JSON-RPC request from an HTTP body.
-     * Returns null if the body is not valid JSON-RPC.
-     */
-    fun parseJsonRpc(body: String): Request? {
-        if (body.isBlank()) return null
-        return runCatching {
-            val obj = JSONObject(body)
-            val method = obj.optString("method", "")
-            if (method.isEmpty()) return null
-            val params = obj.optJSONObject("params")
-            val id: Any? = if (obj.has("id") && !obj.isNull("id")) obj.opt("id") else null
-            Request(method, params, emptyMap(), id)
-        }.getOrNull()
-    }
+    // [P2-dead-code] parseHttpRequest/ParsedRequest/parseJsonRpc were removed:
+    // zero production callers (the live request parse is the byte-level inline
+    // implementation in McpHttpServer.handleConnection, which handles
+    // Content-Length chunk reading the String-based copies cannot) and their
+    // semantics had drifted from the inline parser. Git history keeps them.
 
     /** Build a minimal HTTP response string. */
     fun buildHttpResponse(response: Response): String {
@@ -322,28 +253,7 @@ object McpServerCore {
         return sb.toString()
     }
 
-    /**
-     * Build an HTTP 405 response with CORS headers.
-     */
-    fun methodNotAllowedResponse(allowedMethods: String = "POST, OPTIONS"): String {
-        return buildHttpResponse(
-            Response(405, """{"error":"Method Not Allowed. Use POST to /mcp or /message"}""", "application/json")
-        ).replace("HTTP/1.1 405 Unknown", "HTTP/1.1 405 Method Not Allowed")
-            .replace("Connection: close", "Allow: $allowedMethods\r\nConnection: close")
-    }
-
-    /**
-     * Build an HTTP 200 response for OPTIONS (CORS preflight).
-     */
-    fun corsPreflightResponse(): String {
-        return buildString {
-            append("HTTP/1.1 204 No Content\r\n")
-            append("Access-Control-Allow-Origin: *\r\n")
-            append("Access-Control-Allow-Methods: POST, OPTIONS\r\n")
-            append("Access-Control-Allow-Headers: Content-Type, Authorization\r\n")
-            append("Access-Control-Max-Age: 86400\r\n")
-            append("Connection: close\r\n")
-            append("\r\n")
-        }
-    }
+    // [P2-dead-code] methodNotAllowedResponse / corsPreflightResponse were
+    // removed: the server writes its 405 / 204 (OPTIONS) responses inline in
+    // handleConnection; these builders had no production caller. Git history.
 }

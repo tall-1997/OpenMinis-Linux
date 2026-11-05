@@ -372,7 +372,7 @@ fun ModelGroupsScreen(
             text = {
                 Column {
                     Text(
-                        "Enter a name for the new model group.",
+                        stringResource(R.string.model_groups_new_group_hint),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -868,8 +868,19 @@ private fun GroupRow(
      */
     dragHandleModifier: Modifier? = null,
 ) {
-    val memberNames = group.memberEntryIds.mapNotNull { entryId ->
-        config.modelEntries.find { it.id == entryId }?.model?.displayName
+    // [T-modelgroups-row-scan] Three O(members × entries) scans used to run in
+    // composition on EVERY recomposition of the row (member names, enabled
+    // count, modality markers). One id→entry index is remembered per entries
+    // list; each derived value remembers against the smallest key it depends
+    // on, so unrelated recompositions reuse the results.
+    val membersById = remember(config.modelEntries) {
+        config.modelEntries.associateBy { it.id }
+    }
+    val enabledInstanceIds = remember(config.instances) {
+        config.instances.filter { it.isEnabled }.map { it.id }.toSet()
+    }
+    val memberNames = remember(group.memberEntryIds, membersById) {
+        group.memberEntryIds.mapNotNull { membersById[it]?.model?.displayName }
     }
     val preview = if (memberNames.size <= 3) {
         memberNames.joinToString(", ")
@@ -884,10 +895,9 @@ private fun GroupRow(
     // will actually consider. When every member sits behind a disabled
     // provider, surface a warning so the user understands why the group
     // appears empty in chat.
-    val enabledInstanceIds = config.instances.filter { it.isEnabled }.map { it.id }.toSet()
     val totalMembers = group.memberEntryIds.size
-    val enabledMembers = group.memberEntryIds.count { entryId ->
-        config.modelEntries.find { it.id == entryId }?.providerInstanceId in enabledInstanceIds
+    val enabledMembers = remember(group.memberEntryIds, membersById, enabledInstanceIds) {
+        group.memberEntryIds.count { membersById[it]?.providerInstanceId in enabledInstanceIds }
     }
     val allDisabled = totalMembers > 0 && enabledMembers == 0
 
@@ -933,11 +943,16 @@ private fun GroupRow(
                 // most distinctive modalities (inputs + outputs) right after the
                 // title, in priority order, for at-a-glance "what is this group
                 // for". Ports iOS ModelGroupsView (7caa580a + e0a7cd5f).
-                groupTopModalities(group, config).forEach { marker ->
+                // [T-modelgroups-row-scan] remember-guarded: recomputed only
+                // when the group's members or the entry list change.
+                val topModalities = remember(group.memberEntryIds, membersById) {
+                    groupTopModalities(group, config)
+                }
+                topModalities.forEach { marker ->
                     GroupModalityIcon(marker)
                 }
-                if (isPrimary) BadgeLabel("Primary", MaterialTheme.colorScheme.primary)
-                if (isSub) BadgeLabel("Sub", MaterialTheme.colorScheme.tertiary)
+                if (isPrimary) BadgeLabel(stringResource(R.string.model_group_badge_primary), MaterialTheme.colorScheme.primary)
+                if (isSub) BadgeLabel(stringResource(R.string.model_group_badge_sub), MaterialTheme.colorScheme.tertiary)
                 if (allDisabled) {
                     BadgeLabel(
                         stringResource(R.string.model_group_no_usable_models_badge),
@@ -952,10 +967,11 @@ private fun GroupRow(
             // because it's still the source of truth for what's in the
             // group; the parenthetical reports disabled count.
             val disabledCount = totalMembers - enabledMembers
+            // [T-hardcoded-strings] "models (N disabled)" was English-only.
             val subtitleText = if (disabledCount > 0) {
-                "$strategyLabel · $totalMembers models ($disabledCount disabled)"
+                "$strategyLabel · " + stringResource(R.string.model_group_models_disabled, totalMembers, disabledCount)
             } else {
-                "$strategyLabel · $totalMembers models"
+                "$strategyLabel · " + stringResource(R.string.model_group_models_plain, totalMembers)
             }
             Text(
                 text = subtitleText,

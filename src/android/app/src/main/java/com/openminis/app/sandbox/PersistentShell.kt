@@ -54,6 +54,14 @@ class PersistentShell(
     @Volatile
     private var stdinWriter: BufferedWriter? = null
 
+    /**
+     * Serializes every stdin write. executeCommand writes from its IO
+     * coroutine while applyEnvironment/refreshPath (broadcast paths outside
+     * the session mutex) can write concurrently — interleaved writes would
+     * splice two commands into one stdin line and corrupt both.
+     */
+    private val stdinLock = Any()
+
     private val isStarting = AtomicBoolean(false)
 
     /** Pending command callback — only one command at a time. */
@@ -212,31 +220,16 @@ class PersistentShell(
         // functions defined; force the next command to re-source the prelude.
         sourcedOffloadSignature = null
 
-        val cmd = mutableListOf<String>()
-        cmd.add(rootfsManager.prootBinary.absolutePath)
-        cmd.add("-0")
-        // T141: see PRootKernel.buildProotCommand for rationale — translates
-        // hardlinks to symlinks so apk install of binutils/gcc works.
-        cmd.add("--link2symlink")
-        // So destroyForcibly on timeout also reaps the guest command, not only proot.
-        cmd.add("--kill-on-exit")
-        cmd.add("-r")
-        cmd.add(rootfsManager.rootfsDir.absolutePath)
-        cmd.add("-b"); cmd.add("/dev")
-        cmd.add("-b"); cmd.add("/proc")
-        cmd.add("-b"); cmd.add("/sys")
-        cmd.add("-w"); cmd.add("/root")
-
-        // Apply this session's bind mounts (session-specific, not global)
-        for ((linuxPath, hostPath) in sessionBindMounts) {
-            cmd.add("-b")
-            cmd.add("$hostPath:$linuxPath")
-        }
-
-        val handlers = NativeOffloadServer.registeredHandlers
-        if (handlers.isNotEmpty()) {
-            cmd.add("--native-offload=${NativeOffloadServer.socketName}:${handlers.joinToString(",")}")
-        }
+        // Shared proot prefix (formerly a hand-rolled copy — see
+        // PRootKernel.commonArgv). Same flags, same order; the per-session
+        // bind snapshot and the native-offload socket are included.
+        val cmd = PRootKernel.commonArgv(
+            prootPath = rootfsManager.prootBinary.absolutePath,
+            rootfsDir = rootfsManager.rootfsDir.absolutePath,
+            bindMounts = sessionBindMounts,
+            includeSys = true,
+            includeNativeOffload = true,
+        )
 
         cmd.add("/bin/bash")
         cmd.add("-c")
@@ -483,8 +476,24 @@ class PersistentShell(
     private val lineBudget = TokenBucket(ratePerSec = 250.0, burst = 500)
 
     private fun feedLines(text: String, callback: (String) -> Unit) {
-        if (!lineBudget.tryTake(System.currentTimeMillis())) return
         val lines = text.split('\n')
+        if (!lineBudget.tryTake(System.currentTimeMillis())) {
+            // Over budget. Dropping the whole chunk froze the live stream view
+            // at an older frame for the length of the burst; keep only the
+            // newest emitted-worthy line(s) so a progress meter still shows its
+            // latest state. This path thins the REAL-TIME line callback only:
+            // captured output is untouched because dispatchDecoded runs
+            // appendOutput(step.output) BEFORE feedLines.
+            val first = maxOf(0, lines.size - 2)
+            for (i in first until lines.size) {
+                val line = lines[i].split('\r').lastOrNull { it.isNotEmpty() }.orEmpty()
+                val complete = i < lines.size - 1 || text.endsWith('\n')
+                if (line.isNotEmpty() && (complete || i == lines.size - 1)) {
+                    emitLine(callback, line)
+                }
+            }
+            return
+        }
         for (i in lines.indices) {
             // CR overwrites a progress meter. Keep the latest non-empty
             // segment so "50%\r51%\r" becomes "51%", not "5051".
@@ -700,8 +709,10 @@ class PersistentShell(
                     }
 
                     try {
-                        writer.write(wrappedCommand)
-                        writer.flush()
+                        synchronized(stdinLock) {
+                            writer.write(wrappedCommand)
+                            writer.flush()
+                        }
                     } catch (e: Exception) {
                         beat?.cancel()
                         pendingCallback = null
@@ -741,15 +752,28 @@ class PersistentShell(
         val writer = stdinWriter ?: return
         withContext(Dispatchers.IO) {
             try {
-                for (key in previousKeys - envVars.keys) {
-                    writer.write("unset $key\n")
+                synchronized(stdinLock) {
+                    for (key in previousKeys - envVars.keys) {
+                        // Keys reach the shell verbatim inside `unset`/`export`
+                        // lines; a crafted key would execute shell syntax, so
+                        // illegal names are logged and skipped, not sanitized.
+                        if (!TerminalSession.ENV_KEY.matches(key)) {
+                            Log.w(TAG, "applyEnvironment: skipping illegal env key '${key.take(32)}'")
+                            continue
+                        }
+                        writer.write("unset $key\n")
+                    }
+                    for ((key, value) in envVars) {
+                        if (!TerminalSession.ENV_KEY.matches(key)) {
+                            Log.w(TAG, "applyEnvironment: skipping illegal env key '${key.take(32)}'")
+                            continue
+                        }
+                        // Escape single quotes in values
+                        val escaped = value.replace("'", "'\\''")
+                        writer.write("export $key='$escaped'\n")
+                    }
+                    writer.flush()
                 }
-                for ((key, value) in envVars) {
-                    // Escape single quotes in values
-                    val escaped = value.replace("'", "'\\''")
-                    writer.write("export $key='$escaped'\n")
-                }
-                writer.flush()
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to apply env vars: ${e.message}")
             }
@@ -761,9 +785,11 @@ class PersistentShell(
         val writer = stdinWriter ?: return
         withContext(Dispatchers.IO) {
             try {
-                writer.write(PersistentShellEnvironment.pathRefreshCommand(
-                    RootfsManager.getInstance(context).currentGuestPath()))
-                writer.flush()
+                synchronized(stdinLock) {
+                    writer.write(PersistentShellEnvironment.pathRefreshCommand(
+                        RootfsManager.getInstance(context).currentGuestPath()))
+                    writer.flush()
+                }
             } catch (e: Exception) { Log.w(TAG, "PATH refresh failed: ${e.message}") }
         }
     }

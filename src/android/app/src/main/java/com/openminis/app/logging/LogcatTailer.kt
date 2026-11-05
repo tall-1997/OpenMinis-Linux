@@ -14,7 +14,17 @@ import java.io.InputStreamReader
  * is only needed to read other apps' logs). Tested on Pixel 4a (API 33) and
  * Pixel 6 (API 34) — works in DEBUG builds without any manifest changes.
  */
-internal class LogcatTailer(private val sink: (String) -> Unit) {
+internal class LogcatTailer(
+    private val sink: (String) -> Unit,
+    /**
+     * [Wave3 #11a] Configurable in-process allowlist. Default: only this app's
+     * own tags (AppLogger emits `Minis.<category>`) plus framework lines at
+     * WARN severity and above. Previously everything logcat produced for our
+     * PID reached the sink, so the tailer — and the capped daily file — paid
+     * for every frame-level framework log except the three silenced below.
+     */
+    private val tagPrefixAllowlist: String = "Minis.",
+) {
 
     private var process: java.lang.Process? = null
     private var thread: Thread? = null
@@ -63,6 +73,10 @@ internal class LogcatTailer(private val sink: (String) -> Unit) {
                         val l = line ?: continue
                         // Skip the leading "--------- beginning of main" banner
                         if (l.startsWith("---------")) continue
+                        // [Wave3 #11a] Allowlist pass: app tags at any level,
+                        // everything else only at WARN/ERROR/FATAL. Unparsable
+                        // lines fail OPEN — never silently drop diagnostics.
+                        if (!passesAllowlist(l)) continue
                         try { sink(l) } catch (_: Throwable) {}
                     }
                 } catch (_: Throwable) {
@@ -78,6 +92,24 @@ internal class LogcatTailer(private val sink: (String) -> Unit) {
             Log.w("LogcatTailer", "Failed to spawn logcat: ${e.message}")
             process = null
             thread = null
+        }
+    }
+
+    /**
+     * [Wave3 #11a] Line shape is `MM-DD HH:MM:SS.mmm L/Tag(pid): message`
+     * (`-v time`). Severity letter sits directly before the first '/', the
+     * tag runs from after it to the '(' of the pid suffix.
+     */
+    private fun passesAllowlist(line: String): Boolean {
+        val slash = line.indexOf('/')
+        if (slash <= 0) return true
+        val tagStart = slash + 1
+        val tagEnd = line.indexOf('(', tagStart)
+        if (tagEnd < 0) return true
+        if (line.regionMatches(tagStart, tagPrefixAllowlist, 0, tagPrefixAllowlist.length)) return true
+        return when (line[slash - 1]) {
+            'W', 'E', 'F' -> true
+            else -> false
         }
     }
 

@@ -308,6 +308,19 @@ data class FolderGroupBlock(
 )
 
 /**
+ * [T-android-sessionlist-byid] (#12) The folder-partition memo's output:
+ * folder blocks, the ungrouped remainder (same shape as the old Pair), plus
+ * an id→session map so expanded-group row resolution is O(1) per member
+ * instead of a linear `firstOrNull` scan per id inside the LazyColumn
+ * builder.
+ */
+private data class SessionPartition(
+    val blocks: List<FolderGroupBlock>,
+    val remaining: List<ChatSessionEntity>,
+    val byId: Map<String, ChatSessionEntity>,
+)
+
+/**
  * [T-android-session-grouping] Partition sessions into group blocks + the
  * ungrouped remainder.
  *
@@ -653,14 +666,22 @@ fun SessionListScreen(
     val folderPartition = remember(
         sessions, folders, collapsedFolderIds, showFolderBlock, freshBadgedIds, activeSessionIds,
     ) {
-        if (showFolderBlock) {
+        // [T-android-sessionlist-byid] (#12) Also produce an id→session map
+        // so the folder-expansion render path resolves each member in O(1)
+        // instead of `sessions.firstOrNull { it.id == id }` — O(n×m) inside
+        // the LazyColumn builder, re-run on every list rebuild.
+        val byId = sessions.associateBy { it.id }
+        val (blocks, remaining) = if (showFolderBlock) {
             partitionByFolder(
                 sessions, folders, collapsedFolderIds, freshBadgedIds, activeSessionIds,
             )
-        } else emptyList<FolderGroupBlock>() to sessions
+        } else {
+            emptyList<FolderGroupBlock>() to sessions
+        }
+        SessionPartition(blocks, remaining, byId)
     }
-    val folderBlocks = folderPartition.first
-    val groupedSessions = remember(folderPartition) { groupSessionsByDate(folderPartition.second) }
+    val folderBlocks = folderPartition.blocks
+    val groupedSessions = remember(folderPartition) { groupSessionsByDate(folderPartition.remaining) }
 
     // [T-android-folder-accordion-anchor] Assembly order (Pinned → groups →
     // date buckets) hoisted OUT of the LazyColumn body so the scroll-anchor
@@ -1068,8 +1089,10 @@ fun SessionListScreen(
                                 }
                                 // Collapsed groups contribute no rows; the card
                                 // still reports the real member count.
+                                // (#12) O(1) map lookup per member instead of a
+                                // firstOrNull scan over all sessions per id.
                                 renderSessionRows(
-                                    block.ids.mapNotNull { id -> sessions.firstOrNull { it.id == id } },
+                                    block.ids.mapNotNull(folderPartition.byId::get),
                                     inFolder = true,
                                 )
                             }

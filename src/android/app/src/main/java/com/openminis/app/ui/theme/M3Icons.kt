@@ -123,6 +123,7 @@ import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.ScreenLockPortrait
@@ -256,6 +257,7 @@ import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material.icons.outlined.RecordVoiceOver
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Remove
+import androidx.compose.material.icons.outlined.Replay
 import androidx.compose.material.icons.outlined.RestartAlt
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.ScreenLockPortrait
@@ -419,6 +421,7 @@ private val iconPairs: List<Pair<ImageVector, ImageVector>> = listOf(
     Icons.Filled.RecordVoiceOver to Icons.Outlined.RecordVoiceOver,
     Icons.Filled.Refresh to Icons.Outlined.Refresh,
     Icons.Filled.Remove to Icons.Outlined.Remove,
+    Icons.Filled.Replay to Icons.Outlined.Replay,
     Icons.Filled.RestartAlt to Icons.Outlined.RestartAlt,
     Icons.Filled.Schedule to Icons.Outlined.Schedule,
     Icons.Filled.ScreenLockPortrait to Icons.Outlined.ScreenLockPortrait,

@@ -189,6 +189,15 @@ object AppGraph {
     fun installChatBinder(binder: ChatSessionBinder) = chatBinder.install(binder)
     fun chatBinderOrNull(): ChatSessionBinder? = chatBinder.orNull()
 
+    /**
+     * [Wave3 #4] Live chat/session permission state for config (see
+     * [ChatBinder]). Once-installed: the real implementation is process-wide
+     * state, not something tests legitimately swap.
+     */
+    private val chatStateBinder = Slot<ChatBinder>("chatStateBinder")
+    fun installChatStateBinder(binder: ChatBinder) = chatStateBinder.install(binder)
+    fun chatStateBinderOrNull(): ChatBinder? = chatStateBinder.orNull()
+
     /** Evolution engine handoff; nullable — construction is runCatching-guarded (was EvolutionHooks.engine). */
     private val evolutionEngine = Slot<EvolutionEngine>("evolutionEngine")
     fun installEvolutionEngine(engine: EvolutionEngine?) = evolutionEngine.install(engine)

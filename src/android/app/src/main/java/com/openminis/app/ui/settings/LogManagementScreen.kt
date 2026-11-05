@@ -383,13 +383,21 @@ private fun LogsBody(
             // composition body — same reasoning as the trace list above.
             var versionFiles by remember { mutableStateOf<List<java.io.File>>(emptyList()) }
             var versionFilesLoaded by remember { mutableStateOf(false) }
+            var versionDirUnavailable by remember { mutableStateOf(false) }
             LaunchedEffect(Unit) {
-                versionFiles = withContext(Dispatchers.IO) {
-                    val versionsDir = java.io.File("/var/minis/workspace/offloads/answer-versions")
-                    versionsDir.listFiles()
-                        ?.sortedByDescending { it.lastModified() }?.take(30)
-                        ?: emptyList()
+                // [T-answer-versions-guest-path] The archive lives under the
+                // session's /var/minis/workspace bind — on the host that is
+                // SessionWorkspace.hostDir(filesDir, sid, "workspace") (per
+                // project when filed, else per session). A literal
+                // java.io.File("/var/minis/...") never exists on Android, so
+                // the old read (and the writer, see ChatViewModelRetryExt)
+                // silently no-op'd. This screen has no single session, so
+                // enumerate every session/project candidate and merge.
+                val (files, sawDir) = withContext(Dispatchers.IO) {
+                    answerVersionArchives(context)
                 }
+                versionFiles = files
+                versionDirUnavailable = !sawDir
                 versionFilesLoaded = true
             }
             androidx.compose.material3.AlertDialog(
@@ -399,7 +407,12 @@ private fun LogsBody(
                     if (!versionFilesLoaded) {
                         CircularProgressIndicator()
                     } else if (versionFiles.isEmpty()) {
-                        Text(stringResource(R.string.log_answer_versions_empty))
+                        Text(
+                            stringResource(
+                                if (versionDirUnavailable) R.string.log_answer_versions_dir_unavailable
+                                else R.string.log_answer_versions_empty
+                            )
+                        )
                     } else {
                         Column(
                             modifier = Modifier
@@ -767,14 +780,15 @@ fun LogDetailScreen(
                         .padding(padding)
                         .padding(horizontal = 12.dp, vertical = 12.dp),
                 ) {
-                    // [T-android-log-line-keys] itemsIndexed + stable key (line number + content fragment hash). Without keys the LazyColumn fell back to positional identity: any change
-                    // that shifted offsets (file re-opened after rotation, trailing newline pruning in LazyLogFile.open) moved every row, so Compose re-bound text across rows and the user
-                    // saw a full-viewport flash. Keying on index + a fragment of the line itself keeps row identity stable for the
-                    // immutable snapshot the screen reads. readLine is one
-                    // RAF seek per call and runs for visible rows only.
+                    // [T-android-log-line-keys] Stable key = line number. Without keys the LazyColumn fell back to positional identity: any change
+                    // that shifted offsets moved every row, so Compose re-bound text across rows and the user saw a full-viewport flash.
+                    // The old key also hashed `readLine(i).take(24)` — a second RAF seek per visible row on every key evaluation
+                    // (T-logs-perf regression). Unnecessary: LazyLogFile is an immutable snapshot — lineOffsets are built once in
+                    // open(), the handle is read-only, and a new instance replaces the whole list wholesale, so line number
+                    // identity is stable for as long as the snapshot lives.
                     items(
                         count = log.lineCount,
-                        key = { i -> "log-line:$i:${log.readLine(i).take(24).hashCode()}" },
+                        key = { i -> i },
                     ) { i ->
                         Text(
                             text = log.readLine(i),
@@ -795,40 +809,61 @@ fun LogDetailScreen(
 
 // ─── Share Utilities ───────────────────────────────────────────────────────────
 
-private fun shareLogFile(context: Context, file: File) {
-    try {
-        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-        val intent = Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"
-            putExtra(Intent.EXTRA_STREAM, uri)
-            // Clip carries the URI in a way that downstream chooser
-            // hosts can introspect for the grant when EXTRA_STREAM
-            // alone isn't enough (Issue #17 — SecurityException
-            // "Permission Denial: opening provider … requires the
-            // provider be exported, or grantUriPermission()").
-            clipData = android.content.ClipData.newRawUri(file.name, uri)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        val chooser = Intent.createChooser(intent, context.getString(R.string.log_share_chooser))
-        // The chooser itself starts the receiver; on some OEM builds the grant flag has to live on the outer intent too or the
-        // receiver hits SecurityException reading the content://
-        // FileProvider URI.
-        chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        context.startActivity(chooser)
-    } catch (e: Exception) {
-        // Log the FileProvider failure — earlier this catch silently dropped the exception and fell back to EXTRA_TEXT, masking config bugs
-        // (e.g. a missing files-path root) as "share works but pastes the
-        // whole file as text body" UX. Now any future regression is one
-        // logcat line away from being root-caused.
-        AppLogger.warning(
-            "LogShare",
-            "FileProvider share failed for ${file.name}: ${e.message} — falling back to EXTRA_TEXT",
-        )
-        val text = try { BoundedText.readFileTail(file, 100_000) } catch (_: Exception) { return }
-        val intent = Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"
-            putExtra(Intent.EXTRA_TEXT, text)
-        }
-        context.startActivity(Intent.createChooser(intent, context.getString(R.string.log_share_chooser)))
+/**
+ * [T-answer-versions-guest-path] Every host directory that can back a
+ * session's `/var/minis/workspace/offloads/answer-versions`, newest-first.
+ *
+ * The writer archives under the current session's `/var/minis/workspace`
+ * bind; on the host that path is [SessionWorkspace.hostDir] — per-project
+ * (`minis-workspaces/<folderId>/workspace`) when the session is filed into a
+ * folder, else per-session (`minis-sessions/<id>/workspace`). This screen is
+ * session-agnostic, so the browse dialog unions every candidate and merges.
+ * Returns the (capped) files plus whether any answer-versions directory was
+ * actually present — callers show a distinct "directory unavailable" empty
+ * state instead of the generic "no archives yet" when the writer side never
+ * created one.
+ */
+internal fun answerVersionArchives(context: Context): Pair<List<File>, Boolean> {
+    val filesDir = context.filesDir
+    val sw = com.openminis.app.sandbox.SessionWorkspace
+    val workspaceRoots = buildList {
+        File(filesDir, sw.WORKSPACES_DIR).listFiles()?.forEach { add(File(it, "workspace")) }
+        File(filesDir, sw.SESSIONS_DIR).listFiles()?.forEach { add(File(it, "workspace")) }
     }
+    var sawDir = false
+    val files = workspaceRoots.flatMap { root ->
+        val dir = File(root, "offloads/answer-versions")
+        val listed = dir.listFiles()
+        if (listed != null) {
+            sawDir = true
+            listed.toList()
+        } else {
+            emptyList()
+        }
+    }.sortedByDescending { it.lastModified() }.take(30)
+    return files to sawDir
+}
+
+private fun shareLogFile(context: Context, file: File) {
+    // [T-share-fileprovider-unify] Shared FileProvider helper (Issue #17 clip
+    // + double grant hardening baked in). The EXTRA_TEXT fallback below is
+    // log-specific: a log file is still useful pasted as text.
+    val shared = shareViaFileProvider(
+        context, file, "text/plain", context.getString(R.string.log_share_chooser),
+    )
+    if (shared) return
+    // Log the FileProvider failure — earlier this catch silently dropped the exception and fell back to EXTRA_TEXT, masking config bugs
+    // (e.g. a missing files-path root) as "share works but pastes the
+    // whole file as text body" UX. Now any future regression is one
+    // logcat line away from being root-caused.
+    AppLogger.warning(
+        "LogShare",
+        "FileProvider share failed for ${file.name} — falling back to EXTRA_TEXT",
+    )
+    val text = try { BoundedText.readFileTail(file, 100_000) } catch (_: Exception) { return }
+    val intent = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_TEXT, text)
+    }
+    context.startActivity(Intent.createChooser(intent, context.getString(R.string.log_share_chooser)))
 }

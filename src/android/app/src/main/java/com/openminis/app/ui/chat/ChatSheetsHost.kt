@@ -128,15 +128,15 @@ internal fun ChatSheetsHost(
                     // Back-gesture / scrim dismissal is treated as a deny — the
                     // safe default, and it still wakes the blocked coroutine.
                     onDismissRequest = { viewModel.denyPendingTool(approval.id) },
-                    title = "需要审批: ${approval.toolName}",
-                    text = approval.preview.ifBlank { "Agent 请求执行敏感操作" },
-                    confirmText = "同意",
+                    title = stringResource(R.string.approval_required_title, approval.toolName),
+                    text = approval.preview.ifBlank { stringResource(R.string.approval_default_preview) },
+                    confirmText = stringResource(R.string.approval_action_approve),
                     onConfirm = { viewModel.approvePendingTool(approval.id) },
-                    dismissText = "拒绝",
+                    dismissText = stringResource(R.string.approval_action_deny),
                     onDismiss = { viewModel.denyPendingTool(approval.id) },
                     // [T-session-allow-all] Third action: approve this request
                     // and auto-approve every remaining request this session.
-                    neutralText = "本次会话全部允许",
+                    neutralText = stringResource(R.string.approval_action_allow_all_session),
                     onNeutral = { viewModel.approveAllForSession(approval.id) },
                 )
             }

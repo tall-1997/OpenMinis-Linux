@@ -1,9 +1,9 @@
 package com.openminis.app.backup
 
 import com.openminis.app.logging.AppLogger
+import com.openminis.app.util.Digest
 import java.io.File
 import java.io.InputStream
-import java.security.MessageDigest
 
 /**
  * Content-addressed blob writer for the staging directory (§2), mirroring
@@ -20,8 +20,30 @@ import java.security.MessageDigest
  *      costs a `length()`, not a read.
  *
  * @param maxFileBytes null = unlimited (the §3.4 default).
+ * @param reuse [Wave3 #10b] incremental fast path — resolves an UNCHANGED
+ *   source file to a blob staged from the previous package (see
+ *   [BackupIncrementalManifest]); null disables the fast path.
+ * @param incremental receives one record per stored blob so the next run's
+ *   [reuse] can recognise unchanged files; null skips bookkeeping.
  */
-class BackupBlobStore(stagingRoot: File, private val maxFileBytes: Long?) {
+class BackupBlobStore(
+    stagingRoot: File,
+    private val maxFileBytes: Long?,
+    private val reuse: Reuse? = null,
+    private val incremental: BackupIncrementalManifest? = null,
+) {
+
+    /**
+     * [Wave3 #10b] Resolve [file] to already-packaged bytes. The resolver owns
+     * the previous package and the trust decision (size + mtime match);
+     * [ReusedBlob.staged] is a temp file whose bytes this store renames into
+     * the blob tree. Returning null takes the normal read+hash+copy path.
+     */
+    fun interface Reuse {
+        fun resolve(file: File, logicalPath: String, size: Long): ReusedBlob?
+    }
+
+    class ReusedBlob(val sha256: String, val staged: File)
 
     /**
      * `blobs/<first 2 hex>/<sha256>` — the two-level fan-out keeps any single
@@ -122,6 +144,35 @@ class BackupBlobStore(stagingRoot: File, private val maxFileBytes: Long?) {
             return Outcome.SkippedTooLarge(size)
         }
 
+        // [Wave3 #10b] Incremental fast path: an unchanged file (size + mtime
+        // match last-manifest.json) has the same content hash it had last run,
+        // so its blob is still inside the previous package — take those bytes
+        // instead of re-reading and re-hashing the source. Any mismatch (no
+        // cache entry, missing zip entry, short extraction, rename failure)
+        // falls through to the full path below, so a broken sidecar can only
+        // ever cost a full export, never a wrong one.
+        val reused = reuse?.resolve(file, logicalPath, size)
+        if (reused != null) {
+            if (reused.sha256 in seen) {
+                reused.staged.delete()
+                return Outcome.Duplicate(reused.sha256, size)
+            }
+            val dest = blobFile(reused.sha256)
+            dest.parentFile?.mkdirs()
+            if (dest.exists()) dest.delete()
+            if (reused.staged.renameTo(dest)) {
+                seen.add(reused.sha256)
+                totalBytesStored += size
+                incremental?.record(logicalPath, reused.sha256, size, file.lastModified())
+                _blobIndex.add(
+                    BackupBlobIndexEntry(reused.sha256, size, logicalPath, sessionId, mimeType(logicalPath))
+                )
+                return Outcome.Stored(reused.sha256, size)
+            }
+            // rename failed (cross-device or fs hiccup): clean up, go full.
+            reused.staged.delete()
+        }
+
         val digest = file.inputStream().use { sha256(it) }
         if (digest in seen) return Outcome.Duplicate(digest, size)
 
@@ -135,6 +186,7 @@ class BackupBlobStore(stagingRoot: File, private val maxFileBytes: Long?) {
 
         seen.add(digest)
         totalBytesStored += size
+        incremental?.record(logicalPath, digest, size, file.lastModified())
         _blobIndex.add(BackupBlobIndexEntry(digest, size, logicalPath, sessionId, mimeType(logicalPath)))
         return Outcome.Stored(digest, size)
     }
@@ -148,7 +200,7 @@ class BackupBlobStore(stagingRoot: File, private val maxFileBytes: Long?) {
             skippedPaths.add(SkippedPath(logicalPath, size))
             return Outcome.SkippedTooLarge(size)
         }
-        val digest = MessageDigest.getInstance("SHA-256").digest(data).toHex()
+        val digest = Digest.sha256Hex(data)
         if (digest in seen) return Outcome.Duplicate(digest, size)
 
         val dest = blobFile(digest)
@@ -168,23 +220,12 @@ class BackupBlobStore(stagingRoot: File, private val maxFileBytes: Long?) {
 
         /**
          * Streaming SHA-256 — never loads the file into memory. Media offloads
-         * run to hundreds of MB, so this reads in 1MB chunks regardless of size.
+         * run to hundreds of MB; [Digest.sha256Hex] reads in chunks regardless
+         * of size. [T-sha256-single-source]
          */
-        fun sha256(input: InputStream): String {
-            val digest = MessageDigest.getInstance("SHA-256")
-            val buf = ByteArray(1024 * 1024)
-            while (true) {
-                val n = input.read(buf)
-                if (n < 0) break
-                digest.update(buf, 0, n)
-            }
-            return digest.digest().toHex()
-        }
+        fun sha256(input: InputStream): String = Digest.sha256Hex(input)
 
         fun sha256OfFile(file: File): String = file.inputStream().buffered().use { sha256(it) }
-
-        private fun ByteArray.toHex(): String =
-            joinToString("") { "%02x".format(it) }
 
         fun mimeType(path: String): String? =
             when (path.substringAfterLast('.', "").lowercase()) {

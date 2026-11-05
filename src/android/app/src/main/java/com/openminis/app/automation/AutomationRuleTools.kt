@@ -43,9 +43,24 @@ object AutomationRuleTools {
     private const val DELETE = "${NAME_PREFIX}_delete"
     private const val RUNS = "${NAME_PREFIX}_runs"
 
-    /** Tool names this build actually exposes — whitelist normalization input. */
-    fun knownToolNames(): Set<String> = runCatching {
-        AgentTools.makeAgentTools().map { it.name }.toSet()
+    /**
+     * Tool names this build actually exposes — whitelist normalization input.
+     *
+     * [P1-transcribe-wiring] When [context] is available, transcribe_audio is
+     * admitted through the same probe the speech engine uses
+     * ([ProviderSpeechRecognitionEngine.isAvailable]:
+     * `providerRepository.resolveVoiceInputEntry() != null`) — without it the
+     * whitelist silently dropped a tool the chat surface can actually run.
+     * Null context (no chat context at call time) simply omits it, matching
+     * the default-off registry.
+     */
+    fun knownToolNames(context: Context? = null): Set<String> = runCatching {
+        val hasSpeechModel = context?.applicationContext
+            ?.let { app -> app as? com.openminis.app.MinisApp }
+            ?.takeIf { it.subsystemsReady() }
+            ?.providerRepository
+            ?.resolveVoiceInputEntry() != null
+        AgentTools.makeAgentTools(hasSpeechModel = hasSpeechModel).map { it.name }.toSet()
     }.getOrElse {
         // Defensive floor: never let a registry failure widen or empty the gate.
         setOf(
@@ -188,13 +203,16 @@ object AutomationRuleTools {
         val args = runCatching { JSONObject(argsJson) }.getOrElse {
             return error("invalid JSON arguments: ${it.message}")
         }
-        val manager = AutomationRuleManager(context.applicationContext)
+        // [P1-automation-hub] Process-wide singleton via AutomationEvents — a
+        // private instance here would carry its own cache/gate/debounce state
+        // and drift away from the receiver/UI hub (three-instance split).
+        val manager = AutomationEvents.manager(context.applicationContext)
         return try {
             runBlocking {
                 when (name) {
-                    CREATE -> create(manager, args)
+                    CREATE -> create(manager, args, context)
                     LIST -> list(manager)
-                    UPDATE -> update(manager, args)
+                    UPDATE -> update(manager, args, context)
                     DELETE -> delete(manager, args)
                     RUNS -> runs(manager, args)
                     else -> error("unknown automation tool '$name'")
@@ -207,10 +225,14 @@ object AutomationRuleTools {
 
     // ── actions ──────────────────────────────────────────────────────────
 
-    private suspend fun create(manager: AutomationRuleManager, args: JSONObject): String {
+    private suspend fun create(
+        manager: AutomationRuleManager,
+        args: JSONObject,
+        context: Context,
+    ): String {
         val spec = parseSpec(args, allowPartial = false)
             ?: return error("missing or malformed fields: name, trigger, action are required")
-        val (entity, problems) = manager.createValidated(spec, knownToolNames())
+        val (entity, problems) = manager.createValidated(spec, knownToolNames(context))
         if (entity == null) {
             return error("rule rejected (nothing was saved): " + problems.joinToString("; "))
         }
@@ -249,7 +271,11 @@ object AutomationRuleTools {
         return JSONObject().put("ok", true).put("count", rules.size).put("rules", arr).toString()
     }
 
-    private suspend fun update(manager: AutomationRuleManager, args: JSONObject): String {
+    private suspend fun update(
+        manager: AutomationRuleManager,
+        args: JSONObject,
+        context: Context,
+    ): String {
         val id = ToolArgs.str(args, "id") ?: return error("id is required")
         val resolved = resolveRuleId(manager, id) ?: return error("no rule with id or prefix '$id'")
         val partial = parseSpec(args, allowPartial = true)
@@ -273,7 +299,7 @@ object AutomationRuleTools {
             allowedTools = partial?.allowedTools,
             permissionMode = ToolArgs.str(args, "permission_mode"),
             enabled = enabled,
-            knownTools = knownToolNames(),
+            knownTools = knownToolNames(context),
         )
         if (entity == null) return error("update rejected: " + problems.joinToString("; "))
         return JSONObject()

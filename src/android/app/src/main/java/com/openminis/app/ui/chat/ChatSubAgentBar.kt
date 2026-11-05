@@ -40,12 +40,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.openminis.app.R
 import com.openminis.app.service.SubAgentActivityTracker
 import com.openminis.app.tools.SubAgentRunner
 import com.openminis.app.ui.markdown.MarkdownText
@@ -74,8 +76,12 @@ fun SubAgentLiveBar(
         mine.forEach { m ->
             key(m.id) {
             val bg = phaseColor(m.phase.ifBlank { "思考中" })
+            // [T-android-chat-strings-resource] "子代理 N/M" is pure display —
+            // the phase literals below it stay data sentinels (the tracker
+            // service emits them and both sides compare on them).
+            val indexLabel = stringResource(R.string.subagent_index_of_total, m.index, m.total)
             val label = buildString {
-                if (m.index > 0 && m.total > 0) append("子代理 ${m.index}/${m.total}")
+                if (m.index > 0 && m.total > 0) append(indexLabel)
                 else append(m.title.take(12))
                 append(" · ").append(m.phase.ifBlank { "思考中" })
                 m.currentTool.takeIf { it.isNotBlank() }?.let { append(" · ").append(subAgentToolTitle(it, "")) }
@@ -101,7 +107,7 @@ fun SubAgentLiveBar(
                 )
                 Icon(
                     Icons.Filled.Stop,
-                    contentDescription = "Stop ${m.title}",
+                    contentDescription = stringResource(R.string.subagent_stop_desc, m.title),
                     tint = Color.White,
                     modifier = Modifier
                         .size(20.dp)
@@ -167,7 +173,13 @@ private fun SubAgentDetailSheet(
                     text = listOfNotNull(
                         member.role?.takeIf { it.isNotBlank() },
                         member.model?.takeIf { it.isNotBlank() },
-                        if (member.turnCap > 0) "第 ${member.turnIndex.coerceAtLeast(1)}/${member.turnCap} 轮" else null,
+                        if (member.turnCap > 0) {
+                            stringResource(
+                                R.string.subagent_turn_of,
+                                member.turnIndex.coerceAtLeast(1),
+                                member.turnCap,
+                            )
+                        } else null,
                     ).joinToString(" · "),
                     fontSize = 12.sp,
                     color = ChatColors.primaryText.copy(alpha = 0.55f),
@@ -193,7 +205,7 @@ private fun SubAgentDetailSheet(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             TypingIndicator()
                             Text(
-                                text = "思考中，还没有输出",
+                                text = stringResource(R.string.subagent_waiting_first_output),
                                 fontSize = 13.sp,
                                 color = ChatColors.primaryText.copy(alpha = 0.6f),
                                 modifier = Modifier.padding(start = 8.dp),
@@ -273,11 +285,14 @@ private fun PhaseBanner(phase: String, tool: String) {
 
 @Composable
 private fun ToolStepBody(step: SubAgentActivityTracker.Step) {
+    // [T-android-chat-strings-resource] Display labels only — the when below
+    // that feeds phaseColor keeps the raw literals, which are DATA keys the
+    // tracker service also emits and compares against.
     val status = when (step.status) {
-        "running" -> "执行中"
-        "streaming", "pending" -> "调用工具"
-        "success" -> "已完成"
-        "failed" -> "失败"
+        "running" -> stringResource(R.string.subagent_status_running)
+        "streaming", "pending" -> stringResource(R.string.subagent_status_calling_tool)
+        "success" -> stringResource(R.string.subagent_status_done)
+        "failed" -> stringResource(R.string.subagent_status_failed)
         else -> step.status
     }
     Column(
@@ -302,7 +317,7 @@ private fun ToolStepBody(step: SubAgentActivityTracker.Step) {
         )
         if (step.toolArgs.isNotBlank()) {
             Spacer(modifier = Modifier.height(6.dp))
-            Text(text = "参数", fontSize = 11.sp, color = ChatColors.primaryText.copy(alpha = 0.5f))
+            Text(text = stringResource(R.string.subagent_args_label), fontSize = 11.sp, color = ChatColors.primaryText.copy(alpha = 0.5f))
             Text(
                 text = step.toolArgs,
                 fontSize = 12.sp,
@@ -315,7 +330,7 @@ private fun ToolStepBody(step: SubAgentActivityTracker.Step) {
         }
         if (step.body.isNotBlank()) {
             Spacer(modifier = Modifier.height(6.dp))
-            Text(text = "结果", fontSize = 11.sp, color = ChatColors.primaryText.copy(alpha = 0.5f))
+            Text(text = stringResource(R.string.subagent_result_label), fontSize = 11.sp, color = ChatColors.primaryText.copy(alpha = 0.5f))
             Text(
                 text = step.body,
                 fontSize = 12.sp,
@@ -333,7 +348,7 @@ private fun ToolStepBody(step: SubAgentActivityTracker.Step) {
 private fun UserTaskBubble(title: String) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
         Text(
-            text = title.ifBlank { "子代理任务" },
+            text = title.ifBlank { stringResource(R.string.subagent_task_fallback) },
             color = ChatColors.primaryText,
             fontSize = 14.sp,
             lineHeight = 20.sp,
@@ -345,9 +360,15 @@ private fun UserTaskBubble(title: String) {
     }
 }
 
+// [T-android-chat-strings-resource] Now composable so the display label can
+// come from resources; callers render it directly in composition.
+@Composable
 private fun memberLabel(member: SubAgentActivityTracker.Member): String =
-    if (member.index > 0 && member.total > 0) "子代理 ${member.index}/${member.total}"
-    else member.title.ifBlank { "子代理" }
+    if (member.index > 0 && member.total > 0) {
+        stringResource(R.string.subagent_index_of_total, member.index, member.total)
+    } else {
+        member.title.ifBlank { stringResource(R.string.subagent_fallback_label) }
+    }
 
 private fun phaseColor(phase: String): Color = when (phase) {
     "调用工具" -> Color(0xFFFF9500)

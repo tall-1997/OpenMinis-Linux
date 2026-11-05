@@ -71,15 +71,20 @@ private const val EXIT_SETTLE_MS = 400L
 /** Identifies the goal whose header already exited — "id@updatedAt". */
 private fun goalKey(goal: SessionGoalEntity): String = "${goal.sessionId}@${goal.updatedAt}"
 
-/** Compact token count: 1234 → "1.2k", 1234567 → "1.2M". Shared with [GoalSheet]. */
-internal fun formatGoalTokens(value: Long): String = when {
-    value >= 1_000_000L -> trimZero(value / 100_000.0) + "M"
-    value >= 1_000L -> trimZero(value / 100.0) + "k"
-    else -> value.toString()
-}
-
-private fun trimZero(scaled: Double): String =
-    (if (scaled >= 100.0) scaled.toInt().toString() else "%.1f".format(scaled)).removeSuffix(".0")
+/**
+ * Compact token count. Shared with [GoalSheet].
+ *
+ * [T-android-format-converge] Body moved to [formatTokenCount]; this keeps
+ * the goal-card profile (trailing-zero trim + the historical /100, /100_000
+ * scaling — see [formatTokenCount]'s tenXQuirk note: the KDoc examples below
+ * do NOT match the code's actual 10x-inflated output, which this wave
+ * preserves verbatim).
+ *
+ * KDoc of record: 1234 → "1.2k", 1234567 → "1.2M" (intended);
+ * actual output: 1234 → "12.3k", 1234567 → "12.3M".
+ */
+internal fun formatGoalTokens(value: Long): String =
+    formatTokenCount(value, trimTrailingZero = true, tenXQuirk = true)
 
 /**
  * [T-plan-board-ui] [T-goal-card] Live card above the composer, one surface

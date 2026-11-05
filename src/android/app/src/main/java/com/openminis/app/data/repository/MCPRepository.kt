@@ -101,6 +101,15 @@ class MCPRepository(private val context: Context) {
         McpDbHelper(context).writableDatabase
     }
 
+    /**
+     * [Wave3-fix-4] Session-override CRUD + revision bookkeeping, shared with
+     * [SkillRepository] via [SessionOverrideStore] (the two used to be drifting
+     * copies). Table/column names are this repository's schema constants.
+     */
+    private val overrideStore by lazy {
+        SessionOverrideStore(db, tableName = "mcp_session_overrides", itemColumn = "mcp_id")
+    }
+
     /** Host dir backing `/var/minis/mcp-servers` (mirrors skills' minis-global dir). */
     private val mcpDir: File
         get() = File(context.filesDir, "minis-global/mcp-servers")
@@ -116,6 +125,14 @@ class MCPRepository(private val context: Context) {
 
     @Volatile
     private var loaded = false
+
+    /**
+     * [Wave3-fix-17] mtime+size signature of servers.json as of the last
+     * completed read. Null = the file did not exist at read time (or never
+     * read yet), which never short-circuits.
+     */
+    @Volatile
+    private var lastLoadedDiskSignature: Pair<Long, Long>? = null
 
     /** Guards the one-time blocking fallback in [ensureLoaded]. */
     private val loadLock = Any()
@@ -153,11 +170,37 @@ class MCPRepository(private val context: Context) {
         }
     }
 
-    /** Re-read `servers.json` from disk and re-publish [servers]. */
+    /**
+     * Re-read `servers.json` from disk and re-publish [servers].
+     *
+     * [Wave3-fix-17] Skipped when servers.json's (mtime, size) signature is
+     * unchanged since the last read — same scheme as
+     * [SkillRepository.reloadFromDisk]'s [SkillDiskIndex] diff. This function
+     * runs before EVERY prompt build (ChatViewModelPromptExt calls
+     * [reloadFromDisk] per turn), and the old unconditional
+     * `_servers.value = readServersFile()` minted a NEW list identity each
+     * time, which permanently defeated the prompt-fragment cache's
+     * snapshot-identity check (fragmentCacheServers ===) and re-published the
+     * StateFlow for zero information. An unchanged signature now early-returns
+     * without re-reading or re-publishing. A genuine external edit (CLI,
+     * file browser) always moves mtime or size, so out-of-band installs are
+     * still promoted — the same guarantee the skill-side diff relies on.
+     */
     fun load() {
+        val signature = diskSignature()
+        if (loaded && signature != null && signature == lastLoadedDiskSignature) {
+            return
+        }
         _servers.value = readServersFile()
         loaded = true
+        // Snapshot AFTER the read: readServersFile may itself rewrite the file
+        // (persisting freshly-assigned createdAt values), and the signature we
+        // store must describe the content we actually loaded.
+        lastLoadedDiskSignature = diskSignature()
     }
+
+    private fun diskSignature(): Pair<Long, Long>? =
+        serversFile.takeIf { it.isFile }?.let { it.lastModified() to it.length() }
 
     /** Alias matching SkillRepository.reloadFromDisk() so callers read symmetrically. */
     fun reloadFromDisk() = load()
@@ -399,10 +442,14 @@ class MCPRepository(private val context: Context) {
     fun delete(id: String) {
         ensureLoaded()
         _servers.update { list -> list.filter { it.id != id } }
-        overrideRevision++
+        // [Wave3-fix-4] The override-row purge goes through [overrideStore] and
+        // stays on the IO scope (its [SessionOverrideStore.revision] bump rides
+        // along, off-main). The fragment cache still invalidates immediately via
+        // the _servers identity change above; the lingering row cannot affect a
+        // rebuilt fragment because the deleted server is no longer in _servers.
         warmupScope.launch {
             runCatching {
-                db.execSQL("DELETE FROM mcp_session_overrides WHERE mcp_id=?", arrayOf(id))
+                overrideStore.removeItem(id)
             }.onFailure { Log.w(TAG, "session-override purge for $id failed: ${it.message}") }
             // Secrets + guest bridge must not outlive the server entry.
             runCatching {
@@ -427,28 +474,22 @@ class MCPRepository(private val context: Context) {
         setEnabled(id, !current.enabled)
     }
 
-    // -- Session Overrides (mirror SkillRepository) --
+    // -- Session Overrides --
+    //
+    // [Wave3-fix-4] The CRUD + revision bookkeeping below used to mirror
+    // SkillRepository's block; the implementation now lives in
+    // [SessionOverrideStore]. Only the facade (public signatures unchanged) and
+    // the global-default lookup stay here.
 
-    /** [T-prompt-cache] Bumped by every `mcp_session_overrides` mutation. */
-    @Volatile
-    private var overrideRevision: Long = 0L
+    /** [T-prompt-cache] Revision of the `mcp_session_overrides` table. */
+    private val overrideRevision: Long get() = overrideStore.revision
 
     /**
      * Bulk-load all overrides for one session in a single query —
      * same pattern as [SkillRepository.sessionOverrideMap].
      */
-    fun sessionOverrideMap(sessionId: String): Map<String, Boolean> {
-        val map = HashMap<String, Boolean>()
-        db.rawQuery(
-            "SELECT mcp_id, is_enabled FROM mcp_session_overrides WHERE session_id=?",
-            arrayOf(sessionId),
-        ).use { cursor ->
-            while (cursor.moveToNext()) {
-                map[cursor.getString(0)] = cursor.getInt(1) == 1
-            }
-        }
-        return map
-    }
+    fun sessionOverrideMap(sessionId: String): Map<String, Boolean> =
+        overrideStore.mapForSession(sessionId)
 
     /**
      * [T-mcp-native] Effective per-server enabled state for a session:
@@ -462,12 +503,7 @@ class MCPRepository(private val context: Context) {
     }
 
     fun isEnabledForSession(mcpId: String, sessionId: String): Boolean {
-        val cursor = db.rawQuery(
-            "SELECT is_enabled FROM mcp_session_overrides WHERE session_id=? AND mcp_id=?",
-            arrayOf(sessionId, mcpId)
-        )
-        val override = if (cursor.moveToFirst()) cursor.getInt(0) == 1 else null
-        cursor.close()
+        val override = overrideStore.storedValue(sessionId, mcpId)
         if (override != null) return override
         return _servers.value.find { it.id == mcpId }?.enabled ?: false
     }
@@ -483,41 +519,24 @@ class MCPRepository(private val context: Context) {
      */
     fun setSessionOverride(sessionId: String, mcpId: String, enabled: Boolean) {
         val globalEnabled = _servers.value.find { it.id == mcpId }?.enabled
-        if (globalEnabled != null && enabled == globalEnabled) {
-            db.execSQL(
-                "DELETE FROM mcp_session_overrides WHERE session_id=? AND mcp_id=?",
-                arrayOf(sessionId, mcpId)
-            )
-        } else {
-            db.execSQL(
-                "INSERT OR REPLACE INTO mcp_session_overrides (session_id, mcp_id, is_enabled) VALUES (?, ?, ?)",
-                arrayOf<Any>(sessionId, mcpId, if (enabled) 1 else 0)
-            )
-        }
-        overrideRevision++
+        overrideStore.set(sessionId, mcpId, enabled, globalEnabled)
     }
 
     fun clearSessionOverrides(sessionId: String) {
-        db.execSQL("DELETE FROM mcp_session_overrides WHERE session_id=?", arrayOf(sessionId))
-        overrideRevision++
+        overrideStore.clearSession(sessionId)
     }
 
     /**
      * [T-android-session-skill-override-init-timing] Re-point every
      * `mcp_session_overrides` row that was written against the draft session
      * id ([fromDraft], e.g. `__new__<uuid>`) onto the persisted session id
-     * ([toReal]) once `ensureSession()` creates the real DB row. Without
-     * this hop, a pre-first-message MCP toggle stays bound to the draft key
-     * and becomes invisible the next time the chat is opened under its real
-     * id. Paired with [SkillRepository.renameSessionOverrides].
+     * ([toReal]) once `ensureSession()` creates the real DB row. Without this
+     * hop, a pre-first-message MCP toggle stays bound to the draft key and
+     * becomes invisible the next time the chat is opened under its real id.
+     * Paired with [SkillRepository.renameSessionOverrides].
      */
     fun renameSessionOverrides(fromDraft: String, toReal: String) {
-        if (fromDraft == toReal) return
-        db.execSQL(
-            "UPDATE OR REPLACE mcp_session_overrides SET session_id=? WHERE session_id=?",
-            arrayOf<Any>(toReal, fromDraft),
-        )
-        overrideRevision++
+        overrideStore.renameSession(fromDraft, toReal)
     }
 
     // -- JSON Import (4 format variants, last-write-wins on name) --

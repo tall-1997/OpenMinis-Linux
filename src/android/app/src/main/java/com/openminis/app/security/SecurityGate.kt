@@ -13,7 +13,6 @@ interface SecurityGate {
     fun preview(cmd: GateCommand): String
     fun audit(cmd: GateCommand, decision: Decision, result: String?)
     fun getAuditTrail(): List<AuditEntry>
-    fun setPermissionRules(rules: List<PermissionRule>) {}
     fun setAuthorityProfile(profile: PermissionProfile?) {}
     fun verifyAuditChain(): AuditChainVerification = AuditChainVerification(ok = true)
 }

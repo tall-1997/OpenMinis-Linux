@@ -17,6 +17,7 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.util.Log
+import com.openminis.app.logging.AppLogger
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.MotionEvent
@@ -172,8 +173,10 @@ class ToolOverlayController(
         targetSessionId: String? = null,
         toolTitle: String? = null,
     ) {
-        Log.d(
-            TAG,
+        // [Wave3 #15] Muted-category debug gate (AppLogger.debug) instead of
+        // an ungated per-emission Log.d — consistent with OverlayState.
+        AppLogger.debug(
+            "ToolOverlay",
             "show() toolName=$toolName toolTitle=${toolTitle?.take(40)} " +
                 "status=${statusText.take(40)} " +
                 "running=$isRunning outcome=$outcome reply=${replyExcerpt?.take(20)} " +
@@ -866,22 +869,14 @@ class ToolOverlayController(
     private fun dpToPx(dp: Int): Int = (dp * context.resources.displayMetrics.density + 0.5f).toInt()
 
     /**
-     * Mirrors [AgentForegroundService.toolDisplayLabel] but trims the
-     * "Minis is using " prefix — the overlay capsule is tight, so we just
-     * show the tool kind ("Shell", "Browser", …).
+     * [Wave3 #8] Overlay-capsule tool label. The hardcoded `when` here
+     * mirrored AgentForegroundService.toolDisplayLabel (see the old "Mirrors"
+     * comment); both sides now delegate to
+     * [ForegroundNotificationCopy.toolLabelShort] — one mapping, resource-backed
+     * in strings_service.xml.
      */
-    private fun toolDisplayLabel(toolName: String?): String = when (toolName) {
-        null -> "Minis Ultra"
-        "shell_execute" -> "Shell"
-        "file_read" -> "File"
-        "file_write" -> "Editor"
-        "file_edit" -> "Edit"
-        "browser_use" -> "Browser"
-        "read_image" -> "Image"
-        "memory_write", "memory_get" -> "Memory"
-        "web_search" -> "Search"
-        else -> toolName
-    }
+    private fun toolDisplayLabel(toolName: String?): String =
+        ForegroundNotificationCopy.toolLabelShort(context, toolName)
 
     /**
      * Custom view drawing a single thin arc segment that spans ~180° of

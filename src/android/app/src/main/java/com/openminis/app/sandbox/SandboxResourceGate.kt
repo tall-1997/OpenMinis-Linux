@@ -1,8 +1,11 @@
 package com.openminis.app.sandbox
 
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -157,22 +160,39 @@ object SandboxResourceGate {
         }
     }
 
-    /** tryLock so a timeout cannot leave the mutex held or cancel the holder. */
+    /**
+     * Suspend on [aptMutex] instead of polling tryLock every 50ms — the waiter
+     * parks until the holder releases (or the deadline passes). The holder is
+     * never cancelled: withTimeoutOrNull only abandons OUR wait, and a lock
+     * granted inside the cancel race is still returned as acquired
+     * (startUndispatchedOrReturnIgnoreTimeout), so the mutex cannot leak.
+     * tryLock would work, but a poll loop burns a wake-up every 50ms for up to
+     * [APT_WAIT_MS] and delays admission by up to one poll tick.
+     */
     private suspend fun awaitAptLock(waitMs: Long, queuedAt: Long, onWaiting: (String) -> Unit): Boolean {
-        val deadline = System.currentTimeMillis() + waitMs.coerceAtLeast(0L)
-        // One beat per waited MINUTE: a per-second ticker would flood the
-        // transcript, but total silence for 10+ minutes reads as a hang.
-        var lastBeatMinute = 0L
-        while (!aptMutex.tryLock()) {
-            if (waitMs > 0 && System.currentTimeMillis() >= deadline) return false
-            val minute = (System.currentTimeMillis() - queuedAt) / 60_000L
-            if (minute > 0 && minute != lastBeatMinute) {
-                lastBeatMinute = minute
-                onWaiting("WAITING_RESOURCE: 包管理器仍被占用，已排队 $minute 分钟，继续等待…")
+        return if (waitMs > 0) {
+            coroutineScope {
+                // One beat per waited MINUTE: a per-second ticker would flood
+                // the transcript, but total silence for 10+ minutes reads as a
+                // hang. The heartbeat is a child job so it dies with the wait.
+                val beat = launch {
+                    while (true) {
+                        delay(60_000L)
+                        val minute = (System.currentTimeMillis() - queuedAt) / 60_000L
+                        onWaiting("WAITING_RESOURCE: 包管理器仍被占用，已排队 $minute 分钟，继续等待…")
+                    }
+                }
+                try {
+                    withTimeoutOrNull(waitMs) { aptMutex.lock(); true } ?: false
+                } finally {
+                    beat.cancel()
+                }
             }
-            delay(50)
+        } else {
+            // waitMs <= 0 keeps the old no-timeout semantics: wait forever.
+            aptMutex.lock()
+            true
         }
-        return true
     }
 
     suspend fun <T> withNamedLock(name: String, block: suspend () -> T): T {

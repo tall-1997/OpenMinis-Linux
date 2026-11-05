@@ -6,10 +6,10 @@ import com.openminis.app.mcp.server.approval.McpApprovalCore.MAX_ARGUMENT_CHARS
 import com.openminis.app.mcp.server.approval.McpApprovalCore.MAX_OUTPUT_CHARS
 import com.openminis.app.mcp.server.approval.McpApprovalCore.MAX_RUN_SECONDS
 import com.openminis.app.mcp.server.approval.McpApprovalCore.Operation
+import com.openminis.app.util.Digest
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
-import java.security.MessageDigest
 
 /**
  * [T-mcp-approval] Execution half of the approval flow. Pure JVM logic: it
@@ -148,17 +148,7 @@ class McpApprovalExecutor(
         /** Upper bound for hashing a source-evidence file (64 MiB). */
         const val MAX_SOURCE_FILE_BYTES = 64L * 1024 * 1024
 
-        fun sha256Hex(file: File): String {
-            val digest = MessageDigest.getInstance("SHA-256")
-            file.inputStream().use { input ->
-                val buf = ByteArray(64 * 1024)
-                while (true) {
-                    val n = input.read(buf)
-                    if (n < 0) break
-                    digest.update(buf, 0, n)
-                }
-            }
-            return digest.digest().joinToString("") { "%02x".format(it) }
-        }
+        /** [T-sha256-single-source] Streaming digest of [file]'s bytes. */
+        fun sha256Hex(file: File): String = file.inputStream().use { Digest.sha256Hex(it) }
     }
 }

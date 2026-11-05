@@ -40,6 +40,8 @@ import com.openminis.app.R
 import com.openminis.app.backup.BackupCategory
 import com.openminis.app.backup.BackupHistory
 import com.openminis.app.ui.components.MinisTextButton
+import com.openminis.app.ui.settings.DetailDivider
+import com.openminis.app.ui.settings.DetailValueRow
 import com.openminis.app.ui.settings.SettingsScaffold
 import com.openminis.app.ui.settings.SettingsSection
 import com.openminis.app.ui.theme.m3Icon
@@ -107,39 +109,39 @@ fun BackupHistoryDetailScreen(
                 ?.joinToString(", ")
                 ?.let { stringResource(R.string.backup_history_included, it) },
         ) {
-            DetailRow(label = stringResource(R.string.backup_history_status)) {
+            DetailValueRow(label = stringResource(R.string.backup_history_status)) {
                 StatusValue(record.status)
             }
-            DetailRow(
+            DetailValueRow(
                 label = stringResource(R.string.backup_history_started),
                 value = formatTimestamp(record.startedAt),
             )
             record.durationMillis?.let {
-                DetailRow(
+                DetailValueRow(
                     label = stringResource(R.string.backup_history_duration),
                     value = durationText(it),
                 )
             }
             if (record.totalBytes > 0) {
-                DetailRow(
+                DetailValueRow(
                     label = stringResource(R.string.backup_history_size),
                     value = humanBytes(record.totalBytes),
                 )
             }
-            DetailRow(
+            DetailValueRow(
                 label = stringResource(R.string.backup_history_encrypted),
                 value = stringResource(
                     if (record.encrypted) R.string.common_yes else R.string.common_no,
                 ),
             )
             record.packageName?.let {
-                DetailRow(label = stringResource(R.string.backup_history_file), value = it)
+                DetailValueRow(label = stringResource(R.string.backup_history_file), value = it)
             }
             if (record.skippedFiles > 0) {
                 // Tappable when the list is available: a bare count answers
                 // "how many" but never "which ones", which is the real
                 // question. Records written before the list existed stay plain.
-                DetailRow(
+                DetailValueRow(
                     label = stringResource(R.string.backup_history_excluded),
                     value = stringResource(R.string.backup_history_file_count, record.skippedFiles),
                     onClick = if (record.skippedEntries.isNotEmpty()) onOpenSkipped else null,
@@ -244,53 +246,8 @@ fun BackupHistoryDetailScreen(
     }
 }
 
-/** Label on the left, value on the right — the peer of iOS `LabeledContent`. */
-@Composable
-private fun DetailRow(
-    label: String,
-    value: String? = null,
-    onClick: (() -> Unit)? = null,
-    showDivider: Boolean = true,
-    content: @Composable (() -> Unit)? = null,
-) {
-    Column {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 56.dp)
-                .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(label, style = MaterialTheme.typography.bodyLarge)
-            Spacer(Modifier.width(12.dp))
-            Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
-                when {
-                    content != null -> content()
-                    // The package name is long enough to need two lines; every
-                    // other value is short. Right-aligned so both read as one
-                    // trailing column.
-                    value != null -> Text(
-                        value,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.End,
-                    )
-                }
-            }
-            if (onClick != null) {
-                Spacer(Modifier.width(4.dp))
-                Icon(
-                    m3Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight),
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp),
-                )
-            }
-        }
-        if (showDivider) RowDivider(inset = 14.dp)
-    }
-}
+// [T-detail-rows-unify] DetailValueRow (was private DetailRow) and
+// DetailDivider (was private RowDivider) moved to the shared DetailRows.kt.
 
 /** Status glyph + word, tinted by outcome. */
 @Composable
@@ -371,7 +328,7 @@ private fun DestinationOutcomeRow(
                 )
             }
         }
-        if (showDivider) RowDivider(inset = 48.dp)
+        if (showDivider) DetailDivider(insetStart = 48.dp)
     }
 }
 
@@ -396,16 +353,8 @@ private fun LogRow(entry: BackupHistory.LogEntry, showDivider: Boolean) {
                 modifier = Modifier.weight(1f),
             )
         }
-        if (showDivider) RowDivider(inset = 14.dp)
+        if (showDivider) DetailDivider(insetStart = 14.dp)
     }
-}
-
-@Composable
-private fun RowDivider(inset: androidx.compose.ui.unit.Dp) {
-    Box(
-        Modifier.fillMaxWidth().padding(start = inset)
-            .height(0.5.dp).background(MaterialTheme.colorScheme.outlineVariant),
-    )
 }
 
 /**

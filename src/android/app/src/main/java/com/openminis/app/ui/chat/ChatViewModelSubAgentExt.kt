@@ -857,6 +857,7 @@ private suspend fun ChatViewModel.runOneSubAgentInner(
                                 ),
                                 memoryEnabled = false,
                                 subAgentEnabled = false,
+                                hasSpeechModel = providerRepository.resolveVoiceInputEntry() != null,
                             ) + AgentTools.makeSubAgentExtraTools(),
                             role,
                             context,

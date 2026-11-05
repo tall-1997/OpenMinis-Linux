@@ -111,6 +111,25 @@ object McpJsonRpc {
         }
     }
 
+    /**
+     * Lazy [P1-mcp-stream-lazy] variant of [extractResponse] for live
+     * `text/event-stream` bodies: events are parsed one at a time straight off
+     * [body] (via the shared [ssePayloads] assembler) and the first reply
+     * matching [wantId] is returned WITHOUT draining the rest of the stream —
+     * the caller closes the underlying response, so a long-running server
+     * stream (progress notifications, keepalives) no longer has to finish
+     * before the tool call completes. Non-SSE content types return null (the
+     * caller falls back to the whole-body [extractResponse]).
+     */
+    fun extractResponseStreaming(body: java.io.BufferedReader, contentType: String, wantId: Int): JSONObject? {
+        if (!contentType.contains("text/event-stream", ignoreCase = true)) return null
+        for (payload in ssePayloads(body)) {
+            val obj = runCatching { NonFiniteJson.parse(payload) }.getOrNull() ?: continue
+            if (isReplyFor(obj, wantId)) return obj
+        }
+        return null
+    }
+
     private fun isReplyFor(obj: JSONObject, wantId: Int): Boolean =
         obj.has("jsonrpc") &&
             idKey(obj.opt("id")) == wantId.toString() &&
@@ -137,26 +156,8 @@ object McpJsonRpc {
             .mapNotNull { payload -> runCatching { NonFiniteJson.parse(payload) }.getOrNull() }
             .toList()
 
-    /**
-     * STDIO framing: read newline-delimited JSON from [reader] until the
-     * reply for [wantId] arrives. Server-initiated notifications and
-     * requests (no id / other id) are skipped. Throws [McpError] on EOF or
-     * malformed stream. Blocking — callers own the thread + timeout.
-     */
-    fun readReply(reader: BufferedReader, wantId: Int): JSONObject {
-        while (true) {
-            val line = reader.readLine()
-                ?: throw McpError(McpError.CONNECTION_ERROR, "server closed the stream before replying")
-            if (line.isBlank()) continue
-            val obj = runCatching { NonFiniteJson.parse(line) }.getOrNull() ?: continue
-            if (obj.optInt("id", Int.MIN_VALUE) == wantId &&
-                (obj.has("result") || obj.has("error"))
-            ) return obj
-            // Anything else (notification, server->client request, log line
-            // that happens to be JSON) is ignored, matching daemon.py
-            // `_read_reply`.
-        }
-    }
+    // [P2-dead-code] readReply was removed: zero callers (the STDIO client
+    // frames its own reply loop in McpStdioClient). Git history keeps it.
 
     /** Unwrap a JSON-RPC envelope: return `result` or throw the `error`. */
     fun unwrapResult(reply: JSONObject): JSONObject {

@@ -169,7 +169,22 @@ internal class VirtualScreenUpkeep(
         }
         val m = muter()
         if (m.mutedPackages().isNotEmpty()) {
-            notes.addAll(m.reconcile(liveIds) { pkg -> mainDisplayVisible(pkg) })
+            // ONE Shizuku listTasks for the whole sweep, fetched lazily: the
+            // per-entry lambda used to re-probe task listing for EVERY muted
+            // package (N probes per reconcile). The lazy defers the probe until
+            // a LIVE-display entry actually asks for it — a leftover entry of a
+            // dead display goes straight to unmute without paying for a task
+            // listing it never uses (regression guard for the "leftover sweep
+            // issues a single command" contract).
+            val rows: List<TaskMover.TaskRow>? by lazy {
+                when (val o = mover().listTasks()) {
+                    is TaskMover.ListOutcome.Rows -> o.rows
+                    is TaskMover.ListOutcome.Unavailable -> null
+                }
+            }
+            notes.addAll(m.reconcile(liveIds) { pkg ->
+                rows?.any { it.displayId == VirtualScreenManager.MAIN_DISPLAY_ID && it.packageName == pkg }
+            })
         }
         return notes
     }

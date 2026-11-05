@@ -106,37 +106,60 @@ class MinisAccessibilityService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
         maybeEmitAppOpened(event)
-        val copy = AccessibilityEvent.obtain(event)
+        // [Wave3 #1] Only listeners (script recorder / offload `event watch`)
+        // need the binder-backed `source` extraction (viewId /
+        // contentDescription / screen bounds). With no listeners we record a
+        // lightweight ring entry directly on the callback thread — no
+        // AccessibilityEvent.obtain() copy, no AccessibilityQueryGuard submit,
+        // no per-event Binder round-trip. snapshotEvents() currently has no
+        // external consumer; the ring exists so an ad-hoc consumer can inspect
+        // recent events, so it keeps the cheap marshalled-field set and never
+        // triggers source extraction by itself.
+        val listeners = eventListeners
+        val rec = RecordedEvent(
+            type = AccessibilityEvent.eventTypeToString(event.eventType),
+            packageName = event.packageName?.toString(),
+            className = event.className?.toString(),
+            text = event.text?.joinToString(" ") { it?.toString() ?: "" }?.takeIf { it.isNotBlank() },
+            timestamp = System.currentTimeMillis(),
+        )
+        if (listeners.isEmpty()) {
+            offerToRing(rec)
+            return
+        }
         AccessibilityQueryGuard.submit {
-            val src = try {
-                copy.source
-            } catch (_: Throwable) {
-                null
-            }
+            val copy = AccessibilityEvent.obtain(event)
             try {
-                val rect = android.graphics.Rect()
-                src?.getBoundsInScreen(rect)
-                val xy = if (src != null && !rect.isEmpty) "${rect.centerX()},${rect.centerY()}" else null
-                val rec = RecordedEvent(
-                    type = AccessibilityEvent.eventTypeToString(copy.eventType),
-                    packageName = copy.packageName?.toString(),
-                    className = copy.className?.toString(),
-                    text = copy.text?.joinToString(" ") { it?.toString() ?: "" }?.takeIf { it.isNotBlank() },
-                    timestamp = System.currentTimeMillis(),
-                    viewId = src?.viewIdResourceName,
-                    contentDescription = src?.contentDescription?.toString()?.takeIf { it.isNotBlank() },
-                    xy = xy,
-                )
-                eventRing.offer(rec)
-                while (eventRing.size > EVENT_RING_CAP) eventRing.poll()
-                for (listener in eventListeners) {
-                    try { listener(rec) } catch (_: Throwable) {}
+                val src = try {
+                    copy.source
+                } catch (_: Throwable) {
+                    null
+                }
+                try {
+                    val rect = android.graphics.Rect()
+                    src?.getBoundsInScreen(rect)
+                    val xy = if (src != null && !rect.isEmpty) "${rect.centerX()},${rect.centerY()}" else null
+                    val enriched = rec.copy(
+                        viewId = src?.viewIdResourceName,
+                        contentDescription = src?.contentDescription?.toString()?.takeIf { it.isNotBlank() },
+                        xy = xy,
+                    )
+                    offerToRing(enriched)
+                    for (listener in listeners) {
+                        try { listener(enriched) } catch (_: Throwable) {}
+                    }
+                } finally {
+                    src?.recycle()
                 }
             } finally {
-                src?.recycle()
                 copy.recycle()
             }
         }
+    }
+
+    private fun offerToRing(rec: RecordedEvent) {
+        eventRing.offer(rec)
+        while (eventRing.size > EVENT_RING_CAP) eventRing.poll()
     }
 
     override fun onInterrupt() {

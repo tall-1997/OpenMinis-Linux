@@ -84,7 +84,14 @@ object McpNativeBridge {
      */
     private val clientBuildLocks = ConcurrentHashMap<String, Any>()
 
-    private var envRepoRef: EnvVarRepository? = null
+    /**
+     * [P2-dcl-volatile] Double-checked-locking holder for the env-var repo.
+     * The `@Volatile` is load-bearing: without it a racing reader could observe
+     * the non-null helper before its constructor finished. `by lazy(SYNCHRONIZED)`
+     * was not usable here because the repository needs the per-call [Context]
+     * and this object has no parameterless application-context handle.
+     */
+    @Volatile private var envRepoRef: EnvVarRepository? = null
 
     private fun envRepo(context: Context): EnvVarRepository =
         envRepoRef ?: synchronized(this) {

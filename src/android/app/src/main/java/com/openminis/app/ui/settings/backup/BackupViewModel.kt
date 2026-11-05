@@ -116,8 +116,14 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
      * back on, which is the opposite of what disabling is for: it keeps the
      * server and its credential precisely so skipping one for a while costs
      * nothing to undo.
+     *
+     * [T-android-sessionlist-prefs-io] suspend: RcloneRemoteStore's first
+     * touch parses + decrypts the prefs file and PhoneBackupFolderStore reads
+     * its prefs — both main-thread work before. Callers run it on IO (the
+     * screen wraps it in withContext(Dispatchers.IO); the internal callers
+     * below sit in launch(Dispatchers.IO) blocks).
      */
-    fun refreshDestinations() {
+    suspend fun refreshDestinations() {
         _destinations.value = runCatching {
             com.openminis.app.backup.remote.RcloneRemoteStore(getApplication()).remotes
         }.getOrDefault(emptyList())
@@ -125,36 +131,40 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun addPhoneFolder(uri: Uri) {
-        val name = PhoneBackupFolderStore.treeDisplayName(getApplication(), uri)
-        phoneStore.add(uri, name)
-        refreshDestinations()
+        viewModelScope.launch(Dispatchers.IO) {
+            val name = PhoneBackupFolderStore.treeDisplayName(getApplication(), uri)
+            phoneStore.add(uri, name)
+            refreshDestinations()
+        }
     }
 
     fun setPhoneFolderEnabled(id: String, enabled: Boolean) {
-        phoneStore.setEnabled(id, enabled)
-        refreshDestinations()
+        viewModelScope.launch(Dispatchers.IO) {
+            phoneStore.setEnabled(id, enabled)
+            refreshDestinations()
+        }
     }
 
     fun removePhoneFolder(id: String) {
-        phoneStore.remove(id)
-        refreshDestinations()
+        viewModelScope.launch(Dispatchers.IO) {
+            phoneStore.remove(id)
+            refreshDestinations()
+        }
     }
 
     /** Flip delivery for one destination without touching its credential. */
     fun setDestinationEnabled(name: String, on: Boolean) {
-        runCatching {
-            com.openminis.app.backup.remote.RcloneRemoteStore(getApplication())
-                .setEnabled(name, on)
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                com.openminis.app.backup.remote.RcloneRemoteStore(getApplication())
+                    .setEnabled(name, on)
+            }
+            refreshDestinations()
         }
-        refreshDestinations()
     }
 
     private val _statusText = MutableStateFlow<String?>(null)
     val statusText: StateFlow<String?> = _statusText.asStateFlow()
-
-    /** Non-null once an export finished and its package is ready to share/save. */
-    private val _exportReady = MutableStateFlow<ExportResult?>(null)
-    val exportReady: StateFlow<ExportResult?> = _exportReady.asStateFlow()
 
     private val _errorText = MutableStateFlow<String?>(null)
     val errorText: StateFlow<String?> = _errorText.asStateFlow()
@@ -195,12 +205,6 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
         if (r.allDelivered) _lastResult.value = null
     }
 
-    data class ExportResult(
-        val packageFile: File,
-        val totalBytes: Long,
-        val skippedFiles: Int,
-    )
-
     fun toggleCategory(category: BackupCategory, on: Boolean) {
         _selected.value = _selected.value.toMutableSet().apply {
             if (on) add(category) else remove(category)
@@ -239,7 +243,6 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun clearError() { _errorText.value = null }
-    fun clearExportReady() { _exportReady.value = null }
 
     /**
      * Run an export. Credentials are an explicit user choice and are never
@@ -248,20 +251,18 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
     fun startExport(passphrase: String?) {
         if (_isRunning.value) return
         val cats = _selected.value
-        if (cats.isEmpty()) { _errorText.value = "Choose at least one thing to include."; return }
-        // [T-android-backup-destination-gate] Refuse to produce a package that
-        // can only land in our own sandbox. Re-read here rather than trusting
-        // the cached list: the user may have removed the last destination in
-        // another screen since this one was composed.
-        refreshDestinations()
-        if (!hasDestination) {
+        // [T-android-sessionlist-prefs-io] Cheap flag checks stay on the main
+        // thread so a mis-tap can reject without any disk work; everything
+        // below that touches the disk moves into the coroutine.
+        if (cats.isEmpty()) {
             _errorText.value = getApplication<Application>()
-                .getString(com.openminis.app.R.string.backup_needs_destination)
+                .getString(com.openminis.app.R.string.backup_err_choose_include)
             return
         }
         val encrypting = _encrypt.value
         if (encrypting && passphrase.isNullOrEmpty()) {
-            _errorText.value = "Set a passphrase to encrypt this backup."
+            _errorText.value = getApplication<Application>()
+                .getString(com.openminis.app.R.string.backup_err_passphrase_required)
             return
         }
         // Encryption is a user choice. Credentials are still opt-in and the
@@ -269,26 +270,47 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
         // do not turn that warning into a forced encryption policy.
         _isRunning.value = true
         _lastResult.value = null
-        _statusText.value = "Starting…"
-        _exportReady.value = null
-        // [T-android-backup-history] Open the record BEFORE any work, so a run
-        // killed mid-flight still leaves evidence. BackupHistory reconciles a
-        // record left RUNNING into FAILED on next launch.
-        val log = mutableListOf<BackupHistory.LogEntry>()
-        var record = BackupHistory.Record(
-            backupId = "",
-            startedAt = System.currentTimeMillis(),
-            status = BackupHistory.Status.RUNNING,
-            categories = cats.map { it.key }.sorted(),
-            encrypted = encrypting,
-        )
-        history.upsert(record)
-        _historyRecords.value = history.records()
-
-        fun note(line: String, problem: Boolean = false) {
-            log.add(BackupHistory.LogEntry(System.currentTimeMillis(), line, problem))
-        }
+        _statusText.value = getApplication<Application>()
+            .getString(com.openminis.app.R.string.backup_status_starting)
         exportJob = viewModelScope.launch {
+            // [T-android-backup-destination-gate] Refuse to produce a package
+            // that can only land in our own sandbox. Re-read here rather than
+            // trusting the cached list: the user may have removed the last
+            // destination in another screen since this one was composed.
+            // [T-android-sessionlist-prefs-io] The gate is disk work —
+            // refreshDestinations() parses + decrypts rclone prefs — so it
+            // runs on IO inside the coroutine instead of on the main thread
+            // before launch.
+            val hasDest = withContext(Dispatchers.IO) {
+                refreshDestinations()
+                hasDestination
+            }
+            if (!hasDest) {
+                _errorText.value = getApplication<Application>()
+                    .getString(com.openminis.app.R.string.backup_needs_destination)
+                _statusText.value = null
+                _isRunning.value = false
+                return@launch
+            }
+            // [T-android-backup-history] Open the record BEFORE any work, so a
+            // run killed mid-flight still leaves evidence. BackupHistory
+            // reconciles a record left RUNNING into FAILED on next launch.
+            val log = mutableListOf<BackupHistory.LogEntry>()
+            var record = BackupHistory.Record(
+                backupId = "",
+                startedAt = System.currentTimeMillis(),
+                status = BackupHistory.Status.RUNNING,
+                categories = cats.map { it.key }.sorted(),
+                encrypted = encrypting,
+            )
+            withContext(Dispatchers.IO) {
+                history.upsert(record)
+                _historyRecords.value = history.records()
+            }
+
+            fun note(line: String, problem: Boolean = false) {
+                log.add(BackupHistory.LogEntry(System.currentTimeMillis(), line, problem))
+            }
             try {
                 val summary = withContext(Dispatchers.IO) {
                     BackupExporter(getApplication(), db).export(
@@ -361,11 +383,6 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
                     )
                 }
 
-                _exportReady.value = ExportResult(
-                    packageFile = summary.packageFile,
-                    totalBytes = summary.totalBytes,
-                    skippedFiles = summary.skippedFiles,
-                )
                 _lastResult.value = RunResult(
                     totalBytes = summary.totalBytes,
                     skippedFiles = summary.skippedFiles,
@@ -634,7 +651,8 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun loadPackage(uri: Uri) {
         _isRunning.value = true
-        _statusText.value = "Reading backup…"
+        _statusText.value = getApplication<Application>()
+            .getString(com.openminis.app.R.string.backup_status_reading)
         _report.value = null
         viewModelScope.launch {
             try {
@@ -696,7 +714,8 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
     /** List the `.minisbak` packages on one configured remote. */
     fun listServerPackages(remote: com.openminis.app.backup.remote.RcloneRemoteStore.Remote) {
         _isRunning.value = true
-        _statusText.value = "Listing…"
+        _statusText.value = getApplication<Application>()
+            .getString(com.openminis.app.R.string.backup_status_listing)
         _serverPackages.value = emptyList()
         viewModelScope.launch {
             try {
@@ -841,16 +860,6 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
     fun cancelOpen() {
         AppLogger.info(TAG, "[Restore] user cancelled package open")
         openJob?.cancel()
-    }
-
-    /** Reset every restore-side piece of state. Called on teardown. */
-    fun resetRestoreState() {
-        clearBrowse()
-        _transfer.value = null
-        _openStage.value = null
-        _serverPackages.value = emptyList()
-        _errorText.value = null
-        _statusText.value = null
     }
 
     /**
@@ -999,13 +1008,19 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
         val pending = _pending.value ?: return
         if (_isRunning.value) return
         val cats = _restoreSelected.value
-        if (cats.isEmpty()) { _errorText.value = "Choose at least one thing to restore."; return }
+        if (cats.isEmpty()) {
+            _errorText.value = getApplication<Application>()
+                .getString(com.openminis.app.R.string.backup_err_choose_restore)
+            return
+        }
         if (pending.manifest.encryption != null && passphrase.isNullOrEmpty()) {
-            _errorText.value = "This backup is encrypted. Enter its passphrase to restore."
+            _errorText.value = getApplication<Application>()
+                .getString(com.openminis.app.R.string.backup_err_encrypted_passphrase)
             return
         }
         _isRunning.value = true
-        _statusText.value = "Restoring…"
+        _statusText.value = getApplication<Application>()
+            .getString(com.openminis.app.R.string.backup_status_restoring)
         viewModelScope.launch {
             try {
                 val report = withContext(Dispatchers.IO) {

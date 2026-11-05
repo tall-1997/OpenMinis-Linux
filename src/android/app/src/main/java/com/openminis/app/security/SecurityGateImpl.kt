@@ -22,13 +22,6 @@ class SecurityGateImpl : SecurityGate {
     override fun getPermissionMode(): PermissionMode = _permissionMode
 
     @Volatile
-    private var permissionRules: List<PermissionRule> = emptyList()
-
-    override fun setPermissionRules(rules: List<PermissionRule>) {
-        permissionRules = rules
-    }
-
-    @Volatile
     private var authorityProfile: PermissionProfile? = null
 
     override fun setAuthorityProfile(profile: PermissionProfile?) {
@@ -250,22 +243,21 @@ class SecurityGateImpl : SecurityGate {
 
     override fun decide(cmd: GateCommand, mode: PermissionMode): Decision {
         // [Fix-P0] Reordered to match user expectation: ALLOW_ALL should bypass
-        // everything except rules + fatal-confirm. Old order put authority fence
+        // everything except fatal-confirm. Old order put authority fence
         // + fatal-block *before* ALLOW_ALL, breaking user's "allow all" intent.
+        // [Wave3 #2] The persistent allow/deny rule layer was removed: there was
+        // no writer in the entire repo (setRules/persist were dead code), so the
+        // engine always evaluated an empty rule set — a permanent no-op. The
+        // tighten-only prefix layer (PrefixRulePolicy) went with it.
 
-        // [1] Permission rules: explicit allow/deny bypass everything else.
-        val rule = evaluateRules(cmd)
-        if (rule == "deny") return Decision.Denied("规则拒绝: ${cmd.toolName}")
-        if (rule == "allow") return Decision.Allow("规则放行: ${cmd.toolName}")
-
-        // [2] Always pass: read-only tools (unless mode==DENY_ALL).
+        // [1] Always pass: read-only tools (unless mode==DENY_ALL).
         if ((cmd.toolName in READ_ONLY_TOOLS || (cmd.toolName == "browser_use" && isBrowserReadOnlyAction(cmd))) &&
             mode != PermissionMode.DENY_ALL
         ) {
             return Decision.Allow("只读工具自动放行")
         }
 
-        // [3] Always pass: coordinator tools (unless mode blocks them).
+        // [2] Always pass: coordinator tools (unless mode blocks them).
         if (cmd.toolName in COORDINATOR_TOOLS && mode != PermissionMode.DENY_ALL &&
             mode != PermissionMode.READ_ONLY && mode != PermissionMode.PLAN
         ) {
@@ -312,7 +304,7 @@ class SecurityGateImpl : SecurityGate {
                 ?.let { return Decision.Denied(it, hard = true) }
         }
 
-        // [4] Mode-level block: DENY_ALL, READ_ONLY, PLAN.
+        // [3] Mode-level block: DENY_ALL, READ_ONLY, PLAN.
         if (mode == PermissionMode.DENY_ALL) {
             return Decision.Denied("当前为拒绝全部模式")
         }
@@ -332,7 +324,7 @@ class SecurityGateImpl : SecurityGate {
             }
         }
 
-        // [5] Destructive / fatal risk. YOYO still asks. Approval mode also asks.
+        // [4] Destructive / fatal risk. YOYO still asks. Approval mode also asks.
         val command = extractCommand(cmd)
         val risk = commandRisk(cmd, command)
         if (risk == RiskLevel.FATAL_BANNED) {
@@ -407,34 +399,12 @@ class SecurityGateImpl : SecurityGate {
             }
         }
 
-        // Shell prefix rule layer (Codex execpolicy semantics, rewritten):
-        // must come AFTER every hard refusal above so a rule cannot mask one,
-        // and BEFORE any confirmable path below so `forbidden` is not
-        // laundered through an approval dialog and `prompt` is not silently
-        // executed under YOYO.
-        if (cmd.toolName in SHELL_TOOLS) {
-            val command = extractCommand(cmd)
-            PrefixRulePolicy.evaluate(permissionRules, cmd.toolName, command)?.let { (verdict, pattern) ->
-                return when (verdict) {
-                    PrefixRulePolicy.Verdict.FORBIDDEN -> Decision.Denied(
-                        "规则禁止 (forbidden): $pattern",
-                        hard = true,
-                    )
-                    PrefixRulePolicy.Verdict.PROMPT -> Decision.NeedConfirm(
-                        "规则要求确认 (prompt): $pattern",
-                        preview(cmd),
-                        mustPrompt = true,
-                    )
-                }
-            }
-        }
-
-        // [6] YOYO: everything except fatal-confirm is auto-run.
+        // [5] YOYO: everything except fatal-confirm is auto-run.
         if (mode == PermissionMode.ALLOW_ALL) {
             return Decision.Allow("YOYO：自动执行")
         }
 
-        // [7] Authority fence: only enforced in ASK mode (workspace jail).
+        // [6] Authority fence: only enforced in ASK mode (workspace jail).
         val authority = authorityProfile
         if (authority != null) {
             val path = extractPath(cmd)
@@ -451,7 +421,7 @@ class SecurityGateImpl : SecurityGate {
             }
         }
 
-        // [8] Approval: low-risk auto-run. Everything else confirms.
+        // [7] Approval: low-risk auto-run. Everything else confirms.
         if (isLowRisk(cmd, command, risk)) {
             return Decision.Allow("审批：低风险自动放行")
         }
@@ -564,61 +534,6 @@ class SecurityGateImpl : SecurityGate {
         }
         return md.digest(input.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
     }
-
-    /**
-     * [T-android-rule-laundering] An `allow` rule used to be decided against the
-     * JOINED command with substring semantics, so one rule like `cat` or a blank
-     * pattern authorised `cat x; rm -rf /data/data/…` — and step [1] returns
-     * before SuPathPolicy, GuestMountPolicy, the block-device and fatal arms,
-     * which contradicts the ordering contract [PrefixRulePolicy] documents for
-     * its own layer. `allow` is therefore matched per risk unit and never over a
-     * fatal command. `deny` keeps its old broad matching: over-deny is not a
-     * security hole, and tightening it would silently loosen user intent.
-     */
-    private fun evaluateRules(cmd: GateCommand): String? {
-        if (permissionRules.isEmpty()) return null
-        val target = extractCommand(cmd)
-        val isShell = cmd.toolName in SHELL_TOOLS
-        // Segments, not risk units: an allow rule is written in the user's own
-        // words (`sudo *`, `timeout *`), so it must keep seeing the wrapper it
-        // typed. Units are still what the fatal check runs over, because that
-        // question is about the payload, not the spelling.
-        val segments = if (isShell) shellSegments(target).ifEmpty { listOf(target) } else listOf(target)
-        val hasFatalUnit = isShell &&
-            riskUnits(target).any { classifySegment(it) == RiskLevel.FATAL_BANNED }
-        var allowHit = false
-        for (r in permissionRules) {
-            if (!toolFilterMatches(r.toolFilter, cmd.toolName)) continue
-            val action = r.action.lowercase()
-            if (action == "allow") {
-                if (hasFatalUnit) continue
-                if (segments.all { matchesAllowPattern(r.pattern, it) }) allowHit = true
-                continue
-            }
-            if (patternMatches(r.pattern, target)) {
-                if (action == "deny") return "deny"
-            }
-        }
-        return if (allowHit) "allow" else null
-    }
-
-    /**
-     * Whole-unit prefix match for an allow pattern: `git` covers `git status` but
-     * not `grep category`, `cat*` covers `cat notes.md` but not a later segment
-     * of the same command line. A blank pattern authorises nothing — it used to
-     * authorise everything.
-     */
-    private fun matchesAllowPattern(pattern: String, unit: String): Boolean =
-        RulePattern.allowMatches(pattern, unit)
-
-    private fun toolFilterMatches(filter: String, toolName: String): Boolean = when {
-        filter == "*" || filter.isBlank() -> true
-        filter.endsWith("*") -> toolName.startsWith(filter.dropLast(1))
-        else -> filter == toolName || ToolAliases.canonical(toolName) == filter
-    }
-
-    private fun patternMatches(pattern: String, target: String): Boolean =
-        RulePattern.denyMatches(pattern, target)
 
     private fun extractCommand(cmd: GateCommand): String = when (cmd.toolName) {
         "shell_exec", "shell_execute", "su_exec", "env_exec" -> {

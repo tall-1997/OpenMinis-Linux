@@ -8,6 +8,7 @@ import org.junit.Test
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.After
 import org.junit.Before
@@ -37,7 +38,7 @@ private class FakePrefs : SharedPreferences {
         override fun putFloat(key: String, value: Float): SharedPreferences.Editor = apply { staged[key] = value }
         override fun putBoolean(key: String, value: Boolean): SharedPreferences.Editor = apply { staged[key] = value }
         override fun remove(key: String): SharedPreferences.Editor = apply { staged[key] = null }
-        override fun clear(): SharedPreferences.Editor = apply { staged.clear(); staged["__clear__"] = true }
+        override fun clear(): SharedPreferences.Editor = apply { staged["__clear__"] = true }
         override fun commit(): Boolean { flush(); return true }
         override fun apply() { flush() }
         private fun flush() {
@@ -48,7 +49,15 @@ private class FakePrefs : SharedPreferences {
     }
 }
 
-/** One test world: rpc + its backing manager/store, so cleanup tests can age state. */
+/**
+ * One test world: rpc + its backing manager/store, so cleanup tests can age state.
+ *
+ * [P1-dead-branches] The phone-only steps (approve / revoke / approve_op /
+ * cancel / delete / cleanup) go through [Harness.manager] — exactly the path
+ * the production approvals UI takes ([com.openminis.app.ui.settings.McpApprovalSection]).
+ * The externally reachable surface (request / local_run / status / execute)
+ * still goes through [Harness.rpc.handle], matching the ApprovalTools adapter.
+ */
 private class Harness(
     val rpc: McpApprovalRpc,
     val manager: McpApprovalManager,
@@ -91,17 +100,26 @@ class McpApprovalRpcTest {
         )
     }
 
+    /** External-surface call — only the 4 EXTERNAL_METHODS ever reach this. */
     private fun call(h: Harness, method: String, params: JSONObject = JSONObject()): Pair<JSONObject?, JSONObject?> {
         val resp = h.rpc.handle(method, params, 42)
         val body = JSONObject(resp.body)
         return (body.optJSONObject("result")) to (body.optJSONObject("error"))
     }
 
-    private fun createActiveTask(h: Harness, taskId: String = "task-1") {
-        val (_, err) = call(h, "phone_task_request", JSONObject().put("taskId", taskId).put("name", "demo"))
-        assertTrue("create failed: $err", err == null)
-        val (_, err2) = call(h, "phone_task_approve", JSONObject().put("taskId", taskId))
-        assertTrue("approve failed: $err2", err2 == null)
+    /** Assert a manager Outcome succeeded, with a readable failure message. */
+    private fun ok(out: McpApprovalCore.Outcome, what: String) {
+        assertTrue("$what failed: ${out}", out is McpApprovalCore.Outcome.Ok)
+    }
+
+    /** Phone-only approve — the UI path (manager direct), not an RPC branch. */
+    private fun approveTask(h: Harness, taskId: String = "task-1") {
+        ok(h.manager.createTask(taskId, "demo"), "create")
+        ok(h.manager.approveTask(taskId), "approve")
+    }
+
+    private fun approveOp(h: Harness, operationId: String, fingerprint: String? = null) {
+        ok(h.manager.approveOperation(operationId, null, fingerprint), "approve_op")
     }
 
     private fun submit(h: Harness, taskId: String = "task-1", opId: String = "op-1"): JSONObject {
@@ -120,7 +138,7 @@ class McpApprovalRpcTest {
     fun `full three-phase flow executes and commits`() {
         val disp = FakeDispatcher()
         val h = harness(disp)
-        createActiveTask(h)
+        approveTask(h)
 
         val submitted = submit(h)
         assertEquals("task-1", submitted.optString("taskId"))
@@ -129,8 +147,7 @@ class McpApprovalRpcTest {
         assertEquals(600_000L, submitted.optLong("approvalTtlMs"))
         assertTrue(submitted.optString("requestId").isNotBlank())
 
-        val (_, err1) = call(h, "phone_task_approve_op", JSONObject().put("operationId", "op-1"))
-        assertTrue("approve_op failed: $err1", err1 == null)
+        approveOp(h, "op-1")
 
         val (exec, err2) = call(h, "phone_operation_execute", JSONObject().put("operationId", "op-1"))
         assertTrue("execute failed: $err2", err2 == null)
@@ -152,9 +169,9 @@ class McpApprovalRpcTest {
     fun `execute twice is idempotent`() {
         val disp = FakeDispatcher()
         val h = harness(disp)
-        createActiveTask(h)
+        approveTask(h)
         submit(h)
-        call(h, "phone_task_approve_op", JSONObject().put("operationId", "op-1"))
+        approveOp(h, "op-1")
         val (_, err1) = call(h, "phone_operation_execute", JSONObject().put("operationId", "op-1"))
         assertTrue(err1 == null)
         val (_, err2) = call(h, "phone_operation_execute", JSONObject().put("operationId", "op-1"))
@@ -168,10 +185,10 @@ class McpApprovalRpcTest {
     @Test
     fun `execute after task revocation is rejected`() {
         val h = harness()
-        createActiveTask(h)
+        approveTask(h)
         submit(h)
-        call(h, "phone_task_approve_op", JSONObject().put("operationId", "op-1"))
-        call(h, "phone_task_revoke", JSONObject().put("taskId", "task-1"))
+        approveOp(h, "op-1")
+        ok(h.manager.revokeTask("task-1"), "revoke")
         val (res, err) = call(h, "phone_operation_execute", JSONObject().put("operationId", "op-1"))
         assertTrue(res == null)
         assertEquals(McpApprovalCore.ErrorCode.OPERATION_NOT_FOUND.name, err!!.optJSONObject("data").optString("approvalCode"))
@@ -180,7 +197,7 @@ class McpApprovalRpcTest {
     @Test
     fun `execute before operation approval is rejected`() {
         val h = harness()
-        createActiveTask(h)
+        approveTask(h)
         submit(h)
         val (res, err) = call(h, "phone_operation_execute", JSONObject().put("operationId", "op-1"))
         assertTrue(res == null)
@@ -191,11 +208,9 @@ class McpApprovalRpcTest {
     fun `fingerprint bound at approval gates execution`() {
         val disp = FakeDispatcher()
         val h = harness(disp)
-        createActiveTask(h)
+        approveTask(h)
         submit(h)
-        call(h, "phone_task_approve_op", JSONObject()
-            .put("operationId", "op-1")
-            .put("operationFingerprint", "fp-abc"))
+        approveOp(h, "op-1", fingerprint = "fp-abc")
         // Execute without the fingerprint → rejected, dispatcher untouched.
         val (_, err1) = call(h, "phone_operation_execute", JSONObject().put("operationId", "op-1"))
         assertEquals(McpApprovalCore.ErrorCode.REQUEST_ID_MISMATCH.name, err1!!.optJSONObject("data").optString("approvalCode"))
@@ -212,22 +227,23 @@ class McpApprovalRpcTest {
     // -- list / status / cancel / delete / cleanup ---------------------------
 
     @Test
-    fun `list exposes tasks operations and execution flags`() {
+    fun `state dump exposes tasks operations and execution flags`() {
         val h = harness()
-        createActiveTask(h)
+        approveTask(h)
         submit(h)
-        call(h, "phone_task_approve_op", JSONObject().put("operationId", "op-1"))
+        approveOp(h, "op-1")
         call(h, "phone_operation_execute", JSONObject().put("operationId", "op-1"))
-        val (list, err) = call(h, "phone_task_list")
-        assertTrue(err == null)
-        assertEquals(1, list!!.optJSONArray("tasks").length())
-        val task = list.optJSONArray("tasks").optJSONObject(0)
-        assertEquals("task-1", task.optString("taskId"))
-        assertEquals("ACTIVE", task.optString("status"))
-        val op = list.optJSONArray("operations").optJSONObject(0)
-        assertEquals("op-1", op.optString("operationId"))
-        assertTrue(op.optBoolean("executed"))
-        // Per-operation status view matches.
+        // The UI's list is a plain manager.state() read (no phone_task_list RPC).
+        val state = h.manager.state()
+        assertEquals(1, state.tasks.size)
+        val task = state.tasks.values.single()
+        assertEquals("task-1", task.taskId)
+        assertEquals(McpApprovalCore.TaskStatus.ACTIVE, task.status)
+        assertEquals(1, state.operations.size)
+        val op = state.operations.values.single()
+        assertEquals("op-1", op.operationId)
+        assertTrue(op.operationId in state.executedOperationIds)
+        // Per-operation status view stays on the external surface.
         val (st, err2) = call(h, "phone_task_status", JSONObject().put("operationId", "op-1"))
         assertTrue(err2 == null)
         assertTrue(st!!.optBoolean("executed"))
@@ -237,37 +253,35 @@ class McpApprovalRpcTest {
     @Test
     fun `cancel drops a waiting operation`() {
         val h = harness()
-        createActiveTask(h)
+        approveTask(h)
         submit(h)
-        val (res, err) = call(h, "phone_task_cancel", JSONObject().put("operationId", "op-1"))
-        assertTrue("cancel failed: $err", err == null)
-        assertEquals("CANCELLED", res!!.optString("status"))
+        ok(h.manager.cancelOperation("op-1"), "cancel")
+        assertNull("cancelled op must be dropped", h.manager.operation("op-1"))
         // Approving a cancelled op is impossible.
-        val (_, err2) = call(h, "phone_task_approve_op", JSONObject().put("operationId", "op-1"))
-        assertEquals(McpApprovalCore.ErrorCode.OPERATION_NOT_FOUND.name, err2!!.optJSONObject("data").optString("approvalCode"))
+        val out = h.manager.approveOperation("op-1", null, null)
+        assertEquals(McpApprovalCore.ErrorCode.OPERATION_NOT_FOUND, (out as McpApprovalCore.Outcome.Err).code)
     }
 
     @Test
     fun `delete removes the task and its operations`() {
         val h = harness()
-        createActiveTask(h)
+        approveTask(h)
         submit(h)
-        val (res, err) = call(h, "phone_task_delete", JSONObject().put("taskId", "task-1"))
-        assertTrue("delete failed: $err", err == null)
-        val (list, _) = call(h, "phone_task_list")
-        assertEquals(0, list!!.optJSONArray("tasks").length())
-        assertEquals(0, list.optJSONArray("operations").length())
+        ok(h.manager.deleteTask("task-1"), "delete")
+        val state = h.manager.state()
+        assertTrue(state.tasks.isEmpty())
+        assertTrue(state.operations.isEmpty())
         // Executing the gone operation is rejected.
         val (_, err2) = call(h, "phone_operation_execute", JSONObject().put("operationId", "op-1"))
         assertEquals(McpApprovalCore.ErrorCode.OPERATION_NOT_FOUND.name, err2!!.optJSONObject("data").optString("approvalCode"))
     }
 
     @Test
-    fun `cleanup prunes expired approvals and stale task dirs`() {
+    fun `cleanup prunes expired approvals and can drop stale task dirs`() {
         val h = harness()
-        createActiveTask(h)
+        approveTask(h)
         submit(h)
-        call(h, "phone_task_approve_op", JSONObject().put("operationId", "op-1"))
+        approveOp(h, "op-1")
         // Age the approval past the TTL.
         val state = h.store.load()
         val aged = state.copy(
@@ -282,20 +296,21 @@ class McpApprovalRpcTest {
         val dir = File(McpApprovalStore.taskRootFor("task-1"))
         dir.mkdirs()
         File(dir, "output.txt").writeText("stale")
-        val (res, err) = call(h, "phone_task_cleanup")
-        assertTrue("cleanup failed: $err", err == null)
-        assertEquals(1, res!!.optInt("removed"))
-        assertEquals(1, res.optInt("dirsDeleted"))
+        // Housekeeping is manager.pruneExpired() + deleteTaskDirectory — the
+        // same calls the approvals UI tick makes.
+        val (after, removed) = h.manager.pruneExpired()
+        assertTrue("expired op not pruned", "op-1" in removed)
+        assertTrue(after.operations.isEmpty())
+        assertTrue(h.manager.deleteTaskDirectory("task-1"))
         assertFalse(dir.exists())
     }
 
     @Test
     fun `revoke flips an active task back`() {
         val h = harness()
-        createActiveTask(h)
-        val (res, err) = call(h, "phone_task_revoke", JSONObject().put("taskId", "task-1"))
-        assertTrue("revoke failed: $err", err == null)
-        assertEquals("REVOKED", res!!.optString("status"))
+        approveTask(h)
+        ok(h.manager.revokeTask("task-1"), "revoke")
+        assertEquals(McpApprovalCore.TaskStatus.REVOKED, h.manager.task("task-1")!!.status)
         // Requests under a revoked task are refused.
         val (_, err2) = call(h, "phone_local_run", JSONObject()
             .put("taskId", "task-1").put("operationId", "op-x").put("tool", "shell_exec").put("arguments", "{}"))
@@ -305,7 +320,7 @@ class McpApprovalRpcTest {
     @Test
     fun `phone_local_run rejects a requestId that does not match the content`() {
         val h = harness()
-        createActiveTask(h)
+        approveTask(h)
         val (res, err) = call(h, "phone_local_run", JSONObject()
             .put("taskId", "task-1")
             .put("operationId", "op-1")
@@ -341,10 +356,10 @@ class McpApprovalRpcTest {
     @Test
     fun `task status answers for a whole task with every operation`() {
         val h = harness()
-        createActiveTask(h)
+        approveTask(h)
         submit(h)
         submit(h, opId = "op-2")
-        call(h, "phone_task_approve_op", JSONObject().put("operationId", "op-2"))
+        approveOp(h, "op-2")
         call(h, "phone_operation_execute", JSONObject().put("operationId", "op-2"))
 
         val (st, err) = call(h, "phone_task_status", JSONObject().put("taskId", "task-1"))

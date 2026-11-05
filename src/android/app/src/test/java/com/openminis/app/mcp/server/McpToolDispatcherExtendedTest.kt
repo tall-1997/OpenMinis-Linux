@@ -7,7 +7,6 @@ import com.openminis.app.security.Decision
 import com.openminis.app.security.GateCommand
 import com.openminis.app.security.PermissionMode
 import com.openminis.app.security.PermissionProfile
-import com.openminis.app.security.PermissionRule
 import com.openminis.app.security.Reversibility
 import com.openminis.app.security.RiskLevel
 import com.openminis.app.security.SecurityGate
@@ -37,7 +36,6 @@ class McpToolDispatcherExtendedTest {
         override fun preview(cmd: GateCommand): String = "fake preview"
         override fun audit(cmd: GateCommand, decision: Decision, result: String?) {}
         override fun getAuditTrail(): List<AuditEntry> = emptyList()
-        override fun setPermissionRules(rules: List<PermissionRule>) {}
         override fun setAuthorityProfile(profile: PermissionProfile?) {}
         override fun verifyAuditChain(): AuditChainVerification =
             AuditChainVerification(ok = true)

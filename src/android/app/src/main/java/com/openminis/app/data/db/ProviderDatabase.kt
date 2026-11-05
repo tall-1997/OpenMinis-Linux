@@ -26,6 +26,15 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * fallbackToDestructiveMigration: provider.db is the only copy of
  * structured provider state, and the JSON mirror is the safety net, not
  * a substitute for proper migrations.
+ *
+ * [Wave3-fix-10] exportSchema is now true, matching AppDatabase: the schema
+ * JSON is what makes MigrationTestHelper possible at all. The KSP arg
+ * `room.schemaLocation = $projectDir/schemas` is already configured
+ * (app/build.gradle.kts:341), so the NEXT build emits
+ * `app/schemas/com.openminis.app.data.db.ProviderDatabase/5.json` (the
+ * current version; Room only exports the version being compiled). That JSON
+ * MUST be committed together with this change — a schema export that never
+ * lands in git protects nothing.
  */
 @Database(
     entities = [
@@ -37,7 +46,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ProviderThinkingRuleEntity::class,
     ],
     version = 5,
-    exportSchema = false,
+    exportSchema = true,
 )
 abstract class ProviderDatabase : RoomDatabase() {
     abstract fun providerConfigDao(): ProviderConfigDao

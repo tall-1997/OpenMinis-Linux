@@ -139,7 +139,14 @@ fun ChatViewModel.retryLast() {
                 val doomed = dbMessages.lastOrNull { it.sortOrder >= trailingAssistantSortOrder && it.role == "assistant" }
                 if (doomed != null && doomed.partsJson.isNotBlank()) {
                     runCatching {
-                        val dir = java.io.File("/var/minis/workspace/offloads/answer-versions")
+                        // [T-answer-versions-guest-path] The archive lives under the
+                        // session's /var/minis/workspace bind; on the host that is
+                        // SessionWorkspace.hostDir(filesDir, sid, "workspace") (see the
+                        // read side's answerVersionArchives in ui/settings/LogManagementScreen).
+                        val dir = java.io.File(
+                            com.openminis.app.sandbox.SessionWorkspace.hostDir(context.filesDir, sid, "workspace"),
+                            "offloads/answer-versions",
+                        )
                         dir.mkdirs()
                         val stamp = java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.US)
                             .format(java.util.Date())

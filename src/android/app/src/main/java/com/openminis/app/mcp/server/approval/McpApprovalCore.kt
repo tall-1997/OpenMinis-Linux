@@ -1,6 +1,6 @@
 package com.openminis.app.mcp.server.approval
 
-import java.security.MessageDigest
+import com.openminis.app.util.Digest
 
 /**
  * [T-mcp-approval] Pure decision core for the three-phase external MCP
@@ -103,12 +103,7 @@ object McpApprovalCore {
      * submitted requestId and (taskId, tool, arguments) is rejected.
      */
     fun requestIdFor(taskId: String, tool: String, argumentsJson: String): String =
-        sha256Hex("$taskId\n$tool\n$argumentsJson").take(32)
-
-    private fun sha256Hex(input: String): String {
-        val digest = MessageDigest.getInstance("SHA-256").digest(input.toByteArray(Charsets.UTF_8))
-        return digest.joinToString("") { "%02x".format(it) }
-    }
+        Digest.sha256Hex("$taskId\n$tool\n$argumentsJson").take(32)
 
     fun validId(id: String): Boolean = ID_PATTERN.matches(id)
 

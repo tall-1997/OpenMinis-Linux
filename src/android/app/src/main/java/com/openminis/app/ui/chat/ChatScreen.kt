@@ -398,8 +398,10 @@ fun ChatScreen(
             val r = broken.last()
             val whenStr = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
                 .format(java.util.Date(r.startedAtMs))
+            // [T-android-chat-strings-resource] LaunchedEffect body is not a
+            // composable scope — resolve the text via context.getString.
             snackbarHostState.showSnackbar(
-                "上次有中断的生成（模型 ${r.modelId}，开始于 $whenStr）——中断前的内容已保留在对话中",
+                context.getString(R.string.crash_recovery_snackbar, r.modelId, whenStr),
             )
         }
     }
@@ -513,17 +515,18 @@ fun ChatScreen(
     val tHangDiagAppContext = androidx.compose.ui.platform.LocalContext.current.applicationContext
     androidx.compose.runtime.DisposableEffect(sessionId) {
         ChatViewModelStore.screenEntered(sessionId)
-        // [T-HANG-DIAG] enter / dispose markers around the ChatScreen lifetime
-        // so we can correlate "user tapped session X" → loadSession timings
-        // and any subsequent hang record. Removable by grepping out
-        // `[T-HANG-DIAG]` from this file.
-        println(
-            "[T-HANG-DIAG] ChatScreen MOUNT session=$sessionId hangCount=" +
-                com.openminis.app.diagnostics.HangDetector.currentHangCount(tHangDiagAppContext),
+        // Enter / dispose markers around the ChatScreen lifetime so we can
+        // correlate "user tapped session X" → loadSession timings and any
+        // subsequent hang record. Ride the PerfLongCtx reentry timeline
+        // (same mechanism loadSession uses) instead of raw println — the
+        // hangCount extra is preserved.
+        com.openminis.app.diagnostics.PerfLongCtx.step(
+            sessionId,
+            "chatScreen.mount",
+            "hangCount=" + com.openminis.app.diagnostics.HangDetector.currentHangCount(tHangDiagAppContext),
         )
-        com.openminis.app.diagnostics.PerfLongCtx.step(sessionId, "chatScreen.mount")
         onDispose {
-            println("[T-HANG-DIAG] ChatScreen UNMOUNT session=$sessionId")
+            com.openminis.app.diagnostics.PerfLongCtx.step(sessionId, "chatScreen.unmount")
             ChatViewModelStore.screenLeft(sessionId)
             // T-android-new-chat-empty-residue: drop sessions materialised by
             // a settings toggle (ensureSession via /memory, /thinking, etc.)
@@ -785,7 +788,7 @@ fun ChatScreen(
         if (uris.size > ATTACHMENT_PICK_LIMIT) {
             android.widget.Toast.makeText(
                 context,
-                "Only the first $ATTACHMENT_PICK_LIMIT items were attached.",
+                context.getString(R.string.attachment_pick_truncated_items, ATTACHMENT_PICK_LIMIT),
                 android.widget.Toast.LENGTH_SHORT,
             ).show()
         }
@@ -915,7 +918,7 @@ fun ChatScreen(
         if (uris.size > ATTACHMENT_PICK_LIMIT) {
             android.widget.Toast.makeText(
                 context,
-                "Only the first $ATTACHMENT_PICK_LIMIT files were attached.",
+                context.getString(R.string.attachment_pick_truncated_files, ATTACHMENT_PICK_LIMIT),
                 android.widget.Toast.LENGTH_SHORT,
             ).show()
         }
@@ -1221,16 +1224,12 @@ fun ChatScreen(
     // effect, list growth no longer invalidates the walk — the chain resets
     // only on drag, jump-to-bottom and session switch.
 
-    // [T-android-scroll-fab-reversed] TEMP diagnostic — capture BOTH FABs'
-    // gates so we can verify the matrix (bottom=none, middle=both, top=down
-    // only) and why the down-FAB is missing at the top. Remove after fix.
-    LaunchedEffect(listState) {
-        snapshotFlow {
-            val up = !isNearBottom.value && messages.isNotEmpty()
-            val down = scrollMode is ScrollMode.Reading && contentOverflows.value && messages.isNotEmpty()
-            "FABs up=$up down=$down | nearBottom=${isNearBottom.value} lastJumped=${lastJumpedUserId?.take(8)} mode=$scrollMode overflow=${contentOverflows.value} canFwd=${listState.canScrollForward} canBwd=${listState.canScrollBackward}"
-        }.collect { AppLogger.debug("ScrollFAB2", it) }
-    }
+    // [T-android-scroll-fab-reversed] The TEMP per-frame FAB-gate diagnostic
+    // that used to live here (snapshotFlow → AppLogger.debug("ScrollFAB2"))
+    // was removed: it stringified and logged on every scroll-state change
+    // outside the mute list. FAB visibility is a pure function of the same
+    // state the FAB blocks read, so the rendered buttons remain the source
+    // of truth.
 
     // T-drag-send-queue: shared send-or-enqueue handler used by BOTH the
     // send-button tap and the swipe-up-to-send drag. Routes through
@@ -3524,6 +3523,16 @@ fun ChatScreen(
                 // closes the detail state because the id "doesn't exist").
                 var lastToolBlocks by remember { mutableStateOf<List<AssistantBlock>>(emptyList()) }
                 var detailToolBlocks by remember { mutableStateOf<List<AssistantBlock>>(emptyList()) }
+                // [T-android-lasttoolblocks-throttle] Same conflate+sample(80)
+                // shape as the flatItems pipeline below: the combine's upstream
+                // is flowOf(messages) (a List snapshot, NOT a Flow) so its
+                // "messages changed" semantics come from THIS LaunchedEffect
+                // being keyed on `messages` — every canonical-list change
+                // restarts the effect and combine re-emits immediately
+                // (conflate passes the first value straight through), while
+                // streamingById ticks are sampled at ~12fps instead of
+                // re-running the full assistantToolUseBlocks traversal per
+                // streaming tick.
                 LaunchedEffect(messages, foldAiProcess, showSubAgentBar) {
                     kotlinx.coroutines.flow.combine(
                         kotlinx.coroutines.flow.flowOf(messages),
@@ -3544,7 +3553,10 @@ fun ChatScreen(
                             activeSubAgentToolIds,
                         )
                         all to overlay
-                    }.collect { (all, overlay) ->
+                    }
+                        .conflate()
+                        .sample(80L)
+                        .collect { (all, overlay) ->
                         detailToolBlocks = all
                         lastToolBlocks = overlay
                     }
@@ -3800,8 +3812,11 @@ fun ChatScreen(
                 // overlay around the input Column below, mirroring iOS
                 // AIChatView.swift:1817 (.overlay(alignment: .topTrailing)).
 
-                // T-chat-title-pill: sticky session title overlay. Sits
-                // above the LazyColumn (top-center), animates in once the
+                // T-chat-title-pill: the sticky session title no longer renders
+                // as an overlay here — it lives in the Scaffold topBar via
+                // ChatTopBarTitle (gated by `showChatTitlePill`). This spot is
+                // intentionally empty; the edit sheet below is the pill's
+                // edit flow.
             }
             } // ChatMessagesScope
 
@@ -4080,7 +4095,7 @@ fun ChatScreen(
                                     }
                                     Spacer(Modifier.width(6.dp))
                                     Text(
-                                        "Move to…",
+                                        stringResource(R.string.chat_move_to_capsule),
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Medium,
                                         color = ChatColors.secondaryText,
@@ -4238,7 +4253,7 @@ fun ChatScreen(
                                                 } catch (_: android.content.ActivityNotFoundException) {
                                                     android.widget.Toast.makeText(
                                                         context,
-                                                        "No app available to open this attachment.",
+                                                        context.getString(R.string.attachment_no_app_toast),
                                                         android.widget.Toast.LENGTH_SHORT,
                                                     ).show()
                                                 }

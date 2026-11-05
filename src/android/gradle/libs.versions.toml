@@ -1,0 +1,13 @@
+[versions]
+# [T-version-catalog] Single source of truth for versions that previously
+# drifted across module build files (coroutines was inlined in app + provider:api,
+# kotlinx-serialization in app + core:model). Add new shared coordinates here
+# rather than inlining them again.
+kotlinxCoroutines = "1.9.0"
+kotlinxSerialization = "1.7.3"
+
+[libraries]
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
+kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "kotlinxCoroutines" }
+kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlinxCoroutines" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerialization" }

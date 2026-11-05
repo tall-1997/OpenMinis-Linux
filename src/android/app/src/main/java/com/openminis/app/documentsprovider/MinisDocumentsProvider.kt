@@ -44,6 +44,20 @@ class MinisDocumentsProvider : DocumentsProvider() {
             ".",
             "..",
         )
+        /**
+         * [Wave3-fix-16] Per-directory child cap for [queryChildDocuments]. The
+         * system file picker has no pagination protocol for a plain cursor —
+         * SAF clients render exactly the rows returned — so instead of
+         * materialising EVERY child of a directory (a skills tree with
+         * thousands of entries turned one picker tap into a full directory
+         * walk + that many MatrixCursor rows), we return the first
+         * [MAX_CHILDREN] entries in name order. Files past the cap are
+         * invisible through SAF until the user narrows the directory or the
+         * files are pruned; that is a deliberate trade documented in the
+         * [queryChildDocuments] KDoc.
+         */
+        private const val MAX_CHILDREN = 500
+        private const val TAG = "MinisDocumentsProvider"
 
         private val ROOT_PROJECTION = arrayOf(
             Root.COLUMN_ROOT_ID,
@@ -134,6 +148,22 @@ class MinisDocumentsProvider : DocumentsProvider() {
         return cursor
     }
 
+    /**
+     * List [parentDocumentId]'s children, capped at [MAX_CHILDREN].
+     *
+     * [Wave3-fix-16] The old body materialised the FULL directory listing
+     * (`File.listFiles()` + one MatrixCursor row per child) on every picker
+     * interaction. SAF has no continuation signal for a plain cursor, so
+     * "sort by name, take the first [MAX_CHILDREN]" is the least-surprising
+     * truncation: the result is DETERMINISTIC (a caller always sees the same
+     * prefix for the same directory state, rather than an arbitrary
+     * directory-order subset), and anything the client sorts locally stays
+     * consistent within the prefix. Files beyond the cap are simply not
+     * listed — logged here so a confused user report ("file X missing from
+     * the picker") is diagnosable. Sessions/skills directories with more
+     * than 500 visible entries are the expected trigger; pruning or
+     * narrowing the directory restores visibility.
+     */
     override fun queryChildDocuments(
         parentDocumentId: String,
         projection: Array<String>?,
@@ -142,12 +172,20 @@ class MinisDocumentsProvider : DocumentsProvider() {
         val cursor = MatrixCursor(projection ?: DOCUMENT_PROJECTION)
         val parent = resolveDoc(parentDocumentId)
         val isRoot = parentDocumentId.isEmpty()
-        val children = parent.listFiles()?.toList() ?: emptyList()
+        val children = (parent.listFiles()?.toList() ?: emptyList())
+            .asSequence()
+            .filter { child ->
+                val name = child.name
+                !name.startsWith(".") && name !in METADATA_BLACKLIST &&
+                    (!isRoot || name in TOP_LEVEL)
+            }
+            // Deterministic prefix: name order, locale-stable for the ASCII
+            // ids this tree uses (session uuids / skill ids).
+            .sortedBy { it.name.lowercase() }
+            .take(MAX_CHILDREN)
+            .toList()
         for (child in children) {
             val name = child.name
-            if (name.startsWith(".")) continue
-            if (name in METADATA_BLACKLIST) continue
-            if (isRoot && name !in TOP_LEVEL) continue
             val docId = if (parentDocumentId.isEmpty()) name else "$parentDocumentId/$name"
             cursor.newRow()
                 .add(Document.COLUMN_DOCUMENT_ID, docId)
@@ -156,6 +194,14 @@ class MinisDocumentsProvider : DocumentsProvider() {
                 .add(Document.COLUMN_LAST_MODIFIED, child.lastModified())
                 .add(Document.COLUMN_FLAGS, flagsFor(docId, child))
                 .add(Document.COLUMN_SIZE, if (child.isFile) child.length() else 0L)
+        }
+        if (children.size == MAX_CHILDREN) {
+            // Truncation is at-cap, so the directory MAY hold more; say so.
+            android.util.Log.w(
+                TAG,
+                "queryChildDocuments($parentDocumentId): listing capped at $MAX_CHILDREN entries — " +
+                    "files beyond the cap are not visible through SAF",
+            )
         }
         return cursor
     }

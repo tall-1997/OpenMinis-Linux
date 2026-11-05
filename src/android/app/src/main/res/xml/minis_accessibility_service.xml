@@ -1,6 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Event types narrowed from typeAllMask to the union of actually consumed
+     types (fix #1, Wave 3):
+     - TYPE_WINDOW_STATE_CHANGED  -> maybeEmitAppOpened (automation engine's
+       only a11y-sourced trigger) + A11yScriptRecorder WINDOW steps
+     - TYPE_WINDOW_CONTENT_CHANGED -> generic wake-up signal for offload
+       awaitA11yEvent/sleepPoll and `event watch` default collection
+     - TYPE_VIEW_CLICKED / TYPE_VIEW_TEXT_CHANGED -> A11yScriptRecorder
+       TAP/INPUT steps
+     - TYPE_NOTIFICATION_STATE_CHANGED -> offload `notify` watcher
+       (AccessibilityOffloadHandler.notifySub forces the notification_state_changed type filter)
+     All other typeAllMask types (focus, hover, selection, scroll, long-click,
+     announcements, ...) had no consumer and were pure event-storm load.
+     flagReportViewIds is retained: SkillReplayEngine and
+     AccessibilityOffloadHandler read node.viewIdResourceName, which the
+     framework only populates when this flag is set. -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
-    android:accessibilityEventTypes="typeAllMask"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged|typeViewClicked|typeViewTextChanged|typeNotificationStateChanged"
     android:accessibilityFeedbackType="feedbackGeneric"
     android:accessibilityFlags="flagDefault|flagRetrieveInteractiveWindows|flagReportViewIds|flagRequestTouchExplorationMode"
     android:canPerformGestures="true"

@@ -1,7 +1,5 @@
 package com.openminis.app.automation
 
-import android.app.AlarmManager
-import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -364,41 +362,29 @@ class AutomationRuleManager(
             }
             return
         }
-        val pi = buildPendingIntent(entity.id)
-        try {
-            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, next, pi)
-            AppLogger.info(TAG, "registered rule=${entity.id} name=\"${entity.name}\" triggerAt=$next")
-        } catch (e: SecurityException) {
-            // S+ users may have revoked SCHEDULE_EXACT_ALARM — fall back to
-            // inexact so we still fire eventually rather than dropping.
-            AppLogger.warning(TAG, "exact-alarm denied for rule=${entity.id}; falling back to inexact")
-            try {
-                alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, next, pi)
-            } catch (t2: Throwable) {
-                AppLogger.error(TAG, "inexact fallback failed for rule=${entity.id}: ${t2.message}")
-            }
-        }
+        alarmScheduler.registerExact(entity.id, entity.name, next)
     }
 
     fun cancelAlarm(ruleId: String) {
-        val pi = buildPendingIntent(ruleId)
-        alarmManager.cancel(pi)
-        pi.cancel()
+        alarmScheduler.cancel(ruleId)
     }
 
-    private val alarmManager: AlarmManager
-        get() = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-
-    private fun buildPendingIntent(ruleId: String): PendingIntent {
-        val intent = Intent(context, AutomationRuleReceiver::class.java).apply {
+    /**
+     * [P2-alarm-dedup] The exact/inexact fallback + PendingIntent machinery
+     * lives in the shared [ExactAlarmScheduler]; "automation_" salts the
+     * request-code space away from the scheduled-task manager's task-id
+     * hashes (historic behavior preserved byte-for-byte).
+     */
+    private val alarmScheduler = com.openminis.app.scheduled.ExactAlarmScheduler(
+        context = context,
+        tag = TAG,
+        kind = "rule",
+        requestCodeSalt = "automation_",
+    ) { ctx, ruleId ->
+        Intent(ctx, AutomationRuleReceiver::class.java).apply {
             action = ACTION_FIRE
             putExtra(EXTRA_RULE_ID, ruleId)
         }
-        // Namespace the request code away from the scheduled-task manager's
-        // task-id hashes: "automation_" salts the same 31-bit space.
-        val requestCode = ("automation_$ruleId").hashCode() and 0x7FFFFFFF
-        val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        return PendingIntent.getBroadcast(context, requestCode, intent, flags)
     }
 
     // ── device state ─────────────────────────────────────────────────────

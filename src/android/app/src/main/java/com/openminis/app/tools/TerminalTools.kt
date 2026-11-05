@@ -4,9 +4,6 @@ import android.content.Context
 import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.model.AgentToolParam
 import com.openminis.app.sandbox.MinisTerminals
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -87,9 +84,16 @@ object TerminalTools {
         ),
     )
 
-    /** Production entry point (dispatched from ChatViewModelExecuteToolExt). */
+    /**
+     * Production entry point (dispatched from ChatViewModelExecuteToolExt).
+     * [P2-no-runblocking] No withContext(IO) wrapper: the outer caller is the
+     * suspend tool-dispatch chain, and every [MinisTerminals] call is a
+     * suspending API that confines its own threading internally
+     * (withContext(main)/Default around the handle operations), so there is
+     * no blocking I/O left on this path to relocate.
+     */
     suspend fun execute(argsJson: String, sessionId: String, context: Context?): ToolExecutionResult =
-        withContext(Dispatchers.IO) { route(argsJson, sessionId, context) }
+        route(argsJson, sessionId, context)
 
     /** Internal routing seam — nullable context so JVM tests can drive it. */
     internal suspend fun route(argsJson: String, sessionId: String, context: Context?): ToolExecutionResult {
@@ -109,11 +113,11 @@ object TerminalTools {
         }
     }
 
-    private fun openAction(args: JSONObject, sessionId: String, context: Context?): ToolExecutionResult {
+    private suspend fun openAction(args: JSONObject, sessionId: String, context: Context?): ToolExecutionResult {
         val command = args.optString("command").trim().ifBlank { null }
         val cols = args.optInt("cols", 80)
         val rows = args.optInt("rows", 24)
-        val out = runBlocking { MinisTerminals.open(sessionId, context, command, cols, rows) }
+        val out = MinisTerminals.open(sessionId, context, command, cols, rows)
         if (out.error != null) return error(out.error, ToolErrorCode.EXECUTION_FAILED)
         val json = JSONObject().apply {
             put("ok", true)
@@ -134,7 +138,7 @@ object TerminalTools {
         return ToolExecutionResult(json.toString(), true, toolTitle = TITLE)
     }
 
-    private fun sendAction(args: JSONObject, sessionId: String): ToolExecutionResult {
+    private suspend fun sendAction(args: JSONObject, sessionId: String): ToolExecutionResult {
         val id = args.optString("terminal_id").trim()
         if (id.isEmpty()) return error("terminal_id is required for send", ToolErrorCode.INVALID_ARGUMENTS)
         val text = args.optString("text")
@@ -142,7 +146,7 @@ object TerminalTools {
             return error("text is required for send (or set press_enter to resend a bare carriage return)", ToolErrorCode.INVALID_ARGUMENTS)
         }
         val pressEnter = args.optBoolean("press_enter", true)
-        val out = runBlocking { MinisTerminals.send(sessionId, id, text, pressEnter) }
+        val out = MinisTerminals.send(sessionId, id, text, pressEnter)
         return if (out.ok) {
             ToolExecutionResult(
                 JSONObject()
@@ -158,11 +162,11 @@ object TerminalTools {
         }
     }
 
-    private fun readAction(args: JSONObject, sessionId: String): ToolExecutionResult {
+    private suspend fun readAction(args: JSONObject, sessionId: String): ToolExecutionResult {
         val id = args.optString("terminal_id").trim()
         if (id.isEmpty()) return error("terminal_id is required for read", ToolErrorCode.INVALID_ARGUMENTS)
         val waitMs = if (args.has("wait_ms")) args.optLong("wait_ms", 500L) else 500L
-        val out = runBlocking { MinisTerminals.read(sessionId, id, waitMs) }
+        val out = MinisTerminals.read(sessionId, id, waitMs)
         if (out.error != null) return error(out.error, ToolErrorCode.NOT_FOUND)
         val status = out.status?.name?.lowercase() ?: "unknown"
         val note = when {
@@ -187,12 +191,12 @@ object TerminalTools {
         return ToolExecutionResult(json.toString(), true, toolTitle = TITLE)
     }
 
-    private fun signalAction(args: JSONObject, sessionId: String): ToolExecutionResult {
+    private suspend fun signalAction(args: JSONObject, sessionId: String): ToolExecutionResult {
         val id = args.optString("terminal_id").trim()
         if (id.isEmpty()) return error("terminal_id is required for signal", ToolErrorCode.INVALID_ARGUMENTS)
         val signal = args.optString("signal").trim()
         if (signal.isEmpty()) return error("signal is required for signal (ctrl_c, ctrl_d, ctrl_z)", ToolErrorCode.INVALID_ARGUMENTS)
-        val out = runBlocking { MinisTerminals.signal(sessionId, id, signal) }
+        val out = MinisTerminals.signal(sessionId, id, signal)
         return if (out.ok) {
             ToolExecutionResult(
                 JSONObject().put("ok", true).put("terminal_id", id).put("signal", signal).toString(),
@@ -204,10 +208,10 @@ object TerminalTools {
         }
     }
 
-    private fun closeAction(args: JSONObject, sessionId: String): ToolExecutionResult {
+    private suspend fun closeAction(args: JSONObject, sessionId: String): ToolExecutionResult {
         val id = args.optString("terminal_id").trim()
         if (id.isEmpty()) return error("terminal_id is required for close", ToolErrorCode.INVALID_ARGUMENTS)
-        val out = runBlocking { MinisTerminals.close(sessionId, id) }
+        val out = MinisTerminals.close(sessionId, id)
         return if (out.ok) {
             ToolExecutionResult(
                 JSONObject().put("ok", true).put("closed", id).toString(),
@@ -220,7 +224,9 @@ object TerminalTools {
     }
 
     private fun listAction(sessionId: String): ToolExecutionResult {
-        val terminals = runBlocking { MinisTerminals.list(sessionId) }
+        // MinisTerminals.list is not suspending (CHM snapshot + lazy prune);
+        // the old runBlocking here wrapped a plain call for nothing.
+        val terminals = MinisTerminals.list(sessionId)
         val arr = JSONArray()
         for (t in terminals) {
             arr.put(

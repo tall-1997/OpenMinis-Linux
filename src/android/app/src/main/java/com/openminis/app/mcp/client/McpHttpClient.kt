@@ -171,6 +171,27 @@ class McpHttpClient(
                     }
                     if (wantId == null || resp.code == 202) return null
                     val ct = resp.header("Content-Type") ?: ""
+                    if (ct.contains("text/event-stream", ignoreCase = true)) {
+                        // [P1-mcp-stream-lazy] Consume the SSE stream event by
+                        // event and return the moment the reply for wantId
+                        // arrives — the `use` block closes the response (and
+                        // thereby cancels any remaining server-side stream,
+                        // e.g. progress notifications / keepalives) instead of
+                        // buffering the whole body first. Semantics are
+                        // identical to the buffered path below: same shared
+                        // ssePayloads assembler, same isReplyFor match.
+                        val stream = resp.body?.charStream()?.buffered()
+                            ?: throw McpError(
+                                McpError.PROTOCOL_ERROR,
+                                "no JSON-RPC reply for id=$wantId (content-type=$ct, empty body)",
+                            )
+                        val reply = McpJsonRpc.extractResponseStreaming(stream, ct, wantId)
+                            ?: throw McpError(
+                                McpError.PROTOCOL_ERROR,
+                                "no JSON-RPC reply for id=$wantId (content-type=$ct, stream exhausted)",
+                            )
+                        return McpJsonRpc.unwrapResult(reply)
+                    }
                     val text = resp.body?.string() ?: ""
                     val reply = McpJsonRpc.extractResponse(text, ct, wantId)
                         ?: throw McpError(

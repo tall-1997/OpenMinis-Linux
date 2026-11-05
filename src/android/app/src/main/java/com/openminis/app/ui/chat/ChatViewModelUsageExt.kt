@@ -107,13 +107,13 @@ internal fun mergeMessageUsageStats(stats: List<MessageUsageStats?>): MessageUsa
  * Token-count formatting for the footer, mirroring the Token Usage sheet's
  * iOS convention ("%.1fK" / "%.1fM") but lowercase ("1.2k") to match the
  * compact footer style. Pure — JVM-tested.
+ *
+ * [T-android-format-converge] Body moved to [formatTokenCount]; this keeps
+ * the footer profile — lowercase, zero-decimals above 10k, normal k/M
+ * magnitude — pinned by MessageUsageFooterTest.
  */
-internal fun formatUsageTokenCount(n: Int): String = when {
-    n >= 1_000_000 -> String.format("%.1fM", n / 1_000_000.0)
-    n >= 10_000 -> String.format("%.0fk", n / 1_000.0)
-    n >= 1_000 -> String.format("%.1fk", n / 1_000.0)
-    else -> n.toString()
-}
+internal fun formatUsageTokenCount(n: Int): String =
+    formatTokenCount(n.toLong(), thinTenK = true)
 
 /**
  * Fetch this session's persisted per-turn usage, keyed by DB row id. The UI

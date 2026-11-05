@@ -1,7 +1,7 @@
 package com.openminis.app.sandbox
 
+import com.openminis.app.util.Digest
 import java.io.File
-import java.security.MessageDigest
 import java.util.Base64
 
 /**
@@ -18,12 +18,8 @@ object CaBundle {
         "-----BEGIN CERTIFICATE-----\\s+([A-Za-z0-9+/=\r\n]+)\\s+-----END CERTIFICATE-----",
     )
 
-    fun sha256Hex(bytes: ByteArray): String {
-        val digest = MessageDigest.getInstance("SHA-256").digest(bytes)
-        val sb = StringBuilder(digest.size * 2)
-        for (b in digest) sb.append("%02x".format(b))
-        return sb.toString()
-    }
+    /** [T-sha256-single-source] Delegates to the shared [Digest] hex form. */
+    fun sha256Hex(bytes: ByteArray): String = Digest.sha256Hex(bytes)
 
     fun fingerprintDer(der: ByteArray): String = sha256Hex(der)
 

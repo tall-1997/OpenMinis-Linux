@@ -9,17 +9,23 @@ import java.io.File
 import java.util.Base64
 
 /**
- * [T-android-vscreen] The layered screenshot PNG pipeline, split out of
+ * [T-android-vscreen] The layered screenshot pipeline, split out of
  * [VirtualScreenManager] (architecture ratchet): pure functions over the
  * seams, touching NO manager-private state.
  *
  *  - [captureViaImageReader] — layer 1 (persistent reader, app-uid, no Shizuku).
  *  - [readChunked] — layer 3 (Shizuku screencap + chunked base64 through
  *    stdout); the shell is injected so JVM tests keep driving it.
- *  - [writePng] — terminal write into the offloads dir, returning the
+ *  - [writeScreenshot] — terminal write into the offloads dir, returning the
  *    manager's [VirtualScreenManager.CommandOutcome.Ok] with the guest path.
  *
- * [imageToPng] is the shared Image → PNG codec.
+ * Layer 1 encodes JPEG ([imageToJpeg]) at quality 85 — the same settings
+ * browser/BrowserUseManager.kt uses — because the only consumer (read_image)
+ * re-encodes to JPEG anyway: full-resolution PNG-100 encoding cost seconds of
+ * CPU + several MB per screenshot for nothing. Screenshots of a display are
+ * opaque (the frame alpha is unused), so dropping the PNG alpha channel is
+ * safe. Layers 2/3 receive raw PNG bytes from `screencap -p` and keep the
+ * .png suffix.
  */
 internal object VirtualScreenCapture {
     private const val TAG = "VirtualScreenCapture"
@@ -29,6 +35,9 @@ internal object VirtualScreenCapture {
 
     internal const val PNG_PREFIX = "vscreen_"
     internal const val PNG_SUFFIX = ".png"
+    /** Layer 1 (app-encoded JPEG) screenshots carry this suffix. */
+    internal const val JPEG_SUFFIX = ".jpg"
+    private const val JPEG_QUALITY = 85
 
     /**
      * Layer 1. Reads the latest frame from the display's OWN persistent
@@ -42,7 +51,7 @@ internal object VirtualScreenCapture {
         if (handle == null) return null
         val img = handle.acquireLatestFrame() ?: return null
         return try {
-            imageToPng(img)
+            imageToJpeg(img)
         } catch (t: Throwable) {
             AppLogger.warning(TAG, "ImageReader capture failed: ${t.message}")
             null
@@ -84,8 +93,14 @@ internal object VirtualScreenCapture {
     }
 
     /** Writes the capture under [dir] and reports the guest path (or the failure). */
-    fun writePng(dir: File, displayId: Int, bytes: ByteArray, via: String): VirtualScreenManager.CommandOutcome {
-        val file = File(dir, "$PNG_PREFIX${displayId}_${System.currentTimeMillis()}$PNG_SUFFIX")
+    fun writeScreenshot(
+        dir: File,
+        displayId: Int,
+        bytes: ByteArray,
+        via: String,
+        suffix: String = PNG_SUFFIX,
+    ): VirtualScreenManager.CommandOutcome {
+        val file = File(dir, "$PNG_PREFIX${displayId}_${System.currentTimeMillis()}$suffix")
         return runCatching { file.writeBytes(bytes) }
             .map {
                 VirtualScreenManager.CommandOutcome.Ok(
@@ -99,7 +114,7 @@ internal object VirtualScreenCapture {
             }
     }
 
-    private fun imageToPng(img: Image): ByteArray? = runCatching {
+    private fun imageToJpeg(img: Image): ByteArray? = runCatching {
         val plane = img.planes[0]
         val buffer = plane.buffer
         buffer.rewind()
@@ -112,7 +127,7 @@ internal object VirtualScreenCapture {
             Bitmap.createBitmap(full, 0, 0, img.width, img.height).also { full.recycle() }
         }
         val out = ByteArrayOutputStream()
-        scaled.compress(Bitmap.CompressFormat.PNG, 100, out)
+        scaled.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
         scaled.recycle()
         out.toByteArray()
     }.getOrNull()

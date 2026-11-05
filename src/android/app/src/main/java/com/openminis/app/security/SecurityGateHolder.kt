@@ -1,22 +1,32 @@
 package com.openminis.app.security
 
 import android.content.Context
-import com.openminis.app.logging.AppLogger
 import com.openminis.app.notification.ApprovalNotifier
 import com.openminis.app.service.ApprovalGate
 import com.openminis.app.tools.ToolExecutionResult
-import org.json.JSONArray
-import org.json.JSONObject
 
 /**
- * Process-wide gate + persisted mode/rules. ApprovalGate is only the UI wait.
+ * Process-wide gate + per-session mode registry. ApprovalGate is only the UI wait.
+ *
+ * [Wave3 #2/#16] The persistent allow/deny permission-rule layer was removed:
+ * `setRules`/`persist` had no caller anywhere in the repo and the rules file
+ * was never written, so the gate's rule engine always evaluated an empty set —
+ * a permanent no-op that still cost a pass over every decision. Behaviour is
+ * preserved exactly (rules were always empty ⇒ the engine never fired).
+ *
+ * [Wave3 #16] The session permission state lives HERE (one map), not also in
+ * the gate's global `permissionMode` field. `setActiveSessionMode` no longer
+ * writes the global gate getter — that writeback made "the last session to
+ * speak" the authority for every other chat reading `gate.getPermissionMode()`.
+ * Decisions in [intercept] always resolve the caller's own mode, and callers
+ * that decide directly ([ChatViewModelCodeRunExt]) pass an explicit mode, so
+ * the global getter has no remaining decision-making consumer.
  */
 object SecurityGateHolder {
     val gate: SecurityGateImpl = SecurityGateImpl()
 
     private const val PREFS = "security_gate"
     private const val KEY_MODE = "permission_mode"
-    private const val KEY_RULES = "permission_rules"
 
     fun load(context: Context) {
         val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -29,34 +39,6 @@ object SecurityGateHolder {
         activeSessionModes.clear()
         legacyActiveSessionMode = PermissionMode.ASK
         gate.setPermissionMode(PermissionMode.ASK)
-        val raw = p.getString(KEY_RULES, "[]") ?: "[]"
-        val rules = mutableListOf<PermissionRule>()
-        runCatching {
-            val arr = JSONArray(raw)
-            for (i in 0 until arr.length()) {
-                val o = arr.getJSONObject(i)
-                rules += PermissionRule(
-                    action = o.optString("action"),
-                    toolFilter = o.optString("toolFilter", "*"),
-                    pattern = o.optString("pattern", ""),
-                )
-            }
-        }
-        gate.setPermissionRules(rules)
-    }
-
-    fun persist(context: Context) {
-        val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-        p.putString(KEY_MODE, gate.getPermissionMode().name)
-        val arr = JSONArray()
-        // rules are not exposed from impl; persist is called after setMode/setRules
-        p.apply()
-    }
-
-    fun setMode(context: Context, mode: PermissionMode) {
-        gate.setPermissionMode(mode)
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit().putString(KEY_MODE, mode.name).apply()
     }
 
     private val activeSessionModes = java.util.concurrent.ConcurrentHashMap<String, PermissionMode>()
@@ -66,47 +48,15 @@ object SecurityGateHolder {
         val normalized = if (mode.isYoyo()) PermissionMode.ALLOW_ALL else PermissionMode.ASK
         if (sessionId.isNullOrBlank()) legacyActiveSessionMode = normalized
         else activeSessionModes[sessionId] = normalized
-        // Keep the legacy gate getter useful for settings/old callers. Decisions
-        // in intercept always use the caller's explicit mode below.
-        gate.setPermissionMode(normalized)
+        // [Wave3 #16] No global gate writeback here any more: with concurrent
+        // chats the global getter used to end up holding whichever session set
+        // its mode last. Per-session reads go through [activeSessionMode];
+        // decisions pass the caller's explicit mode.
     }
 
     fun activeSessionMode(sessionId: String? = null): PermissionMode =
         if (sessionId.isNullOrBlank()) legacyActiveSessionMode
         else activeSessionModes[sessionId] ?: PermissionMode.ASK
-
-    fun setRules(context: Context, rules: List<PermissionRule>) {
-        // [T-prefixrule-pattern-tokenize] Save-time validation: a prompt /
-        // forbidden pattern must produce a non-empty token sequence under the
-        // SAME quote-aware tokenizer the matcher uses (tokenizeCommand), or
-        // the rule can never hit — the user believes it is enforced while it
-        // silently never fires. Deliberately NOT rejected here (dropping a
-        // persisted rule on save would silently discard user config); it is
-        // logged loudly instead, and the matcher already ignores it.
-        for (r in rules) {
-            val action = r.action.lowercase()
-            if (action != "prompt" && action != "forbidden") continue
-            if (tokenizeCommand(r.pattern).isEmpty()) {
-                AppLogger.warning(
-                    "SecurityGate",
-                    "permission rule can never match: action=$action " +
-                        "toolFilter=${r.toolFilter} pattern='${r.pattern}'",
-                )
-            }
-        }
-        gate.setPermissionRules(rules)
-        val arr = JSONArray()
-        for (r in rules) {
-            arr.put(
-                JSONObject()
-                    .put("action", r.action)
-                    .put("toolFilter", r.toolFilter)
-                    .put("pattern", r.pattern),
-            )
-        }
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit().putString(KEY_RULES, arr.toString()).apply()
-    }
 
     /**
      * @param callerSessionId the chat that is asking, so the isolation policies
@@ -136,10 +86,11 @@ object SecurityGateHolder {
         return when (decision) {
             is Decision.Allow -> null
             is Decision.Denied -> {
-                // Explicit deny rules still win, and so do the isolation
-                // boundaries: allow-all speeds up the user's own work, it does
-                // not hand one chat another chat's files.
-                if (sessionAllowAll && !decision.hard && !decision.reason.startsWith("规则拒绝")) {
+                // The isolation boundaries still win: allow-all speeds up the
+                // user's own work, it does not hand one chat another chat's
+                // files. (Hard denies are never relaxed; the "规则拒绝" escape
+                // hatch belonged to the removed rule layer — [Wave3 #2].)
+                if (sessionAllowAll && !decision.hard) {
                     return null
                 }
                 InterceptFeedback.publishDenied(canonical, decision.reason)

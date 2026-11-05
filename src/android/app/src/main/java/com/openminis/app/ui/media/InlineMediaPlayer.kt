@@ -87,6 +87,13 @@ fun InlineAudioPlayer(
     var error by remember { mutableStateOf<String?>(null) }
 
     val mediaPlayer = remember { MediaPlayer() }
+    // (#3) The blocking prepare() used to run inside DisposableEffect on the
+    // main thread — demux + header decode of the whole file per composition.
+    // prepareAsync + OnPreparedListener keeps the same observable sequence
+    // (duration label appears, play starts) without the frame stall; the
+    // play button gates on [prepared] so start() can never fire mid-prepare
+    // (which would throw IllegalStateException).
+    var prepared by remember(filePath) { mutableStateOf(false) }
 
     DisposableEffect(filePath) {
         try {
@@ -97,13 +104,25 @@ fun InlineAudioPlayer(
                 // Try as content URI
                 mediaPlayer.setDataSource(context, Uri.parse(filePath))
             }
-            mediaPlayer.prepare()
-            duration = formatDuration(mediaPlayer.duration)
 
+            mediaPlayer.setOnPreparedListener { mp ->
+                duration = formatDuration(mp.duration.coerceAtLeast(0))
+                prepared = true
+            }
+            mediaPlayer.setOnErrorListener { _, what, extra ->
+                android.util.Log.w("InlineAudioPlayer", "media error what=$what extra=$extra")
+                prepared = false
+                true
+            }
             mediaPlayer.setOnCompletionListener {
                 isPlaying = false
                 progress = 0f
                 position = "0:00"
+            }
+            try {
+                mediaPlayer.prepareAsync()
+            } catch (e: Exception) {
+                error = e.message
             }
         } catch (e: Exception) {
             error = e.message
@@ -156,7 +175,9 @@ fun InlineAudioPlayer(
                             if (isPlaying) {
                                 mediaPlayer.pause()
                                 isPlaying = false
-                            } else {
+                            } else if (prepared) {
+                                // (#3) async prepare: never start() before the
+                                // OnPreparedListener fires.
                                 mediaPlayer.start()
                                 isPlaying = true
                             }
@@ -273,6 +294,11 @@ fun InlineVideoPlayer(
                         // Auto-play and surface the controller so the user sees
                         // a live first frame instead of a black surface waiting
                         // for an extra tap.
+                        //
+                        // (#19) Kept: the in-file comment marks auto-play as
+                        // INTENTIONAL (mirror of the preview's "live first
+                        // frame" behavior, not an accident), so the fix adds
+                        // only the missing teardown below.
                         start()
                         controller.show(0)
                     }
@@ -282,6 +308,13 @@ fun InlineVideoPlayer(
                         false
                     }
                 }
+            },
+            // (#19) AndroidView had no onRelease: every inline video card left
+            // its VideoView holding its MediaPlayer + surface forever. Stop
+            // playback (releases the media pipeline inside VideoView) when
+            // the card leaves composition.
+            onRelease = { videoView ->
+                try { videoView.stopPlayback() } catch (_: Throwable) { }
             },
             modifier = Modifier
                 .fillMaxWidth()
@@ -333,7 +366,7 @@ private fun FullscreenVideoContent(file: File, onDismiss: () -> Unit) {
     // fullScreenCover which hides the status bar. Restores the bars on dispose
     // so the chat view comes back with its normal chrome.
     DisposableEffect(view) {
-        val window = findDialogWindow(view)
+        val window = com.openminis.app.ui.components.findDialogWindow(view)
         var originalLightStatusBars: Boolean? = null
         var originalLightNavigationBars: Boolean? = null
         if (window != null) {
@@ -623,22 +656,11 @@ private fun CircleControlButton(
  * content:// URI.
  */
 /**
- * Walk the Compose view's parent chain to find the hosting `Window`. When
- * Compose renders inside a `Dialog`, the ComposeView is attached to an
- * internal `DialogWindowProvider` whose `window` is the Dialog's Window
- * (distinct from the host Activity's Window). Returns null if the search
- * terminates before hitting a provider — callers should no-op in that case.
+ * Walk the Compose view's parent chain to find the hosting `Window`. Moved
+ * to [com.openminis.app.ui.components.findDialogWindow] (#10 of the fix
+ * wave) — shared with the image viewers, the gallery and the web-preview
+ * pair.
  */
-private fun findDialogWindow(view: android.view.View): android.view.Window? {
-    var parent: Any? = view.parent
-    while (parent != null) {
-        if (parent is androidx.compose.ui.window.DialogWindowProvider) {
-            return parent.window
-        }
-        parent = (parent as? android.view.View)?.parent
-    }
-    return null
-}
 
 private fun shareMediaFile(context: android.content.Context, file: File, mime: String) {
     val authority = context.packageName + ".fileprovider"

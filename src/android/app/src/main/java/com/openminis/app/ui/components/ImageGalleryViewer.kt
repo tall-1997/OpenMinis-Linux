@@ -1,7 +1,6 @@
 package com.openminis.app.ui.components
 import com.openminis.app.ui.theme.m3Icon
 
-import android.view.WindowManager
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -32,6 +31,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -55,9 +55,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
 import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
 
@@ -107,48 +104,11 @@ fun ImageGalleryViewer(
     val scope = rememberCoroutineScope()
 
     // Hide system bars on entry, restore on exit. Same pattern as the
-    // single-image FullscreenImageViewer — see its comment block (T169)
-    // for why we don't touch decorFitsSystemWindows on the activity
-    // window.
-    //
-    // [T-android-preview-statusbar-leak] This captures the previous
-    // isAppearanceLight* values, which is safe HERE only because the effect is
-    // keyed on `Unit` and this viewer is never composed alongside another
-    // writer of those flags — it takes over the whole screen. The web preview
-    // pair (sheet ↔ fullscreen) could not make that assumption, overlapped, and
-    // leaked a stale value; both now restore from the theme instead. If this
-    // viewer ever gains a sibling that also writes these flags, do the same
-    // here rather than keeping the capture.
-    DisposableEffect(Unit) {
-        val window = (view.context as? android.app.Activity)?.window
-        val controller = window?.let { WindowInsetsControllerCompat(it, view) }
-        val prevLightStatus = controller?.isAppearanceLightStatusBars
-        val prevLightNav = controller?.isAppearanceLightNavigationBars
-        @Suppress("DEPRECATION")
-        val prevStatusBarColor = window?.statusBarColor
-        @Suppress("DEPRECATION")
-        val prevNavBarColor = window?.navigationBarColor
-
-        controller?.isAppearanceLightStatusBars = false
-        controller?.isAppearanceLightNavigationBars = false
-        @Suppress("DEPRECATION")
-        window?.statusBarColor = android.graphics.Color.TRANSPARENT
-        @Suppress("DEPRECATION")
-        window?.navigationBarColor = android.graphics.Color.TRANSPARENT
-        controller?.hide(WindowInsetsCompat.Type.systemBars())
-        controller?.systemBarsBehavior =
-            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-
-        onDispose {
-            controller?.show(WindowInsetsCompat.Type.systemBars())
-            prevLightStatus?.let { controller.isAppearanceLightStatusBars = it }
-            prevLightNav?.let { controller.isAppearanceLightNavigationBars = it }
-            @Suppress("DEPRECATION")
-            prevStatusBarColor?.let { window.statusBarColor = it }
-            @Suppress("DEPRECATION")
-            prevNavBarColor?.let { window.navigationBarColor = it }
-        }
-    }
+    // single-image FullscreenImageViewer — now the shared
+    // ActivityImmersiveSystemBarsEffect in DialogWindowUtils (T169 capture/
+    // restore semantics; safe here because the viewer takes over the whole
+    // screen and never overlaps another flag writer).
+    ActivityImmersiveSystemBarsEffect(view)
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -159,31 +119,35 @@ fun ImageGalleryViewer(
             decorFitsSystemWindows = false,
         ),
     ) {
-        // Apply immersive flags to the dialog's own window too.
-        val dialogContainer = LocalView.current.parent as? android.view.ViewGroup
-        DisposableEffect(dialogContainer) {
-            val win = dialogContainer?.let { findDialogWindowForGallery(it) }
-            win?.let { w ->
-                w.addFlags(WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS)
-                WindowCompat.setDecorFitsSystemWindows(w, false)
-                @Suppress("DEPRECATION")
-                w.statusBarColor = android.graphics.Color.TRANSPARENT
-                @Suppress("DEPRECATION")
-                w.navigationBarColor = android.graphics.Color.TRANSPARENT
-                val ctrl = WindowInsetsControllerCompat(w, w.decorView)
-                ctrl.isAppearanceLightStatusBars = false
-                ctrl.isAppearanceLightNavigationBars = false
-                ctrl.hide(WindowInsetsCompat.Type.systemBars())
-                ctrl.systemBarsBehavior =
-                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            }
-            onDispose { }
-        }
+        // Apply immersive flags to the dialog's own window too — shared
+        // DialogWindowImmersiveEffect (NO_LIMITS + hide-bars flavor).
+        DialogWindowImmersiveEffect(
+            darkTheme = false,
+            hideBars = true,
+            layoutNoLimits = true,
+        )
 
         val pagerState = rememberPagerState(
             initialPage = startIndex.coerceIn(0, items.size - 1),
             pageCount = { items.size },
         )
+        // [T-android-gallery-async-siblings] FilePreviewScreen now composes
+        // this viewer with a SINGLE-ITEM list first and swaps in the full
+        // sibling list once a background enumeration finishes (#18 of the
+        // fix wave). initialPage was computed against the 1-item list, so a
+        // tapped image that isn't alphabetically first would open on page 0
+        // after the swap. One-shot: when the page count first GROWS, jump to
+        // the documented startIndex — before the user has had any chance to
+        // swipe, so this never fights a manual page change.
+        var jumpedToStartIndex by remember { mutableStateOf(false) }
+        LaunchedEffect(items.size, startIndex) {
+            if (!jumpedToStartIndex && items.size > 1) {
+                runCatching {
+                    pagerState.scrollToPage(startIndex.coerceIn(0, items.size - 1))
+                }
+                jumpedToStartIndex = true
+            }
+        }
         var showChrome by remember { mutableStateOf(true) }
 
         Box(
@@ -388,19 +352,6 @@ private fun GalleryPage(
     }
 }
 
-/**
- * Same shape as the FullscreenImageViewer.findDialogWindow walker —
- * duplicated here (private in the other file) to avoid making it a
- * public utility before we know which other components need it.
- */
-private fun findDialogWindowForGallery(root: android.view.ViewGroup): android.view.Window? {
-    var p: android.view.ViewParent? = root.parent
-    while (p != null) {
-        if (p is android.view.View) {
-            val ctx = p.context
-            if (ctx is android.app.Activity) return ctx.window
-        }
-        p = (p as? android.view.View)?.parent
-    }
-    return null
-}
+// The private findDialogWindowForGallery walker moved to DialogWindowUtils.kt
+// (findDialogWindow) — shared with FullscreenImageViewer, InlineMediaPlayer
+// and the web-preview pair.

@@ -143,6 +143,13 @@ class AgentForegroundService : Service() {
      */
     private var wakeLock: PowerManager.WakeLock? = null
 
+    // [Wave3 #6] Timed hold + renewal. The lock now carries a 30-minute hard
+    // cap; while work is actually in flight the observer re-acquires every 25
+    // minutes, so only a hung state can ever hit the cap.
+    private val WAKE_LOCK_TIMEOUT_MS = 30 * 60 * 1000L
+    private val WAKE_LOCK_RENEW_INTERVAL_MS = 25 * 60 * 1000L
+    private var wakeLockRenewJob: Job? = null
+
     /**
      * T-bg-overlay phase 2: floating tool-status overlay manager + its
      * collector scope. The overlay is *aspirational* — visible only when:
@@ -698,8 +705,11 @@ class AgentForegroundService : Service() {
                 lastDynamicIslandActive = true
                 refreshOngoingNotification()
             }
-            Log.d(
-                TAG,
+            // [Wave3 #15] AppLogger.debug + muted category — same gate as the
+            // ChatScrollFollow precedent: fires per emission, so it is muted
+            // by default instead of paying a logcat line every pass.
+            AppLogger.debug(
+                "OverlayState",
                 "applyOverlayState: dynamic-island active — overlay suppressed " +
                     "(dynamicIslandEnabled=${state.dynamicIslandEnabled})",
             )
@@ -731,8 +741,10 @@ class AgentForegroundService : Service() {
         val shouldShow = state.enabled && hasPerm && !state.isForeground &&
             !state.cameraSuppress &&
             (isBusy || hasCompletionPending)
-        Log.d(
-            TAG,
+        // [Wave3 #15] Muted-category debug gate — was an ungated Log.d per
+        // flow emission (every token / tool-status tick).
+        AppLogger.debug(
+            "OverlayState",
             "applyOverlayState fg=${state.isForeground} enabled=${state.enabled} " +
                 "perm=$hasPerm streaming=${state.hasActiveStream} toolRunning=${state.isRunning} " +
                 "cameraSuppress=${state.cameraSuppress} completionPending=$hasCompletionPending " +
@@ -900,6 +912,13 @@ class AgentForegroundService : Service() {
      * the idle edge. StateFlow combine emits current values immediately, so
      * a service started mid-work (sandbox job, scheduled run, START_STICKY
      * revival) still acquires on the first collection.
+     *
+     * [Wave3 #6] While hasWork stays true a renewal loop re-acquires the
+     * timed lock every [WAKE_LOCK_RENEW_INTERVAL_MS] — before the
+     * [WAKE_LOCK_TIMEOUT_MS] hard cap expires. Legitimately long turns
+     * (scheduled overnight agents) are renewed indefinitely; a hung state
+     * that never emits the idle edge now self-expires at the cap instead of
+     * holding the CPU forever.
      */
     private fun startWakeLockObserver() {
         overlayScope.launch {
@@ -908,7 +927,26 @@ class AgentForegroundService : Service() {
                 SessionActivityTracker.isToolRunning,
             ) { active, toolRunning -> active.isNotEmpty() || toolRunning }
                 .distinctUntilChanged()
-                .collect { hasWork -> updateWakeLock(hasWork) }
+                .collect { hasWork ->
+                    updateWakeLock(hasWork)
+                    wakeLockRenewJob?.cancel()
+                    if (hasWork) {
+                        wakeLockRenewJob = overlayScope.launch {
+                            // Cancellation lands on the delay below — the only
+                            // suspension point in this loop — so no explicit
+                            // isActive check is needed.
+                            while (true) {
+                                kotlinx.coroutines.delay(WAKE_LOCK_RENEW_INTERVAL_MS)
+                                // Idle edge between ticks: released + nulled —
+                                // do not resurrect the lock after release.
+                                if (wakeLock != null) {
+                                    Log.d(TAG, "WakeLock renewed before timeout")
+                                    acquireWakeLock()
+                                }
+                            }
+                        }
+                    }
+                }
         }
     }
 
@@ -917,22 +955,31 @@ class AgentForegroundService : Service() {
     }
 
     private fun acquireWakeLock() {
-        if (wakeLock != null) return
         try {
+            val existing = wakeLock
+            if (existing != null) {
+                // [Wave3 #6] Renewal path: the lock is non-reference-counted,
+                // so acquire(timeout) on the same object just extends its
+                // expiry — no release/recreate churn.
+                existing.acquire(WAKE_LOCK_TIMEOUT_MS)
+                wakeLockHeld = true
+                return
+            }
             val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
             wakeLock = pm.newWakeLock(
                 PowerManager.PARTIAL_WAKE_LOCK,
                 "minis:inference",
             ).apply {
                 setReferenceCounted(false)
-                // No timeout — a hard cap would drop the lock mid-run on a
-                // legitimately long turn (scheduled overnight agents run for
-                // hours). The idle edge in startWakeLockObserver's collector
-                // and onDestroy are the release paths.
-                acquire()
+                // [Wave3 #6] 30-minute timeout instead of the old unbounded
+                // acquire(): the renewal loop in startWakeLockObserver keeps a
+                // genuinely-active turn alive, while a hung hasWork state can
+                // no longer pin the CPU forever. Release paths unchanged
+                // (idle edge + onDestroy).
+                acquire(WAKE_LOCK_TIMEOUT_MS)
             }
             wakeLockHeld = true
-            Log.d(TAG, "WakeLock acquired (PARTIAL_WAKE_LOCK)")
+            Log.d(TAG, "WakeLock acquired (PARTIAL_WAKE_LOCK, ${WAKE_LOCK_TIMEOUT_MS / 60000}min cap)")
         } catch (e: Exception) {
             Log.w(TAG, "WakeLock acquire failed: ${e.message}")
         }
@@ -1311,23 +1358,14 @@ class AgentForegroundService : Service() {
     }
 
     /**
-     * T-bg-overlay phase 1: human-readable label per tool, mirroring
-     * `ChatScreen.kt toolTitleLabel` so the notification's title
-     * matches what the in-app floating tool-status capsule shows. Falls back
-     * to the raw tool name for unknowns rather than a generic string,
-     * so the user still gets a hint about what's running.
+     * T-bg-overlay phase 1: human-readable label per tool. [Wave3 #8] the
+     * duplicated English `when` lived here AND in ToolOverlayController ("Mirrors
+     * …"); both now delegate to [ForegroundNotificationCopy.toolLabel] so the
+     * notification and the overlay capsule read one mapping (resource-backed in
+     * strings_service.xml).
      */
-    private fun toolDisplayLabel(toolName: String): String = when (toolName) {
-        "shell_execute" -> "Minis is using Shell"
-        "file_read" -> "Minis is reading File"
-        "file_write" -> "Minis is using Editor"
-        "file_edit" -> "Minis is editing File"
-        "browser_use" -> "Minis is using Browser"
-        "read_image" -> "Minis is reading Image"
-        "memory_write", "memory_get" -> "Minis is using Memory"
-        "web_search" -> "Minis is using Search"
-        else -> "Minis is using $toolName"
-    }
+    private fun toolDisplayLabel(toolName: String): String =
+        ForegroundNotificationCopy.toolLabel(applicationContext, toolName)
 
     /**
      * Status-bar icons must be an alpha mask from this app. Framework

@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -38,6 +40,7 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PlayCircleFilled
 import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material.icons.outlined.BrokenImage
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -48,18 +51,38 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
 import coil.compose.AsyncImagePainter
 import coil.compose.SubcomposeAsyncImage
 import coil.compose.SubcomposeAsyncImageContent
 import coil.request.ImageRequest
 import com.openminis.app.ui.DisplayBitmapLimits.limitDisplaySize
-import com.openminis.app.ui.chat.BrokenImagePlaceholder
+import com.openminis.app.ui.theme.LocalChatPalette
+import com.openminis.app.ui.theme.ChatColors
+// [T-android-markdown-no-chat-dep] (#15) The two symbols below are the ONLY
+// remaining markdown→chat imports besides the run-router in
+// CodeBlockRunState.kt. They cannot be sunk into this package without
+// editing chat files (Wave 5): LocalMarkdownSessionId is PROVIDED by
+// ChatScreen (ui/chat/ChatScreen.kt:1919) — a markdown-local CompositionLocal
+// would read null there and silently regress session-scoped media resolution
+// — and resolveMdMediaFile is chat's internal session-aware resolver whose
+// call chain (ChatLinkResolver.minisPathCandidates / PRootKernel) is chat
+// territory. Parameterizing MarkdownText(sessionId=…) is not viable either:
+// this composable's chat caller (ChatSubAgentBar) is outside this wave and
+// would keep rendering with the default null. Report documents the retained
+// dependency.
 import com.openminis.app.ui.chat.LocalMarkdownSessionId
 import com.openminis.app.ui.chat.resolveMdMediaFile
 import kotlinx.coroutines.Dispatchers
@@ -107,14 +130,55 @@ fun MarkdownText(
      */
     onRunCode: ((lang: String, code: String) -> Unit)? = null,
 ) {
-    val parsed = remember(markdown) { MarkdownParser.parseWithMath(markdown) }
+    // [T-android-markdown-async-parse] (#5) parseWithMath is O(n) over the raw
+    // text but was remembered per (markdown) INSIDE composition, so every
+    // markdown mutation re-parsed synchronously on the frame the state landed
+    // — for streaming-sized inputs that stalled the frame, and the un-keyed
+    // block loop then re-ran structural diff over every block (O(n²) in
+    // practice).
+    //
+    // Two-phase fix:
+    //  a) Short documents (< [ASYNC_PARSE_THRESHOLD_CHARS], where a full
+    //     parse is single-digit ms — see MarkdownParser's BoundedText notes)
+    //     still parse synchronously so the first frame never flashes empty.
+    //     Longer documents parse on Dispatchers.Default and publish when
+    //     ready; the initial composition shows an empty block list for that
+    //     one frame instead of janking the input path.
+    //  b) The block loop keys each BlockContent slot on (index, block type)
+    //     — Block data classes carry List fields and are structurally
+    //     unstable, so an unkeyed loop could not skip recomposition.
+    var parsed by remember(markdown) {
+        mutableStateOf(
+            if (markdown.length < ASYNC_PARSE_THRESHOLD_CHARS) {
+                MarkdownParser.parseWithMath(markdown)
+            } else {
+                MarkdownParser.ParseResult(emptyList(), emptyList())
+            },
+        )
+    }
+    LaunchedEffect(markdown) {
+        if (markdown.length >= ASYNC_PARSE_THRESHOLD_CHARS) {
+            parsed = withContext(Dispatchers.Default) { MarkdownParser.parseWithMath(markdown) }
+        }
+    }
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        for (block in parsed.blocks) {
-            BlockContent(block, color, style, parsed.mathSpans, onRunCode)
+        for ((index, block) in parsed.blocks.withIndex()) {
+            key(index, block::class) {
+                BlockContent(block, color, style, parsed.mathSpans, onRunCode)
+            }
         }
     }
 }
+
+/**
+ * [T-android-markdown-async-parse] Documents shorter than this parse
+ * synchronously (imperceptible, no first-frame flash); anything longer is
+ * parsed off the main thread. 8K chars ≈ where parseWithMath's line scan +
+ * math extraction stops being single-digit-ms (same order as
+ * BoundedText.MAX_ICU_INPUT_CHARS).
+ */
+private const val ASYNC_PARSE_THRESHOLD_CHARS = 8_192
 
 @Composable
 private fun BlockContent(
@@ -125,12 +189,12 @@ private fun BlockContent(
     onRunCode: ((lang: String, code: String) -> Unit)? = null,
 ) {
     when (block) {
-        is MarkdownParser.Block.Heading -> HeadingBlock(block, color)
+        is MarkdownParser.Block.Heading -> HeadingBlock(block, color, mathSpans)
         is MarkdownParser.Block.Paragraph -> ParagraphBlock(block.content, color, baseStyle, mathSpans)
         is MarkdownParser.Block.CodeBlock -> CodeBlockView(block, onRunCode)
         is MarkdownParser.Block.Blockquote -> BlockquoteView(block, color, baseStyle, mathSpans)
-        is MarkdownParser.Block.BulletList -> BulletListView(block, color, baseStyle)
-        is MarkdownParser.Block.NumberedList -> NumberedListView(block, color, baseStyle)
+        is MarkdownParser.Block.BulletList -> BulletListView(block, color, baseStyle, mathSpans)
+        is MarkdownParser.Block.NumberedList -> NumberedListView(block, color, baseStyle, mathSpans)
         is MarkdownParser.Block.Table -> TableView(block, color, baseStyle, mathSpans)
         is MarkdownParser.Block.MathBlock -> MathBlockView(latex = block.latex)
         is MarkdownParser.Block.ThematicBreak -> HorizontalDivider(
@@ -146,7 +210,11 @@ private fun BlockContent(
 // -- Heading --
 
 @Composable
-private fun HeadingBlock(heading: MarkdownParser.Block.Heading, color: Color) {
+private fun HeadingBlock(
+    heading: MarkdownParser.Block.Heading,
+    color: Color,
+    mathSpans: List<MarkdownParser.MathSpan>,
+) {
     val (fontSize, fontWeight) = when (heading.level) {
         1 -> 24.sp to FontWeight.Bold
         2 -> 20.sp to FontWeight.Bold
@@ -155,10 +223,14 @@ private fun HeadingBlock(heading: MarkdownParser.Block.Heading, color: Color) {
         5 -> 15.sp to FontWeight.Medium
         else -> 14.sp to FontWeight.Medium
     }
-    InlineContent(
-        text = heading.content,
+    // (#4) Headings carry inline math through [MathFlowText] now — previously
+    // the placeholder sentinel was stripped here and `$x^2$` inside a heading
+    // silently vanished.
+    MathFlowText(
+        content = heading.content,
         color = color,
         style = TextStyle(fontSize = fontSize, fontWeight = fontWeight),
+        mathSpans = mathSpans,
     )
 }
 
@@ -171,43 +243,151 @@ private fun ParagraphBlock(
     style: TextStyle,
     mathSpans: List<MarkdownParser.MathSpan> = emptyList(),
 ) {
+    MathFlowText(content = content, color = color, style = style, mathSpans = mathSpans)
+}
+
+/** Regex matching the parser's inline-math placeholder sentinel. */
+private val MATH_PLACEHOLDER_REGEX = Regex("\\uFFFC" + "MATH(\\d+)" + "\\uFFFC")
+
+/**
+ * [T-android-inline-math-flow] (#4 + #21) Core renderer for text that may
+ * carry inline-math placeholders (`\uFFFCMATH<n>\uFFFC`), shared by
+ * paragraphs, headings, list items, table cells and blockquote children.
+ *
+ * Three shapes, best available first:
+ *
+ *  1. No math → single [InlineContent] Text, zero extra cost.
+ *  2. Math rendered AND cached → TRUE inline flow: one Text whose annotated
+ *     string carries `appendInlineContent` slots at each placeholder, with
+ *     [InlineTextContent]s sized to the KaTeX bitmap's exact CSS size
+ *     (T206). The formula sits on the text's own line and the paragraph
+ *     wraps around it naturally — this replaces the old split-Column whose
+ *     fixed 2.dp gaps and forced segment breaks made text+formula read as
+ *     stacked blocks (#21). PlaceholderVerticalAlign.TextCenter centers the
+ *     bitmap box on the text's ascent/descent midpoint, the closest
+ *     approximation to KaTeX's math axis for both simple (`x_i`) and tall
+ *     (`\frac{a}{b}`) inline formulas — a tall formula grows its own line
+ *     via the placeholder height instead of overlapping the next line.
+ *  3. Math not yet rendered → the T208 Layer B split-Column fallback. The
+ *     [KaTeXRenderView] instances shown here double as cache warmers: each
+ *     settled render bumps [renderEpoch], the cache is re-read, and once
+ *     every inline span is cached shape 2 takes over.
+ *
+ * Display math (`$$ … $$`) never reaches here — the parser promotes it to
+ * Block.MathBlock, rendered centered by MathBlockView.
+ */
+@Composable
+private fun MathFlowText(
+    content: String,
+    color: Color,
+    style: TextStyle,
+    mathSpans: List<MarkdownParser.MathSpan>,
+    modifier: Modifier = Modifier,
+) {
     // Fast path: no math placeholders → original single-Text rendering.
     if (mathSpans.isEmpty() || !content.contains('￼')) {
-        InlineContent(text = content, color = color, style = style)
+        InlineContent(text = content, color = color, style = style, modifier = modifier)
         return
     }
 
-    // T208 Layer B: split the paragraph at each placeholder and render
-    // inline math as a *non-display-mode*, *non-fillMaxWidth* tile so the
-    // formula visually flows after the preceding text segment instead of
-    // becoming a centered full-width block. Inline math should be roughly
-    // the size of surrounding text and aligned to the start of its row.
-    // Display math (`$$ … $$`) goes through Block.MathBlock above and
-    // still renders centered via MathBlockView — that path is correct.
-    // True inline-flow (math glyph on the same baseline as text within
-    // a single Text composable via InlineTextContent) is a follow-up;
-    // for now we stay with the row-split shape but keep the math visually
-    // small.
+    val isDark = ChatColors.isDark
     val byPlaceholder = remember(mathSpans) { mathSpans.associateBy { it.placeholder } }
-    val regex = remember { Regex("\\uFFFC" + "MATH(\\d+)" + "\\uFFFC") }
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        var cursor = 0
-        for (match in regex.findAll(content)) {
-            val span = byPlaceholder[match.value] ?: continue
-            if (match.range.first > cursor) {
-                val segment = content.substring(cursor, match.range.first)
-                if (segment.isNotBlank()) {
-                    InlineContent(text = segment, color = color, style = style)
+    // Inline spans only — display-mode spans were promoted to Block.MathBlock
+    // by MarkdownParser.restoreMath and never appear inside paragraph text.
+    val inlineSpans = remember(mathSpans) { mathSpans.filter { !it.isBlock } }
+
+    // Bump whenever an async KaTeX render settles so the cache is re-read.
+    var renderEpoch by remember(mathSpans) { mutableIntStateOf(0) }
+    val entries = remember(mathSpans, isDark, renderEpoch) {
+        inlineSpans.mapNotNull { span ->
+            KaTeXRendererCache.cache
+                .get(KaTeXRendererCache.cacheKey(span.latex, false, isDark))
+                ?.let { span.placeholder to it }
+        }.toMap()
+    }
+    val allReady = inlineSpans.isNotEmpty() && inlineSpans.all { entries.containsKey(it.placeholder) }
+
+    if (allReady) {
+        // Shape 2 — true inline flow. `mathInlineTags` maps a placeholder's
+        // start index to (placeholder, endExclusive) so [parseInline] can
+        // emit InlineTextContent slots without styling the sentinel glyphs.
+        val mathInlineTags = remember(content, mathSpans) {
+            buildMap {
+                MATH_PLACEHOLDER_REGEX.findAll(content).forEach { m ->
+                    if (byPlaceholder.containsKey(m.value)) {
+                        put(m.range.first, m.value to (m.range.last + 1))
+                    }
                 }
             }
-            // Inline math: non-display KaTeX, no fillMaxWidth, start-aligned.
-            KaTeXRenderView(latex = span.latex, displayMode = false)
-            cursor = match.range.last + 1
         }
-        if (cursor < content.length) {
-            val tail = content.substring(cursor)
-            if (tail.isNotBlank()) {
-                InlineContent(text = tail, color = color, style = style)
+        val mathSlots = remember(entries, inlineSpans) {
+            inlineSpans.mapNotNull { span -> entries[span.placeholder]?.let { span.placeholder to it } }
+                .associate { (placeholder, entry) ->
+                    placeholder to InlineTextContent(
+                        Placeholder(
+                            width = entry.cssWidth.sp,
+                            height = entry.cssHeight.sp,
+                            placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter,
+                        ),
+                    ) {
+                        // Same defensive de-clip recipe as the chat streaming
+                        // renderer (T-android-math-fontscale): draw at natural
+                        // CSS size, centered in the slot, scaled DOWN to fit
+                        // if any residual unit drift would otherwise clip.
+                        androidx.compose.foundation.layout.BoxWithConstraints(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = androidx.compose.ui.Alignment.Center,
+                        ) {
+                            val naturalW = entry.cssWidth.dp
+                            val naturalH = entry.cssHeight.dp
+                            val fit = minOf(
+                                1f,
+                                if (naturalW > maxWidth) maxWidth / naturalW else 1f,
+                                if (naturalH > maxHeight) maxHeight / naturalH else 1f,
+                            )
+                            Image(
+                                bitmap = entry.bitmap.asImageBitmap(),
+                                contentDescription = null,
+                                modifier = Modifier.size(naturalW * fit, naturalH * fit),
+                            )
+                        }
+                    }
+                }
+        }
+        InlineContent(
+            text = content,
+            color = color,
+            style = style,
+            modifier = modifier,
+            mathInlineTags = mathInlineTags,
+            mathSlots = mathSlots,
+        )
+    } else {
+        // Shape 3 — warming fallback (T208 Layer B split-Column). Each
+        // KaTeXRenderView completes → onRendered → renderEpoch++ → cache
+        // re-read → shape 2 once all spans are cached.
+        Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            var cursor = 0
+            for (match in MATH_PLACEHOLDER_REGEX.findAll(content)) {
+                val span = byPlaceholder[match.value] ?: continue
+                if (match.range.first > cursor) {
+                    val segment = content.substring(cursor, match.range.first)
+                    if (segment.isNotBlank()) {
+                        InlineContent(text = segment, color = color, style = style)
+                    }
+                }
+                KaTeXRenderView(
+                    latex = span.latex,
+                    displayMode = false,
+                    onRendered = { renderEpoch++ },
+                )
+                cursor = match.range.last + 1
+            }
+            if (cursor < content.length) {
+                val tail = content.substring(cursor)
+                if (tail.isNotBlank()) {
+                    InlineContent(text = tail, color = color, style = style)
+                }
             }
         }
     }
@@ -221,8 +401,27 @@ private fun CodeBlockView(
     onRunCode: ((lang: String, code: String) -> Unit)? = null,
 ) {
     val context = LocalContext.current
-    val codeColor = Color(0xFF4EC9B0) // Green code text
+    // [T-android-color-contract] (#8) The teal below is HighlightPalette.Dark
+    // .type (VS Code dark+ teal). ChatPalette has NO syntax-teal slot — its
+    // codeBlockText is the iOS-parity green — so the literal stays as the
+    // unspanned-fallback color with this pointer to the contract: new code
+    // colors belong in HighlightPalette (SyntaxHighlighter.kt), not inline
+    // literals. Since #16 the highlighter paints every token anyway; this
+    // only shows if a future highlighter revision leaves gaps.
+    val codeColor = Color(0xFF4EC9B0)
     val bgColor = MaterialTheme.colorScheme.surfaceContainerHighest
+    // (#16) MarkdownText's own SyntaxHighlighter finally feeds CodeBlockView.
+    // The highlighter bounds its token scan via BoundedText.MAX_ICU_INPUT_
+    // CHARS and appends any overflow plain, so remembering per (code,
+    // language) is safe for long blocks. Palette tracks the block background
+    // luminance — dark+ colors on a light surface would be unreadable (same
+    // rule CodeEditorField uses).
+    val highlightPalette = remember(bgColor) {
+        if (bgColor.luminance() < 0.5f) HighlightPalette.Dark else HighlightPalette.Light
+    }
+    val highlighted = remember(block.code, block.language, highlightPalette) {
+        SyntaxHighlighter.highlight(block.code, block.language, highlightPalette)
+    }
     // Button shows only when a handler exists AND the fence language is one
     // the router can actually execute. Empty / unknown fences (java, rust,
     // plain ```) render exactly as before — no button, no dead end.
@@ -311,7 +510,7 @@ private fun CodeBlockView(
                 .padding(horizontal = 12.dp, vertical = 8.dp),
         ) {
             Text(
-                text = block.code,
+                text = highlighted,
                 style = TextStyle(
                     fontFamily = FontFamily.Monospace,
                     fontSize = 13.sp,
@@ -332,11 +531,14 @@ private fun BlockquoteView(
     baseStyle: TextStyle,
     mathSpans: List<MarkdownParser.MathSpan> = emptyList(),
 ) {
-    // Orange accent rule on the leading edge — matches iOS, where the
-    // blockquote uses the app systemOrange (0xFFFF9500) at full opacity.
-    // The previous primary @ 0.5 alpha disappeared into theme purple on the
-    // dark palette and didn't read as a quote at all in some compositions.
-    val barColor = Color(0xFFFF9500)
+    // (#8) Orange accent rule on the leading edge — now reads the palette
+    // slot (ChatColors.kt blockquoteBar: iOS systemOrange @ 50% in light,
+    // systemOrange-dark variant in dark) instead of a raw 0xFFFF9500 literal,
+    // per the [T-android-color-contract]: chat-adjacent surfaces follow the
+    // in-app palette so they track the theme override AND the dark palette.
+    // The old literal was full-opacity; the palette slot's tuned alpha is the
+    // contract value.
+    val barColor = LocalChatPalette.current.blockquoteBar
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -367,6 +569,7 @@ private fun BulletListView(
     block: MarkdownParser.Block.BulletList,
     color: Color,
     baseStyle: TextStyle,
+    mathSpans: List<MarkdownParser.MathSpan> = emptyList(),
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         for (item in block.items) {
@@ -390,23 +593,29 @@ private fun BulletListView(
                         modifier = Modifier.padding(end = 8.dp),
                     )
                 }
-                InlineContent(
-                    text = item.content,
+                // (#4) List item content goes through [MathFlowText] —
+                // previously InlineContent stripped the placeholder sentinel
+                // and inline math inside list items silently vanished.
+                MathFlowText(
+                    content = item.content,
                     color = color,
                     style = baseStyle,
+                    mathSpans = mathSpans,
                     modifier = Modifier.weight(1f),
                 )
             }
             // [T-list-item-block-children] Nested blocks (table / code
             // fence collected by MarkdownParser.appendContinuation)
             // render under the item instead of being printed as prose.
+            // mathSpans thread through too (#4) so nested paragraphs in
+            // list items keep their inline math.
             if (item.children.isNotEmpty()) {
                 Column(
                     modifier = Modifier.padding(start = 24.dp, bottom = 4.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     item.children.forEach { child ->
-                        BlockContent(child, color, baseStyle)
+                        BlockContent(child, color, baseStyle, mathSpans)
                     }
                 }
             }
@@ -421,6 +630,7 @@ private fun NumberedListView(
     block: MarkdownParser.Block.NumberedList,
     color: Color,
     baseStyle: TextStyle,
+    mathSpans: List<MarkdownParser.MathSpan> = emptyList(),
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         for ((index, item) in block.items.withIndex()) {
@@ -431,10 +641,13 @@ private fun NumberedListView(
                     style = baseStyle,
                     modifier = Modifier.padding(end = 8.dp),
                 )
-                InlineContent(
-                    text = item.content,
+                // (#4) see BulletListView — placeholders resolve instead of
+                // being stripped.
+                MathFlowText(
+                    content = item.content,
                     color = color,
                     style = baseStyle,
+                    mathSpans = mathSpans,
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -445,7 +658,7 @@ private fun NumberedListView(
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     item.children.forEach { child ->
-                        BlockContent(child, color, baseStyle)
+                        BlockContent(child, color, baseStyle, mathSpans)
                     }
                 }
             }
@@ -538,9 +751,8 @@ private fun TableView(
  * would have its placeholder stripped by [InlineContent]'s cleanup pass
  * and the math would silently disappear.
  *
- * Cells that don't carry any math placeholder fall through to a plain
- * [InlineContent] call so existing inline markdown (bold/italic/code,
- * links) keeps working in cells without paying for an extra Column.
+ * Delegates to [MathFlowText], which now upgrades cells to the true
+ * inline-flow path once the formula bitmaps are cached (#21).
  */
 @Composable
 private fun TableCellContent(
@@ -549,32 +761,7 @@ private fun TableCellContent(
     style: TextStyle,
     mathSpans: List<MarkdownParser.MathSpan>,
 ) {
-    if (mathSpans.isEmpty() || !text.contains('￼')) {
-        InlineContent(text = text, color = color, style = style)
-        return
-    }
-    val byPlaceholder = remember(mathSpans) { mathSpans.associateBy { it.placeholder } }
-    val regex = remember { Regex("\\uFFFC" + "MATH(\\d+)" + "\\uFFFC") }
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        var cursor = 0
-        for (match in regex.findAll(text)) {
-            val span = byPlaceholder[match.value] ?: continue
-            if (match.range.first > cursor) {
-                val segment = text.substring(cursor, match.range.first)
-                if (segment.isNotBlank()) {
-                    InlineContent(text = segment, color = color, style = style)
-                }
-            }
-            KaTeXRenderView(latex = span.latex, displayMode = false)
-            cursor = match.range.last + 1
-        }
-        if (cursor < text.length) {
-            val tail = text.substring(cursor)
-            if (tail.isNotBlank()) {
-                InlineContent(text = tail, color = color, style = style)
-            }
-        }
-    }
+    MathFlowText(content = text, color = color, style = style, mathSpans = mathSpans)
 }
 
 // -- Inline Content --
@@ -585,18 +772,29 @@ private fun InlineContent(
     color: Color,
     style: TextStyle,
     modifier: Modifier = Modifier,
+    /**
+     * [T-android-inline-math-flow] (#21) Maps a placeholder's start index to
+     * (placeholder, endExclusive). When non-empty the placeholders are
+     * emitted as [androidx.compose.foundation.text.appendInlineContent] slots
+     * (true inline flow) instead of being stripped; [mathSlots] supplies the
+     * slot definitions. Empty by default — the no-math / stripping path.
+     */
+    mathInlineTags: Map<Int, Pair<String, Int>> = emptyMap(),
+    mathSlots: Map<String, InlineTextContent> = emptyMap(),
 ) {
     val inlineCodeBg = MaterialTheme.colorScheme.surfaceContainerHighest
     val inlineCodeColor = MaterialTheme.colorScheme.primary
     val linkColor = MaterialTheme.colorScheme.primary
 
     // Strip any leftover math placeholders (U+FFFC MATH<n> U+FFFC). The
-    // ParagraphBlock split path resolves them when math spans are
-    // threaded through, but lists/headings/table cells don't carry the
-    // span list — collapsing the placeholder here keeps the U+FFFC
-    // sentinel from leaking into the rendered glyph stream.
-    val cleaned = remember(text) {
-        if (text.contains('￼')) {
+    // MathFlowText split/warming paths resolve them when math spans are
+    // threaded through, but any InlineContent call outside [MathFlowText]
+    // doesn't carry the span list — collapsing the placeholder here keeps
+    // the U+FFFC sentinel from leaking into the rendered glyph stream.
+    // Skipped on the inline-flow path, where the placeholders are the
+    // slot anchors.
+    val cleaned = remember(text, mathInlineTags) {
+        if (mathInlineTags.isEmpty() && text.contains('￼')) {
             text.replace(Regex("\\uFFFCMATH\\d+\\uFFFC"), "")
         } else {
             text
@@ -631,19 +829,27 @@ private fun InlineContent(
         }
     }
 
-    val annotated = remember(cleaned, color, linkListener) {
-        parseInline(cleaned, color, style, inlineCodeBg, inlineCodeColor, linkColor, linkListener)
+    val annotated = remember(cleaned, color, linkListener, mathInlineTags) {
+        parseInline(
+            cleaned, color, style, inlineCodeBg, inlineCodeColor, linkColor, linkListener,
+            mathInlineTags,
+        )
     }
 
     Text(
         text = annotated,
         modifier = modifier,
         style = style.copy(color = color),
+        inlineContent = mathSlots,
     )
 }
 
 /**
  * Parse inline markdown: **bold**, *italic*, ~~strikethrough~~, `code`, [links](url)
+ *
+ * [mathInlineTags] (#21): start-index → (placeholder, endExclusive). At each
+ * placeholder the parser emits an InlineTextContent slot instead of raw
+ * sentinel glyphs, so styles never span across a formula anchor.
  */
 private fun parseInline(
     text: String,
@@ -653,11 +859,20 @@ private fun parseInline(
     inlineCodeColor: Color,
     linkColor: Color,
     linkListener: LinkInteractionListener? = null,
+    mathInlineTags: Map<Int, Pair<String, Int>> = emptyMap(),
 ): AnnotatedString = buildAnnotatedString {
     var i = 0
     val len = text.length
 
     while (i < len) {
+        // Inline-math placeholder anchor → InlineTextContent slot.
+        val mathTag = mathInlineTags[i]
+        if (mathTag != null) {
+            appendInlineContent(mathTag.first, "￼")
+            i = mathTag.second
+            continue
+        }
+
         // Escaped character
         if (text[i] == '\\' && i + 1 < len) {
             append(text[i + 1])
@@ -807,6 +1022,45 @@ private fun openMediaExternally(context: Context, file: File, mime: String) {
 }
 
 // -- Image block --
+
+/**
+ * Markdown-package stand-in for chat's internal BrokenImagePlaceholder
+ * (#15 of the fix wave): the placeholder is a pure leaf visual, so it is
+ * replicated here instead of importing chat's copy. Visual parity — toolBg
+ * fill, broken-image glyph, alt text — is kept via the shared theme palette.
+ */
+@Composable
+private fun BrokenImagePlaceholder(alt: String?) {
+    val palette = LocalChatPalette.current
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .aspectRatio(4f / 3f)
+            .background(palette.toolBg),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.padding(12.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.BrokenImage,
+                contentDescription = null,
+                modifier = Modifier.size(28.dp),
+                tint = palette.secondaryText,
+            )
+            Text(
+                text = alt?.takeIf { it.isNotBlank() } ?: "Image not available",
+                fontSize = 12.sp,
+                color = palette.secondaryText,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                maxLines = 2,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
 
 @Composable
 private fun MinisImageBlock(block: MarkdownParser.Block.Image) {
@@ -958,18 +1212,38 @@ private fun MinisAudioBlock(block: MarkdownParser.Block.Audio) {
     val filename = remember(block.url) { filenameFromUrl(block.url) }
 
     // Dedicated MediaPlayer per card. Released on DisposableEffect dispose.
+    //
+    // (#3) The blocking prepare() used to run inside remember — a synchronous
+    // main-thread demux/decode of the whole file header on every composition
+    // of an audio card. setDataSource (cheap fd open) stays in remember;
+    // prepare moved to prepareAsync + OnPreparedListener in the effect below.
+    // UI timing stays equivalent: play waits for [prepared], and the
+    // duration/time label appear once the listener reports them.
+    var prepared by remember(file?.absolutePath) { mutableStateOf(false) }
+    var durationMs by remember(file?.absolutePath) { mutableStateOf(0) }
     val player = remember(file?.absolutePath) {
         if (file == null) null else try {
-            MediaPlayer().apply { setDataSource(file.absolutePath); prepare() }
+            MediaPlayer().apply { setDataSource(file.absolutePath) }
         } catch (_: Throwable) { null }
     }
     DisposableEffect(player) {
+        player?.apply {
+            setOnPreparedListener { mp ->
+                durationMs = runCatching { mp.duration }.getOrDefault(0)
+                prepared = true
+            }
+            setOnErrorListener { _, what, extra ->
+                android.util.Log.w("MdMedia", "audio error what=$what extra=$extra")
+                prepared = false
+                true
+            }
+            try { prepareAsync() } catch (_: Throwable) { }
+        }
         onDispose { try { player?.release() } catch (_: Throwable) {} }
     }
 
     var isPlaying by remember { mutableStateOf(false) }
     var positionMs by remember { mutableStateOf(0) }
-    val durationMs = player?.duration ?: 0
 
     // Poll position while playing to drive the progress bar.
     LaunchedEffect(isPlaying) {
@@ -1005,8 +1279,14 @@ private fun MinisAudioBlock(block: MarkdownParser.Block.Audio) {
                 if (player == null) {
                     file?.let { openMediaExternally(context, it, "audio/*") }
                 } else {
-                    if (isPlaying) { try { player.pause() } catch (_: Throwable) {} ; isPlaying = false }
-                    else { try { player.start(); isPlaying = true } catch (_: Throwable) {} }
+                    if (isPlaying) {
+                        try { player.pause() } catch (_: Throwable) {}
+                        isPlaying = false
+                    } else if (prepared) {
+                        // (#3) start() before the async prepare completed would
+                        // throw IllegalStateException — gate on prepared.
+                        try { player.start(); isPlaying = true } catch (_: Throwable) {}
+                    }
                 }
             }
             .padding(horizontal = 10.dp, vertical = 10.dp),

@@ -50,6 +50,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openminis.app.R
+import com.openminis.app.ui.theme.IosBlue
+import com.openminis.app.ui.theme.IosGreen
+import com.openminis.app.ui.theme.monetIconTint
 import com.openminis.app.ui.theme.m3Icon
 
 /**
@@ -362,13 +365,16 @@ internal fun PickerProviderCardHeader(
 /**
  * The circle check/radio selection mark used across the pickers' rows.
  * Default: 20dp, iOS blue. The group rows pass the 22dp green variant
- * (Color(0xFF34C759)) that marks a selected GROUP.
+ * ([IosGreen]) that marks a selected GROUP.
+ *
+ * (#7) Tints read the named AccentTokens instead of raw Color(0xFF…)
+ * literals — byte-identical values, contract-compliant source.
  */
 @Composable
 internal fun PickerSelectionMark(
     selected: Boolean,
     size: Dp = 20.dp,
-    selectedTint: Color = Color(0xFF007AFF),
+    selectedTint: Color = IosBlue,
 ) {
     Icon(
         if (selected) m3Icon(Icons.Default.CheckCircle) else Icons.Default.RadioButtonUnchecked,
@@ -382,18 +388,24 @@ internal fun PickerSelectionMark(
 /**
  * The main picker's green "Active" badge — 9sp Medium on a 10%-green capsule
  * with 5/1 padding, marking the entry that actually serves the next request.
+ *
+ * (#22) Bridges through [monetIconTint]: with dynamic color ON the badge
+ * resolves to the wallpaper's primary (same contract as the settings tiles),
+ * with dynamic color OFF it stays byte-identical to the old static
+ * [IosGreen] (the bridge is a no-op for unbridged gate states).
  */
 @Composable
 internal fun PickerActiveBadge() {
+    val badgeTint = monetIconTint(IosGreen)
     Text(
         stringResource(R.string.model_picker_active_badge),
         fontSize = 9.sp,
         lineHeight = 11.sp,
         fontWeight = FontWeight.Medium,
-        color = Color(0xFF34C759),
+        color = badgeTint,
         modifier = Modifier
             .background(
-                Color(0xFF34C759).copy(alpha = 0.1f),
+                badgeTint.copy(alpha = 0.1f),
                 RoundedCornerShape(50),
             )
             .padding(horizontal = 5.dp, vertical = 1.dp),

@@ -42,6 +42,18 @@ object AgentTools {
         // is wired into the session (main chats only; sub-agents/group chats
         // keep the minis-mcp-cli shell route).
         mcpNativeEnabled: Boolean = false,
+        // [P2-transcribe-audio-gate] transcribe_audio's dispatch branch
+        // (ChatViewModelExecuteToolExt, ProductMediaTools.TRANSCRIBE_AUDIO)
+        // returns notConfigured whenever no provider speech model is
+        // configured, so registering the schema unconditionally handed the
+        // model a tool that can only fail. Gate the injection like
+        // memory/code_graph above. The registry is built without a Context, so
+        // the caller supplies the flag — same shape as visionGroupConfigured:
+        // `hasSpeechModel = providerRepository.resolveVoiceInputEntry() != null`
+        // (the same probe ProviderSpeechRecognitionEngine.isAvailable uses).
+        // Default false: callers that don't pass it (tests, whitelists) simply
+        // don't advertise a transcription tool that cannot run.
+        hasSpeechModel: Boolean = false,
         /** When false, expose only the core set plus [find_tools]. */
         includeLongTail: Boolean = true,
         /** Long-tail tools enabled by a prior find_tools call. */
@@ -68,9 +80,15 @@ object AgentTools {
         add(OcrTool.definition())
         add(ScreenTimeTool.definition())
         add(WebFetchTool.definition())
-        add(shellExecAliasDefinition())
+        // [P2-alias-schema-dedup] shell_exec / env_exec are no longer separate
+        // schema entries — they are byte-identical copies of shell_execute that
+        // rode along in EVERY request (3x the schema for one tool). The names
+        // still route: "shell_exec" is canonicalized to shell_execute by
+        // security.ToolAliases before the dispatcher's when, and "env_exec" has
+        // its own dispatch branch there ("shell_execute", "env_exec" ->
+        // executeShellCommand). Only the duplicate schemas are gone; the model
+        // face now shows shell_execute once.
         add(suExecDefinition())
-        add(envExecDefinition())
         add(DispatchAgentsTool.definition())
         add(WolfpackTool.definition())
         add(AgentPlanTool.definition())
@@ -87,7 +105,11 @@ object AgentTools {
         add(ProductMediaTools.generateImageDefinition())
         add(ProductMediaTools.generateVideoDefinition())
         add(ProductMediaTools.describeImageDefinition())
-        add(ProductMediaTools.transcribeAudioDefinition())
+        // [P2-transcribe-audio-gate] Only injected when the caller confirms a
+        // speech model is configured — see the hasSpeechModel KDoc above.
+        if (hasSpeechModel) {
+            add(ProductMediaTools.transcribeAudioDefinition())
+        }
         add(ProductMediaTools.translateTextDefinition())
         add(SessionLookupTool.searchDefinition())
         add(SessionLookupTool.readDefinition())
@@ -398,17 +420,11 @@ background=true detaches the wave: this call returns a dispatch_id at once inste
         propertyOrdering = listOf("tool_title", "scope", "keywords"),
     )
 
-    private fun shellExecAliasDefinition(): AgentToolDefinition =
-        shellExecuteDefinition().copy(
-            name = "shell_exec",
-            description = "Alias of shell_execute. Isolated Ubuntu 24.04 PRoot. Prefer this name if you come from XINCODE.",
-        )
-
-    private fun envExecDefinition(): AgentToolDefinition =
-        shellExecuteDefinition().copy(
-            name = "env_exec",
-            description = "Run a command in the Ubuntu guest (same as shell_execute). The guest already is the Linux environment.",
-        )
+    // [P2-alias-schema-dedup] shellExecAliasDefinition() / envExecDefinition()
+    // (shellExecuteDefinition().copy(name = ...)) were deleted with their
+    // registry add-sites: same-body aliases must not occupy schema slots. The
+    // alias NAMES stay routable via security.ToolAliases ("shell_exec" →
+    // shell_execute) and the dispatcher's "env_exec" branch.
 
     private fun suExecDefinition(): AgentToolDefinition = AgentToolDefinition(
         name = "su_exec",

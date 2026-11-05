@@ -106,7 +106,6 @@ object Routes {
     const val SKILL_FILE = "skill_file/{skillId}/{relativePath}"
     const val MINIS_SKILLS_BROWSER = "minis_skills_browser"
     const val WEB_SEARCH = "web_search"
-    const val CHARACTER_EXTRAS = "character_extras"
     const val TRANSLATE = "translate"
     const val TRANSLATE_PAD = "translate_pad"
     const val HOME_BROWSER = "home_browser"

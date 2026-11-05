@@ -9,6 +9,8 @@ import com.openminis.app.provider.ImageBudget
 import com.openminis.app.provider.SampledDecode
 import com.openminis.app.util.IsoTime
 import java.io.ByteArrayOutputStream
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
 /**
@@ -84,11 +86,18 @@ internal data class PreparedAttachments(
  * and remain visible to the agent's shell tools — but their content is
  * NOT inlined into the LLM payload (parity with iOS processAttachments,
  * AIChatViewModel.swift L1552-1645).
+ *
+ * [T-android-send-attach-io] The whole body runs on Dispatchers.IO — every
+ * branch touches disk or a ContentResolver stream (readBytes / bitmap
+ * decode+compress / writeBytes / stream copy). Suspending keeps the three
+ * call sites (send, queue-inject, queue-drain, all suspend) off the main
+ * dispatcher for the entire attachment prepare, mirroring the buildSystemPrompt
+ * precedent in sendMessage.
  */
-internal fun ChatViewModel.prepareUserAttachments(
+internal suspend fun ChatViewModel.prepareUserAttachments(
     attachments: List<InputAttachment>,
     sessionId: String,
-): PreparedAttachments {
+): PreparedAttachments = withContext(Dispatchers.IO) {
     val imageParts = mutableListOf<LLMMessage.ImagePart>()
     val imageUris = mutableListOf<Uri>()
     val imageNames = mutableListOf<String>()
@@ -198,6 +207,18 @@ internal fun ChatViewModel.prepareUserAttachments(
         // Stream-copy to the uploads dest first, then hand that
         // file to MediaStore.saveMediaStreamed so a second
         // streaming pass produces the durable mediaRef.
+        //
+        // [T-android-attach-two-paths] Path tradeoff, spelled out: the
+        // IMAGE branch above DOES readBytes() the whole file — its bytes
+        // are required in heap anyway (mediaRef persist + uploads mirror +
+        // the resized LLM inline payload all consume the array, and the
+        // resize pass caps resolution at 2000px to bound that copy). This
+        // NON-IMAGE branch never materialises the file in memory: the
+        // copyTo below streams through a fixed-size buffer straight into
+        // the uploads file, so heap cost is O(buffer) regardless of the
+        // attachment's on-disk size. The copy is still O(size) in wall
+        // time/IO, which is why it lives on Dispatchers.IO now — but it
+        // no longer carries the OOM exposure the readBytes path would.
         nonImageNames.add(attachment.fileName)
         val safeName = uniqueUploadFileName(uploadsHostDir, attachment.fileName)
         val dest = java.io.File(uploadsHostDir, safeName)
@@ -292,7 +313,7 @@ internal fun ChatViewModel.prepareUserAttachments(
     }
 
     // Order matches UserAttachmentList convention: images first, then files.
-    return PreparedAttachments(
+    PreparedAttachments(
         imageParts = imageParts,
         imageUris = imageUris,
         attachmentNames = imageNames + nonImageNames,
@@ -384,10 +405,14 @@ internal data class PastedParts(
  *
  * Returns null when [text] contains no live marker, letting every caller
  * keep its existing straight-line path untouched.
+ *
+ * [T-android-send-attach-io] Runs on Dispatchers.IO — each live marker
+ * writes its text to a media file via mediaStore.saveMedia. StateFlow reads
+ * (_pastedTexts) are thread-safe, so no main-thread hop is needed.
  */
-internal fun ChatViewModel.buildPastedParts(text: String, sessionId: String): PastedParts? {
+internal suspend fun ChatViewModel.buildPastedParts(text: String, sessionId: String): PastedParts? = withContext(Dispatchers.IO) {
     val (chunks, consumed) = splitPastePlaceholders(text, _pastedTexts.value)
-    if (consumed.isEmpty()) return null
+    if (consumed.isEmpty()) return@withContext null
     val byId = _pastedTexts.value.associateBy { it.id }
 
     val parts = mutableListOf<String>()
@@ -434,7 +459,7 @@ internal fun ChatViewModel.buildPastedParts(text: String, sessionId: String): Pa
         "[Paste] ${consumed.size} placeholder(s) -> mediaRef: " +
             "${text.length} chars in bubble, ${model.length} chars to model",
     )
-    return PastedParts(parts, model.toString(), names, uris, consumed)
+    PastedParts(parts, model.toString(), names, uris, consumed)
 }
 
 internal fun ChatViewModel.buildUserPartsJson(

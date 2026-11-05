@@ -325,10 +325,6 @@ private fun relativeDate(context: Context, timestamp: Long): String {
         // index 0 unused, Sunday at Calendar.SUNDAY (1). The old
         // `DAY_OF_WEEK - 1` read the previous slot, so every row in this
         // window was labelled one weekday early ("周一" on a Tuesday).
-        // TODO(duplication): this whole helper is a near-copy of
-        // ui/sessions/SessionListScreen.kt's relativeDate (which indexes
-        // correctly); lifting the two into one shared util is out of this
-        // file's scope, so they still have to be changed in both places.
         val dayNames = java.text.DateFormatSymbols(java.util.Locale.getDefault()).weekdays
         return dayNames[dateCal.get(Calendar.DAY_OF_WEEK)]
     }

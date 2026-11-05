@@ -53,7 +53,9 @@ import androidx.compose.ui.res.stringResource
 import com.openminis.app.data.repository.EnvVarRepository
 import com.openminis.app.data.repository.SkillRepository
 import com.openminis.app.deeplink.DeepLinkCoordinator
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.withContext
 
 /**
  * Environment Variables \u2014 adopts the SettingsScaffold/SettingsSection
@@ -91,18 +93,45 @@ fun EnvironmentVariablesScreen(
 
     val fallbackSkills = remember { MutableStateFlow(emptyList<SkillRepository.Skill>()) }
     val allSkills by (skillRepository?.skills ?: fallbackSkills).collectAsStateWithLifecycle()
-    val platformSkills = remember(allSkills, entries) {
-        allSkills.mapNotNull { skill ->
-            val req = skillRepository?.loadSkillRequirements(skill.id) ?: return@mapNotNull null
-            if (req.env.isEmpty()) return@mapNotNull null
-            Triple(skill, req, computePlatformTier(envVarRepository, req))
+    // [T-android-sessionlist-prefs-io] loadSkillRequirements parses each
+    // skill's SKILL.md frontmatter (JSONObject over a file read) and
+    // computePlatformTier decrypts from EncryptedSharedPreferences — both
+    // used to run inside remember(allSkills, entries), i.e. on the MAIN
+    // thread every time either input changed. Preloaded into state from
+    // Dispatchers.IO instead; the first frame simply shows no platform
+    // cards until the scan lands (it is the only async-driven section).
+    var platformSkills by remember {
+        mutableStateOf<List<Triple<SkillRepository.Skill, SkillRepository.SkillRequirements, Int>>>(emptyList())
+    }
+    LaunchedEffect(allSkills, entries) {
+        val skillsSnapshot = allSkills
+        val list = withContext(Dispatchers.IO) {
+            skillsSnapshot.mapNotNull { skill ->
+                val req = skillRepository?.loadSkillRequirements(skill.id) ?: return@mapNotNull null
+                if (req.env.isEmpty()) return@mapNotNull null
+                Triple(skill, req, computePlatformTier(envVarRepository, req))
+            }
         }
+        platformSkills = list
     }
     val platformVarKeys = remember(platformSkills) {
         platformSkills.flatMap { (_, req, _) -> req.env.keys.map { it.uppercase() } }.toSet()
     }
     val otherEntries = remember(entries, platformVarKeys) {
         entries.filter { it.key.uppercase() !in platformVarKeys }
+    }
+    // [T-android-sessionlist-prefs-io] Every getValue() call decrypts one
+    // EncryptedSharedPreferences entry (Tink) — reading it PER ROW PER FRAME
+    // in composition stalled the list. Snapshot all values once per entries
+    // change, on IO; rows read from the map. Values only mutate through this
+    // same repository (add/update/delete/setDisabled all bump `entries`), so
+    // entries is a sound cache key.
+    var storedValues by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    LaunchedEffect(entries) {
+        val snapshot = entries
+        storedValues = withContext(Dispatchers.IO) {
+            snapshot.associate { it.key to (envVarRepository.getValue(it.key).orEmpty()) }
+        }
     }
 
     SettingsScaffold(
@@ -137,6 +166,7 @@ fun EnvironmentVariablesScreen(
                         tier = tier,
                         envVarRepository = envVarRepository,
                         platformEntries = entries.filter { it.key.uppercase() in platformVarKeys },
+                        storedValues = storedValues,
                         onAddEnvVar = { key, note ->
                             prefill = DeepLinkCoordinator.EnvVarCreate(key.uppercase(), "", note)
                             showAddSheet = true
@@ -179,8 +209,10 @@ fun EnvironmentVariablesScreen(
             } else {
                 otherEntries.forEachIndexed { index, entry ->
                     val isVisible = entry.key in visibleKeys.value
+                    // [T-android-sessionlist-prefs-io] Reads the preloaded
+                    // snapshot — no per-frame EncryptedSharedPreferences decrypt.
                     val displayValue = if (isVisible) {
-                        envVarRepository.getValue(entry.key) ?: ""
+                        storedValues[entry.key] ?: ""
                     } else {
                         "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"
                     }
@@ -224,7 +256,7 @@ fun EnvironmentVariablesScreen(
                                     )
                                 }
                                 IconButton(onClick = {
-                                    val v = envVarRepository.getValue(entry.key) ?: ""
+                                    val v = storedValues[entry.key] ?: ""
                                     clipboardManager.setText(AnnotatedString("${entry.key}=$v"))
                                 }) {
                                     Icon(
@@ -439,6 +471,7 @@ private fun PlatformIntegrationCard(
     tier: Int,
     envVarRepository: EnvVarRepository,
     platformEntries: List<EnvVarRepository.EnvVarEntry>,
+    storedValues: Map<String, String>,
     onAddEnvVar: (key: String, note: String) -> Unit,
     onEditEnvVar: (entryId: String) -> Unit,
 ) {
@@ -466,8 +499,12 @@ private fun PlatformIntegrationCard(
             val existingEntry = platformEntries.find {
                 it.key.equals(varKey, ignoreCase = true)
             }
+            // [T-android-sessionlist-prefs-io] Snapshot map instead of a live
+            // EncryptedSharedPreferences decrypt per row. containsKey (not a
+            // null check on the value) — an entry with an empty value still
+            // counts as configured, matching the old `getValue(...) != null`.
             val isConfigured = existingEntry != null &&
-                envVarRepository.getValue(existingEntry.key) != null
+                storedValues.containsKey(existingEntry.key)
 
             val rowColor = if (isConfigured)
                 MaterialTheme.colorScheme.primary.copy(alpha = 0.06f)

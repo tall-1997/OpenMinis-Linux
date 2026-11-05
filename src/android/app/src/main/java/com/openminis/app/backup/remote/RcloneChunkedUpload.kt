@@ -42,6 +42,19 @@ import com.openminis.app.util.IsoTime
  * The upload goes to a `<name>.partial` scratch object first and is renamed
  * only after the size check passes: a half-uploaded file must never be
  * listable under the real package name.
+ *
+ * ## Why there is still no byte-range resume (Wave3 #10c, deliberately out)
+ *
+ * A `.partial` HEAD + Range-style resume is NOT implementable through the
+ * rclone RPC surface this class drives: `operations/copyfile` transfers a
+ * whole object with no partial-source semantics, there is no cross-process
+ * resume for a single file (the original chunking existed precisely for this),
+ * and no exposed backend here offers a ranged server-side copy that could
+ * extend a partial object. A future resume would have to reintroduce explicit
+ * parts (`.minis-parts/<id>`) plus a resume journal — the design iOS
+ * evaluated and rejected on 2026-08-16 for the listing/usability reasons
+ * documented above. Left as follow-up work; until then an interrupted upload
+ * simply re-runs.
  */
 class RcloneChunkedUpload(private val context: Context) {
 

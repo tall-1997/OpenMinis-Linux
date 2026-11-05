@@ -7,10 +7,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import com.openminis.app.R
@@ -130,9 +128,15 @@ internal fun MarkdownBlockBody(
     // showed every tick flushing. `rawText` arriving here is already paced by
     // the VM, so the fragment just renders it directly; parse stays off-main
     // below.
-    val displayContent by produceState(initialValue = rawText, rawText) {
-        snapshotFlow { rawText }.conflate().collect { value = it }
-    }
+    //
+    // [T-android-blockbody-producestate-noop] The old
+    // `produceState(initialValue = rawText, rawText) { snapshotFlow { rawText }
+    // ... }` was a no-op wrapper: rawText is a plain parameter (not State), so
+    // the snapshotFlow could only ever re-emit the value it captured —
+    // displayContent ended up equal to rawText, one snapshot frame late. The
+    // parse LaunchedEffect below keys on displayContent either way, so a
+    // direct alias preserves behavior exactly.
+    val displayContent = rawText
     // [T-android-inline-parse-offmain] Snapshot the theme colors in
     // composition so the Default-thread parse below can PREWARM the inline
     // caches with the exact keys RenderBlock will look up — main-thread

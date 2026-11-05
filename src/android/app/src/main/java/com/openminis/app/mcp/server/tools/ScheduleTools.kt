@@ -3,6 +3,7 @@ package com.openminis.app.mcp.server.tools
 import com.openminis.app.mcp.server.McpServerCore
 import com.openminis.app.scheduled.CronScheduler
 import com.openminis.app.scheduled.ScheduledTask
+import com.openminis.app.scheduled.ScheduledTaskCodec
 import com.openminis.app.scheduled.ScheduledTaskManager
 import com.openminis.app.scheduled.ScheduledRepeatMode
 import org.json.JSONArray
@@ -119,37 +120,19 @@ private fun createScheduledTask(
     prompt: String,
     name: String,
 ): McpServerCore.CallResult {
-    val parsed = CronScheduler.parseSchedule(schedule)
-        ?: return McpToolShared.error("Error: bad schedule '$schedule'")
-    val now = System.currentTimeMillis()
-    val fireAt = now + parsed.firstDelayMs
-    val cal = Calendar.getInstance().apply { timeInMillis = fireAt }
-    val interval = parsed.kind == "interval"
-    val task = ScheduledTask(
-        id = UUID.randomUUID().toString(),
-        label = name.ifBlank { prompt.take(32) },
-        timeOfDayHour = cal.get(Calendar.HOUR_OF_DAY),
-        timeOfDayMinute = cal.get(Calendar.MINUTE),
-        repeatMode = if (interval) ScheduledRepeatMode.INTERVAL else ScheduledRepeatMode.ONCE,
+    // [P2-schedule-codec] Parse→fireAt→construct is the shared codec
+    // (scheduleTaskCreate has already rendered its own parse-failure message,
+    // so the null branch here is unreachable from that entry point but kept
+    // for direct callers).
+    val task = ScheduledTaskCodec.buildTask(
+        schedule = schedule,
         prompt = prompt,
-        intervalMinutes = parsed.intervalMinutes,
-        fireAtMs = fireAt,
-        createdAt = now,
-    )
+        name = name,
+    ) ?: return McpToolShared.error("Error: bad schedule '$schedule'")
     val saved = manager.create(task)
     return McpServerCore.CallResult(
         JSONArray().put(
-            McpToolShared.text(
-                JSONObject().apply {
-                    put("ok", true)
-                    put("id", saved.id)
-                    put("name", saved.label)
-                    put("schedule", schedule)
-                    put("fireAtMs", saved.fireAtMs ?: fireAt)
-                    put("repeat", saved.repeatMode.name)
-                    if (saved.id != task.id) put("already_existed", true)
-                }.toString(2),
-            ),
+            McpToolShared.text(ScheduledTaskCodec.createResult(saved, task, schedule).toString(2)),
         ),
     )
 }
@@ -161,18 +144,7 @@ private fun scheduleTaskList(deps: McpToolDeps): McpServerCore.CallResult {
         val tasks = manager.list()
         val arr = JSONArray()
         for (t in tasks) {
-            arr.put(
-                JSONObject().apply {
-                    put("id", t.id)
-                    put("name", t.label)
-                    put("enabled", t.enabled)
-                    put("repeat", t.repeatMode.name)
-                    if (t.intervalMinutes > 0) put("intervalMinutes", t.intervalMinutes)
-                    if (t.fireAtMs != null) put("fireAtMs", t.fireAtMs)
-                    put("nextTriggerMs", t.nextTriggerMs() ?: JSONObject.NULL)
-                    put("prompt", t.prompt.take(200))
-                },
-            )
+            arr.put(ScheduledTaskCodec.taskListRow(t))
         }
         McpServerCore.CallResult(
             JSONArray().put(

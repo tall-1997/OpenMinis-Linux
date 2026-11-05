@@ -114,14 +114,55 @@ class BackupExporter(
         val started = System.currentTimeMillis()
         val backupId = UUID.randomUUID().toString()
 
-        // Staging lives in filesDir, not cacheDir: the system may evict the
-        // cache mid-export, and a multi-GB staging tree disappearing underneath
-        // the writer is a failure mode worth designing out.
-        val staging = File(context.filesDir, "backup-staging/$backupId")
+        // [Wave3 #10a] Staging lives on getExternalFilesDir(null), not cacheDir:
+        // the system may evict the cache mid-export, and a multi-GB staging tree
+        // disappearing underneath the writer is a failure mode worth designing
+        // out. Moved out of filesDir (the pre-fix location) because external
+        // app storage sits on the typically-larger emulated volume — filesDir
+        // shares the small data partition with the databases and the rootfs —
+        // while remaining private to the app, unswept as user data, and wiped
+        // on uninstall.
+        val staging = File(stagingRoot(context), backupId)
         staging.mkdirs()
+
+        // [Wave3 #10b] Incremental fast path: consult the sidecar manifest from
+        // the previous successful export. Unchanged files (same size + mtime)
+        // take their blob bytes out of the previous package's zip — no source
+        // read, no hash. The package is still a complete snapshot; only the
+        // per-file work to assemble it shrinks.
+        val incremental = BackupIncrementalManifest(File(backupsDirectory(context), BackupIncrementalManifest.FILE_NAME))
+        incremental.load()
+        val prevZip: java.util.zip.ZipFile? = incremental.packageName?.let { pkgName ->
+            runCatching { java.util.zip.ZipFile(File(backupsDirectory(context), pkgName)) }.getOrNull()
+        }
+        val blobReuse: BackupBlobStore.Reuse? = prevZip?.let { zip ->
+            BackupBlobStore.Reuse { file, logicalPath, size ->
+                val cached = incremental.lookupUnchanged(logicalPath, size, file.lastModified())
+                    ?: return@Reuse null
+                val entryName = "blobs/${cached.sha256.take(2)}/${cached.sha256}"
+                val entry = runCatching { zip.getEntry(entryName) }.getOrNull() ?: return@Reuse null
+                val tmp = File(File(staging, "blobs/${cached.sha256.take(2)}"), ".reuse-${cached.sha256}")
+                val ok = runCatching {
+                    zip.getInputStream(entry).use { input ->
+                        tmp.outputStream().use { output -> input.copyTo(output) }
+                    }
+                    tmp.length() == cached.size
+                }.getOrDefault(false)
+                if (!ok) {
+                    tmp.delete()
+                    null
+                } else {
+                    incremental.countReused(size)
+                    BackupBlobStore.ReusedBlob(cached.sha256, tmp)
+                }
+            }
+        }
         try {
             val dataDir = File(staging, "data").apply { mkdirs() }
-            val blobStore = BackupBlobStore(staging, options.maxFileBytes)
+            val blobStore = BackupBlobStore(
+                staging, options.maxFileBytes,
+                reuse = blobReuse, incremental = incremental,
+            )
             val stats = mutableMapOf<String, BackupManifest.CategoryStat>()
 
             BackupFileIndexWriter(File(staging, "files.index.jsonl")).use { fileIndex ->
@@ -244,12 +285,18 @@ class BackupExporter(
                 skippedBytes = blobStore.skippedBytes,
                 skippedPaths = blobStore.skippedPaths.toList(),
                 durationMillis = duration,
-            )
+            ).also {
+                // [Wave3 #10b] Only a successfully finalised package updates the
+                // sidecar — a failed run keeps the previous manifest, which is
+                // still valid (it points at the still-existing previous zip).
+                incremental.save(packageFile.name)
+            }
         } finally {
+            prevZip?.close()
             // The archive is the deliverable; the staging tree is scratch and
             // can be several GB. Always clear it, including on failure.
             staging.deleteRecursively()
-            File(context.filesDir, "backup-staging").takeIf {
+            stagingRoot(context).takeIf {
                 it.listFiles()?.isEmpty() == true
             }?.delete()
         }
@@ -849,6 +896,20 @@ class BackupExporter(
          */
         fun backupsDirectory(context: Context): File =
             File(context.filesDir, BackupFileTreeExporter.BACKUPS_DIR_NAME).apply { mkdirs() }
+
+        /**
+         * [Wave3 #10a] Scratch root for the pre-zip staging tree, on
+         * [Context.getExternalFilesDir] when the device provides one (falls
+         * back to filesDir otherwise). Same app-private protection as before;
+         * see the comment in [exportBodyAdmitted] for why the volume moved.
+         * Never user data: [BackupFileTreeExporter.isBackupArtifact] keeps
+         * excluding the `backup-staging` name, and the exporter clears both
+         * the per-run tree and an empty root in its `finally`.
+         */
+        fun stagingRoot(context: Context): File {
+            val base = context.getExternalFilesDir(null) ?: context.filesDir
+            return File(base, BackupFileTreeExporter.STAGING_DIR_NAME)
+        }
 
         /**
          * Skills under a skills root: one directory per skill

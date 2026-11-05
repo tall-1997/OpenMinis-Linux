@@ -334,28 +334,33 @@ private fun ChooseCredentialScreen(
     }
 }
 
+// [T-hardcoded-strings] These descriptions were English-only string
+// literals; now resolved through stringResource so they follow the device
+// locale. @Composable — the call sites already run inside composition.
+@Composable
 private fun apiKeyDescription(type: ProviderType): String = when (type) {
-    ProviderType.openAI -> "Supports OpenAI official API and compatible third-party endpoints"
-    ProviderType.anthropic -> "Use an API key from your Anthropic account"
-    ProviderType.gemini -> "Use an API key from your Google Gemini account"
-    ProviderType.openRouter -> "Use an API key from your OpenRouter account"
-    ProviderType.xAI -> "Use an API key from your xAI Console (api.x.ai)"
-    ProviderType.kimiCode -> "Use an API key from your Moonshot account"
-    ProviderType.openAIResponses -> "Supports the OpenAI Responses API and compatible endpoints"
+    ProviderType.openAI -> stringResource(R.string.add_provider_api_key_desc_openai)
+    ProviderType.anthropic -> stringResource(R.string.add_provider_api_key_desc_anthropic)
+    ProviderType.gemini -> stringResource(R.string.add_provider_api_key_desc_gemini)
+    ProviderType.openRouter -> stringResource(R.string.add_provider_api_key_desc_openrouter)
+    ProviderType.xAI -> stringResource(R.string.add_provider_api_key_desc_xai)
+    ProviderType.kimiCode -> stringResource(R.string.add_provider_api_key_desc_kimicode)
+    ProviderType.openAIResponses -> stringResource(R.string.add_provider_api_key_desc_openai_responses)
     ProviderType.antigravity,
-    ProviderType.unsupported -> "This provider type is not supported on Android"
+    ProviderType.unsupported -> stringResource(R.string.add_provider_api_key_desc_unsupported)
 }
 
+@Composable
 private fun oauthDescription(type: ProviderType): String = when (type) {
-    ProviderType.anthropic -> "Sign in with your Claude account"
-    ProviderType.gemini -> "Sign in with Google for Cloud Code Assist"
-    ProviderType.openAI -> "Sign in with OpenAI Codex"
-    ProviderType.xAI -> "Sign in with xAI (requires SuperGrok or X Premium+)"
-    ProviderType.openRouter -> "Sign in with OpenRouter"
-    ProviderType.kimiCode -> "Sign in with your Kimi account (Coding Plan)"
-    ProviderType.openAIResponses -> "Sign in with OpenAI Codex"
+    ProviderType.anthropic -> stringResource(R.string.add_provider_oauth_desc_anthropic)
+    ProviderType.gemini -> stringResource(R.string.add_provider_oauth_desc_gemini)
+    ProviderType.openAI -> stringResource(R.string.add_provider_oauth_desc_openai)
+    ProviderType.xAI -> stringResource(R.string.add_provider_oauth_desc_xai)
+    ProviderType.openRouter -> stringResource(R.string.add_provider_oauth_desc_openrouter)
+    ProviderType.kimiCode -> stringResource(R.string.add_provider_oauth_desc_kimicode)
+    ProviderType.openAIResponses -> stringResource(R.string.add_provider_oauth_desc_openai)
     ProviderType.antigravity,
-    ProviderType.unsupported -> "This provider type is not supported on Android"
+    ProviderType.unsupported -> stringResource(R.string.add_provider_api_key_desc_unsupported)
 }
 
 // -- Step 3: Configure & Save --

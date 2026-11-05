@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    [T-android-chat-strings-resource] Chat-module strings, Chinese.
+    Mirrors values/strings_chat.xml key-for-key; the values here are the
+    literal copy that used to be hardcoded in the chat UI, so the zh display
+    output is unchanged by the resource migration.
+-->
+<resources>
+    <!-- Foreground approval gate (ChatSheetsHost) -->
+    <string name="approval_required_title">需要审批: %1$s</string>
+    <string name="approval_default_preview">Agent 请求执行敏感操作</string>
+    <string name="approval_action_approve">同意</string>
+    <string name="approval_action_deny">拒绝</string>
+    <string name="approval_action_allow_all_session">本次会话全部允许</string>
+
+    <!-- Crash recovery (ChatScreen) -->
+    <string name="crash_recovery_snackbar">上次有中断的生成（模型 %1$s，开始于 %2$s）——中断前的内容已保留在对话中</string>
+
+    <!-- Attachment pick truncation (ChatScreen) -->
+    <string name="attachment_pick_truncated_items">仅附加了前 %1$d 个项目。</string>
+    <string name="attachment_pick_truncated_files">仅附加了前 %1$d 个文件。</string>
+
+    <!-- Chat screen misc -->
+    <string name="chat_move_to_capsule">Move to…</string>
+    <string name="attachment_no_app_toast">No app available to open this attachment.</string>
+
+    <!-- Sub-agent live bar + detail sheet (ChatSubAgentBar) -->
+    <string name="subagent_waiting_first_output">思考中，还没有输出</string>
+    <string name="subagent_turn_of">第 %1$d/%2$d 轮</string>
+    <string name="subagent_index_of_total">子代理 %1$d/%2$d</string>
+    <string name="subagent_fallback_label">子代理</string>
+    <string name="subagent_task_fallback">子代理任务</string>
+    <string name="subagent_stop_desc">Stop %1$s</string>
+    <string name="subagent_status_running">执行中</string>
+    <string name="subagent_status_calling_tool">调用工具</string>
+    <string name="subagent_status_done">已完成</string>
+    <string name="subagent_status_failed">失败</string>
+    <string name="subagent_args_label">参数</string>
+    <string name="subagent_result_label">结果</string>
+
+    <!-- Accessibility labels (ChatComposerWidgets / ChatToolDetailUI) -->
+    <string name="attachment_remove_desc">移除附件</string>
+    <string name="tool_detail_prev_desc">上一个</string>
+    <string name="tool_detail_next_desc">下一个</string>
+
+    <!-- ToolCallPill long-press menu -->
+    <string name="tool_longpress_retry">重试</string>
+    <string name="tool_longpress_open_in_terminal">在终端打开</string>
+</resources>

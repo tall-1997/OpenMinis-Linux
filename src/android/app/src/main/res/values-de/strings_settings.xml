@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    [Wave2-settings] Strings introduced by the Wave 2 ui/settings fixes, German.
+    Mirrors values/strings_settings.xml key-for-key.
+-->
+<resources>
+    <!-- #11 BackupViewModel transient status / error lines -->
+    <string name="backup_err_choose_include">Mindestens eine Option zum Einbeziehen auswählen.</string>
+    <string name="backup_err_passphrase_required">Setzen Sie eine Passphrase, um diese Sicherung zu verschlüsseln.</string>
+    <string name="backup_status_starting">Wird gestartet…</string>
+    <string name="backup_status_reading">Sicherung wird gelesen…</string>
+    <string name="backup_status_listing">Wird aufgelistet…</string>
+    <string name="backup_err_choose_restore">Mindestens eine Option zum Wiederherstellen auswählen.</string>
+    <string name="backup_err_encrypted_passphrase">Diese Sicherung ist verschlüsselt. Geben Sie ihre Passphrase ein, um sie wiederherzustellen.</string>
+    <string name="backup_status_restoring">Wird wiederhergestellt…</string>
+
+    <!-- #1 Answer-versions archive empty state -->
+    <string name="log_answer_versions_dir_unavailable">Archivordner auf diesem Gerät nicht verfügbar. Es wurde noch keine überschriebene Antwort gespeichert.</string>
+
+    <!-- #11 ModelGroupsScreen -->
+    <string name="model_groups_new_group_hint">Geben Sie einen Namen für die neue Modellgruppe ein.</string>
+    <string name="model_group_badge_primary">Primär</string>
+    <string name="model_group_badge_sub">Sub</string>
+    <string name="model_group_models_plain">%1$d Modelle</string>
+    <string name="model_group_models_disabled">%1$d Modelle (%2$d deaktiviert)</string>
+
+    <!-- #11 ProviderDetailScreen -->
+    <string name="provider_detail_oauth_footer">OAuth-Token werden sicher im verschlüsselten Speicher abgelegt.</string>
+    <string name="provider_detail_useful_with_custom_proxy">Nützlich mit benutzerdefinierten Proxy-Endpunkten.</string>
+    <string name="provider_image_footer_auto_resolved">Auto: versucht zuerst /v1/images/generations und weicht auf /v1/chat/completions aus. Zuletzt erfolgreicher Endpunkt: %1$s.</string>
+    <string name="provider_image_footer_auto">Auto: versucht zuerst /v1/images/generations und weicht auf /v1/chat/completions aus. Speichert den funktionierenden Endpunkt nach dem ersten Aufruf.</string>
+    <string name="provider_image_footer_images">Verwendet immer /v1/images/generations.</string>
+    <string name="provider_image_footer_chat">Verwendet immer /v1/chat/completions (multimodale Ausgabe).</string>
+    <string name="provider_oauth_login_expired">Anmeldung abgelaufen — erneut anmelden</string>
+    <string name="provider_oauth_not_connected">Nicht verbunden</string>
+    <string name="provider_oauth_token_configured">Konfiguriert</string>
+    <string name="provider_share_chooser_title">Anbieter exportieren</string>
+
+    <!-- #11/#12 MCPIntegrationsScreen share chooser title -->
+    <string name="mcp_share_chooser_title">MCP-Server exportieren</string>
+
+    <!-- #11 AddProviderScreen credential descriptions -->
+    <string name="add_provider_api_key_desc_openai">Unterstützt die offizielle OpenAI-API und kompatible Drittanbieter-Endpunkte</string>
+    <string name="add_provider_api_key_desc_anthropic">API-Schlüssel aus Ihrem Anthropic-Konto verwenden</string>
+    <string name="add_provider_api_key_desc_gemini">API-Schlüssel aus Ihrem Google-Gemini-Konto verwenden</string>
+    <string name="add_provider_api_key_desc_openrouter">API-Schlüssel aus Ihrem OpenRouter-Konto verwenden</string>
+    <string name="add_provider_api_key_desc_xai">API-Schlüssel aus Ihrer xAI-Konsole (api.x.ai) verwenden</string>
+    <string name="add_provider_api_key_desc_kimicode">API-Schlüssel aus Ihrem Moonshot-Konto verwenden</string>
+    <string name="add_provider_api_key_desc_openai_responses">Unterstützt die OpenAI Responses API und kompatible Endpunkte</string>
+    <string name="add_provider_api_key_desc_unsupported">Dieser Anbietertyp wird auf Android nicht unterstützt</string>
+    <string name="add_provider_oauth_desc_anthropic">Mit Ihrem Claude-Konto anmelden</string>
+    <string name="add_provider_oauth_desc_gemini">Mit Google für Cloud Code Assist anmelden</string>
+    <string name="add_provider_oauth_desc_openai">Mit OpenAI Codex anmelden</string>
+    <string name="add_provider_oauth_desc_xai">Mit xAI anmelden (erfordert SuperGrok oder X Premium+)</string>
+    <string name="add_provider_oauth_desc_openrouter">Mit OpenRouter anmelden</string>
+    <string name="add_provider_oauth_desc_kimicode">Mit Ihrem Kimi-Konto anmelden (Coding Plan)</string>
+</resources>

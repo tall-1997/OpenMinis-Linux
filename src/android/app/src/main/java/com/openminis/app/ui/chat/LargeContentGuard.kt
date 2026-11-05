@@ -22,6 +22,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -33,6 +34,9 @@ import androidx.core.content.FileProvider
 import com.openminis.app.R
 import com.openminis.app.ui.components.MinisTextButton
 import com.openminis.app.logging.AppLogger
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
@@ -85,6 +89,9 @@ internal fun LargeContentBadge(
     onExpand: () -> Unit,
 ) {
     val context = LocalContext.current
+    // [T-android-large-export-io] Scope for the export path: the file write
+    // hops to Dispatchers.IO, chooser + Toast resume on Main when it settles.
+    val exportScope = rememberCoroutineScope()
     val sizeLabel = remember(content.length) { formatByteSize(content.length) }
 
     Column(
@@ -149,16 +156,44 @@ internal fun LargeContentBadge(
 
             MinisTextButton(
                 onClick = {
-                    val ok = exportLargeContentToFile(context, content, stableKey)
-                    Toast.makeText(
-                        context,
-                        if (ok) {
-                            context.getString(R.string.chat_message_large_export_ok)
-                        } else {
-                            context.getString(R.string.chat_message_large_export_fail)
-                        },
-                        Toast.LENGTH_SHORT,
-                    ).show()
+                    // [T-android-large-export-io] Write the multi-MB dump off
+                    // the main thread; the chooser launch + result Toast run
+                    // on Main after the IO write settles.
+                    exportScope.launch {
+                        var ok = false
+                        try {
+                            val file = exportLargeContentToFile(context, content, stableKey)
+                            if (file != null) {
+                                val authority = context.packageName + ".fileprovider"
+                                val uri = FileProvider.getUriForFile(context, authority, file)
+                                val send = Intent(Intent.ACTION_SEND).apply {
+                                    type = "text/plain"
+                                    putExtra(Intent.EXTRA_STREAM, uri)
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    if (context !is android.app.Activity) {
+                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    }
+                                }
+                                val chooser = Intent.createChooser(send, context.getString(R.string.chat_message_large_export))
+                                if (context !is android.app.Activity) {
+                                    chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                context.startActivity(chooser)
+                                ok = true
+                            }
+                        } catch (t: Throwable) {
+                            AppLogger.warning("LargeContentGuard", "export failed: ${t.message}")
+                        }
+                        Toast.makeText(
+                            context,
+                            if (ok) {
+                                context.getString(R.string.chat_message_large_export_ok)
+                            } else {
+                                context.getString(R.string.chat_message_large_export_fail)
+                            },
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                    }
                 },
                 modifier = Modifier.padding(0.dp),
             ) {
@@ -341,35 +376,27 @@ private fun formatByteSize(chars: Int): String {
 }
 
 /**
- * Dump the content to a temp file under cacheDir/large-messages and fire an
- * ACTION_SEND chooser. Returns true if the chooser was launched.
+ * Dump the content to a temp file under cacheDir/large-messages and return
+ * the written file, or null on failure.
+ *
+ * [T-android-large-export-io] The file write runs on Dispatchers.IO — a
+ * multi-MB message must not be serialised on the main thread. The
+ * ACTION_SEND chooser launch stays at the call site so it (and the Toast)
+ * always run on Main after the write settles.
  */
-private fun exportLargeContentToFile(
+private suspend fun exportLargeContentToFile(
     context: android.content.Context,
     content: String,
     stableKey: String,
-): Boolean = try {
-    val dir = File(context.cacheDir, "large-messages").apply { mkdirs() }
-    val safeKey = stableKey.replace(Regex("[^A-Za-z0-9_.-]"), "_").take(64)
-    val file = File(dir, "msg-$safeKey-${System.currentTimeMillis()}.txt")
-    file.writeText(content)
-    val authority = context.packageName + ".fileprovider"
-    val uri = FileProvider.getUriForFile(context, authority, file)
-    val send = Intent(Intent.ACTION_SEND).apply {
-        type = "text/plain"
-        putExtra(Intent.EXTRA_STREAM, uri)
-        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        if (context !is android.app.Activity) {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
+): File? = withContext(Dispatchers.IO) {
+    try {
+        val dir = File(context.cacheDir, "large-messages").apply { mkdirs() }
+        val safeKey = stableKey.replace(Regex("[^A-Za-z0-9_.-]"), "_").take(64)
+        val file = File(dir, "msg-$safeKey-${System.currentTimeMillis()}.txt")
+        file.writeText(content)
+        file
+    } catch (t: Throwable) {
+        AppLogger.warning("LargeContentGuard", "export failed: ${t.message}")
+        null
     }
-    val chooser = Intent.createChooser(send, context.getString(R.string.chat_message_large_export))
-    if (context !is android.app.Activity) {
-        chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    }
-    context.startActivity(chooser)
-    true
-} catch (t: Throwable) {
-    AppLogger.warning("LargeContentGuard", "export failed: ${t.message}")
-    false
 }

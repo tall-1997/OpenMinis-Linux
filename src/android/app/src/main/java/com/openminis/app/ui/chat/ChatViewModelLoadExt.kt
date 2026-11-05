@@ -167,13 +167,12 @@ internal fun ChatViewModel.loadSession() {
         return
     }
     viewModelScope.launch {
-        // [T-HANG-DIAG] timing markers to localise where session entry
-        // stalls. Sentinel-tagged so a single grep -v can strip them
-        // when this diagnostic is removed. Declared OUTSIDE the try
-        // block so the EXIT log in `finally` can still read it after
-        // an early-return / exception path.
+        // Timing markers to localise where session entry stalls — they ride
+        // the PerfLongCtx reentry timeline ([Perf][LongCtx] lines), so a
+        // single grep on that tag returns the whole loadSession story.
+        // Declared OUTSIDE the try block so the EXIT log in `finally` can
+        // still read it after an early-return / exception path.
         val tHangDiagStart = System.currentTimeMillis()
-        println("[T-HANG-DIAG] loadSession ENTER session=$sessionId isDraft=$isDraft")
         com.openminis.app.diagnostics.PerfLongCtx.step(sessionId, "loadSession.enter", "isDraft=$isDraft")
         try {
         val config = providerRepository.config.value
@@ -431,12 +430,15 @@ internal fun ChatViewModel.loadSession() {
         _isLoadingHistory.value = false
         val tHangDiagAfterLoad = tHangDiagBeforeLoad + loaded.loadMs
         val tHangDiagAfterTransform = tHangDiagAfterLoad + loaded.transformMs
-        println(
-            "[T-HANG-DIAG] loadMessages session=$sessionId count=${messages.size} " +
-                "tookMs=${loaded.loadMs}",
+        com.openminis.app.diagnostics.PerfLongCtx.step(
+            sessionId,
+            "loadSession.messages",
+            "count=${messages.size} loadMs=${loaded.loadMs}",
         )
-        println(
-            "[T-HANG-DIAG] toChatMessages session=$sessionId tookMs=${loaded.transformMs}",
+        com.openminis.app.diagnostics.PerfLongCtx.step(
+            sessionId,
+            "loadSession.toChatMessages",
+            "transformMs=${loaded.transformMs}",
         )
         // Per-message size sketch + oversize-row scan. Pure diagnostics —
         // does a full second pass over partsJson with several substring
@@ -516,8 +518,10 @@ internal fun ChatViewModel.loadSession() {
         // any sender writes into agentHistory.
         appendBoundedHistoryAll(loaded.llmHistory)
         val tHangDiagAfterAgentHistory = System.currentTimeMillis()
-        println(
-            "[T-HANG-DIAG] agentHistory rebuilt session=$sessionId tookMs=${tHangDiagAfterAgentHistory - tHangDiagAfterTransform}",
+        com.openminis.app.diagnostics.PerfLongCtx.step(
+            sessionId,
+            "loadSession.agentHistoryRebuilt",
+            "tookMs=${tHangDiagAfterAgentHistory - tHangDiagAfterTransform}",
         )
 
         // Restore the most-recent compact summary, if any, so the first
@@ -711,14 +715,11 @@ internal fun ChatViewModel.loadSession() {
             // missing-session path) and on exception, so the init-time
             // config.collect can never deadlock waiting for us.
             sessionLoaded.value = true
-            // [T-HANG-DIAG] total time spent in loadSession from ENTER to
-            // either successful completion or early return. tHangDiagStart
-            // was captured just inside `try` so this covers the whole
-            // body the user perceives as "loading".
-            println(
-                "[T-HANG-DIAG] loadSession EXIT session=$sessionId " +
-                    "totalMs=${System.currentTimeMillis() - tHangDiagStart}",
-            )
+            // Total time spent in loadSession from ENTER to either successful
+            // completion or early return. tHangDiagStart was captured just
+            // inside `try` so this covers the whole body the user perceives
+            // as "loading". (Rides PerfLongCtx — the raw [T-HANG-DIAG]
+            // println duplicate was removed.)
             com.openminis.app.diagnostics.PerfLongCtx.step(
                 sessionId,
                 "loadSession.exit",

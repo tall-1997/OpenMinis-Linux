@@ -436,6 +436,36 @@ class RootfsManager private constructor(private val context: Context) {
      */
     private fun injectHostCaBundle() {
         ensureCaHookExecutable()
+        // [T-ca-export-stamp] The export walks the whole AndroidCAStore and
+        // rewrites the per-cert trees + bundle on every call. Probe the alias
+        // set first (cheap string enumeration, no cert decoding) and skip the
+        // entire rewrite when it has not changed and the previous bundle is on
+        // disk — the export is a deterministic function of that alias set, so
+        // the on-disk result is already correct. First run (no stamp) behaves
+        // exactly as before.
+        val caStamp = File(rootfsDir, "etc/ssl/.minis-ca-alias-stamp")
+        val aliasProbe = ArrayList<String>()
+        try {
+            val ks = KeyStore.getInstance("AndroidCAStore")
+            ks.load(null)
+            val e = ks.aliases()
+            while (e.hasMoreElements()) aliasProbe.add(e.nextElement())
+        } catch (t: Throwable) {
+            Log.w(TAG, "[CA] AndroidCAStore alias probe failed: ${t.message}")
+        }
+        // "|v1" salt: if the stamping scheme itself changes, old stamps stop matching.
+        val aliasFp = CaBundle.sha256Hex(
+            (aliasProbe.sorted().joinToString("\n") + "|v1").toByteArray(Charsets.UTF_8),
+        )
+        val existingBundle = File(rootfsDir, "etc/ssl/certs/ca-certificates.crt")
+        if (aliasProbe.isNotEmpty() &&
+            caStamp.isFile &&
+            runCatching { caStamp.readText().trim() == aliasFp }.getOrDefault(false) &&
+            existingBundle.isFile && existingBundle.length() >= 2048L
+        ) {
+            Log.i(TAG, "[CA] system CA alias set unchanged (${aliasProbe.size}) — skipping re-export")
+            return
+        }
         val androidPems = LinkedHashMap<String, String>()
         try {
             val ks = KeyStore.getInstance("AndroidCAStore")
@@ -569,6 +599,12 @@ class RootfsManager private constructor(private val context: Context) {
         val share = File(rootfsDir, "usr/local/share/ca-certificates")
         share.mkdirs()
         publishUnprivilegedCa(guestCerts, pem.toString())
+        // Stamp only after the full export succeeded, so a failed rewrite is
+        // retried on the next boot instead of being permanently skipped.
+        runCatching {
+            caStamp.parentFile?.mkdirs()
+            caStamp.writeText(aliasFp)
+        }
         Log.i(TAG, "[CA] injected $source (${pem.length} bytes) → ${dest.absolutePath}")
     }
 
@@ -776,6 +812,19 @@ class RootfsManager private constructor(private val context: Context) {
     }
 
     /**
+     * App-version string used as the overlay short-circuit stamp. The overlay
+     * content (default_mount assets, guest config, CA export) ships with the
+     * APK, so the version identifies it; anything else that can invalidate the
+     * stamp (fresh rootfs extract) deletes the stamp file along with the tree.
+     */
+    private fun appVersionStamp(): String = try {
+        val info = context.packageManager.getPackageInfo(context.packageName, 0)
+        "${info.versionName ?: "?"}"
+    } catch (t: Throwable) {
+        "unknown"
+    }
+
+    /**
      * No-op when the asset dir is missing or the rootfs hasn't been extracted.
      */
     suspend fun applyDefaultMountOverlay() = withContext(Dispatchers.IO) {
@@ -794,6 +843,19 @@ class RootfsManager private constructor(private val context: Context) {
         }
         if (rootEntries.isNullOrEmpty()) {
             Log.d(TAG, "[DefaultMount] no default_mount assets found, skipping overlay")
+            return@withContext
+        }
+
+        // [T-overlay-version-stamp] The overlay (asset copy + configureUbuntuGuest
+        // + full CA re-export) used to run on EVERY boot. Its content changes
+        // only with an app update, so a stamp file holding the app version
+        // short-circuits repeat boots of the same build: first boot writes it,
+        // later boots skip, an app update (or a rootfs reinstall — the stamp
+        // lives inside the tree and is deleted with it) re-runs everything.
+        val stamp = File(rootfsDir, "var/minis/.default-mount-overlay-stamp")
+        val expected = "v=" + appVersionStamp()
+        if (stamp.isFile && runCatching { stamp.readText().trim() == expected }.getOrDefault(false)) {
+            Log.i(TAG, "[DefaultMount] overlay already applied for $expected — skipping re-run")
             return@withContext
         }
 
@@ -826,6 +888,12 @@ class RootfsManager private constructor(private val context: Context) {
 
         val elapsedMs = (System.nanoTime() - startNs) / 1_000_000.0
         Log.i(TAG, "[DefaultMount] Done. $fileCount file(s) overlaid, $markerRemoved EXTERNALLY-MANAGED marker(s) removed, $lockedCount minis-mcp-cli lib path(s) locked read-only in %.1fms".format(elapsedMs))
+        // Stamp only AFTER the whole overlay succeeded — a mid-overlay failure
+        // must leave no stamp so the next boot retries.
+        runCatching {
+            stamp.parentFile?.mkdirs()
+            stamp.writeText(expected)
+        }
     }
 
     /**
@@ -1175,13 +1243,27 @@ class RootfsManager private constructor(private val context: Context) {
         aptMutex.withLock { seedNetworkToolsLocked() }
     }
 
+    /**
+     * proot prefix for the in-guest helper invocations (apt/pip/mirror), via
+     * [PRootKernel.commonArgv]. Recorded current behavior kept as-is: these
+     * runs bind only /dev+/proc (no /sys) except the apt install, pass NO bind
+     * mounts and NO --native-offload socket — they are boot-time plumbing, not
+     * agent workloads.
+     */
+    private fun helperProotCmd(includeSys: Boolean, vararg tail: String): List<String> =
+        PRootKernel.commonArgv(
+            prootPath = prootBinary.absolutePath,
+            rootfsDir = rootfsDir.absolutePath,
+            bindMounts = null,
+            includeSys = includeSys,
+            includeNativeOffload = false,
+        ) + tail
+
     private fun runMinisMirrorAutoLocked() {
         val helper = File(rootfsDir, "usr/local/bin/minis-mirror")
         if (!helper.exists()) return
-        val cmd = listOf(
-            prootBinary.absolutePath, "-0", "--link2symlink", "--kill-on-exit",
-            "-r", rootfsDir.absolutePath,
-            "-b", "/dev", "-b", "/proc", "-w", "/root",
+        val cmd = helperProotCmd(
+            includeSys = false,
             "/usr/local/bin/minis-mirror", "auto",
         )
         val r = runProotWithDeadline(cmd, prootLoaderEnv(), 180)
@@ -1196,10 +1278,8 @@ class RootfsManager private constructor(private val context: Context) {
         // to install — the agent's own early `apt-get install python3` is
         // exactly the caller that would otherwise wedge on the residue.
         runCatching {
-            val sweep = listOf(
-                prootBinary.absolutePath, "-0", "--link2symlink", "--kill-on-exit",
-                "-r", rootfsDir.absolutePath,
-                "-b", "/dev", "-b", "/proc", "-w", "/root",
+            val sweep = helperProotCmd(
+                includeSys = false,
                 "/bin/sh", "-c", GuestAptScript.staleLockSweep(),
             )
             val r = runProotWithDeadline(sweep, prootLoaderEnv(), 30)
@@ -1363,10 +1443,8 @@ class RootfsManager private constructor(private val context: Context) {
     }
 
     private fun runAptMarkShowManualUnlocked(): List<String>? {
-        val cmd = listOf(
-            prootBinary.absolutePath, "-0", "--link2symlink", "--kill-on-exit",
-            "-r", rootfsDir.absolutePath,
-            "-b", "/dev", "-b", "/proc", "-w", "/root",
+        val cmd = helperProotCmd(
+            includeSys = false,
             "/usr/bin/apt-mark", "showmanual",
         )
         val r = runProotWithDeadline(cmd, prootLoaderEnv(), 120)
@@ -1388,10 +1466,10 @@ class RootfsManager private constructor(private val context: Context) {
         val pkgs = pkgNames.filter { DPKG_PKG_NAME.matches(it) }
         if (pkgs.isEmpty()) return AptResult(0, "")
         val script = GuestAptScript.install(pkgs)
-        val cmd = listOf(
-            prootBinary.absolutePath, "-0", "--link2symlink", "--kill-on-exit",
-            "-r", rootfsDir.absolutePath,
-            "-b", "/dev", "-b", "/proc", "-b", "/sys", "-w", "/root",
+        // The ONLY helper invocation that binds /sys — kept identical to the
+        // former hand-rolled list (see helperProotCmd docs).
+        val cmd = helperProotCmd(
+            includeSys = true,
             "/bin/sh", "-c", script,
         )
         val r = runProotWithDeadline(cmd, prootLoaderEnv(), 600)
@@ -1447,10 +1525,8 @@ class RootfsManager private constructor(private val context: Context) {
 
     private fun runPipLeavesUnlocked(): Set<String>? {
         val loaderEnv = prootLoaderEnv()
-        val cmd = listOf(
-            prootBinary.absolutePath, "-0", "--link2symlink", "--kill-on-exit",
-            "-r", rootfsDir.absolutePath,
-            "-b", "/dev", "-b", "/proc", "-w", "/root",
+        val cmd = helperProotCmd(
+            includeSys = false,
             "/usr/bin/python3", "-m", "pip", "list", "--not-required",
             "--format=freeze", "--disable-pip-version-check",
         )
@@ -1509,10 +1585,8 @@ class RootfsManager private constructor(private val context: Context) {
         val req = File(tmp, "pip-world-requirements.txt")
         req.writeText(names.joinToString("\n") + "\n")
         val loaderEnv = prootLoaderEnv()
-        val cmd = listOf(
-            prootBinary.absolutePath, "-0", "--link2symlink", "--kill-on-exit",
-            "-r", rootfsDir.absolutePath,
-            "-b", "/dev", "-b", "/proc", "-w", "/root",
+        val cmd = helperProotCmd(
+            includeSys = false,
             "/usr/bin/python3", "-m", "pip", "install",
             "--ignore-installed", "--disable-pip-version-check", "--no-input",
             "-r", "/tmp/pip-world-requirements.txt",

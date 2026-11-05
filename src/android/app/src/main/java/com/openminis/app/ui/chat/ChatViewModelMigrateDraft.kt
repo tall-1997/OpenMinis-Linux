@@ -1,6 +1,8 @@
 package com.openminis.app.ui.chat
 
 import com.openminis.app.sandbox.ExecutionCoordinator
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * Move every per-session disk resource from the draft directory to the
@@ -14,8 +16,13 @@ import com.openminis.app.sandbox.ExecutionCoordinator
  * moment the VM was recreated under the real id — exactly the symptom
  * observed with the Chinese-named TikTok download that appeared to
  * "disappear" after `yt-dlp` reported success.
+ *
+ * [T-android-draft-migrate-io] The whole body (renameTo fallback
+ * copyRecursive tree walk + deleteRecursively + tabs-file move) is disk
+ * work on the first-message path, so it is dispatched to IO. The only
+ * caller is [ChatViewModel.ensureSession], already suspend.
  */
-internal fun ChatViewModel.migrateDraftResources(fromDraft: String, toReal: String) {
+internal suspend fun ChatViewModel.migrateDraftResources(fromDraft: String, toReal: String) = withContext(Dispatchers.IO) {
     // Stop any shell that was already spun up against the draft id; its
     // -b mount arguments were frozen to the draft directory at launch, so
     // we can't reuse it after the migration.
@@ -23,7 +30,7 @@ internal fun ChatViewModel.migrateDraftResources(fromDraft: String, toReal: Stri
 
     val base = java.io.File(context.filesDir, "minis-sessions")
     val draftBase = java.io.File(base, fromDraft)
-    if (!draftBase.isDirectory) return
+    if (!draftBase.isDirectory) return@withContext
     val realBase = java.io.File(base, toReal).apply { mkdirs() }
 
     com.openminis.app.sandbox.SessionWorkspace.SESSION_SUBDIRS.forEach { subdir ->

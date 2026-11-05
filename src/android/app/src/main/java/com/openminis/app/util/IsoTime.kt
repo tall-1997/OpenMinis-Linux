@@ -1,9 +1,7 @@
 package com.openminis.app.util
 
+import com.openminis.app.data.model.IsoTimeCore
 import java.time.Instant
-import java.time.LocalDate
-import java.time.LocalDateTime
-import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
@@ -13,6 +11,13 @@ import java.util.Locale
  * Thread-safe timestamps. [java.text.SimpleDateFormat] is not safe to share
  * on an `object` / companion; hang/crash/config/log/offload paths all run
  * off the main thread.
+ *
+ * [T-iso8601-serializer-single-source] The backup wire-format members
+ * ([parseFlexible], [formatUtcSeconds]) delegate to
+ * `:core:model`'s [IsoTimeCore] — the single implementation shared with
+ * `Iso8601MillisSerializer` — instead of keeping a second copy of the parse
+ * chain here. The FQCN and every signature are unchanged, so the ~43 call
+ * sites need no edits.
  */
 object IsoTime {
 
@@ -40,10 +45,6 @@ object IsoTime {
         DateTimeFormatter.ofPattern("MM-dd HH:mm").withZone(ZoneId.systemDefault())
     private val LOCAL_MILLIS: DateTimeFormatter =
         DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS").withZone(ZoneId.systemDefault())
-    private val LOCAL_DATE_TIME: DateTimeFormatter =
-        DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")
-    private val LOCAL_DATE_MINUTE: DateTimeFormatter =
-        DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm")
     private val OFFSET: DateTimeFormatter =
         DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX").withZone(ZoneId.systemDefault())
     private val HTTP_DATE: DateTimeFormatter =
@@ -57,7 +58,7 @@ object IsoTime {
     fun formatLocalSeconds(ms: Long): String = LOCAL_SECONDS.format(Instant.ofEpochMilli(ms))
 
     /** Config / env-var / backup wire format: UTC seconds with a literal `Z`. */
-    fun formatUtcSeconds(ms: Long): String = UTC_SECONDS.format(Instant.ofEpochMilli(ms))
+    fun formatUtcSeconds(ms: Long): String = IsoTimeCore.formatUtcSeconds(ms)
 
     fun formatLocalDate(ms: Long = System.currentTimeMillis()): String =
         LOCAL_DATE.format(Instant.ofEpochMilli(ms))
@@ -110,34 +111,9 @@ object IsoTime {
     /**
      * Agent/offload ISO dates: offset, `Z`, local date-time, or date-only.
      * Relative shorthands (`-7d`) stay in the caller.
+     *
+     * Delegates to [IsoTimeCore.parseFlexible] — the shared superset chain
+     * (identical candidate order, so results are unchanged).
      */
-    fun parseFlexible(s: String): Long? {
-        val t = s.trim()
-        if (t.isEmpty()) return null
-        try {
-            return Instant.parse(t).toEpochMilli()
-        } catch (_: Throwable) {}
-        try {
-            return OffsetDateTime.parse(t).toInstant().toEpochMilli()
-        } catch (_: Throwable) {}
-        try {
-            return Instant.from(UTC_SECONDS.parse(t)).toEpochMilli()
-        } catch (_: Throwable) {}
-        try {
-            return LocalDateTime.parse(t, DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-                .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-        } catch (_: Throwable) {}
-        try {
-            return LocalDateTime.parse(t, LOCAL_DATE_TIME)
-                .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-        } catch (_: Throwable) {}
-        try {
-            return LocalDateTime.parse(t, LOCAL_DATE_MINUTE)
-                .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-        } catch (_: Throwable) {}
-        try {
-            return LocalDate.parse(t).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
-        } catch (_: Throwable) {}
-        return parseLocalMillis(t)
-    }
+    fun parseFlexible(s: String): Long? = IsoTimeCore.parseFlexible(s)
 }

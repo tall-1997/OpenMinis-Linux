@@ -41,6 +41,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -97,7 +98,12 @@ fun ProviderDetailScreen(
     var menuEntryId by remember { mutableStateOf<String?>(null) }
     var deleted by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    if (instance == null && !deleted) { onBack(); return }
+    // [T-compose-nav-in-composition] Navigation out of composition — see
+    // SkillDetailScreen. The body early-returns (renders nothing) instead;
+    // keyed on the null-ness so a mid-session deletion still navigates.
+    LaunchedEffect(instanceId, deleted, instance == null) {
+        if (instance == null && !deleted) onBack()
+    }
     if (instance == null) return
     var label by remember { mutableStateOf(instance.label) }
     val labelChanged = label != instance.label
@@ -164,7 +170,7 @@ fun ProviderDetailScreen(
         val isOAuthProvider = instance.credentialType == com.openminis.app.data.model.ProviderCredential.oauth
         SettingsSection(
             header = if (isOAuthProvider) stringResource(R.string.add_provider_credential) else stringResource(R.string.provider_list_api_key),
-            footer = if (isOAuthProvider) "OAuth tokens are stored securely in encrypted storage." else null,
+            footer = if (isOAuthProvider) stringResource(R.string.provider_detail_oauth_footer) else null,
         ) {
             SettingsCardBlock {
                 if (isOAuthProvider) {
@@ -231,7 +237,7 @@ fun ProviderDetailScreen(
             SettingsSection(
                 header = stringResource(R.string.provider_detail_manual_bearer_token),
                 footer = stringResource(R.string.provider_detail_use_a_static_bearer_token_instead_of_the) +
-                    "Useful with custom proxy endpoints.",
+                    stringResource(R.string.provider_detail_useful_with_custom_proxy),
             ) {
                 SettingsCardBlock {
                     ManualBearerTokenSection(
@@ -423,14 +429,14 @@ fun ProviderDetailScreen(
                             val resolved = if (instance.imageEndpointResolved ==
                                 com.openminis.app.data.model.ImageEndpointMode.imagesGenerations
                             ) "/v1/images/generations" else "/v1/chat/completions"
-                            "Auto: tries /v1/images/generations first, falls back to /v1/chat/completions. Last successful endpoint: $resolved."
+                            stringResource(R.string.provider_image_footer_auto_resolved, resolved)
                         } else {
-                            "Auto: tries /v1/images/generations first, falls back to /v1/chat/completions. Caches the working endpoint after the first call."
+                            stringResource(R.string.provider_image_footer_auto)
                         }
                     com.openminis.app.data.model.ImageEndpointMode.imagesGenerations ->
-                        "Always use /v1/images/generations."
+                        stringResource(R.string.provider_image_footer_images)
                     com.openminis.app.data.model.ImageEndpointMode.chatCompletions ->
-                        "Always use /v1/chat/completions (multimodal output)."
+                        stringResource(R.string.provider_image_footer_chat)
                 },
             ) {
                 SettingsCardBlock {
@@ -871,7 +877,7 @@ private fun OAuthCredentialBlock(
             )
             if (needsReauth) {
                 Text(
-                    "Login expired — sign in again",
+                    stringResource(R.string.provider_oauth_login_expired),
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodySmall,
                 )
@@ -879,7 +885,7 @@ private fun OAuthCredentialBlock(
         } else {
             Spacer(modifier = Modifier.weight(1f))
             Text(
-                "Not connected",
+                stringResource(R.string.provider_oauth_not_connected),
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -1065,26 +1071,12 @@ private fun exportProviderInstance(
     val file = java.io.File(dir, "$safeLabel.json")
     runCatching { file.writeText(json) }.onFailure { return }
 
-    val uri = try {
-        androidx.core.content.FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.fileprovider",
-            file,
-        )
-    } catch (_: Throwable) {
-        return
-    }
-
-    val sendIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-        type = "application/json"
-        putExtra(android.content.Intent.EXTRA_STREAM, uri)
-        putExtra(android.content.Intent.EXTRA_SUBJECT, "$safeLabel.json")
-        addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-    }
-    val chooser = android.content.Intent.createChooser(sendIntent, "Export provider").apply {
-        addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-    }
-    context.startActivity(chooser)
+    // [T-share-fileprovider-unify] Shared FileProvider helper (clip + double
+    // grant hardening, previously missing on this variant).
+    shareViaFileProvider(
+        context, file, "application/json",
+        context.getString(R.string.provider_share_chooser_title),
+    )
 }
 
 /**
@@ -1154,7 +1146,7 @@ private fun ManualBearerTokenSection(
     if (hasToken) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                "Configured",
+                stringResource(R.string.provider_oauth_token_configured),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f),

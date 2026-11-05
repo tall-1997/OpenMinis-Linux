@@ -225,7 +225,6 @@ private fun BackupTab(
     confirm: String,
     onConfirmChange: (String) -> Unit,
 ) {
-    val context = androidx.compose.ui.platform.LocalContext.current
     val selected by vm.selected.collectAsStateWithLifecycle()
     val encrypt by vm.encrypt.collectAsStateWithLifecycle()
     val maxFileSizeMB by vm.maxFileSizeMB.collectAsStateWithLifecycle()
@@ -252,17 +251,11 @@ private fun BackupTab(
         // Only a settled, fully-delivered run is dropped — a failure is the
         // one result worth coming back to.
         vm.clearSettledSuccess()
-        // [T-android-sessionlist-prefs-io] Both refreshes are pure disk work:
-        // refreshDestinations() constructs RcloneRemoteStore (first touch parses
-        // + decrypts the prefs file) and refreshHistory() reads and JSON-decodes
-        // records.json. They used to run on the main dispatcher — once on entry
-        // and again on EVERY ON_RESUME, i.e. every time the user came back from
-        // Manage Destinations. StateFlow writes from an IO thread are safe; the
-        // collectors receive them on their own dispatcher.
-        withContext(Dispatchers.IO) {
-            vm.refreshDestinations()
-            vm.refreshHistory()
-        }
+        // [T-android-backup-tab-double-refresh] The refreshes used to run here
+        // too, duplicating the ON_RESUME observer below ON EVERY ENTRY
+        // (ON_RESUME fires right after first composition). The observer alone
+        // covers first entry AND every return from Manage Destinations, so
+        // only it refreshes now.
     }
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {

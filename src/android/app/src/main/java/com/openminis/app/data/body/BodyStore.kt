@@ -1,14 +1,10 @@
 package com.openminis.app.data.body
 
-import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
+import com.openminis.app.util.Digest
 import java.io.DataInputStream
 import java.io.File
 import java.io.FileInputStream
 import java.security.MessageDigest
-import java.util.zip.Deflater
-import java.util.zip.DeflaterOutputStream
-import java.util.zip.InflaterInputStream
 import java.util.UUID
 
 /**
@@ -17,7 +13,14 @@ import java.util.UUID
  *
  * File layout: magic OMB1, uncompressed size (int), compressed size (int),
  * codec byte, payload. Declared uncompressed size above the cap is refused
- * before inflate.
+ * before reading.
+ *
+ * [Wave3-fix-7] Only CODEC_RAW is ever written ([writeFramed]); the
+ * deflate/inflate side channel had zero callers and its read branch was
+ * unreachable, so both were removed. The codec byte stays in the layout (and
+ * [CODEC_DEFLATE] stays defined) so old framed files keep parsing and the
+ * on-disk format stays forward-compatible; a body carrying a non-RAW codec is
+ * simply refused, exactly like an unknown codec value was.
  */
 open class BodyStore(private val root: File) {
     data class Put(val ok: Boolean, val ref: String? = null, val sha: String? = null, val error: String? = null)
@@ -91,10 +94,10 @@ open class BodyStore(private val root: File) {
         val (uncompressed, stored, codec) = parsed
         if (uncompressed < 0 || uncompressed > ResourceLimits.MAX_DECLARED_UNCOMPRESSED ||
             stored < 0 || stored.toLong() != inputLength) return null
-        if (codec == CODEC_RAW && uncompressed != stored) return null
-        if (codec == CODEC_DEFLATE && (stored == 0 ||
-                uncompressed > stored.toLong() * ResourceLimits.MAX_EXPANSION_RATIO)) return null
-        if (codec != CODEC_RAW && codec != CODEC_DEFLATE) return null
+        // [Wave3-fix-7] RAW only: DEFLATE payloads were never written by any
+        // build path that survives, and the inflate side channel is gone.
+        if (codec != CODEC_RAW) return null
+        if (uncompressed != stored) return null
         val bounded = maxBytes.coerceIn(0, uncompressed)
         val reservation = bounded.toLong() + IO_CHUNK_BYTES
         if (!Admission.tryAdmit(reservation)) return null
@@ -111,8 +114,8 @@ open class BodyStore(private val root: File) {
                     }
                 }
             } catch (_: Exception) { return null }
-            val decoded = if (codec == CODEC_RAW) payloadStream else InflaterInputStream(payloadStream)
-            decoded.use { input ->
+            // [Wave3-fix-7] Codec is guaranteed RAW here — the payload IS the body.
+            payloadStream.use { input ->
                 val chunk = ByteArray(IO_CHUNK_BYTES)
                 var total = 0
                 var prefixWritten = 0
@@ -161,50 +164,12 @@ open class BodyStore(private val root: File) {
         }
     }
 
-    private fun deflate(bytes: ByteArray): ByteArray {
-        val out = ByteArrayOutputStream()
-        DeflaterOutputStream(out, Deflater(Deflater.BEST_SPEED)).use { it.write(bytes) }
-        return out.toByteArray()
-    }
+    // [Wave3-fix-7] deflate / inflateCapped / readBounded deleted: zero callers
+    // anywhere in the repository (the DEFLATE read branch in [read] was the only
+    // thing keeping the shape alive, and writeFramed only ever emits CODEC_RAW).
 
-    private fun inflateCapped(payload: ByteArray, declared: Int): ByteArray? {
-        val out = ByteArray(declared)
-        return try {
-            InflaterInputStream(ByteArrayInputStream(payload)).use { input ->
-                var off = 0
-                while (off < declared) {
-                    val n = input.read(out, off, declared - off)
-                    if (n < 0) return null
-                    off += n
-                }
-                if (input.read() != -1) return null
-            }
-            out
-        } catch (_: java.io.IOException) {
-            null
-        }
-    }
-
-    private fun readBounded(file: File): ByteArray? {
-        val len = file.length()
-        if (len < HEADER || len > HEADER + ResourceLimits.MAX_DECLARED_UNCOMPRESSED.toLong()) return null
-        val out = ByteArray(len.toInt())
-        file.inputStream().use { input ->
-            var off = 0
-            while (off < out.size) {
-                val n = input.read(out, off, out.size - off)
-                if (n < 0) return null
-                off += n
-            }
-            if (input.read() != -1) return null
-        }
-        return out
-    }
-
-    private fun sha256(bytes: ByteArray): String {
-        val digest = MessageDigest.getInstance("SHA-256").digest(bytes)
-        return digest.joinToString("") { "%02x".format(it) }
-    }
+    /** [T-sha256-single-source] Shared hex digest. */
+    private fun sha256(bytes: ByteArray): String = Digest.sha256Hex(bytes)
 
     private fun intBytes(value: Int): ByteArray = byteArrayOf(
         (value ushr 24).toByte(),
@@ -221,7 +186,15 @@ open class BodyStore(private val root: File) {
 
     companion object {
         private val MAGIC = byteArrayOf('O'.code.toByte(), 'M'.code.toByte(), 'B'.code.toByte(), '1'.code.toByte())
+        /** The only codec [writeFramed] writes. */
         private const val CODEC_RAW = 1
+        /**
+         * Reserved codec byte for legacy framed files. No writer emits it since
+         * [Wave3-fix-7] (the deflate channel was dead); [read] refuses it like
+         * any unknown codec, and the value stays documented so the on-disk
+         * layout keeps its meaning.
+         */
+        @Suppress("unused")
         private const val CODEC_DEFLATE = 2
         private const val HEADER = 13
         private const val IO_CHUNK_BYTES = 64 * 1024

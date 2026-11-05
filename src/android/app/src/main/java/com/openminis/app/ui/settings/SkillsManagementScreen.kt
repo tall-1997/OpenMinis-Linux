@@ -114,6 +114,10 @@ fun SkillsManagementScreen(
     var showA11yRecord by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    // [T-android-sessionlist-prefs-io] Skill ids whose enabled-write is still
+    // in flight — the row's switch is disabled while present (anti double-tap).
+    var togglingSkillIds by remember { mutableStateOf(emptySet<String>()) }
 
     // Sort preference — persisted like the file browser's (SharedPreferences, default name ascending). Mirrors iOS skillsList.sortKey/sortAscending.
     //
@@ -301,6 +305,10 @@ fun SkillsManagementScreen(
                         trailing = {
                             // Source badge + Switch. Wrapping in a Row keeps
                             // them visually grouped before the row's chevron.
+                            // [T-android-sessionlist-prefs-io] setEnabled writes
+                            // the disable-marker prefs + DB row — off the main
+                            // thread now, with the switch disabled while its
+                            // write is in flight so rapid re-taps can't race.
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
                                     badgeIcon,
@@ -311,7 +319,16 @@ fun SkillsManagementScreen(
                                 Spacer(Modifier.width(8.dp))
                                 SettingsSwitch(
                                     checked = skill.isEnabled,
-                                    onCheckedChange = { skillRepository.setEnabled(skill.id, it) },
+                                    enabled = skill.id !in togglingSkillIds,
+                                    onCheckedChange = { on ->
+                                        togglingSkillIds = togglingSkillIds + skill.id
+                                        scope.launch {
+                                            withContext(Dispatchers.IO) {
+                                                skillRepository.setEnabled(skill.id, on)
+                                            }
+                                            togglingSkillIds = togglingSkillIds - skill.id
+                                        }
+                                    },
                                 )
                             }
                         },
@@ -397,8 +414,15 @@ fun SkillsManagementScreen(
             text = { Text(stringResource(R.string.skill_delete_confirm_text)) },
             confirmButton = {
                 MinisTextButton(onClick = {
-                    deleteSkillId?.let { skillRepository.delete(it) }
+                    // [T-android-sessionlist-prefs-io] delete() rewrites the
+                    // skill directory + DB row — off the main thread.
+                    val id = deleteSkillId
                     deleteSkillId = null
+                    if (id != null) {
+                        scope.launch {
+                            withContext(Dispatchers.IO) { skillRepository.delete(id) }
+                        }
+                    }
                 }) { Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
@@ -578,13 +602,25 @@ private fun SkillImportSheet(
                                     }
                                 }
                                 1 -> {
-                                    val result = skillRepository.importFromContent(pasteContent)
-                                    if (result != null) onDismiss()
-                                    else errorText = context.getString(R.string.skill_import_error_format)
+                                    // [T-android-sessionlist-prefs-io] Same shape
+                                    // as the URL import above: importFromContent
+                                    // parses + writes the skill tree and DB row,
+                                    // so it runs on IO; only state writes stay on
+                                    // main. The button already shows the in-progress
+                                    // label while isLoading.
+                                    isLoading = true
+                                    scope.launch {
+                                        val result = withContext(Dispatchers.IO) {
+                                            skillRepository.importFromContent(pasteContent)
+                                        }
+                                        isLoading = false
+                                        if (result != null) onDismiss()
+                                        else errorText = context.getString(R.string.skill_import_error_format)
+                                    }
                                 }
                             }
                         },
-                        enabled = when (selectedTab) { 0 -> urlText.isNotBlank() && !isLoading; 1 -> pasteContent.isNotBlank(); else -> false },
+                        enabled = when (selectedTab) { 0 -> urlText.isNotBlank() && !isLoading; 1 -> pasteContent.isNotBlank() && !isLoading; else -> false },
                     ) { Text(if (isLoading) stringResource(R.string.skill_import_in_progress) else stringResource(R.string.skill_import_submit)) }
                 }
             }
@@ -608,8 +644,18 @@ fun SkillDetailScreen(
     val skill = skills.find { it.id == skillId }
     var deleted by remember { mutableStateOf(false) }
 
-    if (skill == null && !deleted) { onBack(); return }
-    if (skill == null) return // Already deleted, just stop rendering
+    // [T-compose-nav-in-composition] Calling onBack() during composition
+    // navigates while this frame is still being built (and Compose flags
+    // side effects in composition). The navigation now happens in a
+    // LaunchedEffect once the skill turns out to be missing; the body only
+    // early-returns (rendering nothing) when there is no skill to show.
+    // Keyed on the null-ness too so a mid-session deletion (repo flow
+    // dropping the skill) still navigates, like the old composition-body
+    // check did on every recomposition.
+    LaunchedEffect(skillId, deleted, skill == null) {
+        if (skill == null && !deleted) onBack()
+    }
+    if (skill == null) return // Already deleted or not loaded yet — render nothing
 
     var showDeleteDialog by remember { mutableStateOf(false) }
     // T155: name editing now happens in a modal dialog instead of an inline
@@ -754,7 +800,7 @@ fun SkillDetailScreen(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                     )
                 }
-                DetailDivider()
+                DetailDivider(insetEnd = 14.dp, alpha = 0.5f)
 
                 // Version
                 DetailRow {
@@ -762,7 +808,7 @@ fun SkillDetailScreen(
                     Spacer(Modifier.weight(1f))
                     Text(skill.version, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                DetailDivider()
+                DetailDivider(insetEnd = 14.dp, alpha = 0.5f)
 
                 // Last Modified
                 DetailRow {
@@ -770,7 +816,7 @@ fun SkillDetailScreen(
                     Spacer(Modifier.weight(1f))
                     Text(relativeTime(skill.updatedAt), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                DetailDivider()
+                DetailDivider(insetEnd = 14.dp, alpha = 0.5f)
 
                 // Source
                 DetailRow {
@@ -807,7 +853,7 @@ fun SkillDetailScreen(
                         Text(stringResource(R.string.skill_detail_update_url), color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
                         Text(relativeTime(skill.updatedAt), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    DetailDivider()
+                    DetailDivider(insetEnd = 14.dp, alpha = 0.5f)
                 }
 
                 DetailRow(clickable = !isBusy, onClick = {
@@ -818,14 +864,21 @@ fun SkillDetailScreen(
                     Spacer(Modifier.width(14.dp))
                     Text(stringResource(R.string.skill_detail_update_file), color = MaterialTheme.colorScheme.primary)
                 }
-                DetailDivider()
+                DetailDivider(insetEnd = 14.dp, alpha = 0.5f)
 
                 DetailRow(clickable = !isBusy, onClick = {
                     if (isBusy) return@DetailRow
                     updateStatus = UpdateStatus.InProgress(context.getString(R.string.skill_detail_status_rescanning))
-                    val refreshed = skillRepository.rescanFromDisk(skill.id)
-                    updateStatus = if (refreshed != null) UpdateStatus.Done
-                        else UpdateStatus.Failed(context.getString(R.string.skill_detail_error_missing))
+                    // [T-android-sessionlist-prefs-io] rescanFromDisk re-reads
+                    // the skill tree from disk — off the main thread, same
+                    // shape as the URL update path above.
+                    scope.launch {
+                        val refreshed = withContext(Dispatchers.IO) {
+                            skillRepository.rescanFromDisk(skill.id)
+                        }
+                        updateStatus = if (refreshed != null) UpdateStatus.Done
+                            else UpdateStatus.Failed(context.getString(R.string.skill_detail_error_missing))
+                    }
                 }) {
                     SettingsActionIcon(m3Icon(Icons.Default.Refresh), SettingsIconGreen)
                     Spacer(Modifier.width(14.dp))
@@ -837,7 +890,7 @@ fun SkillDetailScreen(
                 // clears it back to Idle.
                 when (val s = updateStatus) {
                     is UpdateStatus.InProgress -> {
-                        DetailDivider()
+                        DetailDivider(insetEnd = 14.dp, alpha = 0.5f)
                         DetailRow {
                             CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
                             Spacer(Modifier.width(10.dp))
@@ -845,7 +898,7 @@ fun SkillDetailScreen(
                         }
                     }
                     is UpdateStatus.Done -> {
-                        DetailDivider()
+                        DetailDivider(insetEnd = 14.dp, alpha = 0.5f)
                         DetailRow {
                             Icon(m3Icon(Icons.Default.CheckCircle), contentDescription = null, tint = IosGreen, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(10.dp))
@@ -853,7 +906,7 @@ fun SkillDetailScreen(
                         }
                     }
                     is UpdateStatus.Failed -> {
-                        DetailDivider()
+                        DetailDivider(insetEnd = 14.dp, alpha = 0.5f)
                         DetailRow {
                             Icon(m3Icon(Icons.Default.Error), contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(10.dp))
@@ -891,7 +944,7 @@ fun SkillDetailScreen(
             }
             DetailSection(header = stringResource(R.string.skills_section_files)) {
                 skillFiles.forEachIndexed { index, relativePath ->
-                    if (index > 0) DetailDivider()
+                    if (index > 0) DetailDivider(insetEnd = 14.dp, alpha = 0.5f)
                     DetailRow(clickable = true, onClick = { onFileClick(skill.id, relativePath) }) {
                         Icon(m3Icon(Icons.Outlined.Description), contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(10.dp))
@@ -936,9 +989,17 @@ fun SkillDetailScreen(
             confirmButton = {
                 MinisTextButton(onClick = {
                     deleted = true
-                    skillRepository.delete(skill.id)
                     showDeleteDialog = false
-                    onBack()
+                    // [T-android-sessionlist-prefs-io] delete() removes the
+                    // skill tree + DB row — off the main thread. onBack is
+                    // deferred until the delete completes so the coroutine
+                    // (bound to this composition's scope) is not cancelled
+                    // mid-write; `deleted` above stops the missing-skill
+                    // LaunchedEffect from navigating first.
+                    scope.launch {
+                        withContext(Dispatchers.IO) { skillRepository.delete(skill.id) }
+                        onBack()
+                    }
                 }) { Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
@@ -967,8 +1028,15 @@ fun SkillDetailScreen(
                 val canSave = trimmed.isNotEmpty() && trimmed != skill.name
                 MinisTextButton(
                     onClick = {
-                        if (canSave) skillRepository.update(skill.id, name = trimmed)
                         showEditNameDialog = false
+                        // [T-android-sessionlist-prefs-io] update() rewrites
+                        // SKILL.md + the DB row — off the main thread.
+                        if (canSave) {
+                            val id = skill.id
+                            scope.launch {
+                                withContext(Dispatchers.IO) { skillRepository.update(id, name = trimmed) }
+                            }
+                        }
                     },
                     enabled = canSave,
                 ) { Text(stringResource(R.string.skill_file_save)) }
@@ -980,64 +1048,9 @@ fun SkillDetailScreen(
     }
 }
 
-/** A grouped card section matching iOS List section style. */
-@Composable
-private fun DetailSection(
-    header: String? = null,
-    content: @Composable () -> Unit,
-) {
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
-    ) {
-        if (header != null) {
-            Text(
-                text = header.uppercaseForDisplay(),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
-                letterSpacing = 0.5.sp,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-            )
-        }
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(MaterialTheme.colorScheme.surfaceContainerLow),
-        ) {
-            content()
-        }
-    }
-}
-
-@Composable
-private fun DetailRow(
-    clickable: Boolean = false,
-    onClick: () -> Unit = {},
-    content: @Composable () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(if (clickable) Modifier.clickable(onClick = onClick) else Modifier)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        content()
-    }
-}
-
-@Composable
-private fun DetailDivider() {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 14.dp, end = 14.dp)
-            .height(0.5.dp)
-            .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-    )
-}
+// [T-detail-rows-unify] DetailSection / DetailRow / DetailDivider moved to the
+// shared DetailRows.kt (previously private copies here, duplicated in
+// BackupHistoryDetailScreen and UsageStatsScreen).
 
 /**
  * [T-android-skill-export] Hand an exported skill zip to the system share
@@ -1051,25 +1064,12 @@ private fun DetailDivider() {
  * sweeps exports older than 24h before each new export instead.
  */
 private fun shareSkillZip(context: android.content.Context, zip: java.io.File) {
-    val uri = try {
-        androidx.core.content.FileProvider.getUriForFile(
-            context, "${context.packageName}.fileprovider", zip,
+    // [T-share-fileprovider-unify] Shared FileProvider helper (clip + double
+    // grant hardening, previously missing on this variant).
+    if (!shareViaFileProvider(
+            context, zip, "application/zip", context.getString(R.string.skill_export_share),
         )
-    } catch (t: Throwable) {
-        Toast.makeText(context, context.getString(R.string.skill_export_failed), Toast.LENGTH_SHORT).show()
-        return
-    }
-    val sendIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-        type = "application/zip"
-        putExtra(android.content.Intent.EXTRA_STREAM, uri)
-        putExtra(android.content.Intent.EXTRA_SUBJECT, zip.name)
-        addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-    }
-    val chooser = android.content.Intent.createChooser(
-        sendIntent,
-        context.getString(R.string.skill_export_share),
-    ).apply { addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK) }
-    runCatching { context.startActivity(chooser) }.onFailure {
+    ) {
         Toast.makeText(context, context.getString(R.string.skill_export_failed), Toast.LENGTH_SHORT).show()
     }
 }
@@ -1103,20 +1103,27 @@ private fun stripMarkdown(text: String): String {
         .take(120)
 }
 
-/** Format millis as relative time string (matching iOS). */
+/** Format millis as relative time string (matching iOS).
+ *  [T-hardcoded-strings] The manual "just now"/"min ago"/"hr ago"/"days ago"
+ *  branches were English-only; `DateUtils.getRelativeTimeSpanString` is the
+ *  repository's existing localized relative-time mechanism (GitPanelScreen,
+ *  McpApprovalSection use it too) and follows the device locale. Sub-minute
+ *  uses second resolution so "just now"-style output stays precise. */
 private fun relativeTime(millis: Long): String {
     val now = System.currentTimeMillis()
     val diff = now - millis
-    val minutes = diff / 60_000
-    val hours = diff / 3_600_000
-    val days = diff / 86_400_000
-    return when {
-        minutes < 1 -> "just now"
-        minutes < 60 -> "$minutes min ago"
-        hours < 24 -> "$hours hr ago"
-        days < 30 -> "$days days ago"
-        else -> IsoTime.formatLocalDate(millis)
+    val resolution = if (diff < 60_000) {
+        android.text.format.DateUtils.SECOND_IN_MILLIS
+    } else {
+        android.text.format.DateUtils.MINUTE_IN_MILLIS
     }
+    if (diff >= 30 * 86_400_000L) {
+        // Past a month falls back to the absolute date, as before.
+        return IsoTime.formatLocalDate(millis)
+    }
+    return android.text.format.DateUtils.getRelativeTimeSpanString(
+        millis, now, resolution,
+    ).toString()
 }
 
 // ─── Skill File Viewer Screen (full page, matching iOS) ─────────────────────
@@ -1131,7 +1138,14 @@ fun SkillFileViewerScreen(
 ) {
     val skills by skillRepository.skills.collectAsStateWithLifecycle()
     val skill = skills.find { it.id == skillId }
-    if (skill == null) { onBack(); return }
+
+    // [T-compose-nav-in-composition] Navigation out of composition — see
+    // SkillDetailScreen. The body early-returns (renders nothing) instead;
+    // keyed on the null-ness so a mid-session deletion still navigates.
+    LaunchedEffect(skillId, skill == null) {
+        if (skill == null) onBack()
+    }
+    if (skill == null) return
 
     val isSkillMd = relativePath.equals("SKILL.md", ignoreCase = true)
     val fileName = relativePath.substringAfterLast('/')
@@ -1159,6 +1173,7 @@ fun SkillFileViewerScreen(
 
     var isEditing by remember { mutableStateOf(false) }
     var editContent by remember(skillId, relativePath) { mutableStateOf(initialContent) }
+    val scope = rememberCoroutineScope()
 
     Scaffold(
         topBar = {
@@ -1172,15 +1187,23 @@ fun SkillFileViewerScreen(
                 actions = {
                     if (isEditing) {
                         MinisTextButton(onClick = {
-                            if (isSkillMd) {
-                                // SKILL.md edits go through importFromContent so
-                                // YAML frontmatter changes flow back into DB metadata.
-                                skillRepository.importFromContent(editContent, skill.importSource)
-                            } else {
-                                skillRepository.writeSkillFile(skillId, relativePath, editContent)
-                            }
                             isEditing = false
-                            onBack()
+                            // [T-android-sessionlist-prefs-io] importFromContent /
+                            // writeSkillFile parse + rewrite the file tree and DB
+                            // row — off the main thread. onBack waits for the save
+                            // so this composition's scope isn't cancelled mid-write.
+                            scope.launch {
+                                withContext(Dispatchers.IO) {
+                                    if (isSkillMd) {
+                                        // SKILL.md edits go through importFromContent so
+                                        // YAML frontmatter changes flow back into DB metadata.
+                                        skillRepository.importFromContent(editContent, skill.importSource)
+                                    } else {
+                                        skillRepository.writeSkillFile(skillId, relativePath, editContent)
+                                    }
+                                }
+                                onBack()
+                            }
                         }) { Text(stringResource(R.string.skill_file_save)) }
                     } else {
                         MinisTextButton(onClick = {

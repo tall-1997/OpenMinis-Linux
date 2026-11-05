@@ -114,6 +114,10 @@ object NativeOffloadServer {
      */
     private const val HANDLER_TIMEOUT_MS = 20_000L
 
+    /** Fixed pool sizes (see the pool docs above [workerPool]). */
+    private const val WORKER_POOL_SIZE = 4
+    private const val HANDLER_POOL_SIZE = 4
+
     const val socketName: String = SOCKET_NAME
 
     /**
@@ -134,6 +138,31 @@ object NativeOffloadServer {
     private val counter = AtomicLong(0)
     private var serverSocket: LocalServerSocket? = null
     private var acceptThread: Thread? = null
+
+    /**
+     * Fixed pools (created in start, shut down in stop) replace the old
+     * thread-per-request spawns, which leaked an unbounded pair of threads
+     * under a chatty guest.
+     *
+     * Watchdog note: a handler that outlives its deadline keeps running on a
+     * [handlerPool] thread (the watchdog only releases the CLIENT, it cannot
+     * kill the handler — Java cannot safely kill a thread). In-guest prompts
+     * are capped internally (~4min worst case), so pool saturation is bounded;
+     * while saturated, excess requests still get an immediate
+     * `handler_timeout` reply from the grace-poll branch, so no client ever
+     * blocks.
+     */
+    @Volatile
+    private var workerPool: java.util.concurrent.ExecutorService? = null
+    @Volatile
+    private var handlerPool: java.util.concurrent.ExecutorService? = null
+
+    private fun newPool(name: String, size: Int): java.util.concurrent.ExecutorService {
+        val seq = java.util.concurrent.atomic.AtomicInteger(0)
+        return java.util.concurrent.Executors.newFixedThreadPool(size) { r ->
+            Thread(r, "$name-${seq.incrementAndGet()}").apply { isDaemon = true }
+        }
+    }
 
     @Volatile
     private var rootfsTmpDir: File? = null
@@ -178,6 +207,8 @@ object NativeOffloadServer {
                 "previous process holding the namespace?",
             )
         serverSocket = s
+        workerPool = newPool("native-offload-worker", WORKER_POOL_SIZE)
+        handlerPool = newPool("native-offload-handler", HANDLER_POOL_SIZE)
         acceptThread = thread(name = "native-offload-accept", isDaemon = true) {
             runAcceptLoop(s)
         }
@@ -260,6 +291,12 @@ object NativeOffloadServer {
         try { serverSocket?.close() } catch (_: Exception) {}
         serverSocket = null
         acceptThread = null
+        // shutdown() (not shutdownNow): an in-flight handler still gets to
+        // reply to its client; daemon threads mean nothing blocks process exit.
+        workerPool?.shutdown()
+        handlerPool?.shutdown()
+        workerPool = null
+        handlerPool = null
     }
 
     private fun runAcceptLoop(s: LocalServerSocket) {
@@ -271,7 +308,14 @@ object NativeOffloadServer {
                 return
             }
             Log.d(TAG, "accepted client from proot extension")
-            thread(name = "native-offload-worker", isDaemon = true) {
+            // Pooled worker instead of a thread per connection: each connection
+            // is short (one request → reply), so a small fixed pool is enough.
+            val pool = workerPool
+            if (pool == null || pool.isShutdown) {
+                runCatching { client.close() }
+                continue
+            }
+            pool.execute {
                 try {
                     handleClient(client)
                 } catch (e: Exception) {
@@ -469,7 +513,15 @@ object NativeOffloadServer {
     ): NativeOffloadResult {
         val timeoutMs = handlerDeadlineMs(name, request.argv)
         val slot = ArrayBlockingQueue<NativeOffloadResult>(1)
-        thread(name = "native-offload-handler", isDaemon = true) {
+        // Pooled instead of a thread per request; the three-state gate below is
+        // unchanged (coroutine deadline → timeout body; queue poll grace →
+        // synthesized timeout reply). A saturated pool just shifts work to the
+        // grace branch — the client is still always answered.
+        val pool = handlerPool
+        if (pool == null || pool.isShutdown) {
+            return handlerTimeoutResult(name, timeoutMs, request)
+        }
+        pool.execute {
             val result = try {
                 // The coroutine deadline is what lets a suspending confirmation
                 // gate observe cancellation instead of sitting in runBlocking.

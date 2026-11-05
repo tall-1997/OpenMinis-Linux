@@ -11,33 +11,35 @@ import org.json.JSONObject
 import java.io.File
 
 /**
- * [T-mcp-approval] JSON-RPC surface for the three-phase approval flow,
- * mounted under the `phone_` method family. All decision logic lives in
- * [McpApprovalCore]; this class only maps params to outcomes and outcomes to
- * JSON-RPC envelopes.
+ * [T-mcp-approval] JSON-RPC surface for the three-phase approval flow.
+ * All decision logic lives in [McpApprovalCore]; this class only maps params
+ * to outcomes and outcomes to JSON-RPC envelopes.
  *
- * Method table:
- *  - phone_task_request    plan a task grant (PENDING) → {taskId, status}
- *  - phone_local_run       submit one run (WAITING) → {taskId, operationId, requestId, status, approvalTtlMs}
+ * [P1-dead-branches] The REAL call graph has exactly two entry points:
+ *  - External MCP clients: only the 4 methods in [EXTERNAL_METHODS] reach
+ *    [handle], and only through the tool surface ([com.openminis.app.mcp.server.tools.ApprovalTools].
+ *    invoke, which gates on [isExternalMethod] first). An external caller can
+ *    *request* and *run*, it can never grant itself permission.
+ *  - The approvals UI ([com.openminis.app.ui.settings.McpApprovalSection])
+ *    calls [McpApprovalManager] DIRECTLY (approveTask / revokeTask /
+ *    approveOperation / cancelOperation / pruneExpired) and uses
+ *    [executeApproved] for runs — it never goes through [handle].
+ *
+ * Everything else (task list / delete / cleanup / revoke over RPC) used to sit
+ * here as unreachable `phone_*` branches and was removed — git history keeps
+ * the shapes. The phone-only actions remain available exactly where they
+ * always were reachable from: the in-process UI.
+ *
+ * Reachable method table:
+ *  - phone_task_request     plan a task grant (PENDING) → {taskId, status}
+ *  - phone_local_run        submit one run (WAITING) → {taskId, operationId, requestId, status, approvalTtlMs}
  *  - phone_operation_execute run an APPROVED operation (source + fingerprint checked)
  *  - phone_task_status      read-only view: one operation, or a task with all its operations
- *
- * Phone-only methods (the approvals UI calls them in-process; they are never
- * reachable from the HTTP tool surface):
- *  - phone_task_approve    task grant PENDING → ACTIVE → {status, approvalTtlMs}
- *  - phone_task_approve_op per-run grant WAITING → APPROVED (source binding optional)
- *  - phone_task_revoke     revoke task + outstanding runs → {status}
- *  - phone_task_list       full state dump for the approvals UI
- *  - phone_task_cancel     drop one WAITING operation
- *  - phone_task_cleanup    prune expired grants + stale task dirs
- *  - phone_task_delete     delete task + all its operations + task dir
  */
 class McpApprovalRpc(
     private val manager: McpApprovalManager,
     private val executor: McpApprovalExecutor,
 ) {
-
-    fun isApprovalMethod(method: String): Boolean = method.startsWith("phone_")
 
     /**
      * The three-phase surface an external MCP client may reach — exposed as
@@ -50,15 +52,8 @@ class McpApprovalRpc(
         when (method) {
             "phone_task_request" -> handleTaskCreate(params, id)
             "phone_local_run" -> handleLocalRun(params, id)
-            "phone_task_approve" -> handleTaskApprove(params, id)
-            "phone_task_revoke" -> handleTaskRevoke(params, id)
-            "phone_task_list" -> handleTaskList(params, id)
             "phone_task_status" -> handleTaskStatus(params, id)
-            "phone_task_approve_op" -> handleApproveOperation(params, id)
             "phone_operation_execute" -> handleExecute(params, id)
-            "phone_task_cancel" -> handleCancel(params, id)
-            "phone_task_cleanup" -> handleCleanup(params, id)
-            "phone_task_delete" -> handleDelete(params, id)
             else -> McpServerCore.rpcError(id, -32601, "Unknown method: $method")
         }
     } catch (t: Throwable) {
@@ -118,37 +113,6 @@ class McpApprovalRpc(
             .put("status", TaskStatus.PENDING.name))
     }
 
-    private fun handleTaskApprove(params: JSONObject?, id: Any?): Response {
-        val taskId = str(params, "taskId") ?: return err(id, ErrorCode.INVALID_ID, "missing taskId")
-        val out = manager.approveTask(taskId)
-        val result = JSONObject()
-            .put("taskId", taskId)
-            .put("status", if (out is Outcome.Ok) TaskStatus.ACTIVE.name else manager.task(taskId)?.status?.name ?: "UNKNOWN")
-            .put("approvalTtlMs", McpApprovalCore.APPROVAL_TTL_MS)
-        return outcome(id, out, result)
-    }
-
-    private fun handleTaskRevoke(params: JSONObject?, id: Any?): Response {
-        val taskId = str(params, "taskId") ?: return err(id, ErrorCode.INVALID_ID, "missing taskId")
-        val out = manager.revokeTask(taskId)
-        return outcome(id, out, JSONObject()
-            .put("taskId", taskId)
-            .put("status", if (out is Outcome.Ok) TaskStatus.REVOKED.name else manager.task(taskId)?.status?.name ?: "UNKNOWN"))
-    }
-
-    private fun handleTaskList(params: JSONObject?, id: Any?): Response {
-        val state = manager.state()
-        val tasks = org.json.JSONArray()
-        state.tasks.values.sortedBy { it.createdAtMs }.forEach { tasks.put(taskJson(it)) }
-        val ops = org.json.JSONArray()
-        state.operations.values.sortedBy { it.createdAtMs }
-            .forEach { ops.put(opJson(it, it.operationId in state.executedOperationIds)) }
-        return McpServerCore.jsonRpcResult(id, JSONObject()
-            .put("epoch", state.epoch)
-            .put("tasks", tasks)
-            .put("operations", ops))
-    }
-
     private fun handleLocalRun(params: JSONObject?, id: Any?): Response {
         val taskId = str(params, "taskId") ?: return err(id, ErrorCode.INVALID_ID, "missing taskId")
         val tool = str(params, "tool") ?: return err(id, ErrorCode.INVALID_NAME, "missing tool name")
@@ -197,16 +161,10 @@ class McpApprovalRpc(
         return McpServerCore.jsonRpcResult(id, taskJson(task).put("operations", operations))
     }
 
-    private fun handleApproveOperation(params: JSONObject?, id: Any?): Response {
-        val operationId = str(params, "operationId") ?: return err(id, ErrorCode.INVALID_ID, "missing operationId")
-        val sourceFileHash = str(params, "sourceFileHash")
-        val fingerprint = str(params, "operationFingerprint")
-        val out = manager.approveOperation(operationId, sourceFileHash, fingerprint)
-        return outcome(id, out, JSONObject()
-            .put("operationId", operationId)
-            .put("status", OperationStatus.APPROVED.name)
-            .put("approvalTtlMs", McpApprovalCore.APPROVAL_TTL_MS))
-    }
+    // [P1-dead-branches] handleApproveOperation / handleExecute's phone-only
+    // siblings (approve / revoke / list / cancel / cleanup / delete) were
+    // removed with their unreachable `handle` branches: the approvals UI goes
+    // through McpApprovalManager directly, never through this RPC surface.
 
     private fun handleExecute(params: JSONObject?, id: Any?): Response {
         val operationId = str(params, "operationId") ?: return err(id, ErrorCode.INVALID_ID, "missing operationId")
@@ -300,35 +258,5 @@ class McpApprovalRpc(
             result.put("content", stored.optJSONArray("content") ?: JSONArray())
         }
         return McpServerCore.jsonRpcResult(id, result)
-    }
-
-    private fun handleCancel(params: JSONObject?, id: Any?): Response {
-        val operationId = str(params, "operationId") ?: return err(id, ErrorCode.INVALID_ID, "missing operationId")
-        // Cancel = drop a WAITING operation; an executed one is immutable.
-        val out = manager.cancelOperation(operationId)
-        return outcome(id, out, JSONObject()
-            .put("operationId", operationId)
-            .put("status", "CANCELLED"))
-    }
-
-    private fun handleCleanup(params: JSONObject?, id: Any?): Response {
-        val (state, removed) = manager.pruneExpired()
-        // Delete task dirs whose operations were all pruned.
-        val orphanTaskIds = state.tasks.keys.filter { taskId ->
-            state.operations.none { it.value.taskId == taskId }
-        }
-        var dirsDeleted = 0
-        orphanTaskIds.forEach { if (manager.deleteTaskDirectory(it)) dirsDeleted++ }
-        return McpServerCore.jsonRpcResult(id, JSONObject()
-            .put("removed", removed.size)
-            .put("dirsDeleted", dirsDeleted))
-    }
-
-    private fun handleDelete(params: JSONObject?, id: Any?): Response {
-        val taskId = str(params, "taskId") ?: return err(id, ErrorCode.INVALID_ID, "missing taskId")
-        val out = manager.deleteTask(taskId)
-        return outcome(id, out, JSONObject()
-            .put("taskId", taskId)
-            .put("status", "DELETED"))
     }
 }

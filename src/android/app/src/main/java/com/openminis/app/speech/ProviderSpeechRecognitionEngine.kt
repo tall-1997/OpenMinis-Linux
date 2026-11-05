@@ -237,60 +237,15 @@ class ProviderSpeechRecognitionEngine(private val appContext: Context) : SpeechR
             // throws advances to the next; the first success becomes the
             // STICKY member for later takes; only when EVERY candidate fails
             // does the error surface (last error wins).
+            //
+            // [T-android-provider-asr-dedupe] The loop used to be inlined here
+            // AND in transcribeSegment — two verbatim copies that had already
+            // started drifting (only this one documented the empty-transcript
+            // semantics). The VAD path's [transcribeSegment] is now the single
+            // implementation; both callers differ only in how the WAV is built.
             transcribeJob = scope.launch {
                 val wav = VoiceProvider.wrapPcm16InWav(audio, SAMPLE_RATE)
-                // Sticky-first try order: rotate the chain so the last
-                // successful member goes first, the rest wrap around.
-                val ordered = stickyEntryId
-                    ?.let { sticky -> candidates.indexOfFirst { it.second.id == sticky } }
-                    ?.takeIf { it > 0 }
-                    ?.let { i -> candidates.drop(i) + candidates.take(i) }
-                    ?: candidates
-                var lastError: Exception? = null
-                for ((instance, entry) in ordered) {
-                    if (cancelled.get()) return@launch
-                    val provider = VoiceProviderFactory.make(instance, repo.loadApiKey(instance.id))
-                    if (provider == null) {
-                        Log.w(TAG, "candidate ${instance.label} cannot serve voice input — skipping")
-                        continue
-                    }
-                    try {
-                        val response = provider.transcribe(
-                            VoiceInputRequest(
-                                audioData = wav,
-                                model = entry.baseModel.id,
-                                language = locale.toLanguageTag(),
-                                resolvedModel = entry.model,
-                            ),
-                        )
-                        if (cancelled.get()) return@launch
-                        stickyEntryId = entry.id
-                        val text = response.text.trim()
-                        if (text.isEmpty()) {
-                            // A successful round-trip that heard nothing is a
-                            // semantic no-match, not a provider failure — do
-                            // NOT advance the chain for it.
-                            listener.onError(RecognitionError.NO_MATCH, "Empty transcription.")
-                        } else {
-                            listener.onFinal(text)
-                        }
-                        return@launch
-                    } catch (e: kotlinx.coroutines.CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        Log.e(TAG, "transcribe failed on ${entry.model.displayName}: ${e.message} — trying next candidate")
-                        lastError = e
-                    }
-                }
-                if (!cancelled.get()) {
-                    val e = lastError
-                    val kind = when {
-                        e is VoiceProviderException.Auth -> RecognitionError.PERMISSION_DENIED
-                        e is java.io.IOException -> RecognitionError.NETWORK
-                        else -> RecognitionError.UNKNOWN
-                    }
-                    listener.onError(kind, e?.message ?: "All voice-input candidates failed.")
-                }
+                transcribeSegment(wav, locale, repo, candidates, listener)
             }
         }
     }
@@ -423,7 +378,15 @@ class ProviderSpeechRecognitionEngine(private val appContext: Context) : SpeechR
         listener.onReadyForSpeech()
     }
 
-    /** Transcribe one segment. Extracted so the VAD and legacy paths share it. */
+    /**
+     * Transcribe one segment. Extracted so the VAD and legacy paths share it.
+     *
+     * Fail-over is SEAMLESS across the candidate chain (mirrors iOS
+     * transcribeWithFailover / VoiceOutputPlayer): a candidate that throws
+     * advances to the next; the first success becomes the STICKY member for
+     * later takes; only when EVERY candidate fails does the error surface
+     * (last error wins).
+     */
     private suspend fun transcribeSegment(
         wav: ByteArray,
         locale: Locale,
@@ -431,6 +394,8 @@ class ProviderSpeechRecognitionEngine(private val appContext: Context) : SpeechR
         candidates: List<Pair<com.openminis.app.data.model.ProviderInstance, com.openminis.app.data.model.ModelEntry>>,
         listener: SpeechRecognitionEngine.Listener,
     ) {
+        // Sticky-first try order: rotate the chain so the last successful
+        // member goes first, the rest wrap around.
         val ordered = stickyEntryId
             ?.let { sticky -> candidates.indexOfFirst { it.second.id == sticky } }
             ?.takeIf { it > 0 }
@@ -457,6 +422,9 @@ class ProviderSpeechRecognitionEngine(private val appContext: Context) : SpeechR
                 stickyEntryId = entry.id
                 val text = response.text.trim()
                 if (text.isEmpty()) {
+                    // A successful round-trip that heard nothing is a semantic
+                    // no-match, not a provider failure — do NOT advance the
+                    // chain for it.
                     listener.onError(RecognitionError.NO_MATCH, "Empty transcription.")
                 } else {
                     listener.onFinal(text)

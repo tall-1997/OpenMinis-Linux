@@ -253,6 +253,24 @@ class MinisApp : Application(), ImageLoaderFactory {
         // Chat bridge for debug/headless RPC — via the AppGraph registry.
         AppGraph.installChatBinder(com.openminis.app.ui.chat.ChatViewModelBinder(this))
 
+        // [Wave3 #4/#16] Live chat/session permission state for config (see
+        // com.openminis.app.di.ChatBinder). One facade composes the three
+        // sources config used to import directly — ui.chat.ChatViewModelStore
+        // (a forbiddenImports violation for the non-ui config layer),
+        // SecurityGateHolder and ApprovalGate — so ConfigBuiltins reads only
+        // the di slot. Unwired (unit tests) degrades to null/ASK/false there.
+        AppGraph.installChatStateBinder(object : com.openminis.app.di.ChatBinder {
+            override fun activeSessionId(): String? =
+                com.openminis.app.ui.chat.ChatViewModelStore.activeSessionId
+            override fun sessionMode(id: String?): String? =
+                com.openminis.app.security.effectivePermissionMode(
+                    com.openminis.app.security.SecurityGateHolder.activeSessionMode(id),
+                    com.openminis.app.service.ApprovalGate.isSessionAllowAll(id),
+                ).name
+            override fun sessionAllowAll(id: String?): Boolean =
+                com.openminis.app.service.ApprovalGate.isSessionAllowAll(id)
+        })
+
         // [T-codex-fast-mode] Capture the app context + warm the Fast Mode
         // flag cache so the provider layer (no Context) can read it at
         // request-build time — including offload / title-gen calls that
@@ -478,7 +496,13 @@ class MinisApp : Application(), ImageLoaderFactory {
         appContainer.chatRepository = ChatRepository(
             database.chatDao(), database.goalDao(), filesDir, database.messageVersionDao(), database,
         )
-        appContainer.evolutionEngine = runCatching {
+        // [Wave3 #17] The engine used to be registered twice — written to
+        // appContainer.evolutionEngine here AND installed into AppGraph on the
+        // next line — two registries that could drift. AppGraph is now the
+        // single source of truth (AppContainer.evolutionEngine is a compat
+        // getter delegating to AppGraph, so MinisApp.evolutionEngine /
+        // EvolutionSettingsScreen keep compiling and reading the same slot).
+        val evolutionEngineInstance = runCatching {
             EvolutionEngine(
                 context = this,
                 memoryRepository = memoryRepository,
@@ -489,7 +513,7 @@ class MinisApp : Application(), ImageLoaderFactory {
             )
         }.onFailure { Log.e("MinisApp", "evolution init failed", it) }.getOrNull()
         // Possibly null (runCatching-guarded); readers tolerate null.
-        AppGraph.installEvolutionEngine(appContainer.evolutionEngine)
+        AppGraph.installEvolutionEngine(evolutionEngineInstance)
         appContainer.webAppShortcutRepository = WebAppShortcutRepository(database.webAppShortcutDao())
         MinisAppAsyncInit.startWarmup(appContainer)
 
@@ -524,21 +548,48 @@ class MinisApp : Application(), ImageLoaderFactory {
             return
         }
 
-        // Load assets first so DEFAULT_CONTENT is the shipped persona.
-        // Do not force-overwrite SOUL.md. The 1.36.13 one-shot already ran on
-        // devices that installed it; a missing flag must not wipe an older persona.
-        com.openminis.app.agent.SoulStore.loadDefaultFromAssets(this)
-        com.openminis.app.agent.SoulStore.forceOverwriteOnce(this)
-        com.openminis.app.agent.SoulStore.ensureExists(this)
-        com.openminis.app.agent.SoulStore.upgradeStaleDefault(this)
-        com.openminis.app.agent.SoulStore.renameStockProduct(this)
-        com.openminis.app.agent.SoulStore.refreshCache(this)
+        // [Wave3 #12] The SoulStore six-step chain + identity/GLOBAL.md seeding
+        // moved off the onCreate critical path (was 6+ serialized file stats,
+        // asset reads and existence checks on the main thread). Consumer audit
+        // before the move:
+        //  - SoulStore.cachedMetadata is a StateFlow seeded with
+        //    SoulMetadata.DEFAULT; every reader (ChatTopBarSection,
+        //    ChatIndicators, ChatAssistantMessageUI, group-chat naming, …)
+        //    collects it reactively, so the UI re-renders when refreshCache
+        //    lands milliseconds later.
+        //  - SoulStore.load() readers (PersonaPromptLibrary, ConfigBuiltins
+        //    soul.* fields, SoulStore:642) read the FILE on demand with
+        //    DEFAULT_CONTENT fallback — they never read on the first frame.
+        //  - SystemPromptBuilder.identitySection() runs at prompt-build time
+        //    (first send), long after this IO launch completes.
+        //  - MemoryRepository readers fall back to the in-repo skeleton when
+        //    GLOBAL.md is absent (documented at MemoryRepository.kt:87).
+        //  - ConfigRegistry/ConfigAuditLog/MinisConfigPermissionStore stay
+        //    synchronous below: they are plain in-memory registration, and
+        //    ConfigRegistry.get() is consumed by offload/debug handlers whose
+        //    first dispatch can precede any IO tick.
+        appCoroutineScopes.io.launch {
+            // Load assets first so DEFAULT_CONTENT is the shipped persona.
+            // Do not force-overwrite SOUL.md. The 1.36.13 one-shot already ran on
+            // devices that installed it; a missing flag must not wipe an older persona.
+            runCatching {
+                com.openminis.app.agent.SoulStore.loadDefaultFromAssets(this@MinisApp)
+                com.openminis.app.agent.SoulStore.forceOverwriteOnce(this@MinisApp)
+                com.openminis.app.agent.SoulStore.ensureExists(this@MinisApp)
+                com.openminis.app.agent.SoulStore.upgradeStaleDefault(this@MinisApp)
+                com.openminis.app.agent.SoulStore.renameStockProduct(this@MinisApp)
+                com.openminis.app.agent.SoulStore.refreshCache(this@MinisApp)
 
-        // [T-global-md-seed + T-default-assets] Seed GLOBAL.md starter template
-        // on first launch (create-only; user edits are never overwritten).
-        com.openminis.app.agent.SystemPromptBuilder.loadIdentityFromAssets(this)
-        com.openminis.app.data.repository.MemoryRepository.loadGlobalDefaultFromAssets(this)
-        com.openminis.app.data.repository.MemoryRepository.ensureGlobalExists(this)
+                // [T-global-md-seed + T-default-assets] Seed GLOBAL.md starter
+                // template on first launch (create-only; user edits are never
+                // overwritten).
+                com.openminis.app.agent.SystemPromptBuilder.loadIdentityFromAssets(this@MinisApp)
+                com.openminis.app.data.repository.MemoryRepository.loadGlobalDefaultFromAssets(this@MinisApp)
+                com.openminis.app.data.repository.MemoryRepository.ensureGlobalExists(this@MinisApp)
+            }.onFailure {
+                android.util.Log.e("MinisApp", "soul/memory asset seeding failed", it)
+            }
+        }
 
         appCoroutineScopes.io.launch {
             runCatching { chatRepository.warmupWorkspaceOwners() }.onFailure {

@@ -325,6 +325,7 @@ private fun ChatViewModel.groupTools(provider: LLMProvider) = AgentTools.makeAge
     ),
     memoryEnabled = false,
     subAgentEnabled = false,
+    hasSpeechModel = providerRepository.resolveVoiceInputEntry() != null,
 ).filter { !SubAgentKind.blocks(SubAgentKind.PLAN, it.name) }
 
 private fun ChatViewModel.openingKey() = "opening:$groupChatPrefsId"

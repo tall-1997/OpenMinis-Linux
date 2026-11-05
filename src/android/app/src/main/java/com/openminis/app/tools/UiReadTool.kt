@@ -54,14 +54,27 @@ object UiReadTool {
               exit 127
             fi
         """.trimIndent()
+        // [T-a11y-host-shell] Was ProcessBuilder("/bin/bash","-c",script) on the
+        // host — stock Android has no /bin/bash host-side and the CLI stub lives
+        // in the guest rootfs, so every real device saw "Error: Cannot run
+        // program..." instead of a screen dump. Execute through the same guest
+        // path McpToolDispatcher/SkillReplayEngine migrated to
+        // (ExecutionCoordinator.execute); the -x probe above now runs INSIDE the
+        // guest, where /usr/local/bin actually resolves. A session-less caller
+        // (dispatcher not yet threading activeSessionId) shares the skill-replay
+        // lane's stable id — ExecutionCoordinator materializes its bind dirs on
+        // demand. 30s matches the mcp server's ui_read guest route.
+        val lane = sessionId ?: GUEST_LANE_ID
         return runCatching {
-            val process = ProcessBuilder("/bin/bash", "-c", script)
-                .redirectErrorStream(true)
-                .start()
-            val out = process.inputStream.bufferedReader().readText()
-            process.waitFor()
-            val exit = process.exitValue()
-            val trimmed = out.trim().take(cap)
+            val result = kotlinx.coroutines.runBlocking {
+                com.openminis.app.sandbox.ExecutionCoordinator.execute(
+                    sessionId = lane,
+                    command = script,
+                    timeout = GUEST_TIMEOUT_MS,
+                )
+            }
+            val exit = result.exitCode
+            val trimmed = result.output.trim().take(cap)
             var body = trimmed.ifBlank { "（屏幕为空或读屏失败——确认已授予无障碍权限：Settings → 权限）" }
             val code = when {
                 trimmed.contains("SERVICE_NOT_RUNNING") -> ToolErrorCode.PERMISSION_DENIED
@@ -87,4 +100,11 @@ object UiReadTool {
             ToolExecutionResult("Error: ${it.message}", false, errorCode = ToolErrorCode.EXECUTION_FAILED, toolTitle = toolTitle)
         }
     }
+
+    /**
+     * Stable internal lane for guest a11y commands issued without a chat
+     * session (same pattern as A11yReplay's "a11y-skill-replay" lane).
+     */
+    private const val GUEST_LANE_ID = "a11y-ui-tools"
+    private const val GUEST_TIMEOUT_MS = 30_000L
 }

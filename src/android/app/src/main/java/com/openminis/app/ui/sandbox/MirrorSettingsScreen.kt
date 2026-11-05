@@ -253,16 +253,28 @@ object MirrorSpeedTestViewModel {
         if (loaded) return
         synchronized(this) {
             if (loaded) return
-            val p = prefs(context)
-            for (cat in MirrorCategory.entries) {
-                val savedUrl = p.getString("mirror.selected.${cat.key}", null)
-                if (savedUrl != null) {
-                    val entry = MirrorCatalog.findByBaseURL(savedUrl)
-                    if (entry != null) selectedMirrorId[cat] = entry.id
-                }
-                useCustomMirror[cat] = p.getBoolean("mirror.useCustom.${cat.key}", false)
-            }
             loaded = true
+            // [T-android-mirror-prefs-io] (#20) The FIRST SharedPreferences
+            // read loads the prefs XML synchronously on the calling thread,
+            // and ensureLoaded was called straight from composition — a disk
+            // read on the main thread inside a frame, the exact pattern
+            // [T-android-sessionlist-prefs-io] fixed in SessionListViewModel
+            // (same fix shape: flag first so only one kick, then the read on
+            // IO; the SnapshotStateMaps are thread-safe so publishing from
+            // the IO coroutine is fine). Composition calls keep working
+            // unchanged; selections simply arrive a frame or two later
+            // instead of blocking the frame that renders the screen.
+            scope.launch {
+                val p = prefs(context.applicationContext)
+                for (cat in MirrorCategory.entries) {
+                    val savedUrl = p.getString("mirror.selected.${cat.key}", null)
+                    if (savedUrl != null) {
+                        val entry = MirrorCatalog.findByBaseURL(savedUrl)
+                        if (entry != null) selectedMirrorId[cat] = entry.id
+                    }
+                    useCustomMirror[cat] = p.getBoolean("mirror.useCustom.${cat.key}", false)
+                }
+            }
         }
     }
 

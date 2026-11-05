@@ -5,6 +5,14 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
+ * [Wave3 #7 — boundary note] PRODUCTION PATH DEPENDENCY: the provider hot
+ * path (provider/anthropic/AnthropicProvider, provider/openai/OpenAIRawStream)
+ * writes into this object on every LLM request. Despite living in `debug/`,
+ * it is production code on the per-request path — keep it allocation-light
+ * (see the T302 body cap below) and coordinate changes with the provider/
+ * owners. Planned follow-up (out of this wave's ownership, the call sites are
+ * in provider/): move it next to its writers or behind a logging/ interface.
+ *
  * Ring buffer that captures recent LLM API requests and responses for debugging.
  * Accessible via debug.llmRequests JSON-RPC method.
  */

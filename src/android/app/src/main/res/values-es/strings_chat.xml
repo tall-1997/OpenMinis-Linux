@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    [T-android-chat-strings-resource] Chat-module strings, Spanish.
+    Mirrors values/strings_chat.xml key-for-key.
+-->
+<resources>
+    <!-- Foreground approval gate (ChatSheetsHost) -->
+    <string name="approval_required_title">Se necesita aprobación: %1$s</string>
+    <string name="approval_default_preview">El agente solicita ejecutar una operación sensible</string>
+    <string name="approval_action_approve">Aprobar</string>
+    <string name="approval_action_deny">Denegar</string>
+    <string name="approval_action_allow_all_session">Permitir todo en esta sesión</string>
+
+    <!-- Crash recovery (ChatScreen) -->
+    <string name="crash_recovery_snackbar">La última generación quedó interrumpida (modelo %1$s, iniciada a las %2$s); el contenido producido antes de la interrupción se conserva en la conversación</string>
+
+    <!-- Attachment pick truncation (ChatScreen) -->
+    <string name="attachment_pick_truncated_items">Solo se adjuntaron los primeros %1$d elementos.</string>
+    <string name="attachment_pick_truncated_files">Solo se adjuntaron los primeros %1$d archivos.</string>
+
+    <!-- Chat screen misc -->
+    <string name="chat_move_to_capsule">Mover a…</string>
+    <string name="attachment_no_app_toast">No hay ninguna app disponible para abrir este adjunto.</string>
+
+    <!-- Sub-agent live bar + detail sheet (ChatSubAgentBar) -->
+    <string name="subagent_waiting_first_output">Pensando, aún sin salida</string>
+    <string name="subagent_turn_of">Turno %1$d de %2$d</string>
+    <string name="subagent_index_of_total">Subagente %1$d/%2$d</string>
+    <string name="subagent_fallback_label">Subagente</string>
+    <string name="subagent_task_fallback">Tarea de subagente</string>
+    <string name="subagent_stop_desc">Detener %1$s</string>
+    <string name="subagent_status_running">En ejecución</string>
+    <string name="subagent_status_calling_tool">Llamando a herramienta</string>
+    <string name="subagent_status_done">Completado</string>
+    <string name="subagent_status_failed">Error</string>
+    <string name="subagent_args_label">Argumentos</string>
+    <string name="subagent_result_label">Resultado</string>
+
+    <!-- Accessibility labels (ChatComposerWidgets / ChatToolDetailUI) -->
+    <string name="attachment_remove_desc">Quitar adjunto</string>
+    <string name="tool_detail_prev_desc">Anterior</string>
+    <string name="tool_detail_next_desc">Siguiente</string>
+
+    <!-- ToolCallPill long-press menu -->
+    <string name="tool_longpress_retry">Reintentar</string>
+    <string name="tool_longpress_open_in_terminal">Abrir en la terminal</string>
+</resources>

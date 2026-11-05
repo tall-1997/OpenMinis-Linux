@@ -40,10 +40,8 @@
 # R8 otherwise treats the package as unused and strips it, recreating
 # NoClassDefFoundError on the first execute_code / javaToJS.
 -keep class javax.lang.model.** { *; }
-# :core:model packages org.json:json:20231013 into the APK. R8 renaming those
-# classes makes ART's org.json.JSONStringer (bootclasspath) disagree with the
-# app's renamed copy and crashes ACRA. Keep the names; do not shrink them.
--keep class org.json.** { *; }
+# org.json resolves from the platform via compileOnly in :core:model —
+# no Maven copy ships in the APK, so nothing here needs keeping.
 -dontwarn org.json.**
 -dontwarn org.mozilla.javascript.**
 -dontwarn org.mozilla.classfile.**

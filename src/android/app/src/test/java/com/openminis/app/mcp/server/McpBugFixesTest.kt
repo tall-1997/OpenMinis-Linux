@@ -247,37 +247,9 @@ class McpBugFixesTest {
 
     // ─── Bug C: string id round-trip ─────────────────────────────────────
 
-    @Test
-    fun `string id is preserved in JSON-RPC response`() {
-        val rpc = """{"jsonrpc":"2.0","id":"abc-123","method":"ping"}"""
-        val req = McpServerCore.parseJsonRpc(rpc)
-        assertNotNull(req)
-        assertEquals("abc-123", req!!.id)
-    }
-
-    @Test
-    fun `integer id is preserved as integer`() {
-        val rpc = """{"jsonrpc":"2.0","id":42,"method":"ping"}"""
-        val req = McpServerCore.parseJsonRpc(rpc)
-        assertNotNull(req)
-        assertEquals(42, req!!.id)
-    }
-
-    @Test
-    fun `null id is preserved as null`() {
-        val rpc = """{"jsonrpc":"2.0","id":null,"method":"ping"}"""
-        val req = McpServerCore.parseJsonRpc(rpc)
-        assertNotNull(req)
-        assertNull(req!!.id)
-    }
-
-    @Test
-    fun `missing id is preserved as null`() {
-        val rpc = """{"jsonrpc":"2.0","method":"ping"}"""
-        val req = McpServerCore.parseJsonRpc(rpc)
-        assertNotNull(req)
-        assertNull(req!!.id)
-    }
+    // [P2-dead-code] The four parseJsonRpc id-preservation tests were removed
+    // with the dead parseJsonRpc helper; id preservation on the live path is
+    // covered by McpHttpServerTest's string-id end-to-end round trip.
 
     @Test
     fun `string id round-trips through jsonRpcResult`() {
@@ -340,7 +312,6 @@ class McpBugFixesTest {
             lastAuditedDecision = decision
         }
         override fun getAuditTrail() = emptyList<com.openminis.app.security.AuditEntry>()
-        override fun setPermissionRules(rules: List<com.openminis.app.security.PermissionRule>) {}
         override fun setAuthorityProfile(profile: com.openminis.app.security.PermissionProfile?) {}
         override fun verifyAuditChain() = com.openminis.app.security.AuditChainVerification(ok = true)
     }

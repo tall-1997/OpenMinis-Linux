@@ -62,6 +62,14 @@ class BrowserUseManager(
         private const val DEFAULT_DOM_STABLE_TIMEOUT_MS = 5_000
 
         /**
+         * [P2-screenshot-retention] Lazy cap for cacheDir/browser_screenshots.
+         * A write that pushes the dir past this deletes the oldest files by
+         * lastModified, so an agent session that captures thousands of
+         * screenshots cannot fill the cache dir forever.
+         */
+        private const val MAX_SCREENSHOT_FILES = 100
+
+        /**
          * Cap full_page screenshot stretched viewport at 32768 px. Above this,
          * Bitmap.createBitmap risks OOM (e.g. 32768 × ~1130 px × 4 B/ARGB ≈ 144 MB
          * at desktop 1280 CSS × 2.75 density). Pages taller than the cap are
@@ -159,6 +167,17 @@ class BrowserUseManager(
         onCloseWindow = null
         onDownloadStart = null
         onBlobDownloadData = null
+        // [P2-screenshot-retention] Session teardown: this tab's captures are
+        // unreachable now — delete them off the main thread. The dir itself is
+        // shared by live managers, so only files THIS manager wrote go; the
+        // >100 lazy sweep in saveBitmapToFile caps what accumulates beyond that.
+        val staleScreenshots = myScreenshotFiles.toList()
+        myScreenshotFiles.clear()
+        if (staleScreenshots.isNotEmpty()) {
+            Thread {
+                for (f in staleScreenshots) runCatching { f.delete() }
+            }.apply { isDaemon = true }.start()
+        }
         webView.stopLoading()
         (webView.parent as? android.view.ViewGroup)?.removeView(webView)
         webView.setDownloadListener(null)
@@ -222,6 +241,13 @@ class BrowserUseManager(
     private val screenshotsDir: File by lazy {
         File(webView.context.cacheDir, "browser_screenshots").also { it.mkdirs() }
     }
+
+    /**
+     * [P2-screenshot-retention] Captures THIS manager wrote, removed at
+     * [dispose] so a closed session stops holding screenshot files in the
+     * shared cache dir (the dir itself is per-process, not per-manager).
+     */
+    private val myScreenshotFiles = java.util.concurrent.ConcurrentLinkedQueue<File>()
 
     /** Deferred used by executeJS to receive results from async scripts via JS bridge. */
     private var asyncJsDeferred: CompletableDeferred<String>? = null
@@ -848,13 +874,32 @@ class BrowserUseManager(
         return BrowserActionResult(text = meta)
     }
 
-    private suspend fun navigationMetadata(): String {
-        val url = _currentURL.value
-        val title = _pageTitle.value
-        // Read the viewport directly from the page (`window.innerWidth/Height`)
-        // so a session or global viewport override shows the actual layout
-        // size, not the UA profile default. Matches iOS which likewise queries
-        // the WKWebView's live bounds rather than a profile constant.
+    /**
+     * [P2-dup-viewport] Single viewport/page probe shared by the navigation
+     * and screenshot metadata builders (both used to carry a verbatim copy of
+     * the JS + parsing). Read the viewport directly from the page
+     * (`window.innerWidth/Height`) so a session or global viewport override
+     * shows the actual layout size, not the UA profile default — matches iOS,
+     * which likewise queries the WKWebView's live bounds rather than a
+     * profile constant.
+     */
+    private data class ViewportState(
+        val scrollX: Int,
+        val scrollY: Int,
+        val pageW: Int,
+        val pageH: Int,
+        val vpW: Int,
+        val vpH: Int,
+    ) {
+        /**
+         * Fall back to the UA profile default when the page hasn't populated
+         * `window.inner*` yet (e.g. navigation failure / about:blank).
+         */
+        fun effectiveViewport(fallback: Pair<Int, Int>): Pair<Int, Int> =
+            (if (vpW > 0) vpW else fallback.first) to (if (vpH > 0) vpH else fallback.second)
+    }
+
+    private suspend fun readViewportState(): ViewportState {
         val scrollInfo = evaluateJavascript(
             "JSON.stringify({" +
                 "sx:window.scrollX||0,sy:window.scrollY||0," +
@@ -863,27 +908,30 @@ class BrowserUseManager(
                 "vw:window.innerWidth||0,vh:window.innerHeight||0" +
                 "})"
         )
-        var scrollX = 0; var scrollY = 0; var pageW = 0; var pageH = 0
-        var vpW = 0; var vpH = 0
-        try {
+        return try {
             val info = JSONObject(scrollInfo)
-            scrollX = info.optInt("sx"); scrollY = info.optInt("sy")
-            pageW = info.optInt("pw"); pageH = info.optInt("ph")
-            vpW = info.optInt("vw"); vpH = info.optInt("vh")
-        } catch (_: Exception) {}
+            ViewportState(
+                scrollX = info.optInt("sx"), scrollY = info.optInt("sy"),
+                pageW = info.optInt("pw"), pageH = info.optInt("ph"),
+                vpW = info.optInt("vw"), vpH = info.optInt("vh"),
+            )
+        } catch (_: Exception) {
+            ViewportState(0, 0, 0, 0, 0, 0)
+        }
+    }
 
-        // Fall back to the UA profile default when the page hasn't populated
-        // `window.inner*` yet (e.g. navigation failure / about:blank).
-        val fallback = currentProfile.viewportSize
-        val effectiveVpW = if (vpW > 0) vpW else fallback.first
-        val effectiveVpH = if (vpH > 0) vpH else fallback.second
+    private suspend fun navigationMetadata(): String {
+        val url = _currentURL.value
+        val title = _pageTitle.value
+        val vp = readViewportState()
+        val (effectiveVpW, effectiveVpH) = vp.effectiveViewport(currentProfile.viewportSize)
 
         return buildString {
             appendLine("Navigated to $url")
             if (title.isNotEmpty()) appendLine("  Title: $title")
             appendLine("  Viewport: ${effectiveVpW}x$effectiveVpH")
-            if (pageW > 0 || pageH > 0) appendLine("  Page size: ${pageW}x$pageH")
-            append("  Scroll position: ($scrollX, $scrollY)")
+            if (vp.pageW > 0 || vp.pageH > 0) appendLine("  Page size: ${vp.pageW}x${vp.pageH}")
+            append("  Scroll position: (${vp.scrollX}, ${vp.scrollY})")
         }
     }
 
@@ -988,26 +1036,8 @@ class BrowserUseManager(
         val url = _currentURL.value
         val title = _pageTitle.value
 
-        val scrollInfo = evaluateJavascript(
-            "JSON.stringify({" +
-                "sx:window.scrollX||0,sy:window.scrollY||0," +
-                "pw:document.documentElement.scrollWidth||0," +
-                "ph:document.documentElement.scrollHeight||0," +
-                "vw:window.innerWidth||0,vh:window.innerHeight||0" +
-                "})"
-        )
-        var scrollX = 0; var scrollY = 0; var pageW = 0; var pageH = 0
-        var vpW = 0; var vpH = 0
-        try {
-            val info = JSONObject(scrollInfo)
-            scrollX = info.optInt("sx"); scrollY = info.optInt("sy")
-            pageW = info.optInt("pw"); pageH = info.optInt("ph")
-            vpW = info.optInt("vw"); vpH = info.optInt("vh")
-        } catch (_: Exception) {}
-
-        val fallback = currentProfile.viewportSize
-        val effectiveVpW = if (vpW > 0) vpW else fallback.first
-        val effectiveVpH = if (vpH > 0) vpH else fallback.second
+        val vp = readViewportState()
+        val (effectiveVpW, effectiveVpH) = vp.effectiveViewport(currentProfile.viewportSize)
 
         return buildString {
             appendLine("Screenshot captured")
@@ -1015,14 +1045,14 @@ class BrowserUseManager(
             if (title.isNotEmpty()) appendLine("  Title: $title")
             appendLine("  Image: ${imageW}x$imageH (${fileSize / 1024}KB)")
             appendLine("  Viewport: ${effectiveVpW}x$effectiveVpH")
-            if (pageW > 0 || pageH > 0) appendLine("  Page size: ${pageW}x$pageH")
+            if (vp.pageW > 0 || vp.pageH > 0) appendLine("  Page size: ${vp.pageW}x${vp.pageH}")
             appendLine("  Image may be downscaled; use viewport coordinates for actions.")
             if (fullPage) {
                 appendLine("  Full page: true")
                 if (originalHeightPx > 0) appendLine("  Original height: ${originalHeightPx}px")
                 if (truncated) appendLine("  Truncated: true (capped at ${MAX_FULL_PAGE_HEIGHT_PX}px)")
             }
-            append("  Scroll position: ($scrollX, $scrollY)")
+            append("  Scroll position: (${vp.scrollX}, ${vp.scrollY})")
         }
     }
 
@@ -1082,7 +1112,24 @@ class BrowserUseManager(
         file.outputStream().use { out ->
             check(bitmap.compress(Bitmap.CompressFormat.JPEG, quality, out)) { "Screenshot encoding failed" }
         }
+        myScreenshotFiles.add(file)
+        sweepScreenshotDir()
         return file
+    }
+
+    /**
+     * [P2-screenshot-retention] Lazy sweep on the write path: keep the newest
+     * [MAX_SCREENSHOT_FILES] files in the screenshots dir, delete the rest
+     * oldest-first (by lastModified). Best-effort — a failed sweep must never
+     * fail a capture. Called from [saveBitmapToFile], which already runs on
+     * Dispatchers.IO.
+     */
+    private fun sweepScreenshotDir() {
+        val files = screenshotsDir.listFiles() ?: return
+        if (files.size <= MAX_SCREENSHOT_FILES) return
+        files.sortedBy { it.lastModified() }
+            .drop(files.size - MAX_SCREENSHOT_FILES)
+            .forEach { f -> runCatching { f.delete() } }
     }
 
     // -- Click --
@@ -1108,13 +1155,13 @@ class BrowserUseManager(
 
     private suspend fun getText(selector: String?): BrowserActionResult {
         val js = BrowserUseJS.getText(selector)
-        return evaluateJSAndParse(js)
+        return evaluateAndReturn(js)
     }
 
     // -- Get Readable --
 
     private suspend fun getReadable(): BrowserActionResult {
-        return evaluateJSAndParse(BrowserUseJS.getReadable())
+        return evaluateAndReturn(BrowserUseJS.getReadable())
     }
 
     // -- Scroll --
@@ -1123,7 +1170,7 @@ class BrowserUseManager(
         val dir = direction ?: ScrollDirection.DOWN
         val px = amount ?: 500
         val js = BrowserUseJS.scroll(dir, px, selector)
-        return evaluateJSAndParse(js)
+        return evaluateAndReturn(js)
     }
 
     // -- Get Page Info --
@@ -1496,25 +1543,10 @@ class BrowserUseManager(
         deferred.await()
     }
 
-    private suspend fun evaluateAndReturn(js: String): BrowserActionResult {
-        return try {
-            val raw = evaluateJavascript(js)
-            val json = try { JSONObject(raw) } catch (_: Exception) { null }
-            if (json != null) {
-                if (json.has("error")) {
-                    BrowserActionResult.error(json.getString("error"))
-                } else {
-                    BrowserActionResult(text = formatJSONResult(json))
-                }
-            } else {
-                BrowserActionResult(text = raw)
-            }
-        } catch (e: Exception) {
-            BrowserActionResult.error("JavaScript error: ${e.message}")
-        }
-    }
+    // [P2-dup-eval] evaluateJSAndParse was a byte-for-byte copy of this
+    // function and is gone; every caller funnels through [evaluateAndReturn].
 
-    private suspend fun evaluateJSAndParse(js: String): BrowserActionResult {
+    private suspend fun evaluateAndReturn(js: String): BrowserActionResult {
         return try {
             val raw = evaluateJavascript(js)
             val json = try { JSONObject(raw) } catch (_: Exception) { null }
@@ -1785,16 +1817,69 @@ class BrowserUseManager(
     // -- Wait for DOM Stable --
 
     /**
-     * Poll the DOM for stability: repeatedly measures `document.body.innerHTML.length`
-     * at ~200ms intervals and returns when two successive readings match, or the
+     * Installs the per-call [P2-domstable-observer] on the live document: a
+     * MutationObserver over `document.documentElement` that flips
+     * `__minisDomDirty` (boolean + `Date.now()` timestamp) at most once per
+     * 500ms debounce window of activity. Re-injected on EVERY [waitForDomStable]
+     * call — a navigation replaces the document, which destroys the previous
+     * observer and its window fields with it.
+     */
+    private val domObserverInstallJs = """
+        (function(){
+          try {
+            if (window.__minisDomObserver) { try { window.__minisDomObserver.disconnect(); } catch (e) {} }
+            window.__minisDomDirty = false;
+            window.__minisDomDirtyAt = 0;
+            var arm = null;
+            var obs = new MutationObserver(function(){
+              if (arm !== null) return;
+              arm = setTimeout(function(){
+                arm = null;
+                window.__minisDomDirty = true;
+                window.__minisDomDirtyAt = Date.now();
+              }, 500);
+            });
+            window.__minisDomObserver = obs;
+            obs.observe(document.documentElement,
+              {childList:true, subtree:true, attributes:true, characterData:true});
+            return 'ok';
+          } catch(e) { return 'err:' + e; }
+        })()
+    """.trimIndent()
+
+    /** Read-and-reset: true when the DOM mutated since the previous query. */
+    private val domDirtyQueryJs = """
+        (function(){
+          try {
+            var d = window.__minisDomDirty === true;
+            window.__minisDomDirty = false;
+            return d ? 'true' : 'false';
+          } catch(e) { return 'true'; }
+        })()
+    """.trimIndent()
+
+    private val domBodyLengthJs =
+        "(function(){try{return (document.body&&document.body.innerHTML.length)||0;}catch(e){return -1;}})()"
+
+    /**
+     * Poll the DOM for stability and return when it stops mutating, or the
      * timeout elapses. Matches iOS `wait_for_dom_stable`.
+     *
+     * [P2-domstable-observer] The old loop serialized the whole page DOM
+     * (`document.body.innerHTML.length`) every 200ms — quadratic-cost on big
+     * pages. The loop now consults a one-shot MutationObserver (installed by
+     * [domObserverInstallJs] above): each query reads-and-resets
+     * `__minisDomDirty`, and two consecutive "no changes since the previous
+     * query" readings declare stability — the same two-sample criterion as
+     * before, minus the per-poll serialization. The [pollInterval] and
+     * deadline structure, the readyState fast path and the response wording
+     * are unchanged.
      */
     private suspend fun waitForDomStable(timeoutMs: Int?): BrowserActionResult {
         val budget = (timeoutMs ?: DEFAULT_DOM_STABLE_TIMEOUT_MS).coerceIn(
             MIN_DOM_STABLE_TIMEOUT_MS, MAX_DOM_STABLE_TIMEOUT_MS,
         )
         val pollInterval = 200L
-        var lastSize = -1L
         var stable = false
         val deadline = System.currentTimeMillis() + budget
         // [T-android-domstable-min-budget] C5 fast path: a document that has
@@ -1806,13 +1891,9 @@ class BrowserUseManager(
             "(function(){try{return document.readyState;}catch(e){return '';}})()"
         ).trim('"')
         if (readyState == "complete") {
-            val first = evaluateJavascript(
-                "(function(){try{return (document.body&&document.body.innerHTML.length)||0;}catch(e){return -1;}})()"
-            ).toLongOrNull() ?: -1L
+            val first = evaluateJavascript(domBodyLengthJs).toLongOrNull() ?: -1L
             delay(50)
-            val second = evaluateJavascript(
-                "(function(){try{return (document.body&&document.body.innerHTML.length)||0;}catch(e){return -1;}})()"
-            ).toLongOrNull() ?: -1L
+            val second = evaluateJavascript(domBodyLengthJs).toLongOrNull() ?: -1L
             // [T-android-review-p1-fixes] F4: require a NON-EMPTY body.
             // SPAs report readyState=complete with an empty/skeleton body
             // before the JS app renders — `first >= 0` declared those
@@ -1826,25 +1907,49 @@ class BrowserUseManager(
                 )
             }
             // Fast path inconclusive (DOM still mutating post-load, or body
-            // still empty) — fall through to the normal polling loop with
-            // lastSize untouched so its stability criterion stays exactly
-            // as before.
+            // still empty) — fall through to the polling loop.
         }
-        while (System.currentTimeMillis() < deadline) {
-            val raw = evaluateJavascript(
-                "(function(){try{return (document.body&&document.body.innerHTML.length)||0;}catch(e){return -1;}})()"
-            )
-            val size = raw.toLongOrNull() ?: -1L
-            if (size == lastSize && size >= 0) { stable = true; break }
-            lastSize = size
-            delay(pollInterval)
+
+        // Fresh observer for THIS call (a navigation killed the previous one).
+        val installed = evaluateJavascript(domObserverInstallJs)
+        val observerUsable = installed.startsWith("ok")
+
+        var lastClean = false
+        if (observerUsable) {
+            while (System.currentTimeMillis() < deadline) {
+                val dirty = evaluateJavascript(domDirtyQueryJs) == "true"
+                if (!dirty && lastClean) { stable = true; break }
+                lastClean = !dirty
+                delay(pollInterval)
+            }
+        } else {
+            // Observer unavailable on this page — legacy size-compare loop
+            // (identical to the pre-observer behavior, minus the fast path).
+            var lastSize = -1L
+            while (System.currentTimeMillis() < deadline) {
+                val size = evaluateJavascript(domBodyLengthJs).toLongOrNull() ?: -1L
+                if (size == lastSize && size >= 0) { stable = true; break }
+                lastSize = size
+                delay(pollInterval)
+            }
+            return finishDomStable(stable, budget, deadline, lastSize)
         }
+        val bodyLength = evaluateJavascript(domBodyLengthJs).toLongOrNull() ?: -1L
+        return finishDomStable(stable, budget, deadline, bodyLength)
+    }
+
+    private fun finishDomStable(
+        stable: Boolean,
+        budget: Int,
+        deadline: Long,
+        bodyLength: Long,
+    ): BrowserActionResult {
         val elapsed = budget - (deadline - System.currentTimeMillis())
         return if (stable) {
-            BrowserActionResult(text = "DOM stable after ${elapsed}ms (body length=$lastSize)")
+            BrowserActionResult(text = "DOM stable after ${elapsed}ms (body length=$bodyLength)")
         } else {
             BrowserActionResult(
-                text = "DOM did not stabilize within ${budget}ms (last body length=$lastSize)",
+                text = "DOM did not stabilize within ${budget}ms (last body length=$bodyLength)",
                 success = false,
             )
         }

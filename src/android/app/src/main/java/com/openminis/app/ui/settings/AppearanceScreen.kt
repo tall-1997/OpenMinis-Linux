@@ -62,12 +62,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -277,33 +279,69 @@ fun AppearanceScreen(
     onThemeChanged: (Int) -> Unit = {},
 ) {
     val context = LocalContext.current
-    val prefs = remember { getAppearancePrefs(context) }
+    // [T-android-sessionlist-prefs-io] Same treatment as
+    // SkillsManagementScreen's sort prefs: getSharedPreferences() PARSES the
+    // prefs XML synchronously on first touch, and this screen used to read 24
+    // keys (plus HighRefreshRate's and AppIconRepository's own prefs files)
+    // inside remember {} on the main thread — a cold-process stall on every
+    // entry. The handles are lazy, the first touch happens on
+    // Dispatchers.IO, and the first frame shows the same defaults the files
+    // store so nothing has to be "loaded" visually.
+    val prefs = remember { lazy { getAppearancePrefs(context) } }
 
-    var themeMode by remember { mutableIntStateOf(prefs.getInt(KEY_THEME_MODE, 0)) }
-    var launchSession by remember { mutableIntStateOf(prefs.getInt(KEY_LAUNCH_SESSION, 0)) }
-    var returnKeyBehavior by remember { mutableIntStateOf(prefs.getInt(KEY_RETURN_KEY_BEHAVIOR, 0)) }
-    var keepScreenAwake by remember { mutableStateOf(prefs.getBoolean(KEY_KEEP_SCREEN_AWAKE, false)) }
-    var highRefresh by remember { mutableStateOf(com.openminis.app.ui.HighRefreshRate.enabled(context)) }
-    var showFloatingToolBar by remember { mutableStateOf(prefs.getBoolean(KEY_SHOW_FLOATING_TOOL_BAR, true)) }
-    var showCompletedToolCards by remember { mutableStateOf(prefs.getBoolean(KEY_SHOW_COMPLETED_TOOL_CARDS, false)) }
-    var showSubAgentBar by remember { mutableStateOf(prefs.getBoolean(KEY_SHOW_SUBAGENT_BAR, DEFAULT_SHOW_SUB_AGENT_BAR)) }
-    var showMicButton by remember { mutableStateOf(prefs.getBoolean(KEY_SHOW_MIC_BUTTON, DEFAULT_SHOW_MIC_BUTTON)) }
-    var showMessageUsage by remember { mutableStateOf(prefs.getBoolean(KEY_SHOW_MESSAGE_TOKEN_USAGE, true)) }
-    var composerContextGlow by remember { mutableStateOf(prefs.getBoolean(KEY_COMPOSER_CONTEXT_GLOW, true)) }
-    var autoFocusAfterReply by remember { mutableStateOf(prefs.getBoolean(KEY_AUTO_FOCUS_AFTER_REPLY, true)) }
-    var autoExpandThinking by remember { mutableStateOf(prefs.getBoolean(KEY_AUTO_EXPAND_THINKING, true)) }
-    var foldAiProcess by remember { mutableStateOf(prefs.getBoolean(KEY_FOLD_AI_PROCESS, DEFAULT_FOLD_AI_PROCESS)) }
+    var themeMode by remember { mutableIntStateOf(0) }
+    var launchSession by remember { mutableIntStateOf(0) }
+    var returnKeyBehavior by remember { mutableIntStateOf(0) }
+    var keepScreenAwake by remember { mutableStateOf(false) }
+    var highRefresh by remember { mutableStateOf(true) }
+    var showFloatingToolBar by remember { mutableStateOf(true) }
+    var showCompletedToolCards by remember { mutableStateOf(false) }
+    var showSubAgentBar by remember { mutableStateOf(DEFAULT_SHOW_SUB_AGENT_BAR) }
+    var showMicButton by remember { mutableStateOf(DEFAULT_SHOW_MIC_BUTTON) }
+    var showMessageUsage by remember { mutableStateOf(true) }
+    var composerContextGlow by remember { mutableStateOf(true) }
+    var autoFocusAfterReply by remember { mutableStateOf(true) }
+    var autoExpandThinking by remember { mutableStateOf(true) }
+    var foldAiProcess by remember { mutableStateOf(DEFAULT_FOLD_AI_PROCESS) }
     // Material You is an Android 12+ framework capability (minSdk is 26), so the
     // row renders disabled below S instead of promising something it cannot do.
     val monetSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-    var dynamicColor by remember { mutableStateOf(prefs.getBoolean(KEY_DYNAMIC_COLOR, false)) }
-    var showChatTitle by remember { mutableStateOf(prefs.getBoolean(KEY_SHOW_CHAT_TITLE, true)) }
-    var autoGrouping by remember { mutableStateOf(prefs.getBoolean(KEY_AUTO_GROUPING, true)) }
-    var chatInputLevel by remember { mutableIntStateOf(prefs.getInt(KEY_FONT_CHAT_INPUT, 0)) }
-    var messageLevel by remember { mutableIntStateOf(prefs.getInt(KEY_FONT_MESSAGE, 0)) }
-    var appBaseLevel by remember { mutableIntStateOf(prefs.getInt(KEY_FONT_APP_BASE, 0)) }
-    var selectedLanguage by remember { mutableStateOf(prefs.getString(KEY_LANGUAGE, "") ?: "") }
-    var selectedAppIcon by remember { mutableStateOf(AppIconRepository.current(context)) }
+    var dynamicColor by remember { mutableStateOf(false) }
+    var showChatTitle by remember { mutableStateOf(true) }
+    var autoGrouping by remember { mutableStateOf(true) }
+    var chatInputLevel by remember { mutableIntStateOf(0) }
+    var messageLevel by remember { mutableIntStateOf(0) }
+    var appBaseLevel by remember { mutableIntStateOf(0) }
+    var selectedLanguage by remember { mutableStateOf("") }
+    var selectedAppIcon by remember { mutableStateOf(AppIconRepository.Variant.Auto) }
+
+    LaunchedEffect(Unit) {
+        withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val p = prefs.value
+            themeMode = p.getInt(KEY_THEME_MODE, 0)
+            launchSession = p.getInt(KEY_LAUNCH_SESSION, 0)
+            returnKeyBehavior = p.getInt(KEY_RETURN_KEY_BEHAVIOR, 0)
+            keepScreenAwake = p.getBoolean(KEY_KEEP_SCREEN_AWAKE, false)
+            highRefresh = com.openminis.app.ui.HighRefreshRate.enabled(context)
+            showFloatingToolBar = p.getBoolean(KEY_SHOW_FLOATING_TOOL_BAR, true)
+            showCompletedToolCards = p.getBoolean(KEY_SHOW_COMPLETED_TOOL_CARDS, false)
+            showSubAgentBar = p.getBoolean(KEY_SHOW_SUBAGENT_BAR, DEFAULT_SHOW_SUB_AGENT_BAR)
+            showMicButton = p.getBoolean(KEY_SHOW_MIC_BUTTON, DEFAULT_SHOW_MIC_BUTTON)
+            showMessageUsage = p.getBoolean(KEY_SHOW_MESSAGE_TOKEN_USAGE, true)
+            composerContextGlow = p.getBoolean(KEY_COMPOSER_CONTEXT_GLOW, true)
+            autoFocusAfterReply = p.getBoolean(KEY_AUTO_FOCUS_AFTER_REPLY, true)
+            autoExpandThinking = p.getBoolean(KEY_AUTO_EXPAND_THINKING, true)
+            foldAiProcess = p.getBoolean(KEY_FOLD_AI_PROCESS, DEFAULT_FOLD_AI_PROCESS)
+            dynamicColor = p.getBoolean(KEY_DYNAMIC_COLOR, false)
+            showChatTitle = p.getBoolean(KEY_SHOW_CHAT_TITLE, true)
+            autoGrouping = p.getBoolean(KEY_AUTO_GROUPING, true)
+            chatInputLevel = p.getInt(KEY_FONT_CHAT_INPUT, 0)
+            messageLevel = p.getInt(KEY_FONT_MESSAGE, 0)
+            appBaseLevel = p.getInt(KEY_FONT_APP_BASE, 0)
+            selectedLanguage = p.getString(KEY_LANGUAGE, "") ?: ""
+            selectedAppIcon = AppIconRepository.current(context)
+        }
+    }
 
     val fontsModified = chatInputLevel != 0 || messageLevel != 0 || appBaseLevel != 0
 
@@ -336,7 +374,7 @@ fun AppearanceScreen(
                     selected = themeMode == idx,
                     onSelect = {
                         themeMode = idx
-                        prefs.edit().putInt(KEY_THEME_MODE, idx).apply()
+                        prefs.value.edit().putInt(KEY_THEME_MODE, idx).apply()
                         onThemeChanged(idx)
                     },
                     leading = {
@@ -362,7 +400,7 @@ fun AppearanceScreen(
                 checked = dynamicColor && monetSupported,
                 onCheckedChange = {
                     dynamicColor = it
-                    prefs.edit().putBoolean(KEY_DYNAMIC_COLOR, it).apply()
+                    prefs.value.edit().putBoolean(KEY_DYNAMIC_COLOR, it).apply()
                 },
                 enabled = monetSupported,
                 showDivider = false,
@@ -390,7 +428,7 @@ fun AppearanceScreen(
                     selected = launchSession == idx,
                     onSelect = {
                         launchSession = idx
-                        prefs.edit().putInt(KEY_LAUNCH_SESSION, idx).apply()
+                        prefs.value.edit().putInt(KEY_LAUNCH_SESSION, idx).apply()
                     },
                     leading = {
                         androidx.compose.material3.Icon(
@@ -423,7 +461,7 @@ fun AppearanceScreen(
                     selected = returnKeyBehavior == row.value,
                     onSelect = {
                         returnKeyBehavior = row.value
-                        prefs.edit().putInt(KEY_RETURN_KEY_BEHAVIOR, row.value).apply()
+                        prefs.value.edit().putInt(KEY_RETURN_KEY_BEHAVIOR, row.value).apply()
                     },
                     leading = {
                         androidx.compose.material3.Icon(
@@ -453,7 +491,7 @@ fun AppearanceScreen(
                 checked = keepScreenAwake,
                 onCheckedChange = {
                     keepScreenAwake = it
-                    prefs.edit().putBoolean(KEY_KEEP_SCREEN_AWAKE, it).apply()
+                    prefs.value.edit().putBoolean(KEY_KEEP_SCREEN_AWAKE, it).apply()
                 },
                 showDivider = false,
             )
@@ -490,7 +528,7 @@ fun AppearanceScreen(
                 checked = showFloatingToolBar,
                 onCheckedChange = {
                     showFloatingToolBar = it
-                    prefs.edit().putBoolean(KEY_SHOW_FLOATING_TOOL_BAR, it).apply()
+                    prefs.value.edit().putBoolean(KEY_SHOW_FLOATING_TOOL_BAR, it).apply()
                 },
             )
             // [P0-4] The "Tool Preview Window" switch used to live here. The
@@ -506,7 +544,7 @@ fun AppearanceScreen(
                 checked = showCompletedToolCards,
                 onCheckedChange = {
                     showCompletedToolCards = it
-                    prefs.edit().putBoolean(KEY_SHOW_COMPLETED_TOOL_CARDS, it).apply()
+                    prefs.value.edit().putBoolean(KEY_SHOW_COMPLETED_TOOL_CARDS, it).apply()
                 },
             )
             SettingsSwitchRow(
@@ -516,7 +554,7 @@ fun AppearanceScreen(
                 checked = showSubAgentBar,
                 onCheckedChange = {
                     showSubAgentBar = it
-                    prefs.edit().putBoolean(KEY_SHOW_SUBAGENT_BAR, it).apply()
+                    prefs.value.edit().putBoolean(KEY_SHOW_SUBAGENT_BAR, it).apply()
                 },
             )
             SettingsSwitchRow(
@@ -527,7 +565,7 @@ fun AppearanceScreen(
                 checked = showMicButton,
                 onCheckedChange = {
                     showMicButton = it
-                    prefs.edit().putBoolean(KEY_SHOW_MIC_BUTTON, it).apply()
+                    prefs.value.edit().putBoolean(KEY_SHOW_MIC_BUTTON, it).apply()
                 },
                 showDivider = true,
             )
@@ -540,7 +578,7 @@ fun AppearanceScreen(
                 checked = showMessageUsage,
                 onCheckedChange = {
                     showMessageUsage = it
-                    prefs.edit().putBoolean(KEY_SHOW_MESSAGE_TOKEN_USAGE, it).apply()
+                    prefs.value.edit().putBoolean(KEY_SHOW_MESSAGE_TOKEN_USAGE, it).apply()
                 },
             )
             // [T-android-composer-context-glow] Composer edge glow near the
@@ -553,7 +591,7 @@ fun AppearanceScreen(
                 checked = composerContextGlow,
                 onCheckedChange = {
                     composerContextGlow = it
-                    prefs.edit().putBoolean(KEY_COMPOSER_CONTEXT_GLOW, it).apply()
+                    prefs.value.edit().putBoolean(KEY_COMPOSER_CONTEXT_GLOW, it).apply()
                 },
                 showDivider = false,
             )
@@ -575,7 +613,7 @@ fun AppearanceScreen(
                 checked = autoExpandThinking,
                 onCheckedChange = {
                     autoExpandThinking = it
-                    prefs.edit().putBoolean(KEY_AUTO_EXPAND_THINKING, it).apply()
+                    prefs.value.edit().putBoolean(KEY_AUTO_EXPAND_THINKING, it).apply()
                 },
                 showDivider = true,
             )
@@ -587,7 +625,7 @@ fun AppearanceScreen(
                 checked = foldAiProcess,
                 onCheckedChange = {
                     foldAiProcess = it
-                    prefs.edit().putBoolean(KEY_FOLD_AI_PROCESS, it).apply()
+                    prefs.value.edit().putBoolean(KEY_FOLD_AI_PROCESS, it).apply()
                 },
                 showDivider = false,
             )
@@ -607,7 +645,7 @@ fun AppearanceScreen(
                 checked = autoFocusAfterReply,
                 onCheckedChange = {
                     autoFocusAfterReply = it
-                    prefs.edit().putBoolean(KEY_AUTO_FOCUS_AFTER_REPLY, it).apply()
+                    prefs.value.edit().putBoolean(KEY_AUTO_FOCUS_AFTER_REPLY, it).apply()
                 },
                 showDivider = false,
             )
@@ -629,7 +667,7 @@ fun AppearanceScreen(
                 checked = showChatTitle,
                 onCheckedChange = {
                     showChatTitle = it
-                    prefs.edit().putBoolean(KEY_SHOW_CHAT_TITLE, it).apply()
+                    prefs.value.edit().putBoolean(KEY_SHOW_CHAT_TITLE, it).apply()
                 },
                 showDivider = false,
             )
@@ -650,7 +688,7 @@ fun AppearanceScreen(
                 checked = autoGrouping,
                 onCheckedChange = {
                     autoGrouping = it
-                    prefs.edit().putBoolean(KEY_AUTO_GROUPING, it).apply()
+                    prefs.value.edit().putBoolean(KEY_AUTO_GROUPING, it).apply()
                 },
                 showDivider = false,
             )
@@ -675,7 +713,7 @@ fun AppearanceScreen(
                 level = chatInputLevel,
                 onLevelChange = {
                     chatInputLevel = it
-                    prefs.edit().putInt(KEY_FONT_CHAT_INPUT, it).apply()
+                    prefs.value.edit().putInt(KEY_FONT_CHAT_INPUT, it).apply()
                 },
                 showDivider = true,
             )
@@ -684,7 +722,7 @@ fun AppearanceScreen(
                 level = messageLevel,
                 onLevelChange = {
                     messageLevel = it
-                    prefs.edit().putInt(KEY_FONT_MESSAGE, it).apply()
+                    prefs.value.edit().putInt(KEY_FONT_MESSAGE, it).apply()
                 },
                 showDivider = true,
             )
@@ -693,7 +731,7 @@ fun AppearanceScreen(
                 level = appBaseLevel,
                 onLevelChange = {
                     appBaseLevel = it
-                    prefs.edit().putInt(KEY_FONT_APP_BASE, it).apply()
+                    prefs.value.edit().putInt(KEY_FONT_APP_BASE, it).apply()
                 },
                 showDivider = fontsModified,
             )
@@ -706,7 +744,7 @@ fun AppearanceScreen(
                 ) {
                     MinisTextButton(onClick = {
                         chatInputLevel = 0; messageLevel = 0; appBaseLevel = 0
-                        prefs.edit()
+                        prefs.value.edit()
                             .putInt(KEY_FONT_CHAT_INPUT, 0)
                             .putInt(KEY_FONT_MESSAGE, 0)
                             .putInt(KEY_FONT_APP_BASE, 0)
@@ -859,7 +897,7 @@ fun AppearanceScreen(
                     selected = selectedLanguage == lang.code,
                     onSelect = {
                         selectedLanguage = lang.code
-                        prefs.edit().putString(KEY_LANGUAGE, lang.code).apply()
+                        prefs.value.edit().putString(KEY_LANGUAGE, lang.code).apply()
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                             val lm = context.getSystemService(LocaleManager::class.java)
                             lm?.applicationLocales = if (lang.code.isEmpty()) {

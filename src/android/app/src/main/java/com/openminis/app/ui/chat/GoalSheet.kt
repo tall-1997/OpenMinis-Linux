@@ -464,11 +464,8 @@ private fun GoalUsageRow(goal: SessionGoalEntity) {
     }
 }
 
-/** 252_000ms → "4m 12s"; 3_780_000ms → "1h 3m"; under a minute → "42s". */
-private fun formatDuration(ms: Long): String {
-    val seconds = ms / 1_000
-    if (seconds < 60) return "${seconds}s"
-    val minutes = seconds / 60
-    if (minutes < 60) return "${minutes}m ${seconds % 60}s"
-    return "${minutes / 60}h ${minutes % 60}m"
-}
+/** 252_000ms → "4m 12s"; 3_780_000ms → "1h 3m"; under a minute → "42s".
+ *  [T-android-format-converge] Thin profile over the shared duration ladder
+ *  ([formatDurationCompact]); output unchanged. */
+private fun formatDuration(ms: Long): String =
+    formatDurationCompact(ms) ?: "0s"

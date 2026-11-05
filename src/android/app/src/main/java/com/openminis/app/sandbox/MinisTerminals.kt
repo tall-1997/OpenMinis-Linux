@@ -5,13 +5,14 @@ import com.openminis.app.logging.AppLogger
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -73,14 +74,6 @@ object MinisTerminals {
     /** How long an initial command waits for the shell to come up. */
     internal const val BOOT_TIMEOUT_MS = 20_000L
 
-    /**
-     * Settle delay before the initial command is typed. TerminalSession.start()
-     * writes its own prelude + `cd /var/minis && clear` at +300ms after RUNNING;
-     * typing earlier would queue the agent's command BEFORE the prelude and get
-     * its output wiped by the `clear`.
-     */
-    internal const val PRELUDE_SETTLE_MS = 400L
-
     /** EXITED terminals older than this are pruned on list (open prunes all). */
     private const val EXITED_RETENTION_MS = 60_000L
 
@@ -114,6 +107,14 @@ object MinisTerminals {
          * the emulator — this is text, not bytes.
          */
         fun snapshotText(): String
+
+        /**
+         * Suspends until the session's own startup prelude has been written
+         * into the PTY, so a first command queued after it can never be wiped
+         * by the prelude's `clear`. Returns false when [timeoutMs] elapsed
+         * first. Default for test fakes without a prelude: already done.
+         */
+        suspend fun awaitPrelude(timeoutMs: Long): Boolean = true
 
         /** True while a full-screen TUI app is active (alternate screen buffer). */
         val alternateScreenActive: Boolean get() = false
@@ -255,15 +256,18 @@ object MinisTerminals {
         val rec = record ?: return OpenOutcome(error = "terminal bookkeeping failed")
         withContext(resolveMain(main)) { handle.start(owner, safeCols, safeRows) }
         if (!command.isNullOrBlank()) {
-            commandScope.launch { sendInitialCommand(rec, command.trim(), PRELUDE_SETTLE_MS, BOOT_TIMEOUT_MS) }
+            commandScope.launch { sendInitialCommand(rec, command.trim(), 0L, BOOT_TIMEOUT_MS) }
         }
         return OpenOutcome(rec.id, rec.status, evicted = victim?.id)
     }
 
     /**
-     * Type the initial command once the shell is up. The 300ms prelude written
-     * by TerminalSession.start() must land first, hence the settle delay after
-     * RUNNING instead of writing straight into the PTY buffer.
+     * Type the initial command once the shell is up. The prelude written by
+     * TerminalSession.start() must land first; [MinisTerminals.TerminalHandle.awaitPrelude]
+     * observes that write instead of the former fixed 400ms settle, so the
+     * command queues right after the prelude (whose `clear` would otherwise
+     * wipe the command's output). [settleMs] stays as an extra floor (0 in
+     * production) for callers that want a minimum delay after RUNNING.
      */
     internal suspend fun sendInitialCommand(
         record: TerminalRecord,
@@ -275,7 +279,11 @@ object MinisTerminals {
             record.handle.state.first { it == TState.RUNNING || it == TState.EXITED }
         }
         if (reached != TState.RUNNING) return
-        delay(settleMs)
+        // On awaitPrelude timeout we proceed anyway: the status check below
+        // still guards a dead terminal, matching the old fixed-delay behavior
+        // of typing regardless of what the session did.
+        record.handle.awaitPrelude(bootTimeoutMs)
+        if (settleMs > 0) delay(settleMs)
         if (record.status != TState.RUNNING) return
         record.handle.sendText(command)
         record.handle.sendRawBytes(byteArrayOf(0x0D))
@@ -305,20 +313,29 @@ object MinisTerminals {
         val collected = StringBuilder()
         while (true) {
             val status = record.status
-            // Transcript reads share the emulator thread's data — same access
-            // pattern the Termux TerminalView uses from the UI thread.
-            val snap = withContext(mainDisp) { record.handle.snapshotText() }
-            val alt = record.handle.alternateScreenActive
-            val delta = synchronized(record.snapshotLock) {
-                val modeFlipped = record.lastSnapshotAlt != null && record.lastSnapshotAlt != alt
-                val (next, d) = TerminalDelta.next(
-                    if (modeFlipped) "" else record.lastSnapshot,
-                    snap,
-                    READ_MAX_CHARS,
-                )
-                record.lastSnapshot = next
-                record.lastSnapshotAlt = alt
-                d
+            // Snapshot + O(transcript) diff run on Dispatchers.Default — the
+            // caller's dispatcher (Main in some paths) only paid for the
+            // string copy before. Thread-safety basis: the Termux TerminalBuffer
+            // has no locks — the emulator's reader thread writes it while the
+            // TerminalView already reads it from the UI thread with no
+            // synchronization (upstream Termux does exactly this), so a plain
+            // read from a Default worker is the same access class the UI
+            // thread performs; no new race is introduced. handle.stop() for an
+            // exited terminal stays on [mainDisp] (Termux teardown).
+            val delta = withContext(Dispatchers.Default) {
+                val snap = record.handle.snapshotText()
+                val alt = record.handle.alternateScreenActive
+                synchronized(record.snapshotLock) {
+                    val modeFlipped = record.lastSnapshotAlt != null && record.lastSnapshotAlt != alt
+                    val (next, d) = TerminalDelta.next(
+                        if (modeFlipped) "" else record.lastSnapshot,
+                        snap,
+                        READ_MAX_CHARS,
+                    )
+                    record.lastSnapshot = next
+                    record.lastSnapshotAlt = alt
+                    d
+                }
             }
             if (delta.isNotEmpty()) {
                 collected.append(delta)
@@ -521,17 +538,25 @@ internal class TermuxTerminalHandle(
     private val session: TerminalSession,
 ) : MinisTerminals.TerminalHandle {
 
+    // Scope local to THIS handle: cancelling it in stop() releases the
+    // collector below. The old SharingStarted.Eagerly stateIn subscribed a
+    // coroutine that nothing ever cancelled, so every closed terminal leaked
+    // its live TerminalSession reference (and the whole object graph it pins)
+    // for the life of the process.
     private val mapScope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
 
-    override val state: StateFlow<MinisTerminals.TState> = session.state
-        .map {
-            when (it) {
-                TerminalSession.State.RUNNING -> MinisTerminals.TState.RUNNING
-                TerminalSession.State.STOPPED -> MinisTerminals.TState.EXITED
-                else -> MinisTerminals.TState.BOOTING
-            }
-        }
-        .stateIn(mapScope, SharingStarted.Eagerly, MinisTerminals.TState.BOOTING)
+    private fun map(s: TerminalSession.State): MinisTerminals.TState = when (s) {
+        TerminalSession.State.RUNNING -> MinisTerminals.TState.RUNNING
+        TerminalSession.State.STOPPED -> MinisTerminals.TState.EXITED
+        else -> MinisTerminals.TState.BOOTING
+    }
+
+    private val mappedState = MutableStateFlow(map(session.state.value))
+    override val state: StateFlow<MinisTerminals.TState> = mappedState.asStateFlow()
+
+    private val mapJob: Job = mapScope.launch {
+        session.state.collect { mappedState.value = map(it) }
+    }
 
     override fun start(ownerSessionId: String, cols: Int, rows: Int) {
         session.start(ownerSessionId, cols, rows)
@@ -558,7 +583,16 @@ internal class TermuxTerminalHandle(
         }.getOrDefault("")
     }
 
+    override suspend fun awaitPrelude(timeoutMs: Long): Boolean =
+        withTimeoutOrNull(timeoutMs) { session.preludeDone.first { it } } ?: false
+
     override fun stop() {
+        // Cancel the state-mapping collector FIRST so the TerminalSession (and
+        // its PTY object graph) becomes collectible once the caller drops the
+        // record; session.stop() then tears the PTY itself down. Idempotent —
+        // stop() runs from eviction, exit cleanup and close().
+        mapJob.cancel()
+        mapScope.cancel()
         session.stop()
     }
 }

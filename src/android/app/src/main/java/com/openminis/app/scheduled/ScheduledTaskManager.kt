@@ -1,9 +1,7 @@
 package com.openminis.app.scheduled
 
-import android.app.AlarmManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import com.openminis.app.logging.AppLogger
@@ -21,7 +19,6 @@ import com.openminis.app.logging.AppLogger
  */
 class ScheduledTaskManager(private val context: Context) {
 
-    private val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
     private val store = ScheduledTaskStore(context)
 
     init { ensureNotificationChannel() }
@@ -163,39 +160,28 @@ class ScheduledTaskManager(private val context: Context) {
             AppLogger.warning(TAG, "task ${task.id} has no next trigger — skipping register")
             return
         }
-        val pi = buildPendingIntent(task.id)
-        try {
-            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
-            AppLogger.info(TAG, "registered task=${task.id} label=\"${task.label}\" triggerAt=$triggerAt")
-        } catch (e: SecurityException) {
-            // S+ users may have revoked SCHEDULE_EXACT_ALARM — fall back
-            // to inexact so we still fire eventually rather than dropping.
-            AppLogger.warning(
-                TAG,
-                "exact-alarm denied for task=${task.id} (${e.message}); falling back to inexact",
-            )
-            try {
-                alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
-            } catch (t2: Throwable) {
-                AppLogger.error(TAG, "inexact fallback failed for task=${task.id}: ${t2.message}")
-            }
-        }
+        alarmScheduler.registerExact(task.id, task.label, triggerAt)
     }
 
     private fun cancelAlarm(taskId: String) {
-        val pi = buildPendingIntent(taskId)
-        alarmManager.cancel(pi)
-        pi.cancel()
+        alarmScheduler.cancel(taskId)
     }
 
-    private fun buildPendingIntent(taskId: String): PendingIntent {
-        val intent = Intent(context, ScheduledTaskAlarmReceiver::class.java).apply {
+    /**
+     * [P2-alarm-dedup] The exact/inexact fallback + PendingIntent machinery
+     * lives in the shared [ExactAlarmScheduler]. No request-code salt here —
+     * the historic raw task-id hash is preserved (the automation owner salts
+     * its own space with "automation_").
+     */
+    private val alarmScheduler = ExactAlarmScheduler(
+        context = context,
+        tag = TAG,
+        kind = "task",
+    ) { ctx, taskId ->
+        Intent(ctx, ScheduledTaskAlarmReceiver::class.java).apply {
             action = ACTION_FIRE
             putExtra(EXTRA_TASK_ID, taskId)
         }
-        val requestCode = taskId.hashCode() and 0x7FFFFFFF
-        val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        return PendingIntent.getBroadcast(context, requestCode, intent, flags)
     }
 
     private fun ensureNotificationChannel() {

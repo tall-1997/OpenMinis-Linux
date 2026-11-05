@@ -172,16 +172,89 @@ internal fun toolTitleLabel(toolName: String): String = when (toolName) {
     else -> "Minis is using ${toolDisplayName(toolName)}"
 }
 
-// Helper: format duration (iOS: < 1s → "0.1s", < 60s → "45s", >= 60s → "2m 10s")
-internal fun formatToolDuration(ms: Long): String {
-    val seconds = ms / 1000.0
-    return when {
-        seconds < 1 -> String.format("%.1fs", seconds)
-        seconds < 60 -> String.format("%.0fs", seconds)
-        else -> {
-            val m = (seconds / 60).toInt()
-            val s = (seconds % 60).toInt()
-            "${m}m ${s}s"
+// Helper: format duration (iOS: < 1s → "0.1s", < 60s → "45s", >= 60s → "2m 10s").
+// [T-android-format-converge] Thin tool-pill profile over [formatDurationCompact]
+// (sub-second decimals + rounding, no hours branch, always renders).
+internal fun formatToolDuration(ms: Long): String =
+    formatDurationCompact(ms, subSecondDecimals = 1, hoursBranch = false) ?: "0.0s"
+
+/**
+ * [T-android-format-converge] Single compact-duration formatter for the chat
+ * package. The three per-surface variants (tool pill, process fold-bar, goal
+ * sheet) expressed the same ladder with drifted details; the differences are
+ * now parameters:
+ *
+ *  - [subSecondDecimals] — the tool pill renders sub-second durations with a
+ *    decimal ("0.4s") and ROUNDS whole seconds below a minute ("%.0fs");
+ *    process cards / the goal sheet truncate to whole seconds ("47s").
+ *    0 = truncating style, 1 = pill style.
+ *  - [hoursBranch] — process cards and the goal sheet render beyond 60m as
+ *    "1h 5m"; the tool pill has always rendered "90m 0s" and keeps doing so.
+ *  - [nullWhenNonPositive] — the process fold-bar omits the duration suffix
+ *    entirely for <= 0 totals (never renders "0s"); the pill always renders.
+ *
+ * Byte-for-byte output of each historical variant is preserved.
+ */
+internal fun formatDurationCompact(
+    ms: Long,
+    subSecondDecimals: Int = 0,
+    hoursBranch: Boolean = true,
+    nullWhenNonPositive: Boolean = false,
+): String? {
+    if (nullWhenNonPositive && ms <= 0L) return null
+    val fractionalSeconds = ms / 1000.0
+    if (subSecondDecimals > 0 && fractionalSeconds < 1.0) {
+        return String.format("%.${subSecondDecimals}fs", fractionalSeconds)
+    }
+    val totalSeconds = ms / 1000L
+    if (totalSeconds < 60L) {
+        if (subSecondDecimals > 0) return String.format("%.0fs", fractionalSeconds)
+        return "${totalSeconds}s"
+    }
+    if (!hoursBranch || totalSeconds < 3600L) {
+        return "${totalSeconds / 60L}m ${totalSeconds % 60L}s"
+    }
+    return "${totalSeconds / 3600L}h ${totalSeconds % 3600L / 60L}m"
+}
+
+/**
+ * [T-android-format-converge] Single compact token-count formatter. The three
+ * variants (usage footer, goal card, Token Usage sheet) shared the
+ * k/M ladder but drifted in suffix case, decimals and thresholds; the
+ * differences are parameters:
+ *
+ *  - [uppercaseSuffix] — the Token Usage sheet follows the iOS sheet
+ *    convention ("1.2K"); the footer and goal cards are lowercase.
+ *  - [trimTrailingZero] — the goal card strips ".0" ("10k" not "10.0k").
+ *  - [thinTenK] — the usage footer renders >= 10,000 with zero decimals
+ *    ("12k" for 12,345); the other variants keep one decimal.
+ *  - [tenXQuirk] — the goal-card variant historically scaled by /100 and
+ *    /100_000 (one decimal of the PREFIX digits, then trimmed) instead of
+ *    /1_000 and /1_000_000, i.e. the rendered magnitude is 10x the true k/M
+ *    value ("1234 → '12.3k'" per the code, while its own KDoc claimed
+ *    "1.2k"). Display output is preserved verbatim this wave; flipping this
+ *    flag to false adopts the correct magnitude in a dedicated change.
+ *
+ * Every historical variant's byte-for-byte output is preserved.
+ */
+internal fun formatTokenCount(
+    n: Long,
+    uppercaseSuffix: Boolean = false,
+    trimTrailingZero: Boolean = false,
+    thinTenK: Boolean = false,
+    tenXQuirk: Boolean = false,
+): String {
+    val k = if (uppercaseSuffix) "K" else "k"
+    fun scaled(suffix: String, value: Double): String =
+        if (trimTrailingZero) {
+            (if (value >= 100.0) value.toInt().toString() else "%.1f".format(value)).removeSuffix(".0") + suffix
+        } else {
+            String.format("%.1f", value) + suffix
         }
+    return when {
+        n >= 1_000_000L -> scaled("M", if (tenXQuirk) n / 100_000.0 else n / 1_000_000.0)
+        thinTenK && n >= 10_000L -> String.format("%.0f", n / 1_000.0) + k
+        n >= 1_000L -> scaled(k, if (tenXQuirk) n / 100.0 else n / 1_000.0)
+        else -> n.toString()
     }
 }

@@ -784,7 +784,14 @@ class ChatViewModel(
         }
     }
 
-    internal val mediaStore = com.openminis.app.data.storage.MediaStore(context)
+    // [T-android-mediastore-lazy] Lazy construction: MediaStore's constructor
+    // is pure (one File computation, no I/O) but every draft session paid it
+    // on first-message setup regardless of whether any attachment/paste ever
+    // landed. Nothing reads mediaStore during VM init (usage sites: attachment
+    // prepare, paste fold, and load-time mediaRef resolution — all runtime
+    // call paths), so the lazy delegate has no initialization-order exposure.
+    // Ownership unchanged; physical relocation is Wave 5 scope.
+    internal val mediaStore by lazy { com.openminis.app.data.storage.MediaStore(context) }
 
     internal val _messages = SnapshotMutableStateFlow<List<ChatMessage>>(
         emptyList(),
@@ -1246,7 +1253,7 @@ class ChatViewModel(
      * Streaming side-channel — see [StreamingDelta]. During a live agent
      * turn, [updateAssistantMessage] writes delta-bearing fields here
      * INSTEAD of mutating the messages list. This isolates per-token
-     * updates from ChatScreen's top-level recompose scope (the 8980-line
+     * updates from ChatScreen's top-level recompose scope (the screen-sized
      * mega-composable was being walked at full slot-table cost on every
      * token, costing ~94 ms per recompose). Top-level subscribers
      * (`messages.any/.associate/.isNotEmpty/.lastOrNull`) only see a new
@@ -2053,6 +2060,7 @@ class ChatViewModel(
             codeGraphEnabled = true,
             mcpNativeEnabled = mcpRepository != null,
             includeLongTail = true,
+            hasSpeechModel = providerRepository.resolveVoiceInputEntry() != null,
         ) + com.openminis.app.plugins.OnlinePluginStore.toolDefinitions(context) +
             com.openminis.app.plugins.LocalToolPluginStore.agentToolDefinitions(context)
         val matches = com.openminis.app.tools.FindTools.search(query, all, limit)
@@ -2105,6 +2113,7 @@ class ChatViewModel(
                 mcpNativeEnabled = mcpRepository != null,
                 includeLongTail = false,
                 enabledToolNames = enabledLongTailTools,
+                hasSpeechModel = providerRepository.resolveVoiceInputEntry() != null,
             ) + com.openminis.app.plugins.OnlinePluginStore.toolDefinitions(context) +
                 com.openminis.app.plugins.LocalToolPluginStore.agentToolDefinitions(context)
             agentToolsMemo = built

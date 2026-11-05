@@ -66,7 +66,12 @@ object HostStatusPublisher {
 
     fun writeOnce(context: Context, rootfsDir: File) {
         if (!rootfsDir.isDirectory) return
-        val json = snapshot(context).toString()
+        // ONE /proc walk per publish: both minis-host-status.json's 4-field
+        // "proc" block and minis-proc.json previously snapshot() /proc
+        // independently, doubling the (stat + cmdline + status read per pid)
+        // cost every minute. The full JSON serves both consumers.
+        val proc = ProcfsSnapshot.snapshot()
+        val json = snapshot(context, proc).toString()
         val runDir = File(rootfsDir, "run").also { it.mkdirs() }
         val target = File(runDir, "minis-host-status.json")
         val tmp = File(runDir, "minis-host-status.json.tmp")
@@ -76,7 +81,7 @@ object HostStatusPublisher {
                 target.writeText(json)
                 tmp.delete()
             }
-            val procJson = ProcfsSnapshot.snapshot().toString()
+            val procJson = proc.toString()
             val procTarget = File(runDir, "minis-proc.json")
             val procTmp = File(runDir, "minis-proc.json.tmp")
             procTmp.writeText(procJson)
@@ -89,7 +94,13 @@ object HostStatusPublisher {
         }
     }
 
-    fun snapshot(context: Context): JSONObject {
+    /**
+     * Host status snapshot. [proc] is injected so callers that already hold a
+     * [ProcfsSnapshot.snapshot()] (writeOnce also writes it verbatim as
+     * minis-proc.json) can share one /proc walk; the default parameter keeps
+     * the old single-argument call sites unchanged.
+     */
+    fun snapshot(context: Context, proc: JSONObject = ProcfsSnapshot.snapshot()): JSONObject {
         val json = JSONObject()
         json.put("timestamp_ms", System.currentTimeMillis())
         json.put("app_foreground", (context.applicationContext as? MinisApp)?.isAppForeground() == true)
@@ -121,7 +132,7 @@ object HostStatusPublisher {
         json.put("http_proxy", SandboxHttpProxy.envBlock()?.get("http_proxy") ?: JSONObject.NULL)
         json.put("firewall", SandboxFirewall.snapshot(context))
         json.put("doze", DozeSnapshot.json(context))
-        val proc = ProcfsSnapshot.snapshot()
+        // [proc] arrives as a parameter — the shared /proc snapshot (see writeOnce).
         json.put(
             "proc",
             JSONObject()

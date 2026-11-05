@@ -51,6 +51,16 @@ class McpHttpServer(
         /** Max header block size before the connection is dropped. */
         private const val MAX_HEADER_BYTES = 64 * 1024
 
+        /**
+         * [P2-mcp-pool] Worker count. The fixed 4 was small enough that a
+         * handful of slow `tools/call` (each parks a worker inside
+         * McpToolShared.runInGuest's runBlocking for the whole command) could
+         * starve every other MCP method — even tools/list on another
+         * connection. max(8, 2×cores) leaves headroom for the fast methods
+         * while a few slow tool calls are in flight.
+         */
+        val workerCount: Int = maxOf(8, 2 * Runtime.getRuntime().availableProcessors())
+
         fun validPort(port: Int): Boolean = port in MIN_PORT..MAX_PORT
     }
 
@@ -58,6 +68,14 @@ class McpHttpServer(
     private val running = AtomicBoolean(false)
     private var pool: ExecutorService? = null
     private var acceptThread: Thread? = null
+
+    /**
+     * [P2-mcp-pool] Connections accepted but not yet finished — includes both
+     * running workers and queued tasks (the fixed-pool queue is unbounded, so
+     * saturation shows up as growth here, not a rejection). Logged on submit
+     * when everything is busy so a starving server leaves a trace.
+     */
+    private val inFlightConnections = AtomicLong(0)
 
     /** Exposed for the manager's state line. */
     @Volatile
@@ -80,7 +98,7 @@ class McpHttpServer(
         return try {
             val socket = ServerSocket(port, 10, InetAddress.getByName("127.0.0.1"))
             serverSocket = socket
-            pool = Executors.newFixedThreadPool(4) { r ->
+            pool = Executors.newFixedThreadPool(workerCount) { r ->
                 Thread(r, "mcp-server-worker").apply { isDaemon = true }
             }
             running.set(true)
@@ -123,7 +141,19 @@ class McpHttpServer(
                 }
                 break
             }
-            pool?.execute { handleConnection(client) }
+            // [P2-mcp-pool] Saturation trace: when every worker is busy the
+            // unbounded queue grows silently; leave a warning with the depth.
+            val pending = inFlightConnections.incrementAndGet()
+            if (pending > workerCount) {
+                Log.w(TAG, "mcp pool saturated: $pending connections in flight/queued (workers=$workerCount)")
+            }
+            pool?.execute {
+                try {
+                    handleConnection(client)
+                } finally {
+                    inFlightConnections.decrementAndGet()
+                }
+            }
         }
     }
 
@@ -297,8 +327,8 @@ class McpHttpServer(
         }
     }
 
-    private fun rpcErrorResponse(id: Any?, code: Int, message: String): McpServerCore.Response =
-        McpServerCore.rpcError(id, code, message)
+    // [P2-dead-code] rpcErrorResponse removed: private, zero callers — the
+    // route() paths answer via McpServerCore.rpcErrorNullId / handle directly.
 }
 
 /**

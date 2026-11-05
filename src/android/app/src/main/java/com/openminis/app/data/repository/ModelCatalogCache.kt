@@ -87,7 +87,9 @@ internal class ModelCatalogCache(
      */
     private fun clearFetchedModelEntries(instanceId: String): Set<String> {
         synchronized(repo.configLock) {
-            repo.ensureConfigLoaded()
+            // [Wave3-fix-1] Main-thread cold-start window: refuse (no clear) instead
+            // of runBlocking the ~8s startup decode.
+            if (!repo.ensureConfigLoaded()) return emptySet()
             val config = repo.workingCopy()
             val instance = config.instances.firstOrNull { it.id == instanceId } ?: return emptySet()
             val voiceIds = VoiceProviderTemplate.template(instance.customBaseURL)

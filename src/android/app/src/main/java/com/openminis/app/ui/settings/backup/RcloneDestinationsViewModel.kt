@@ -23,10 +23,22 @@ import kotlinx.coroutines.withContext
  */
 class RcloneDestinationsViewModel(app: Application) : AndroidViewModel(app) {
 
-    private val store = RcloneRemoteStore(app)
+    // [T-android-sessionlist-prefs-io] RcloneRemoteStore's first touch parses
+    // + decrypts the prefs file — main-thread work. Both the field and the
+    // initial remotes read were eager, so merely CONSTRUCTING this ViewModel
+    // (before any of its UI showed) did that IO on the main thread. The store
+    // is now lazy and the initial list loads in an IO coroutine; the flow
+    // starts empty and fills in.
+    private val store by lazy { RcloneRemoteStore(app) }
 
-    private val _remotes = MutableStateFlow(store.remotes)
+    private val _remotes = MutableStateFlow<List<RcloneRemoteStore.Remote>>(emptyList())
     val remotes: StateFlow<List<RcloneRemoteStore.Remote>> = _remotes.asStateFlow()
+
+    init {
+        viewModelScope.launch(Dispatchers.IO) {
+            _remotes.value = runCatching { store.remotes }.getOrDefault(emptyList())
+        }
+    }
 
     private val _busy = MutableStateFlow(false)
     val busy: StateFlow<Boolean> = _busy.asStateFlow()
@@ -52,18 +64,31 @@ class RcloneDestinationsViewModel(app: Application) : AndroidViewModel(app) {
     private val _certificateRejected = MutableStateFlow(false)
     val certificateRejected: StateFlow<Boolean> = _certificateRejected.asStateFlow()
 
-    fun refresh() { _remotes.value = store.remotes }
+    // [T-android-sessionlist-prefs-io] refresh/setEnabled/remove all touch the
+    // prefs-backed store (read or write) — moved onto Dispatchers.IO, same
+    // pattern as browsePhoneFolderForRestore in BackupViewModel.
+    fun refresh() {
+        viewModelScope.launch(Dispatchers.IO) {
+            _remotes.value = runCatching { store.remotes }.getOrDefault(emptyList())
+        }
+    }
     fun clearError() { _error.value = null }
 
     /** Reset the certificate prompt when the user edits the form or backs out. */
     fun clearCertificateRejection() { _certificateRejected.value = false }
 
     fun setEnabled(name: String, on: Boolean) {
-        store.setEnabled(name, on); refresh()
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching { store.setEnabled(name, on) }
+            _remotes.value = runCatching { store.remotes }.getOrDefault(emptyList())
+        }
     }
 
     fun remove(name: String) {
-        store.remove(name); refresh()
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching { store.remove(name) }
+            _remotes.value = runCatching { store.remotes }.getOrDefault(emptyList())
+        }
     }
 
     /**

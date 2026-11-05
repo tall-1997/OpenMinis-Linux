@@ -423,7 +423,9 @@ object VirtualScreenManager {
 
         // Layer 1: our own display, our own uid.
         VirtualScreenCapture.captureViaImageReader(s.handle)?.let { bytes ->
-            return VirtualScreenCapture.writePng(offloadsDir, displayId, bytes, "ImageReader")
+            return VirtualScreenCapture.writeScreenshot(
+                offloadsDir, displayId, bytes, "ImageReader", VirtualScreenCapture.JPEG_SUFFIX,
+            )
         }
 
         // Layers 2 and 3 ride the Shizuku shell.
@@ -471,7 +473,7 @@ object VirtualScreenManager {
                     "(cp into the offloads dir refused by the ROM, and the chunked base64 read failed)",
             )
         }
-        return VirtualScreenCapture.writePng(offloadsDir, displayId, bytes, "chunked base64")
+        return VirtualScreenCapture.writeScreenshot(offloadsDir, displayId, bytes, "chunked base64")
     }
 
     /** Probe: does this ROM's screencap accept `-d`? Null = inconclusive (try the capture). */

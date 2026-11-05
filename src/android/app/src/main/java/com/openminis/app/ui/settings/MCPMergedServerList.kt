@@ -12,7 +12,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -20,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import com.openminis.app.R
 import com.openminis.app.data.repository.MCPRepository
 import com.openminis.app.ui.theme.m3Icon
+import kotlinx.coroutines.launch
 
 /**
  * [T-android-mcp-merged-server-list] ONE list for presets and saved servers.
@@ -52,27 +56,44 @@ internal fun MCPMergedServerList(
         presetServers.mapNotNull { it.second?.id }.toSet()
     }
     val customServers = servers.filterNot { it.id in presetServerIds }
+    // [T-mcp-disk-io] add/setEnabled rewrite servers.json — the switch
+    // callbacks used to run them on the main thread. Writes go to
+    // Dispatchers.IO now, and the flipping switch is disabled until its write
+    // settles ([T-mcp-switch-debounce] — a rapid re-tap used to race the
+    // first write).
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var pendingToggles by remember { mutableStateOf(emptySet<String>()) }
 
     SettingsSection(
         header = stringResource(R.string.mcp_section_servers),
         footer = stringResource(R.string.mcp_section_footer),
     ) {
         presetServers.forEachIndexed { index, (preset, existing) ->
+            val toggleKey = existing?.id ?: "preset:${preset.name}"
+            val busy = toggleKey in pendingToggles
             val showDivider = index < presetServers.lastIndex || customServers.isNotEmpty()
             val toggle: (Boolean) -> Unit = { checked ->
-                if (checked) {
-                    if (existing == null) {
-                        // Same URL guard the standalone preset list used: a
-                        // blocked host never reaches the repo.
-                        val blocked = preset.url?.let { url ->
-                            com.openminis.app.tools.FetchUrlGuard.blockedReason(url) != null
-                        } == true
-                        if (!blocked) mcpRepository.add(preset.toServer())
-                    } else {
-                        mcpRepository.setEnabled(existing.id, true)
+                if (!busy) {
+                    pendingToggles = pendingToggles + toggleKey
+                    scope.launch {
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            if (checked) {
+                                if (existing == null) {
+                                    // Same URL guard the standalone preset list used: a
+                                    // blocked host never reaches the repo.
+                                    val blocked = preset.url?.let { url ->
+                                        com.openminis.app.tools.FetchUrlGuard.blockedReason(url) != null
+                                    } == true
+                                    if (!blocked) mcpRepository.add(preset.toServer())
+                                } else {
+                                    mcpRepository.setEnabled(existing.id, true)
+                                }
+                            } else if (existing != null) {
+                                mcpRepository.setEnabled(existing.id, false)
+                            }
+                        }
+                        pendingToggles = pendingToggles - toggleKey
                     }
-                } else if (existing != null) {
-                    mcpRepository.setEnabled(existing.id, false)
                 }
             }
             if (existing == null) {
@@ -83,6 +104,7 @@ internal fun MCPMergedServerList(
                     title = preset.name,
                     subtitle = preset.description,
                     checked = false,
+                    enabled = !busy,
                     onCheckedChange = toggle,
                     showDivider = showDivider,
                 )
@@ -96,11 +118,12 @@ internal fun MCPMergedServerList(
                     subtitle = preset.description,
                     showDivider = showDivider,
                     onClick = { onEditServer(existing) },
-                    trailing = { ServerTrailing(existing, toggle, { onOpenTools(existing) }) },
+                    trailing = { ServerTrailing(existing, toggle, { onOpenTools(existing) }, enabled = !busy) },
                 )
             }
         }
         customServers.forEachIndexed { index, server ->
+            val busy = server.id in pendingToggles
             SettingsRow(
                 title = server.id,
                 subtitle = server.transportSummary.takeIf { it.isNotBlank() },
@@ -114,7 +137,17 @@ internal fun MCPMergedServerList(
                 trailing = {
                     ServerTrailing(
                         server = server,
-                        onEnabledChange = { mcpRepository.setEnabled(server.id, it) },
+                        enabled = !busy,
+                        onEnabledChange = { checked ->
+                            if (busy) return@ServerTrailing
+                            pendingToggles = pendingToggles + server.id
+                            scope.launch {
+                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                    mcpRepository.setEnabled(server.id, checked)
+                                }
+                                pendingToggles = pendingToggles - server.id
+                            }
+                        },
                         onOpenTools = { onOpenTools(server) },
                     )
                 },
@@ -128,6 +161,7 @@ private fun ServerTrailing(
     server: MCPRepository.MCPServerConfig,
     onEnabledChange: (Boolean) -> Unit,
     onOpenTools: () -> Unit,
+    enabled: Boolean = true,
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         // Tools list (per-tool enable/disable) stays one tap away without
@@ -154,6 +188,7 @@ private fun ServerTrailing(
         SettingsSwitch(
             checked = server.enabled,
             onCheckedChange = onEnabledChange,
+            enabled = enabled,
         )
     }
 }

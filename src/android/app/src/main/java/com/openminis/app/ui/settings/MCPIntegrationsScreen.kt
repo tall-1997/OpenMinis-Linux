@@ -100,6 +100,11 @@ fun MCPIntegrationsScreen(
     var showShellPolicyDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    // [T-mcp-disk-io] delete/setPort/regenerateToken rewrite servers.json /
+    // the config store — off the main thread now. The repository layer itself
+    // stays synchronous (repo is another workstream's file).
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var builtinServerBusy by remember { mutableStateOf(false) }
 
     SettingsScaffold(
         title = stringResource(R.string.mcp_title),
@@ -237,8 +242,12 @@ fun MCPIntegrationsScreen(
             text = { Text(stringResource(R.string.mcp_delete_message)) },
             confirmButton = {
                 MinisTextButton(onClick = {
-                    mcpRepository.delete(id)
                     deleteId = null
+                    scope.launch {
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            mcpRepository.delete(id)
+                        }
+                    }
                 }) { Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
@@ -271,11 +280,17 @@ fun MCPIntegrationsScreen(
             confirmButton = {
                 MinisTextButton(onClick = {
                     val p = portText.toIntOrNull()
-                    if (p != null && p in McpHttpServer.MIN_PORT..McpHttpServer.MAX_PORT) {
-                        mcpStore?.setPort(p)
+                    if (p != null && p in McpHttpServer.MIN_PORT..McpHttpServer.MAX_PORT && !builtinServerBusy) {
+                        builtinServerBusy = true
                         showPortDialog = false
-                        if (mcpState.status == McpServerManager.Status.RUNNING) {
-                            McpServerManager.restart()
+                        scope.launch {
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                mcpStore?.setPort(p)
+                            }
+                            builtinServerBusy = false
+                            if (mcpState.status == McpServerManager.Status.RUNNING) {
+                                McpServerManager.restart()
+                            }
                         }
                     }
                 }) { Text(stringResource(R.string.common_save)) }
@@ -309,10 +324,20 @@ fun MCPIntegrationsScreen(
             confirmButton = {
                 Row {
                     MinisTextButton(onClick = {
-                        val newToken = mcpStore?.regenerateToken()
-                        if (newToken != null) {
-                            clipboard.setText(androidx.compose.ui.text.AnnotatedString(newToken))
-                            android.widget.Toast.makeText(context, context.getString(R.string.mcp_builtin_token_regenerated_toast), android.widget.Toast.LENGTH_SHORT).show()
+                        if (builtinServerBusy) return@MinisTextButton
+                        builtinServerBusy = true
+                        scope.launch {
+                            // [T-mcp-disk-io] Token generation writes the config
+                            // store — off the main thread, guarded against
+                            // double-taps by builtinServerBusy.
+                            val newToken = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                mcpStore?.regenerateToken()
+                            }
+                            builtinServerBusy = false
+                            if (newToken != null) {
+                                clipboard.setText(androidx.compose.ui.text.AnnotatedString(newToken))
+                                android.widget.Toast.makeText(context, context.getString(R.string.mcp_builtin_token_regenerated_toast), android.widget.Toast.LENGTH_SHORT).show()
+                            }
                         }
                     }) { Text(stringResource(R.string.mcp_builtin_token_regenerate)) }
                     currentToken?.let {
@@ -447,6 +472,10 @@ private fun MCPFormTab(
 ) {
     val context = LocalContext.current
     val isEdit = editServer != null
+    // [T-mcp-disk-io] Save writes servers.json — runs on IO; isSaving guards
+    // the save button against double-taps while the write is in flight.
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var isSaving by remember { mutableStateOf(false) }
     // [T-mcp-server-export-android] Clipboard for "Copy JSON".
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
     // [T-mcp-env-var-picker-android] App env var keys for the STDIO env picker.
@@ -885,19 +914,32 @@ private fun MCPFormTab(
             Spacer(Modifier.weight(1f))
             MinisTextButton(onClick = onDone) { Text(stringResource(R.string.cancel)) }
             MinisTextButton(onClick = {
+                if (isSaving) return@MinisTextButton
                 val server = buildServerFromForm() ?: return@MinisTextButton
-                // [T-android-mcp-oauth] Store the client secret in the encrypted
-                // store (keyed by server id) — it never goes into servers.json.
-                // Cleared when the OAuth section is emptied.
-                if (isUrlTransport) {
-                    com.openminis.app.mcp.oauth.MCPOAuthStore.setClientSecret(
-                        context, server.id,
-                        if (server.oauth != null) oauthClientSecret.trim().ifBlank { null } else null,
-                    )
+                isSaving = true
+                scope.launch {
+                    // [T-mcp-disk-io] update/add rewrite servers.json and the
+                    // OAuth secret write decrypts an encrypted prefs file —
+                    // both off the main thread. isSaving disables the button
+                    // so a double-tap cannot save twice.
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        // [T-android-mcp-oauth] Store the client secret in the encrypted
+                        // store (keyed by server id) — it never goes into servers.json.
+                        // Cleared when the OAuth section is emptied.
+                        if (isUrlTransport) {
+                            com.openminis.app.mcp.oauth.MCPOAuthStore.setClientSecret(
+                                context, server.id,
+                                if (server.oauth != null) oauthClientSecret.trim().ifBlank { null } else null,
+                            )
+                        }
+                        if (isEdit) mcpRepository.update(server) else mcpRepository.add(server)
+                    }
+                    isSaving = false
+                    onDone()
                 }
-                if (isEdit) mcpRepository.update(server) else mcpRepository.add(server)
-                onDone()
-            }) { Text(stringResource(R.string.mcp_form_save)) }
+            },
+            enabled = !isSaving,
+        ) { Text(stringResource(R.string.mcp_form_save)) }
         }
     }
 
@@ -1038,7 +1080,18 @@ private fun MCPImportTab(
     val context = LocalContext.current
     var text by remember { mutableStateOf("") }
     var errorText by remember { mutableStateOf<String?>(null) }
-    val previewCount = remember(text) { if (text.isBlank()) 0 else mcpRepository.previewImport(text) }
+    // [T-mcp-import-debounce] previewImport parsed the whole pasted JSON in a
+    // remember(text) — i.e. in composition on EVERY keystroke. Debounced to
+    // one parse per 300 ms of typing silence; the count simply lags the field.
+    var previewCount by remember { mutableStateOf(0) }
+    LaunchedEffect(text) {
+        kotlinx.coroutines.delay(300)
+        val t = text
+        previewCount = if (t.isBlank()) 0
+        else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            mcpRepository.previewImport(t)
+        }
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(
@@ -1108,23 +1161,12 @@ private fun shareMcpServerJson(context: android.content.Context, serverId: Strin
     val dir = java.io.File(context.cacheDir, "shared").apply { mkdirs() }
     val file = java.io.File(dir, "$safeName-mcp.json")
     runCatching { file.writeText(json) }.onFailure { return }
-    val uri = try {
-        androidx.core.content.FileProvider.getUriForFile(
-            context, "${context.packageName}.fileprovider", file,
-        )
-    } catch (_: Throwable) {
-        return
-    }
-    val sendIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-        type = "application/json"
-        putExtra(android.content.Intent.EXTRA_STREAM, uri)
-        putExtra(android.content.Intent.EXTRA_SUBJECT, "$safeName-mcp.json")
-        addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-    }
-    val chooser = android.content.Intent.createChooser(sendIntent, "Export MCP server").apply {
-        addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-    }
-    context.startActivity(chooser)
+    // [T-share-fileprovider-unify] Shared FileProvider helper (clip + double
+    // grant hardening, previously missing on this variant).
+    shareViaFileProvider(
+        context, file, "application/json",
+        context.getString(R.string.mcp_share_chooser_title),
+    )
 }
 
 private fun mapToLines(map: Map<String, String>?, joiner: String): String {
