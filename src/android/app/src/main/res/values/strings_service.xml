@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    [Wave3 #8] Foreground-service + tool-overlay copy that was previously
+    hardcoded in TWO places (AgentForegroundService.toolDisplayLabel — long
+    notification form, and ToolOverlayController.toolDisplayLabel — short
+    overlay form) as mirrored English literals. Both now read these strings
+    through ForegroundNotificationCopy, so there is exactly one mapping.
+
+    Naming: bg_service_tool_<tool> is the long notification variant
+    ("Minis is using X"); tool_label_short_<tool> is the tight overlay-capsule
+    variant ("X"). New file on purpose — strings.xml is being edited by
+    parallel fix waves and must not be touched by this one.
+-->
+<resources>
+    <!-- Tool labels: long (notification) variants -->
+    <string name="bg_service_tool_shell">Minis is using Shell</string>
+    <string name="bg_service_tool_file_read">Minis is reading File</string>
+    <string name="bg_service_tool_editor">Minis is using Editor</string>
+    <string name="bg_service_tool_file_edit">Minis is editing File</string>
+    <string name="bg_service_tool_browser">Minis is using Browser</string>
+    <string name="bg_service_tool_read_image">Minis is reading Image</string>
+    <string name="bg_service_tool_memory">Minis is using Memory</string>
+    <string name="bg_service_tool_search">Minis is using Search</string>
+    <string name="bg_service_tool_generic">Minis is using %1$s</string>
+
+    <!-- Tool labels: short (overlay capsule) variants -->
+    <string name="tool_label_short_shell">Shell</string>
+    <string name="tool_label_short_file">File</string>
+    <string name="tool_label_short_editor">Editor</string>
+    <string name="tool_label_short_edit">Edit</string>
+    <string name="tool_label_short_browser">Browser</string>
+    <string name="tool_label_short_image">Image</string>
+    <string name="tool_label_short_memory">Memory</string>
+    <string name="tool_label_short_search">Search</string>
+    <string name="tool_label_short_app_name">Minis Ultra</string>
+</resources>

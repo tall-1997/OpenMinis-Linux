@@ -10,6 +10,7 @@ import com.openminis.app.data.model.ProviderInstance
 import com.openminis.app.data.model.ProviderType
 import com.openminis.app.data.model.VoiceProviderTemplate
 import com.openminis.app.data.model.isVoiceTemplateSeedShape
+import com.openminis.app.util.Digest
 import com.openminis.app.provider.BuiltinFreeLane
 import com.openminis.app.provider.BuiltinFreeLanes
 import com.openminis.app.provider.FreeLaneHealth
@@ -149,30 +150,15 @@ internal class ProviderConfigStore(
      * the ONLY two call sites it has, and the audit is what decides whether the
      * `runBlocking` is allowed):
      *
-     *  1. the `init { loadScope.launch { … } }` loader above — that scope is
-     *     `SupervisorJob() + Dispatchers.IO`, so genuinely off-main;
-     *  2. [ensureConfigLoaded], i.e. every non-suspend mutator/reader in this
-     *     class (add/update/removeInstance, add/removeEntry, group + agent-loop +
-     *     voice/vision slot setters, resolve*Candidates…). Those ARE reachable from
-     *     the composition thread — ui/settings/AddProviderScreen.kt:640
-     *     (`addInstance`), ProviderListScreen.kt:407/524,
-     *     ProviderDetailScreen.kt:777 (`removeInstance`),
-     *     ModelGroupsScreen.kt:402 / OnboardingModelSelectionScreen.kt:226
-     *     (`addGroup`) all call it directly from a click/confirm lambda —
-     *     alongside genuinely off-main ones (the config/collections adapters run on
-     *     minis-config bridge's background pool, debug/ handlers,
-     *     provider/agent paths).
-     *
-     * The stall is therefore real but BOUNDED to the cold-start window: the very
-     * first line of [ensureConfigLoaded] returns the moment
-     * [ProviderRepository._configLoaded] is
-     * true, which the IO loader set during Application startup, so a main-thread
-     * caller only pays the decode when it acts before that load lands. Removing
-     * even that window means giving the public mutators themselves suspend
-     * variants (and moving their Room/keystore work off the lock), which changes
-     * the signature of every one of the ~18 Compose call sites listed above —
-     * files outside this workstream's scope. Kept as-is on purpose; see the
-     * matching note on [ensureConfigLoaded].
+     *  1. the `init { loadScope.launch { … } }` loader in [ProviderRepository] —
+     *     that scope is `SupervisorJob() + Dispatchers.IO`, so genuinely off-main;
+     *  2. [ensureConfigLoaded] — and ONLY for callers that pass its main-thread
+     *     guard. Since [Wave3-fix-1] [ensureConfigLoaded] refuses to load on the
+     *     main thread (returns false instead), every remaining [loadConfig]
+     *     caller is provably off-main (IO loader, debug/ handlers, config
+     *     bridge's background pool, provider/agent paths), so the `runBlocking`
+     *     here can no longer park a Compose frame through the ~8 s decode of
+     *     [T-android-startup-config-stall] #753.
      */
     private fun loadConfig(): ProviderConfig = runBlocking { repo.loadConfigSuspending() }
 
@@ -181,16 +167,7 @@ internal class ProviderConfigStore(
      * marker. SHA-256 hex so collisions are negligible. Returns null only
      * if [str] is null (caller normalizes).
      */
-    internal fun hashJsonMirror(str: String): String {
-        val digest = java.security.MessageDigest.getInstance("SHA-256").digest(str.toByteArray())
-        return buildString(digest.size * 2) {
-            for (b in digest) {
-                val v = b.toInt() and 0xFF
-                append(Character.forDigit(v shr 4, 16))
-                append(Character.forDigit(v and 0xF, 16))
-            }
-        }
-    }
+    internal fun hashJsonMirror(str: String): String = Digest.sha256Hex(str)
 
     /**
      * [T-android-startup-config-stall] Guard for read-modify-write mutators.
@@ -202,20 +179,49 @@ internal class ProviderConfigStore(
      * Synchronized on [ProviderRepository.configLock] so it can't race the
      * async loader's emit.
      *
-     * [T-android-save-off-main-thread] When the config is still unloaded this
-     * blocks the CALLER thread through [loadConfig] — see that function's KDoc for
-     * the caller audit and why the cold-start-only window is left as it is. Once
-     * the initial load has landed this is a volatile read and costs nothing, so
-     * main-thread mutators never wait on I/O after startup.
+     * [Wave3-fix-1][T-android-save-off-main-thread] Returns **false** instead of
+     * blocking when the caller is on the MAIN thread and the config is still
+     * unloaded: the cold-start decode of a large config measured ~8 s (#753),
+     * and ~18 Compose call sites (AddProviderScreen.kt:606/721/886,
+     * ProviderListScreen.kt:407/524, ProviderDetailScreen.kt:777,
+     * ModelGroupsScreen.kt:402, OnboardingModelSelectionScreen.kt:226, …) can
+     * reach this from click/confirm lambdas inside that window. Making the
+     * public mutators suspend would change every one of those signatures — files
+     * outside the data layer — so instead the main-thread caller is told to
+     * ABORT: the mutator logs and refuses to write, which matches the existing
+     * anti-wipe refusal style (a refused write is always safer than a write
+     * against an unverified empty placeholder). Once the initial load has
+     * landed this is a volatile read that returns true on any thread. Off-main
+     * callers keep the old behaviour: block until the load lands (debug/
+     * handlers and the config bridge NEED that force-load on a cold process,
+     * where the async loader may not have run yet).
+     *
+     * @return true when the config is loaded and the caller may proceed with
+     *   its read-modify-write; false ONLY in the main-thread cold-start window —
+     *   the caller must abort the mutation (log + no-op), never write the
+     *   empty placeholder. Throws when the load itself failed (store unreadable).
      */
     // internal (was private): the debug server's read-only provider.* handlers
     // read `config.value` directly and must be able to force the lazy load —
     // on a cold process they otherwise report an EMPTY config, which reads as
-    // "all your providers are gone" rather than "not loaded yet".
-    internal fun ensureConfigLoaded() {
-        if (repo._configLoaded.value) return
+    // "all your providers are gone" rather than "not loaded yet". Those run
+    // off-main, so they still get the force-load.
+    internal fun ensureConfigLoaded(): Boolean {
+        if (repo._configLoaded.value) return true
+        if (isOnMainThread()) {
+            // [Wave3-fix-1] Refuse instead of runBlocking: never park Main for
+            // the startup decode, and never let a mutation run against the
+            // empty placeholder. The async loader will set _configLoaded
+            // momentarily; the user's click is a no-op this once.
+            android.util.Log.w(
+                "ProviderRepo",
+                "[ProviderStore] ensureConfigLoaded: config not loaded yet and caller is on Main — " +
+                    "refusing the mutation instead of runBlocking the load; retry after the async load lands",
+            )
+            return false
+        }
         synchronized(repo.configLock) {
-            if (repo._configLoaded.value) return
+            if (repo._configLoaded.value) return true
             // A read-modify-write operation must never proceed from the empty
             // placeholder when persisted data could not be read. Keep this
             // failure observable to each caller so it can abort before mutation.
@@ -235,6 +241,24 @@ internal class ProviderConfigStore(
         // config is available, so the (sync) request builder can read user rules.
         repo.loadAllThinkingRulesIntoCache()
         if (!repo.configLoadComplete.isCompleted) repo.configLoadComplete.complete(Unit)
+        return true
+    }
+
+    /**
+     * True only when a REAL main Looper exists and the caller is on it.
+     *
+     * The null/failure guards matter off-device: JVM unit tests run with
+     * `unitTests.isReturnDefaultValues = true`, where both Looper accessors
+     * return null — a naive `myLooper() == mainLooper` would read `null == null`
+     * as "on Main" and silently turn every mutator into a no-op in tests. A
+     * missing main Looper therefore means "not Main" (off-device, or a thread
+     * on a bare JVM), which restores the legacy blocking behaviour there.
+     */
+    private fun isOnMainThread(): Boolean = try {
+        val main = android.os.Looper.getMainLooper() ?: return false
+        android.os.Looper.myLooper() == main
+    } catch (_: Throwable) {
+        false
     }
 
     /**
@@ -270,7 +294,10 @@ internal class ProviderConfigStore(
      *    modality when it diverged.
      */
     fun ensureVoiceTemplateModels() = synchronized(repo.configLock) {
-        repo.ensureConfigLoaded()
+        // [Wave3-fix-1] Main-thread cold-start window: refuse the reconciliation
+        // (a no-op) instead of runBlocking the ~8s decode. The init loader on
+        // Dispatchers.IO re-runs it right after the load lands.
+        if (!repo.ensureConfigLoaded()) return@synchronized
         val config = repo.workingCopy()
         var changed = false
         for (instance in config.instances) {
@@ -338,7 +365,7 @@ internal class ProviderConfigStore(
         activeInstanceIds: Set<String> = BuiltinFreeLanes.ALL_INSTANCE_IDS,
     ) {
         val doomed = synchronized(repo.configLock) {
-            repo.ensureConfigLoaded()
+            if (!repo.ensureConfigLoaded()) return@synchronized emptyList()
             BuiltinLaneRetirement.instancesToPurge(repo.workingCopy(), activeInstanceIds)
         }
         doomed.forEach { runCatching { repo.removeInstance(it) } }
@@ -417,7 +444,9 @@ internal class ProviderConfigStore(
      * changed, which is the caller's cue to refresh the catalogue.
      */
     internal fun restoreBuiltInFreeLane(builtin: BuiltinFreeLane): Boolean = synchronized(repo.configLock) {
-        repo.ensureConfigLoaded()
+        // [Wave3-fix-1] Refused in the main-thread cold-start window: report
+        // "not restored" instead of runBlocking the load.
+        if (!repo.ensureConfigLoaded()) return@synchronized false
         val config = repo.workingCopy()
         val done = FreeLaneBootstrap.restore(config, builtin) { loadApiKey(it) } ?: return@synchronized false
         repo.saveConfig(config)

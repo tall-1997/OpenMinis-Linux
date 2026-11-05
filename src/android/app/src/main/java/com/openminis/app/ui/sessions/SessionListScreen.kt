@@ -220,14 +220,7 @@ private enum class DatePeriod(val label: String) {
     EARLIER("Earlier"),
 }
 
-/**
- * Map a session's updatedAt timestamp to its display bucket. Mirrors iOS
- * `ContentView.groupedSessions`:
- *   - Today / Yesterday: calendar-day match
- *   - This Week: within the last 7 days (rolling window, not current week)
- *   - This Month: within the last 30 days (rolling window, NOT current calendar month)
- *   - Earlier: everything else
- */
+// Map a session's updatedAt to its display bucket (mirrors iOS groupedSessions): Today/Yesterday calendar-day, This Week 7-day rolling, This Month 30-day rolling, else Earlier.
 private fun datePeriod(timestamp: Long): DatePeriod {
     val now = Calendar.getInstance()
     val cal = Calendar.getInstance().apply { time = Date(timestamp) }
@@ -244,32 +237,15 @@ private fun datePeriod(timestamp: Long): DatePeriod {
     val diffDays = TimeUnit.MILLISECONDS.toDays(now.timeInMillis - timestamp)
     if (diffDays < 7) return DatePeriod.THIS_WEEK
 
-    // iOS uses `monthAgo = now - 1 month` (rolling window). A calendar-month
-    // match would push e.g. a March 30 session into "Earlier" on April 2 —
-    // iOS still shows it in "This Month" until May 2.
+    // iOS uses a rolling `monthAgo = now - 1 month` (a calendar-month match would misbucket e.g. March 30).
     val monthAgo = Calendar.getInstance().apply { add(Calendar.MONTH, -1) }.timeInMillis
     if (timestamp > monthAgo) return DatePeriod.THIS_MONTH
 
     return DatePeriod.EARLIER
 }
 
-/**
- * [T-android-session-grouping] One rendered group block: a user-created group
- * plus the sessions filed into it.
- *
- * Holds session IDS, not session objects — the list differ re-evaluates this on
- * every emission, so the value must stay cheap to compare. (iOS learned the
- * same lesson as `SidebarGroup`; a `List<ChatSessionEntity>` here deep-compares
- * long message strings on every tick.)
- *
- * `ids` is EMPTY while collapsed, but [totalCount] keeps the real number so the
- * card can still say "5 chats".
- */
-/**
- * [T-android-group-pause-badge-restamp] How recently a session must have
- * ENTERED its badge state for that badge to pass through to the collapsed
- * group card. 24h, matching iOS's `freshCornerBadgeSessionIds(within: 24*3600)`.
- */
+// [T-android-session-grouping] One rendered group block (group + filed sessions). Holds ids, not session objects (cheap to compare); [totalCount] keeps the real count while collapsed.
+// [T-android-group-pause-badge-restamp] Freshness window for badges to pass through to the collapsed group card (24h, iOS parity).
 private const val GROUP_BADGE_FRESH_WINDOW_MS = 24L * 60L * 60L * 1000L
 
 data class FolderGroupBlock(
@@ -282,50 +258,20 @@ data class FolderGroupBlock(
     val summaryTitle: String? = null,
     /** Newest member's category — tints the composed folder icon like iOS FolderComposedIcon. */
     val firstCategory: String? = null,
-    /**
-     * [T-android-group-pause-badge-restamp] Any member carrying a FRESH corner
-     * badge (entered within the last 24h). Rendered on the card icon ONLY while
-     * the group is collapsed — expanded members carry their own row badges, and
-     * a header copy would leave the user guessing which row it refers to.
-     * Mirrors iOS `SidebarGroup.anyPaused`.
-     *
-     * The freshness window is a GROUP-CARD filter only: session rows keep
-     * rendering their badge unfiltered at any age. It exists so a pause from
-     * days ago stops flagging its whole group forever.
-     */
+    // [T-android-group-pause-badge-restamp] Any member with a fresh badge (24h), shown only while collapsed (iOS anyPaused); group-card filter only.
     val anyPaused: Boolean = false,
-    /**
-     * [T-android-group-running-ring] Any member currently running its agent
-     * loop. Drives the collapsed group card's SpinningRing, so a task started
-     * inside a group stays visible after the group is folded shut — otherwise
-     * collapsing the group hides the only signal that work is in flight.
-     * Mirrors iOS `SidebarGroup.anyActive` (ContentView.swift:4771).
-     *
-     * Unlike [anyPaused] there is no freshness window: "running" is live state
-     * that ends on its own, so it can never go stale.
-     */
+    // [T-android-group-running-ring] Any member currently running its loop; drives the collapsed card's SpinningRing (iOS anyActive). No freshness window.
     val anyActive: Boolean = false,
 )
 
-/**
- * [T-android-session-grouping] Partition sessions into group blocks + the
- * ungrouped remainder.
- *
- * Ordering rules, ported from iOS `computeGroupedSessionIDs`:
- *  - Input arrives `updated_at DESC`, so first-encounter order over the filed
- *    sessions IS the groups' activity order — no separate sort needed.
- *  - Pinned groups float above unpinned as a STABLE PARTITION, not a re-sort,
- *    so activity order survives inside each half.
- *  - **Group membership outranks pin for PLACEMENT**: a pinned session that is
- *    also filed renders inside its group, not in the Pinned bucket. Otherwise
- *    filing a pinned session looks like a no-op — the write lands but the row
- *    never moves. The pin itself is untouched: pinned members sort first inside
- *    the group and keep their pin glyph.
- *  - A `folder_id` pointing at a group we don't have renders as UNGROUPED
- *    rather than vanishing. There is no FK, so this is a normal state.
- *  - Empty groups still render — a group that disappears when its last session
- *    moves out reads as data loss.
- */
+// [T-android-sessionlist-byid] (#12) Folder blocks + ungrouped remainder + id→session map (O(1) expanded-group row resolution).
+private data class SessionPartition(
+    val blocks: List<FolderGroupBlock>,
+    val remaining: List<ChatSessionEntity>,
+    val byId: Map<String, ChatSessionEntity>,
+)
+
+// [T-android-session-grouping] Partition into group blocks + ungrouped remainder. Pinned groups float above unpinned (stable partition); membership outranks pin for placement; unknown folder_id and empty groups render rather than vanish.
 // `internal` so the accordion invariant can be tested for real rather than by
 // matching source text — see SessionGroupAccordionTest.
 internal fun partitionByFolder(
@@ -653,14 +599,22 @@ fun SessionListScreen(
     val folderPartition = remember(
         sessions, folders, collapsedFolderIds, showFolderBlock, freshBadgedIds, activeSessionIds,
     ) {
-        if (showFolderBlock) {
+        // [T-android-sessionlist-byid] (#12) Also produce an id→session map
+        // so the folder-expansion render path resolves each member in O(1)
+        // instead of `sessions.firstOrNull { it.id == id }` — O(n×m) inside
+        // the LazyColumn builder, re-run on every list rebuild.
+        val byId = sessions.associateBy { it.id }
+        val (blocks, remaining) = if (showFolderBlock) {
             partitionByFolder(
                 sessions, folders, collapsedFolderIds, freshBadgedIds, activeSessionIds,
             )
-        } else emptyList<FolderGroupBlock>() to sessions
+        } else {
+            emptyList<FolderGroupBlock>() to sessions
+        }
+        SessionPartition(blocks, remaining, byId)
     }
-    val folderBlocks = folderPartition.first
-    val groupedSessions = remember(folderPartition) { groupSessionsByDate(folderPartition.second) }
+    val folderBlocks = folderPartition.blocks
+    val groupedSessions = remember(folderPartition) { groupSessionsByDate(folderPartition.remaining) }
 
     // [T-android-folder-accordion-anchor] Assembly order (Pinned → groups →
     // date buckets) hoisted OUT of the LazyColumn body so the scroll-anchor
@@ -1068,8 +1022,10 @@ fun SessionListScreen(
                                 }
                                 // Collapsed groups contribute no rows; the card
                                 // still reports the real member count.
+                                // (#12) O(1) map lookup per member instead of a
+                                // firstOrNull scan over all sessions per id.
                                 renderSessionRows(
-                                    block.ids.mapNotNull { id -> sessions.firstOrNull { it.id == id } },
+                                    block.ids.mapNotNull(folderPartition.byId::get),
                                     inFolder = true,
                                 )
                             }

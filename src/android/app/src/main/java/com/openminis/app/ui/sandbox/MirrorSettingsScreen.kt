@@ -119,11 +119,7 @@ data class MirrorTestResult(
 
 // ─── Mirror Definitions ──────────────────────────────────────────────────────
 
-/**
- * Every [MirrorCatalog] display name must map here. A miss falls through to
- * the English catalog string, which is what left USTC / SJTU / npmmirror
- * untranslated on the Chinese software-source page.
- */
+/** Every [MirrorCatalog] display name must map here; a miss falls through to English, which left USTC/SJTU/npmmirror untranslated. */
 internal fun mirrorNameStringRes(name: String): Int? = when (name) {
     "Official ports" -> R.string.mirror_name_official_ports
     "Official PyPI" -> R.string.mirror_name_official_pypi
@@ -253,16 +249,19 @@ object MirrorSpeedTestViewModel {
         if (loaded) return
         synchronized(this) {
             if (loaded) return
-            val p = prefs(context)
-            for (cat in MirrorCategory.entries) {
-                val savedUrl = p.getString("mirror.selected.${cat.key}", null)
-                if (savedUrl != null) {
-                    val entry = MirrorCatalog.findByBaseURL(savedUrl)
-                    if (entry != null) selectedMirrorId[cat] = entry.id
-                }
-                useCustomMirror[cat] = p.getBoolean("mirror.useCustom.${cat.key}", false)
-            }
             loaded = true
+            // [T-android-mirror-prefs-io] First prefs read loads XML synchronously on the caller (main thread in composition) — do it on IO; SnapshotStateMaps are thread-safe so publishing is fine.
+            scope.launch {
+                val p = prefs(context.applicationContext)
+                for (cat in MirrorCategory.entries) {
+                    val savedUrl = p.getString("mirror.selected.${cat.key}", null)
+                    if (savedUrl != null) {
+                        val entry = MirrorCatalog.findByBaseURL(savedUrl)
+                        if (entry != null) selectedMirrorId[cat] = entry.id
+                    }
+                    useCustomMirror[cat] = p.getBoolean("mirror.useCustom.${cat.key}", false)
+                }
+            }
         }
     }
 

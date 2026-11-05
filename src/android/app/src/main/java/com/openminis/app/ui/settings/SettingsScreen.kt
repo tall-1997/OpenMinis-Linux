@@ -97,7 +97,8 @@ fun SettingsScreen(
     // Agent Runtime section; default no-op for callers that haven't wired
     // the route yet.
     onSoulClick: () -> Unit = {},
-    onEvolutionClick: () -> Unit = {},
+    // [T-dead-character-extras] onEvolutionClick removed: no Settings row ever
+    // invoked it (the Evolution entry migrated into the Memory hub).
     onPermissionsClick: () -> Unit = {},
     onUsageClick: () -> Unit = {},
     onAppearanceClick: () -> Unit = {},
@@ -113,7 +114,9 @@ fun SettingsScreen(
     // don't need to be retrofitted.
     onBackgroundClick: () -> Unit = {},
     onWebSearchClick: () -> Unit = {},
-    onCharacterExtrasClick: () -> Unit = {},
+    // [T-dead-character-extras] onCharacterExtrasClick removed: no row invoked
+    // it, so the CHARACTER_EXTRAS page was unreachable — deleted along with
+    // its navigation destination.
     onTranslateClick: () -> Unit = {},
     onOpenBrowser: () -> Unit = {},
     onBrowserSettings: () -> Unit = {},

@@ -364,16 +364,28 @@ private fun AudioReplyContent(data: ByteArray) {
     val context = LocalContext.current
     var isPlaying by remember { mutableStateOf(false) }
     val player = remember { android.media.MediaPlayer() }
-    val file = remember(data) {
-        java.io.File(context.cacheDir, "quicktest-audio-${data.hashCode()}.bin").apply {
-            writeBytes(data)
+    // (#3) writeBytes used to run inside remember — a synchronous main-thread
+    // disk write per composition of the audio reply card. The bytes now land
+    // on Dispatchers.IO in a LaunchedEffect; [file] starts null (nothing to
+    // play until the write settles) and the onDispose cleanup reads the
+    // latest value when the card leaves.
+    var file by remember { mutableStateOf<java.io.File?>(null) }
+    androidx.compose.runtime.LaunchedEffect(data) {
+        file = withContext(Dispatchers.IO) {
+            runCatching {
+                java.io.File(context.cacheDir, "quicktest-audio-${data.hashCode()}.bin").apply {
+                    writeBytes(data)
+                }
+            }.onFailure {
+                AppLogger.warning(TAG, "[QuickTest] audio cache write failed: ${it.message}")
+            }.getOrNull()
         }
     }
 
-    fun play() {
+    fun play(f: java.io.File) {
         runCatching {
             player.reset()
-            player.setDataSource(file.absolutePath)
+            player.setDataSource(f.absolutePath)
             player.setOnCompletionListener { isPlaying = false }
             player.prepare()
             player.start()
@@ -384,16 +396,20 @@ private fun AudioReplyContent(data: ByteArray) {
         }
     }
 
-    androidx.compose.runtime.LaunchedEffect(file) { play() }
+    androidx.compose.runtime.LaunchedEffect(file) { file?.let { play(it) } }
     androidx.compose.runtime.DisposableEffect(Unit) {
         onDispose {
             runCatching { player.release() }
-            runCatching { file.delete() }
+            runCatching { file?.delete() }
         }
     }
 
     Row(verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = { if (!isPlaying) play() }) {
+        IconButton(
+            onClick = { if (!isPlaying) file?.let { play(it) } },
+            // Nothing to play until the async cache write settles (#3).
+            enabled = file != null,
+        ) {
             Icon(
                 if (isPlaying) Icons.Outlined.GraphicEq else Icons.Filled.PlayArrow,
                 contentDescription = stringResource(

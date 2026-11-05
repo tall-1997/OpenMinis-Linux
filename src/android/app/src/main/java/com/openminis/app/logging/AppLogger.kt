@@ -150,7 +150,7 @@ object AppLogger {
         System.setErr(PrintStream(LineCapturingStream(originalErr!!, "STDERR"), true))
         // Spawn the logcat tail before emitting the session-start marker so
         // the marker itself shows up in the captured stream as a sanity check.
-        logcatTailer = LogcatTailer { line -> writeLogcatLine(line) }.also { it.start() }
+        logcatTailer = LogcatTailer(sink = { line -> writeLogcatLine(line) }).also { it.start() }
         captureActive = true
         info("AppLogger", "Logging session started — capturing stdout/stderr + logcat tail")
         // [T-android-mem-probe-trust] Device/ROM/heap identity, immediately
@@ -267,8 +267,8 @@ object AppLogger {
     private fun writeFileLine(channel: String, line: String) {
         if (!enabled) return
         val ms = System.currentTimeMillis()
-        val today = IsoTime.formatLocalDate(ms)
-        val timestamp = IsoTime.formatLocalTimeMillis(ms)
+        val today = cachedLocalDate(ms)
+        val timestamp = cachedLocalTimeMillis(ms)
         appendFileLine(today, "[$timestamp] [$channel] $line")
     }
 
@@ -287,6 +287,32 @@ object AppLogger {
         log("ERROR", category, message)
     }
 
+    // [Wave3 #11b] Same-millisecond timestamp caches. The LogcatTailer sink
+    // feeds every logcat line through [writeFileLine], and a streaming reply
+    // emits hundreds of lines inside the same millisecond — each of which
+    // re-ran the (locale-aware, allocation-heavy) date/time formatters. One
+    // AtomicReference slot per formatter: hit = no formatting; a newer
+    // millisecond simply overwrites the slot. Benign races between threads
+    // cost at worst a redundant format, which is exactly the old behaviour.
+    private val localDateCache = java.util.concurrent.atomic.AtomicReference<Pair<Long, String>?>(null)
+    private val localTimeMillisCache = java.util.concurrent.atomic.AtomicReference<Pair<Long, String>?>(null)
+
+    private fun cachedLocalDate(ms: Long): String {
+        val cached = localDateCache.get()
+        if (cached != null && cached.first == ms) return cached.second
+        val formatted = IsoTime.formatLocalDate(ms)
+        localDateCache.set(ms to formatted)
+        return formatted
+    }
+
+    private fun cachedLocalTimeMillis(ms: Long): String {
+        val cached = localTimeMillisCache.get()
+        if (cached != null && cached.first == ms) return cached.second
+        val formatted = IsoTime.formatLocalTimeMillis(ms)
+        localTimeMillisCache.set(ms to formatted)
+        return formatted
+    }
+
     /**
      * Categories whose DEBUG logs we silently drop. Useful for high-volume
      * categories that fire on every scroll frame / token (e.g. the chat
@@ -297,7 +323,14 @@ object AppLogger {
      * but `Log.d → liblog → LogcatTailer → file write` is more expensive
      * than the string build alone.
      */
-    private val mutedDebugCategories = setOf("ChatScrollFollow")
+    private val mutedDebugCategories = setOf(
+        "ChatScrollFollow",
+        // [Wave3 #15] Per-emission overlay diagnostics — the flow emits on
+        // every token / tool-status tick, so an ungated line per emission was
+        // the whole log-storm problem. Same muting contract as ChatScrollFollow.
+        "OverlayState",
+        "ToolOverlay",
+    )
 
     fun debug(category: String, message: String) {
         if (category in mutedDebugCategories) return
@@ -306,8 +339,8 @@ object AppLogger {
 
     private fun log(level: String, category: String, message: String) {
         val ms = System.currentTimeMillis()
-        val today = IsoTime.formatLocalDate(ms)
-        val timestamp = IsoTime.formatLocalTimeMillis(ms)
+        val today = cachedLocalDate(ms)
+        val timestamp = cachedLocalTimeMillis(ms)
 
         // Also output to logcat
         val logcatTag = "Minis.$category"

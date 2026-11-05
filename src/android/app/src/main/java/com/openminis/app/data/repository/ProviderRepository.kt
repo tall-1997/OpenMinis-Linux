@@ -33,7 +33,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class ProviderRepository(internal val context: Context) {
+class ProviderRepository(
+    internal val context: Context,
+    /** [Wave3-fix-9] Where removed entry ids get scrubbed; defaults to legacy behaviour (moved verbatim into [LegacySessionBindingCleaner]) so construction sites need no change. */
+    internal val sessionBindingCleaner: SessionBindingCleaner =
+        SessionBindingCleaner.legacy(context),
+) {
 
     // ── Persistence collaborator [ProviderRepository split] ──
     // The persistence slice (JSON codec, prefs, encrypted prefs, hash mirror,
@@ -102,27 +107,11 @@ class ProviderRepository(internal val context: Context) {
 
     // encryptedPrefs (provider_secrets) moved to ProviderConfigStore.
 
-    // [T-android-startup-config-stall] #753: loadConfig() does a synchronous
-    // SharedPreferences read (~3s first-touch as the XML is parsed) + a
-    // Json.decodeFromString<ProviderConfig> (~8s on a large config). It used to
-    // run INLINE in this field initializer, i.e. inside ProviderRepository's
-    // constructor, which MinisApp.onCreate() invokes on the MAIN THREAD — so
-    // cold start hung >11s. Now we start with an empty placeholder (instant, no
-    // I/O) and load the real config on Dispatchers.IO, emitting it when ready.
-    // Reactive consumers (config.collectAsState) update automatically on emit;
-    // action-time `config.value` reads tolerate the brief empty window (a send
-    // before load just has no model entry, exactly like a fresh install).
+    // [T-android-startup-config-stall] loadConfig's sync prefs read + JSON decode used to run inline in the constructor on the MAIN thread (cold start hung >11s); now we start empty and load on IO, emitting when ready.
     internal val _config = MutableStateFlow(ProviderConfig())
     val config: StateFlow<ProviderConfig> = _config.asStateFlow()
 
-    /**
-     * [T-android-startup-config-stall] False until the persisted config has
-     * been read off-thread and emitted. First-screen code that branches on
-     * `instances.isEmpty()` (the onboarding gate) reads this to avoid flashing
-     * a "no providers" / onboarding state for an existing user during the load
-     * window. Distinguishes "empty because not loaded yet" from "empty because
-     * the user genuinely has no providers".
-     */
+    /** [T-android-startup-config-stall] False until config is read off-thread and emitted; first-screen onboarding reads it to avoid flashing "no providers" during the load window. */
     // internal (was private): ProviderConfigStore.ensureConfigLoaded mutates it.
     internal val _configLoaded = MutableStateFlow(false)
     val configLoaded: StateFlow<Boolean> = _configLoaded.asStateFlow()
@@ -290,7 +279,7 @@ class ProviderRepository(internal val context: Context) {
     }
 
     fun addInstance(instance: ProviderInstance): Unit = synchronized(configLock) {
-        ensureConfigLoaded()
+        if (!ensureConfigLoaded()) return
         val config = workingCopy()
         config.instances.add(instance)
         // Seed built-in model entries ONLY when the seed is appropriate for this
@@ -357,7 +346,7 @@ class ProviderRepository(internal val context: Context) {
         configStore.restoreBuiltInFreeLane(builtin)
 
     fun updateInstance(instance: ProviderInstance): Unit = synchronized(configLock) {
-        ensureConfigLoaded()
+        if (!ensureConfigLoaded()) return
         val config = workingCopy()
         val idx = config.instances.indexOfFirst { it.id == instance.id }
         if (idx >= 0) {
@@ -389,14 +378,14 @@ class ProviderRepository(internal val context: Context) {
         }
     }
     fun setInstancePinned(id: String, pinned: Boolean): Unit = synchronized(configLock) {
-        ensureConfigLoaded()
+        if (!ensureConfigLoaded()) return
         val config = workingCopy()
         val inst = config.instances.find { it.id == id } ?: return
         inst.pinned = pinned
         saveConfig(config)
     }
     fun removeInstance(instanceId: String): Unit = synchronized(configLock) {
-        ensureConfigLoaded()
+        if (!ensureConfigLoaded()) return
         invalidateModelCache(instanceId)
         val config = workingCopy()
         val removedInstance = config.instances.find { it.id == instanceId }
@@ -481,7 +470,7 @@ class ProviderRepository(internal val context: Context) {
     // happens-before with main-thread readers.
     fun setImageEndpointResolved(instanceId: String, endpoint: ImageEndpointMode): Unit =
         synchronized(configLock) {
-            ensureConfigLoaded()
+            if (!ensureConfigLoaded()) return@synchronized
             val config = workingCopy()
             val idx = config.instances.indexOfFirst { it.id == instanceId }
             if (idx < 0) return@synchronized
@@ -603,8 +592,10 @@ class ProviderRepository(internal val context: Context) {
     fun enabledMemberEntries(group: ModelGroup): List<ModelEntry> {
         val config = _config.value
         val enabledIds = config.instances.filter { it.isEnabled }.map { it.id }.toSet()
+        // [Wave3-fix-13] id→entry map instead of a linear `find` per member.
+        val entriesById = config.modelEntries.associateBy { it.id }
         return group.memberEntryIds.mapNotNull { entryId ->
-            val entry = config.modelEntries.find { it.id == entryId }
+            val entry = entriesById[entryId]
             if (entry != null && entry.providerInstanceId in enabledIds) entry else null
         }
     }
@@ -637,10 +628,15 @@ class ProviderRepository(internal val context: Context) {
      */
     fun availableMemberEntries(group: ModelGroup): List<ModelEntry> {
         val config = _config.value
+        // [Wave3-fix-13] Maps built once per call: this runs per routing
+        // decision and the old `find` inside `mapNotNull` was O(members ×
+        // entries) + O(members × instances) on the hot request path.
+        val entriesById = config.modelEntries.associateBy { it.id }
+        val instancesById = config.instances.associateBy { it.id }
         return group.memberEntryIds.mapNotNull { entryId ->
-            val entry = config.modelEntries.find { it.id == entryId } ?: return@mapNotNull null
+            val entry = entriesById[entryId] ?: return@mapNotNull null
             if (entry.isHidden) return@mapNotNull null
-            val instance = config.instances.find { it.id == entry.providerInstanceId }
+            val instance = instancesById[entry.providerInstanceId]
                 ?: return@mapNotNull null
             if (!instance.isEnabled) return@mapNotNull null
             if (!hasAnyCredential(instance)) return@mapNotNull null
@@ -702,7 +698,7 @@ class ProviderRepository(internal val context: Context) {
      */
     fun replaceEntries(instanceId: String, models: List<LLMModel>, dropStaleRefs: Boolean = false): Set<String> = synchronized(configLock) {
         if (models.isEmpty()) return@synchronized emptySet()
-        ensureConfigLoaded()
+        if (!ensureConfigLoaded()) return@synchronized emptySet()
         // Hot path for concurrent autoRefreshModels coroutines (one per
         // enabled instance) — without this lock, two replaceEntries() calls
         // race on the shared config.modelEntries ArrayList. The working copy
@@ -861,11 +857,16 @@ class ProviderRepository(internal val context: Context) {
      * the entries (which is what publishes the removal in memory anyway).
      *
      * COORDINATION: the DAO updates the row whose binding literally contains
-     * `"entryId":"<id>"` (ChatDao.clearBindingReferencing, `instr` not `LIKE`),
-     * and [com.openminis.app.scheduled.ScheduledTaskStore.dropEntryRefs] parses
-     * the same JSON before comparing. Both used to substring-match, which
+     * `"entryId":"<id>"` (ChatDao.clearBindingsReferencing, `instr` not
+     * `LIKE`), and [com.openminis.app.scheduled.ScheduledTaskStore.dropEntryRefs]
+     * parses the same JSON before comparing. Both used to substring-match, which
      * un-pinned `inst/gpt-4o` whenever `inst/gpt-4` was removed; keep the two
      * call sites exact if either is touched again.
+     *
+     * [Wave3-fix-9] The chat-DB + ScheduledTaskStore half moved behind
+     * [sessionBindingCleaner] so this class no longer reaches into the app
+     * container or constructs a throwaway ScheduledTaskStore per call. The
+     * default implementation preserves the old behaviour exactly.
      */
     // internal (was private): ModelCatalogCache.refreshModels reuses it.
     internal fun scrubExternalEntryRefs(removedIds: Set<String>) {
@@ -873,13 +874,7 @@ class ProviderRepository(internal val context: Context) {
         val ids = removedIds.toList()
         ensurePersistWorker()
         persistRequests.trySend(ProviderPersistRequest.Task {
-            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                val dao = (context as? com.openminis.app.MinisApp)?.appContainer?.database?.chatDao() ?: com.openminis.app.data.db.AppDatabase.getInstance(context).chatDao() // [T-singleton-convergence] AppContainer-first; getInstance = pre-wiring fallback only
-                for (id in ids) {
-                    dao.clearBindingReferencing(id)
-                }
-                com.openminis.app.scheduled.ScheduledTaskStore(context).dropEntryRefs(ids.toSet())
-            }
+            sessionBindingCleaner.clearModelBindings(ids)
         })
     }
 
@@ -900,7 +895,7 @@ class ProviderRepository(internal val context: Context) {
     // fine — replaceEntries / ensureVoiceTemplateModels already rely on that.
 
     fun addEntry(entry: ModelEntry): Unit = synchronized(configLock) {
-        ensureConfigLoaded()
+        if (!ensureConfigLoaded()) return
         val config = workingCopy()
         if (!entry.isCustom) {
             val exists = config.modelEntries.any {
@@ -927,7 +922,7 @@ class ProviderRepository(internal val context: Context) {
     }
 
     fun updateEntry(entry: ModelEntry): Unit = synchronized(configLock) {
-        ensureConfigLoaded()
+        if (!ensureConfigLoaded()) return
         val config = workingCopy()
         val idx = config.modelEntries.indexOfFirst { it.id == entry.id }
         if (idx >= 0) {
@@ -937,7 +932,7 @@ class ProviderRepository(internal val context: Context) {
     }
 
     fun removeEntry(entryId: String): Unit = synchronized(configLock) {
-        ensureConfigLoaded()
+        if (!ensureConfigLoaded()) return
         val config = workingCopy()
         // 非自定义条目记墓碑，刷新不复活。
         config.modelEntries.firstOrNull { it.id == entryId }?.let { ModelDeletion.recordDeletion(config, it) }
@@ -1010,7 +1005,7 @@ class ProviderRepository(internal val context: Context) {
      * permutation compares equal under data-class structural equality.
      */
     fun reorderInstances(newOrder: List<String>): Unit = synchronized(configLock) {
-        ensureConfigLoaded()
+        if (!ensureConfigLoaded()) return
         val config = workingCopy()
         val current = config.instances.toList()
         if (current.isEmpty()) return
@@ -1165,7 +1160,7 @@ class ProviderRepository(internal val context: Context) {
         }
 
     fun firstModelId(instanceId: String): String? {
-        ensureConfigLoaded()
+        if (!ensureConfigLoaded()) return null
         return _config.value.modelEntries.firstOrNull { it.providerInstanceId == instanceId }?.model?.id
     }
 
@@ -1314,7 +1309,7 @@ class ProviderRepository(internal val context: Context) {
      * catalog keeps everything (list must not be mysteriously empty before first fetch).
      */
     fun builtInThinkingRulesForDisplay(instanceId: String): List<ThinkingRule> {
-        ensureConfigLoaded()
+        if (!ensureConfigLoaded()) return emptyList()
         val config = _config.value
         val inst = config.instances.find { it.id == instanceId } ?: return emptyList()
         val base = (inst.effectiveBaseURL ?: "").lowercase()

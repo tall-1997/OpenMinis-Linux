@@ -12,6 +12,15 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
+ * [Wave3 #7 — boundary note] PRODUCTION PATH DEPENDENCY: despite living in
+ * `debug/`, this object is on the production scheduled-task chain —
+ * scheduled/ScheduledAgentRunner imports it and reaches it from real task
+ * dispatch, not only from the debug RPC. Modifying its semantics (VM cache,
+ * per-session serialization, session lifecycle) must be coordinated with the
+ * scheduled/ owner. Planned follow-up (out of this wave's ownership, its
+ * import sites are outside it): move this object to session/ (or agent/) and
+ * update the ScheduledAgentRunner import.
+ *
  * Headless wrapper around [ChatViewModel] for the debug RPC layer.
  *
  * Issues:

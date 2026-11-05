@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -38,6 +40,7 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PlayCircleFilled
 import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material.icons.outlined.BrokenImage
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -48,18 +51,38 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
 import coil.compose.AsyncImagePainter
 import coil.compose.SubcomposeAsyncImage
 import coil.compose.SubcomposeAsyncImageContent
 import coil.request.ImageRequest
 import com.openminis.app.ui.DisplayBitmapLimits.limitDisplaySize
-import com.openminis.app.ui.chat.BrokenImagePlaceholder
+import com.openminis.app.ui.theme.LocalChatPalette
+import com.openminis.app.ui.theme.ChatColors
+// [T-android-markdown-no-chat-dep] (#15) The two symbols below are the ONLY
+// remaining markdown→chat imports besides the run-router in
+// CodeBlockRunState.kt. They cannot be sunk into this package without
+// editing chat files (Wave 5): LocalMarkdownSessionId is PROVIDED by
+// ChatScreen (ui/chat/ChatScreen.kt:1919) — a markdown-local CompositionLocal
+// would read null there and silently regress session-scoped media resolution
+// — and resolveMdMediaFile is chat's internal session-aware resolver whose
+// call chain (ChatLinkResolver.minisPathCandidates / PRootKernel) is chat
+// territory. Parameterizing MarkdownText(sessionId=…) is not viable either:
+// this composable's chat caller (ChatSubAgentBar) is outside this wave and
+// would keep rendering with the default null. Report documents the retained
+// dependency.
 import com.openminis.app.ui.chat.LocalMarkdownSessionId
 import com.openminis.app.ui.chat.resolveMdMediaFile
 import kotlinx.coroutines.Dispatchers
@@ -107,14 +130,55 @@ fun MarkdownText(
      */
     onRunCode: ((lang: String, code: String) -> Unit)? = null,
 ) {
-    val parsed = remember(markdown) { MarkdownParser.parseWithMath(markdown) }
+    // [T-android-markdown-async-parse] (#5) parseWithMath is O(n) over the raw
+    // text but was remembered per (markdown) INSIDE composition, so every
+    // markdown mutation re-parsed synchronously on the frame the state landed
+    // — for streaming-sized inputs that stalled the frame, and the un-keyed
+    // block loop then re-ran structural diff over every block (O(n²) in
+    // practice).
+    //
+    // Two-phase fix:
+    //  a) Short documents (< [ASYNC_PARSE_THRESHOLD_CHARS], where a full
+    //     parse is single-digit ms — see MarkdownParser's BoundedText notes)
+    //     still parse synchronously so the first frame never flashes empty.
+    //     Longer documents parse on Dispatchers.Default and publish when
+    //     ready; the initial composition shows an empty block list for that
+    //     one frame instead of janking the input path.
+    //  b) The block loop keys each BlockContent slot on (index, block type)
+    //     — Block data classes carry List fields and are structurally
+    //     unstable, so an unkeyed loop could not skip recomposition.
+    var parsed by remember(markdown) {
+        mutableStateOf(
+            if (markdown.length < ASYNC_PARSE_THRESHOLD_CHARS) {
+                MarkdownParser.parseWithMath(markdown)
+            } else {
+                MarkdownParser.ParseResult(emptyList(), emptyList())
+            },
+        )
+    }
+    LaunchedEffect(markdown) {
+        if (markdown.length >= ASYNC_PARSE_THRESHOLD_CHARS) {
+            parsed = withContext(Dispatchers.Default) { MarkdownParser.parseWithMath(markdown) }
+        }
+    }
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        for (block in parsed.blocks) {
-            BlockContent(block, color, style, parsed.mathSpans, onRunCode)
+        for ((index, block) in parsed.blocks.withIndex()) {
+            key(index, block::class) {
+                BlockContent(block, color, style, parsed.mathSpans, onRunCode)
+            }
         }
     }
 }
+
+/**
+ * [T-android-markdown-async-parse] Documents shorter than this parse
+ * synchronously (imperceptible, no first-frame flash); anything longer is
+ * parsed off the main thread. 8K chars ≈ where parseWithMath's line scan +
+ * math extraction stops being single-digit-ms (same order as
+ * BoundedText.MAX_ICU_INPUT_CHARS).
+ */
+private const val ASYNC_PARSE_THRESHOLD_CHARS = 8_192
 
 @Composable
 private fun BlockContent(
@@ -125,12 +189,12 @@ private fun BlockContent(
     onRunCode: ((lang: String, code: String) -> Unit)? = null,
 ) {
     when (block) {
-        is MarkdownParser.Block.Heading -> HeadingBlock(block, color)
+        is MarkdownParser.Block.Heading -> HeadingBlock(block, color, mathSpans)
         is MarkdownParser.Block.Paragraph -> ParagraphBlock(block.content, color, baseStyle, mathSpans)
         is MarkdownParser.Block.CodeBlock -> CodeBlockView(block, onRunCode)
         is MarkdownParser.Block.Blockquote -> BlockquoteView(block, color, baseStyle, mathSpans)
-        is MarkdownParser.Block.BulletList -> BulletListView(block, color, baseStyle)
-        is MarkdownParser.Block.NumberedList -> NumberedListView(block, color, baseStyle)
+        is MarkdownParser.Block.BulletList -> BulletListView(block, color, baseStyle, mathSpans)
+        is MarkdownParser.Block.NumberedList -> NumberedListView(block, color, baseStyle, mathSpans)
         is MarkdownParser.Block.Table -> TableView(block, color, baseStyle, mathSpans)
         is MarkdownParser.Block.MathBlock -> MathBlockView(latex = block.latex)
         is MarkdownParser.Block.ThematicBreak -> HorizontalDivider(
@@ -146,7 +210,11 @@ private fun BlockContent(
 // -- Heading --
 
 @Composable
-private fun HeadingBlock(heading: MarkdownParser.Block.Heading, color: Color) {
+private fun HeadingBlock(
+    heading: MarkdownParser.Block.Heading,
+    color: Color,
+    mathSpans: List<MarkdownParser.MathSpan>,
+) {
     val (fontSize, fontWeight) = when (heading.level) {
         1 -> 24.sp to FontWeight.Bold
         2 -> 20.sp to FontWeight.Bold
@@ -155,10 +223,14 @@ private fun HeadingBlock(heading: MarkdownParser.Block.Heading, color: Color) {
         5 -> 15.sp to FontWeight.Medium
         else -> 14.sp to FontWeight.Medium
     }
-    InlineContent(
-        text = heading.content,
+    // (#4) Headings carry inline math through [MathFlowText] now — previously
+    // the placeholder sentinel was stripped here and `$x^2$` inside a heading
+    // silently vanished.
+    MathFlowText(
+        content = heading.content,
         color = color,
         style = TextStyle(fontSize = fontSize, fontWeight = fontWeight),
+        mathSpans = mathSpans,
     )
 }
 
@@ -171,46 +243,7 @@ private fun ParagraphBlock(
     style: TextStyle,
     mathSpans: List<MarkdownParser.MathSpan> = emptyList(),
 ) {
-    // Fast path: no math placeholders → original single-Text rendering.
-    if (mathSpans.isEmpty() || !content.contains('￼')) {
-        InlineContent(text = content, color = color, style = style)
-        return
-    }
-
-    // T208 Layer B: split the paragraph at each placeholder and render
-    // inline math as a *non-display-mode*, *non-fillMaxWidth* tile so the
-    // formula visually flows after the preceding text segment instead of
-    // becoming a centered full-width block. Inline math should be roughly
-    // the size of surrounding text and aligned to the start of its row.
-    // Display math (`$$ … $$`) goes through Block.MathBlock above and
-    // still renders centered via MathBlockView — that path is correct.
-    // True inline-flow (math glyph on the same baseline as text within
-    // a single Text composable via InlineTextContent) is a follow-up;
-    // for now we stay with the row-split shape but keep the math visually
-    // small.
-    val byPlaceholder = remember(mathSpans) { mathSpans.associateBy { it.placeholder } }
-    val regex = remember { Regex("\\uFFFC" + "MATH(\\d+)" + "\\uFFFC") }
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        var cursor = 0
-        for (match in regex.findAll(content)) {
-            val span = byPlaceholder[match.value] ?: continue
-            if (match.range.first > cursor) {
-                val segment = content.substring(cursor, match.range.first)
-                if (segment.isNotBlank()) {
-                    InlineContent(text = segment, color = color, style = style)
-                }
-            }
-            // Inline math: non-display KaTeX, no fillMaxWidth, start-aligned.
-            KaTeXRenderView(latex = span.latex, displayMode = false)
-            cursor = match.range.last + 1
-        }
-        if (cursor < content.length) {
-            val tail = content.substring(cursor)
-            if (tail.isNotBlank()) {
-                InlineContent(text = tail, color = color, style = style)
-            }
-        }
-    }
+    MathFlowText(content = content, color = color, style = style, mathSpans = mathSpans)
 }
 
 // -- Code Block --
@@ -221,8 +254,27 @@ private fun CodeBlockView(
     onRunCode: ((lang: String, code: String) -> Unit)? = null,
 ) {
     val context = LocalContext.current
-    val codeColor = Color(0xFF4EC9B0) // Green code text
+    // [T-android-color-contract] (#8) The teal below is HighlightPalette.Dark
+    // .type (VS Code dark+ teal). ChatPalette has NO syntax-teal slot — its
+    // codeBlockText is the iOS-parity green — so the literal stays as the
+    // unspanned-fallback color with this pointer to the contract: new code
+    // colors belong in HighlightPalette (SyntaxHighlighter.kt), not inline
+    // literals. Since #16 the highlighter paints every token anyway; this
+    // only shows if a future highlighter revision leaves gaps.
+    val codeColor = Color(0xFF4EC9B0)
     val bgColor = MaterialTheme.colorScheme.surfaceContainerHighest
+    // (#16) MarkdownText's own SyntaxHighlighter finally feeds CodeBlockView.
+    // The highlighter bounds its token scan via BoundedText.MAX_ICU_INPUT_
+    // CHARS and appends any overflow plain, so remembering per (code,
+    // language) is safe for long blocks. Palette tracks the block background
+    // luminance — dark+ colors on a light surface would be unreadable (same
+    // rule CodeEditorField uses).
+    val highlightPalette = remember(bgColor) {
+        if (bgColor.luminance() < 0.5f) HighlightPalette.Dark else HighlightPalette.Light
+    }
+    val highlighted = remember(block.code, block.language, highlightPalette) {
+        SyntaxHighlighter.highlight(block.code, block.language, highlightPalette)
+    }
     // Button shows only when a handler exists AND the fence language is one
     // the router can actually execute. Empty / unknown fences (java, rust,
     // plain ```) render exactly as before — no button, no dead end.
@@ -311,7 +363,7 @@ private fun CodeBlockView(
                 .padding(horizontal = 12.dp, vertical = 8.dp),
         ) {
             Text(
-                text = block.code,
+                text = highlighted,
                 style = TextStyle(
                     fontFamily = FontFamily.Monospace,
                     fontSize = 13.sp,
@@ -332,11 +384,14 @@ private fun BlockquoteView(
     baseStyle: TextStyle,
     mathSpans: List<MarkdownParser.MathSpan> = emptyList(),
 ) {
-    // Orange accent rule on the leading edge — matches iOS, where the
-    // blockquote uses the app systemOrange (0xFFFF9500) at full opacity.
-    // The previous primary @ 0.5 alpha disappeared into theme purple on the
-    // dark palette and didn't read as a quote at all in some compositions.
-    val barColor = Color(0xFFFF9500)
+    // (#8) Orange accent rule on the leading edge — now reads the palette
+    // slot (ChatColors.kt blockquoteBar: iOS systemOrange @ 50% in light,
+    // systemOrange-dark variant in dark) instead of a raw 0xFFFF9500 literal,
+    // per the [T-android-color-contract]: chat-adjacent surfaces follow the
+    // in-app palette so they track the theme override AND the dark palette.
+    // The old literal was full-opacity; the palette slot's tuned alpha is the
+    // contract value.
+    val barColor = LocalChatPalette.current.blockquoteBar
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -367,6 +422,7 @@ private fun BulletListView(
     block: MarkdownParser.Block.BulletList,
     color: Color,
     baseStyle: TextStyle,
+    mathSpans: List<MarkdownParser.MathSpan> = emptyList(),
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         for (item in block.items) {
@@ -390,23 +446,29 @@ private fun BulletListView(
                         modifier = Modifier.padding(end = 8.dp),
                     )
                 }
-                InlineContent(
-                    text = item.content,
+                // (#4) List item content goes through [MathFlowText] —
+                // previously InlineContent stripped the placeholder sentinel
+                // and inline math inside list items silently vanished.
+                MathFlowText(
+                    content = item.content,
                     color = color,
                     style = baseStyle,
+                    mathSpans = mathSpans,
                     modifier = Modifier.weight(1f),
                 )
             }
             // [T-list-item-block-children] Nested blocks (table / code
             // fence collected by MarkdownParser.appendContinuation)
             // render under the item instead of being printed as prose.
+            // mathSpans thread through too (#4) so nested paragraphs in
+            // list items keep their inline math.
             if (item.children.isNotEmpty()) {
                 Column(
                     modifier = Modifier.padding(start = 24.dp, bottom = 4.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     item.children.forEach { child ->
-                        BlockContent(child, color, baseStyle)
+                        BlockContent(child, color, baseStyle, mathSpans)
                     }
                 }
             }
@@ -421,6 +483,7 @@ private fun NumberedListView(
     block: MarkdownParser.Block.NumberedList,
     color: Color,
     baseStyle: TextStyle,
+    mathSpans: List<MarkdownParser.MathSpan> = emptyList(),
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         for ((index, item) in block.items.withIndex()) {
@@ -431,10 +494,13 @@ private fun NumberedListView(
                     style = baseStyle,
                     modifier = Modifier.padding(end = 8.dp),
                 )
-                InlineContent(
-                    text = item.content,
+                // (#4) see BulletListView — placeholders resolve instead of
+                // being stripped.
+                MathFlowText(
+                    content = item.content,
                     color = color,
                     style = baseStyle,
+                    mathSpans = mathSpans,
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -445,7 +511,7 @@ private fun NumberedListView(
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     item.children.forEach { child ->
-                        BlockContent(child, color, baseStyle)
+                        BlockContent(child, color, baseStyle, mathSpans)
                     }
                 }
             }
@@ -538,9 +604,8 @@ private fun TableView(
  * would have its placeholder stripped by [InlineContent]'s cleanup pass
  * and the math would silently disappear.
  *
- * Cells that don't carry any math placeholder fall through to a plain
- * [InlineContent] call so existing inline markdown (bold/italic/code,
- * links) keeps working in cells without paying for an extra Column.
+ * Delegates to [MathFlowText], which now upgrades cells to the true
+ * inline-flow path once the formula bitmaps are cached (#21).
  */
 @Composable
 private fun TableCellContent(
@@ -549,54 +614,40 @@ private fun TableCellContent(
     style: TextStyle,
     mathSpans: List<MarkdownParser.MathSpan>,
 ) {
-    if (mathSpans.isEmpty() || !text.contains('￼')) {
-        InlineContent(text = text, color = color, style = style)
-        return
-    }
-    val byPlaceholder = remember(mathSpans) { mathSpans.associateBy { it.placeholder } }
-    val regex = remember { Regex("\\uFFFC" + "MATH(\\d+)" + "\\uFFFC") }
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        var cursor = 0
-        for (match in regex.findAll(text)) {
-            val span = byPlaceholder[match.value] ?: continue
-            if (match.range.first > cursor) {
-                val segment = text.substring(cursor, match.range.first)
-                if (segment.isNotBlank()) {
-                    InlineContent(text = segment, color = color, style = style)
-                }
-            }
-            KaTeXRenderView(latex = span.latex, displayMode = false)
-            cursor = match.range.last + 1
-        }
-        if (cursor < text.length) {
-            val tail = text.substring(cursor)
-            if (tail.isNotBlank()) {
-                InlineContent(text = tail, color = color, style = style)
-            }
-        }
-    }
+    MathFlowText(content = text, color = color, style = style, mathSpans = mathSpans)
 }
 
 // -- Inline Content --
 
 @Composable
-private fun InlineContent(
+internal fun InlineContent(
     text: String,
     color: Color,
     style: TextStyle,
     modifier: Modifier = Modifier,
+    /**
+     * [T-android-inline-math-flow] (#21) Maps a placeholder's start index to
+     * (placeholder, endExclusive). When non-empty the placeholders are
+     * emitted as [androidx.compose.foundation.text.appendInlineContent] slots
+     * (true inline flow) instead of being stripped; [mathSlots] supplies the
+     * slot definitions. Empty by default — the no-math / stripping path.
+     */
+    mathInlineTags: Map<Int, Pair<String, Int>> = emptyMap(),
+    mathSlots: Map<String, InlineTextContent> = emptyMap(),
 ) {
     val inlineCodeBg = MaterialTheme.colorScheme.surfaceContainerHighest
     val inlineCodeColor = MaterialTheme.colorScheme.primary
     val linkColor = MaterialTheme.colorScheme.primary
 
     // Strip any leftover math placeholders (U+FFFC MATH<n> U+FFFC). The
-    // ParagraphBlock split path resolves them when math spans are
-    // threaded through, but lists/headings/table cells don't carry the
-    // span list — collapsing the placeholder here keeps the U+FFFC
-    // sentinel from leaking into the rendered glyph stream.
-    val cleaned = remember(text) {
-        if (text.contains('￼')) {
+    // MathFlowText split/warming paths resolve them when math spans are
+    // threaded through, but any InlineContent call outside [MathFlowText]
+    // doesn't carry the span list — collapsing the placeholder here keeps
+    // the U+FFFC sentinel from leaking into the rendered glyph stream.
+    // Skipped on the inline-flow path, where the placeholders are the
+    // slot anchors.
+    val cleaned = remember(text, mathInlineTags) {
+        if (mathInlineTags.isEmpty() && text.contains('￼')) {
             text.replace(Regex("\\uFFFCMATH\\d+\\uFFFC"), "")
         } else {
             text
@@ -631,19 +682,27 @@ private fun InlineContent(
         }
     }
 
-    val annotated = remember(cleaned, color, linkListener) {
-        parseInline(cleaned, color, style, inlineCodeBg, inlineCodeColor, linkColor, linkListener)
+    val annotated = remember(cleaned, color, linkListener, mathInlineTags) {
+        parseInline(
+            cleaned, color, style, inlineCodeBg, inlineCodeColor, linkColor, linkListener,
+            mathInlineTags,
+        )
     }
 
     Text(
         text = annotated,
         modifier = modifier,
         style = style.copy(color = color),
+        inlineContent = mathSlots,
     )
 }
 
 /**
  * Parse inline markdown: **bold**, *italic*, ~~strikethrough~~, `code`, [links](url)
+ *
+ * [mathInlineTags] (#21): start-index → (placeholder, endExclusive). At each
+ * placeholder the parser emits an InlineTextContent slot instead of raw
+ * sentinel glyphs, so styles never span across a formula anchor.
  */
 private fun parseInline(
     text: String,
@@ -653,11 +712,20 @@ private fun parseInline(
     inlineCodeColor: Color,
     linkColor: Color,
     linkListener: LinkInteractionListener? = null,
+    mathInlineTags: Map<Int, Pair<String, Int>> = emptyMap(),
 ): AnnotatedString = buildAnnotatedString {
     var i = 0
     val len = text.length
 
     while (i < len) {
+        // Inline-math placeholder anchor → InlineTextContent slot.
+        val mathTag = mathInlineTags[i]
+        if (mathTag != null) {
+            appendInlineContent(mathTag.first, "￼")
+            i = mathTag.second
+            continue
+        }
+
         // Escaped character
         if (text[i] == '\\' && i + 1 < len) {
             append(text[i + 1])
@@ -760,308 +828,4 @@ private fun parseInline(
         append(text[i])
         i++
     }
-}
-
-// ─── Media blocks (inline image / video / audio) ────────────────────────────
-
-// [T-minis-decode-unify] The old local resolver (resolveMediaFile) used the
-// GLOBAL bindMounts map (last-writer-wins across sessions) plus URLDecoder
-// ('+' → space, no double-decode tolerance). The image/video/audio blocks
-// below now share the session-aware resolveMdMediaFile with the streaming
-// renderer, so every surface resolves a minis:// URL the same way a link
-// TAP does.
-
-private fun filenameFromUrl(url: String): String {
-    val stripped = url.substringBefore('?')
-    val last = stripped.substringAfterLast('/')
-    // [T-minis-decode-unify] same decode as resolution: URLDecoder would
-    // turn a literal '+' in the filename into a space in the DISPLAYED name.
-    return com.openminis.app.ui.chat.ChatLinkResolver.minisPathCandidates(last).first()
-}
-
-/**
- * Share a resolved media file via the system chooser (system player, file
- * manager, etc.). Used when tapping an inline video card — simpler than
- * bundling ExoPlayer for a fullscreen experience.
- */
-private fun openMediaExternally(context: Context, file: File, mime: String) {
-    val authority = context.packageName + ".fileprovider"
-    val uri = try {
-        androidx.core.content.FileProvider.getUriForFile(context, authority, file)
-    } catch (_: Throwable) {
-        Uri.fromFile(file)
-    }
-    val intent = Intent(Intent.ACTION_VIEW).apply {
-        setDataAndType(uri, mime)
-        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        if (context !is android.app.Activity) {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-    }
-    val chooser = Intent.createChooser(intent, file.name).apply {
-        if (context !is android.app.Activity) {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-    }
-    try { context.startActivity(chooser) } catch (_: Throwable) { /* no handler */ }
-}
-
-// -- Image block --
-
-@Composable
-private fun MinisImageBlock(block: MarkdownParser.Block.Image) {
-    val surfaceBg = MaterialTheme.colorScheme.surfaceVariant
-    val borderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-    val context = LocalContext.current
-    // [T-minis-decode-unify] Resolve through the SAME session-aware resolver
-    // the streaming renderer uses (StreamingMarkdownRenderBlock). Raw
-    // AsyncImage(model = url) routes through MinisImageFetcher → the GLOBAL
-    // bindMounts map, which is last-writer-wins across sessions: on a
-    // multi-session device an old message's image resolves against whichever
-    // session booted its shell most recently and renders broken until the
-    // user re-enters this chat. LocalMarkdownSessionId is provided by
-    // ChatScreen; outside chat it is null and the global resolver answers
-    // (previous behavior, e.g. the skills screen).
-    val sessionId = LocalMarkdownSessionId.current
-    val file = remember(block.url, sessionId) { resolveMdMediaFile(context, block.url, sessionId) }
-    // [T-android-canvas-large-bitmap-crash] Cap the DECODE size like the
-    // streaming path: without an explicit request size Coil decodes at the
-    // image's intrinsic size, and a very tall PNG (215 MB bitmap in the
-    // field report) crashes RecordingCanvas from ThreadedRenderer.draw.
-    val imageRequest = remember(file, block.url) {
-        ImageRequest.Builder(context)
-            .data(file ?: block.url)
-            .limitDisplaySize()
-            .build()
-    }
-    SubcomposeAsyncImage(
-        model = imageRequest,
-        contentDescription = block.alt.ifEmpty { filenameFromUrl(block.url) },
-        contentScale = ContentScale.Fit,
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(max = 360.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(surfaceBg)
-            .border(0.5.dp, borderColor, RoundedCornerShape(8.dp))
-            .padding(vertical = 4.dp),
-    ) {
-        when (painter.state) {
-            // T148 parity with the streaming renderer: a gone/broken file
-            // shows a placeholder instead of a silent blank gap.
-            is AsyncImagePainter.State.Error -> BrokenImagePlaceholder(alt = block.alt)
-            else -> SubcomposeAsyncImageContent()
-        }
-    }
-}
-
-// -- Video block (thumbnail card + tap to open system player) --
-
-@Composable
-private fun MinisVideoBlock(block: MarkdownParser.Block.Video) {
-    val context = LocalContext.current
-    // [T-minis-decode-unify] session-aware resolution, same as the image
-    // block — the old local resolveMediaFile used the global bindMounts
-    // resolver plus URLDecoder ('+' → space).
-    val sessionId = LocalMarkdownSessionId.current
-    val file = remember(block.url, sessionId) { resolveMdMediaFile(context, block.url, sessionId) }
-    val filename = remember(block.url) { filenameFromUrl(block.url) }
-    val surfaceBg = MaterialTheme.colorScheme.surfaceVariant
-    val borderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-    val captionColor = MaterialTheme.colorScheme.onSurfaceVariant
-
-    // Generate a thumbnail frame off the main thread via MediaMetadataRetriever.
-    val thumbnail by produceState<Bitmap?>(initialValue = null, key1 = file?.absolutePath) {
-        val f = file ?: run {
-            value = null
-            return@produceState
-        }
-        value = withContext(Dispatchers.IO) {
-            val retriever = MediaMetadataRetriever()
-            try {
-                retriever.setDataSource(f.absolutePath)
-                val bmp = retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-                bmp
-            } catch (t: Throwable) {
-                android.util.Log.w("MdMedia", "video thumbnail failed: ${t.message}")
-                null
-            } finally {
-                try { retriever.release() } catch (_: Throwable) {}
-            }
-        }
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(surfaceBg)
-            .border(0.5.dp, borderColor, RoundedCornerShape(8.dp))
-            .clickable {
-                file?.let { openMediaExternally(context, it, "video/*") }
-            },
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 180.dp, max = 280.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            val thumb = thumbnail
-            if (thumb != null) {
-                Image(
-                    bitmap = thumb.asImageBitmap(),
-                    contentDescription = block.alt.ifEmpty { filename },
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-            Icon(
-                imageVector = Icons.Filled.PlayCircleFilled,
-                contentDescription = "Play video",
-                tint = Color.White.copy(alpha = 0.9f),
-                modifier = Modifier.width(56.dp).height(56.dp),
-            )
-        }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Videocam,
-                contentDescription = null,
-                tint = captionColor,
-                modifier = Modifier.width(14.dp).height(14.dp),
-            )
-            Text(
-                text = filename,
-                style = MaterialTheme.typography.bodySmall,
-                color = captionColor,
-                maxLines = 1,
-                modifier = Modifier.padding(start = 4.dp),
-            )
-        }
-    }
-}
-
-// -- Audio block (inline play/pause + progress) --
-
-@Composable
-private fun MinisAudioBlock(block: MarkdownParser.Block.Audio) {
-    val context = LocalContext.current
-    // [T-minis-decode-unify] session-aware resolution, same as the image block.
-    val sessionId = LocalMarkdownSessionId.current
-    val file = remember(block.url, sessionId) { resolveMdMediaFile(context, block.url, sessionId) }
-    val filename = remember(block.url) { filenameFromUrl(block.url) }
-
-    // Dedicated MediaPlayer per card. Released on DisposableEffect dispose.
-    val player = remember(file?.absolutePath) {
-        if (file == null) null else try {
-            MediaPlayer().apply { setDataSource(file.absolutePath); prepare() }
-        } catch (_: Throwable) { null }
-    }
-    DisposableEffect(player) {
-        onDispose { try { player?.release() } catch (_: Throwable) {} }
-    }
-
-    var isPlaying by remember { mutableStateOf(false) }
-    var positionMs by remember { mutableStateOf(0) }
-    val durationMs = player?.duration ?: 0
-
-    // Poll position while playing to drive the progress bar.
-    LaunchedEffect(isPlaying) {
-        while (isPlaying && player != null) {
-            positionMs = try { player.currentPosition } catch (_: Throwable) { 0 }
-            if (!player.isPlaying) { isPlaying = false; break }
-            delay(200)
-        }
-    }
-    DisposableEffect(player) {
-        val listener = MediaPlayer.OnCompletionListener {
-            isPlaying = false
-            positionMs = 0
-            try { player?.seekTo(0) } catch (_: Throwable) {}
-        }
-        player?.setOnCompletionListener(listener)
-        onDispose { try { player?.setOnCompletionListener(null) } catch (_: Throwable) {} }
-    }
-
-    val tint = MaterialTheme.colorScheme.primary
-    val subtle = MaterialTheme.colorScheme.onSurfaceVariant
-    val cardBg = MaterialTheme.colorScheme.surfaceVariant
-    val borderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(cardBg)
-            .border(0.5.dp, borderColor, RoundedCornerShape(10.dp))
-            .clickable(enabled = file != null) {
-                if (player == null) {
-                    file?.let { openMediaExternally(context, it, "audio/*") }
-                } else {
-                    if (isPlaying) { try { player.pause() } catch (_: Throwable) {} ; isPlaying = false }
-                    else { try { player.start(); isPlaying = true } catch (_: Throwable) {} }
-                }
-            }
-            .padding(horizontal = 10.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        // Leading icon
-        Icon(
-            imageVector = Icons.Filled.Audiotrack,
-            contentDescription = null,
-            tint = subtle,
-            modifier = Modifier.width(18.dp).height(18.dp),
-        )
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .padding(horizontal = 10.dp),
-        ) {
-            Text(
-                text = block.alt.ifEmpty { filename },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-            )
-            val progress = if (durationMs > 0) positionMs.toFloat() / durationMs else 0f
-            LinearProgressIndicator(
-                progress = { progress.coerceIn(0f, 1f) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 4.dp)
-                    .height(3.dp),
-                color = tint,
-                trackColor = tint.copy(alpha = 0.2f),
-            )
-            if (durationMs > 0) {
-                Text(
-                    text = "${formatMs(positionMs)} / ${formatMs(durationMs)}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = subtle,
-                    modifier = Modifier.padding(top = 2.dp),
-                )
-            }
-        }
-        Icon(
-            imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-            contentDescription = if (isPlaying) "Pause" else "Play",
-            tint = tint,
-            modifier = Modifier.width(28.dp).height(28.dp),
-        )
-    }
-}
-
-private fun formatMs(ms: Int): String {
-    if (ms <= 0) return "0:00"
-    val totalSec = ms / 1000
-    val m = totalSec / 60
-    val s = totalSec % 60
-    return "%d:%02d".format(m, s)
 }

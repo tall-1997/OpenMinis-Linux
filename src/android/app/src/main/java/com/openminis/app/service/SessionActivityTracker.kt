@@ -25,10 +25,23 @@ import kotlinx.coroutines.flow.update
  * the user holds a stable adj=200 across reading, composing, and
  * streaming alike. It stops only when both are empty (user has
  * navigated back to Sessions list AND no stream is in flight).
+ * [Wave3 #5] the presence half is user-toggleable (default ON);
+ * streams always hold the service regardless of the toggle.
  */
 object SessionActivityTracker {
 
     private const val TAG = "SessionTracker"
+
+    /**
+     * [Wave3 #5] Prefs file + key for the presence keep-alive toggle.
+     * Deliberately the SAME file [com.openminis.app.data.repository
+     * .BackgroundSettingsRepository] owns (PREFS_NAME = "background_settings")
+     * so the future repository-level key lands in one store; see the KDoc on
+     * [presenceKeepAliveEnabled] for the handoff steps. Default true = the
+     * pre-fix behaviour.
+     */
+    private const val PRESENCE_KEEP_ALIVE_PREFS = "background_settings"
+    private const val PRESENCE_KEEP_ALIVE_KEY = "presenceKeepAliveEnabled"
 
     // [T-fgs-stop-linger] Owns the deferred service stop. See
     // [ServiceStopLinger] for the crossing this closes.
@@ -234,9 +247,38 @@ object SessionActivityTracker {
      * the user is currently present in at least one chat. Both inputs
      * are independently mutated, so we always recompute from the live
      * state flows rather than tracking a derived flag.
+     *
+     * [Wave3 #5] The presence half is gated by the user toggle
+     * [PRESENCE_KEEP_ALIVE_KEY] (default ON = unchanged behaviour). With the
+     * toggle OFF, only in-flight streams hold the foreground service — a
+     * mounted composer alone no longer pins the process at adj=200. Streams
+     * always hold it: killing the service mid-run would drop active work.
      */
     private fun shouldRunService(): Boolean =
-        _activeSessions.value.isNotEmpty() || _presentSessions.value.isNotEmpty()
+        _activeSessions.value.isNotEmpty() ||
+            (presenceKeepAliveEnabled() && _presentSessions.value.isNotEmpty())
+
+    /**
+     * [Wave3 #5] Presence keep-alive toggle. Key declared HERE on purpose:
+     * the natural home, [com.openminis.app.data.repository
+     * .BackgroundSettingsRepository], is in data\ (outside this fix wave's
+     * ownership), so the key lives in the same prefs file that repository
+     * already owns ("background_settings") and is read directly. Ownership
+     * handoff for the settings UI:
+     *  1. data\ BackgroundSettingsRepository: add
+     *     `val presenceKeepAliveEnabled = MutableStateFlow(prefs.getBoolean(
+     *     "presenceKeepAliveEnabled", true))` + a setter, mirroring
+     *     KEY_DYNAMIC_ISLAND_ENABLED.
+     *  2. ui\settings Background screen: add a switch row bound to that flow,
+     *     title e.g. "Presence keep-alive (前台保活)", default ON, and route
+     *     writes through the repository (same file+key, so this tracker's
+     *     direct read stays the source of truth).
+     */
+    private fun presenceKeepAliveEnabled(): Boolean {
+        val ctx = appContext ?: return true
+        return ctx.getSharedPreferences(PRESENCE_KEEP_ALIVE_PREFS, Context.MODE_PRIVATE)
+            .getBoolean(PRESENCE_KEEP_ALIVE_KEY, true)
+    }
 
     /**
      * T50: per-session stream-cancel callbacks. Each ChatViewModel

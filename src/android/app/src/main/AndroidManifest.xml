@@ -197,7 +197,6 @@
         android:requestLegacyExternalStorage="true"
         android:preserveLegacyExternalStorage="true"
         android:networkSecurityConfig="@xml/network_security_config"
-        android:usesCleartextTraffic="true"
         android:extractNativeLibs="true"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -540,11 +539,7 @@
 
         <receiver
             android:name=".notification.SandboxNotifyActionReceiver"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="com.openminis.linux.action.SANDBOX_NOTIFY" />
-            </intent-filter>
-        </receiver>
+            android:exported="false" />
 
         <!-- [T-android-approval-gate] Broadcast receiver for the approve/deny
              buttons on the tool-approval notification. Exported so the system

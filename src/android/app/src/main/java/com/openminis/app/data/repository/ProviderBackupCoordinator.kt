@@ -2,6 +2,7 @@ package com.openminis.app.data.repository
 
 import android.content.Context
 import android.util.Base64
+import androidx.room.withTransaction
 import com.openminis.app.backup.BackupSecrets
 import com.openminis.app.data.db.ProviderConfigDao
 import com.openminis.app.data.model.LLMModel
@@ -36,7 +37,8 @@ internal class ProviderBackupCoordinator(
         val configValue: ProviderConfig
         fun saveConfig(config: ProviderConfig)
         fun workingCopy(): ProviderConfig
-        fun ensureConfigLoaded()
+        /** [Wave3-fix-1] False = config still unloaded on Main; caller must abort. */
+        fun ensureConfigLoaded(): Boolean
         fun addInstance(instance: ProviderInstance)
         fun instance(id: String): ProviderInstance?
         fun visibleEntries(instanceId: String): List<ModelEntry>
@@ -69,7 +71,9 @@ internal class ProviderBackupCoordinator(
 
     /** Export an instance as shareable JSON (includes base64-encoded API key). */
     fun exportInstanceJSON(instanceId: String): String? {
-        host.ensureConfigLoaded()
+        // [Wave3-fix-1] Refused in the main-thread cold-start window → no config
+        // to export yet; surface as "instance not found" rather than block Main.
+        if (!host.ensureConfigLoaded()) return null
         val instance = host.instance(instanceId) ?: return null
         val entries = host.visibleEntries(instanceId) + host.configValue.modelEntries.filter {
             it.providerInstanceId == instanceId && it.isHidden
@@ -379,7 +383,10 @@ internal class ProviderBackupCoordinator(
      * not "updated").
      */
     fun mergeBackupProviderConfig(remote: ProviderConfig): Pair<Int, Int> {
-        host.ensureConfigLoaded()
+        // [Wave3-fix-1] Refused in the main-thread cold-start window: report
+        // "0 changed" instead of merging into the empty placeholder (that would
+        // seed an empty config and, worse, persist it).
+        if (!host.ensureConfigLoaded()) return 0 to 0
         return synchronized(host.configLock) {
             val local = host.configValue
             // 备份优先：同 id 替换、同名分组合并、本机独有内容保留。
@@ -414,32 +421,53 @@ internal class ProviderBackupCoordinator(
      * by id is left as-is (skipped), an absent one is inserted. This is the
      * closest faithful behaviour the local schema allows; the record's carried
      * createdAt/updatedAt are ignored on import.
+     *
+     * [Wave3-fix-15] The per-row upserts used to run as N implicit
+     * transactions; a crash mid-restore left a PARTIAL rule set with no way to
+     * tell it apart from a complete one. All writes now run in ONE
+     * provider.db transaction ([restoreBackupThinkingRulesSuspending]).
+     *
+     * Threading: the only caller (backup/BackupImporter.importProviders) is a
+     * NON-suspend function, so this wrapper keeps `runBlocking` (the import
+     * itself already runs off-main on the backup pipeline) and delegates to the
+     * suspend variant. Wave 4/5 can make importProviders suspend and call the
+     * variant directly, dropping the hop.
      */
     fun restoreBackupThinkingRules(
         rules: List<com.openminis.app.backup.BackupThinkingRuleRecord>,
-    ): Pair<Int, Int> = runBlocking {
-        if (rules.isEmpty()) return@runBlocking 0 to 0
-        val existing = host.providerDao.loadAllThinkingRules().map { it.id }.toSet()
-        var written = 0
-        var skipped = 0
-        for (r in rules) {
-            if (r.id in existing) { skipped++; continue }
-            host.providerDao.upsertThinkingRule(
-                com.openminis.app.data.db.ProviderThinkingRuleEntity(
-                    id = r.id,
-                    providerInstanceId = r.instanceId,
-                    label = r.label,
-                    scopeKind = r.scopeKind,
-                    scopePattern = r.scopePattern,
-                    wireFormatJson = r.wireFormatJson.takeIf { it.isNotBlank() && it != "{}" },
-                    reasoningEchoJson = null,
-                    sortOrder = r.sortOrder,
+    ): Pair<Int, Int> = runBlocking { restoreBackupThinkingRulesSuspending(rules) }
+
+    /** Suspend variant of [restoreBackupThinkingRules] — one transaction for the whole batch. */
+    suspend fun restoreBackupThinkingRulesSuspending(
+        rules: List<com.openminis.app.backup.BackupThinkingRuleRecord>,
+    ): Pair<Int, Int> {
+        if (rules.isEmpty()) return 0 to 0
+        val dao = host.providerDao
+        val providerDb = com.openminis.app.data.db.ProviderDatabase.getInstance(context)
+        return providerDb.withTransaction {
+            val existing = dao.loadAllThinkingRules().map { it.id }.toSet()
+            var written = 0
+            var skipped = 0
+            for (r in rules) {
+                if (r.id in existing) { skipped++; continue }
+                dao.upsertThinkingRule(
+                    com.openminis.app.data.db.ProviderThinkingRuleEntity(
+                        id = r.id,
+                        providerInstanceId = r.instanceId,
+                        label = r.label,
+                        scopeKind = r.scopeKind,
+                        scopePattern = r.scopePattern,
+                        wireFormatJson = r.wireFormatJson.takeIf { it.isNotBlank() && it != "{}" },
+                        reasoningEchoJson = null,
+                        sortOrder = r.sortOrder,
+                    )
                 )
-            )
-            written++
+                written++
+            }
+            written to skipped
+        }.also {
+            host.loadAllThinkingRulesIntoCache()
         }
-        host.loadAllThinkingRulesIntoCache()
-        written to skipped
     }
 
     /**
@@ -448,7 +476,8 @@ internal class ProviderBackupCoordinator(
      * - Decodes base64-encoded API key (falls back to plain text)
      */
     fun importInstanceJSON(jsonStr: String): String? {
-        host.ensureConfigLoaded()
+        // [Wave3-fix-1] Refused in the main-thread cold-start window.
+        if (!host.ensureConfigLoaded()) return null
         val dict = try { JSONObject(jsonStr) } catch (_: Exception) { return null }
         val providerTypeRaw = dict.optString("providerType", "").ifEmpty { return null }
         val providerType = try { ProviderType.valueOf(providerTypeRaw) } catch (_: Exception) { return null }

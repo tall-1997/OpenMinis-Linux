@@ -194,35 +194,9 @@ class McpServerCoreTest {
 
     // ─── HTTP helpers ─────────────────────────────────────────────────────
 
-    @Test
-    fun `parseHttpRequest extracts method path headers and body`() {
-        val raw = "POST /mcp HTTP/1.1\r\nContent-Length: 15\r\n\r\n{\"method\":\"x\"}"
-        val p = McpServerCore.parseHttpRequest(raw)
-        assertEquals("POST", p!!.method)
-        assertEquals("/mcp", p.path)
-        assertEquals(15, p.contentLength)
-        assertEquals("""{"method":"x"}""", p.body)
-    }
-
-    @Test
-    fun `parseHttpRequest rejects garbage and truncates oversized body`() {
-        assertNull(McpServerCore.parseHttpRequest("not a request line"))
-        val p = McpServerCore.parseHttpRequest(
-            "POST /mcp HTTP/1.1\r\nContent-Length: 3\r\n\r\n{\"a\":1}{\"b\":2}",
-        )
-        assertEquals(3, p!!.body.length)
-        assertEquals("{\"a", p.body)
-    }
-
-    @Test
-    fun `parseJsonRpc extracts method params and id`() {
-        val r = McpServerCore.parseJsonRpc("""{"method":"ping","id":7,"params":{"a":1}}""")
-        assertEquals("ping", r!!.method)
-        assertEquals(7, r.id)
-        assertEquals(1, r.params!!.getInt("a"))
-        assertNull(McpServerCore.parseJsonRpc("not json"))
-        assertNull(McpServerCore.parseJsonRpc("""{"id":1}""")) // no method
-    }
+    // [P2-dead-code] parseHttpRequest / parseJsonRpc tests removed with the
+    // dead functions themselves (production parses inline in McpHttpServer;
+    // the live path is covered by McpHttpServerTest's end-to-end cases).
 
     @Test
     fun `buildHttpResponse emits status content length and cors`() {

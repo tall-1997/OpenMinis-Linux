@@ -38,21 +38,10 @@ import kotlinx.coroutines.launch
 class AgentForegroundService : Service() {
 
     companion object {
-        /**
-         * [T-STALL-DIAG] How many times onStartCommand has run in THIS process.
-         * A START_STICKY revival lands in a fresh process, so a value of 1 with
-         * `revival=true` proves the system re-created the service after the
-         * process died — distinguishing that from an ordinary in-process
-         * restart (which would show an increasing count).
-         */
+        // [T-STALL-DIAG] onStartCommand ordinal in THIS process; 1 + revival=true proves a fresh-process START_STICKY revival.
         private val onStartCommandCalls = java.util.concurrent.atomic.AtomicInteger(0)
 
-        /**
-         * [T-STALL-DIAG] Process-start reference so every diagnostic line can
-         * report how long THIS process has been alive. Pairs with the pid to
-         * tell "same dirty process the user failed to kill" apart from "clean
-         * cold start" when comparing against `adb shell ps`.
-         */
+        // [T-STALL-DIAG] Process-start reference so diagnostics report how long THIS process has been alive.
         private val processStartElapsedMs = android.os.SystemClock.elapsedRealtime()
 
         @Volatile
@@ -70,51 +59,35 @@ class AgentForegroundService : Service() {
         private const val CHANNEL_NAME = "Agent Status"
         private const val NOTIFICATION_ID = 9001
 
-        // [T-bg-overlay phase 2 fix] Separate channel + notification id
-        // for the SYSTEM_ALERT_WINDOW permission nudge so it can have a
-        // higher importance than the ongoing FGS status row (which is
-        // intentionally LOW so it doesn't make sound on every tool).
+        // [T-bg-overlay phase 2 fix] Separate channel/id for the SYSTEM_ALERT_WINDOW nudge (higher importance than the LOW FGS row).
         private const val OVERLAY_NUDGE_CHANNEL_ID = "overlay_permission_nudge"
         private const val OVERLAY_NUDGE_NOTIFICATION_ID = 9002
 
-        // [T-android-dynamic-island] Framework extras key read by
-        // Notification.isRequestPromotedOngoing() (Android 16). Not exported as
-        // a public SDK constant; value verified by decompiling the on-device
-        // framework.jar (const-string "android.requestPromotedOngoing").
+        // [T-android-dynamic-island] Framework extras key for isRequestPromotedOngoing() (Android 16), not an exported SDK constant.
         private const val EXTRA_REQUEST_PROMOTED_ONGOING = "android.requestPromotedOngoing"
         private const val ACTION_STOP = "com.openminis.app.STOP_AGENT_SERVICE"
-        // [T-approval-action-single-source] Approval actions + the request-id
-        // extra live in one shared object (ApprovalIntents) with the notifier
-        // that posts them — the old hand-copied duplicates here carried a
-        // "MUST match verbatim" comment, which is drift waiting to happen.
+        // [T-approval-action-single-source] Approval actions + request-id live in the shared ApprovalIntents object.
         private const val ACTION_APPROVE = com.openminis.app.notification.ApprovalIntents.ACTION_APPROVE
         private const val ACTION_DENY = com.openminis.app.notification.ApprovalIntents.ACTION_DENY
         private const val ACTION_INTERRUPT = "com.openminis.app.INTERRUPT_AGENT"
         private const val EXTRA_APPROVAL_ID = com.openminis.app.notification.ApprovalIntents.EXTRA_REQUEST_ID
 
-        /**
-         * Starts or updates the foreground service with current status.
-         */
+        /** Starts or updates the foreground service with current status. */
         fun startService(context: Context) {
-            // The tracker is the source of truth; carrying a second status
-            // snapshot in start intents caused stale/duplicate foreground posts.
+            // The tracker is the source of truth (a second snapshot caused stale/duplicate posts).
             val intent = Intent(context, AgentForegroundService::class.java)
             try {
                 // minSdk 26 (O) — the pre-O startService() branch was unreachable.
                 context.startForegroundService(intent)
             } catch (e: IllegalStateException) {
-                // API 31+ ForegroundServiceStartNotAllowedException when the
-                // process is backgrounded. The job keeps running; the
-                // notification is best-effort and must not crash the caller.
+                // API 31+ backgrounded start: keep running; notification is best-effort.
                 Log.w(TAG, "startForegroundService not allowed: ${e.message}")
             } catch (e: SecurityException) {
                 Log.w(TAG, "startForegroundService denied: ${e.message}")
             }
         }
 
-        /**
-         * Stops the foreground service.
-         */
+        /** Stops the foreground service. */
         fun stopService(context: Context) {
             val intent = Intent(context, AgentForegroundService::class.java)
             context.stopService(intent)
@@ -122,60 +95,24 @@ class AgentForegroundService : Service() {
     }
 
     private var startTimeMs: Long = 0L
-    /**
-     * Partial wake lock held ONLY while real work is in flight — an active
-     * agent stream ([SessionActivityTracker.activeSessions]) or a running
-     * tool ([SessionActivityTracker.isToolRunning]). Required because
-     * Android can put the CPU to sleep even with a foreground service
-     * running — Doze can suspend non-FGS background threads, and on some
-     * OEM ROMs (MIUI, EMUI, ColorOS) the CPU throttles aggressively after
-     * screen-off. Without this lock, long shell commands can stall
-     * mid-stream when the device sleeps.
-     *
-     * [Issue #2 — battery drain] The T166 presence keep-alive (user sits
-     * in a chat, no stream running) deliberately does NOT hold this lock:
-     * the foreground service alone already biases the OOM killer at
-     * adj=200, and a presence-held PARTIAL_WAKE_LOCK kept the SoC awake
-     * for the whole time the app sat backgrounded with a chat open —
-     * screen off, zero work, battery draining, phone hot. The lock is
-     * driven by [startWakeLockObserver]'s collector and released on the
-     * idle edge; [onDestroy] releases it deterministically as a backstop.
-     */
+    // Partial wake lock held ONLY while real work is in flight (active stream or running tool); released on the idle edge and by [onDestroy].
     private var wakeLock: PowerManager.WakeLock? = null
 
-    /**
-     * T-bg-overlay phase 2: floating tool-status overlay manager + its
-     * collector scope. The overlay is *aspirational* — visible only when:
-     *   1. User toggled `backgroundOverlayEnabled` ON, AND
-     *   2. SYSTEM_ALERT_WINDOW is granted, AND
-     *   3. App is currently backgrounded, AND
-     *   4. A tool is in flight (isToolRunning), OR was recently in flight
-     *      and we're in the 30-second linger window.
-     * Falls back silently to Phase 1 notification when any precondition
-     * fails. Bound to the service lifetime so onDestroy tears everything
-     * down deterministically.
-     */
+    // [Wave3 #6] 30-min hard cap; the observer renews every 25 min while work is in flight.
+    private val WAKE_LOCK_TIMEOUT_MS = 30 * 60 * 1000L
+    private val WAKE_LOCK_RENEW_INTERVAL_MS = 25 * 60 * 1000L
+    private var wakeLockRenewJob: Job? = null
+
+    // T-bg-overlay phase 2: floating tool-status overlay (visible only when toggle ON + SAW granted + backgrounded + tool in flight); falls back to the Phase 1 notification.
     private var overlayController: ToolOverlayController? = null
     private val overlayScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var lingerJob: Job? = null
 
-    // [T-android-overlay-completion-pending] X9: linger a completed-state
-    // capsule after the busy edge, but ONLY when the turn ended while the
-    // app was backgrounded (and the overlay was eligible to show). Scoping
-    // the flag to that exact busy→idle edge is what keeps the old
-    // pre-show-if-busy regression out: lastOutcome / lastReplyExcerpt
-    // persist across turns in the tracker, so any rule that consults them
-    // without an edge guard re-pops the capsule on every later home-screen
-    // visit. The flag clears on user dismissal (tap-to-open / X) and on
-    // foreground (the user saw the reply in-app).
+    // [T-android-overlay-completion-pending] X9: linger a completed capsule only when the turn ended while backgrounded; clears on dismissal or foreground.
     private var hasCompletionPending = false
     private var wasBusy = false
 
-    // [T-android-hyperos-island] Background executor for the HyperOS
-    // canShowFocus binder probe (the official guide marks it 耗时操作 —
-    // never on the main thread). Daemon single-thread: probes are rare
-    // (service start + foreground transitions, throttled to 30s inside
-    // HyperOsIsland.refreshFocusPermission).
+    // [T-android-hyperos-island] Background executor for the HyperOS canShowFocus binder probe (never on the main thread).
     private val islandProbeExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { r ->
         Thread(r, "mi-island-probe").apply { isDaemon = true }
     }
@@ -183,31 +120,18 @@ class AgentForegroundService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        // Safe-mode bail-out. When CrashFrequencyDetector tripped in
-        // MinisApp.onCreate, the Application skipped its lateinit init
-        // for repositories — but a sticky FG service that was running
-        // pre-crash will still be re-created by the system on the next
-        // process spawn. Reading MinisApp.backgroundSettingsRepository
-        // from ToolOverlayController.<init> here would throw
-        // UninitializedPropertyAccessException and write a second crash
-        // log, which is exactly the "detection logic recursively
-        // crashing" pattern. Skip the overlay observer and let
-        // onStartCommand satisfy the FG-deadline + stopSelf.
+        // Safe-mode bail-out: reading an unassigned repository from ToolOverlayController would re-crash; skip observers and let onStartCommand satisfy the deadline + stopSelf.
         isRunning = true
         createNotificationChannel()
         startTimeMs = SystemClock.elapsedRealtime()
-        // Meet the deadline before creating PendingIntents or starting observers.
-        // Exactly one cheap, unpromoted placeholder per service instance.
+        // Meet the deadline first: exactly one cheap, unpromoted placeholder per instance.
         publishBootstrap()
         if (!bootstrapPosted || com.openminis.app.crash.CrashFrequencyDetector.isSafeMode()) {
             Log.w(TAG, "foreground unavailable or safe-mode ON — skipping overlay/wake-lock bring-up")
             return
         }
         startWakeLockObserver()
-        // [T-android-hyperos-island] Populate the focus-notification
-        // permission cache before the first overlay/island decision in
-        // nearly all cases: the service starts when a stream starts, and
-        // the probe lands within one binder round-trip.
+        // [T-android-hyperos-island] Populate the focus-notification permission cache before the first island decision.
         islandProbeExecutor.execute {
             if (HyperOsIsland.refreshFocusPermission(this)) {
                 notifyHandler.post { requestStatusRefresh() }
@@ -218,20 +142,10 @@ class AgentForegroundService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // [T-STALL-DIAG] Revival probe. `intent == null` means the SYSTEM
-        // re-created this service under START_STICKY after the process died —
-        // the suspected "dirty shell" path behind "killing the app doesn't
-        // help". Log the call ordinal, whether this is a revival, and the
-        // in-memory tracker state, which is what a revived process CANNOT have
-        // restored (SessionActivityTracker is a plain object + StateFlow).
-        //
-        // Reading `activeSessions` empty on a revival is the smoking gun: the
-        // service is being kept alive for streams that no longer exist.
+        // [T-STALL-DIAG] Revival probe: intent == null means START_STICKY re-created the service after process death; an empty activeSessions is the smoking gun.
         val call = onStartCommandCalls.incrementAndGet()
         val active = SessionActivityTracker.activeSessions.value
-        // [T-STALL-DIAG] Routed through AppLogger, not println: System.out
-        // bypasses AppLogger's file rotation and redaction, and these lines
-        // carry session-id lists — in release too.
+        // [T-STALL-DIAG] AppLogger (not println) — these lines carry session-id lists, in release too.
         AppLogger.info(
             TAG,
             "[T-STALL-DIAG] FGS onStartCommand#$call pid=${android.os.Process.myPid()} " +
@@ -240,18 +154,7 @@ class AgentForegroundService : Service() {
                 "processAliveMs=${android.os.SystemClock.elapsedRealtime() - processStartElapsedMs} " +
                 "slots=${SessionConcurrencyManager.diagSnapshot()}",
         )
-        // [T-fgs-deadline-invariant] Every Context.startForegroundService()
-        // delivery must be answered by Service.startForeground() in THIS
-        // dispatch — unconditionally. The refresh pipeline below deliberately
-        // skips no-op publishes (identical state) and applyForeground's
-        // notify()-only branch (non-forked SystemUI) never re-anchors; both
-        // are fine for notification churn but leave the platform's 5-10s
-        // foreground deadline armed against a service that already considers
-        // itself anchored (crash-2026-10-15_01-00-01 class). Re-anchoring
-        // with the CURRENT state notification is a cheap idempotent no-op for
-        // the platform, and it must run BEFORE any stopSelf() return path —
-        // stopSelf() tears the component down but does NOT retract the
-        // pending foreground requirement (see applyForeground's catch).
+        // [T-fgs-deadline-invariant] Answer every startForegroundService() with startForeground() in THIS dispatch (before any stopSelf()), or the 5-10s deadline kills the app.
         if (bootstrapPosted) {
             val anchor = try {
                 buildNotification(notificationState())
@@ -261,14 +164,12 @@ class AgentForegroundService : Service() {
             }
             applyForeground(anchor, reanchor = true)
         }
-        // onCreate already satisfied the foreground deadline with a plain stub.
-        // If even the stub failed, no background service should remain alive.
+        // onCreate already satisfied the deadline with a stub; if even that failed, nothing should stay alive.
         if (!bootstrapPosted || com.openminis.app.crash.CrashFrequencyDetector.isSafeMode()) {
             stopSelf()
             return START_NOT_STICKY
         }
-        // START_STICKY restores the service, not in-memory agent jobs. Do not
-        // leave an orphan foreground notification after a process restart.
+        // START_STICKY restores the service, not jobs; don't leave an orphan notification after restart.
         if (intent == null &&
             SessionActivityTracker.activeSessions.value.isEmpty() &&
             SessionActivityTracker.presentSessions.value.isEmpty()
@@ -276,11 +177,7 @@ class AgentForegroundService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
-        // [T-question-bg-notify] Question notification answer fallback, same
-        // delivery shape as the approval fallback below: the PendingIntent
-        // targets AskUserBroadcastReceiver, but if the system re-routes a
-        // stale broadcast to this foreground service we still resolve the
-        // answer and clear the bar entry.
+        // [T-question-bg-notify] Answer fallback for a stale broadcast re-routed to this service.
         if (intent?.action == com.openminis.app.notification.AskUserIntents.ACTION_ANSWER) {
             val qId = intent.getStringExtra(com.openminis.app.notification.AskUserIntents.EXTRA_REQUEST_ID)
             val qLabel = intent.getStringExtra(com.openminis.app.notification.AskUserIntents.EXTRA_ANSWER_LABEL)
@@ -294,43 +191,22 @@ class AgentForegroundService : Service() {
             return START_NOT_STICKY
         }
         if (intent?.action == ACTION_APPROVE || intent?.action == ACTION_DENY) {
-            // [T-android-notif-approval] Approval notification action fallback.
-            // PendingIntent targets ApprovalBroadcastReceiver (getBroadcast), which
-            // calls ApprovalGate.approve/deny directly. This service handler catches
-            // intents routed to onStartCommand instead (e.g. when the system
-            // re-routes a stale broadcast to the foreground service).
+            // [T-android-notif-approval] Approval action fallback for intents routed to onStartCommand.
             val id = intent.getStringExtra(EXTRA_APPROVAL_ID)
             if (id != null) {
                 if (intent.action == ACTION_APPROVE) ApprovalGate.approve(id)
                 else ApprovalGate.deny(id)
             }
-            // Clear the approval notification on every resolution path that
-            // lands here — the receiver owns its own tap path, but if the
-            // system delivers this intent to onStartCommand we still need
-            // the bar entry gone.
+            // Clear the approval notification on every resolution path landing here.
             if (id != null) com.openminis.app.notification.ApprovalNotifier.cancelApproval(this, id)
             return START_NOT_STICKY
         }
         if (intent?.action == ACTION_STOP) {
-            // T50: the notification's Stop action — also cancel every
-            // running agent loop. Without this, stopSelf() alone leaves
-            // streamJobs running until the OS reclaims the process; the
-            // user taps Stop and sees the notification go away but tools
-            // keep firing in the background. SessionActivityTracker holds
-            // the per-session cancel callbacks registered by each VM at
-            // streamJob start.
-            //
-            // [T-android-approval-teardown] Also resolve every pending
-            // ApprovalGate request and clear its notification: stopping the
-            // agent must not leave an orphaned "needs approval" bar entry
-            // whose buttons wake nothing. Snapshot the ids first —
-            // cleanupAll empties the queue — then cancel those notifications.
+            // T50: Stop also cancels every running agent loop, and [T-android-approval-teardown] resolves pending approvals + clears their notifications (snapshot ids before cleanupAll).
             val stopPendingIds = ApprovalGate.pendingIds()
             ApprovalGate.cleanupAll()
             com.openminis.app.notification.ApprovalNotifier.cancelAll(this, stopPendingIds)
-            // [T-question-bg-notify] Stopping the agent must also resolve
-            // every pending ask_user_question (skip verdict) and clear its
-            // notification — same orphaned-bar contract as approvals above.
+            // [T-question-bg-notify] Resolve pending questions (skip) + clear notifications, same orphaned-bar contract.
             val stopQuestionSessions = AskUserGate.cancelAll("interrupted")
             com.openminis.app.notification.AskUserNotifier.cancelAll(this, stopQuestionSessions)
             SessionActivityTracker.cancelAllActiveStreams()
@@ -338,16 +214,7 @@ class AgentForegroundService : Service() {
             return START_NOT_STICKY
         }
         if (intent?.action == ACTION_INTERRUPT) {
-            // [T-android-interrupt] Stop the running agent loop AND clear the
-            // notification. [T-interrupt-no-pause-button] No notification
-            // button posts this any more (it used to be labelled "Pause"
-            // while it destroyed the turn); the branch stays so intents
-            // already queued by an older build, or sent by external tools,
-            // resolve with the documented teardown instead of falling through
-            // to a plain status refresh.
-            // [T-android-approval-teardown] Same contract as ACTION_STOP:
-            // an interrupt resolves every pending approval and clears its
-            // notification before the service tears down.
+            // [T-android-interrupt] Stop the loop + clear the notification; [T-interrupt-no-pause-button] kept for stale/external intents; [T-android-approval-teardown] same approval teardown as ACTION_STOP.
             val interruptPendingIds = ApprovalGate.pendingIds()
             ApprovalGate.cleanupAll()
             com.openminis.app.notification.ApprovalNotifier.cancelAll(this, interruptPendingIds)
@@ -355,26 +222,17 @@ class AgentForegroundService : Service() {
             val interruptQuestionSessions = AskUserGate.cancelAll("interrupted")
             com.openminis.app.notification.AskUserNotifier.cancelAll(this, interruptQuestionSessions)
             SessionActivityTracker.cancelAllActiveStreams()
-            // [T-android-interrupt-clear] The ongoing notification is the
-            // visual representation of "agent is running". If we just stopped
-            // all active streams, keeping the notification lying would leave
-            // a stale "Minis is working…" pill with no way to dismiss it.
-            // The notification manager id is NOTIFICATION_ID.
+            // [T-android-interrupt-clear] Clear the ongoing notification (id NOTIFICATION_ID) once all streams are stopped.
             try {
                 getSystemService(NotificationManager::class.java)
                     ?.cancel(NOTIFICATION_ID)
             } catch (_: Exception) {}
-            // Stop the service — it was started solely to run agents. If a
-            // new agent later registers with SessionActivityTracker, the
-            // service will be re-started via startService from the session
-            // activation path. Leaving it alive here is a dead service
-            // burning CPU / battery.
+            // Stop the service (it was started solely to run agents); it re-starts via startService on the next session activation.
             stopSelf()
             return START_NOT_STICKY
         }
 
-        // The stub was posted once in onCreate. Subsequent start intents only
-        // update the visible state if it actually changed; never replay it.
+        // The stub posted once in onCreate; later intents only update state when it changed.
         requestStatusRefresh()
         return START_STICKY
     }
@@ -398,11 +256,7 @@ class AgentForegroundService : Service() {
 
     private fun applyForeground(notification: Notification, reanchor: Boolean = false): Boolean {
         return try {
-            // Forked SystemUI ignores a later notify() on a foreground-service
-            // row, so a real run boundary still goes through startForeground.
-            // Those publishes are start/stop only; cosmetic updates never reach
-            // this method. AOSP tool-name updates use notify() and do not
-            // rebind the chip.
+            // Forked SystemUI ignores later notify() on an FGS row; real run boundaries go through startForeground, cosmetic updates use notify().
             val forceStart = reanchor || !foregroundAnchored ||
                 !SystemUiHost.allowsLiveNotificationTemplates()
             if (forceStart) {
@@ -417,8 +271,7 @@ class AgentForegroundService : Service() {
                 }
                 foregroundAnchored = true
             } else {
-                // Repeating startForeground is a new focus-notification bind on
-                // HyperOS / ZUI. Same-id notify updates the shade without it.
+                // Repeating startForeground re-binds focus on HyperOS/ZUI; same-id notify updates the shade without it.
                 getSystemService(NotificationManager::class.java)
                     ?.notify(NOTIFICATION_ID, notification)
             }
@@ -426,23 +279,7 @@ class AgentForegroundService : Service() {
         } catch (t: Throwable) {
             Log.w(TAG, "applyForeground failed: ${t.message}")
             if (!foregroundAnchored) {
-                // Bootstrap case (publishBootstrap, before any successful
-                // startForeground). The service was launched with
-                // startForegroundService(), so the system has a hard ~5s
-                // deadline for a successful startForeground(). That deadline
-                // is queued the moment the START call lands — it is NOT lifted
-                // by stopSelf(), which only tears down the component. If
-                // startForeground() threw (a forked SystemUI rejecting the
-                // notification, a missing channel after restore, a transient
-                // DeadObject), swallowing the error and just returning false
-                // leaves the deadline armed against a service that will never
-                // anchor: the caller's stopSelf() destroys it, and the system
-                // then fires ForegroundServiceDidNotStartInTimeException and
-                // kills the app. Dropping out of the foreground state
-                // explicitly is the only call that retracts that pending
-                // requirement — it tells the ActivityManager "this service is
-                // no longer expected to go foreground", so the already-
-                // destroyed component has nothing left to answer for.
+                // Bootstrap failure: stopSelf() does NOT retract the pending foreground deadline, so retract it explicitly to avoid ForegroundServiceDidNotStartInTimeException.
                 try {
                     androidx.core.app.ServiceCompat.stopForeground(
                         this,
@@ -452,15 +289,7 @@ class AgentForegroundService : Service() {
                     Log.w(TAG, "stopForeground after applyForeground failure also failed: ${t2.message}")
                 }
             } else {
-                // [T-fgs-reanchor] Mid-run throw (status-refresh path, ~824):
-                // the service ALREADY anchored, so it is still in foreground —
-                // retracting here would drop a LIVE agent run out of foreground
-                // and remove its notification over one transient DeadObject,
-                // while the caller only logs. Do NOT stopForeground. Clear the
-                // anchor flag instead so the next publish takes the
-                // startForeground branch and re-binds the row, rather than
-                // silently degrading to notify()-only on exactly the forked
-                // SystemUIs where notify() on an FGS row is ignored.
+                // [T-fgs-reanchor] Mid-run throw: already anchored — do NOT retract; clear the anchor flag so the next publish re-binds via startForeground.
                 foregroundAnchored = false
             }
             false
@@ -469,22 +298,10 @@ class AgentForegroundService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    /**
-     * Swipe-from-recents handler. Default Service behaviour on some OEM
-     * builds is to silently end the service when the task is removed
-     * even if it's a foreground service — we lose the streamJob, the
-     * notification disappears, and the user thinks "Stop" was tapped.
-     *
-     * Re-anchor the service to its own intent and call startForeground
-     * again. AOSP keeps it alive across task removal as long as at least
-     * one active session is registered; if zero sessions remain (the
-     * task removal raced a natural completion), [stopSelf] cleans up.
-     */
+    // Swipe-from-recents: re-anchor so OEM task removal doesn't silently end the FGS; keep alive iff a session is active, else stopSelf.
     override fun onTaskRemoved(rootIntent: Intent?) {
         super.onTaskRemoved(rootIntent)
-        // [T-STALL-DIAG] Record the FULL keep-alive decision. The branch taken
-        // here decides whether a swipe-away leaves a service behind that the
-        // system will later revive with START_STICKY.
+        // [T-STALL-DIAG] Record the full keep-alive decision (swipe-away may leave a service the system later revives).
         val activeAtRemoval = SessionActivityTracker.activeSessions.value
         AppLogger.info(
             TAG,
@@ -493,11 +310,7 @@ class AgentForegroundService : Service() {
                 "decision=${if (activeAtRemoval.isEmpty()) "stopSelf" else "KEEP-ALIVE"} " +
                 "slots=${SessionConcurrencyManager.diagSnapshot()}",
         )
-        // T166: swiping from recents kills the Activity but the FG
-        // service should survive iff a stream is still running. Pure
-        // presence (user was reading a chat, then swiped away) is no
-        // longer a reason to keep alive — they explicitly dismissed
-        // the app, so clear presence here and re-evaluate.
+        // T166: keep alive iff a stream is still running; clear presence (a chat read then swiped away is no longer a reason).
         SessionActivityTracker.clearPresence()
         if (SessionActivityTracker.activeSessions.value.isEmpty()) {
             Log.d(TAG, "onTaskRemoved with no active sessions, stopping self")
@@ -505,17 +318,11 @@ class AgentForegroundService : Service() {
             return
         }
         Log.d(TAG, "onTaskRemoved with ${SessionActivityTracker.activeSessions.value.size} active session(s) — keeping service alive")
-        // Task removal is a real OEM re-anchor event, not a status tick.
-        // Force exactly one current-state publish through the same pipeline.
+        // Task removal is a real OEM re-anchor, not a status tick; force one current-state publish.
         requestStatusRefresh(reanchor = true)
     }
 
-    // [T-android-overlay-landscape-width-rotation-drift] A Service receives
-    // raw configuration changes regardless of any manifest configChanges
-    // filter. Forward orientation flips / multi-window resizes to the
-    // overlay controller so the WindowManager capsule (which is not
-    // recreated on rotation) re-clamps itself back into the new screen
-    // bounds and picks up the new capped width.
+    // [T-android-overlay-landscape-width-rotation-drift] Forward orientation flips / resizes to the overlay controller so it re-clamps into new bounds.
     override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
         super.onConfigurationChanged(newConfig)
         overlayController?.onConfigurationChanged()
@@ -535,18 +342,7 @@ class AgentForegroundService : Service() {
         super.onDestroy()
         Log.d(TAG, "Service destroyed")
     }
-    /**
-     * T-bg-overlay phase 2: collect the (foreground, toolName, toolStatus,
-     * isToolRunning, toggle) tuple and reflect it into the overlay. We
-     * combine() inside the service so the collector dies cleanly with
-     * onDestroy and we never leak views across service restarts.
-     *
-     * Linger behaviour: when [SessionActivityTracker.isToolRunning] flips
-     * false (tool finished), we don't hide immediately — Phase 2 spec
-     * wants 30 s of "task ended" feedback while the app stays
-     * backgrounded. Foreground transitions always hide instantly so the
-     * overlay doesn't draw on top of the chat itself.
-     */
+    // T-bg-overlay phase 2: collect the status tuple into the overlay (dies with onDestroy); foreground transitions hide instantly.
     private fun startOverlayObserver() {
         val app = applicationContext as? MinisApp ?: return
         overlayController = ToolOverlayController(applicationContext).apply {
@@ -698,8 +494,11 @@ class AgentForegroundService : Service() {
                 lastDynamicIslandActive = true
                 refreshOngoingNotification()
             }
-            Log.d(
-                TAG,
+            // [Wave3 #15] AppLogger.debug + muted category — same gate as the
+            // ChatScrollFollow precedent: fires per emission, so it is muted
+            // by default instead of paying a logcat line every pass.
+            AppLogger.debug(
+                "OverlayState",
                 "applyOverlayState: dynamic-island active — overlay suppressed " +
                     "(dynamicIslandEnabled=${state.dynamicIslandEnabled})",
             )
@@ -731,8 +530,10 @@ class AgentForegroundService : Service() {
         val shouldShow = state.enabled && hasPerm && !state.isForeground &&
             !state.cameraSuppress &&
             (isBusy || hasCompletionPending)
-        Log.d(
-            TAG,
+        // [Wave3 #15] Muted-category debug gate — was an ungated Log.d per
+        // flow emission (every token / tool-status tick).
+        AppLogger.debug(
+            "OverlayState",
             "applyOverlayState fg=${state.isForeground} enabled=${state.enabled} " +
                 "perm=$hasPerm streaming=${state.hasActiveStream} toolRunning=${state.isRunning} " +
                 "cameraSuppress=${state.cameraSuppress} completionPending=$hasCompletionPending " +
@@ -900,6 +701,13 @@ class AgentForegroundService : Service() {
      * the idle edge. StateFlow combine emits current values immediately, so
      * a service started mid-work (sandbox job, scheduled run, START_STICKY
      * revival) still acquires on the first collection.
+     *
+     * [Wave3 #6] While hasWork stays true a renewal loop re-acquires the
+     * timed lock every [WAKE_LOCK_RENEW_INTERVAL_MS] — before the
+     * [WAKE_LOCK_TIMEOUT_MS] hard cap expires. Legitimately long turns
+     * (scheduled overnight agents) are renewed indefinitely; a hung state
+     * that never emits the idle edge now self-expires at the cap instead of
+     * holding the CPU forever.
      */
     private fun startWakeLockObserver() {
         overlayScope.launch {
@@ -908,7 +716,26 @@ class AgentForegroundService : Service() {
                 SessionActivityTracker.isToolRunning,
             ) { active, toolRunning -> active.isNotEmpty() || toolRunning }
                 .distinctUntilChanged()
-                .collect { hasWork -> updateWakeLock(hasWork) }
+                .collect { hasWork ->
+                    updateWakeLock(hasWork)
+                    wakeLockRenewJob?.cancel()
+                    if (hasWork) {
+                        wakeLockRenewJob = overlayScope.launch {
+                            // Cancellation lands on the delay below — the only
+                            // suspension point in this loop — so no explicit
+                            // isActive check is needed.
+                            while (true) {
+                                kotlinx.coroutines.delay(WAKE_LOCK_RENEW_INTERVAL_MS)
+                                // Idle edge between ticks: released + nulled —
+                                // do not resurrect the lock after release.
+                                if (wakeLock != null) {
+                                    Log.d(TAG, "WakeLock renewed before timeout")
+                                    acquireWakeLock()
+                                }
+                            }
+                        }
+                    }
+                }
         }
     }
 
@@ -917,22 +744,31 @@ class AgentForegroundService : Service() {
     }
 
     private fun acquireWakeLock() {
-        if (wakeLock != null) return
         try {
+            val existing = wakeLock
+            if (existing != null) {
+                // [Wave3 #6] Renewal path: the lock is non-reference-counted,
+                // so acquire(timeout) on the same object just extends its
+                // expiry — no release/recreate churn.
+                existing.acquire(WAKE_LOCK_TIMEOUT_MS)
+                wakeLockHeld = true
+                return
+            }
             val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
             wakeLock = pm.newWakeLock(
                 PowerManager.PARTIAL_WAKE_LOCK,
                 "minis:inference",
             ).apply {
                 setReferenceCounted(false)
-                // No timeout — a hard cap would drop the lock mid-run on a
-                // legitimately long turn (scheduled overnight agents run for
-                // hours). The idle edge in startWakeLockObserver's collector
-                // and onDestroy are the release paths.
-                acquire()
+                // [Wave3 #6] 30-minute timeout instead of the old unbounded
+                // acquire(): the renewal loop in startWakeLockObserver keeps a
+                // genuinely-active turn alive, while a hung hasWork state can
+                // no longer pin the CPU forever. Release paths unchanged
+                // (idle edge + onDestroy).
+                acquire(WAKE_LOCK_TIMEOUT_MS)
             }
             wakeLockHeld = true
-            Log.d(TAG, "WakeLock acquired (PARTIAL_WAKE_LOCK)")
+            Log.d(TAG, "WakeLock acquired (PARTIAL_WAKE_LOCK, ${WAKE_LOCK_TIMEOUT_MS / 60000}min cap)")
         } catch (e: Exception) {
             Log.w(TAG, "WakeLock acquire failed: ${e.message}")
         }
@@ -1311,23 +1147,14 @@ class AgentForegroundService : Service() {
     }
 
     /**
-     * T-bg-overlay phase 1: human-readable label per tool, mirroring
-     * `ChatScreen.kt toolTitleLabel` so the notification's title
-     * matches what the in-app floating tool-status capsule shows. Falls back
-     * to the raw tool name for unknowns rather than a generic string,
-     * so the user still gets a hint about what's running.
+     * T-bg-overlay phase 1: human-readable label per tool. [Wave3 #8] the
+     * duplicated English `when` lived here AND in ToolOverlayController ("Mirrors
+     * …"); both now delegate to [ForegroundNotificationCopy.toolLabel] so the
+     * notification and the overlay capsule read one mapping (resource-backed in
+     * strings_service.xml).
      */
-    private fun toolDisplayLabel(toolName: String): String = when (toolName) {
-        "shell_execute" -> "Minis is using Shell"
-        "file_read" -> "Minis is reading File"
-        "file_write" -> "Minis is using Editor"
-        "file_edit" -> "Minis is editing File"
-        "browser_use" -> "Minis is using Browser"
-        "read_image" -> "Minis is reading Image"
-        "memory_write", "memory_get" -> "Minis is using Memory"
-        "web_search" -> "Minis is using Search"
-        else -> "Minis is using $toolName"
-    }
+    private fun toolDisplayLabel(toolName: String): String =
+        ForegroundNotificationCopy.toolLabel(applicationContext, toolName)
 
     /**
      * Status-bar icons must be an alpha mask from this app. Framework

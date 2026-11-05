@@ -472,13 +472,11 @@ fun AppNavigation(
                 onMcpClick = { navController.safeNavigate(Routes.MCP) },
                 onPluginMarketClick = { navController.safeNavigate(Routes.PLUGIN_MARKET) },
                 onSoulClick = { navController.safeNavigate(Routes.SOUL) },
-                onEvolutionClick = { navController.safeNavigate(Routes.EVOLUTION) },
                 onPermissionsClick = { navController.safeNavigate(Routes.PERMISSIONS) },
                 onUsageClick = { navController.safeNavigate(Routes.USAGE_STATS) },
                 onAppearanceClick = { navController.safeNavigate(Routes.APPEARANCE) },
                 onBackgroundClick = { navController.safeNavigate(Routes.BACKGROUND) },
                 onWebSearchClick = { navController.safeNavigate(Routes.WEB_SEARCH) },
-                onCharacterExtrasClick = { navController.safeNavigate(Routes.CHARACTER_EXTRAS) },
                 onTranslateClick = { navController.safeNavigate(Routes.TRANSLATE) },
                 onOpenBrowser = { navController.safeNavigate(Routes.HOME_BROWSER) },
                 onBrowserSettings = { navController.safeNavigate(Routes.HOME_BROWSER_SETTINGS) },
@@ -871,11 +869,11 @@ fun AppNavigation(
             )
         }
 
-        composable(Routes.CHARACTER_EXTRAS) {
-            com.openminis.app.ui.settings.CharacterExtrasScreen(
-                onBack = { navController.safePopBackStack() },
-            )
-        }
+        // [T-dead-character-extras] Routes.CHARACTER_EXTRAS destination removed:
+        // its only entry was SettingsScreen's onCharacterExtrasClick, a dead
+        // callback no row ever invoked. The page (CharacterExtrasScreen) is
+        // deleted; the route constant in navigation/Routes.kt stays for now
+        // (file owned by another workstream) and is simply unreferenced.
 
         composable(Routes.TRANSLATE) {
             com.openminis.app.ui.settings.TranslationSettingsScreen(

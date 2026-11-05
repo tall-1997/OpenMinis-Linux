@@ -6,28 +6,77 @@ import android.content.Context
 import android.content.Intent
 import androidx.core.app.NotificationCompat
 import com.openminis.app.logging.AppLogger
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 
 /**
  * BroadcastReceiver that fires when an alarm or timer triggers.
  * Shows a high-priority notification with the alarm label.
+ *
+ * [T-android-alarm-rearm-chain] Also owns the repeat chain: every fire calls
+ * [AlarmOffloadManager.onAlarmFired], which re-arms the next occurrence for
+ * DAILY/WEEKDAYS entries (all modes register as one-shot
+ * setExactAndAllowWhileIdle alarms). BOOT_COMPLETED / MY_PACKAGE_REPLACED
+ * re-register every persisted alarm via
+ * [AlarmOffloadManager.rescheduleAll].
  */
 class AlarmReceiver : BroadcastReceiver() {
 
     companion object {
         private const val TAG = "AlarmReceiver"
         private const val NOTIFICATION_GROUP = "minis_alarm_group"
+
+        /**
+         * Ceiling for the whole BOOT reschedule (two prefs sweeps +
+         * AlarmManager re-registrations). A manifest-declared receiver gets
+         * roughly 10s of background-broadcast budget before the system ANRs
+         * it; 8s leaves headroom (same constant as the scheduled /
+         * automation receivers).
+         */
+        private const val HANDOFF_TIMEOUT_MS = 8_000L
     }
 
     override fun onReceive(context: Context, intent: Intent) {
-        // BOOT_COMPLETED arrives with no extras; it just keeps the receiver
-        // resident so the AlarmManager re-fires the persisted alarms after
-        // a reboot. Nothing to clean up in that branch.
+        // [T-android-alarm-boot-rearm] BOOT_COMPLETED / MY_PACKAGE_REPLACED:
+        // AlarmManager pending intents do not survive a reboot or an app
+        // update, so the old "the OS re-fires the persisted alarms on its own"
+        // assumption never held — every offload alarm used to die silently.
+        // Re-register them all here, on the app's coroutine scope behind
+        // goAsync() with a hard timeout — the same short-handoff shape
+        // AutomationRuleReceiver / ScheduledTaskAlarmReceiver use for their
+        // own BOOT resync.
         if (intent.action == Intent.ACTION_BOOT_COMPLETED || intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
             AppLogger.info(TAG, "${intent.action} — rescheduling persisted alarms")
-            try {
-                com.openminis.app.scheduled.ScheduledTaskManager(context).rescheduleAll()
-            } catch (t: Throwable) {
-                AppLogger.warning(TAG, "scheduled-task rescheduleAll failed: ${t.message}")
+            val pendingResult = goAsync()
+            val appContext = context.applicationContext
+            val scope = (appContext as? com.openminis.app.MinisApp)?.appCoroutineScopes?.application
+            if (scope == null) {
+                // Half-built app (GH#156 shape): nothing we can do, but the
+                // broadcast must still be released.
+                pendingResult.finish()
+                return
+            }
+            scope.launch {
+                try {
+                    withTimeout(HANDOFF_TIMEOUT_MS) {
+                        try {
+                            com.openminis.app.scheduled.ScheduledTaskManager(appContext).rescheduleAll()
+                        } catch (t: Throwable) {
+                            AppLogger.warning(TAG, "scheduled-task rescheduleAll failed: ${t.message}")
+                        }
+                        try {
+                            AlarmOffloadManager(appContext).rescheduleAll()
+                        } catch (t: Throwable) {
+                            AppLogger.warning(TAG, "alarm rescheduleAll failed: ${t.message}")
+                        }
+                    }
+                } catch (t: Throwable) {
+                    // Includes TimeoutCancellationException — release the
+                    // broadcast rather than holding it until the system ANRs.
+                    AppLogger.warning(TAG, "${intent.action} reschedule timed out: ${t.message}")
+                } finally {
+                    pendingResult.finish()
+                }
             }
             return
         }
@@ -37,9 +86,11 @@ class AlarmReceiver : BroadcastReceiver() {
 
         AppLogger.debug(TAG, "Alarm triggered: id=$alarmId label=$label")
 
-        // Drop the entry from prefs for ONCE alarms / timers so the next
-        // `android-alarm list` call no longer surfaces them. DAILY/WEEKDAYS
-        // are kept (the OS re-fires them).
+        // [T-android-alarm-rearm-chain] Drop the entry from prefs for ONCE
+        // alarms / timers so the next `android-alarm list` call no longer
+        // surfaces them. DAILY/WEEKDAYS are RE-ARMED inside onAlarmFired —
+        // setExactAndAllowWhileIdle is a one-shot, so the receiver owns the
+        // repeat chain and must schedule the next occurrence itself.
         if (alarmId != "unknown") {
             try {
                 AlarmOffloadManager(context).onAlarmFired(alarmId)

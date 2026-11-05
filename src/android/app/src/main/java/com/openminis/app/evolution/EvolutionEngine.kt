@@ -35,11 +35,18 @@ class EvolutionEngine(
 
     fun onSessionFinished(sessionId: String, isError: Boolean) {
         if (!prefs.isEnabled) return
+        // [P2-evolution-lockfree-llm] The engine mutex is NOT taken here: the
+        // harvest path makes up-to-45s LLM calls (refineRule / refineSkillPatch
+        // / weekly reflect) and holding the single mutex across them starved
+        // the UI's accept/rollback decisions behind model latency. The proposing
+        // flows now run read → propose (LLM, no engine lock) → short store
+        // critical section ([EvolutionStore.insertProposalIfNoOpen]) — the
+        // dedup keys (fingerprint / belief / skill_id / draft_text) are checked
+        // and inserted atomically at the store, so rules cannot double-insert
+        // or get lost. UI decisions keep the original mutex semantics.
         scope.launch {
-            mutex.withLock {
-                runCatching { processSession(sessionId) }
-                    .onFailure { AppLogger.warning(TAG, "session $sessionId: ${it.message}") }
-            }
+            runCatching { processSession(sessionId) }
+                .onFailure { AppLogger.warning(TAG, "session $sessionId: ${it.message}") }
         }
     }
 
@@ -48,13 +55,11 @@ class EvolutionEngine(
         if (!prefs.harvestCooldownElapsed()) return
         if (!isChargingOrUnknown()) return
         scope.launch {
-            mutex.withLock {
-                runCatching {
-                    store.maintainBeliefs()
-                    harvestIdle()
-                    maybeWeeklyReflect()
-                }.onFailure { AppLogger.warning(TAG, "idle harvest: ${it.message}") }
-            }
+            runCatching {
+                store.maintainBeliefs()
+                harvestIdle()
+                maybeWeeklyReflect()
+            }.onFailure { AppLogger.warning(TAG, "idle harvest: ${it.message}") }
         }
     }
 
@@ -65,10 +70,8 @@ class EvolutionEngine(
         val fails = store.recentToolFails(sessionId, skillId, System.currentTimeMillis() - DAY_MS)
         if (fails.size < EvolutionPrefs.SKILL_FAIL_THRESHOLD) return
         scope.launch {
-            mutex.withLock {
-                runCatching { maybeSkillPatch(sessionId, skillId, fails) }
-                    .onFailure { AppLogger.warning(TAG, "skill patch: ${it.message}") }
-            }
+            runCatching { maybeSkillPatch(sessionId, skillId, fails) }
+                .onFailure { AppLogger.warning(TAG, "skill patch: ${it.message}") }
         }
     }
 
@@ -203,12 +206,15 @@ class EvolutionEngine(
         val assistantText = lastAssistant?.let {
             ChatRepository.extractTextPreview(it.partsJson).orEmpty()
         }.orEmpty()
+        // [P2-evolution-lockfree-llm] LLM runs with NO engine lock held; the
+        // atomic gate+insert below re-checks the fingerprint so a flow that
+        // raced us during the call cannot double-insert.
         val polished = refineRule(
             user = text,
             assistant = assistantText,
             hint = hint,
         ) ?: hint
-        store.insertProposal(
+        store.insertProposalIfNoOpen(
             EvolutionProposal(
                 id = UUID.randomUUID().toString(),
                 type = EvolutionProposal.Type.LEARNED_RULE,
@@ -223,6 +229,7 @@ class EvolutionEngine(
                 decidedAt = null,
                 scene = scene,
             ),
+            fingerprint = fp,
         )
         AppLogger.info(TAG, "Be-ACTIVE proposal for session ${sessionId.take(8)}")
     }
@@ -268,10 +275,13 @@ class EvolutionEngine(
             val belief = store.bumpBelief(fp, "harvest", hint, sessionScene)
             if (belief.hitCount < EvolutionPrefs.MIN_BELIEF_HITS) continue
             if (store.hasOpenProposal(fp)) continue
+            // [P2-evolution-lockfree-llm] LLM with no engine lock held; the
+            // atomic gate+insert re-checks the fingerprint under the store
+            // monitor so a racing flow cannot double-insert.
             val polished = if (compact.isNullOrBlank()) hint else {
                 refineRule(user = hint, assistant = compact.take(800), hint = hint) ?: hint
             }
-            store.insertProposal(
+            store.insertProposalIfNoOpen(
                 EvolutionProposal(
                     id = UUID.randomUUID().toString(),
                     type = EvolutionProposal.Type.LEARNED_RULE,
@@ -286,6 +296,7 @@ class EvolutionEngine(
                     decidedAt = null,
                     scene = sessionScene,
                 ),
+                fingerprint = fp,
             )
         }
         store.setWatermark(sessionId, lastId)
@@ -297,9 +308,11 @@ class EvolutionEngine(
         val skill = skillRepository.skills.value.find { it.id == skillId } ?: return
         val excerpt = BoundedText.markdownParseInput(skill.body).take(4_000)
         val errors = fails.take(3).joinToString("\n") { "- ${it.take(240)}" }
+        // [P2-evolution-lockfree-llm] LLM outside any engine lock; atomic
+        // gate+insert keyed on the skill fingerprint.
         val patch = refineSkillPatch(skill.id, excerpt, errors)
             ?: return
-        store.insertProposal(
+        store.insertProposalIfNoOpen(
             EvolutionProposal(
                 id = UUID.randomUUID().toString(),
                 type = EvolutionProposal.Type.SKILL_PATCH,
@@ -313,6 +326,7 @@ class EvolutionEngine(
                 createdAt = System.currentTimeMillis(),
                 decidedAt = null,
             ),
+            fingerprint = fp,
         )
         AppLogger.info(TAG, "skill_patch proposal for $skillId session=${sessionId.take(8)}")
     }

@@ -45,6 +45,7 @@ import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -83,6 +84,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import kotlin.math.min
 import com.openminis.app.ui.components.MinisTextButton
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -136,9 +138,29 @@ fun FilePreviewScreen(
     // (siblings from the same directory) instead of the in-place
     // ImagePreview column. Gallery owns its own close / save / share /
     // copy chrome, so we skip the Scaffold + TopAppBar entirely.
+    //
+    // [T-android-gallery-async-enumeration] (#18) collectImageGallery used to
+    // run inside remember — a synchronous composition-time parent.listFiles()
+    // walk + per-sibling stat, on the main thread, on the critical path of
+    // opening an image, and it re-ran on every recomposition that re-entered
+    // this branch. Now: the tapped file renders immediately as a 1-item
+    // gallery (the state's initial value) and the sibling list replaces it
+    // once Dispatchers.IO finishes enumerating. ImageGalleryViewer scrolls to
+    // the tapped image's sorted position one-shot when the list first grows,
+    // so the swap is seamless.
     if (item.isImageFile) {
-        val galleryState = remember(item.file.absolutePath) {
-            collectImageGallery(item.file)
+        var galleryState by remember(item.file.absolutePath) {
+            mutableStateOf(
+                listOf(
+                    com.openminis.app.ui.components.ImageGalleryItem(
+                        model = item.file,
+                        caption = item.file.name,
+                    ),
+                ) to 0,
+            )
+        }
+        LaunchedEffect(item.file.absolutePath) {
+            galleryState = withContext(Dispatchers.IO) { collectImageGallery(item.file) }
         }
         com.openminis.app.ui.components.ImageGalleryViewer(
             items = galleryState.first,
@@ -328,6 +350,33 @@ private fun ImagePreview(item: FileItem) {
 
 // ==================== Text/Code Preview ====================
 
+/**
+ * [T-android-preview-bounded-read] (#17) Read at most [limit] bytes without
+ * ever materializing the whole file: `File.length()` gates the truncation
+ * flag from metadata and a fixed-buffer loop stops at the cap. The previous
+ * `readBytes()` + truncate pattern read the ENTIRE file into memory first —
+ * a multi-hundred-MB sandbox log preview allocated every byte before the
+ * cap ever applied.
+ */
+private fun readBoundedTextBytes(file: File, limit: Int): Pair<ByteArray, Boolean> {
+    val total = file.length()
+    val truncated = total > limit
+    val out = java.io.ByteArrayOutputStream(
+        min(limit.toLong(), total.coerceAtLeast(0L)).toInt().coerceAtLeast(1),
+    )
+    file.inputStream().use { input ->
+        val buf = ByteArray(8192)
+        var remaining = limit
+        while (remaining > 0) {
+            val n = input.read(buf, 0, minOf(buf.size, remaining))
+            if (n <= 0) break
+            out.write(buf, 0, n)
+            remaining -= n
+        }
+    }
+    return out.toByteArray() to truncated
+}
+
 @Composable
 private fun TextPreview(item: FileItem) {
     var content by remember { mutableStateOf<String?>(null) }
@@ -337,14 +386,10 @@ private fun TextPreview(item: FileItem) {
     LaunchedEffect(item.file) {
         withContext(Dispatchers.IO) {
             try {
-                val bytes = item.file.readBytes()
-                if (bytes.size > MAX_TEXT_PREVIEW_BYTES) {
-                    content = String(bytes, 0, MAX_TEXT_PREVIEW_BYTES, Charsets.UTF_8)
-                    truncated = true
-                } else {
-                    content = String(bytes, Charsets.UTF_8)
-                    truncated = false
-                }
+                // (#17) bounded read — never the whole file.
+                val (bytes, wasTruncated) = readBoundedTextBytes(item.file, MAX_TEXT_PREVIEW_BYTES)
+                content = String(bytes, Charsets.UTF_8)
+                truncated = wasTruncated
             } catch (e: Exception) {
                 error = e.message ?: "Failed to read file"
             }
@@ -419,9 +464,9 @@ private fun MarkdownPreview(item: FileItem, onLinkClick: (String) -> Unit) {
     LaunchedEffect(item.file) {
         withContext(Dispatchers.IO) {
             try {
-                val bytes = item.file.readBytes()
-                val cap = if (bytes.size > MAX_TEXT_PREVIEW_BYTES) MAX_TEXT_PREVIEW_BYTES else bytes.size
-                content = String(bytes, 0, cap, Charsets.UTF_8)
+                // (#17) bounded read — never the whole file.
+                val (bytes, _) = readBoundedTextBytes(item.file, MAX_TEXT_PREVIEW_BYTES)
+                content = String(bytes, Charsets.UTF_8)
             } catch (e: Exception) {
                 error = e.message ?: "Failed to read file"
                 AppLogger.warning("FilePreview", "markdown read failed for ${item.name}: ${e.message}")
@@ -537,73 +582,8 @@ private fun VideoPreview(item: FileItem) {
     }
 }
 
-// ==================== PDF (native PdfRenderer) ====================
-
-/**
- * T144: in-app PDF viewer via Android's stock [PdfRenderer]. Each page is
- * rendered to a Bitmap once, scaled to the page's natural aspect at the
- * card width, and shown in a LazyColumn so 100-page PDFs don't OOM.
- * Capped at 50 pages — full doc available via Save-As / external open.
- */
 @Composable
-private fun PdfPreview(item: FileItem) {
-    var pages by remember(item.file) { mutableStateOf<List<Bitmap>?>(null) }
-    var error by remember(item.file) { mutableStateOf<String?>(null) }
-
-    LaunchedEffect(item.file) {
-        withContext(Dispatchers.IO) {
-            try {
-                ParcelFileDescriptor.open(item.file, ParcelFileDescriptor.MODE_READ_ONLY).use { pfd ->
-                    PdfRenderer(pfd).use { renderer ->
-                        val out = ArrayList<Bitmap>(renderer.pageCount)
-                        val limit = minOf(renderer.pageCount, 50)
-                        for (i in 0 until limit) {
-                            renderer.openPage(i).use { page ->
-                                val targetW = 1600
-                                val targetH = (targetW.toFloat() * page.height / page.width).toInt()
-                                val bmp = Bitmap.createBitmap(targetW, targetH, Bitmap.Config.ARGB_8888)
-                                bmp.eraseColor(android.graphics.Color.WHITE)
-                                page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                                out.add(bmp)
-                            }
-                        }
-                        pages = out
-                    }
-                }
-            } catch (e: Exception) {
-                AppLogger.warning("FilePreview", "PdfRenderer failed for ${item.name}: ${e.message}")
-                error = e.message ?: "Failed to render PDF"
-            }
-        }
-    }
-
-    when {
-        error != null -> PdfOpenExternalFallback(item, error!!)
-        pages == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(stringResource(R.string.filepreview_loading_pdf), color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        pages!!.isEmpty() -> PdfOpenExternalFallback(item, stringResource(R.string.filepreview_pdf_empty))
-        else -> {
-            val rendered = pages!!
-            LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(8.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                items(rendered.size) { idx ->
-                    Image(
-                        bitmap = rendered[idx].asImageBitmap(),
-                        contentDescription = stringResource(R.string.filepreview_page_n, idx + 1),
-                        modifier = Modifier.fillMaxWidth(),
-                        contentScale = ContentScale.FillWidth,
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun PdfOpenExternalFallback(item: FileItem, reason: String) {
+internal fun PdfOpenExternalFallback(item: FileItem, reason: String) {
     val context = LocalContext.current
     // T149: same regression as Office — fallback page now reuses the shared
     // metadata block under the placeholder so an unrenderable PDF still shows
@@ -745,11 +725,10 @@ private fun JsonPreview(item: FileItem) {
     LaunchedEffect(item.file) {
         withContext(Dispatchers.IO) {
             try {
-                val bytes = item.file.readBytes()
-                val cap = if (bytes.size > MAX_TEXT_PREVIEW_BYTES) {
-                    truncated = true; MAX_TEXT_PREVIEW_BYTES
-                } else bytes.size
-                val raw = String(bytes, 0, cap, Charsets.UTF_8)
+                // (#17) bounded read — never the whole file.
+                val (bytes, wasTruncated) = readBoundedTextBytes(item.file, MAX_TEXT_PREVIEW_BYTES)
+                truncated = wasTruncated
+                val raw = String(bytes, Charsets.UTF_8)
                 pretty = try {
                     when (raw.trimStart().firstOrNull()) {
                         '{' -> org.json.JSONObject(raw).toString(2)

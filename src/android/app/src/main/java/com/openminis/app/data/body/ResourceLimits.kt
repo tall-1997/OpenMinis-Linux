@@ -11,7 +11,8 @@ object ResourceLimits {
     const val PARSE_OUTPUT_BYTES = 256 * 1024
     const val MAX_PARSE_NODES = 256
     const val INLINE_BODY_BYTES = 2048
-    const val MAX_EXPANSION_RATIO = 32
+    // [Wave3-fix-7] MAX_EXPANSION_RATIO (32) deleted with the BodyStore DEFLATE
+    // read branch — it guarded only that inflate path, which had no writer.
     const val MAX_DECLARED_UNCOMPRESSED = 8 * 1024 * 1024
     /** One session load may materialize at most this many preview bytes. */
     const val SESSION_PREVIEW_BUDGET = 1024 * 1024

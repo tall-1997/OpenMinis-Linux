@@ -227,33 +227,6 @@ fun MinisMenuDivider(modifier: Modifier = Modifier) {
 }
 
 /**
- * Consistent row padding + colors for menu items. Use this to tighten the
- * default Material3 48dp row to 44dp and give the leading icon breathing room
- * that matches the iOS context-menu look.
- */
-object MinisMenuDefaults {
-    val ItemPadding: PaddingValues = PaddingValues(horizontal = 14.dp, vertical = 0.dp)
-
-    @Composable
-    fun itemColors(
-        textColor: Color = MaterialTheme.colorScheme.onSurface,
-        leadingIconColor: Color = MaterialTheme.colorScheme.primary,
-        trailingIconColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
-    ): MenuItemColors = MenuDefaults.itemColors(
-        textColor = textColor,
-        leadingIconColor = leadingIconColor,
-        trailingIconColor = trailingIconColor,
-    )
-
-    @Composable
-    fun destructiveItemColors(): MenuItemColors = MenuDefaults.itemColors(
-        textColor = MaterialTheme.colorScheme.error,
-        leadingIconColor = MaterialTheme.colorScheme.error,
-        trailingIconColor = MaterialTheme.colorScheme.error,
-    )
-}
-
-/**
  * [P0-6] Small group label for a [MinisMenu] section. The chat top-bar menu
  * used to be one flat 16+ item list; sections (快捷 / 会话 / 工具 / 设置)
  * are what make it scannable. A header rather than another divider: a

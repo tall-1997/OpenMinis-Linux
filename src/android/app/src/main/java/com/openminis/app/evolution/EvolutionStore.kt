@@ -197,6 +197,22 @@ class EvolutionStore(dir: File) {
         reload()
     }
 
+    /**
+     * [P2-evolution-lockfree-llm] Atomic dedup+insert. Proposing flows no
+     * longer hold the engine mutex across their (up to 45 s) LLM call, so the
+     * [hasOpenProposal] gate and [insertProposal] must be ONE monitor
+     * critical section here — otherwise two flows racing the same fingerprint
+     * both pass the check and double-insert. The dedup keys are unchanged
+     * (belief fingerprint join, skill_id, draft_text per [hasOpenProposal]).
+     * Returns false (nothing inserted) when an open proposal already exists.
+     */
+    @Synchronized
+    fun insertProposalIfNoOpen(proposal: EvolutionProposal, fingerprint: String): Boolean {
+        if (hasOpenProposal(fingerprint)) return false
+        insertProposal(proposal)
+        return true
+    }
+
     @Synchronized
     fun setStatus(id: String, status: EvolutionProposal.Status, rollbackText: String? = null) {
         val now = System.currentTimeMillis()

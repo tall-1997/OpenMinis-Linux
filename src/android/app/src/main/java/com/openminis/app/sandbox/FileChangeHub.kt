@@ -113,6 +113,18 @@ object FileChangeHub {
         registrations.remove(sessionId)?.observers?.values?.forEach {
             runCatching { it.stopWatching() }
         }
+        // The flow dies with the registration: an entry that only ever grows
+        // meant every session ever watched kept a MutableSharedFlow forever.
+        flows.remove(sessionId)
+        synchronized(this) {
+            if (registrations.isEmpty() && ticker?.isActive == true) {
+                // No watchers left — park the 200ms ticker. watch() restarts it
+                // via ensureTicker(). A cancelled job's isActive is false, so
+                // the double-checked relaunch works unchanged.
+                ticker?.cancel()
+                ticker = null
+            }
+        }
     }
 
     /** Change events for one session. Safe to collect before [watch]. */
@@ -223,6 +235,10 @@ object FileChangeHub {
                     for (reg in registrations.values) {
                         val due = reg.coalescer.drainDue()
                         if (due.isEmpty()) continue
+                        // Skip a registration removed mid-drain: unwatch() also
+                        // removed its flow, and flowFor() here would recreate an
+                        // orphan that nothing will ever emit into again.
+                        if (registrations[reg.sessionId] !== reg) continue
                         val flow = flowFor(reg.sessionId)
                         for (e in due) {
                             flow.tryEmit(

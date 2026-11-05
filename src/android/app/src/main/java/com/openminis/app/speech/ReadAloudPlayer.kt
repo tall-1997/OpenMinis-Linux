@@ -11,12 +11,16 @@ import com.openminis.app.R
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.provider.voice.VoiceOutputRequest
 import com.openminis.app.provider.voice.VoiceProviderFactory
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -27,40 +31,8 @@ import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.coroutines.resume
 
-/**
- * [T-android-provider-tts-readaloud] Read-aloud playback that routes through
- * the resolved Voice OUTPUT selection, falling back to the on-device engine.
- *
- * ## Why this exists
- * Read-aloud previously constructed a bare [TextToSpeechManager], so it always
- * used the on-device Android engine. The whole provider TTS stack —
- * `VoiceProvider.synthesize()` plus ~723 lines of vendor adapters (MiniMax,
- * Doubao, ElevenLabs, Azure, Gemini, Xunfei, …) — was reachable only from the
- * settings Quick Test sheet, so no provider voice was usable in chat.
- *
- * ## Routing
- * Each utterance asks [com.openminis.app.data.repository.ProviderRepository
- * .resolveVoiceOutputChoice] (added in the P0-1 commit) where to go:
- *  - System choice, no credentials, unsupported vendor, or ANY synthesis
- *    failure → [TextToSpeechManager] (the on-device engine).
- *  - Provider choice → `synthesize()` then play the returned bytes.
- *
- * Fallback is per-utterance and silent by design: a mid-reply network blip
- * degrades to the device voice rather than dropping the sentence.
- *
- * ## Ordering
- * Utterances go through a [Channel] consumed by a single worker coroutine, so
- * sentence N+1 is synthesized/played only after N finishes. Without this,
- * concurrent `synthesize()` calls would return out of order and the reply would
- * be read scrambled. This is the Android stand-in for iOS's
- * `VoiceOutputPlayer` queue (we deliberately do NOT prefetch-ahead yet — that
- * is P1 territory).
- *
- * Text is sanitized via [VoiceTextSanitizer] before either path, so Markdown,
- * URLs and emoji are never pronounced.
- *
- * Not thread-safe beyond the channel; call from the main thread.
- */
+// [T-android-provider-tts-readaloud] Read-aloud routed through the resolved Voice OUTPUT selection, falling back to the on-device engine.
+// Utterances flow through a [Channel] worker (ordered); [T-android-tts-prefetch] lookahead synthesizes the next sentence during the current one's playback. Text is sanitized via [VoiceTextSanitizer].
 class ReadAloudPlayer(context: Context) {
 
     private val appContext = context.applicationContext
@@ -70,58 +42,35 @@ class ReadAloudPlayer(context: Context) {
     private val queue = Channel<String>(Channel.UNLIMITED)
     private var worker: Job? = null
 
+    // [T-android-tts-prefetch] Lookahead slot: [lookaheadGrabber] synthesizes the next sentence during the current one's playback;
+    // [lookaheadText] lets stop/suspend see a grabbed-but-unplayed sentence; [lookaheadEpoch] detects a lookahead cancelled underneath the worker.
+    private var lookaheadGrabber: Deferred<LookaheadGrab?>? = null
+    private var lookaheadText: String? = null
+    private var lookaheadEpoch = 0L
+
     /** Currently playing provider audio, if any — held so [stop] can cancel it. */
     private var player: MediaPlayer? = null
 
-    /**
-     * Completes the in-flight [playBytes] suspension when [stop] tears the
-     * MediaPlayer down. Releasing the player means its completion/error
-     * callbacks will never fire, so without this the worker coroutine would
-     * wait forever and the queue would wedge.
-     */
+    // Completes the in-flight [playBytes] suspension when [stop] releases the MediaPlayer (otherwise the worker would wedge).
     private var playbackFinisher: (() -> Unit)? = null
 
-    /**
-     * [T-android-tts-broken-listener] Latched once the system engine misses a
-     * completion callback. Some OEM engines speak fine but never deliver
-     * UtteranceProgressListener events; without this every sentence waited out
-     * its whole (>=10 s) budget and was then cut off mid-word.
-     */
+    // [T-android-tts-broken-listener] Latched when the engine never delivers UtteranceProgressListener events (some OEM engines).
     @Volatile
     private var progressListenerBroken = false
 
     /** Utterances enqueued but not yet finished; drives [isSpeaking]. */
     private val pending = AtomicInteger(0)
 
-    /**
-     * [T-android-tts-player-registry] True when THIS player owns the capsule.
-     *
-     * Two players can be alive at once (the reply channel, and the selection
-     * Read-Aloud player). Both used to write the shared
-     * isSpeaking/isSynthesizing/activeModelLabel mirrors unconditionally, so a
-     * background player's state flickered the capsule of the foreground one.
-     * Only the registry's top may drive the UI.
-     */
+    // [T-android-tts-player-registry] True when THIS player owns the capsule (only the registry's top drives the UI).
     private fun ownsCapsule(): Boolean = VoiceOutputState.isActivePlayer(this)
 
     private val _isSpeaking = MutableStateFlow(false)
     val isSpeaking: StateFlow<Boolean> = _isSpeaking.asStateFlow()
 
-    /**
-     * Rolling buffer for streaming input. Mirrors [TextToSpeechManager]'s own
-     * buffer, but lives here so the sentence split happens BEFORE the routing
-     * decision (each sentence is independently a provider or system utterance).
-     */
+    // Rolling buffer for streaming input; split happens BEFORE the routing decision.
     private val sentenceBuffer = StringBuilder()
 
-    /**
-     * [T-android-tts-stop-on-capture] Utterances parked by [suspendForCapture]
-     * while the microphone is open, replayed by [resumeAfterCapture].
-     *
-     * Guarded by the same main-thread confinement the rest of this class
-     * relies on (see the queue-state note on [stop]) — both entry points are
-     * driven from the recognizer's state flow, which is collected on main.
-     */
+    // [T-android-tts-stop-on-capture] Utterances parked by [suspendForCapture], replayed by [resumeAfterCapture]; main-thread-confined.
     private val heldForCapture = mutableListOf<String>()
 
     /** True between [suspendForCapture] and [resumeAfterCapture]/[stop]. */
@@ -136,21 +85,43 @@ class ReadAloudPlayer(context: Context) {
     }
 
     init {
-        // [T-android-tts-capsule] Register as the active player so the global
-        // capsule's mute/close/stop actions reach this instance, and mirror the
-        // live speaking flag into the global state the capsule renders from.
+        // [T-android-tts-capsule] Register so the capsule's mute/close/stop reach this instance and mirror the speaking flag.
         VoiceOutputState.init(appContext)
         VoiceOutputState.registerPlayer(this)
         worker = scope.launch {
-            for (text in queue) {
-                runCatching { speakOne(text) }
-                    .onFailure { AppLogger.error(TAG, "utterance failed: $it") }
-                // Queue drained → speech is over. Counter rather than
-                // Channel.isEmpty, which is experimental API.
-                if (pending.decrementAndGet() <= 0) {
-                    _isSpeaking.value = false
-                    if (ownsCapsule()) VoiceOutputState.isSpeaking.value = false
+            // [T-android-tts-prefetch] Explicit loop (next sentence comes from the grabber or the queue); queue.close() exits cleanly.
+            try {
+                while (true) {
+                    val lookahead = nextUtterance() ?: continue
+                    val (text, prefetched) = lookahead
+
+                    // Spawn the NEXT lookahead before playing so its queue-wait + synthesis overlap this sentence's playback.
+                    lookaheadGrabber = scope.async {
+                        val next = try {
+                            queue.receive()
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (_: ClosedReceiveChannelException) {
+                            // queue.close() from shutdown() — nothing to prefetch.
+                            return@async null
+                        }
+                        // Publish before the synthesis hop so stop()/suspendForCapture() can drop/hold it mid-flight.
+                        lookaheadText = next
+                        LookaheadGrab(next, prefetchAudio(next))
+                    }
+
+                    runCatching { speakOne(text, prefetched) }
+                        .onFailure { AppLogger.error(TAG, "utterance failed: $it") }
+                    // Queue drained → speech over (counter, not experimental Channel.isEmpty).
+                    if (pending.decrementAndGet() <= 0) {
+                        _isSpeaking.value = false
+                        if (ownsCapsule()) VoiceOutputState.isSpeaking.value = false
+                    }
                 }
+            } catch (e: CancellationException) {
+                throw e // worker?.cancel() / scope.cancel() — normal shutdown
+            } catch (_: ClosedReceiveChannelException) {
+                // queue.close() from shutdown()
             }
         }
     }
@@ -249,8 +220,16 @@ class ReadAloudPlayer(context: Context) {
     fun suspendForCapture() {
         if (capturePaused) return
         capturePaused = true
-        // Drain into the holding list rather than onto the floor.
+        // [T-android-tts-prefetch] Invalidate any in-flight lookahead FIRST:
+        // the grabber may be sitting on a sentence the drain below cannot see.
+        // Its text goes back first — it was pulled from the queue before
+        // everything still in it, so the re-queue order is preserved.
+        lookaheadEpoch++
         val held = mutableListOf<String>()
+        lookaheadText?.let { held.add(it) }
+        lookaheadText = null
+        lookaheadGrabber?.cancel()
+        lookaheadGrabber = null
         while (true) {
             val r = queue.tryReceive()
             if (r.isSuccess) held.add(r.getOrThrow()) else break
@@ -293,6 +272,13 @@ class ReadAloudPlayer(context: Context) {
         capturePaused = false
         heldForCapture.clear()
         sentenceBuffer.setLength(0)
+        // [T-android-tts-prefetch] The grabber may hold a sentence the queue
+        // drain cannot see (already received, not yet played) — kill it and
+        // bump the epoch so the worker discards whatever it was awaiting.
+        lookaheadEpoch++
+        lookaheadGrabber?.cancel()
+        lookaheadGrabber = null
+        lookaheadText = null
         while (queue.tryReceive().isSuccess) { /* drain */ }
         // Unblock the worker BEFORE releasing, so the in-flight utterance's
         // suspension completes instead of waiting on callbacks that a released
@@ -323,7 +309,19 @@ class ReadAloudPlayer(context: Context) {
 
     // -- internals --
 
-    private suspend fun speakOne(text: String) {
+    private suspend fun speakOne(text: String, prefetched: PrefetchedAudio? = null) {
+        // [T-android-tts-prefetch] Audio already synthesized by the lookahead
+        // during the previous sentence's playback: skip resolve + network
+        // entirely and play. On failure the caller's serial path below never
+        // runs for this sentence (prefetched audio either exists or the
+        // grabber handed back null, which routed here with prefetched=null).
+        if (prefetched != null) {
+            if (ownsCapsule()) {
+                VoiceOutputState.activeModelLabel.value = prefetched.modelLabel
+            }
+            playBytes(prefetched.data)
+            return
+        }
         val entry = runCatching {
             (appContext as? MinisApp)?.providerRepository?.resolveVoiceOutputEntry()
         }.getOrNull()
@@ -360,6 +358,84 @@ class ReadAloudPlayer(context: Context) {
         }
     }
 
+    /**
+     * [T-android-tts-prefetch] The worker's next utterance: from the in-flight
+     * lookahead grabber when one exists, otherwise straight from the queue.
+     *
+     * The epoch compare detects a stop()/suspendForCapture() that ran while we
+     * awaited the grabber — the grabbed sentence was already dropped or moved
+     * to [heldForCapture], so it must NOT be spoken here too (the grabber can
+     * complete with ready audio at the same moment; without the check it would
+     * play and later play AGAIN from the held list).
+     *
+     * Null when there is nothing to play right now: a cancelled grabber (stop)
+     * means the worker loops back and parks on the queue.
+     */
+    private suspend fun nextUtterance(): LookaheadGrab? {
+        val grabberJob = lookaheadGrabber
+            ?: return LookaheadGrab(queue.receive(), null)
+        val epochBefore = lookaheadEpoch
+        val grab = runCatching { grabberJob.await() }.getOrNull()
+        // Clear the slot only AFTER the await settles: stop()/suspendForCapture()
+        // cancel whatever the field still points at, so an in-flight grabber
+        // must stay reachable through it for the whole await. Nulling earlier
+        // would orphan a grabber parked in queue.receive() — it would hold the
+        // receiver slot and swallow the next enqueued sentence.
+        lookaheadGrabber = null
+        val stolen = lookaheadEpoch != epochBefore
+        lookaheadText = null
+        return if (grab == null || stolen) null else grab
+    }
+
+    /**
+     * [T-android-tts-prefetch] Synthesize [text] through the provider route
+     * for the lookahead slot. Mirrors the resolve + synthesize half of
+     * [speakOne] / [speakViaProvider] (same gates, same request shape) minus
+     * playback; null on any gate failure or synthesis error, in which case
+     * playback falls back to the serial path, which re-runs the whole
+     * resolve + synthesize + play sequence — and, on failure there, the
+     * system engine.
+     *
+     * Deliberately does NOT touch [VoiceOutputState.isSynthesizing]: the
+     * capsule's loading arc belongs to the utterance the user is waiting on,
+     * which the play-time path still drives.
+     */
+    private suspend fun prefetchAudio(text: String): PrefetchedAudio? {
+        val entry = runCatching {
+            (appContext as? MinisApp)?.providerRepository?.resolveVoiceOutputEntry()
+        }.getOrNull() ?: return null
+        val (instance, modelEntry) = entry
+        val voice = resolveProviderVoice(instance) ?: return null
+        if (!voice.supportsVoiceOutput) {
+            AppLogger.error(TAG, "provider TTS skipped: ${voice.javaClass.simpleName} does not support output")
+            return null
+        }
+        val data = try {
+            withContext(Dispatchers.IO) {
+                voice.synthesize(voiceOutputRequest(modelEntry, text))
+            }
+        } catch (e: CancellationException) {
+            throw e // grabber cancelled mid-synthesis (stop / capture pause)
+        } catch (e: Exception) {
+            AppLogger.error(TAG, "provider TTS prefetch failed (model=${modelEntry.model.id}): $e")
+            return null
+        }
+        if (data.isEmpty()) {
+            AppLogger.error(TAG, "provider TTS prefetch returned empty audio (model=${modelEntry.model.id})")
+            return null
+        }
+        return PrefetchedAudio(modelEntry.model.displayName.ifBlank { modelEntry.model.id }, data)
+    }
+
+    /** [T-android-tts-prefetch] Provider audio synthesized ahead of playback. */
+    private class PrefetchedAudio(val modelLabel: String, val data: ByteArray)
+
+    /**
+     * What the lookahead grabber hands back: the sentence it received and,
+     * when the provider route served it, its ready audio (null = serial path).
+     */
+    private data class LookaheadGrab(val text: String, val audio: PrefetchedAudio?)
+
     /** One-shot user-visible signal that read-aloud cannot produce sound. */
     private var unavailableNotified = false
 
@@ -385,25 +461,7 @@ class ReadAloudPlayer(context: Context) {
         modelEntry: com.openminis.app.data.model.ModelEntry,
         text: String,
     ): Boolean {
-        // [T-android-safemode-lateinit-crash-147] `?.` guards a null
-        // Application but NOT an unassigned lateinit — the getter throws.
-        // Read-aloud can be driven from a notification action with no
-        // Activity, so gate on subsystemsReady() before touching a repository.
-        // Each bail-out logs its reason: these gates used to return false
-        // silently, which made "no sound" undiagnosable from a user device
-        // (the daily log files showed nothing at all).
-        val repo = (appContext as? MinisApp)
-            ?.takeIf { it.subsystemsReady() }
-            ?.providerRepository
-            ?: return false.also { AppLogger.error(TAG, "provider TTS skipped: repository unavailable") }
-        val apiKey = repo.loadApiKey(instance.id)
-            ?: return false.also { AppLogger.error(TAG, "provider TTS skipped: no API key for ${instance.id}") }
-        val voice = VoiceProviderFactory.make(instance, apiKey)
-            ?: return false.also { AppLogger.error(TAG, "provider TTS skipped: no voice adapter for ${instance.providerType}/${instance.customBaseURL}") }
-        if (!voice.supportsVoiceOutput) {
-            AppLogger.error(TAG, "provider TTS skipped: ${voice.javaClass.simpleName} does not support output")
-            return false
-        }
+        val voice = resolveProviderVoice(instance) ?: return false
 
         // [T-android-tts-capsule] Drives the capsule's rotating-arc loading
         // indicator while the network request is in flight (iOS
@@ -411,16 +469,7 @@ class ReadAloudPlayer(context: Context) {
         if (ownsCapsule()) VoiceOutputState.isSynthesizing.value = true
         val data = try {
             withContext(Dispatchers.IO) {
-                voice.synthesize(
-                    // The entry id doubles as the voice id — template voices carry
-                    // the voice id as the model id (same convention QuickTestSheet
-                    // relies on, iOS 0a52bdbf).
-                    VoiceOutputRequest(
-                        input = text,
-                        model = modelEntry.model.id,
-                        voice = modelEntry.model.id,
-                    ),
-                )
+                voice.synthesize(voiceOutputRequest(modelEntry, text))
             }
         } finally {
             VoiceOutputState.isSynthesizing.value = false
@@ -432,6 +481,51 @@ class ReadAloudPlayer(context: Context) {
         playBytes(data)
         return true
     }
+
+    /**
+     * Resolve the provider-side pieces of the TTS route (repository gate, API
+     * key, voice adapter). Shared by the play-time path ([speakViaProvider])
+     * and the lookahead prefetch ([prefetchAudio]) so a gate added in one
+     * place applies to both. Null = provider route unavailable.
+     *
+     * [T-android-safemode-lateinit-crash-147] `?.` guards a null
+     * Application but NOT an unassigned lateinit — the getter throws.
+     * Read-aloud can be driven from a notification action with no
+     * Activity, so gate on subsystemsReady() before touching a repository.
+     * Each bail-out logs its reason: these gates used to return false
+     * silently, which made "no sound" undiagnosable from a user device
+     * (the daily log files showed nothing at all).
+     */
+    private fun resolveProviderVoice(
+        instance: com.openminis.app.data.model.ProviderInstance,
+    ): com.openminis.app.provider.voice.VoiceProvider? {
+        val repo = (appContext as? MinisApp)
+            ?.takeIf { it.subsystemsReady() }
+            ?.providerRepository
+            ?: return null.also { AppLogger.error(TAG, "provider TTS skipped: repository unavailable") }
+        val apiKey = repo.loadApiKey(instance.id)
+            ?: return null.also { AppLogger.error(TAG, "provider TTS skipped: no API key for ${instance.id}") }
+        val voice = VoiceProviderFactory.make(instance, apiKey)
+            ?: return null.also { AppLogger.error(TAG, "provider TTS skipped: no voice adapter for ${instance.providerType}/${instance.customBaseURL}") }
+        if (!voice.supportsVoiceOutput) {
+            AppLogger.error(TAG, "provider TTS skipped: ${voice.javaClass.simpleName} does not support output")
+            return null
+        }
+        return voice
+    }
+
+    /** Request shape shared by the play-time and prefetch synthesize calls. */
+    private fun voiceOutputRequest(
+        modelEntry: com.openminis.app.data.model.ModelEntry,
+        text: String,
+    ) = VoiceOutputRequest(
+        input = text,
+        // The entry id doubles as the voice id — template voices carry
+        // the voice id as the model id (same convention QuickTestSheet
+        // relies on, iOS 0a52bdbf).
+        model = modelEntry.model.id,
+        voice = modelEntry.model.id,
+    )
 
     /**
      * Write [data] to a cache file and play it to completion. Same approach as

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    [Wave3 #8] Foreground-service + tool-overlay copy, German.
+    Mirrors values/strings_service.xml key-for-key.
+-->
+<resources>
+    <!-- Tool labels: long (notification) variants -->
+    <string name="bg_service_tool_shell">Minis nutzt Shell</string>
+    <string name="bg_service_tool_file_read">Minis liest Datei</string>
+    <string name="bg_service_tool_editor">Minis nutzt Editor</string>
+    <string name="bg_service_tool_file_edit">Minis bearbeitet Datei</string>
+    <string name="bg_service_tool_browser">Minis nutzt Browser</string>
+    <string name="bg_service_tool_read_image">Minis liest Bild</string>
+    <string name="bg_service_tool_memory">Minis nutzt Speicher</string>
+    <string name="bg_service_tool_search">Minis nutzt Suche</string>
+    <string name="bg_service_tool_generic">Minis nutzt %1$s</string>
+
+    <!-- Tool labels: short (overlay capsule) variants -->
+    <string name="tool_label_short_shell">Shell</string>
+    <string name="tool_label_short_file">Datei</string>
+    <string name="tool_label_short_editor">Editor</string>
+    <string name="tool_label_short_edit">Bearbeiten</string>
+    <string name="tool_label_short_browser">Browser</string>
+    <string name="tool_label_short_image">Bild</string>
+    <string name="tool_label_short_memory">Speicher</string>
+    <string name="tool_label_short_search">Suche</string>
+    <string name="tool_label_short_app_name">Minis Ultra</string>
+</resources>

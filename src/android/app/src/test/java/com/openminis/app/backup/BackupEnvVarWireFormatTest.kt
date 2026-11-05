@@ -1,5 +1,6 @@
 package com.openminis.app.backup
 
+import com.openminis.app.data.model.Iso8601MillisNullableSerializer
 import kotlinx.serialization.builtins.ListSerializer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue

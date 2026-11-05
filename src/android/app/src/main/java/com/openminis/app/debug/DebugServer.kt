@@ -28,6 +28,10 @@ class DebugServer(
     companion object {
         private const val TAG = "DebugServer"
 
+        /** [Wave3 #13] LAN-listen opt-in prefs (debug builds only, default OFF). */
+        private const val LAN_LISTEN_PREFS = "debug_server_prefs"
+        private const val LAN_LISTEN_KEY = "lan_listen"
+
         /**
          * [T-android-debugserver-auth] Remote-connection auth decision, kept
          * pure for unit testing. Loopback connections (adb forward — the
@@ -89,6 +93,20 @@ class DebugServer(
     @Volatile
     private var stopped = false
 
+    /**
+     * [Wave3 #13] Explicit LAN-listen opt-in. Debug builds only (release never
+     * starts this server at all); default OFF. Prefs file "debug_server_prefs",
+     * key "lan_listen" — kept out of the token file so `adb shell` tooling
+     * keeps a stable contract.
+     */
+    private fun lanListenEnabled(): Boolean {
+        if (!com.openminis.app.BuildConfig.DEBUG) return false
+        return runCatching {
+            context.getSharedPreferences(LAN_LISTEN_PREFS, Context.MODE_PRIVATE)
+                .getBoolean(LAN_LISTEN_KEY, false)
+        }.getOrDefault(false)
+    }
+
     fun start() {
         if (serverSocket != null) return
         if (!scope.isActive) {
@@ -99,11 +117,31 @@ class DebugServer(
 
         acceptJob = scope.launch {
             try {
-                // Listen on all interfaces (0.0.0.0) for network access
-                val ss = ServerSocket(port, 10)
+                // [Wave3 #13] Default bind is LOOPBACK (127.0.0.1), not 0.0.0.0.
+                // The old all-interfaces bind left an RPC surface that reads
+                // logs/files and spends API quota exposed to the whole LAN by
+                // default, gated only by the X-Minis-Token. adb forward (the
+                // workflow this server actually serves) reaches a loopback
+                // bind fine. LAN access is now an explicit opt-in: debug
+                // builds only, prefs key debug_server_prefs/lan_listen
+                // (default OFF), read right before the ServerSocket is
+                // created. UI hook (owner: ui/debug or the debug panel owner):
+                // a "LAN access" switch writing that prefs file+key; adb
+                // equivalent:
+                //   adb shell run-as com.openminis.app sh -c                 //     'printf "" > /dev/null'  # (set via the UI switch)
+                val lan = lanListenEnabled()
+                val ss = if (lan) {
+                    ServerSocket(port, 10)
+                } else {
+                    ServerSocket(port, 10, java.net.InetAddress.getByName("127.0.0.1"))
+                }
                 serverSocket = ss
-                Log.i(TAG, "Debug server listening on port $port (all interfaces)")
-                Log.i(TAG, "Remote (non-loopback) clients must send X-Minis-Token: $authToken")
+                if (lan) {
+                    Log.i(TAG, "Debug server listening on port $port (all interfaces — LAN access enabled)")
+                    Log.i(TAG, "Remote (non-loopback) clients must send X-Minis-Token: $authToken")
+                } else {
+                    Log.i(TAG, "Debug server listening on port $port (loopback only)")
+                }
 
                 while (!stopped) {
                     try {
@@ -139,11 +177,17 @@ class DebugServer(
                 val reader = HttpRequestReader(s.getInputStream())
                 val writer = PrintWriter(s.getOutputStream(), true)
 
+                // [Wave3 #13] CORS tightened: only the Android WebView /
+                // file-scheme "null" origin (or no Origin at all) gets a grant.
+                // Declared before the early-return paths below so every
+                // response can honour it.
+                var origin: String? = null
+
                 // Read HTTP request line
                 val requestLine = reader.readLine() ?: return
                 val parts = requestLine.split(" ", limit = 3)
                 if (parts.size < 2) {
-                    sendResponse(writer, 400, rpcHandler.errorJSON(-32700, "Parse error"))
+                    sendResponse(writer, 400, rpcHandler.errorJSON(-32700, "Parse error"), origin = origin)
                     return
                 }
                 val method = parts[0]
@@ -153,7 +197,7 @@ class DebugServer(
 
                 // Handle CORS preflight
                 if (method == "OPTIONS") {
-                    sendCorsPreflightResponse(writer)
+                    sendCorsPreflightResponse(writer, origin)
                     return
                 }
 
@@ -170,6 +214,9 @@ class DebugServer(
                     }
                     if (lower.startsWith("accept:")) {
                         accept = lower.substringAfter(":").trim()
+                    }
+                    if (lower.startsWith("origin:")) {
+                        origin = headerLine.substringAfter(":").trim()
                     }
                     // [T-android-debugserver-auth] Token via X-Minis-Token or
                     // Authorization: Bearer — either spelling accepted.
@@ -189,7 +236,7 @@ class DebugServer(
                 val isLoopback = s.inetAddress?.isLoopbackAddress == true
                 if (!isAuthorized(isLoopback, providedToken, authToken)) {
                     Log.w(TAG, "401 unauthorized ${if (isLoopback) "loopback" else s.inetAddress?.hostAddress ?: "?"} (missing/wrong token)")
-                    sendResponse(writer, 401, rpcHandler.errorJSON(-32000, "Unauthorized — send X-Minis-Token (see `adb shell run-as com.openminis.app cat files/debug_server_token`)"))
+                    sendResponse(writer, 401, rpcHandler.errorJSON(-32000, "Unauthorized — send X-Minis-Token (see `adb shell run-as com.openminis.app cat files/debug_server_token`)"), origin = origin)
                     return
                 }
 
@@ -209,14 +256,14 @@ class DebugServer(
                         accept.contains("text/plain")
                     when (path) {
                         "/schema" -> {
-                            sendResponse(writer, 200, schemaJSON())
+                            sendResponse(writer, 200, schemaJSON(), origin = origin)
                             return
                         }
                         "/", "/skill", "/skill/" -> {
                             // A bare `GET /` from a tool (no human Accept) keeps
                             // returning the machine schema, same contract as iOS.
                             if (path == "/" && !wantsHuman) {
-                                sendResponse(writer, 200, schemaJSON())
+                                sendResponse(writer, 200, schemaJSON(), origin = origin)
                             } else {
                                 sendSkill(writer, wantsHuman)
                             }
@@ -234,12 +281,12 @@ class DebugServer(
                 }
 
                 if (method != "POST") {
-                    sendResponse(writer, 405, rpcHandler.errorJSON(-32600, "Only POST accepted"))
+                    sendResponse(writer, 405, rpcHandler.errorJSON(-32600, "Only POST accepted"), origin = origin)
                     return
                 }
 
                 if (contentLength <= 0) {
-                    sendResponse(writer, 400, rpcHandler.errorJSON(-32700, "Empty body"))
+                    sendResponse(writer, 400, rpcHandler.errorJSON(-32700, "Empty body"), origin = origin)
                     return
                 }
 
@@ -265,7 +312,7 @@ class DebugServer(
                     rpcHandler.handle(jsonBody)
                 }
 
-                sendResponse(writer, 200, responseJSON)
+                sendResponse(writer, 200, responseJSON, origin = origin)
             } catch (e: Exception) {
                 Log.w(TAG, "Connection error: ${e.message}")
             }
@@ -333,11 +380,26 @@ class DebugServer(
         null
     }
 
+    /**
+     * [Wave3 #13] CORS grant is conditional: only the Android WebView /
+     * file-scheme cases — an absent Origin header or the literal "null" —
+     * receive `Access-Control-Allow-Origin`. Arbitrary http(s) origins (any
+     * web page could previously read the RPC) get NO ACAO header, so a
+     * browser blocks the response even when the token gate passed.
+     * Non-browser clients (curl, adb, the CLI skill) do not enforce CORS
+     * and are unaffected. X-Minis-Token stays the remote-auth barrier.
+     */
+    private fun corsAllowOriginHeader(origin: String?): String =
+        if (origin == null || origin == "null") {
+            "Access-Control-Allow-Origin: null\r\n"
+        } else ""
+
     private fun sendResponse(
         writer: PrintWriter,
         statusCode: Int,
         body: String,
         contentType: String = "application/json",
+        origin: String? = null,
     ) {
         val statusText = when (statusCode) {
             200 -> "OK"
@@ -352,7 +414,7 @@ class DebugServer(
         writer.print("Content-Type: $contentType\r\n")
         writer.print("Content-Length: ${bytes.size}\r\n")
         writer.print("Connection: close\r\n")
-        writer.print("Access-Control-Allow-Origin: *\r\n")
+        writer.print(corsAllowOriginHeader(origin))
         writer.print("Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n")
         writer.print("Access-Control-Allow-Headers: Content-Type, X-Minis-Token, Authorization\r\n")
         writer.print("\r\n")
@@ -391,9 +453,11 @@ class DebugServer(
         fun read(dst: ByteArray, off: Int, len: Int): Int = input.read(dst, off, len)
     }
 
-    private fun sendCorsPreflightResponse(writer: PrintWriter) {
+    private fun sendCorsPreflightResponse(writer: PrintWriter, origin: String? = null) {
         writer.print("HTTP/1.1 204 No Content\r\n")
-        writer.print("Access-Control-Allow-Origin: *\r\n")
+        // [Wave3 #13] Same conditional grant as sendResponse — see the
+        // KDoc there. A non-null http(s) origin is refused preflight.
+        writer.print(corsAllowOriginHeader(origin))
         writer.print("Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n")
         writer.print("Access-Control-Allow-Headers: Content-Type, X-Minis-Token, Authorization\r\n")
         writer.print("Access-Control-Max-Age: 86400\r\n")

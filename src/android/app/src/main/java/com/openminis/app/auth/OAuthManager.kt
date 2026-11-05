@@ -55,6 +55,36 @@ abstract class OAuthManager(
         internal fun refreshMutexFor(instanceId: String): Mutex =
             refreshMutexes.getOrPut(instanceId) { Mutex() }
 
+        /**
+         * [Wave3 #3] Refresh-failure cooldown, keyed by the refresh token that
+         * failed. Lives in the companion because managers are constructed per
+         * call site (chat / provider routing / backup each build their own), so
+         * an instance field would not be shared. Purpose: when a refresh fails
+         * transiently (network blip, 5xx), every request that hits the expiring
+         * window used to retry the round-trip immediately — a burst of failing
+         * network calls per token. After one failure we stay quiet for
+         * [REFRESH_FAIL_COOLDOWN_MS] and serve the stored token instead; a
+         * rotated refresh token gets a fresh key, so re-login paths are never
+         * blocked by a stale cooldown.
+         */
+        private val refreshFailAtMs = java.util.concurrent.ConcurrentHashMap<String, Long>()
+        internal const val REFRESH_FAIL_COOLDOWN_MS = 60_000L
+        internal const val REFRESH_WINDOW_MS = 10 * 60 * 1000L
+
+        internal fun isRefreshCoolingDown(key: String?): Boolean {
+            if (key.isNullOrEmpty()) return false
+            val failAt = refreshFailAtMs[key] ?: return false
+            return System.currentTimeMillis() - failAt < REFRESH_FAIL_COOLDOWN_MS
+        }
+
+        internal fun markRefreshFailed(key: String?) {
+            if (!key.isNullOrEmpty()) refreshFailAtMs[key] = System.currentTimeMillis()
+        }
+
+        internal fun clearRefreshFailed(key: String?) {
+            if (!key.isNullOrEmpty()) refreshFailAtMs.remove(key)
+        }
+
         /** Shared OkHttp client for all OAuth HTTP requests (respects system proxy). */
         internal val httpClient = OkHttpClient.Builder()
             // [T-doh-resolver-fallback] Sign-in is often the first network call
@@ -341,6 +371,16 @@ abstract class OAuthManager(
     open suspend fun refreshToken(): Boolean = coalesceRefresh { performRefreshToken() }
 
     /**
+     * [Wave3 #3] Cooldown key = the refresh token currently stored for this
+     * account, per the token→lastFailMs map in the companion. Falls back to
+     * instanceId when no refresh token is stored, so a failure is still
+     * remembered per account. Keying by token (not instance) means a rotated
+     * refresh token is immediately retryable.
+     */
+    private suspend fun refreshCooldownKey(): String? =
+        loadStoredTokens()?.optString("refresh_token", "")?.ifEmpty { null } ?: instanceId
+
+    /**
      * [T-oauth-refresh-race] Take the per-instance refresh lock and re-check
      * whether the refresh is still needed before spending a round-trip.
      *
@@ -350,9 +390,13 @@ abstract class OAuthManager(
      * lock, where they can only ever be equal, so its "fresher token already
      * present" branch was unreachable and every queued caller still hit the
      * network.)
+     *
+     * [Wave3 #3] A failed attempt records a cooldown keyed by the refresh
+     * token; a successful one clears it. Concurrent coalescing is unchanged.
      */
     protected suspend fun coalesceRefresh(refresh: suspend () -> Boolean): Boolean {
         val priorExpireAt = loadStoredTokens()?.optLong("expire_at", 0) ?: 0L
+        val cooldownKey = refreshCooldownKey()
         return withContext(Dispatchers.IO) {
             refreshMutexFor(instanceId).withLock {
                 val storedExpireAt = loadStoredTokens()?.optLong("expire_at", 0) ?: 0L
@@ -360,7 +404,9 @@ abstract class OAuthManager(
                     Log.d(TAG, "Refresh skipped — fresher token already present (concurrent refresh coalesced)")
                     return@withLock true
                 }
-                refresh()
+                val ok = refresh()
+                if (ok) clearRefreshFailed(cooldownKey) else markRefreshFailed(cooldownKey)
+                ok
             }
         }
     }
@@ -421,9 +467,16 @@ abstract class OAuthManager(
         val expireAt = stored.optLong("expire_at", 0)
         val now = System.currentTimeMillis()
 
-        // Refresh if expires within 4 hours
-        if (expireAt > 0 && (expireAt - now) < 4 * 3600 * 1000) {
-            if (refreshToken()) {
+        // [Wave3 #3] Refresh if expires within 10 minutes. The old 4-hour
+        // window made every background request inside the last 4h of token
+        // life enter the refresh path — with coalescing alone, sequential
+        // requests still each paid a lock round-trip and, right after a
+        // transient failure, each retried the network call. 10 minutes keeps
+        // the token fresh (one refresh per hour of use, not per request).
+        if (expireAt > 0 && (expireAt - now) < REFRESH_WINDOW_MS) {
+            if (isRefreshCoolingDown(refreshCooldownKey())) {
+                Log.d(TAG, "Refresh skipped — previous attempt failed within ${REFRESH_FAIL_COOLDOWN_MS / 1000}s cooldown")
+            } else if (refreshToken()) {
                 return loadStoredTokens()?.optString("access_token")
             }
             // [T-oauth-refresh-race] Re-read BEFORE deciding anything. `token` and

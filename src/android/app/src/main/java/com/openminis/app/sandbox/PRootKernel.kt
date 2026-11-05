@@ -12,9 +12,13 @@ import com.openminis.app.data.FileMentionIndex
 import com.openminis.app.di.AppGraph
 import java.io.File
 import java.util.TimeZone
+import java.util.concurrent.ConcurrentNavigableMap
+import java.util.concurrent.ConcurrentSkipListMap
 import kotlin.math.abs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
@@ -27,8 +31,24 @@ object PRootKernel {
 
     private const val TAG = "PRootKernel"
 
+    // @Volatile: the fast-path `if (isBooted) return` in boot() and the
+    // ExecutionCoordinator auto-boot check run on arbitrary threads; without
+    // volatile a caller could re-run the whole boot body (double install,
+    // double NativeOffloadServer.start) after another caller had finished it.
+    @Volatile
     var isBooted: Boolean = false
         private set
+
+    /**
+     * Serializes the boot body. Two concurrent first-boot entries exist —
+     * ExecutionCoordinator's auto-boot inside its session mutex, and
+     * TerminalSession.start() — both can hit boot() before either finished.
+     * A Mutex (not `synchronized`) because the guarded region contains
+     * suspension points: a monitor held across a suspend leaks the lock when
+     * the coroutine resumes on another thread. Mirrors the double-checked
+     * pattern of RootfsManager.getInstance.
+     */
+    private val bootMutex = Mutex()
 
     /** Path to native library directory (for LD_LIBRARY_PATH). */
     var nativeLibDir: String = ""
@@ -48,8 +68,21 @@ object PRootKernel {
     /** Custom environment variables injected into every proot command. */
     val customEnvironment: MutableMap<String, String> = mutableMapOf()
 
-    /** Bind mounts: Linux path -> host filesystem path. */
-    val bindMounts: MutableMap<String, String> = linkedMapOf()
+    /**
+     * Bind mounts: Linux path -> host filesystem path.
+     *
+     * ConcurrentSkipListMap, not LinkedHashMap: writers (addBindMount /
+     * applyMountedFoldersSnapshot / syncSharedStorageBindMounts, from boot and
+     * mounted-folder CRUD) raced readers (buildProotCommand, resolveHostPath,
+     * TerminalSession.buildTermuxArgs) with no lock — a resize during iteration
+     * could throw CME or observe torn state. Iteration order changes from
+     * insertion order to lexicographic, which is safe everywhere it is
+     * consumed: the map never holds nested guest prefixes (no key is a path
+     * prefix of another key), so proot's `-b host:linux` list is
+     * order-independent, and resolveHostPath does its own longest-prefix
+     * ordering via descendingMap().
+     */
+    val bindMounts: ConcurrentNavigableMap<String, String> = ConcurrentSkipListMap()
 
     /**
      * Initialize the PRoot environment: install rootfs and proot binary.
@@ -60,25 +93,25 @@ object PRootKernel {
             return
         }
 
-        // [T-android-startup-splash-hang] The blocking boot body — refreshDns /
-        // configureUbuntuGuest file writes, registerGlobalBindMounts().mkdirs(),
-        // installHandlerStubs() writes, NativeOffloadServer.start()'s abstract-
-        // socket bind + Thread.sleep backoff and listFiles() sweep, and
-        // applyMountedFoldersSnapshot()'s ContentResolver queries +
-        // File.canExecute() checks — had no dispatcher switch, so the first
-        // interactive terminal open (and any ExecutionCoordinator auto-boot) ran
-        // all of it on the caller's thread, including Dispatchers.Main. Force it
-        // onto Dispatchers.IO. Body ORDER and the isBooted guarantee are
-        // unchanged: isBooted is set at the very end of this block, which the
-        // suspend caller sees only after withContext returns.
+        // [T-android-startup-splash-hang] The blocking boot body had no dispatcher
+        // switch, so the first terminal open (or auto-boot) ran it on the caller's
+        // thread — force onto Dispatchers.IO. Body order and the isBooted guarantee
+        // are unchanged; bootMutex keeps the whole body single-run.
+        bootMutex.withLock {
+        if (isBooted) {
+            Log.d(TAG, "Already booted (double-checked)")
+            return
+        }
         withContext(Dispatchers.IO) {
         rootfsManagerRef = RootfsManager.getInstance(context)
         rootfsManager.installIfNeeded()
         rootfsManager.installProotIfNeeded()
 
-        // Overlay assets/default_mount/ onto the rootfs on every boot so
-        // updated profile scripts and URL-interception wrappers ship with
-        // each app update. Mirrors iOS RootfsManager.applyDefaultMountOverlay.
+        // Overlay assets/default_mount/ onto the rootfs so updated profile
+        // scripts and URL-interception wrappers ship with each app update
+        // (version-stamped inside applyDefaultMountOverlay — repeat boots of
+        // the same build skip the copy). Mirrors iOS
+        // RootfsManager.applyDefaultMountOverlay.
         rootfsManager.applyDefaultMountOverlay()
         rootfsManager.applyHostTimezone()
 
@@ -249,6 +282,7 @@ object PRootKernel {
             "bindMounts=${bindMounts.size} " +
             "offloadHandlers=${NativeOffloadServer.registeredHandlers.sorted()}")
         }
+        }
     }
 
     fun addBindMount(linuxPath: String, hostPath: String) {
@@ -287,7 +321,7 @@ object PRootKernel {
     // PRoot's `-b host:linux` flag is per-invocation, so the diff-sync
     // applied via [applyMountedFoldersSnapshot] only affects subsequent
     // shell_execute calls — live processes won't observe a CRUD mid-flight.
-    private const val MOUNTS_LINUX_PREFIX = "/var/minis/mounts/"
+    internal const val MOUNTS_LINUX_PREFIX = "/var/minis/mounts/"
 
     // Sentinel in the read-only write-guard wrapper scripts so we can recognize
     // and remove our own wrappers (vs a user/busybox binary of the same name).
@@ -764,65 +798,19 @@ object PRootKernel {
      * ```
      * <proot> -0 --link2symlink -r <rootfs> -b /dev -b /proc -b /sys -w /root
      *         [-b <host>:<linux> ...for each bind mount]
-     *         /bin/sh -c "<command>"
+     *         /bin/bash -c "<command>"
      * ```
      */
     fun buildProotCommand(shellCommand: String): List<String> {
         check(isBooted) { "PRootKernel.boot() must be called before building commands" }
 
-        val cmd = mutableListOf<String>()
-
-        cmd.add(rootfsManager.prootBinary.absolutePath)
-
-        // Run as fake root (uid 0)
-        cmd.add("-0")
-
-        // T141: Translate hardlink() syscalls to symlink(). Android's /data
-        // (ext4/F2FS as mounted by zygote) refuses cross-directory hardlinks
-        // for app uids, so PRoot would otherwise pass link() straight through
-        // to the host kernel and the host kernel rejects with EPERM. Alpine's
-        // apk installs busybox-applet packages (binutils, gcc deps, etc.) by
-        // hardlinking ar/ld/nm/strip → busybox; without this flag every such
-        // install fails with "Permission denied". Symlinks are functionally
-        // equivalent for the apk consumer.
-        cmd.add("--link2symlink")
-        // One-shot proot must reap the guest when the host process is killed.
-        cmd.add("--kill-on-exit")
-
-        // Set rootfs
-        cmd.add("-r")
-        cmd.add(rootfsManager.rootfsDir.absolutePath)
-
-        // Bind essential pseudo-filesystems
-        cmd.add("-b")
-        cmd.add("/dev")
-        cmd.add("-b")
-        cmd.add("/proc")
-        cmd.add("-b")
-        cmd.add("/sys")
-
-        // Working directory
-        cmd.add("-w")
-        cmd.add("/root")
-
-        // User bind mounts
-        for ((linuxPath, hostPath) in bindMounts) {
-            cmd.add("-b")
-            cmd.add("$hostPath:$linuxPath")
-            // Log external-folder binds specifically — these are the ones that
-            // read empty when the host view is filtered, and the proot child's
-            // own EACCES on readdir is otherwise invisible in the log file.
-            if (linuxPath.startsWith(MOUNTS_LINUX_PREFIX)) {
-                Log.i(TAG, "proot bind mount: $hostPath -> $linuxPath")
-            }
-        }
-
-        // Native offload: route registered handler names to the host-side
-        // NativeOffloadServer over the abstract unix socket.
-        val handlers = NativeOffloadServer.registeredHandlers
-        if (handlers.isNotEmpty()) {
-            cmd.add("--native-offload=${NativeOffloadServer.socketName}:${handlers.joinToString(",")}")
-        }
+        val cmd = commonArgv(
+            prootPath = rootfsManager.prootBinary.absolutePath,
+            rootfsDir = rootfsManager.rootfsDir.absolutePath,
+            bindMounts = bindMounts,
+            includeSys = true,
+            includeNativeOffload = true,
+        )
 
         // Shell command
         cmd.add("/bin/bash")
@@ -860,11 +848,13 @@ object PRootKernel {
      * read another's private tree).
      */
     fun resolveHostPath(linuxPath: String): File? {
-        // Check bind mounts (longest prefix match)
-        val sorted = bindMounts.keys.sortedByDescending { it.length }
-        for (mountPoint in sorted) {
+        // Check bind mounts (longest prefix match). Iterating descendingMap()
+        // preserves the old `keys.sortedByDescending { it.length }` semantics:
+        // any two keys that both prefix-match one path are prefixes of each
+        // other, and a string that extends a prefix sorts after it, so the
+        // descending map always visits the longest match first.
+        for ((mountPoint, hostBase) in bindMounts.descendingMap()) {
             if (linuxPath == mountPoint || linuxPath.startsWith("$mountPoint/")) {
-                val hostBase = bindMounts[mountPoint]!!
                 val relativePath = linuxPath.removePrefix(mountPoint).removePrefix("/")
                 val file = if (relativePath.isEmpty()) File(hostBase) else File(hostBase, relativePath)
                 return file.takeIf { SessionWorkspace.staysInside(File(hostBase), it) }

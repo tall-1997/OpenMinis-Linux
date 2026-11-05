@@ -4,15 +4,11 @@ import android.content.Context
 import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.model.AgentToolParam
 import com.openminis.app.sandbox.ExecutionCoordinator
-import com.openminis.app.scheduled.CronScheduler
-import com.openminis.app.scheduled.ScheduledRepeatMode
 import com.openminis.app.scheduled.ScheduledTargetMode
-import com.openminis.app.scheduled.ScheduledTask
+import com.openminis.app.scheduled.ScheduledTaskCodec
 import com.openminis.app.scheduled.ScheduledTaskManager
 import org.json.JSONArray
 import org.json.JSONObject
-import java.util.Calendar
-import java.util.UUID
 
 /**
  * Agent-facing cron wrapper over [ScheduledTaskManager] (AlarmManager).
@@ -86,19 +82,10 @@ object CronJobTool {
         val arr = JSONArray()
         for (t in tasks) {
             arr.put(
-                JSONObject().apply {
-                    put("id", t.id)
-                    put("name", t.label)
-                    put("enabled", t.enabled)
-                    put("repeat", t.repeatMode.name)
-                    if (t.intervalMinutes > 0) put("intervalMinutes", t.intervalMinutes)
-                    if (t.fireAtMs != null) put("fireAtMs", t.fireAtMs)
-                    put("nextTriggerMs", t.nextTriggerMs() ?: JSONObject.NULL)
-                    put("prompt", t.prompt.take(200))
-                    // [T-android-subagent-attribution] Surface where a fire
-                    // lands so the model (and the user) can see the owning chat.
-                    t.targetMode.sessionIdOrNull?.let { put("target_session", it) }
-                },
+                // [P2-schedule-codec] Shared row shape; this surface adds the
+                // owning-chat field so the model (and the user) can see where
+                // a fire lands ([T-android-subagent-attribution]).
+                ScheduledTaskCodec.taskListRow(t, includeTargetSession = true),
             )
         }
         return ToolExecutionResult(
@@ -116,46 +103,26 @@ object CronJobTool {
         val schedule = args.optString("schedule").trim()
         val prompt = args.optString("prompt").trim()
         if (prompt.isEmpty()) return ToolExecutionResult("Error: prompt is required for create", false)
-        val parsed = CronScheduler.parseSchedule(schedule)
-            ?: return ToolExecutionResult(
-                "Error: schedule must look like '30m', '2h', '1d', or 'every 30m'/'every 2h'/'every 1d'",
-                false,
-            )
-        val now = System.currentTimeMillis()
-        val fireAt = now + parsed.firstDelayMs
-        val cal = Calendar.getInstance().apply { timeInMillis = fireAt }
-        val interval = parsed.kind == "interval"
-        val task = ScheduledTask(
-            id = UUID.randomUUID().toString(),
-            label = name.ifBlank { prompt.take(32) },
-            timeOfDayHour = cal.get(Calendar.HOUR_OF_DAY),
-            timeOfDayMinute = cal.get(Calendar.MINUTE),
-            repeatMode = if (interval) ScheduledRepeatMode.INTERVAL else ScheduledRepeatMode.ONCE,
+        // [P2-schedule-codec] Parse→fireAt→construct is the shared codec; this
+        // surface only adapts its inputs (attribution to the calling chat).
+        // Blank owner (no chat context, e.g. a debug harness) keeps the
+        // legacy fresh-chat behavior.
+        val task = ScheduledTaskCodec.buildTask(
+            schedule = schedule,
             prompt = prompt,
-            // [T-android-subagent-attribution] Attribute the task to the
-            // calling chat: fires append there and run records / notification
-            // deep links point at it. Blank owner (no chat context, e.g. a
-            // debug harness) keeps the legacy fresh-chat behavior.
+            name = name,
             targetMode = if (ownerSessionId.isBlank()) {
                 ScheduledTargetMode.NewSession
             } else {
                 ScheduledTargetMode.AppendToSession(ownerSessionId)
             },
-            intervalMinutes = parsed.intervalMinutes,
-            fireAtMs = fireAt,
-            createdAt = now,
+        ) ?: return ToolExecutionResult(
+            "Error: schedule must look like '30m', '2h', '1d', or 'every 30m'/'every 2h'/'every 1d'",
+            false,
         )
         val saved = manager.create(task)
         return ToolExecutionResult(
-            JSONObject().apply {
-                put("ok", true)
-                put("id", saved.id)
-                put("name", saved.label)
-                put("schedule", schedule)
-                put("fireAtMs", saved.fireAtMs ?: fireAt)
-                put("repeat", saved.repeatMode.name)
-                if (saved.id != task.id) put("already_existed", true)
-            }.toString(),
+            ScheduledTaskCodec.createResult(saved, task, schedule).toString(),
             true,
         )
     }

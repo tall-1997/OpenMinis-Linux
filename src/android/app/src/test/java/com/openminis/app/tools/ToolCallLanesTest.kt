@@ -29,6 +29,10 @@ class ToolCallLanesTest {
             subAgentEnabled = true,
             codeGraphEnabled = true,
             mcpNativeEnabled = true,
+            // [P2-transcribe-audio-gate] transcribe_audio rides the CONCURRENT
+            // set and is now schema-gated on the speech model; opt in so the
+            // guard still covers it.
+            hasSpeechModel = true,
             includeLongTail = true,
         ).map { it.name }.toSet()
 

@@ -65,32 +65,23 @@ fun MCPIntegrationsScreen(
     mcpRepository: MCPRepository,
     onBack: () -> Unit,
     onOpenTools: (MCPRepository.MCPServerConfig) -> Unit = {},
-    // [T-mcp-env-var-picker-android] App env vars, for the STDIO env field's
-    // "insert app var" picker ($$VAR references resolve at runtime in PRoot).
-    // Null when the caller hasn't wired it — the picker affordance hides.
+    // [T-mcp-env-var-picker-android] App env vars for the STDIO env "insert app var" picker; null hides the affordance.
     envVarRepository: com.openminis.app.data.repository.EnvVarRepository? = null,
 ) {
     val servers by mcpRepository.servers.collectAsStateWithLifecycle()
 
-    // [T-android-mcp-list-reload-on-appear] MCPRepository reads servers.json
-    // only in init() (app launch). A server the agent writes via minis-mcp-cli
-    // AFTER launch isn't reflected in the `servers` StateFlow until restart.
-    // Re-read the file each time the screen appears (mirrors the Skills screen's
-    // reloadFromDisk on entry) so CLI-added servers show without an app restart.
+    // [T-android-mcp-list-reload-on-appear] Re-read servers.json on entry so CLI-added servers show without restart.
     LaunchedEffect(Unit) {
         mcpRepository.reloadFromDisk()
     }
 
     var showAddSheet by remember { mutableStateOf(false) }
-    // [T-mcp-review-fixes-android] FIX 1: tapping a row opens the form in EDIT
-    // mode (matches iOS). null = the sheet is for adding a new server.
+    // [T-mcp-review-fixes-android] FIX 1: row tap opens EDIT mode; null = add flow.
     var editServer by remember { mutableStateOf<MCPRepository.MCPServerConfig?>(null) }
     var deleteId by remember { mutableStateOf<String?>(null) }
 
     // ─── 内置 MCP Server（实验）─────────────────────────────────────────────
-    // Manager is a process-wide object; its config store is created in init()
-    // (MinisApp.onCreate), so it is non-null here in practice. Null-safe reads
-    // fall back to defaults when the screen is shown before init.
+    // Config store is created in init(); null-safe reads fall back to defaults pre-init.
     val mcpStore = remember { McpServerManager.configStore() }
     val mcpConfig = mcpStore?.config?.collectAsStateWithLifecycle()?.value
         ?: McpServerConfigStore.Config()
@@ -100,6 +91,9 @@ fun MCPIntegrationsScreen(
     var showShellPolicyDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    // [T-mcp-disk-io] delete/setPort/regenerateToken run off the main thread.
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var builtinServerBusy by remember { mutableStateOf(false) }
 
     SettingsScaffold(
         title = stringResource(R.string.mcp_title),
@@ -237,8 +231,12 @@ fun MCPIntegrationsScreen(
             text = { Text(stringResource(R.string.mcp_delete_message)) },
             confirmButton = {
                 MinisTextButton(onClick = {
-                    mcpRepository.delete(id)
                     deleteId = null
+                    scope.launch {
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            mcpRepository.delete(id)
+                        }
+                    }
                 }) { Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
@@ -271,11 +269,17 @@ fun MCPIntegrationsScreen(
             confirmButton = {
                 MinisTextButton(onClick = {
                     val p = portText.toIntOrNull()
-                    if (p != null && p in McpHttpServer.MIN_PORT..McpHttpServer.MAX_PORT) {
-                        mcpStore?.setPort(p)
+                    if (p != null && p in McpHttpServer.MIN_PORT..McpHttpServer.MAX_PORT && !builtinServerBusy) {
+                        builtinServerBusy = true
                         showPortDialog = false
-                        if (mcpState.status == McpServerManager.Status.RUNNING) {
-                            McpServerManager.restart()
+                        scope.launch {
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                mcpStore?.setPort(p)
+                            }
+                            builtinServerBusy = false
+                            if (mcpState.status == McpServerManager.Status.RUNNING) {
+                                McpServerManager.restart()
+                            }
                         }
                     }
                 }) { Text(stringResource(R.string.common_save)) }
@@ -309,10 +313,18 @@ fun MCPIntegrationsScreen(
             confirmButton = {
                 Row {
                     MinisTextButton(onClick = {
-                        val newToken = mcpStore?.regenerateToken()
-                        if (newToken != null) {
-                            clipboard.setText(androidx.compose.ui.text.AnnotatedString(newToken))
-                            android.widget.Toast.makeText(context, context.getString(R.string.mcp_builtin_token_regenerated_toast), android.widget.Toast.LENGTH_SHORT).show()
+                        if (builtinServerBusy) return@MinisTextButton
+                        builtinServerBusy = true
+                        scope.launch {
+                            // [T-mcp-disk-io] Token generation writes the config store off-main, guarded by builtinServerBusy.
+                            val newToken = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                mcpStore?.regenerateToken()
+                            }
+                            builtinServerBusy = false
+                            if (newToken != null) {
+                                clipboard.setText(androidx.compose.ui.text.AnnotatedString(newToken))
+                                android.widget.Toast.makeText(context, context.getString(R.string.mcp_builtin_token_regenerated_toast), android.widget.Toast.LENGTH_SHORT).show()
+                            }
                         }
                     }) { Text(stringResource(R.string.mcp_builtin_token_regenerate)) }
                     currentToken?.let {
@@ -369,11 +381,7 @@ fun MCPIntegrationsScreen(
 
 // ─── Add Sheet (Form / Import tabs) ─────────────────────────────────────────
 
-/**
- * Add/Edit bottom sheet. When [editServer] is null this is the add flow
- * (Form / Import-JSON tabs). When it's non-null the sheet is the edit flow:
- * Form only, pre-filled, with a Delete affordance ([onRequestDelete]).
- */
+/** Add/Edit bottom sheet: add flow (Form/Import tabs) when [editServer] is null, else edit flow with Delete. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MCPAddSheet(
@@ -383,18 +391,13 @@ private fun MCPAddSheet(
     onDismiss: () -> Unit,
     onRequestDelete: () -> Unit,
 ) {
-    // [T-android-mcp-sheet-ime-occlusion] GH#44: skipPartiallyExpanded so the
-    // sheet opens full-height — at half-height the soft keyboard left no room
-    // for the lower form fields at all.
+    // [T-android-mcp-sheet-ime-occlusion] GH#44: open full-height so the keyboard doesn't cover lower fields.
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var selectedTab by remember { mutableIntStateOf(0) }
     val isEdit = editServer != null
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        // [T-android-mcp-sheet-ime-occlusion] GH#44: verticalScroll + imePadding
-        // keep every field reachable while the keyboard is up — imePadding sits
-        // after verticalScroll so the inset becomes scrollable bottom space the
-        // content can scroll past, instead of the IME clipping the column.
+        // [T-android-mcp-sheet-ime-occlusion] GH#44: verticalScroll + imePadding keep fields reachable while the keyboard is up.
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -447,6 +450,9 @@ private fun MCPFormTab(
 ) {
     val context = LocalContext.current
     val isEdit = editServer != null
+    // [T-mcp-disk-io] Save writes servers.json on IO; isSaving guards double-taps.
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var isSaving by remember { mutableStateOf(false) }
     // [T-mcp-server-export-android] Clipboard for "Copy JSON".
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
     // [T-mcp-env-var-picker-android] App env var keys for the STDIO env picker.
@@ -454,17 +460,10 @@ private fun MCPFormTab(
         ?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(emptyList<com.openminis.app.data.repository.EnvVarRepository.EnvVarEntry>()) })
     val appEnvKeys = remember(appEnvEntries) { appEnvEntries.map { it.key } }
     var showEnvVarPicker by remember { mutableStateOf(false) }
-    // [T-mcp-http-headers-env-picker-android] Same $$VAR picker offered on the
-    // HTTP/SSE Custom Headers and Server URL value fields.
+    // [T-mcp-http-headers-env-picker-android] Same $$VAR picker on HTTP/SSE headers + URL fields.
     var showHeaderVarPicker by remember { mutableStateOf(false) }
     var showUrlVarPicker by remember { mutableStateOf(false) }
-    // [T-mcp-review-fixes-android] FIX 4: transport is now 3-way —
-    // 0 = HTTP, 1 = SSE, 2 = STDIO. HTTP and SSE both store as a plain `url`
-    // entry (no separate storage field — round-trips identically to iOS); only
-    // STDIO uses command/args/env. Pre-fill from editServer: STDIO if it has a
-    // command, else HTTP (we can't distinguish a persisted SSE from HTTP since
-    // both are url-only, so an SSE edit defaults to the HTTP affordance — the
-    // saved entry is byte-identical either way).
+    // [T-mcp-review-fixes-android] FIX 4: transport 0=HTTP, 1=SSE, 2=STDIO; HTTP/SSE store as url-only, STDIO uses command/args/env.
     var transport by remember { mutableIntStateOf(if (editServer?.isStdio == true) 2 else 0) }
     var name by remember { mutableStateOf(editServer?.id ?: "") }
     var note by remember { mutableStateOf(editServer?.note ?: "") }
@@ -473,15 +472,11 @@ private fun MCPFormTab(
     var command by remember { mutableStateOf(editServer?.command ?: "") }
     var args by remember { mutableStateOf(editServer?.args?.joinToString(" ") ?: "") }
     var env by remember { mutableStateOf(mapToLines(editServer?.env, "=")) }
-    // [T-mcp-startup-timeout] Optional STDIO startup/handshake timeout (seconds).
-    // Kept as text so it round-trips; parsed to Int on save; blank = default 60s.
+    // [T-mcp-startup-timeout] Optional STDIO startup timeout (seconds), text; blank = default 60s.
     var startupTimeout by remember { mutableStateOf(editServer?.startupTimeoutSeconds?.toString() ?: "") }
     var errorText by remember { mutableStateOf<String?>(null) }
 
-    // [T-android-mcp-oauth] Static-OAuth fields for a URL transport. Expanded
-    // automatically when the edited server already has an oauth block. The
-    // client secret is loaded from / saved to MCPOAuthStore (encrypted), never
-    // shown pre-filled from JSON (it isn't stored there).
+    // [T-android-mcp-oauth] Static-OAuth fields (expanded when an oauth block exists); secret lives in MCPOAuthStore, not JSON.
     val oauthScope = androidx.compose.runtime.rememberCoroutineScope()
     var oauthExpanded by remember { mutableStateOf(editServer?.oauth != null) }
     var oauthClientId by remember { mutableStateOf(editServer?.oauth?.clientId ?: "") }
@@ -513,8 +508,7 @@ private fun MCPFormTab(
         )
         return cfg.takeIf { it.isConfigured }
     }
-    // [T-mcp-env-var-delete-confirm-android] Drives the confirm dialog before
-    // clearing a non-empty env field. (Empty field clears with no confirm.)
+    // [T-mcp-env-var-delete-confirm-android] Confirm before clearing a non-empty env field.
     var showClearEnvConfirm by remember { mutableStateOf(false) }
 
     // True for the url-based transports (HTTP / SSE).
@@ -550,11 +544,7 @@ private fun MCPFormTab(
         )
 
         if (isUrlTransport) {
-            // [T-mcp-http-headers-env-picker-android] Offer the same $$VAR App
-            // env-var picker on the URL + Custom Headers value fields (runtime
-            // expansion of $$VAR / $VAR in url/headers already works in the
-            // shared CLI). Selecting a var appends `$$KEY` to the field so it
-            // lands as a value (e.g. after `Authorization: ` in a header line).
+            // [T-mcp-http-headers-env-picker-android] $$VAR picker on URL + Custom Headers; selecting appends `$$KEY`.
             Row(verticalAlignment = Alignment.CenterVertically) {
                 FieldLabel(stringResource(R.string.mcp_form_url))
                 if (envVarRepository != null) {
@@ -598,10 +588,7 @@ private fun MCPFormTab(
                 textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
             )
 
-            // [T-android-mcp-oauth] Static OAuth section (collapsible). When
-            // configured, the server authorizes via PKCE and the issued bearer
-            // token is attached at connect time (in-guest wiring is a later
-            // phase; here the user can configure + complete the auth handshake).
+            // [T-android-mcp-oauth] Static OAuth section (collapsible); PKCE authorize + attach bearer token at connect.
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
@@ -693,8 +680,7 @@ private fun MCPFormTab(
                                     errorText = context.getString(R.string.mcp_form_oauth_incomplete)
                                 else -> {
                                     errorText = null
-                                    // Persist the secret so the token exchange can
-                                    // read it; harmless if the flow is cancelled.
+                                    // Persist the secret for the token exchange; harmless if cancelled.
                                     com.openminis.app.mcp.oauth.MCPOAuthStore.setClientSecret(
                                         context, sid, oauthClientSecret.trim().ifBlank { null },
                                     )
@@ -746,11 +732,7 @@ private fun MCPFormTab(
                 placeholder = stringResource(R.string.mcp_form_args_placeholder),
                 singleLine = true,
             )
-            // [T-mcp-env-var-picker-android] Env label + "insert app var"
-            // affordance. Tapping opens a picker of App env var keys; selecting
-            // one appends a `KEY=$$KEY` line so the value resolves at runtime
-            // from the PRoot guest env (App env vars are injected there). The
-            // affordance only shows when an EnvVarRepository was wired in.
+            // [T-mcp-env-var-picker-android] "insert app var" picker appends a `KEY=$$KEY` line (resolved at runtime in PRoot).
             Row(verticalAlignment = Alignment.CenterVertically) {
                 FieldLabel(stringResource(R.string.mcp_form_env))
                 Spacer(Modifier.weight(1f))
@@ -764,10 +746,7 @@ private fun MCPFormTab(
                         Text(stringResource(R.string.mcp_form_env_insert_app_var))
                     }
                 }
-                // [T-mcp-env-var-delete-confirm-android] Explicit clear/delete
-                // affordance. Non-empty → confirm dialog before wiping; empty →
-                // clears immediately (no-op confirm). Disabled while blank so the
-                // affordance reads as inert when there's nothing to delete.
+                // [T-mcp-env-var-delete-confirm-android] Clear affordance: confirm when non-empty, else clear immediately.
                 MinisTextButton(
                     onClick = {
                         if (env.isBlank()) env = "" else showClearEnvConfirm = true
@@ -817,11 +796,7 @@ private fun MCPFormTab(
             Text(errorText!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
         }
 
-        // [T-mcp-server-export-android] Build a MCPServerConfig from the CURRENT
-        // form fields (so Copy/Share export reflects unsaved edits, same
-        // construction Save uses). Returns null + sets errorText when invalid.
-        // HTTP (0) and SSE (1) both persist as a url-only entry; STDIO (2)
-        // persists command/args/env. createdAt preserved on edit.
+        // [T-mcp-server-export-android] Build config from current form fields (null + errorText when invalid).
         fun buildServerFromForm(): MCPRepository.MCPServerConfig? {
             if (name.isBlank()) {
                 errorText = context.getString(R.string.mcp_form_error_no_name); return null
@@ -857,9 +832,7 @@ private fun MCPFormTab(
             }
         }
 
-        // [T-mcp-server-export-android] Export the current config as standard
-        // mcpServers JSON — Copy to clipboard + Share intent. Builds from the
-        // live form so it includes unsaved edits.
+        // [T-mcp-server-export-android] Copy/Share the current config as mcpServers JSON.
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             MinisTextButton(onClick = {
                 val server = buildServerFromForm() ?: return@MinisTextButton
@@ -875,8 +848,7 @@ private fun MCPFormTab(
         }
 
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            // FIX 1: Delete affordance lives inside the edit sheet so a plain
-            // row tap no longer means delete, without losing the delete path.
+            // FIX 1: Delete lives inside the edit sheet (plain row tap no longer deletes).
             if (isEdit) {
                 MinisTextButton(onClick = onRequestDelete) {
                     Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error)
@@ -885,35 +857,36 @@ private fun MCPFormTab(
             Spacer(Modifier.weight(1f))
             MinisTextButton(onClick = onDone) { Text(stringResource(R.string.cancel)) }
             MinisTextButton(onClick = {
+                if (isSaving) return@MinisTextButton
                 val server = buildServerFromForm() ?: return@MinisTextButton
-                // [T-android-mcp-oauth] Store the client secret in the encrypted
-                // store (keyed by server id) — it never goes into servers.json.
-                // Cleared when the OAuth section is emptied.
-                if (isUrlTransport) {
-                    com.openminis.app.mcp.oauth.MCPOAuthStore.setClientSecret(
-                        context, server.id,
-                        if (server.oauth != null) oauthClientSecret.trim().ifBlank { null } else null,
-                    )
+                isSaving = true
+                scope.launch {
+                    // [T-mcp-disk-io] update/add + OAuth secret write run off-main; isSaving guards double-taps.
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        // [T-android-mcp-oauth] Store the client secret in the encrypted store (keyed by id); never in servers.json.
+                        if (isUrlTransport) {
+                            com.openminis.app.mcp.oauth.MCPOAuthStore.setClientSecret(
+                                context, server.id,
+                                if (server.oauth != null) oauthClientSecret.trim().ifBlank { null } else null,
+                            )
+                        }
+                        if (isEdit) mcpRepository.update(server) else mcpRepository.add(server)
+                    }
+                    isSaving = false
+                    onDone()
                 }
-                if (isEdit) mcpRepository.update(server) else mcpRepository.add(server)
-                onDone()
-            }) { Text(stringResource(R.string.mcp_form_save)) }
+            },
+            enabled = !isSaving,
+        ) { Text(stringResource(R.string.mcp_form_save)) }
         }
     }
 
-    // [T-mcp-env-var-picker-android] App env var picker. Appends a
-    // `KEY=$$KEY` line to the env editor (the $$KEY reference is saved verbatim
-    // and expanded at runtime). Manual typing in the editor still works.
+    // [T-mcp-env-var-picker-android] App env var picker; appends a `KEY=$$KEY` line to the env editor.
     if (showEnvVarPicker) {
         MCPEnvVarPickerSheet(
             keys = appEnvKeys,
             onPick = { key ->
-                // [T-mcp-env-picker-insert-android] APPEND, don't replace
-                // (reverses #719, aligns with iOS #728 8f90f2a8). Picking a var
-                // adds a new KEY=$$KEY line so the user can pick MULTIPLE vars
-                // and they accumulate (no dedup/overwrite). The env editor is a
-                // multiline KEY=VALUE textarea, so a whole line is the natural
-                // unit to append; a blank field seeds the first line.
+                // [T-mcp-env-picker-insert-android] Append (not replace) a new KEY=$$KEY line so multiple vars accumulate.
                 val line = "$key=$\$$key"
                 env = if (env.isBlank()) line else env.trimEnd('\n') + "\n" + line
                 showEnvVarPicker = false
@@ -922,12 +895,7 @@ private fun MCPFormTab(
         )
     }
 
-    // [T-mcp-http-headers-env-picker-android] Headers / URL pickers. Unlike the
-    // STDIO env textarea (whole KEY=VALUE lines), headers/url are values the
-    // var reference drops INTO (e.g. `Authorization: $$KEY`, or `…?token=$$KEY`).
-    // So we append just `$$KEY` to the end of the field — with a leading space
-    // when the current text doesn't already end in whitespace, so it reads as a
-    // value rather than fusing onto the preceding token. Manual editing intact.
+    // [T-mcp-http-headers-env-picker-android] Headers/URL pickers append `$$KEY` (with a leading space if needed).
     if (showHeaderVarPicker) {
         MCPEnvVarPickerSheet(
             keys = appEnvKeys,
@@ -956,8 +924,7 @@ private fun MCPFormTab(
         )
     }
 
-    // [T-mcp-env-var-delete-confirm-android] Confirm before wiping a non-empty
-    // env field. Only reachable when env was non-blank at tap time.
+    // [T-mcp-env-var-delete-confirm-android] Confirm before wiping a non-empty env field.
     if (showClearEnvConfirm) {
         AlertDialog(
             onDismissRequest = { showClearEnvConfirm = false },
@@ -978,11 +945,7 @@ private fun MCPFormTab(
     }
 }
 
-/**
- * [T-mcp-env-var-picker-android] Bottom sheet listing App environment variable
- * keys. Picking one inserts a `$$KEY` reference into the MCP server's env (via
- * the caller's [onPick]). Shows an empty-state hint when there are none.
- */
+/** [T-mcp-env-var-picker-android] Bottom sheet of App env var keys; picking one inserts a `$$KEY` via [onPick]. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MCPEnvVarPickerSheet(
@@ -1038,7 +1001,16 @@ private fun MCPImportTab(
     val context = LocalContext.current
     var text by remember { mutableStateOf("") }
     var errorText by remember { mutableStateOf<String?>(null) }
-    val previewCount = remember(text) { if (text.isBlank()) 0 else mcpRepository.previewImport(text) }
+    // [T-mcp-import-debounce] Debounced to one parse per 300 ms of typing silence.
+    var previewCount by remember { mutableStateOf(0) }
+    LaunchedEffect(text) {
+        kotlinx.coroutines.delay(300)
+        val t = text
+        previewCount = if (t.isBlank()) 0
+        else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            mcpRepository.previewImport(t)
+        }
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(
@@ -1087,44 +1059,18 @@ private fun FieldLabel(text: String) {
     )
 }
 
-/**
- * Parse multi-line "Key<sep> Value" text into a map. Lines without the
- * separator are skipped. Used for headers (`:`) and env (`=`).
- */
-/**
- * Serialize a map back into multi-line "Key<joiner>Value" text for pre-filling
- * the edit form. Inverse of [parseKeyValueLines]. Empty/null → "".
- */
-/**
- * [T-mcp-server-export-android] Share [json] (a single-server mcpServers
- * config) via ACTION_SEND. Mirrors ProviderDetailScreen.exportProviderInstance:
- * write to cacheDir/shared/<safeName>-mcp.json, expose via FileProvider
- * (${packageName}.fileprovider, configured for cache-path "shared/"), and
- * launch a chooser with type application/json.
- */
+// [T-mcp-server-export-android] Share [json] (a single-server mcpServers config) via ACTION_SEND using the shared FileProvider helper.
 private fun shareMcpServerJson(context: android.content.Context, serverId: String, json: String) {
     val safeName = serverId.ifBlank { "mcp-server" }
         .replace(Regex("[^A-Za-z0-9._-]"), "_")
     val dir = java.io.File(context.cacheDir, "shared").apply { mkdirs() }
     val file = java.io.File(dir, "$safeName-mcp.json")
     runCatching { file.writeText(json) }.onFailure { return }
-    val uri = try {
-        androidx.core.content.FileProvider.getUriForFile(
-            context, "${context.packageName}.fileprovider", file,
-        )
-    } catch (_: Throwable) {
-        return
-    }
-    val sendIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-        type = "application/json"
-        putExtra(android.content.Intent.EXTRA_STREAM, uri)
-        putExtra(android.content.Intent.EXTRA_SUBJECT, "$safeName-mcp.json")
-        addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-    }
-    val chooser = android.content.Intent.createChooser(sendIntent, "Export MCP server").apply {
-        addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-    }
-    context.startActivity(chooser)
+    // [T-share-fileprovider-unify] Shared FileProvider helper (clip + double grant hardening).
+    shareViaFileProvider(
+        context, file, "application/json",
+        context.getString(R.string.mcp_share_chooser_title),
+    )
 }
 
 private fun mapToLines(map: Map<String, String>?, joiner: String): String {

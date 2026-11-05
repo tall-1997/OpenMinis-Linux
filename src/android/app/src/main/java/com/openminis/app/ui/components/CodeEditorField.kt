@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -18,12 +19,20 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.PlatformTextStyle
@@ -145,6 +154,28 @@ fun CodeEditorField(
 /** Line height shared by gutter rows and editor lines — must stay identical. */
 private val EditorLineHeightSp = 20.sp
 
+/** Lines composed beyond the viewport on each side of the gutter window (#14). */
+private const val GUTTER_OVERSCAN_LINES = 8
+
+/**
+ * Line-number gutter, windowed (#14 of the fix wave).
+ *
+ * The old gutter composed a [Text] per document line inside a
+ * shared-scroll [Column] — a 2000-line file composed 2000 gutter Texts in
+ * one frame, on every content/selection change, all offscreen.
+ *
+ * Two candidate shapes were weighed:
+ *  - a [androidx.compose.foundation.lazy.LazyColumn] gutter CANNOT share the
+ *    editor's [ScrollState] (different scroll controllers), so the two
+ *    surfaces would drift — the one thing this gutter's layout contract
+ *    forbids;
+ *  - this windowed renderer keeps the shared scroll contract: since
+ *    softWrap is off every line is exactly [EditorLineHeightSp] tall, so the
+ *    visible line range is derivable from `scrollState.value` alone. Only
+ *    ~viewport+overscan rows compose, positioned by a graphicsLayer
+ *    translation — pixel-identical alignment to the editor, recomposition
+ *    bounded to line-boundary crossings via [derivedStateOf].
+ */
 @Composable
 private fun LineNumberGutter(
     text: String,
@@ -160,24 +191,53 @@ private fun LineNumberGutter(
         lineHeight = EditorLineHeightSp,
         platformStyle = PlatformTextStyle(includeFontPadding = false),
     )
-    Column(
+    val density = LocalDensity.current
+    val lineHeightPx = remember(density) { with(density) { EditorLineHeightSp.toPx() } }
+    val lineHeightDp = with(density) { EditorLineHeightSp.toDp() }
+    var viewportHeightPx by remember { mutableIntStateOf(0) }
+
+    // Only crosses a boundary once per LINE scrolled — not per pixel.
+    val firstVisibleLine by remember(scrollState, lineHeightPx) {
+        derivedStateOf { (scrollState.value / lineHeightPx).toInt() }
+    }
+    val startLine = (firstVisibleLine - GUTTER_OVERSCAN_LINES).coerceAtLeast(0)
+    val windowLines = kotlin.math.ceil(viewportHeightPx / lineHeightPx).toInt() +
+        2 * GUTTER_OVERSCAN_LINES + 1
+    val endLine = (startLine + windowLines).coerceAtMost(count)
+
+    Box(
         modifier = Modifier
             .width(44.dp)
             .fillMaxHeight()
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f))
-            .verticalScroll(scrollState),
+            .clipToBounds()
+            .onSizeChanged { viewportHeightPx = it.height },
     ) {
-        for (i in 0 until count) {
-            Text(
-                text = (i + 1).toString(),
-                style = style,
-                color = if (i == currentLine) activeColor else idleColor,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(end = 8.dp),
-                textAlign = androidx.compose.ui.text.style.TextAlign.End,
-                maxLines = 1,
-            )
+        Column(
+            modifier = Modifier.graphicsLayer {
+                // Line i sits at y = i * lineHeight in the editor's scroll
+                // content; shift the window so line startLine lands exactly
+                // where the shared scroll offset puts it. Reads
+                // scrollState.value in the DRAW phase — no recomposition per
+                // pixel, only the layer translation updates.
+                translationY = startLine * lineHeightPx - scrollState.value
+            },
+        ) {
+            for (i in startLine until endLine) {
+                Text(
+                    text = (i + 1).toString(),
+                    style = style,
+                    color = if (i == currentLine) activeColor else idleColor,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        // Exact line box — keeps the 1:1 row mapping with the
+                        // editor lines.
+                        .height(lineHeightDp)
+                        .padding(end = 8.dp),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.End,
+                    maxLines = 1,
+                )
+            }
         }
     }
 }

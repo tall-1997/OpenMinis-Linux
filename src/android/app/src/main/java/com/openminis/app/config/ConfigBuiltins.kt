@@ -16,19 +16,19 @@ import com.openminis.app.data.repository.ChatRepository
 import com.openminis.app.data.repository.EnvVarRepository
 import com.openminis.app.data.repository.ProviderRepository
 import com.openminis.app.data.model.ThinkingLevel
-import com.openminis.app.security.SecurityGateHolder
-import com.openminis.app.security.effectivePermissionMode
-import com.openminis.app.service.ApprovalGate
-import com.openminis.app.ui.chat.ChatViewModelStore
+import com.openminis.app.di.AppGraph
+import com.openminis.app.di.ChatBinder
 import com.openminis.app.util.IsoTime
 import kotlinx.coroutines.runBlocking
 
-/**
- * Built-in field registrations. Single place to add or remove a
- * setting from the agent-facing surface. Mirrors iOS
- * `ConfigRegistry+Builtins.swift`.
- */
+/** Built-in field registrations — single place to add/remove a setting from the agent-facing surface. Mirrors iOS ConfigRegistry+Builtins.swift. */
 internal object ConfigBuiltins {
+
+    /** [Wave3 #4] Live chat/session facade via AppGraph; replaces direct imports of ui.chat singletons (a forbiddenImports violation — config is a non-ui layer). Unwired degrades to null/ASK/false. */
+    private val chatState: ChatBinder? get() = AppGraph.chatStateBinderOrNull()
+
+    /** @return the foregrounded session id, or null when none / not wired. */
+    private fun activeSessionIdOrNull(): String? = chatState?.activeSessionId()
 
     fun registerInto(
         r: ConfigRegistry,
@@ -93,12 +93,11 @@ internal object ConfigBuiltins {
                     "Change it in the chat menu. Destructive commands still confirm under YOYO.",
                 valueSchema = ConfigSchema.Str(),
                 reader = {
-                    val sid = ChatViewModelStore.activeSessionId
-                    val mode = effectivePermissionMode(
-                        SecurityGateHolder.activeSessionMode(sid),
-                        ApprovalGate.isSessionAllowAll(sid),
-                    )
-                    ConfigValue.Str(mode.name)
+                    val sid = activeSessionIdOrNull()
+                    // [Wave3 #4] One facade read; the binder implementation
+                    // composes per-session mode + allow-all. Unwired falls back
+                    // to ASK — the same default activeSessionMode(null) had.
+                    ConfigValue.Str(chatState?.sessionMode(sid) ?: "ASK")
                 },
             )
         )
@@ -156,7 +155,7 @@ internal object ConfigBuiltins {
                 revertable = true,
                 reader = {
                     assertNotMainThread()
-                    val sid = ChatViewModelStore.activeSessionId
+                    val sid = activeSessionIdOrNull()
                     if (sid == null) ConfigValue.Null
                     else {
                         val session = runBlocking { chatRepo.dao.getSession(sid) }
@@ -170,7 +169,7 @@ internal object ConfigBuiltins {
                 writer = { v ->
                     val token = (v as? ConfigValue.Str)?.value ?: throw ConfigError.TypeMismatch("string")
                     val level = thinkingLevelFromToken(token) ?: throw ConfigError.InvalidValue("Unknown thinking level: $token")
-                    val sid = ChatViewModelStore.activeSessionId
+                    val sid = activeSessionIdOrNull()
                         ?: throw ConfigError.InvalidValue("No active session — open a chat first")
                     runBlocking { chatRepo.dao.updateThinkingOverride(sid, level.name) }
                 },
@@ -186,7 +185,7 @@ internal object ConfigBuiltins {
                 revertable = true,
                 reader = {
                     assertNotMainThread()
-                    val sid = ChatViewModelStore.activeSessionId
+                    val sid = activeSessionIdOrNull()
                     if (sid == null) ConfigValue.Str("")
                     else {
                         val session = runBlocking { chatRepo.dao.getSession(sid) }
@@ -195,7 +194,7 @@ internal object ConfigBuiltins {
                 },
                 writer = { v ->
                     val s = (v as? ConfigValue.Str)?.value ?: throw ConfigError.TypeMismatch("string")
-                    val sid = ChatViewModelStore.activeSessionId
+                    val sid = activeSessionIdOrNull()
                         ?: throw ConfigError.InvalidValue("No active session — open a chat first")
                     if (s.isEmpty()) {
                         // Clear the binding — fall back to default group/entry on next load.
@@ -951,7 +950,7 @@ internal object ConfigBuiltins {
                 // resolving through it fails outright when the user hasn't
                 // run a command yet — which is exactly the state a config
                 // write from the UI arrives in.
-                val sid = ChatViewModelStore.activeSessionId
+                val sid = activeSessionIdOrNull()
                     ?: throw ConfigError.InvalidValue(
                         "no active session — open a chat first, or pass the image inline as a data URI",
                     )

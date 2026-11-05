@@ -243,9 +243,12 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // Prefer the committed upload keystore (src/android/release.keystore)
-            // so CI and local assembleRelease share one cert. MINIS_UPLOAD_* env
-            // overrides. Debug keystore is last-resort only.
+            // The upload keystore is NOT committed (it holds the private
+            // signing key — see .gitignore). Resolution order: MINIS_UPLOAD_*
+            // env vars (CI reads them from repository secrets), then
+            // signing.properties, then a local src/android/release.keystore if
+            // the developer has one, so local assembleRelease still builds.
+            // Debug keystore is last-resort only.
             signingConfig = if (hasUploadKeystore) {
                 signingConfigs.getByName("releaseUpload")
             } else {
@@ -381,36 +384,9 @@ tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }
     .configureEach { dependsOn(copyBashismRules) }
 tasks.named("preBuild") { dependsOn(copyBashismRules) }
 
-// [T-android-debugserver-skill] Stage the debug-server skill + an Android
-// reference client into the DEBUG-ONLY asset source set, so the debug server
-// can serve them over GET /skill (mirrors the iOS "Generate Debug Skill" build
-// phase). Single source of truth stays .claude/skills/debug-server/.
-//
-// Wired to DEBUG asset merges only: src/debug/assets never reaches a release
-// APK, so the tooling docs can't ship to users. `assets` is also declared as an
-// output so Gradle re-runs this when the skill changes but skips it otherwise.
-val stageDebugSkillAssets by tasks.registering(Exec::class) {
-    val script = rootProject.file("../../scripts/gen_debug_skill_android.sh")
-    val skillDir = rootProject.file("../../.claude/skills/debug-server")
-    onlyIf { script.exists() }
-    // Declare the inputs only when they exist. `.optional()` covers an unset
-    // property, not a path that is absent: Gradle validates inputs before it
-    // consults onlyIf, so a missing skill dir fails the build outright. The
-    // public mirror has neither the script nor .claude/skills, and must still
-    // build.
-    if (skillDir.isDirectory) inputs.dir(skillDir)
-    if (script.isFile) inputs.file(script)
-    outputs.dir(layout.projectDirectory.dir("src/debug/assets/debug-skill"))
-    commandLine("bash", script.absolutePath)
-}
-tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") && it.name.contains("Debug") }
-    .configureEach { dependsOn(stageDebugSkillAssets) }
-
 dependencies {
     implementation(project(":core:model"))
-    implementation(project(":core:common"))
     implementation(project(":provider:api"))
-    implementation(project(":hostcapability:api"))
     // Compose BOM
     val composeBom = platform("androidx.compose:compose-bom:2025.09.00")
     implementation(composeBom)
@@ -435,12 +411,6 @@ dependencies {
     implementation("androidx.compose.material3.adaptive:adaptive-layout:1.2.0")
     implementation("androidx.compose.material3.adaptive:adaptive-navigation:1.2.0")
     implementation("androidx.compose.ui:ui")
-    // [T-android-tooling-preview-debug-only] ui-tooling-preview carries only
-    // the IDE @Preview annotation surface — grep confirmed ZERO references in
-    // the main (release) source set, so it moves next to ui-tooling as a
-    // debug-only dependency instead of riding the release classpath.
-    debugImplementation("androidx.compose.ui:ui-tooling-preview")
-    debugImplementation("androidx.compose.ui:ui-tooling")
 
     // Core
     implementation("androidx.core:core-ktx:1.15.0")
@@ -476,7 +446,7 @@ dependencies {
     // androidx.datastore:datastore-preferences removed — zero usage: `git grep
     // androidx.datastore` over src/android matched only this declaration, no
     // `preferencesDataStore`/`dataStore` builder and no import anywhere in app,
-    // :core:model, :core:common, :provider:api or :hostcapability:api. Every
+    // :core:model or :provider:api. Every
     // settings store in this app is SharedPreferences or
     // androidx.security EncryptedSharedPreferences, and PendingUpdateStore.kt
     // documents deliberately avoiding DataStore.
@@ -527,7 +497,7 @@ dependencies {
     implementation("com.github.mwiede:jsch:0.2.26")
 
     // Kotlinx Serialization
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+    implementation(libs.kotlinx.serialization.json)
 
     // Coil (image loading)
     implementation("io.coil-kt:coil-compose:2.7.0")
@@ -553,7 +523,7 @@ dependencies {
     implementation("com.termux.termux-app:terminal-view:0.118.0")
 
     // Coroutines
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    implementation(libs.kotlinx.coroutines.android)
 
     // T283: ACRA — local crash report capture. acra-core only (no http
     // sender, no network permission). CrashFileSender writes reports to
@@ -581,7 +551,7 @@ dependencies {
 
     // Testing — JVM unit tests
     testImplementation("junit:junit:4.13.2")
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+    testImplementation(libs.kotlinx.coroutines.test)
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     testImplementation("org.json:json:20231013")
     // [T-restore-txn-integration] Robolectric runs the archive/restore Room
@@ -604,7 +574,7 @@ dependencies {
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation(composeBom)
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
-    androidTestImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+    androidTestImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation("junit:junit:4.13.2")
 }
 

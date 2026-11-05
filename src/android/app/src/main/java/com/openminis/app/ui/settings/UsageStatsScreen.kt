@@ -672,19 +672,19 @@ private fun ExpandableModelRow(model: ModelStats, shareOfTotal: Float, showDivid
 
         AnimatedVisibility(visible = expanded) {
             Column(modifier = Modifier.padding(start = 53.dp, end = 14.dp, bottom = 10.dp)) {
-                DetailRow(stringResource(R.string.usage_detail_input), formatCount(model.inputTokens))
-                DetailRow(stringResource(R.string.usage_detail_output), formatCount(model.outputTokens))
-                if (model.cacheReadTokens > 0) DetailRow(stringResource(R.string.usage_label_cache_read), formatCount(model.cacheReadTokens))
-                if (model.cacheCreationTokens > 0) DetailRow(stringResource(R.string.usage_label_cache_creation), formatCount(model.cacheCreationTokens))
+                StatDetailRow(stringResource(R.string.usage_detail_input), formatCount(model.inputTokens))
+                StatDetailRow(stringResource(R.string.usage_detail_output), formatCount(model.outputTokens))
+                if (model.cacheReadTokens > 0) StatDetailRow(stringResource(R.string.usage_label_cache_read), formatCount(model.cacheReadTokens))
+                if (model.cacheCreationTokens > 0) StatDetailRow(stringResource(R.string.usage_label_cache_creation), formatCount(model.cacheCreationTokens))
                 val modelTotalInput = model.totalInput
                 if (modelTotalInput > 0 && model.cacheReadTokens > 0) {
                     val rate = (model.cacheReadTokens.toDouble() / modelTotalInput) * 100
-                    DetailRow(stringResource(R.string.usage_label_cache_hit_rate), String.format("%.1f%%", rate))
+                    StatDetailRow(stringResource(R.string.usage_label_cache_hit_rate), String.format("%.1f%%", rate))
                 }
                 // The window share is shown as a percentage next to the bar so
                 // the bar is not the only encoding of the number.
                 if (shareOfTotal > 0f) {
-                    DetailRow(
+                    StatDetailRow(
                         stringResource(R.string.usage_detail_window_share),
                         String.format("%.1f%%", shareOfTotal * 100),
                     )
@@ -692,13 +692,13 @@ private fun ExpandableModelRow(model: ModelStats, shareOfTotal: Float, showDivid
                 val days = model.distinctDays.size
                 val sessions = model.distinctSessions.size
                 if (days > 0) {
-                    DetailRow(stringResource(R.string.usage_detail_daily_avg), formatCount((model.inputTokens + model.outputTokens) / days))
+                    StatDetailRow(stringResource(R.string.usage_detail_daily_avg), formatCount((model.inputTokens + model.outputTokens) / days))
                 }
                 if (sessions > 0) {
-                    DetailRow(stringResource(R.string.usage_detail_session_avg), formatCount((model.inputTokens + model.outputTokens) / sessions))
+                    StatDetailRow(stringResource(R.string.usage_detail_session_avg), formatCount((model.inputTokens + model.outputTokens) / sessions))
                 }
-                DetailRow(stringResource(R.string.usage_detail_sessions), sessions.toString())
-                DetailRow(stringResource(R.string.usage_detail_active_days), days.toString())
+                StatDetailRow(stringResource(R.string.usage_detail_sessions), sessions.toString())
+                StatDetailRow(stringResource(R.string.usage_detail_active_days), days.toString())
             }
         }
 
@@ -759,18 +759,8 @@ private fun AttributionBadge(textRes: Int) {
     )
 }
 
-@Composable
-private fun DetailRow(label: String, value: String) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 3.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Default)
-    }
-}
+// [T-detail-rows-unify] StatDetailRow (was private DetailRow) moved to the
+// shared DetailRows.kt, keeping this screen's compact SpaceBetween visuals.
 
 /**
  * Compact token count with UPPERCASE units only. The k/M case used to be

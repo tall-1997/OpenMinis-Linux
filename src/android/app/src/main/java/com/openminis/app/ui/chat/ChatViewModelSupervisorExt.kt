@@ -133,6 +133,7 @@ private fun ChatViewModel.supervisorBaseTools(entry: ModelEntry): List<AgentTool
         visionGroupConfigured = VisionGroupResolver.isConfigured(providerRepository, context),
         memoryEnabled = false,
         subAgentEnabled = false,
+        hasSpeechModel = providerRepository.resolveVoiceInputEntry() != null,
     )
 
 /** Supervisor seat: the session model, or null when it has no usable provider. */

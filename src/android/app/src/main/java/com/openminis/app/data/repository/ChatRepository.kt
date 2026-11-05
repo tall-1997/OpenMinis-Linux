@@ -1,7 +1,6 @@
 package com.openminis.app.data.repository
 
 import androidx.room.withTransaction
-import android.database.sqlite.SQLiteBlobTooBigException
 import com.openminis.app.data.body.BodyStore
 import com.openminis.app.data.body.BudgetDecision
 import com.openminis.app.data.body.PreviewBudget
@@ -429,10 +428,40 @@ class ChatRepository(
         dao.updateSessionBinding(sessionId, binding, modelId)
     }
 
+    /**
+     * Delete a session and everything hanging off it.
+     *
+     * [Wave3-fix-8] The three store writes used to run as separate implicit
+     * transactions: a crash (or a concurrent reader) between them could leave a
+     * session row without its messages, a goal row pointing at a deleted
+     * session, or — worse — a partially deleted session resurrected by a
+     * partially completed cascade. All three writes now run in ONE Room
+     * transaction on the [AppDatabase] handle, so the deletion is all-or-
+     * nothing. The explicit [ChatDao.deleteMessages] is kept inside the
+     * transaction (belt-and-suspenders alongside the messages→sessions
+     * `onDelete = ForeignKey.CASCADE`, which also covers compact_markers);
+     * dropping it would rely on the PRAGMA being on for every connection.
+     *
+     * File-side cleanup (sandbox workspace + execution coordinator) stays
+     * AFTER the transaction on purpose: it cannot roll back, so it must only
+     * run once the DB state is durably committed.
+     *
+     * [db] is null in some JVM tests that construct the repository without a
+     * database handle; there the writes degrade to the old sequential form.
+     */
     suspend fun deleteSession(id: String) {
-        dao.deleteMessages(id)
-        goalDao.delete(id)
-        dao.deleteSession(id)
+        val dbRef = db
+        if (dbRef != null) {
+            dbRef.withTransaction {
+                dao.deleteMessages(id)
+                goalDao.delete(id)
+                dao.deleteSession(id)
+            }
+        } else {
+            dao.deleteMessages(id)
+            goalDao.delete(id)
+            dao.deleteSession(id)
+        }
         val dir = filesDir
         if (dir != null) {
             runCatching { ExecutionCoordinator.sessionDidTerminate(id) }
@@ -447,89 +476,32 @@ class ChatRepository(
     suspend fun searchSessions(query: String): List<ChatSessionEntity> =
         searchDao().searchSessions("%$query%")
 
-    fun observeMessages(sessionId: String): Flow<List<MessageEntity>> =
-        dao.observeMessages(sessionId)
+    // [Wave3-fix-5] `observeMessages(sessionId)` was deleted: a dead Flow with
+    // zero collectors in the whole repository, wrapping a query silently
+    // truncated at 200 rows (ChatDao.observeMessages). The UI pages through
+    // loadSessionTail / loadOlderMessages instead.
 
     /**
-     * Load all messages for a session in bounded pages instead of a
-     * single SELECT * batch. The legacy `dao.loadMessages` path issued
-     * one query whose Cursor result, once materialised, easily exceeded
-     * the per-CursorWindow 2 MB ceiling on a session containing even one
-     * large tool_result blob (Issue #17) — Android then aborted with
-     * SQLiteBlobTooBigException and the chat loader hung the UI thread.
+     * Unbounded session loading is DISABLED.
      *
-     * This paginated loader keeps each underlying query small enough that
-     * the CursorWindow can hold a normal-shaped page. If a single page
-     * still contains an individual >2MB row we fall back to fetching
-     * that range row-by-row and substitute a proxy MessageEntity for
-     * any single row that genuinely can't be materialised — the
-     * transcript stays continuous instead of crashing the load.
+     * The name is kept because it is a long-standing public API surface whose
+     * compile-time error is the guard: any caller asking for a whole session's
+     * transcript in one list gets [IllegalStateException] instead of the
+     * CursorWindow / OOM class of failure that motivated the ban (Issue #17 —
+     * a 4562-message / 5.4M-char session ran RSS to 2.3 GB and aborted).
      *
-     * Existing oversized rows are not migrated; new oversized inserts
-     * are prevented by the cap in [appendMessage].
+     * Use one of the bounded loaders instead:
+     *  - [loadSessionTail] / [loadMessagesTail] — tail window for UI + history;
+     *  - [loadMessagesBefore] / [loadMessagesAfter] / [loadMessagesInSortRange]
+     *    — turn-aligned paging around a sort_order anchor;
+     *  - [loadRequestHistory] — request-side bodies, paged, for the model call;
+     *  - [dao.loadMessagesPage] — raw pages for the sessions CLI.
      */
-    suspend fun loadMessages(sessionId: String): List<MessageEntity> {
-        // T-android-crash-safe-mode-v2: defensive guard. ChatViewModel.loadSession
-        // is already gated upstream, but loadMessages has other call sites
-        // (compaction, fork, regenerate-title, debug menu) that could fire
-        // from a foreground retry or a Flow collector before the safe-mode
-        // dialog is dismissed. Returning an empty list mirrors the "no rows
-        // for this session" branch and is harmless for every caller.
-        if (com.openminis.app.crash.CrashFrequencyDetector.isSafeMode()) {
-            android.util.Log.w(
-                "ChatRepository",
-                "loadMessages: safe-mode active, skipping (sessionId=$sessionId)",
-            )
-            return emptyList()
-        }
-        throw IllegalStateException("Unbounded session loading is disabled; page through loadMessagesTail or forEachMessagePage.")
-        val total = dao.messageCountForSession(sessionId)
-        if (total == 0) return emptyList()
-        val out = ArrayList<MessageEntity>(total)
-        var offset = 0
-        while (offset < total) {
-            val limit = LOAD_PAGE_SIZE
-            val page = try {
-                dao.loadMessagesPage(sessionId, offset, limit)
-            } catch (e: SQLiteBlobTooBigException) {
-                // Fall back to single-row pages so we can isolate the
-                // offending blob(s) and serve the rest of the slice.
-                loadPageRowByRow(sessionId, offset, limit)
-            } catch (e: IllegalStateException) {
-                // Some Room/SQLite combinations wrap the CursorWindow
-                // overflow in IllegalStateException("Couldn't read row N,
-                // col N from CursorWindow"); treat the same way.
-                if (e.message?.contains("CursorWindow", ignoreCase = true) == true) {
-                    loadPageRowByRow(sessionId, offset, limit)
-                } else {
-                    throw e
-                }
-            }
-            if (page.isEmpty()) break
-            out.addAll(page)
-            offset += limit
-        }
-        return out
-    }
-
-    private suspend fun loadPageRowByRow(
-        sessionId: String,
-        baseOffset: Int,
-        limit: Int,
-    ): List<MessageEntity> {
-        val result = ArrayList<MessageEntity>(limit)
-        for (i in 0 until limit) {
-            val row = try {
-                dao.loadMessagesPage(sessionId, baseOffset + i, 1).firstOrNull()
-            } catch (e: SQLiteBlobTooBigException) {
-                null
-            } catch (e: IllegalStateException) {
-                if (e.message?.contains("CursorWindow", ignoreCase = true) == true) null else throw e
-            } ?: continue
-            result.add(row)
-        }
-        return result
-    }
+    suspend fun loadMessages(sessionId: String): List<MessageEntity> =
+        throw IllegalStateException(
+            "Unbounded session loading is disabled; page through loadSessionTail / " +
+                "loadMessagesBefore / loadRequestHistory / loadMessagesPage instead (sessionId=$sessionId)",
+        )
 
     /**
      * @return true when the rows were deleted (or when the version store is
@@ -1347,10 +1319,10 @@ class ChatRepository(
         // truncated and flagged with "truncated": true.
         internal const val MESSAGE_TEXT_MAX_FULL = 50_000
 
-        // Issue #17 — page size for the chat loader. 200 rows per query
-        // keeps a normal-shaped CursorWindow well under 2 MB while
-        // still amortising query overhead for long sessions.
-        private const val LOAD_PAGE_SIZE = 200
+        // [Wave3-fix-6] LOAD_PAGE_SIZE (200) was deleted with the unreachable
+        // loadMessages body and its loadPageRowByRow fallback; the bounded
+        // loaders pass their page sizes explicitly (50/500 — see
+        // loadBoundedMessageRange / loadMessageIds).
 
         // Issue #17 — hard cap on a single message's parts_json. 500_000
         // chars ≈ 500 KB ASCII (worst case ~2 MB UTF-8 for 4-byte runs;

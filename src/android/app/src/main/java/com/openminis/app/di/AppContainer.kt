@@ -45,8 +45,16 @@ class AppContainer(val scopes: AppCoroutineScopes) {
     @Volatile
     var memoryRepository: MemoryRepository? = null
 
-    @Volatile
-    var evolutionEngine: EvolutionEngine? = null
+    /**
+     * [Wave3 #17] Compat getter — the single source of truth for the engine is
+     * [AppGraph.evolutionEngineOrNull]. This used to be a second writable
+     * registry slot ([MinisApp.onCreate] wrote both), which could drift; the
+     * write side was removed and the field is now a read-only delegation so
+     * existing readers ([MinisApp.evolutionEngine], used by
+     * EvolutionSettingsScreen) keep compiling against one registry.
+     */
+    val evolutionEngine: EvolutionEngine?
+        get() = AppGraph.evolutionEngineOrNull()
 
     @Volatile
     var webAppShortcutRepository: WebAppShortcutRepository? = null

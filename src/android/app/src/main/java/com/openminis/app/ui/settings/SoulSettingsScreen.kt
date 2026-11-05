@@ -47,6 +47,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -117,7 +118,13 @@ fun SoulSettingsScreen(
     var lang by remember { mutableStateOf(SoulMetadata.DEFAULT.lang) }
     var pendingRestoreBody by remember { mutableStateOf<String?>(null) }
     var loaded by remember { mutableStateOf(false) }
-    var editingPromptId by remember { mutableStateOf<String?>(null) }
+    // [T-soul-editor-rememberable] The in-screen prompt editor is a
+    // screen-swap, not a nav-backstack entry, so `remember` lost the open
+    // editor on process death/configuration change (the user landed back on
+    // the list with edits gone). rememberSaveable keeps the id — and thus the
+    // editor — across recreation. A new nav route was considered and rejected
+    // as a structural change; the saveable id preserves the same behaviour.
+    var editingPromptId by rememberSaveable { mutableStateOf<String?>(null) }
     var importError by remember { mutableStateOf<String?>(null) }
     var pendingImport by remember { mutableStateOf<PersonaImportPreview.Ready?>(null) }
     var pendingDelete by remember { mutableStateOf<PersonaPromptEntry?>(null) }
@@ -136,14 +143,7 @@ fun SoulSettingsScreen(
     var showEmojiSheet by remember { mutableStateOf(false) }
     var iconError by remember { mutableStateOf<String?>(null) }
 
-    // [T-android-soul-save-in-appbar] What was loaded from disk, kept so
-    // "has the user changed anything" is a comparison rather than a flag.
-    //
-    // A boolean set by every onValueChange would report dirty after a round
-    // trip that lands back on the original text (type a character, delete it),
-    // and would need a reset at each of the several places state is
-    // reassigned — the load, the restore-default, and the save itself. A
-    // snapshot compared by value cannot drift out of sync with the fields.
+    // [T-android-soul-save-in-appbar] Baseline snapshot compared by value: a dirty flag would report changed after a round trip back onto the original text, and would need reset at each reassignment point; a value snapshot cannot drift out of sync.
     var baseline by remember { mutableStateOf<SoulFile?>(null) }
 
     // [T-android-soul-custom-icon] Image import: decode → reject opaque →

@@ -54,6 +54,7 @@ import com.openminis.app.R
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.ui.DisplayBitmapLimits
 import com.openminis.app.ui.theme.ChatColors
+import com.openminis.app.util.Format
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -250,7 +251,7 @@ private fun FileCardBody(card: ToolCard.FileCard) {
         card.sizeBytes?.let { size ->
             Spacer(Modifier.width(6.dp))
             Text(
-                text = formatBytes(size),
+                text = Format.formatBytes(size),
                 fontSize = 11.sp,
                 color = ChatColors.tertiaryText,
             )
@@ -647,10 +648,4 @@ private fun shareCard(context: android.content.Context, card: ToolCard): Boolean
 } catch (t: Throwable) {
     AppLogger.warning(TAG, "share failed: ${t.message}")
     false
-}
-
-private fun formatBytes(bytes: Long): String = when {
-    bytes >= 1 shl 20 -> String.format("%.1f MB", bytes / 1048576.0)
-    bytes >= 1 shl 10 -> String.format("%.1f KB", bytes / 1024.0)
-    else -> "$bytes B"
 }

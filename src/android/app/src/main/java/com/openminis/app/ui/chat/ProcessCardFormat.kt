@@ -11,16 +11,19 @@ package com.openminis.app.ui.chat
  * thinking-block work pushed that file past its baseline ceiling: both
  * helpers here are pure and already pinned by ChatFlatItemsProcessFoldTest, so
  * the file they lived in could shed 60+ lines without moving any behaviour.
+ *
+ * [T-android-format-converge] Body moved to [formatDurationCompact] (the
+ * chat package's single duration ladder); this name stays as the
+ * truncating, hours-branching, null-on-non-positive profile the fold-bar
+ * and its tests pin.
  */
-internal fun formatProcessDuration(totalMs: Long): String? {
-    if (totalMs <= 0L) return null
-    val totalSeconds = totalMs / 1000L
-    return when {
-        totalSeconds < 60L -> "${totalSeconds}s"
-        totalSeconds < 3600L -> "${totalSeconds / 60L}m ${totalSeconds % 60L}s"
-        else -> "${totalSeconds / 3600L}h ${totalSeconds % 3600L / 60L}m"
-    }
-}
+internal fun formatProcessDuration(totalMs: Long): String? =
+    formatDurationCompact(
+        totalMs,
+        subSecondDecimals = 0,
+        hoursBranch = true,
+        nullWhenNonPositive = true,
+    )
 
 /**
  * [P-process-card] What the card is doing right now. Pure so the header

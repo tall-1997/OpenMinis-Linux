@@ -401,20 +401,7 @@ internal suspend fun ChatViewModel.executeRunSubAgent(
         )
     }
 
-/**
- * [T-subagent-background] Run a wave detached from the calling tool.
- *
- * The parent loop gets a dispatch id back immediately and keeps thinking; the
- * lanes run on viewModelScope, which outlives this tool call and the current
- * agent turn. Progress stays visible through the sub-agent chip bar
- * (SubAgentActivityTracker) and queryable with `check_agent`; the registry also
- * persists lane state, so a wave cut short by process death comes back as
- * `stopped` instead of disappearing without a trace.
- *
- * Deliberately no parent tool block: by the time a detached lane reports, the
- * main transcript has moved on, and writing into a stale MutableList would
- * corrupt a block that is already persisted.
- */
+/** [T-subagent-background] Detached wave: parent loop keeps thinking while lanes run on viewModelScope; registry persists lane state so process death surfaces `stopped`, not a silent gap. */
 private fun ChatViewModel.launchDetachedSubAgentBatch(
         batch: com.openminis.app.tools.SubAgentBatchRegistry.Batch,
         ownerSession: String,
@@ -857,6 +844,7 @@ private suspend fun ChatViewModel.runOneSubAgentInner(
                                 ),
                                 memoryEnabled = false,
                                 subAgentEnabled = false,
+                                hasSpeechModel = providerRepository.resolveVoiceInputEntry() != null,
                             ) + AgentTools.makeSubAgentExtraTools(),
                             role,
                             context,

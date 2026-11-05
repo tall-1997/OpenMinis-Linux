@@ -2,6 +2,7 @@ package com.openminis.app.ui.preview
 
 import androidx.compose.ui.res.stringResource
 import com.openminis.app.R
+import com.openminis.app.ui.components.DialogWindowImmersiveEffect
 
 import android.annotation.SuppressLint
 import android.content.Intent
@@ -170,24 +171,13 @@ fun WebPreviewBottomSheet(
         // leaving the activity's status-bar background visible above the
         // sheet. Flip the dialog window to edge-to-edge + transparent bars
         // so the sheet's surface actually paints under the status bar.
-        // Mirrors FullscreenImageViewer / InlineMediaPlayer.
-        val localView = LocalView.current
-        DisposableEffect(localView, darkTheme) {
-            val win = findDialogWindow(localView)
-            AppLogger.info("WebPreviewSheet", "edgeToEdge: dialogWindow=${win?.javaClass?.simpleName ?: "null"}")
-            win?.let { w ->
-                WindowCompat.setDecorFitsSystemWindows(w, false)
-                w.addFlags(android.view.WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
-                @Suppress("DEPRECATION")
-                w.statusBarColor = android.graphics.Color.TRANSPARENT
-                @Suppress("DEPRECATION")
-                w.navigationBarColor = android.graphics.Color.TRANSPARENT
-                val ctrl = WindowInsetsControllerCompat(w, w.decorView)
-                ctrl.isAppearanceLightStatusBars = !darkTheme
-                ctrl.isAppearanceLightNavigationBars = !darkTheme
-            }
-            onDispose { }
-        }
+        // Now the shared DialogWindowImmersiveEffect (appearance follows
+        // darkTheme + DRAWS_SYSTEM_BAR_BACKGROUNDS flavor — identical to
+        // the inline block it replaces).
+        DialogWindowImmersiveEffect(
+            darkTheme = darkTheme,
+            drawsSystemBarBackgrounds = true,
+        )
 
         Column(
             modifier = Modifier
@@ -447,14 +437,9 @@ private fun ToolbarIcon(
     }
 }
 
-private fun findDialogWindow(view: android.view.View): android.view.Window? {
-    var p: android.view.ViewParent? = view.parent
-    while (p != null) {
-        if (p is androidx.compose.ui.window.DialogWindowProvider) return p.window
-        p = p.parent
-    }
-    return null
-}
+// The private findDialogWindow walker moved to ui.components.DialogWindowUtils
+// (shared with the fullscreen web preview, the image viewers and
+// InlineMediaPlayer).
 
 /**
  * Open a URL in an external browser / app.

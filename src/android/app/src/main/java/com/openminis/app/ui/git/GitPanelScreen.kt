@@ -449,8 +449,14 @@ private fun DiffOverlay(diff: GitDiffView, onClose: () -> Unit) {
                             .verticalScroll(rememberScrollState())
                             .padding(horizontal = 8.dp, vertical = 4.dp),
                     ) {
+                        // (#13) colorizeDiff walks the whole diff line-by-line
+                        // building spans — it used to re-run on EVERY
+                        // recomposition of this panel (it took no remember at
+                        // all), so an unrelated state change re-colored an
+                        // arbitrarily large diff. Memoize per content.
+                        val colored = remember(diff.content) { colorizeDiff(diff.content) }
                         Text(
-                            colorizeDiff(diff.content),
+                            colored,
                             fontFamily = FontFamily.Monospace,
                             fontSize = 11.sp,
                             lineHeight = 15.sp,

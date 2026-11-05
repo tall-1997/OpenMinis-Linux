@@ -62,12 +62,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -86,74 +88,39 @@ import kotlin.math.roundToInt
 
 const val KEY_THEME_MODE = "theme_mode"            // 0=System, 1=Light, 2=Dark
 const val KEY_LAUNCH_SESSION = "launch_session"    // 0=Auto, 1=LastSession, 2=NewChat, 3=Home
-// iOS-aligned key names — match `@AppStorage("returnKeyBehavior")` and
-// `@AppStorage("keepScreenAwakeDuringTasks")` in ContentView.swift so
-// future cross-platform sync (if it ever lands) reads the same values.
+// iOS-aligned key names (match ContentView.swift @AppStorage keys).
 const val KEY_RETURN_KEY_BEHAVIOR = "returnKeyBehavior"  // Int 0=Newline (default), 1=Send
 const val KEY_KEEP_SCREEN_AWAKE = "keepScreenAwakeDuringTasks"  // Boolean, default false
 const val KEY_TOOL_PREVIEW = "tool_preview"        // Boolean, default true
 const val KEY_SHOW_FLOATING_TOOL_BAR = "chat.showFloatingToolBar"  // Boolean, default true
 const val KEY_SHOW_COMPLETED_TOOL_CARDS = "chat.showCompletedToolCards"  // Boolean, default false
 const val KEY_SHOW_SUBAGENT_BAR = "chat.showSubAgentBar"
-// [T-composer-mic-toggle] Single source for the sub-agent bar default
-// (mirrors DEFAULT_SHOW_MIC_BUTTON) so the setting row and the
-// ChatScreen read can never drift apart.
+// [T-composer-mic-toggle] Single source for the sub-agent bar default.
 const val DEFAULT_SHOW_SUB_AGENT_BAR = true
-// Whether the composer should request focus when a reply finishes. Default
-// ON (iOS parity); entering or switching sessions never requests focus.
+// Whether the composer requests focus when a reply finishes. Default ON (iOS parity).
 const val KEY_AUTO_FOCUS_AFTER_REPLY = "chat.autoFocusAfterReply"  // Boolean, default true
-// T-chat-title-pill: shows a sticky session-title pill above the chat list
-// while the user scrolls back through history. Cross-platform key name
-// (matches iOS @AppStorage("appearance.show_chat_title")) so future config
-// sync reads the same value.
+// T-chat-title-pill: sticky session-title pill above the chat list while scrolling back through history.
 const val KEY_SHOW_CHAT_TITLE = "appearance.show_chat_title"  // Boolean, default true
-// [T-thinking-auto-expand-toggle] When true (default, historical behavior) a
-// NEW streaming thinking block auto-expands while the model reasons; when false
-// it stays collapsed until tapped. Key name mirrors iOS
-// `@AppStorage("chat.autoExpandThinking")` so future config sync reads the same
-// value. Read at block-mount time in ThinkingBlock.
+// [T-thinking-auto-expand-toggle] A new streaming thinking block auto-expands while the model reasons (default); read at block-mount time.
 const val KEY_AUTO_EXPAND_THINKING = "chat.autoExpandThinking"  // Boolean, default true
-// Collapse thinking + tool process into a summary after the turn finishes
-// (streaming stays expanded). Default ON since the OmniBot-parity pass: the
-// folded form (summary bar + floating overlay for in-flight tools) is the
-// primary presentation; the fully-expanded stream is opt-in. Existing users
-// who ever toggled the switch keep their stored value (getBoolean only falls
-// back to the default when the key is absent).
+// Collapse thinking + tool process into a summary after the turn finishes (streaming stays expanded). Default ON.
 const val KEY_FOLD_AI_PROCESS = "chat.foldAiProcess"
 const val DEFAULT_FOLD_AI_PROCESS = true
-// [T-composer-mic-toggle] Show the composer's mic (voice input) button. Default OFF: in practice the mic is rarely used and it competes for the
-// same bottom-row slot as the paste-image chip and edit pill. Voice mode itself is unaffected — the app-icon "voice chat" quick action and the
-// START_VOICE deep link still enter the panel; and once voice mode IS
-// active the mic button re-appears regardless (it is the only way back to
-// the keyboard), so hiding it can never strand the user in voice mode.
+// [T-composer-mic-toggle] Show the composer's mic button. Default OFF; voice mode re-shows it so hiding never strands the user.
 const val KEY_SHOW_MIC_BUTTON = "chat.showMicButton"
 const val DEFAULT_SHOW_MIC_BUTTON = false
-// [T-android-message-usage-footer] Small token-usage line under each reply
-// (↑ in ↓ out · cache %). Default ON; ChatScreen reads the same key in its
-// appearance-prefs block.
+// [T-android-message-usage-footer] Small token-usage line under each reply. Default ON.
 const val KEY_SHOW_MESSAGE_TOKEN_USAGE = "chat.showMessageTokenUsage"  // Boolean, default true
-// [T-android-composer-context-glow] Rotating composer-edge glow while the
-// session's context usage approaches the model window. Default ON.
+// [T-android-composer-context-glow] Rotating composer-edge glow near the model window. Default ON.
 const val KEY_COMPOSER_CONTEXT_GLOW = "chat.composerContextGlow"  // Boolean, default true
-// Material You wallpaper dynamic color. Default OFF: the app's identity is the
-// iOS-parity palette with measured contrast, so wallpaper tinting is opt-in.
+// Material You wallpaper dynamic color. Default OFF (iOS-parity palette).
 const val KEY_DYNAMIC_COLOR = "chat.dynamicColor"  // Boolean, default false
-// [T-android-auto-grouping] When a chat's title is first generated, also file it into a matching EXISTING group. Rides the title-generation call — no
-// second round-trip. Key name matches iOS `autoGroupingEnabled` so a future config sync reads the same value.
-//
-// Default ON (both platforms, per product decision 2026-08-16). iOS originally shipped this opt-in on the reasoning that it "moves user data without being
-// asked"; that concern is bounded here because the feature only ever files a
-// chat into a group the user already created, only when the model is confident,
-// only once per chat, and never over a hand-filed session (setFolderIfUnfiled).
+// [T-android-auto-grouping] File a chat into a matching EXISTING group on first title generation (no extra round-trip). Default ON; only files into user-created groups, once per chat.
 const val KEY_AUTO_GROUPING = "autoGroupingEnabled"  // Boolean, default true
 const val KEY_FONT_CHAT_INPUT = "font_chat_input"  // Int scale level -2..3
 const val KEY_FONT_MESSAGE = "font_message"        // Int scale level -2..3
 const val KEY_FONT_APP_BASE = "font_app_base"      // Int scale level -2..3
-// "" = system, else a BCP-47 tag: "en", "zh", "zh-Hant", "ja", "ko", "fr",
-// "de", "ru", "es". Region-qualified tags are stored in BCP-47 form so both
-/** True when Enter (without Shift) should send the message. iOS calls this
- *  `returnKeyBehavior == 1`. Default 0 = Enter inserts a newline (matches
- *  iOS shipping default + most desktop chat clients). */
+/** True when Enter (without Shift) sends the message (iOS returnKeyBehavior == 1); default 0 = newline. */
 fun returnKeySendsMessage(context: Context): Boolean = getAppearancePrefs(context).getInt(KEY_RETURN_KEY_BEHAVIOR, 0) == 1
 
 fun keepScreenAwakeEnabled(context: Context): Boolean = getAppearancePrefs(context).getBoolean(KEY_KEEP_SCREEN_AWAKE, false)
@@ -164,20 +131,11 @@ fun autoGroupingEnabled(context: Context): Boolean = getAppearancePrefs(context)
 /** Default ON — pill shows up on scroll for everyone unless explicitly disabled. */
 fun showChatTitleEnabled(context: Context): Boolean = getAppearancePrefs(context).getBoolean(KEY_SHOW_CHAT_TITLE, true)
 
-/** [T-thinking-auto-expand-toggle] Default ON = historical behavior: a new
- *  streaming thinking block opens expanded. Off = it stays collapsed until the
- *  user taps it. */
+/** [T-thinking-auto-expand-toggle] Default ON: a new streaming thinking block opens expanded. */
 fun autoExpandThinkingEnabled(context: Context): Boolean = getAppearancePrefs(context).getBoolean(KEY_AUTO_EXPAND_THINKING, true)
 
 /** Font scale levels matching iOS: XS(-2) Small(-1) Default(0) Medium(1) Large(2) XL(3) */
-/**
- * [T-android-app-icon-tile-max-width] Upper bound for one app-icon preview tile.
- *
- * Matches the 192px the preview bitmap is rasterized at — a launcher icon's
- * native size, and there is no higher-resolution source to draw from — so the
- * artwork is never asked to scale far past its own resolution. Without a cap the
- * weight(1f) tiles reached ~380dp on a tablet and the icons visibly blurred.
- */
+// [T-android-app-icon-tile-max-width] Upper bound for one icon tile (matches the 192px rasterization; uncapped tiles blurred at ~380dp on tablets).
 private val APP_ICON_TILE_MAX_WIDTH = 192.dp
 
 private val fontScaleLabels = listOf("XS", "Small", "Default", "Medium", "Large", "XL")
@@ -185,34 +143,12 @@ private val fontScaleValues = listOf(-2, -1, 0, 1, 2, 3)
 private val fontScaleMultipliers = listOf(0.88f, 0.94f, 1.0f, 1.06f, 1.12f, 1.21f)
 
 private data class LanguageOption(val code: String, val flag: String, val label: String)
-// "System" label is resolved at call-site via stringResource so it follows
-// the user's chosen UI language. The remaining entries are language self-names
-// and stay as literals \u2014 Chinese is always "\u7B80\u4F53\u4E2D\u6587", regardless of UI locale.
+// "System" is resolved via stringResource; the rest are self-name literals.
 private val languageOptions = listOf(
     LanguageOption("", "\uD83C\uDF10", ""),
     LanguageOption("en", "\uD83C\uDDFA\uD83C\uDDF8", "English"),
     LanguageOption("zh", "\uD83C\uDDE8\uD83C\uDDF3", "简体中文"),
-    // zh-Hant: values-zh-rTW has carried a Traditional Chinese translation
-    // all along, but the picker never listed it and locales_config.xml never
-    // declared it, so those users could not select it at all. The tag is
-    // BCP-47 on purpose \u2014 LocaleList.forLanguageTags and
-    // LocaleWrap.parseLocale both resolve it to the zh-rTW resources,
-    // whereas a bare "zh" would land on Simplified.
-    // [T-android-zh-hant-flag] Flag is HK (\uD83C\uDDED\uD83C\uDDF0), matching
-    // iOS ContentView's own zh-Hant entry.
-    //
-    // It was TW (\uD83C\uDDF9\uD83C\uDDFC), which rendered as an EMPTY BOX on a
-    // Huawei MatePad \u2014 Chinese-market ROMs generally ship fonts with that
-    // flag glyph withheld, so the row had no icon at all.
-    //
-    // HK is the same glyph iOS already uses for this row, so it is the smallest
-    // change that also keeps the platforms aligned. If it turns out to be
-    // withheld on the same devices, the answer is to drop the flag for this row
-    // rather than hunt for a third region \u2014 a script is not a country.
-    //
-    // A region flag is a poor label for a script in any case (zh-Hant is used
-    // in TW, HK and MO alike), but keeping the two platforms on the same glyph
-    // beats inventing a third answer here.
+    // zh-Hant: BCP-47 on purpose (resolves to values-zh-rTW). [T-android-zh-hant-flag] Flag is HK, matching iOS; TW rendered as an empty box on Chinese-market ROMs.
     LanguageOption("zh-Hant", "\uD83C\uDDED\uD83C\uDDF0", "\u7E41\u9AD4\u4E2D\u6587"),
     LanguageOption("ja", "\uD83C\uDDEF\uD83C\uDDF5", "日本語"),
     LanguageOption("ko", "\uD83C\uDDF0\uD83C\uDDF7", "한국어"),
@@ -222,38 +158,21 @@ private val languageOptions = listOf(
     LanguageOption("ru", "\uD83C\uDDF7\uD83C\uDDFA", "\u0420\u0443\u0441\u0441\u043A\u0438\u0439"),
     // es: flag \uD83C\uDDEA\uD83C\uDDF8 (ES), self-name Espanol
     LanguageOption("es", "\uD83C\uDDEA\uD83C\uDDF8", "Espa\u00F1ol"),
-    // id: flag \uD83C\uDDEE\uD83C\uDDE9 (ID), self-name Bahasa Indonesia.
-    //
-    // The tag is "id", but the resources live in res/values-in. Android's
-    // resource resolver normalises Indonesian to the legacy code "in" at every
-    // API level \u2014 a values-id directory is never consulted and the app would
-    // silently fall back to English. Verified on Android 13 and 17 that "id"
-    // resolves to values-in through both code paths this picker feeds:
-    // LocaleList.forLanguageTags (API 33+, MainActivity) and new Locale(code)
-    // (LocaleWrap, pre-33). Keep the tag modern here and the directory legacy.
+    // id: tag is "id" but resources live in res/values-in (Android normalises Indonesian to "in"), so keep the tag modern and the directory legacy.
     LanguageOption("id", "\uD83C\uDDEE\uD83C\uDDE9", "Bahasa Indonesia"),
-    // ms: flag \uD83C\uDDF2\uD83C\uDDFE (MY), self-name Bahasa Melayu. No legacy-code caveat \u2014 the
-    // tag and the directory (values-ms) agree, and Indonesian does not resolve
-    // to it, so the two stay separate despite the shared vocabulary.
+    // ms: flag MY, self-name Bahasa Melayu (tag and values-ms agree; distinct from Indonesian).
     LanguageOption("ms", "\uD83C\uDDF2\uD83C\uDDFE", "Bahasa Melayu"),
-    // fil: flag \uD83C\uDDF5\uD83C\uDDED (PH), self-name Filipino. The tag is "fil", not "tl" \u2014 both
-    // resolve to values-fil at runtime, but fil is the standardised national
-    // language and the code CLDR and the Play Store use.
+    // fil: tag "fil" (not "tl") resolves to values-fil; standardised national code.
     LanguageOption("fil", "\uD83C\uDDF5\uD83C\uDDED", "Filipino"),
-    // th: flag \uD83C\uDDF9\uD83C\uDDED (TH), self-name \u0E44\u0E17\u0E22. No naming caveat \u2014 values-th serves
-    // both "th" and "th-TH".
+    // th: values-th serves both "th" and "th-TH".
     LanguageOption("th", "\uD83C\uDDF9\uD83C\uDDED", "\u0E44\u0E17\u0E22"),
-    // tr: flag \uD83C\uDDF9\uD83C\uDDF7 (TR), self-name T\u00FCrk\u00E7e. Note the
-    // dotted/dotless i \u2014 see LocaleAwareCase.uppercaseForDisplay for why the
-    // section headers must not use a bare .uppercase() in this language.
+    // tr: see LocaleAwareCase.uppercaseForDisplay (dotted/dotless i).
     LanguageOption("tr", "\uD83C\uDDF9\uD83C\uDDF7", "T\u00FCrk\u00E7e"),
     // pl: flag \uD83C\uDDF5\uD83C\uDDF1 (PL), self-name Polski.
     LanguageOption("pl", "\uD83C\uDDF5\uD83C\uDDF1", "Polski"),
     // ro: flag \uD83C\uDDF7\uD83C\uDDF4 (RO), self-name Rom\u00E2n\u0103.
     LanguageOption("ro", "\uD83C\uDDF7\uD83C\uDDF4", "Rom\u00E2n\u0103"),
-    // pt-BR: flag \uD83C\uDDE7\uD83C\uDDF7 (BR), self-name Portugu\u00EAs (Brasil). Region-qualified on
-    // purpose \u2014 the resources live in values-pt-rBR and the wording is
-    // Brazilian, so the tag should say so rather than claim generic "pt".
+    // pt-BR: region-qualified on purpose (resources live in values-pt-rBR).
     LanguageOption("pt-BR", "\uD83C\uDDE7\uD83C\uDDF7", "Portugu\u00EAs (Brasil)"),
 )
 
@@ -277,33 +196,61 @@ fun AppearanceScreen(
     onThemeChanged: (Int) -> Unit = {},
 ) {
     val context = LocalContext.current
-    val prefs = remember { getAppearancePrefs(context) }
+    // [T-android-sessionlist-prefs-io] Lazy prefs handle; first touch runs on IO so the first frame shows defaults (no main-thread XML parse).
+    val prefs = remember { lazy { getAppearancePrefs(context) } }
 
-    var themeMode by remember { mutableIntStateOf(prefs.getInt(KEY_THEME_MODE, 0)) }
-    var launchSession by remember { mutableIntStateOf(prefs.getInt(KEY_LAUNCH_SESSION, 0)) }
-    var returnKeyBehavior by remember { mutableIntStateOf(prefs.getInt(KEY_RETURN_KEY_BEHAVIOR, 0)) }
-    var keepScreenAwake by remember { mutableStateOf(prefs.getBoolean(KEY_KEEP_SCREEN_AWAKE, false)) }
-    var highRefresh by remember { mutableStateOf(com.openminis.app.ui.HighRefreshRate.enabled(context)) }
-    var showFloatingToolBar by remember { mutableStateOf(prefs.getBoolean(KEY_SHOW_FLOATING_TOOL_BAR, true)) }
-    var showCompletedToolCards by remember { mutableStateOf(prefs.getBoolean(KEY_SHOW_COMPLETED_TOOL_CARDS, false)) }
-    var showSubAgentBar by remember { mutableStateOf(prefs.getBoolean(KEY_SHOW_SUBAGENT_BAR, DEFAULT_SHOW_SUB_AGENT_BAR)) }
-    var showMicButton by remember { mutableStateOf(prefs.getBoolean(KEY_SHOW_MIC_BUTTON, DEFAULT_SHOW_MIC_BUTTON)) }
-    var showMessageUsage by remember { mutableStateOf(prefs.getBoolean(KEY_SHOW_MESSAGE_TOKEN_USAGE, true)) }
-    var composerContextGlow by remember { mutableStateOf(prefs.getBoolean(KEY_COMPOSER_CONTEXT_GLOW, true)) }
-    var autoFocusAfterReply by remember { mutableStateOf(prefs.getBoolean(KEY_AUTO_FOCUS_AFTER_REPLY, true)) }
-    var autoExpandThinking by remember { mutableStateOf(prefs.getBoolean(KEY_AUTO_EXPAND_THINKING, true)) }
-    var foldAiProcess by remember { mutableStateOf(prefs.getBoolean(KEY_FOLD_AI_PROCESS, DEFAULT_FOLD_AI_PROCESS)) }
-    // Material You is an Android 12+ framework capability (minSdk is 26), so the
-    // row renders disabled below S instead of promising something it cannot do.
+    var themeMode by remember { mutableIntStateOf(0) }
+    var launchSession by remember { mutableIntStateOf(0) }
+    var returnKeyBehavior by remember { mutableIntStateOf(0) }
+    var keepScreenAwake by remember { mutableStateOf(false) }
+    var highRefresh by remember { mutableStateOf(true) }
+    var showFloatingToolBar by remember { mutableStateOf(true) }
+    var showCompletedToolCards by remember { mutableStateOf(false) }
+    var showSubAgentBar by remember { mutableStateOf(DEFAULT_SHOW_SUB_AGENT_BAR) }
+    var showMicButton by remember { mutableStateOf(DEFAULT_SHOW_MIC_BUTTON) }
+    var showMessageUsage by remember { mutableStateOf(true) }
+    var composerContextGlow by remember { mutableStateOf(true) }
+    var autoFocusAfterReply by remember { mutableStateOf(true) }
+    var autoExpandThinking by remember { mutableStateOf(true) }
+    var foldAiProcess by remember { mutableStateOf(DEFAULT_FOLD_AI_PROCESS) }
+    // Material You is Android 12+; the row renders disabled below S.
     val monetSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-    var dynamicColor by remember { mutableStateOf(prefs.getBoolean(KEY_DYNAMIC_COLOR, false)) }
-    var showChatTitle by remember { mutableStateOf(prefs.getBoolean(KEY_SHOW_CHAT_TITLE, true)) }
-    var autoGrouping by remember { mutableStateOf(prefs.getBoolean(KEY_AUTO_GROUPING, true)) }
-    var chatInputLevel by remember { mutableIntStateOf(prefs.getInt(KEY_FONT_CHAT_INPUT, 0)) }
-    var messageLevel by remember { mutableIntStateOf(prefs.getInt(KEY_FONT_MESSAGE, 0)) }
-    var appBaseLevel by remember { mutableIntStateOf(prefs.getInt(KEY_FONT_APP_BASE, 0)) }
-    var selectedLanguage by remember { mutableStateOf(prefs.getString(KEY_LANGUAGE, "") ?: "") }
-    var selectedAppIcon by remember { mutableStateOf(AppIconRepository.current(context)) }
+    var dynamicColor by remember { mutableStateOf(false) }
+    var showChatTitle by remember { mutableStateOf(true) }
+    var autoGrouping by remember { mutableStateOf(true) }
+    var chatInputLevel by remember { mutableIntStateOf(0) }
+    var messageLevel by remember { mutableIntStateOf(0) }
+    var appBaseLevel by remember { mutableIntStateOf(0) }
+    var selectedLanguage by remember { mutableStateOf("") }
+    var selectedAppIcon by remember { mutableStateOf(AppIconRepository.Variant.Auto) }
+
+    LaunchedEffect(Unit) {
+        withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val p = prefs.value
+            themeMode = p.getInt(KEY_THEME_MODE, 0)
+            launchSession = p.getInt(KEY_LAUNCH_SESSION, 0)
+            returnKeyBehavior = p.getInt(KEY_RETURN_KEY_BEHAVIOR, 0)
+            keepScreenAwake = p.getBoolean(KEY_KEEP_SCREEN_AWAKE, false)
+            highRefresh = com.openminis.app.ui.HighRefreshRate.enabled(context)
+            showFloatingToolBar = p.getBoolean(KEY_SHOW_FLOATING_TOOL_BAR, true)
+            showCompletedToolCards = p.getBoolean(KEY_SHOW_COMPLETED_TOOL_CARDS, false)
+            showSubAgentBar = p.getBoolean(KEY_SHOW_SUBAGENT_BAR, DEFAULT_SHOW_SUB_AGENT_BAR)
+            showMicButton = p.getBoolean(KEY_SHOW_MIC_BUTTON, DEFAULT_SHOW_MIC_BUTTON)
+            showMessageUsage = p.getBoolean(KEY_SHOW_MESSAGE_TOKEN_USAGE, true)
+            composerContextGlow = p.getBoolean(KEY_COMPOSER_CONTEXT_GLOW, true)
+            autoFocusAfterReply = p.getBoolean(KEY_AUTO_FOCUS_AFTER_REPLY, true)
+            autoExpandThinking = p.getBoolean(KEY_AUTO_EXPAND_THINKING, true)
+            foldAiProcess = p.getBoolean(KEY_FOLD_AI_PROCESS, DEFAULT_FOLD_AI_PROCESS)
+            dynamicColor = p.getBoolean(KEY_DYNAMIC_COLOR, false)
+            showChatTitle = p.getBoolean(KEY_SHOW_CHAT_TITLE, true)
+            autoGrouping = p.getBoolean(KEY_AUTO_GROUPING, true)
+            chatInputLevel = p.getInt(KEY_FONT_CHAT_INPUT, 0)
+            messageLevel = p.getInt(KEY_FONT_MESSAGE, 0)
+            appBaseLevel = p.getInt(KEY_FONT_APP_BASE, 0)
+            selectedLanguage = p.getString(KEY_LANGUAGE, "") ?: ""
+            selectedAppIcon = AppIconRepository.current(context)
+        }
+    }
 
     val fontsModified = chatInputLevel != 0 || messageLevel != 0 || appBaseLevel != 0
 
@@ -316,10 +263,6 @@ fun AppearanceScreen(
     SettingsScaffold(title = stringResource(R.string.appearance_title), onBack = null) {
 
         // -- Theme --
-        // Each row carries its own leading icon + tile colour, mirroring the
-        // Provider / Permissions screens. Earlier only the first row had an
-        // icon and rows 2–3 fell through to a 24dp Spacer, which read as a
-        // visual hiccup at the section boundary.
         SettingsSection(
             header = stringResource(R.string.appearance_section_theme),
             footer = stringResource(R.string.appearance_theme_footer),
@@ -336,7 +279,7 @@ fun AppearanceScreen(
                     selected = themeMode == idx,
                     onSelect = {
                         themeMode = idx
-                        prefs.edit().putInt(KEY_THEME_MODE, idx).apply()
+                        prefs.value.edit().putInt(KEY_THEME_MODE, idx).apply()
                         onThemeChanged(idx)
                     },
                     leading = {
@@ -349,11 +292,7 @@ fun AppearanceScreen(
                     showDivider = true,
                 )
             }
-            // [T-android-monet-dynamic-color] Sits in the Theme section because
-            // it is the fourth way to answer "what colours is this app" — after
-            // system / light / dark. Last row in the section, so showDivider is
-            // false and the preceding rows all draw theirs (hence the themeRows
-            // showDivider change above).
+            // [T-android-monet-dynamic-color] Fourth theme option (after system/light/dark); last row so showDivider is false.
             SettingsSwitchRow(
                 icon = Icons.Outlined.Palette,
                 iconColor = tileTeal,
@@ -362,7 +301,7 @@ fun AppearanceScreen(
                 checked = dynamicColor && monetSupported,
                 onCheckedChange = {
                     dynamicColor = it
-                    prefs.edit().putBoolean(KEY_DYNAMIC_COLOR, it).apply()
+                    prefs.value.edit().putBoolean(KEY_DYNAMIC_COLOR, it).apply()
                 },
                 enabled = monetSupported,
                 showDivider = false,
@@ -370,9 +309,7 @@ fun AppearanceScreen(
         }
 
         // -- Launch Session --
-        // Same per-row icon treatment as the Theme section. Bolt = Auto
-        // (system picks), History = Last Session (revisit), ChatBubble =
-        // New Chat (compose), Home = Home screen.
+        // Bolt=Auto, History=Last Session, ChatBubble=New Chat, Home=Home.
         SettingsSection(
             header = stringResource(R.string.appearance_section_launch),
             footer = stringResource(R.string.appearance_launch_footer),
@@ -390,7 +327,7 @@ fun AppearanceScreen(
                     selected = launchSession == idx,
                     onSelect = {
                         launchSession = idx
-                        prefs.edit().putInt(KEY_LAUNCH_SESSION, idx).apply()
+                        prefs.value.edit().putInt(KEY_LAUNCH_SESSION, idx).apply()
                     },
                     leading = {
                         androidx.compose.material3.Icon(
@@ -404,10 +341,8 @@ fun AppearanceScreen(
             }
         }
 
-        // -- Return Key (mirrors iOS AppearanceSettingsView stringResource(R.string.appearance_section_return_key) section) --
-        // 0=Newline (default), 1=Send. Hardware Shift+Enter always inserts a
-        // newline regardless of this setting — matches iOS behavior and
-        // overrides the read in ChatScreen's onKeyEvent handler.
+        // -- Return Key --
+        // 0=Newline (default), 1=Send; Shift+Enter always inserts a newline.
         SettingsSection(
             header = stringResource(R.string.appearance_section_return_key),
             footer = stringResource(R.string.appearance_return_key_footer),
@@ -423,7 +358,7 @@ fun AppearanceScreen(
                     selected = returnKeyBehavior == row.value,
                     onSelect = {
                         returnKeyBehavior = row.value
-                        prefs.edit().putInt(KEY_RETURN_KEY_BEHAVIOR, row.value).apply()
+                        prefs.value.edit().putInt(KEY_RETURN_KEY_BEHAVIOR, row.value).apply()
                     },
                     leading = {
                         androidx.compose.material3.Icon(
@@ -438,10 +373,7 @@ fun AppearanceScreen(
         }
 
         // -- Keep Screen Awake --
-        // Holds FLAG_KEEP_SCREEN_ON on the activity window while any session
-        // has an active task (mirrors iOS UIApplication.isIdleTimerDisabled
-        // pattern in KeepScreenAwakeController). Default off — battery cost
-        // is real and most users don't need it.
+        // Holds FLAG_KEEP_SCREEN_ON while a session has an active task (mirrors iOS). Default off.
         SettingsSection(
             header = stringResource(R.string.appearance_section_keep_awake),
             footer = stringResource(R.string.appearance_keep_awake_footer),
@@ -453,7 +385,7 @@ fun AppearanceScreen(
                 checked = keepScreenAwake,
                 onCheckedChange = {
                     keepScreenAwake = it
-                    prefs.edit().putBoolean(KEY_KEEP_SCREEN_AWAKE, it).apply()
+                    prefs.value.edit().putBoolean(KEY_KEEP_SCREEN_AWAKE, it).apply()
                 },
                 showDivider = false,
             )
@@ -490,14 +422,10 @@ fun AppearanceScreen(
                 checked = showFloatingToolBar,
                 onCheckedChange = {
                     showFloatingToolBar = it
-                    prefs.edit().putBoolean(KEY_SHOW_FLOATING_TOOL_BAR, it).apply()
+                    prefs.value.edit().putBoolean(KEY_SHOW_FLOATING_TOOL_BAR, it).apply()
                 },
             )
-            // [P0-4] The "Tool Preview Window" switch used to live here. The
-            // floating surface is now the single-line ToolActivityPill, which
-            // has no preview thumbnail, so the switch controlled nothing and
-            // was removed. KEY_TOOL_PREVIEW stays defined above so persisted
-            // values from older builds are simply ignored.
+            // [P0-4] "Tool Preview Window" switch removed (ToolActivityPill has no preview); KEY_TOOL_PREVIEW stays for compat.
             SettingsSwitchRow(
                 icon = Icons.Outlined.ViewAgenda,
                 iconColor = tileTeal,
@@ -506,7 +434,7 @@ fun AppearanceScreen(
                 checked = showCompletedToolCards,
                 onCheckedChange = {
                     showCompletedToolCards = it
-                    prefs.edit().putBoolean(KEY_SHOW_COMPLETED_TOOL_CARDS, it).apply()
+                    prefs.value.edit().putBoolean(KEY_SHOW_COMPLETED_TOOL_CARDS, it).apply()
                 },
             )
             SettingsSwitchRow(
@@ -516,7 +444,7 @@ fun AppearanceScreen(
                 checked = showSubAgentBar,
                 onCheckedChange = {
                     showSubAgentBar = it
-                    prefs.edit().putBoolean(KEY_SHOW_SUBAGENT_BAR, it).apply()
+                    prefs.value.edit().putBoolean(KEY_SHOW_SUBAGENT_BAR, it).apply()
                 },
             )
             SettingsSwitchRow(
@@ -527,7 +455,7 @@ fun AppearanceScreen(
                 checked = showMicButton,
                 onCheckedChange = {
                     showMicButton = it
-                    prefs.edit().putBoolean(KEY_SHOW_MIC_BUTTON, it).apply()
+                    prefs.value.edit().putBoolean(KEY_SHOW_MIC_BUTTON, it).apply()
                 },
                 showDivider = true,
             )
@@ -540,11 +468,10 @@ fun AppearanceScreen(
                 checked = showMessageUsage,
                 onCheckedChange = {
                     showMessageUsage = it
-                    prefs.edit().putBoolean(KEY_SHOW_MESSAGE_TOKEN_USAGE, it).apply()
+                    prefs.value.edit().putBoolean(KEY_SHOW_MESSAGE_TOKEN_USAGE, it).apply()
                 },
             )
-            // [T-android-composer-context-glow] Composer edge glow near the
-            // context cap. Same group, adjacent to the usage toggle.
+            // [T-android-composer-context-glow] Composer edge glow near the context cap.
             SettingsSwitchRow(
                 icon = Icons.Outlined.LightMode,
                 iconColor = tileTeal,
@@ -553,17 +480,14 @@ fun AppearanceScreen(
                 checked = composerContextGlow,
                 onCheckedChange = {
                     composerContextGlow = it
-                    prefs.edit().putBoolean(KEY_COMPOSER_CONTEXT_GLOW, it).apply()
+                    prefs.value.edit().putBoolean(KEY_COMPOSER_CONTEXT_GLOW, it).apply()
                 },
                 showDivider = false,
             )
         }
 
         // [T-thinking-auto-expand-toggle] -- Deep Thinking --
-        // Whether a NEW streaming thinking block opens expanded (historical
-        // behavior, default ON) or stays collapsed. Only affects the streaming
-        // auto-expand; manual taps always work either way. Mirrors iOS
-        // AppearanceSettingsView "Deep Thinking" section.
+        // New streaming thinking block opens expanded (default ON); manual taps always work.
         SettingsSection(
             header = stringResource(R.string.appearance_section_deep_thinking),
             footer = stringResource(R.string.appearance_auto_expand_thinking_footer),
@@ -575,7 +499,7 @@ fun AppearanceScreen(
                 checked = autoExpandThinking,
                 onCheckedChange = {
                     autoExpandThinking = it
-                    prefs.edit().putBoolean(KEY_AUTO_EXPAND_THINKING, it).apply()
+                    prefs.value.edit().putBoolean(KEY_AUTO_EXPAND_THINKING, it).apply()
                 },
                 showDivider = true,
             )
@@ -587,15 +511,14 @@ fun AppearanceScreen(
                 checked = foldAiProcess,
                 onCheckedChange = {
                     foldAiProcess = it
-                    prefs.edit().putBoolean(KEY_FOLD_AI_PROCESS, it).apply()
+                    prefs.value.edit().putBoolean(KEY_FOLD_AI_PROCESS, it).apply()
                 },
                 showDivider = false,
             )
         }
 
         // -- Auto-Focus After Reply --
-        // Applies only on the streaming→idle edge inside the chat; session
-        // entry itself always leaves the keyboard hidden.
+        // Applies only on the streaming→idle edge; session entry leaves the keyboard hidden.
         SettingsSection(
             header = stringResource(R.string.appearance_section_auto_focus_after_reply),
             footer = stringResource(R.string.appearance_auto_focus_after_reply_footer),
@@ -607,16 +530,14 @@ fun AppearanceScreen(
                 checked = autoFocusAfterReply,
                 onCheckedChange = {
                     autoFocusAfterReply = it
-                    prefs.edit().putBoolean(KEY_AUTO_FOCUS_AFTER_REPLY, it).apply()
+                    prefs.value.edit().putBoolean(KEY_AUTO_FOCUS_AFTER_REPLY, it).apply()
                 },
                 showDivider = false,
             )
         }
 
         // -- Chat Title (T-chat-title-pill) --
-        // Sticky session-title pill that appears at the top of the chat
-        // when the user scrolls back through history. Default ON; toggle
-        // also reachable via `minis-config set appearance.show_chat_title`.
+        // Sticky session-title pill when scrolling back through history. Default ON.
         SettingsSection(
             header = stringResource(R.string.appearance_section_chat_title),
             footer = stringResource(R.string.appearance_show_chat_title_footer),
@@ -629,15 +550,14 @@ fun AppearanceScreen(
                 checked = showChatTitle,
                 onCheckedChange = {
                     showChatTitle = it
-                    prefs.edit().putBoolean(KEY_SHOW_CHAT_TITLE, it).apply()
+                    prefs.value.edit().putBoolean(KEY_SHOW_CHAT_TITLE, it).apply()
                 },
                 showDivider = false,
             )
         }
 
         // -- Auto-Grouping (T-android-auto-grouping) --
-        // Rides the title-generation call, so enabling it costs no extra
-        // request. Port of iOS ContentView's "Grouping" section.
+        // Rides the title-generation call (no extra request). Port of iOS "Grouping".
         SettingsSection(
             header = stringResource(R.string.appearance_section_grouping),
             footer = stringResource(R.string.appearance_auto_grouping_footer),
@@ -650,7 +570,7 @@ fun AppearanceScreen(
                 checked = autoGrouping,
                 onCheckedChange = {
                     autoGrouping = it
-                    prefs.edit().putBoolean(KEY_AUTO_GROUPING, it).apply()
+                    prefs.value.edit().putBoolean(KEY_AUTO_GROUPING, it).apply()
                 },
                 showDivider = false,
             )
@@ -675,7 +595,7 @@ fun AppearanceScreen(
                 level = chatInputLevel,
                 onLevelChange = {
                     chatInputLevel = it
-                    prefs.edit().putInt(KEY_FONT_CHAT_INPUT, it).apply()
+                    prefs.value.edit().putInt(KEY_FONT_CHAT_INPUT, it).apply()
                 },
                 showDivider = true,
             )
@@ -684,7 +604,7 @@ fun AppearanceScreen(
                 level = messageLevel,
                 onLevelChange = {
                     messageLevel = it
-                    prefs.edit().putInt(KEY_FONT_MESSAGE, it).apply()
+                    prefs.value.edit().putInt(KEY_FONT_MESSAGE, it).apply()
                 },
                 showDivider = true,
             )
@@ -693,7 +613,7 @@ fun AppearanceScreen(
                 level = appBaseLevel,
                 onLevelChange = {
                     appBaseLevel = it
-                    prefs.edit().putInt(KEY_FONT_APP_BASE, it).apply()
+                    prefs.value.edit().putInt(KEY_FONT_APP_BASE, it).apply()
                 },
                 showDivider = fontsModified,
             )
@@ -706,7 +626,7 @@ fun AppearanceScreen(
                 ) {
                     MinisTextButton(onClick = {
                         chatInputLevel = 0; messageLevel = 0; appBaseLevel = 0
-                        prefs.edit()
+                        prefs.value.edit()
                             .putInt(KEY_FONT_CHAT_INPUT, 0)
                             .putInt(KEY_FONT_MESSAGE, 0)
                             .putInt(KEY_FONT_APP_BASE, 0)
@@ -719,14 +639,7 @@ fun AppearanceScreen(
         }
 
         // -- App Icon (T-android-dynamic-app-icon) --
-        // Grid picker mirrors the iOS Settings → Appearance → App Icon
-        // section but uses a 3-column grid layout per spec. Each tile is
-        // an adaptive-icon preview (loaded as Bitmap via ResourcesCompat
-        // since painterResource can't decode mipmap-anydpi-v26 XMLs);
-        // the currently-selected tile gets a checkmark badge in the
-        // top-right corner. Tapping a tile flips the corresponding
-        // activity-alias enabled state via PackageManager — the launcher
-        // refreshes its icon cache within a few seconds.
+        // 3-column adaptive-icon grid; selected tile gets a checkmark badge; tap flips the activity-alias enabled state.
         SettingsSection(
             header = stringResource(R.string.appearance_section_app_icon),
             footer = stringResource(R.string.appearance_app_icon_footer),
@@ -737,20 +650,7 @@ fun AppearanceScreen(
                 IconOption(AppIconRepository.Variant.ClassicLight, R.string.appearance_app_icon_light, R.mipmap.ic_launcher_classic_light),
                 IconOption(AppIconRepository.Variant.ClassicDark, R.string.appearance_app_icon_dark, R.mipmap.ic_launcher_classic_dark),
             )
-            // [T-android-app-icon-tile-max-width] Cap each tile and centre the
-            // row.
-            //
-            // The tiles are weight(1f) + aspectRatio(1f), so on a tablet they
-            // grew to ~380dp each. The preview bitmap is rasterized at 192px
-            // (a launcher icon's native size — there is no larger source), so
-            // at that size it is being upscaled roughly 4.6x on this display
-            // and visibly blurs. The cap keeps the artwork at or under its own
-            // resolution; the row centres so the three stay together as a group
-            // instead of drifting apart across a wide settings pane.
-            //
-            // Phones are unaffected: a third of a phone-width row is already
-            // well under the cap, so widthIn is inert there and the layout is
-            // byte-identical.
+            // [T-android-app-icon-tile-max-width] Cap each tile (192px source upscaled ~4.6x at ~380dp and blurred) and centre the row; phones are unaffected.
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
@@ -758,9 +658,7 @@ fun AppearanceScreen(
                 for (option in iconOptions) {
                     val isSelected = selectedAppIcon == option.variant
                     val iconPainter: Painter = remember(option.mipmapRes) {
-                        // painterResource() can't decode adaptive-icon
-                        // XML drawables (mipmap-anydpi-v26), so rasterize
-                        // the drawable into a Bitmap first.
+                        // painterResource() can't decode adaptive-icon XML; rasterize to a Bitmap first.
                         val drawable = ResourcesCompat.getDrawable(context.resources, option.mipmapRes, context.theme)
                         if (drawable != null) {
                             BitmapPainter(drawable.toBitmap(width = 192, height = 192).asImageBitmap())
@@ -775,11 +673,7 @@ fun AppearanceScreen(
                     Column(
                         modifier = Modifier
                             .weight(1f, fill = false)
-                            // 192dp = the preview bitmap's own 192px, so the
-                            // artwork is never scaled past 1:1 at mdpi and only
-                            // mildly at higher densities. `fill = false` on the
-                            // weight is what lets the tile stop growing at the
-                            // cap instead of being forced to its full share.
+                            // 192dp = the bitmap's 192px; fill=false lets the tile stop at the cap.
                             .widthIn(max = APP_ICON_TILE_MAX_WIDTH)
                             .clickable {
                                 if (selectedAppIcon != option.variant) {
@@ -859,7 +753,7 @@ fun AppearanceScreen(
                     selected = selectedLanguage == lang.code,
                     onSelect = {
                         selectedLanguage = lang.code
-                        prefs.edit().putString(KEY_LANGUAGE, lang.code).apply()
+                        prefs.value.edit().putString(KEY_LANGUAGE, lang.code).apply()
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                             val lm = context.getSystemService(LocaleManager::class.java)
                             lm?.applicationLocales = if (lang.code.isEmpty()) {
@@ -868,13 +762,7 @@ fun AppearanceScreen(
                                 LocaleList.forLanguageTags(lang.code)
                             }
                         } else {
-                            // T-n01-andmenu-l10n: pre-Tiramisu has no
-                            // LocaleManager. The new language is read
-                            // from SharedPreferences by
-                            // [LocaleWrap.wrap] on the next
-                            // attachBaseContext call, so recreate the
-                            // Activity so its base Configuration picks
-                            // up the change immediately.
+                            // T-n01-andmenu-l10n: pre-Tiramisu has no LocaleManager; recreate so attachBaseContext picks up the new language.
                             (context as? android.app.Activity)?.recreate()
                         }
                     },

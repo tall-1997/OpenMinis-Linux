@@ -90,12 +90,7 @@ class ChatViewModel(
     internal val isDraft: Boolean = sessionId.startsWith("__new__")
     /** The real session ID, populated on first message for drafts. */
     internal var realSessionId: String = if (isDraft) "" else sessionId
-    /**
-     * [T-android-tts-scene-announcements] Speech sink for scene announcements,
-     * injected by the UI layer (which owns the TTS engine binding). The agent
-     * loop hands phrases to it at lifecycle boundaries; null = no engine
-     * bound yet, announcements degrade to silence. Never crashes the loop.
-     */
+    /** [T-android-tts-scene-announcements] Speech sink for scene announcements, injected by the UI layer; null = no engine bound yet (degrade to silence). */
     @Volatile
     var announcementSink: ((String) -> Unit)? = null
     /** [T-prompt-cache] Memoized session-scoped MemoryRepository;
@@ -137,12 +132,7 @@ class ChatViewModel(
         // timeout stops slow-but-few calls, and the existing depth cap stops
         // recursion.
 
-        /**
-         * Leaf LLM calls one compaction may issue in total, across every
-         * segment. The depth-3 cap alone permits 15; this cuts the worst case
-         * to a third of that while still allowing a full first split (1+2) plus
-         * one deeper rescue.
-         */
+        /** Leaf LLM calls one compaction may issue in total; the depth-3 cap alone permits 15, this cuts the worst case to 6 while allowing a full first split plus one rescue. */
         internal const val MAX_COMPACT_LLM_CALLS = 6
 
         internal const val COMPACT_SEGMENT_MIN_TOKENS = 8_000
@@ -784,7 +774,14 @@ class ChatViewModel(
         }
     }
 
-    internal val mediaStore = com.openminis.app.data.storage.MediaStore(context)
+    // [T-android-mediastore-lazy] Lazy construction: MediaStore's constructor
+    // is pure (one File computation, no I/O) but every draft session paid it
+    // on first-message setup regardless of whether any attachment/paste ever
+    // landed. Nothing reads mediaStore during VM init (usage sites: attachment
+    // prepare, paste fold, and load-time mediaRef resolution — all runtime
+    // call paths), so the lazy delegate has no initialization-order exposure.
+    // Ownership unchanged; physical relocation is Wave 5 scope.
+    internal val mediaStore by lazy { com.openminis.app.data.storage.MediaStore(context) }
 
     internal val _messages = SnapshotMutableStateFlow<List<ChatMessage>>(
         emptyList(),
@@ -1246,7 +1243,7 @@ class ChatViewModel(
      * Streaming side-channel — see [StreamingDelta]. During a live agent
      * turn, [updateAssistantMessage] writes delta-bearing fields here
      * INSTEAD of mutating the messages list. This isolates per-token
-     * updates from ChatScreen's top-level recompose scope (the 8980-line
+     * updates from ChatScreen's top-level recompose scope (the screen-sized
      * mega-composable was being walked at full slot-table cost on every
      * token, costing ~94 ms per recompose). Top-level subscribers
      * (`messages.any/.associate/.isNotEmpty/.lastOrNull`) only see a new
@@ -2053,6 +2050,7 @@ class ChatViewModel(
             codeGraphEnabled = true,
             mcpNativeEnabled = mcpRepository != null,
             includeLongTail = true,
+            hasSpeechModel = providerRepository.resolveVoiceInputEntry() != null,
         ) + com.openminis.app.plugins.OnlinePluginStore.toolDefinitions(context) +
             com.openminis.app.plugins.LocalToolPluginStore.agentToolDefinitions(context)
         val matches = com.openminis.app.tools.FindTools.search(query, all, limit)
@@ -2105,6 +2103,7 @@ class ChatViewModel(
                 mcpNativeEnabled = mcpRepository != null,
                 includeLongTail = false,
                 enabledToolNames = enabledLongTailTools,
+                hasSpeechModel = providerRepository.resolveVoiceInputEntry() != null,
             ) + com.openminis.app.plugins.OnlinePluginStore.toolDefinitions(context) +
                 com.openminis.app.plugins.LocalToolPluginStore.agentToolDefinitions(context)
             agentToolsMemo = built

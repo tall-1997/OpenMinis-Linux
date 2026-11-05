@@ -337,17 +337,9 @@ class McpHttpServerTest {
 
     // ─── CORS / 构造响应（纯函数面） ──────────────────────────────────────
 
-    @Test
-    fun `cors preflight response carries the allow headers`() {
-        val pre = McpServerCore.corsPreflightResponse()
-        assertTrue(pre.startsWith("HTTP/1.1 204 No Content\r\n"))
-        assertTrue(pre.contains("Access-Control-Allow-Origin: *"))
-        assertTrue(pre.contains("Access-Control-Allow-Headers: Content-Type, Authorization"))
-        // method not allowed 变体替换了 Allow 头
-        val mna = McpServerCore.methodNotAllowedResponse()
-        assertTrue(mna.contains("Allow: POST, OPTIONS"))
-        assertTrue(mna.startsWith("HTTP/1.1 405 Method Not Allowed"))
-    }
+    // [P2-dead-code] corsPreflightResponse / methodNotAllowedResponse tests
+    // removed with the dead builders; OPTIONS→204 and 405 behaviour on the
+    // live socket path is asserted by the end-to-end route tests above.
 
     // ─── 端口占用（bind conflict）─────────────────────────────────────────
 

@@ -1,18 +1,8 @@
 package com.openminis.app.backup
 
-import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.descriptors.PrimitiveKind
-import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
-import kotlinx.serialization.descriptors.SerialDescriptor
-import kotlinx.serialization.encoding.Decoder
-import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonDecoder
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.longOrNull
-import com.openminis.app.util.IsoTime
 
 /**
  * [T-android-envvar-iso8601-wire] A `createdAt`-style timestamp that WRITES an
@@ -23,56 +13,16 @@ import com.openminis.app.util.IsoTime
  *     which wrote `createdAt` as a bare Long — that number is exactly what iOS
  *     rejected with "isn't in the correct format").
  *
- * The in-memory value stays epoch-millis (Long) so callers are unchanged; only
- * the wire representation moves to a string. Kept in BackupFormat so both the
- * exporter and importer share one definition.
+ * [T-iso8601-serializer-single-source] Single implementation now lives in
+ * `:core:model` ([com.openminis.app.data.model.Iso8601MillisSerializer], which
+ * delegates to [com.openminis.app.data.model.IsoTimeCore]); this typealias
+ * keeps the `com.openminis.app.backup.Iso8601MillisSerializer` name so every
+ * `@Serializable(with = ...)` reference and import is unchanged. The wire
+ * format is identical: same `Iso8601Millis` descriptor name, same
+ * `yyyy-MM-dd'T'HH:mm:ss'Z'` pattern, same superset parse chain (the old app
+ * object delegated to `util.IsoTime`, whose chain IsoTimeCore now carries).
  */
-object Iso8601MillisSerializer : KSerializer<Long> {
-    override val descriptor: SerialDescriptor =
-        PrimitiveSerialDescriptor("Iso8601Millis", PrimitiveKind.STRING)
-
-    override fun serialize(encoder: Encoder, value: Long) {
-        encoder.encodeString(IsoTime.formatUtcSeconds(value))
-    }
-
-    override fun deserialize(decoder: Decoder): Long {
-        // Tolerate both a JSON string (ISO-8601) and a JSON number (legacy
-        // epoch millis). Use JsonDecoder to peek at the actual element type so
-        // an old numeric package doesn't throw.
-        val jd = decoder as? JsonDecoder
-            ?: return IsoTime.parseFlexible(decoder.decodeString()) ?: 0L
-        val el = jd.decodeJsonElement()
-        val prim = el as? JsonPrimitive ?: return 0L
-        prim.longOrNull?.let { return it } // legacy numeric epoch millis
-        val s = prim.content
-        return IsoTime.parseFlexible(s) ?: 0L
-    }
-}
-
-/**
- * [T-android-provider-iso8601-wire] Nullable peer of [Iso8601MillisSerializer]
- * for optional timestamps (e.g. `ModelEntry.userModifiedAt`, which iOS decodes
- * as `Date?`). null round-trips as JSON null; otherwise identical rules —
- * writes ISO-8601, reads ISO strings or legacy epoch-millis numbers.
- */
-object Iso8601MillisNullableSerializer : KSerializer<Long?> {
-    override val descriptor: SerialDescriptor =
-        PrimitiveSerialDescriptor("Iso8601MillisNullable", PrimitiveKind.STRING)
-
-    override fun serialize(encoder: Encoder, value: Long?) {
-        if (value == null) encoder.encodeNull()
-        else Iso8601MillisSerializer.serialize(encoder, value)
-    }
-
-    override fun deserialize(decoder: Decoder): Long? {
-        val jd = decoder as? JsonDecoder ?: return Iso8601MillisSerializer.deserialize(decoder)
-        val el = jd.decodeJsonElement()
-        if (el is kotlinx.serialization.json.JsonNull) return null
-        val prim = el as? JsonPrimitive ?: return null
-        prim.longOrNull?.let { return it }
-        return IsoTime.parseFlexible(prim.content)
-    }
-}
+typealias Iso8601MillisSerializer = com.openminis.app.data.model.Iso8601MillisSerializer
 
 /**
  * On-the-wire types for the `.minisbak` backup package.

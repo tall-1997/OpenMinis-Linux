@@ -175,14 +175,14 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
     // other tools get 5Hz so command/url previews stay legible.
     var lastFileToolInputMs = 0L
     var lastOtherToolInputMs = 0L
-    fun textDeltaThrottleMs(len: Int): Long = when {
-        len < 500     -> 150L
-        len < 2_000   -> 300L
-        len < 32_000  -> 500L
-        len < 64_000  -> 1_000L
-        len < 128_000 -> 1_500L
-        else          -> 2_000L
-    }
+    // [T-android-throttle-ladder-converge] Ladder body moved to
+    // [StreamingThrottle.ladderFor]. This surface deliberately keeps its
+    // FASTER 150ms first tier (vs the flush/parse surfaces' 200ms) — the
+    // delta gate only applies to short inputs, where the pill's command/url
+    // preview benefits from the lower latency; the rest of the ladder is
+    // shared.
+    fun textDeltaThrottleMs(len: Int): Long =
+        StreamingThrottle.ladderFor(len, firstTierMs = 150L)
     // Fallback state — mirrors iOS streamWithGroupFallback.
     // [T-android-model-switch-midrun-adopt] Both are reassigned at the top of
     // every request when the user picked a different model since the previous

@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 28,
-    "identityHash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "identityHash": "b30381ccedbf816045ed5309d3af5ed7",
     "entities": [
       {
         "tableName": "sessions",
@@ -1127,7 +1127,7 @@
         ],
         "primaryKey": {
           "autoGenerate": false,
-          "fieldPaths": [
+          "columnNames": [
             "id"
           ]
         },
@@ -1142,17 +1142,7 @@
             "createSql": "CREATE INDEX IF NOT EXISTS `index_project_experience_session_id` ON `${TABLE_NAME}` (`session_id`)"
           }
         ],
-        "foreignKeys": [],
-        "columnMappings": [
-          {
-            "from": "sessionId",
-            "to": "session_id"
-          },
-          {
-            "from": "toolName",
-            "to": "tool_name"
-          }
-        ]
+        "foreignKeys": []
       },
       {
         "tableName": "instruction_states",
@@ -1264,6 +1254,7 @@
             "columnNames": [
               "sessionId"
             ],
+            "orders": [],
             "createSql": "CREATE INDEX IF NOT EXISTS `index_instruction_updates_sessionId` ON `${TABLE_NAME}` (`sessionId`)"
           }
         ],
@@ -1273,7 +1264,7 @@
     "views": [],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '103183372ef6a0529b520c6c9d94c776')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'b30381ccedbf816045ed5309d3af5ed7')"
     ]
   }
 }

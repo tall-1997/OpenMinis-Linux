@@ -92,36 +92,52 @@ class BackupExporter(
     }
 
     private suspend fun exportBodyAdmitted(options: Options, onProgress: ((String) -> Unit)?): Summary {
-        // [T-backup-credentials-without-encryption] There is deliberately NO
-        // "refuse to export credentials without a passphrase" guard here.
-        //
-        // §3.3/§5.4 used to require encryption for any package carrying
-        // secrets, and this threw otherwise. In practice that turned the
-        // default export into one that silently restores a HALF-WORKING
-        // device: a user moving from iOS landed with 19 providers holding no
-        // key and 38 environment variables holding no value, with nothing in
-        // the package or the UI saying so. A backup whose whole purpose is to
-        // reconstitute a device must reconstitute it.
-        //
-        // The risk is now handled by TELLING the user rather than by quietly
-        // dropping their data: the encryption toggle's footer states plainly
-        // that an unencrypted package contains readable API keys, OAuth
-        // tokens and env-var values (backup_encrypt_footer_off_creds).
-        //
-        // Matches iOS BackupExporter.swift, same tag — the two must agree or
-        // packages stop being interchangeable, which is the thing this whole
-        // format exists for.
+        // [T-backup-credentials-without-encryption] No passphrase guard: an
+        // unencrypted export still carries credentials (the risk is surfaced in
+        // the UI, not by silently dropping data). Matches iOS, same tag.
         val started = System.currentTimeMillis()
         val backupId = UUID.randomUUID().toString()
 
-        // Staging lives in filesDir, not cacheDir: the system may evict the
-        // cache mid-export, and a multi-GB staging tree disappearing underneath
-        // the writer is a failure mode worth designing out.
-        val staging = File(context.filesDir, "backup-staging/$backupId")
+        // [Wave3 #10a] Staging lives on getExternalFilesDir(null), not the
+        // evictable cacheDir; it stays app-private and wiped on uninstall.
+        val staging = File(stagingRoot(context), backupId)
         staging.mkdirs()
+
+        // [Wave3 #10b] Incremental fast path: reuse unchanged files' blob bytes
+        // (same size + mtime) from the previous zip — no source read, no hash.
+        val incremental = BackupIncrementalManifest(File(backupsDirectory(context), BackupIncrementalManifest.FILE_NAME))
+        incremental.load()
+        val prevZip: java.util.zip.ZipFile? = incremental.packageName?.let { pkgName ->
+            runCatching { java.util.zip.ZipFile(File(backupsDirectory(context), pkgName)) }.getOrNull()
+        }
+        val blobReuse: BackupBlobStore.Reuse? = prevZip?.let { zip ->
+            BackupBlobStore.Reuse { file, logicalPath, size ->
+                val cached = incremental.lookupUnchanged(logicalPath, size, file.lastModified())
+                    ?: return@Reuse null
+                val entryName = "blobs/${cached.sha256.take(2)}/${cached.sha256}"
+                val entry = runCatching { zip.getEntry(entryName) }.getOrNull() ?: return@Reuse null
+                val tmp = File(File(staging, "blobs/${cached.sha256.take(2)}"), ".reuse-${cached.sha256}")
+                val ok = runCatching {
+                    zip.getInputStream(entry).use { input ->
+                        tmp.outputStream().use { output -> input.copyTo(output) }
+                    }
+                    tmp.length() == cached.size
+                }.getOrDefault(false)
+                if (!ok) {
+                    tmp.delete()
+                    null
+                } else {
+                    incremental.countReused(size)
+                    BackupBlobStore.ReusedBlob(cached.sha256, tmp)
+                }
+            }
+        }
         try {
             val dataDir = File(staging, "data").apply { mkdirs() }
-            val blobStore = BackupBlobStore(staging, options.maxFileBytes)
+            val blobStore = BackupBlobStore(
+                staging, options.maxFileBytes,
+                reuse = blobReuse, incremental = incremental,
+            )
             val stats = mutableMapOf<String, BackupManifest.CategoryStat>()
 
             BackupFileIndexWriter(File(staging, "files.index.jsonl")).use { fileIndex ->
@@ -175,12 +191,8 @@ class BackupExporter(
             }
 
             // secrets.json aggregates credentials for BOTH providers and
-            // env-vars into one member, staged next to `data/` (NOT inside it)
-            // so the credential policy is a single-file concern. The
-            // encryption pass routes it through `secretsKey`; a share copy
-            // (includeCredentials=false) simply never writes it. Collected
-            // once, AFTER the category exports, because it spans two
-            // categories. Mirrors iOS exportProviders/BackupSecretsCollector.
+            // env-vars into one member, staged next to `data/` (not inside it).
+            // Collected once, after the category exports. Mirrors iOS.
             if (options.includeCredentials) {
                 onProgress?.invoke("Collecting credentials…")
                 exportSecrets(staging, options.categories)
@@ -244,12 +256,18 @@ class BackupExporter(
                 skippedBytes = blobStore.skippedBytes,
                 skippedPaths = blobStore.skippedPaths.toList(),
                 durationMillis = duration,
-            )
+            ).also {
+                // [Wave3 #10b] Only a successfully finalised package updates the
+                // sidecar — a failed run keeps the previous manifest, which is
+                // still valid (it points at the still-existing previous zip).
+                incremental.save(packageFile.name)
+            }
         } finally {
+            prevZip?.close()
             // The archive is the deliverable; the staging tree is scratch and
             // can be several GB. Always clear it, including on failure.
             staging.deleteRecursively()
-            File(context.filesDir, "backup-staging").takeIf {
+            stagingRoot(context).takeIf {
                 it.listFiles()?.isEmpty() == true
             }?.delete()
         }
@@ -334,17 +352,9 @@ class BackupExporter(
     }
 
     /**
-     * The session row as iOS writes it.
-     *
-     * Field names and date format follow iOS's `ChatSession` under the
-     * synthesized Codable encoder (camelCase, ISO-8601), plus the two extras
-     * iOS keeps alongside it in `SessionRecord`. Android-only columns with no
-     * iOS counterpart (`editCount`, `thinkingOverride`) are carried too: §2.2
-     * rule 4 says platform-specific data is preserved and ignored by the other
-     * side, which is strictly better than dropping a user's per-session
-     * thinking override on a same-platform restore.
-     *
-     * Device-local fields are deliberately absent — see [messageRecord].
+     * The session row as iOS writes it: camelCase + ISO-8601 keys, plus
+     * Android-only columns (`editCount`, `thinkingOverride`) preserved per
+     * §2.2 rule 4. Device-local fields are absent — see [messageRecord].
      */
     private fun sessionRecord(s: ChatSessionEntity): JsonElement = buildJsonObject {
         put("id", JsonPrimitive(s.id))
@@ -366,20 +376,9 @@ class BackupExporter(
     }
 
     /**
-     * The message row as iOS writes it.
-     *
-     * `parts` is spliced in as pre-parsed JSON rather than re-encoded: the
-     * column already holds the exact `[ContentPart]` array iOS's ContentPart
-     * encoder produces (`{"type":…,"value":…}`), so passing it through keeps
-     * MediaRef paths and tool payloads byte-identical. Re-encoding through a
-     * Kotlin model would risk reordering or dropping a field the Android model
-     * doesn't know about.
-     *
-     * `errorInfo` is NOT written. §0.2 lists it with `part_flags` as a
-     * device-local field the portable record excludes: an error sticker for a
-     * failed turn on the old device is meaningless on the new one, and
-     * restoring it would resurrect a red error badge against a message that
-     * never failed for this install.
+     * The message row as iOS writes it: `parts` is spliced in as pre-parsed
+     * JSON (kept byte-identical). `errorInfo` is device-local and is
+     * deliberately NOT written (§0.2).
      */
     private fun exportBodyBlobs(blobStore: BackupBlobStore, fileIndex: BackupFileIndexWriter) {
         val root = File(context.filesDir, "bodies")
@@ -420,16 +419,9 @@ class BackupExporter(
         put("bodyBytes", JsonPrimitive(m.bodyBytes))
         m.bodyRef?.let { put("bodyRef", JsonPrimitive(it)) }
         m.bodySha?.let { put("bodySha", JsonPrimitive(it)) }
-        // [T-token-attribution-snapshot] Per-message model attribution. Emitted
-        // only when present, so a package from a device with no snapshots keeps
-        // its previous shape and older importers see nothing new.
-        //
-        // camelCase, NOT snake_case: iOS serializes `RawMessage` straight
-        // through Codable with no CodingKeys, so its wire keys are the Swift
-        // property names — the rest of this record already matches that
-        // (`tokenUsage`, `streamInterruptCount`, `sortOrder`). A snake_case key
-        // here would simply not decode on iOS, which is the same silent
-        // cross-platform drop we hit with the env-var `createdAt` format.
+        // [T-token-attribution-snapshot] Per-message model attribution, emitted
+        // only when present. camelCase (not snake_case) to match iOS Codable's
+        // wire keys — a snake_case key would silently not decode on iOS.
         m.modelId?.let { put("modelId", JsonPrimitive(it)) }
         m.modelDisplayName?.let { put("modelDisplayName", JsonPrimitive(it)) }
         m.providerType?.let { put("providerType", JsonPrimitive(it)) }
@@ -488,19 +480,9 @@ class BackupExporter(
     }
 
     /**
-     * Skills, counted in SKILLS — not files.
-     *
-     * `filesIncluded` is every file under every skill directory, which for a
-     * skill carrying scripts and assets runs into the hundreds: a user with a
-     * dozen skills was shown "569 items" and reasonably read it as corruption.
-     * iOS has always reported `rows.count` here (BackupExporter.swift:625), so
-     * this is Android matching the established semantics rather than a new
-     * convention.
-     *
-     * The count comes from the on-disk layout (`skills/<skillId>/…`, one
-     * directory per skill — the same layout SkillRepository writes and the
-     * importer restores into) rather than from the repository, so it stays
-     * correct when the export runs before subsystems are ready.
+     * Skills, counted in SKILLS — not files. `filesIncluded` would be every
+     * script/asset (hundreds for a real skill), so `entries` counts skill
+     * directories instead, matching iOS (`rows.count`).
      */
     private fun exportSkills(trees: BackupFileTreeExporter): BackupManifest.CategoryStat {
         val root = File(context.filesDir, "minis-global/skills")
@@ -792,11 +774,8 @@ class BackupExporter(
         out.parentFile?.mkdirs()
         out.delete()
 
-        // Write to a `.partial` sibling and rename on success. A kill or a full
-        // disk mid-write would otherwise leave a TRUNCATED file carrying a
-        // perfectly valid `.minisbak` name, which then shows up in the restore
-        // picker with a plausible size and date — discovered only when the
-        // restore fails, plausibly on a new device after wiping the old one.
+        // Write to a `.partial` sibling and rename on success, so a kill or
+        // full disk can never leave a truncated file under a valid `.minisbak`.
         val partial = File(out.parentFile, ".${out.name}.partial")
         partial.delete()
         try {
@@ -849,6 +828,20 @@ class BackupExporter(
          */
         fun backupsDirectory(context: Context): File =
             File(context.filesDir, BackupFileTreeExporter.BACKUPS_DIR_NAME).apply { mkdirs() }
+
+        /**
+         * [Wave3 #10a] Scratch root for the pre-zip staging tree, on
+         * [Context.getExternalFilesDir] when the device provides one (falls
+         * back to filesDir otherwise). Same app-private protection as before;
+         * see the comment in [exportBodyAdmitted] for why the volume moved.
+         * Never user data: [BackupFileTreeExporter.isBackupArtifact] keeps
+         * excluding the `backup-staging` name, and the exporter clears both
+         * the per-run tree and an empty root in its `finally`.
+         */
+        fun stagingRoot(context: Context): File {
+            val base = context.getExternalFilesDir(null) ?: context.filesDir
+            return File(base, BackupFileTreeExporter.STAGING_DIR_NAME)
+        }
 
         /**
          * Skills under a skills root: one directory per skill

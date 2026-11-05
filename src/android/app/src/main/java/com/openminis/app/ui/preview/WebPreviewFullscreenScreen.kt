@@ -46,6 +46,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.openminis.app.R
 import com.openminis.app.logging.AppLogger
+import com.openminis.app.ui.components.DialogWindowImmersiveEffect
 import com.openminis.app.ui.theme.ChatColors
 import kotlinx.coroutines.delay
 
@@ -133,31 +134,17 @@ fun WebPreviewFullscreenScreen(
         ),
     ) {
         // The Dialog hosts its own window — make its status / nav bar
-        // transparent so the black WebView background paints under them
-        // (matches the activity-edge-to-edge style). Without this the
-        // dialog window's default opaque bar background leaks as a grey
-        // strip above the WebView.
-        val dialogView = LocalView.current
-        DisposableEffect(dialogView) {
-            val win = findDialogWindow(dialogView)
-            win?.let { w ->
-                androidx.core.view.WindowCompat.setDecorFitsSystemWindows(w, false)
-                // FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS: tell the system that THIS
-                // window paints under the system bars itself, so the system
-                // doesn't fill the status/nav bar region with its own opaque
-                // background. Without this the dialog window leaves a grey
-                // band under the status bar even with statusBarColor=TRANSPARENT.
-                w.addFlags(android.view.WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
-                @Suppress("DEPRECATION")
-                w.statusBarColor = android.graphics.Color.TRANSPARENT
-                @Suppress("DEPRECATION")
-                w.navigationBarColor = android.graphics.Color.TRANSPARENT
-                val ctrl = WindowInsetsControllerCompat(w, w.decorView)
-                ctrl.isAppearanceLightStatusBars = false
-                ctrl.isAppearanceLightNavigationBars = false
-            }
-            onDispose { }
-        }
+        // transparent so the WebView content paints under them (matches the
+        // activity-edge-to-edge style). Without this the dialog window's
+        // default opaque bar background leaks as a grey strip above the
+        // WebView. Now the shared DialogWindowImmersiveEffect (appearance
+        // dark-icons-off — the swipe-revealed bars need light icons over the
+        // web canvas, same as the activity block above; DRAWS_SYSTEM_BAR_
+        // BACKGROUNDS flavor per the grey-band note that used to live here).
+        DialogWindowImmersiveEffect(
+            darkTheme = false,
+            drawsSystemBarBackgrounds = true,
+        )
 
         // BackHandler ensures BACK collapses to sheet (if available) or
         // dismisses the dialog — Dialog's dismissOnBackPress would skip
@@ -362,11 +349,5 @@ private fun FloatingMenuButton(
 
 private const val AUTO_HIDE_MS = 4000L
 
-private fun findDialogWindow(view: android.view.View): android.view.Window? {
-    var p: android.view.ViewParent? = view.parent
-    while (p != null) {
-        if (p is androidx.compose.ui.window.DialogWindowProvider) return p.window
-        p = p.parent
-    }
-    return null
-}
+// The private findDialogWindow walker moved to ui.components.DialogWindowUtils
+// (shared with the sheet, the image viewers and InlineMediaPlayer).

@@ -76,7 +76,7 @@ object UiActionTool {
     /** Directions the accessibility CLI accepts (`--direction must be up|down|left|right`). */
     private val SCROLL_DIRECTIONS = setOf("up", "down", "left", "right")
 
-    fun execute(argsJson: String): ToolExecutionResult {
+    fun execute(argsJson: String, sessionId: String? = null): ToolExecutionResult {
         val obj = runCatching { JSONObject(argsJson) }.getOrElse {
             return ToolExecutionResult("Error: invalid args: ${it.message}", false)
         }
@@ -137,22 +137,42 @@ object UiActionTool {
             fi
         """.trimIndent()
 
+        // [T-a11y-host-shell] Was ProcessBuilder("/bin/bash","-c",script) on the
+        // host — stock Android has no /bin/bash host-side and the CLI stubs live
+        // in the guest rootfs, so every tap/type died as a swallowed IOException
+        // on real devices. Execute through the same guest path
+        // McpToolDispatcher/SkillReplayEngine migrated to
+        // (ExecutionCoordinator.execute); the -x probe above runs INSIDE the
+        // guest. 30s matches the mcp server's ui_action guest route; the
+        // typed-error mapping below (WINDOW_CHANGED / SERVICE_NOT_RUNNING /
+        // non-zero exit) is preserved against the guest's exit status.
+        val lane = sessionId ?: GUEST_LANE_ID
         return runCatching {
-            val process = ProcessBuilder("/bin/bash", "-c", script)
-                .redirectErrorStream(true)
-                .start()
-            val out = process.inputStream.bufferedReader().readText()
-            process.waitFor()
-            val trimmed = out.trim().ifBlank { "(无输出)" }
+            val result = kotlinx.coroutines.runBlocking {
+                com.openminis.app.sandbox.ExecutionCoordinator.execute(
+                    sessionId = lane,
+                    command = script,
+                    timeout = GUEST_TIMEOUT_MS,
+                )
+            }
+            val exit = result.exitCode
+            val trimmed = result.output.trim().ifBlank { "(无输出)" }
             val code = when {
                 trimmed.contains("WINDOW_CHANGED") -> ToolErrorCode.STALE_OBSERVATION
                 trimmed.contains("SERVICE_NOT_RUNNING") -> ToolErrorCode.PERMISSION_DENIED
-                process.exitValue() != 0 -> ToolErrorCode.EXECUTION_FAILED
+                exit != 0 -> ToolErrorCode.EXECUTION_FAILED
                 else -> null
             }
-            ToolExecutionResult(trimmed, process.exitValue() == 0, errorCode = code, toolTitle = toolTitle)
+            ToolExecutionResult(trimmed, exit == 0, errorCode = code, toolTitle = toolTitle)
         }.getOrElse {
             ToolExecutionResult("Error: ${it.message}", false, toolTitle = toolTitle)
         }
     }
+
+    /**
+     * Stable internal lane for guest a11y commands issued without a chat
+     * session (same pattern as A11yReplay's "a11y-skill-replay" lane).
+     */
+    private const val GUEST_LANE_ID = "a11y-ui-tools"
+    private const val GUEST_TIMEOUT_MS = 30_000L
 }

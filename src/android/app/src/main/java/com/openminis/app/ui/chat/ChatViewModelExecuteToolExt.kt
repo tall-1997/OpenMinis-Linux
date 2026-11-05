@@ -241,10 +241,11 @@ internal suspend fun ChatViewModel.executeTool(
             executeShellCommand(argsJson, toolId, toolBlocks, assistantId, currentText)
         }
         "su_exec" -> {
+            // [T-android-sueexec-tool-home] Command rewriting (android-su -c
+            // wrapping + single-quote escaping) lives in tools/SuExecTool.kt;
+            // this is a one-line delegation. Behavior unchanged.
             val o = JSONObject(argsJson)
-            val cmd = o.optString("command")
-            val quoted = "'" + cmd.replace("'", "'\\''") + "'"
-            o.put("command", "android-su -c " + quoted)
+            o.put("command", com.openminis.app.tools.SuExecTool.wrapSuCommand(o.optString("command")))
             executeShellCommand(o.toString(), toolId, toolBlocks, assistantId, currentText)
         }
         "browser_use" -> executeBrowserUseTool(argsJson)

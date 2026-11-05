@@ -18,11 +18,9 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material3.HorizontalDivider
@@ -282,7 +280,9 @@ fun LazyListScope.modelEntryPickerItems(
                         .padding(horizontal = 16.dp, vertical = 13.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    SelectionDot(isSelected)
+                    // (#9) Shared selection mark — replaced the private
+                    // SelectionDot duplicate.
+                    PickerSelectionMark(isSelected)
                     Spacer(Modifier.width(10.dp))
                     Box(modifier = Modifier.size(6.dp).background(dotColor, CircleShape))
                     Spacer(Modifier.width(10.dp))
@@ -306,90 +306,108 @@ fun LazyListScope.modelEntryPickerItems(
                 }
             }
         } else {
-            item(key = "entries_${instance.id}") {
-                Column(
-                    modifier = Modifier
-                        .padding(horizontal = 16.dp)
-                        .background(
-                            MaterialTheme.colorScheme.surfaceContainer,
-                            RoundedCornerShape(12.dp),
-                        ),
-                ) {
-                    entries.forEachIndexed { index, entry ->
-                        val isSelected = entry.id in selectedIds
-                        val rowShape = when {
-                            entries.size == 1 -> RoundedCornerShape(12.dp)
-                            index == 0 -> RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)
-                            index == entries.size - 1 -> RoundedCornerShape(bottomStart = 12.dp, bottomEnd = 12.dp)
-                            else -> RoundedCornerShape(0.dp)
-                        }
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(rowShape)
-                                .clickable { onToggleSelection(entry.id) }
-                                .padding(horizontal = 16.dp, vertical = 13.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            SelectionDot(isSelected)
-                            Spacer(Modifier.width(10.dp))
-                            Box(modifier = Modifier.size(6.dp).background(dotColor, CircleShape))
-                            Spacer(Modifier.width(10.dp))
-                            Column(modifier = Modifier.weight(1f)) {
+            // [T-android-picker-per-row-items] (#6) One LazyColumn item per
+            // ENTRY. The old shape — one item whose Column composed every
+            // entry row in a single pass — meant a large provider section
+            // (hundreds of model rows + modality chips) composed IN ONE
+            // FRAME on sheet open and could not skip rows during scroll.
+            // Each row now paints its own slice of the card background with
+            // first/last corner shaping (PickerSheetShell's clipChildren
+            // approach achieves the same rounded-card read by clipping
+            // children; here the segments are separate items so each paints
+            // its own shape), and the inter-row hairline is its own item
+            // carrying the card background so the surface stays continuous.
+            entries.forEachIndexed { index, entry ->
+                val isSelected = entry.id in selectedIds
+                val rowShape = when {
+                    entries.size == 1 -> RoundedCornerShape(12.dp)
+                    index == 0 -> RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)
+                    index == entries.size - 1 -> RoundedCornerShape(bottomStart = 12.dp, bottomEnd = 12.dp)
+                    else -> RoundedCornerShape(0.dp)
+                }
+                item(key = "entry_${instance.id}_${entry.id}") {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                            .background(MaterialTheme.colorScheme.surfaceContainer, rowShape)
+                            .clip(rowShape)
+                            .clickable { onToggleSelection(entry.id) }
+                            .padding(horizontal = 16.dp, vertical = 13.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        // (#9) Shared PickerSelectionMark (PickerSheetShell) —
+                        // byte-identical 20dp blue mark; the local duplicate
+                        // SelectionDot is deleted.
+                        PickerSelectionMark(isSelected)
+                        Spacer(Modifier.width(10.dp))
+                        Box(modifier = Modifier.size(6.dp).background(dotColor, CircleShape))
+                        Spacer(Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                entry.model.displayName,
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                            // [T-android-provider-voice] Modality chips
+                            // (iOS entryRow modalityBadges: img / audio /
+                            // video / pdf and the -out variants).
+                            //
+                            // [T-android-modality-chip] FlowRow, NOT Row: this
+                            // was the one call site 0e7b742cc missed when it
+                            // fixed the same defect in the three picker sheets.
+                            // In a plain Row an overflowing chip is squeezed
+                            // until Compose wraps it character-by-character —
+                            // "img-out" drew as a vertical letter column, and
+                            // because the Row is CenterVertically that column
+                            // inflated the row height until the model name
+                            // floated above the selection dot. The shared
+                            // ModalityBadge (maxLines=1 + softWrap=false) stops
+                            // a chip breaking internally; FlowRow is what gives
+                            // it somewhere to go, wrapping whole chips instead.
+                            // Overflow here is about total chip width, not any
+                            // single label: a long model id plus 4 chips
+                            // overflows the weight(1f) column just as surely.
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                itemVerticalAlignment = Alignment.CenterVertically,
+                            ) {
                                 Text(
-                                    entry.model.displayName,
-                                    style = MaterialTheme.typography.bodyMedium,
+                                    entry.model.id,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                                 )
-                                // [T-android-provider-voice] Modality chips
-                                // (iOS entryRow modalityBadges: img / audio /
-                                // video / pdf and the -out variants).
-                                //
-                                // [T-android-modality-chip] FlowRow, NOT Row: this
-                                // was the one call site 0e7b742cc missed when it
-                                // fixed the same defect in the three picker sheets.
-                                // In a plain Row an overflowing chip is squeezed
-                                // until Compose wraps it character-by-character —
-                                // "img-out" drew as a vertical letter column, and
-                                // because the Row is CenterVertically that column
-                                // inflated the row height until the model name
-                                // floated above the selection dot. The shared
-                                // ModalityBadge (maxLines=1 + softWrap=false) stops
-                                // a chip breaking internally; FlowRow is what gives
-                                // it somewhere to go, wrapping whole chips instead.
-                                // Overflow here is about total chip width, not any
-                                // single label: a long model id plus 4 chips
-                                // overflows the weight(1f) column just as surely.
-                                FlowRow(
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                    itemVerticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Text(
-                                        entry.model.id,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                                    )
-                                    modalityBadges(entry.model).forEach { badge ->
-                                        ModalityBadge(badge)
-                                    }
-                                }
-                            }
-                            // System virtual entries have no cloud endpoint to
-                            // smoke-test — no bolt on those rows.
-                            if (onQuickTest != null && !SystemVoiceEntries.isSystemEntryId(entry.id)) {
-                                IconButton(
-                                    onClick = { onQuickTest(entry) },
-                                    modifier = Modifier.size(32.dp),
-                                ) {
-                                    Icon(
-                                        Icons.Outlined.Bolt,
-                                        contentDescription = stringResource(R.string.quicktest_button),
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(18.dp),
-                                    )
+                                modalityBadges(entry.model).forEach { badge ->
+                                    ModalityBadge(badge)
                                 }
                             }
                         }
-                        if (index < entries.size - 1) {
+                        // System virtual entries have no cloud endpoint to
+                        // smoke-test — no bolt on those rows.
+                        if (onQuickTest != null && !SystemVoiceEntries.isSystemEntryId(entry.id)) {
+                            IconButton(
+                                onClick = { onQuickTest(entry) },
+                                modifier = Modifier.size(32.dp),
+                            ) {
+                                Icon(
+                                    Icons.Outlined.Bolt,
+                                    contentDescription = stringResource(R.string.quicktest_button),
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+                if (index < entries.size - 1) {
+                    item(key = "div_${instance.id}_${entry.id}") {
+                        // Card-background carrier so the hairline sits ON the
+                        // surface (same geometry as the in-container version:
+                        // 16dp card inset + 52dp start / 16dp end).
+                        Box(
+                            modifier = Modifier
+                                .padding(horizontal = 16.dp)
+                                .background(MaterialTheme.colorScheme.surfaceContainer),
+                        ) {
                             HorizontalDivider(
                                 modifier = Modifier.padding(start = 52.dp, end = 16.dp),
                                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
@@ -413,16 +431,9 @@ fun LazyListScope.modelEntryPickerItems(
     }
 }
 
-@Composable
-private fun SelectionDot(isSelected: Boolean) {
-    Icon(
-        if (isSelected) m3Icon(Icons.Default.CheckCircle) else Icons.Default.RadioButtonUnchecked,
-        contentDescription = null,
-        tint = if (isSelected) Color(0xFF007AFF)
-        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
-        modifier = Modifier.size(20.dp),
-    )
-}
+// SelectionDot deleted (#9): PickerSelectionMark in PickerSheetShell.kt is
+// the single shared selection mark (was a byte-identical duplicate whose
+// selected tint 0xFF007AFF now lives behind the IosBlue AccentToken).
 
 /**
  * [T-android-provider-voice] Non-text modality chips for a model row —

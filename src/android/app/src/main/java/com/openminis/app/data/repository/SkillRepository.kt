@@ -127,6 +127,15 @@ class SkillRepository(private val context: Context) {
         SkillDbHelper(context).writableDatabase
     }
 
+    /**
+     * [Wave3-fix-4] Session-override CRUD + revision bookkeeping, shared with
+     * [MCPRepository] via [SessionOverrideStore] (was a drifting copy here).
+     * Table/column names are this repository's schema constants.
+     */
+    private val overrideStore by lazy {
+        SessionOverrideStore(db, tableName = "session_skill_overrides", itemColumn = "skill_id")
+    }
+
     private val skillsDir: File
         get() = File(context.filesDir, "minis-global/skills")
 
@@ -279,8 +288,7 @@ class SkillRepository(private val context: Context) {
     fun delete(id: String) {
         ensureLoaded()
         db.execSQL("DELETE FROM skills WHERE id=?", arrayOf(id))
-        db.execSQL("DELETE FROM session_skill_overrides WHERE skill_id=?", arrayOf(id))
-        overrideRevision++
+        overrideStore.removeItem(id)
         val dir = File(skillsDir, id)
         dir.deleteRecursively()
         _skills.update { list -> list.filter { it.id != id } }
@@ -391,16 +399,21 @@ class SkillRepository(private val context: Context) {
     }
 
     // -- Session Overrides --
+    //
+    // [Wave3-fix-4] The CRUD + revision bookkeeping below used to be a
+    // line-for-line copy of MCPRepository's block that had drifted (no
+    // sparse-clear). The implementation now lives in [SessionOverrideStore];
+    // only the facade (public signatures unchanged) and the global-default
+    // lookup stay here.
 
     /**
-     * [T-prompt-cache] Bumped by every mutation of the `session_skill_overrides`
-     * table ([setSessionOverride], [clearSessionOverrides],
-     * [renameSessionOverrides]). `skillPromptFragment` uses it as part of its
-     * cache key so a toggle invalidates the cached fragment instantly without
-     * any change to `_skills`.
+     * [T-prompt-cache] Revision of the `session_skill_overrides` table, bumped
+     * by every mutation ([setSessionOverride], [clearSessionOverrides],
+     * [renameSessionOverrides], skill deletions). `skillPromptFragment` uses it
+     * as part of its cache key so a toggle invalidates the cached fragment
+     * instantly without any change to `_skills`.
      */
-    @Volatile
-    private var overrideRevision: Long = 0L
+    private val overrideRevision: Long get() = overrideStore.revision
 
     /**
      * Bulk-load all overrides for one session in a single query. The
@@ -408,41 +421,30 @@ class SkillRepository(private val context: Context) {
      * with 200+ installed skills that was 200+ cursor round-trips on EVERY
      * turn (fragment built per request). One query instead.
      */
-    fun sessionOverrideMap(sessionId: String): Map<String, Boolean> {
-        val map = HashMap<String, Boolean>()
-        db.rawQuery(
-            "SELECT skill_id, is_enabled FROM session_skill_overrides WHERE session_id=?",
-            arrayOf(sessionId),
-        ).use { cursor ->
-            while (cursor.moveToNext()) {
-                map[cursor.getString(0)] = cursor.getInt(1) == 1
-            }
-        }
-        return map
-    }
+    fun sessionOverrideMap(sessionId: String): Map<String, Boolean> =
+        overrideStore.mapForSession(sessionId)
 
     fun isEnabledForSession(skillId: String, sessionId: String): Boolean {
-        val cursor = db.rawQuery(
-            "SELECT is_enabled FROM session_skill_overrides WHERE session_id=? AND skill_id=?",
-            arrayOf(sessionId, skillId)
-        )
-        val override = if (cursor.moveToFirst()) cursor.getInt(0) == 1 else null
-        cursor.close()
+        val override = overrideStore.storedValue(sessionId, skillId)
         if (override != null) return override
         return _skills.value.find { it.id == skillId }?.isEnabled ?: false
     }
 
+    /**
+     * [Wave3-fix-4] BEHAVIOUR FIX (sparse-clear, previously MCP-only): when
+     * [enabled] equals the skill's CURRENT global `isEnabled`, the override row
+     * is DELETED instead of pinned, so a later flip of the global toggle
+     * propagates to this session. The old always-pinning copy left stale
+     * session overrides stuck at the pre-flip value forever. Read precedence
+     * (override → global → false) is unchanged.
+     */
     fun setSessionOverride(sessionId: String, skillId: String, enabled: Boolean) {
-        db.execSQL(
-            "INSERT OR REPLACE INTO session_skill_overrides (session_id, skill_id, is_enabled) VALUES (?, ?, ?)",
-            arrayOf<Any>(sessionId, skillId, if (enabled) 1 else 0)
-        )
-        overrideRevision++
+        val globalEnabled = _skills.value.find { it.id == skillId }?.isEnabled
+        overrideStore.set(sessionId, skillId, enabled, globalEnabled)
     }
 
     fun clearSessionOverrides(sessionId: String) {
-        db.execSQL("DELETE FROM session_skill_overrides WHERE session_id=?", arrayOf(sessionId))
-        overrideRevision++
+        overrideStore.clearSession(sessionId)
     }
 
     /**
@@ -456,12 +458,7 @@ class SkillRepository(private val context: Context) {
      * [MCPRepository.renameSessionOverrides].
      */
     fun renameSessionOverrides(fromDraft: String, toReal: String) {
-        if (fromDraft == toReal) return
-        db.execSQL(
-            "UPDATE OR REPLACE session_skill_overrides SET session_id=? WHERE session_id=?",
-            arrayOf<Any>(toReal, fromDraft),
-        )
-        overrideRevision++
+        overrideStore.renameSession(fromDraft, toReal)
     }
 
     // -- Prompt Fragment --
@@ -1540,8 +1537,7 @@ class SkillRepository(private val context: Context) {
                 continue
             }
             db.execSQL("DELETE FROM skills WHERE id=?", arrayOf(id))
-            db.execSQL("DELETE FROM session_skill_overrides WHERE skill_id=?", arrayOf(id))
-            overrideRevision++
+            overrideStore.removeItem(id)
             removedNonBundled.add(id)
             Log.i(TAG, "Pruned skill missing from disk: $id")
         }
@@ -1682,8 +1678,7 @@ class SkillRepository(private val context: Context) {
                 !File(skillsDir, "$id/SKILL.md").exists()
             ) {
                 db.execSQL("DELETE FROM skills WHERE id=?", arrayOf(id))
-                db.execSQL("DELETE FROM session_skill_overrides WHERE skill_id=?", arrayOf(id))
-                overrideRevision++
+                overrideStore.removeItem(id)
                 Log.i(TAG, "Pruned orphan skill row (no SKILL.md on disk): $id")
                 continue
             }

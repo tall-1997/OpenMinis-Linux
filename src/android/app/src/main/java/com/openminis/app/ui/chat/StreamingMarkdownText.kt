@@ -230,14 +230,11 @@ internal val InlineCodeCornerRadius = 6.dp
 // line on dense streams while keeping short replies responsive.
 //   < 500  : 200ms   < 2000 : 300ms   < 32K : 500ms
 //   < 64K  : 1000ms  < 128K : 1500ms  else  : 2000ms
-internal fun streamingThrottleFor(content: String): Long = when {
-    content.length < 500 -> 200L
-    content.length < 2_000 -> 300L
-    content.length < 32_000 -> 500L
-    content.length < 64_000 -> 1_000L
-    content.length < 128_000 -> 1_500L
-    else -> 2_000L
-}
+// [T-android-throttle-ladder-converge] Ladder body moved to
+// [StreamingThrottle.ladderFor]; the parse surface uses the default 200ms
+// first tier.
+internal fun streamingThrottleFor(content: String): Long =
+    StreamingThrottle.ladderFor(content.length)
 
 
 @Composable

@@ -29,15 +29,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
 
-/**
- * [T-groupchat-host-deadline] The host is supposed to only open and close the
- * discussion (e817cc1), but neither call had a deadline of its own: a host
- * model stuck on a stalled network kept runGroupChat suspended forever, the
- * UI parked on the summary state, and "群聊关不掉" (the exact bug aac4d26
- * fixed) came back through the time-out door instead. Members are wrapped by
- * the same deadline inside speakMembers' error handling; the host paths now
- * share one explicit budget.
- */
+/** [T-groupchat-host-deadline] Host open/close had no deadline: a stalled host kept runGroupChat suspended forever ("群聊关不掉" came back); host paths now share one explicit budget. */
 private const val GROUP_CHAT_HOST_TIMEOUT_MS = 3L * 60_000L
 
 internal suspend fun ChatViewModel.runGroupChat(provider: LLMProvider, closing: Boolean) {
@@ -325,6 +317,7 @@ private fun ChatViewModel.groupTools(provider: LLMProvider) = AgentTools.makeAge
     ),
     memoryEnabled = false,
     subAgentEnabled = false,
+    hasSpeechModel = providerRepository.resolveVoiceInputEntry() != null,
 ).filter { !SubAgentKind.blocks(SubAgentKind.PLAN, it.name) }
 
 private fun ChatViewModel.openingKey() = "opening:$groupChatPrefsId"

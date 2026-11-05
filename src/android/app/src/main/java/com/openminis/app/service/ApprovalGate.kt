@@ -76,7 +76,14 @@ object ApprovalGate {
 
     fun isConfigured(): Boolean = true
 
-    fun requestApproval(): String = requestApproval(legacySession(), "", "", false)
+    // [Wave3 #14] The fully no-arg `requestApproval()` shim was deleted: it had
+    // zero callers (main, tests, and the debug RPC — none of which touch this
+    // object at all), and its only possible effect was to attach an empty
+    // tool/preview request to whatever session bindSession() last set. The
+    // remaining legacy overloads (toolName/preview 3-arg form and the no-arg
+    // allow* helpers) stay: they have live consumers (ApprovalSameToolTest
+    // exercises the bindSession flow) and ui\ ChatViewModel calls bindSession,
+    // so legacyBoundSessionId is a real pointer, not dead state.
 
     fun requestApproval(toolName: String, preview: String, mustPrompt: Boolean = false): String =
         requestApproval(legacySession(), toolName, preview, mustPrompt)

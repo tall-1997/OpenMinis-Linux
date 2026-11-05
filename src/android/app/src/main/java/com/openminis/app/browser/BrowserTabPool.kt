@@ -899,12 +899,14 @@ class BrowserTabPool(private val context: Context) {
         tab
     }
 
-    private fun createTab(tabs: MutableList<Tab>, url: String? = null): Tab? {
-        if (tabs.size >= MAX_TABS || !reserveTab()) return null
-        // reserveTab may have evicted a cold tab from this pool too.
-        tabs.retainAll(_tabs.value.toSet())
-
-        val id = nextTabId++
+    /**
+     * [P2-dup-tabbuild] The WebView + BrowserUseManager construction sequence
+     * shared by [createTab] and [handleNewWindow] — used to be two verbatim
+     * copies. Main thread only (WebView creation). The fresh WebView is
+     * reachable as [BrowserUseManager.webView] for callers that must hand the
+     * transport back (window.open).
+     */
+    private fun buildManager(): BrowserUseManager {
         val webView = WebView(context)
         // [T-android-minis-url-session-scope] Hand the manager a LIVE reader of
         // this pool's session id (set later via setSession) plus a context, so
@@ -927,6 +929,16 @@ class BrowserTabPool(private val context: Context) {
         manager.onNewWindow = { resultMsg -> handleNewWindow(resultMsg) }
         manager.onCloseWindow = { handleCloseWindow(manager) }
         wireDownloadHandlers(manager)
+        return manager
+    }
+
+    private fun createTab(tabs: MutableList<Tab>, url: String? = null): Tab? {
+        if (tabs.size >= MAX_TABS || !reserveTab()) return null
+        // reserveTab may have evicted a cold tab from this pool too.
+        tabs.retainAll(_tabs.value.toSet())
+
+        val id = nextTabId++
+        val manager = buildManager()
 
         val tab = Tab(id = id, manager = manager)
         tabs.add(tab)
@@ -1009,21 +1021,9 @@ class BrowserTabPool(private val context: Context) {
         }
         currentTabs.retainAll(_tabs.value.toSet())
         val id = nextTabId++
-        val newWebView = WebView(context)
-        val manager = BrowserUseManager(
-            newWebView,
-            userAgentProfile,
-            sessionIdProvider = { sessionId },
-            appContext = context.applicationContext,
-        )
-        if (userAgentProfile == UserAgentProfile.CUSTOM && !customUserAgentString.isNullOrEmpty()) {
-            manager.setUserAgent(userAgentProfile, customUserAgentString)
-        }
-        val (vpW, vpH) = resolvedViewportSize()
-        manager.applyViewport(vpW, vpH)
-        manager.onNewWindow = { msg -> handleNewWindow(msg) }
-        manager.onCloseWindow = { handleCloseWindow(manager) }
-        wireDownloadHandlers(manager)
+        // [P2-dup-tabbuild] Construction sequence shared with createTab.
+        val manager = buildManager()
+        val newWebView = manager.webView
 
         val tab = Tab(id = id, manager = manager)
         currentTabs.add(tab)

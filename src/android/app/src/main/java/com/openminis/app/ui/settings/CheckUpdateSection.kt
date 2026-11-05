@@ -92,6 +92,38 @@ fun CheckUpdateSection() {
     // geo-block know what to do without hunting for the URL themselves.
     var showReleasesLink by remember { mutableStateOf(false) }
     var update by remember { mutableStateOf<UpdateChecker.CheckResult.UpdateAvailable?>(null) }
+    // [T-checkupdate-shared-run] The check→result→status-message mapping was
+    // duplicated verbatim for the manual check row and the rolling-channel
+    // toggle. One shared suspend run now serves both; the only behavioural
+    // unification is that an UpToDate result also clears a stale update
+    // banner (the toggle path already did; the manual path now matches).
+    suspend fun runCheckAndReport(includeRolling: Boolean) {
+        statusMessage = null
+        showReleasesLink = false
+        when (val r = UpdateChecker.check(context, includeRolling)) {
+            is UpdateChecker.CheckResult.UpdateAvailable -> {
+                update = r
+                statusMessage = null
+            }
+            UpdateChecker.CheckResult.UpToDate -> {
+                update = null
+                statusMessage = context.getString(R.string.check_update_up_to_date)
+            }
+            UpdateChecker.CheckResult.NoReleaseAvailable ->
+                statusMessage = context.getString(R.string.check_update_no_release)
+            is UpdateChecker.CheckResult.NoApkAsset ->
+                statusMessage = context.getString(R.string.check_update_no_apk_asset, r.tagName)
+            UpdateChecker.CheckResult.Forbidden -> {
+                statusMessage = context.getString(R.string.update_error_forbidden_with_link)
+                showReleasesLink = true
+            }
+            UpdateChecker.CheckResult.NetworkUnreachable ->
+                statusMessage = context.getString(R.string.update_error_network_unreachable)
+            is UpdateChecker.CheckResult.Error ->
+                statusMessage = context.getString(R.string.check_update_error, r.message)
+        }
+        checking = false
+    }
     // [T-update-source-choice] The user's download source pick for the
     // currently shown update, plus live probe results. Selection persists
     // via UpdateSourceRegistry so the next update pre-selects it.
@@ -291,30 +323,8 @@ fun CheckUpdateSection() {
             onClick = if (checking) null else {
                 {
                     checking = true
-                    statusMessage = null
-                    showReleasesLink = false
                     scope.launch {
-                        when (val r = UpdateChecker.check(context, includeRolling)) {
-                            is UpdateChecker.CheckResult.UpdateAvailable -> {
-                                update = r
-                                statusMessage = null
-                            }
-                            UpdateChecker.CheckResult.UpToDate ->
-                                statusMessage = context.getString(R.string.check_update_up_to_date)
-                            UpdateChecker.CheckResult.NoReleaseAvailable ->
-                                statusMessage = context.getString(R.string.check_update_no_release)
-                            is UpdateChecker.CheckResult.NoApkAsset ->
-                                statusMessage = context.getString(R.string.check_update_no_apk_asset, r.tagName)
-                            UpdateChecker.CheckResult.Forbidden -> {
-                                statusMessage = context.getString(R.string.update_error_forbidden_with_link)
-                                showReleasesLink = true
-                            }
-                            UpdateChecker.CheckResult.NetworkUnreachable ->
-                                statusMessage = context.getString(R.string.update_error_network_unreachable)
-                            is UpdateChecker.CheckResult.Error ->
-                                statusMessage = context.getString(R.string.check_update_error, r.message)
-                        }
-                        checking = false
+                        runCheckAndReport(includeRolling)
                     }
                 }
             },
@@ -344,31 +354,8 @@ fun CheckUpdateSection() {
                 // immediately instead of on the next manual tap.
                 if (!checking) {
                     checking = true
-                    statusMessage = null
                     scope.launch {
-                        when (val r = UpdateChecker.check(context, checked)) {
-                            is UpdateChecker.CheckResult.UpdateAvailable -> {
-                                update = r
-                                statusMessage = null
-                            }
-                            UpdateChecker.CheckResult.UpToDate -> {
-                                update = null
-                                statusMessage = context.getString(R.string.check_update_up_to_date)
-                            }
-                            UpdateChecker.CheckResult.NoReleaseAvailable ->
-                                statusMessage = context.getString(R.string.check_update_no_release)
-                            is UpdateChecker.CheckResult.NoApkAsset ->
-                                statusMessage = context.getString(R.string.check_update_no_apk_asset, r.tagName)
-                            UpdateChecker.CheckResult.Forbidden -> {
-                                statusMessage = context.getString(R.string.update_error_forbidden_with_link)
-                                showReleasesLink = true
-                            }
-                            UpdateChecker.CheckResult.NetworkUnreachable ->
-                                statusMessage = context.getString(R.string.update_error_network_unreachable)
-                            is UpdateChecker.CheckResult.Error ->
-                                statusMessage = context.getString(R.string.check_update_error, r.message)
-                        }
-                        checking = false
+                        runCheckAndReport(checked)
                     }
                 }
             },

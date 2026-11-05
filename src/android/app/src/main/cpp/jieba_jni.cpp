@@ -3,15 +3,24 @@
 // side extracted out of Assets (JNI can't read Assets by path), then serves
 // exact-mode (`Cut`) and search-mode (`CutForSearch`) segmentation.
 //
-// We deliberately build DictTrie + HMMModel directly and share them between a
-// MixSegment (exact) and a QuerySegment (search) instead of using the full
-// cppjieba::Jieba facade — Jieba pulls in KeywordExtractor, which needs
-// idf.utf8 + stop_words.utf8 (~6MB we don't ship). Segmentation only needs the
-// dict + HMM model, so this keeps the shipped asset down to ~5.4MB.
+// We deliberately build DictTrie + HMMModel directly and share them between the
+// segmenters instead of using the full cppjieba::Jieba facade — Jieba pulls in
+// KeywordExtractor, which needs idf.utf8 + stop_words.utf8 (~6MB we don't
+// ship). Segmentation only needs the dict + HMM model, so this keeps the
+// shipped asset down to ~5.4MB.
 //
-// Thread-safety: a single global instance guarded by a std::mutex. All C++ is
-// wrapped in try/catch so a load failure or a malformed input returns false /
-// an empty array to Kotlin rather than crashing the app.
+// Thread-safety: dictionary LOADING is serialized by g_state_mutex (nativeInit
+// is a one-shot ~5MB parse; two concurrent inits would double the work and the
+// file cache in DictTrie is load-time only). Segmentation is lock-free: after
+// init the JiebaState is immutable and shared via a const shared_ptr (the
+// mutex is held only to copy that pointer), and each call builds its own
+// MixSegment/QuerySegment over the shared dict — cppjieba's Cut paths are
+// const and read-only over the trie/model (MixSegment::Cut/MPSegment::Cut/
+// HMMSegment::InternalCut are const, DictTrie::Find is a const trie walk, and
+// the HMM Viterbi works on a local weight vector reading const model fields),
+// so concurrent calls share the dictionaries without a global mutex. All C++
+// is wrapped in try/catch so a load failure or a malformed input returns
+// false / an empty array to Kotlin rather than crashing the app.
 
 #include <jni.h>
 #include <android/log.h>
@@ -32,17 +41,23 @@
 
 namespace {
 
-// Owns the loaded dictionaries and both segmenters. Constructed once, under the
-// global mutex, on the first successful nativeInit call.
+// Owns the loaded dictionaries. Immutable after publication — segmenters are
+// built per call over these shared, read-only objects.
 struct JiebaState {
     std::unique_ptr<cppjieba::DictTrie> dict;
     std::unique_ptr<cppjieba::HMMModel> hmm;
-    std::unique_ptr<cppjieba::MixSegment> mixSeg;      // exact mode (Cut, HMM on)
-    std::unique_ptr<cppjieba::QuerySegment> querySeg;  // search-engine mode
 };
 
-std::mutex g_mutex;
-std::unique_ptr<JiebaState> g_state;
+// Guards the g_state POINTER (publication + snapshot); never held across a
+// Cut. nativeInit stores a fully-built state under the lock, cut calls copy
+// the shared_ptr out and then work without any lock.
+std::mutex g_state_mutex;
+std::shared_ptr<const JiebaState> g_state;
+
+std::shared_ptr<const JiebaState> loadedState() {
+    std::lock_guard<std::mutex> lock(g_state_mutex);
+    return g_state;
+}
 
 // Join two path components with a single '/'.
 std::string joinPath(const std::string& dir, const std::string& file) {
@@ -87,7 +102,10 @@ extern "C" {
 JNIEXPORT jboolean JNICALL
 Java_com_openminis_app_shared_JiebaEngine_nativeInit(
     JNIEnv* env, jobject /* thiz */, jstring dictDir) {
-    std::lock_guard<std::mutex> lock(g_mutex);
+    // The ~5MB dictionary parse is the only serialized section: concurrent
+    // inits must not double-parse, and publication must be ordered so a Cut
+    // call never observes a half-built state.
+    std::lock_guard<std::mutex> lock(g_state_mutex);
     if (g_state) return JNI_TRUE;  // already initialized
 
     const std::string dir = toStdString(env, dictDir);
@@ -97,15 +115,14 @@ Java_com_openminis_app_shared_JiebaEngine_nativeInit(
     }
 
     try {
-        auto state = std::make_unique<JiebaState>();
+        auto state = std::make_shared<JiebaState>();
         const std::string dictPath = joinPath(dir, "jieba.dict.utf8");
         const std::string hmmPath = joinPath(dir, "hmm_model.utf8");
 
         state->dict = std::make_unique<cppjieba::DictTrie>(dictPath);
         state->hmm = std::make_unique<cppjieba::HMMModel>(hmmPath);
-        // Both segmenters borrow the same dict/HMM (non-owning pointers).
-        state->mixSeg = std::make_unique<cppjieba::MixSegment>(state->dict.get(), state->hmm.get());
-        state->querySeg = std::make_unique<cppjieba::QuerySegment>(state->dict.get(), state->hmm.get());
+        // Segmenters are built per call over these (non-owning) pointers, so
+        // concurrent Cuts need no lock — see the thread-safety note above.
 
         g_state = std::move(state);
         LOGI("nativeInit: loaded dictionaries from %s", dir.c_str());
@@ -124,16 +141,19 @@ Java_com_openminis_app_shared_JiebaEngine_nativeInit(
 JNIEXPORT jobjectArray JNICALL
 Java_com_openminis_app_shared_JiebaEngine_nativeSegment(
     JNIEnv* env, jobject /* thiz */, jstring text) {
-    std::lock_guard<std::mutex> lock(g_mutex);
-    if (!g_state) {
+    const std::shared_ptr<const JiebaState> state = loadedState();
+    if (!state) {
         LOGE("nativeSegment before init");
         return emptyStringArray(env);
     }
     try {
         const std::string sentence = toStdString(env, text);
         std::vector<std::string> words;
-        // Exact mode with HMM enabled (recovers OOV words).
-        g_state->mixSeg->Cut(sentence, words, /* hmm = */ true);
+        // Exact mode with HMM enabled (recovers OOV words). Per-call segmenter
+        // over the shared immutable dict — cheap (two pointer stores) and
+        // lock-free.
+        cppjieba::MixSegment seg(state->dict.get(), state->hmm.get());
+        seg.Cut(sentence, words, /* hmm = */ true);
         return toStringArray(env, words);
     } catch (const std::exception& e) {
         LOGE("nativeSegment failed: %s", e.what());
@@ -147,15 +167,16 @@ Java_com_openminis_app_shared_JiebaEngine_nativeSegment(
 JNIEXPORT jobjectArray JNICALL
 Java_com_openminis_app_shared_JiebaEngine_nativeSegmentForSearch(
     JNIEnv* env, jobject /* thiz */, jstring text) {
-    std::lock_guard<std::mutex> lock(g_mutex);
-    if (!g_state) {
+    const std::shared_ptr<const JiebaState> state = loadedState();
+    if (!state) {
         LOGE("nativeSegmentForSearch before init");
         return emptyStringArray(env);
     }
     try {
         const std::string sentence = toStdString(env, text);
         std::vector<std::string> words;
-        g_state->querySeg->Cut(sentence, words, /* hmm = */ true);
+        cppjieba::QuerySegment seg(state->dict.get(), state->hmm.get());
+        seg.Cut(sentence, words, /* hmm = */ true);
         return toStringArray(env, words);
     } catch (const std::exception& e) {
         LOGE("nativeSegmentForSearch failed: %s", e.what());
@@ -181,8 +202,8 @@ Java_com_openminis_app_shared_JiebaEngine_nativeSegmentForSearch(
 JNIEXPORT jobjectArray JNICALL
 Java_com_openminis_app_shared_JiebaEngine_nativePosTag(
     JNIEnv* env, jobject /* thiz */, jstring text) {
-    std::lock_guard<std::mutex> lock(g_mutex);
-    if (!g_state) {
+    const std::shared_ptr<const JiebaState> state = loadedState();
+    if (!state) {
         LOGE("nativePosTag before init");
         return emptyStringArray(env);
     }
@@ -191,8 +212,10 @@ Java_com_openminis_app_shared_JiebaEngine_nativePosTag(
         std::vector<std::pair<std::string, std::string> > tagged;
         cppjieba::PosTagger tagger;
         // MixSegment is a SegmentTagged, so it supplies both the cut and the
-        // DictTrie the tag lookup needs.
-        tagger.Tag(sentence, tagged, *g_state->mixSeg);
+        // DictTrie the tag lookup needs. Built per call over the shared
+        // immutable dict (same lock-free rationale as nativeSegment).
+        cppjieba::MixSegment seg(state->dict.get(), state->hmm.get());
+        tagger.Tag(sentence, tagged, seg);
         std::vector<std::string> flat;
         flat.reserve(tagged.size() * 2);
         for (size_t i = 0; i < tagged.size(); ++i) {

@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -34,12 +35,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openminis.app.R
+import com.openminis.app.ui.theme.IosBlue
+import com.openminis.app.ui.theme.IosGreen
 import com.openminis.app.data.model.ModelEntry
 import com.openminis.app.data.model.ModelGroup
 import com.openminis.app.data.model.SystemVoiceEntries
@@ -191,13 +195,17 @@ fun UnifiedModelPickerSheet(
                         PickerSelectionMark(
                             selected = groupSelected,
                             size = 22.dp,
-                            selectedTint = Color(0xFF34C759),
+                            // (#7) named AccentToken — same value as the old
+                            // 0xFF34C759 literal.
+                            selectedTint = IosGreen,
                         )
                         Spacer(Modifier.width(10.dp))
                         Icon(
                             Icons.Default.Layers,
                             contentDescription = null,
-                            tint = Color(0xFF007AFF),
+                            // (#7) named AccentToken — same value as the old
+                            // 0xFF007AFF literal.
+                            tint = IosBlue,
                             modifier = Modifier.size(18.dp),
                         )
                         Spacer(Modifier.width(10.dp))
@@ -473,9 +481,18 @@ fun UnifiedModelPickerSheet(
                 if (entries.isEmpty()) null else inst to entries
             }
         entriesByInstance.forEach { (inst, entries) ->
-            item("p_${inst.id}") {
-                val collapsed = collapsedInstanceIds.contains(inst.id)
-                PickerSectionCard(clipChildren = true) {
+            val collapsed = collapsedInstanceIds.contains(inst.id)
+            // [T-android-picker-per-row-items] (#6) One LazyColumn item per
+            // provider card SEGMENT: the header, then one item per ENTRY row.
+            // The old single-item card composed header + every model row of
+            // the provider in one frame (same defect as
+            // modelEntryPickerItems — hundreds of rows composed on sheet
+            // open, none skippable during scroll). Each segment paints its
+            // own slice of the section card (surfaceContainerHigh, 14dp
+            // corners, first/last shaping) via [PickerCardSegment]; stacked
+            // segments read as the same card the old PickerSectionCard drew.
+            item(key = "ph_${inst.id}") {
+                PickerCardSegment(isFirst = true, isLast = collapsed) {
                     // Provider header — main picker's embedded header:
                     // start16/end8 top10/bottom8, 24dp circled chevron,
                     // hairline under the name ([PickerProviderCardHeader]).
@@ -488,8 +505,12 @@ fun UnifiedModelPickerSheet(
                                 else collapsedInstanceIds + inst.id
                         },
                     )
-                    if (!collapsed) {
-                        entries.forEachIndexed { i, entry ->
+                }
+            }
+            if (!collapsed) {
+                entries.forEachIndexed { i, entry ->
+                    item(key = "pe_${inst.id}_${entry.id}") {
+                        PickerCardSegment(isFirst = false, isLast = i == entries.lastIndex) {
                             if (i > 0) {
                                 HorizontalDivider(
                                     modifier = Modifier.padding(start = 52.dp, end = 16.dp),
@@ -558,8 +579,13 @@ fun UnifiedModelPickerSheet(
                                     )
                                 }
                             }
+                            // The last member's 10dp row padding alone left it
+                            // crowding the card's bottom edge — keep the old
+                            // trailing spacer on the final segment.
+                            if (i == entries.lastIndex) {
+                                Spacer(Modifier.height(4.dp))
+                            }
                         }
-                        Spacer(Modifier.height(4.dp))
                     }
                 }
             }
@@ -574,6 +600,36 @@ fun UnifiedModelPickerSheet(
             onDismiss = { quickTestEntry = null },
         )
     }
+}
+
+/**
+ * [T-android-picker-per-row-items] (#6) One vertical segment of a picker
+ * section card: surfaceContainerHigh, 14dp corners, the card's outer 16dp
+ * horizontal inset and 6dp top/bottom inset carried by the FIRST/LAST
+ * segments. Stacked segments tile into the same visual card
+ * [PickerSectionCard] drew, but each is an independent LazyColumn item so
+ * the rows inside compose on demand.
+ */
+@Composable
+private fun PickerCardSegment(
+    isFirst: Boolean,
+    isLast: Boolean,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val shape = when {
+        isFirst && isLast -> RoundedCornerShape(14.dp)
+        isFirst -> RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp)
+        isLast -> RoundedCornerShape(bottomStart = 14.dp, bottomEnd = 14.dp)
+        else -> RoundedCornerShape(0.dp)
+    }
+    Column(
+        modifier = Modifier
+            .padding(horizontal = 16.dp)
+            .padding(top = if (isFirst) 6.dp else 0.dp, bottom = if (isLast) 6.dp else 0.dp)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh, shape)
+            .clip(shape),
+        content = content,
+    )
 }
 
 /** Subtitle for the injected System virtual rows, keyed on the model id. */

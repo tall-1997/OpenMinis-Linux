@@ -261,13 +261,43 @@ fun MultiAgentSettingsScreen(
             var showMindMapOverwriteDialog by remember { mutableStateOf(false) }
             var mindMapDraft by remember { mutableStateOf("") }
             var mindMapStatus by remember { mutableStateOf<String?>(null) }
-            val importedTeam = remember(mindMapDraft) {
-                com.openminis.app.tools.MindMapTeamImport.parse(mindMapDraft)
+            // [T-mindmap-import-debounce] Both parses used to sit in
+            // remember(mindMapDraft): every keystroke re-ran
+            // MindMapTeamImport.parse TWICE (importTeamFromMindMap re-parses
+            // internally) in composition. Now the settled draft is parsed once
+            // per 300 ms of typing silence; while typing the previous preview
+            // simply stays on screen.
+            var importedTeam by remember {
+                mutableStateOf<com.openminis.app.tools.MindMapTeamImport.ImportedTeam?>(null)
             }
-            val importedRoles = remember(mindMapDraft) {
-                com.openminis.app.tools.CollabRoles.importTeamFromMindMap(mindMapDraft)
+            var importedRoles by remember {
+                mutableStateOf<List<com.openminis.app.tools.CollabRoles.Role>>(emptyList())
             }
-            val roles = com.openminis.app.tools.CollabRoles.allWithCustom(context)
+            LaunchedEffect(mindMapDraft) {
+                kotlinx.coroutines.delay(300)
+                val draft = mindMapDraft
+                importedTeam = com.openminis.app.tools.MindMapTeamImport.parse(draft)
+                importedRoles = com.openminis.app.tools.CollabRoles.importTeamFromMindMap(draft)
+            }
+            // [T-collab-roles-prefs-io] allWithCustom parses the saved-roles
+            // JSON out of SharedPreferences; it used to run bare in
+            // composition on every recomposition. Loaded once into state (off
+            // the main thread), refreshed explicitly after every add/edit/
+            // delete/import via [rolesVersion].
+            var rolesVersion by remember { mutableStateOf(0) }
+            var roles by remember {
+                mutableStateOf<List<com.openminis.app.tools.CollabRoles.Role>>(emptyList())
+            }
+            LaunchedEffect(rolesVersion) {
+                roles = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    com.openminis.app.tools.CollabRoles.allWithCustom(context)
+                }
+            }
+            fun refreshRoles() { rolesVersion++ }
+            // loadCustom == allWithCustom filtered to !builtin (same parse);
+            // reused instead of re-reading prefs in the dialogs below.
+            val savedCustomRoles = roles.filterNot { it.builtin }
+            val customRoleNames = savedCustomRoles.map { it.name.trim().lowercase() }.toSet()
             roles.forEachIndexed { index, role ->
                 SettingsRow(
                     title = role.name + if (role.builtin) "" else " *",
@@ -312,17 +342,15 @@ fun MultiAgentSettingsScreen(
                     roles = importedRoles,
                     onDismiss = { showMindMapDialog = false },
                     onRequestImport = {
-                        val customNames = com.openminis.app.tools.CollabRoles.loadCustom(context)
-                            .map { it.name.trim().lowercase() }
-                            .toSet()
                         val conflicts = importedRoles.map { it.name }
-                            .filter { it.trim().lowercase() in customNames }
+                            .filter { it.trim().lowercase() in customRoleNames }
                         if (conflicts.isEmpty()) {
                             val merged = com.openminis.app.tools.CollabRoles.mergeImportedCustom(
-                                com.openminis.app.tools.CollabRoles.loadCustom(context),
+                                savedCustomRoles,
                                 importedRoles,
                             )
                             com.openminis.app.tools.CollabRoles.saveCustom(context, merged)
+                            refreshRoles()
                             mindMapStatus = context.getString(
                                 R.string.settings_collab_roles_import_done,
                                 importedRoles.size,
@@ -339,11 +367,10 @@ fun MultiAgentSettingsScreen(
                     onDismissRequest = { showMindMapOverwriteDialog = false },
                     title = { Text(stringResource(R.string.settings_collab_roles_import_overwrite_title)) },
                     text = {
-                        val customNames = com.openminis.app.tools.CollabRoles.loadCustom(context)
-                            .map { it.name.trim().lowercase() }
-                            .toSet()
+                        // [T-collab-roles-prefs-io] Conflict names come from the
+                        // saved-roles state — no prefs re-read in composition.
                         val conflicts = importedRoles.map { it.name }
-                            .filter { it.trim().lowercase() in customNames }
+                            .filter { it.trim().lowercase() in customRoleNames }
                             .distinct()
                         Text(
                             stringResource(
@@ -355,10 +382,11 @@ fun MultiAgentSettingsScreen(
                     confirmButton = {
                         TextButton(onClick = {
                             val merged = com.openminis.app.tools.CollabRoles.mergeImportedCustom(
-                                com.openminis.app.tools.CollabRoles.loadCustom(context),
+                                savedCustomRoles,
                                 importedRoles,
                             )
                             com.openminis.app.tools.CollabRoles.saveCustom(context, merged)
+                            refreshRoles()
                             mindMapStatus = context.getString(
                                 R.string.settings_collab_roles_import_done,
                                 importedRoles.size,
@@ -381,17 +409,17 @@ fun MultiAgentSettingsScreen(
                     initial = editingRole,
                     onDismiss = { editingRole = null; showAddDialog = false },
                     onSave = { saved ->
-                        val customs = com.openminis.app.tools.CollabRoles
-                            .loadCustom(context).filter { it.name != saved.name }
+                        val customs = savedCustomRoles.filter { it.name != saved.name }
                         com.openminis.app.tools.CollabRoles.saveCustom(context, customs + saved)
+                        refreshRoles()
                         editingRole = null
                         showAddDialog = false
                     },
                     onDelete = if (editingRole?.builtin == false) ({
                         val target = editingRole!!
-                        val customs = com.openminis.app.tools.CollabRoles
-                            .loadCustom(context).filter { it.name != target.name }
+                        val customs = savedCustomRoles.filter { it.name != target.name }
                         com.openminis.app.tools.CollabRoles.saveCustom(context, customs)
+                        refreshRoles()
                         editingRole = null
                     }) else null,
                 )

@@ -9,6 +9,7 @@ import com.openminis.app.logging.AppLogger
 import com.openminis.app.tools.AtomicFileWrite
 import java.io.File
 import java.io.IOException
+import com.openminis.app.util.Digest
 import com.openminis.app.util.IsoTime
 
 /**
@@ -243,7 +244,7 @@ class MemoryRepository(private val memoryDir: File) {
 
         val existing = if (file.exists()) file.readText() else ""
         if (expectedRevision != null) {
-            val actual = sha256Hex(existing)
+            val actual = Digest.sha256Hex(existing)
             if (!actual.startsWith(expectedRevision)) {
                 return "Error: MEMORY_CONFLICT — 日志文件已被并发更新（期望 revision $expectedRevision，实际 ${actual.take(16)}…）。请先 memory_get 重新读取后再写。"
             }
@@ -256,7 +257,7 @@ class MemoryRepository(private val memoryDir: File) {
 
         return try {
             writeTextAtomic(file, newContent)
-            val newRevision = sha256Hex(newContent).take(16)
+            val newRevision = Digest.sha256Hex(newContent).take(16)
             Log.i(TAG, "Memory written to $fileName (${content.length} chars, revision $newRevision)")
             "Memory saved to $fileName (${content.length} chars, revision $newRevision)"
         } catch (e: Exception) {
@@ -269,13 +270,8 @@ class MemoryRepository(private val memoryDir: File) {
     fun currentDailyRevision(): String? {
         val file = File(memoryDir, "${IsoTime.formatLocalDate()}.md")
         if (!file.exists()) return null
-        return sha256Hex(file.readText()).take(16)
+        return Digest.sha256Hex(file.readText()).take(16)
     }
-
-    private fun sha256Hex(s: String): String =
-        java.security.MessageDigest.getInstance("SHA-256")
-            .digest(s.toByteArray(Charsets.UTF_8))
-            .joinToString("") { "%02x".format(it) }
 
     // -- memory_get --
 

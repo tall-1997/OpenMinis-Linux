@@ -436,6 +436,36 @@ class RootfsManager private constructor(private val context: Context) {
      */
     private fun injectHostCaBundle() {
         ensureCaHookExecutable()
+        // [T-ca-export-stamp] The export walks the whole AndroidCAStore and
+        // rewrites the per-cert trees + bundle on every call. Probe the alias
+        // set first (cheap string enumeration, no cert decoding) and skip the
+        // entire rewrite when it has not changed and the previous bundle is on
+        // disk — the export is a deterministic function of that alias set, so
+        // the on-disk result is already correct. First run (no stamp) behaves
+        // exactly as before.
+        val caStamp = File(rootfsDir, "etc/ssl/.minis-ca-alias-stamp")
+        val aliasProbe = ArrayList<String>()
+        try {
+            val ks = KeyStore.getInstance("AndroidCAStore")
+            ks.load(null)
+            val e = ks.aliases()
+            while (e.hasMoreElements()) aliasProbe.add(e.nextElement())
+        } catch (t: Throwable) {
+            Log.w(TAG, "[CA] AndroidCAStore alias probe failed: ${t.message}")
+        }
+        // "|v1" salt: if the stamping scheme itself changes, old stamps stop matching.
+        val aliasFp = CaBundle.sha256Hex(
+            (aliasProbe.sorted().joinToString("\n") + "|v1").toByteArray(Charsets.UTF_8),
+        )
+        val existingBundle = File(rootfsDir, "etc/ssl/certs/ca-certificates.crt")
+        if (aliasProbe.isNotEmpty() &&
+            caStamp.isFile &&
+            runCatching { caStamp.readText().trim() == aliasFp }.getOrDefault(false) &&
+            existingBundle.isFile && existingBundle.length() >= 2048L
+        ) {
+            Log.i(TAG, "[CA] system CA alias set unchanged (${aliasProbe.size}) — skipping re-export")
+            return
+        }
         val androidPems = LinkedHashMap<String, String>()
         try {
             val ks = KeyStore.getInstance("AndroidCAStore")
@@ -569,6 +599,12 @@ class RootfsManager private constructor(private val context: Context) {
         val share = File(rootfsDir, "usr/local/share/ca-certificates")
         share.mkdirs()
         publishUnprivilegedCa(guestCerts, pem.toString())
+        // Stamp only after the full export succeeded, so a failed rewrite is
+        // retried on the next boot instead of being permanently skipped.
+        runCatching {
+            caStamp.parentFile?.mkdirs()
+            caStamp.writeText(aliasFp)
+        }
         Log.i(TAG, "[CA] injected $source (${pem.length} bytes) → ${dest.absolutePath}")
     }
 
@@ -776,6 +812,19 @@ class RootfsManager private constructor(private val context: Context) {
     }
 
     /**
+     * App-version string used as the overlay short-circuit stamp. The overlay
+     * content (default_mount assets, guest config, CA export) ships with the
+     * APK, so the version identifies it; anything else that can invalidate the
+     * stamp (fresh rootfs extract) deletes the stamp file along with the tree.
+     */
+    private fun appVersionStamp(): String = try {
+        val info = context.packageManager.getPackageInfo(context.packageName, 0)
+        "${info.versionName ?: "?"}"
+    } catch (t: Throwable) {
+        "unknown"
+    }
+
+    /**
      * No-op when the asset dir is missing or the rootfs hasn't been extracted.
      */
     suspend fun applyDefaultMountOverlay() = withContext(Dispatchers.IO) {
@@ -794,6 +843,19 @@ class RootfsManager private constructor(private val context: Context) {
         }
         if (rootEntries.isNullOrEmpty()) {
             Log.d(TAG, "[DefaultMount] no default_mount assets found, skipping overlay")
+            return@withContext
+        }
+
+        // [T-overlay-version-stamp] The overlay (asset copy + configureUbuntuGuest
+        // + full CA re-export) used to run on EVERY boot. Its content changes
+        // only with an app update, so a stamp file holding the app version
+        // short-circuits repeat boots of the same build: first boot writes it,
+        // later boots skip, an app update (or a rootfs reinstall — the stamp
+        // lives inside the tree and is deleted with it) re-runs everything.
+        val stamp = File(rootfsDir, "var/minis/.default-mount-overlay-stamp")
+        val expected = "v=" + appVersionStamp()
+        if (stamp.isFile && runCatching { stamp.readText().trim() == expected }.getOrDefault(false)) {
+            Log.i(TAG, "[DefaultMount] overlay already applied for $expected — skipping re-run")
             return@withContext
         }
 
@@ -826,6 +888,12 @@ class RootfsManager private constructor(private val context: Context) {
 
         val elapsedMs = (System.nanoTime() - startNs) / 1_000_000.0
         Log.i(TAG, "[DefaultMount] Done. $fileCount file(s) overlaid, $markerRemoved EXTERNALLY-MANAGED marker(s) removed, $lockedCount minis-mcp-cli lib path(s) locked read-only in %.1fms".format(elapsedMs))
+        // Stamp only AFTER the whole overlay succeeded — a mid-overlay failure
+        // must leave no stamp so the next boot retries.
+        runCatching {
+            stamp.parentFile?.mkdirs()
+            stamp.writeText(expected)
+        }
     }
 
     /**
@@ -924,193 +992,6 @@ class RootfsManager private constructor(private val context: Context) {
         return BIN_DIR_PREFIXES.any { normalized.startsWith(it) }
     }
 
-    // --- POSIX tar extraction ---
-
-    /**
-     * Extract a POSIX tar stream into the target directory.
-     * Handles regular files, directories, and symlinks.
-     * Does not depend on any external library.
-     */
-    internal fun extractTar(input: InputStream, targetDir: File) {
-        val header = ByteArray(512)
-
-        while (true) {
-            val bytesRead = readFully(input, header)
-            if (bytesRead == 0) break
-            if (bytesRead < 512) throw java.io.IOException("short tar header: $bytesRead")
-
-            // Check for end-of-archive (two consecutive zero blocks)
-            if (header.all { it == 0.toByte() }) break
-
-            val name = extractString(header, 0, 100)
-            val modeOctal = extractString(header, 100, 8)
-            val sizeOctal = extractString(header, 124, 12)
-            val typeFlag = header[156].toInt().toChar()
-            val linkName = extractString(header, 157, 100)
-            val mode = modeOctal.trim().toIntOrNull(8) ?: 0
-
-            // Handle GNU/POSIX long names via prefix field (bytes 345-500)
-            val prefix = extractString(header, 345, 155)
-            val fullName = if (prefix.isNotEmpty()) "$prefix/$name" else name
-
-            if (fullName.isEmpty()) break
-
-            val size = sizeOctal.trim().toLongOrNull(8) ?: 0L
-            val outFile = File(targetDir, fullName)
-
-            when (typeFlag) {
-                '5', 'D' -> {
-                    // Directory
-                    outFile.mkdirs()
-                }
-                '2' -> {
-                    // Symbolic link. Android app-private storage often rejects
-                    // createSymbolicLink; fall back to copying the referent so
-                    // /etc/ssl/certs hash names still resolve (otherwise apt/curl
-                    // report "no valid CA chain").
-                    outFile.parentFile?.mkdirs()
-                    if (outFile.exists()) outFile.delete()
-                    val linkPath = Paths.get(linkName)
-                    try {
-                        Files.createSymbolicLink(outFile.toPath(), linkPath)
-                    } catch (_: Exception) {
-                        val dest = if (linkPath.isAbsolute) {
-                            File(targetDir, linkPath.toString().trimStart('/'))
-                        } else {
-                            File(outFile.parentFile, linkName)
-                        }
-                        try {
-                            if (dest.exists() && dest.isFile) {
-                                dest.copyTo(outFile, overwrite = true)
-                            } else {
-                                Log.w(TAG, "Failed to create symlink: $fullName -> $linkName")
-                            }
-                        } catch (t: Exception) {
-                            Log.w(TAG, "Failed to materialize symlink $fullName: ${t.message}")
-                        }
-                    }
-                }
-                '0', '\u0000' -> {
-                    // Regular file (type '0' or null/legacy)
-                    outFile.parentFile?.mkdirs()
-                    outFile.outputStream().use { output ->
-                        var remaining = size
-                        val buf = ByteArray(8192)
-                        while (remaining > 0) {
-                            val toRead = minOf(buf.size.toLong(), remaining).toInt()
-                            val n = input.read(buf, 0, toRead)
-                            if (n < 0) {
-                                throw java.io.IOException("short read of $name, $remaining bytes missing")
-                            }
-                            output.write(buf, 0, n)
-                            remaining -= n
-                        }
-                    }
-                    // Preserve executable permission from tar header
-                    if (mode and 0b001_001_001 != 0) {
-                        outFile.setExecutable(true, false)
-                    }
-                    // Skip padding to next 512-byte boundary
-                    val remainder = (size % 512).toInt()
-                    if (remainder != 0) {
-                        skipFully(input, (512 - remainder).toLong())
-                    }
-                    continue // Already consumed data + padding
-                }
-                '1' -> {
-                    // Hard link — create a copy
-                    outFile.parentFile?.mkdirs()
-                    val linkTarget = File(targetDir, linkName)
-                    if (linkTarget.exists()) {
-                        linkTarget.copyTo(outFile, overwrite = true)
-                    }
-                }
-                else -> {
-                    // Unknown type, skip data
-                }
-            }
-
-            // Skip data blocks for non-file entries that we didn't consume above
-            if (typeFlag != '0' && typeFlag != '\u0000' && size > 0) {
-                val blocks = (size + 511) / 512 * 512
-                skipFully(input, blocks)
-            }
-        }
-    }
-
-    internal fun extractString(header: ByteArray, offset: Int, length: Int): String {
-        val end = minOf(offset + length, header.size)
-        var actualEnd = offset
-        for (i in offset until end) {
-            if (header[i] == 0.toByte()) break
-            actualEnd = i + 1
-        }
-        return String(header, offset, actualEnd - offset, Charset.forName("UTF-8"))
-    }
-
-    internal fun readFully(input: InputStream, buf: ByteArray): Int {
-        var offset = 0
-        while (offset < buf.size) {
-            val n = input.read(buf, offset, buf.size - offset)
-            if (n < 0) return offset
-            offset += n
-        }
-        return offset
-    }
-
-    internal fun skipFully(input: InputStream, count: Long) {
-        var remaining = count
-        val buf = ByteArray(8192)
-        while (remaining > 0) {
-            val toRead = minOf(buf.size.toLong(), remaining).toInt()
-            val n = input.read(buf, 0, toRead)
-            if (n < 0) throw java.io.IOException("short tar skip: $remaining")
-            remaining -= n
-        }
-    }
-
-    /**
-     * InputStream wrapper that reports cumulative bytes read as a 0..1 fraction.
-     * Throttles updates so each +1% bump emits at most once. Designed to wrap
-     * the asset stream (not the gzip stream) so progress is monotonic against
-     * a size we can cheaply know up front.
-     */
-    private class ProgressInputStream(
-        inner: InputStream,
-        private val total: Long,
-        private val onProgress: (Float) -> Unit,
-    ) : FilterInputStream(inner) {
-        private var read: Long = 0
-        private var lastReportedPercent: Int = -1
-
-        override fun read(): Int {
-            val b = super.read()
-            if (b >= 0) { read += 1; publish() }
-            return b
-        }
-
-        override fun read(b: ByteArray, off: Int, len: Int): Int {
-            val n = super.read(b, off, len)
-            if (n > 0) { read += n; publish() }
-            return n
-        }
-
-        override fun skip(n: Long): Long {
-            val skipped = super.skip(n)
-            if (skipped > 0) { read += skipped; publish() }
-            return skipped
-        }
-
-        private fun publish() {
-            if (total <= 0) return
-            val pct = ((read * 100) / total).toInt().coerceIn(0, 99)
-            if (pct != lastReportedPercent) {
-                lastReportedPercent = pct
-                onProgress(pct / 100f)
-            }
-        }
-    }
-
     private val aptMutex get() = SandboxResourceGate.aptMutex
     private val pipWorldFile: File get() = File(context.filesDir, "pip-world.txt")
     private val pipWorldFailedFile: File get() = File(context.filesDir, "pip-world-failed.txt")
@@ -1175,13 +1056,27 @@ class RootfsManager private constructor(private val context: Context) {
         aptMutex.withLock { seedNetworkToolsLocked() }
     }
 
+    /**
+     * proot prefix for the in-guest helper invocations (apt/pip/mirror), via
+     * [PRootKernel.commonArgv]. Recorded current behavior kept as-is: these
+     * runs bind only /dev+/proc (no /sys) except the apt install, pass NO bind
+     * mounts and NO --native-offload socket — they are boot-time plumbing, not
+     * agent workloads.
+     */
+    private fun helperProotCmd(includeSys: Boolean, vararg tail: String): List<String> =
+        commonArgv(
+            prootPath = prootBinary.absolutePath,
+            rootfsDir = rootfsDir.absolutePath,
+            bindMounts = null,
+            includeSys = includeSys,
+            includeNativeOffload = false,
+        ) + tail
+
     private fun runMinisMirrorAutoLocked() {
         val helper = File(rootfsDir, "usr/local/bin/minis-mirror")
         if (!helper.exists()) return
-        val cmd = listOf(
-            prootBinary.absolutePath, "-0", "--link2symlink", "--kill-on-exit",
-            "-r", rootfsDir.absolutePath,
-            "-b", "/dev", "-b", "/proc", "-w", "/root",
+        val cmd = helperProotCmd(
+            includeSys = false,
             "/usr/local/bin/minis-mirror", "auto",
         )
         val r = runProotWithDeadline(cmd, prootLoaderEnv(), 180)
@@ -1196,10 +1091,8 @@ class RootfsManager private constructor(private val context: Context) {
         // to install — the agent's own early `apt-get install python3` is
         // exactly the caller that would otherwise wedge on the residue.
         runCatching {
-            val sweep = listOf(
-                prootBinary.absolutePath, "-0", "--link2symlink", "--kill-on-exit",
-                "-r", rootfsDir.absolutePath,
-                "-b", "/dev", "-b", "/proc", "-w", "/root",
+            val sweep = helperProotCmd(
+                includeSys = false,
                 "/bin/sh", "-c", GuestAptScript.staleLockSweep(),
             )
             val r = runProotWithDeadline(sweep, prootLoaderEnv(), 30)
@@ -1363,10 +1256,8 @@ class RootfsManager private constructor(private val context: Context) {
     }
 
     private fun runAptMarkShowManualUnlocked(): List<String>? {
-        val cmd = listOf(
-            prootBinary.absolutePath, "-0", "--link2symlink", "--kill-on-exit",
-            "-r", rootfsDir.absolutePath,
-            "-b", "/dev", "-b", "/proc", "-w", "/root",
+        val cmd = helperProotCmd(
+            includeSys = false,
             "/usr/bin/apt-mark", "showmanual",
         )
         val r = runProotWithDeadline(cmd, prootLoaderEnv(), 120)
@@ -1388,10 +1279,10 @@ class RootfsManager private constructor(private val context: Context) {
         val pkgs = pkgNames.filter { DPKG_PKG_NAME.matches(it) }
         if (pkgs.isEmpty()) return AptResult(0, "")
         val script = GuestAptScript.install(pkgs)
-        val cmd = listOf(
-            prootBinary.absolutePath, "-0", "--link2symlink", "--kill-on-exit",
-            "-r", rootfsDir.absolutePath,
-            "-b", "/dev", "-b", "/proc", "-b", "/sys", "-w", "/root",
+        // The ONLY helper invocation that binds /sys — kept identical to the
+        // former hand-rolled list (see helperProotCmd docs).
+        val cmd = helperProotCmd(
+            includeSys = true,
             "/bin/sh", "-c", script,
         )
         val r = runProotWithDeadline(cmd, prootLoaderEnv(), 600)
@@ -1447,10 +1338,8 @@ class RootfsManager private constructor(private val context: Context) {
 
     private fun runPipLeavesUnlocked(): Set<String>? {
         val loaderEnv = prootLoaderEnv()
-        val cmd = listOf(
-            prootBinary.absolutePath, "-0", "--link2symlink", "--kill-on-exit",
-            "-r", rootfsDir.absolutePath,
-            "-b", "/dev", "-b", "/proc", "-w", "/root",
+        val cmd = helperProotCmd(
+            includeSys = false,
             "/usr/bin/python3", "-m", "pip", "list", "--not-required",
             "--format=freeze", "--disable-pip-version-check",
         )
@@ -1509,10 +1398,8 @@ class RootfsManager private constructor(private val context: Context) {
         val req = File(tmp, "pip-world-requirements.txt")
         req.writeText(names.joinToString("\n") + "\n")
         val loaderEnv = prootLoaderEnv()
-        val cmd = listOf(
-            prootBinary.absolutePath, "-0", "--link2symlink", "--kill-on-exit",
-            "-r", rootfsDir.absolutePath,
-            "-b", "/dev", "-b", "/proc", "-w", "/root",
+        val cmd = helperProotCmd(
+            includeSys = false,
             "/usr/bin/python3", "-m", "pip", "install",
             "--ignore-installed", "--disable-pip-version-check", "--no-input",
             "-r", "/tmp/pip-world-requirements.txt",
@@ -1757,7 +1644,6 @@ class RootfsManager private constructor(private val context: Context) {
         private const val PROOT_ASSET = "proot-aarch64"
         private const val DEFAULT_MOUNT_ASSET = "default_mount"
         private const val SDK_BUILD_TOOLS_REV = "35.0.2"
-
 
         /**
          * Android 14+ stores CAs in the conscrypt APEX; `/system/etc/security/cacerts`

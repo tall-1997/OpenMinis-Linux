@@ -165,6 +165,23 @@ class VoiceActivityDetector(
         private const val LEVEL_SCALE = 0.95f
         private const val LEVEL_FLOOR = 0.04f
 
+        /**
+         * [T-android-vad-level-throttle] Push the waveform level every N-th
+         * capture frame instead of every frame. The loop runs at ~94 Hz
+         * (512-sample frames @ 48 kHz) and each push costs a [levelFor] sweep
+         * of the frame on the capture thread plus a 40-element list rebuild in
+         * SpeechRecognitionManager.pushLevel downstream — at 94 Hz that is pure
+         * waste, the waveform UI cannot render faster than a few tens of Hz
+         * anyway. 4 frames ≈ 23 Hz, which keeps the bars fluid.
+         *
+         * Safe to thin: onLevel is DISPLAY-ONLY. Every consumer
+         * (SystemSpeechRecognitionEngine / ProviderSpeechRecognitionEngine)
+         * forwards it straight to the manager's waveform StateFlow; the VAD's
+         * decisions come from the library's own callbacks and the session
+         * timers, which read [isSpeaking], never this level.
+         */
+        private const val LEVEL_PUSH_EVERY_FRAMES = 4
+
         /** The library always emits 16 kHz mono PCM16 WAV. */
         // internal, not private: WavSegmentMerger needs the same two constants
         // to concatenate segments, and a second copy would be free to drift.
@@ -251,6 +268,13 @@ class VoiceActivityDetector(
     private var smoothedGain = 1.0f
     private var noiseFloorRms = INITIAL_NOISE_FLOOR
 
+    /**
+     * [T-android-vad-level-throttle] Frame counter for the level thinning in
+     * [captureLoop]. Capture-thread-only (single coroutine touches it), reset
+     * on [start].
+     */
+    private var levelFrameCounter = 0
+
     /** Samples fed to the VAD since the current segment opened; drives the length cap. */
     private var segmentSamples = 0L
 
@@ -296,6 +320,7 @@ class VoiceActivityDetector(
         smoothedGain = 1.0f
         noiseFloorRms = INITIAL_NOISE_FLOOR
         segmentSamples = 0
+        levelFrameCounter = 0
         isSpeaking = false
 
         val wrapper = try {
@@ -431,7 +456,13 @@ class VoiceActivityDetector(
             // Waveform is driven from the boosted TAP, not the library's
             // onVoiceDidContinue: that only fires DURING a detected segment, so
             // relying on it leaves the bars flat until VAD trips (iOS :657-664).
-            listener.onLevel(levelFor(floats, n))
+            // [T-android-vad-level-throttle] Thinned to every 4th frame
+            // (~23 Hz) — the level is display-only and the per-frame push used
+            // to hammer SpeechRecognitionManager's StateFlow at ~94 Hz.
+            if (++levelFrameCounter >= LEVEL_PUSH_EVERY_FRAMES) {
+                levelFrameCounter = 0
+                listener.onLevel(levelFor(floats, n))
+            }
 
             val frame = if (n == FRAME_SAMPLES) floats else floats.copyOf(n)
 

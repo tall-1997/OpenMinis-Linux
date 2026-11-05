@@ -202,10 +202,9 @@ private fun StatRow(label: String, value: String) {
 }
 
 // iOS formatting: "%.1fM" >= 1M, "%.1fK" >= 1k, raw otherwise.
-private fun formatTokens(n: Long): String = when {
-    n >= 1_000_000L -> String.format("%.1fM", n / 1_000_000.0)
-    n >= 1_000L -> String.format("%.1fK", n / 1_000.0)
-    else -> n.toString()
-}
+// [T-android-format-converge] Body moved to [formatTokenCount]; this keeps
+// the sheet profile — uppercase suffix, one decimal always, normal magnitude.
+private fun formatTokens(n: Long): String =
+    formatTokenCount(n, uppercaseSuffix = true)
 
 private fun formatTokens(n: Int): String = formatTokens(n.toLong())

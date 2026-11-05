@@ -66,47 +66,22 @@ class AlarmOffloadManager(private val context: Context) {
         val id = UUID.randomUUID().toString()
         val requestCode = id.hashCode() and 0x7FFFFFFF // positive int
 
-        val calendar = Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, hour)
-            set(Calendar.MINUTE, minute)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-            // If the time is already past today, push to tomorrow
-            if (before(Calendar.getInstance())) {
-                add(Calendar.DAY_OF_YEAR, 1)
-            }
-        }
+        // [T-android-alarm-rearm-chain] One shared "next occurrence" computation
+        // for every mode: the first shot is registered below and the RECEIVER
+        // re-arms each following occurrence after every fire (see
+        // [onAlarmFired]) — the same receiver-reschedule design
+        // ScheduledTaskManager uses because setRepeating is inexact and Doze
+        // can delay it by hours.
+        val triggerAt = nextOccurrenceMs(hour, minute, repeatMode)
 
         val pendingIntent = buildPendingIntent(id, requestCode, label)
 
         try {
-            when (repeatMode) {
-                RepeatMode.ONCE -> {
-                    alarmManager.setExactAndAllowWhileIdle(
-                        AlarmManager.RTC_WAKEUP,
-                        calendar.timeInMillis,
-                        pendingIntent,
-                    )
-                }
-                RepeatMode.DAILY -> {
-                    alarmManager.setRepeating(
-                        AlarmManager.RTC_WAKEUP,
-                        calendar.timeInMillis,
-                        AlarmManager.INTERVAL_DAY,
-                        pendingIntent,
-                    )
-                }
-                RepeatMode.WEEKDAYS -> {
-                    // For weekdays we schedule the next weekday occurrence and
-                    // re-schedule from the receiver to keep the chain going.
-                    skipToNextWeekday(calendar)
-                    alarmManager.setExactAndAllowWhileIdle(
-                        AlarmManager.RTC_WAKEUP,
-                        calendar.timeInMillis,
-                        pendingIntent,
-                    )
-                }
-            }
+            alarmManager.setExactAndAllowWhileIdle(
+                AlarmManager.RTC_WAKEUP,
+                triggerAt,
+                pendingIntent,
+            )
         } catch (e: SecurityException) {
             AppLogger.error(TAG, "Cannot schedule exact alarm – missing SCHEDULE_EXACT_ALARM permission: ${e.message}")
             return "Error: exact alarm permission not granted. Please allow exact alarms in system settings."
@@ -120,7 +95,7 @@ class AlarmOffloadManager(private val context: Context) {
             put("minute", minute)
             put("repeatMode", repeatMode.name)
             put("type", "alarm")
-            put("triggerAtMs", calendar.timeInMillis)
+            put("triggerAtMs", triggerAt)
         }
         persistAlarm(entry)
 
@@ -186,9 +161,11 @@ class AlarmOffloadManager(private val context: Context) {
                 sb.append(" duration=${a.getInt("durationSec")}s")
             }
             // DAILY/WEEKDAYS may have a triggerAtMs from the *first* fire
-            // that's now in the past — that's normal (the OS keeps repeating
-            // them). Only mark non-repeating entries as [expired]; repeating
-            // entries we leave unannotated.
+            // that's now in the past — that's normal (the receiver re-arms
+            // each occurrence and overwrites triggerAtMs; a stale value just
+            // means the alarm has not fired since it was scheduled). Only
+            // mark non-repeating entries as [expired]; repeating entries we
+            // leave unannotated.
             val triggerAt = a.optLong("triggerAtMs", 0L)
             val mode = a.optString("repeatMode", "ONCE")
             val nonRepeating = a.getString("type") == "timer" || mode == "ONCE"
@@ -230,9 +207,17 @@ class AlarmOffloadManager(private val context: Context) {
     }
 
     /**
-     * Called from [AlarmReceiver] right after an alarm fires. Looks up the
-     * entry in prefs and drops it iff it's a ONCE alarm or a timer; for
-     * DAILY/WEEKDAYS the OS re-fires on its own and we keep the entry.
+     * Called from [AlarmReceiver] right after an alarm fires. ONCE alarms /
+     * timers are dropped from prefs so the next `android-alarm list` call no
+     * longer surfaces them.
+     *
+     * [T-android-alarm-rearm-chain] DAILY/WEEKDAYS are RE-ARMED here instead
+     * of being left to the OS: every mode registers through
+     * setExactAndAllowWhileIdle, which is a one-shot, so the receiver owns the
+     * repeat chain — the next occurrence is computed from hour:minute
+     * ([nextOccurrenceMs]), persisted as the entry's triggerAtMs and
+     * registered again ([registerExact]). Without this, a repeating alarm
+     * fired exactly once and the chain died.
      */
     fun onAlarmFired(alarmId: String) {
         val alarms = loadAlarms()
@@ -241,16 +226,84 @@ class AlarmOffloadManager(private val context: Context) {
             if (a.optString("id") != alarmId) continue
             val mode = a.optString("repeatMode", "ONCE")
             val nonRepeating = a.optString("type") == "timer" || mode == "ONCE"
-            if (!nonRepeating) {
-                AppLogger.info(TAG, "alarm id=$alarmId mode=$mode fired — keeping entry (repeats)")
+            if (nonRepeating) {
+                alarms.remove(i)
+                prefs.edit().putString(KEY_ALARMS, alarms.toString()).apply()
+                AppLogger.info(TAG, "alarm id=$alarmId mode=$mode fired — removed from prefs")
                 return
             }
-            alarms.remove(i)
+            // [T-android-alarm-rearm-chain] Repeating alarm: arm the next
+            // occurrence. A malformed entry (unknown repeatMode, missing
+            // hour/minute) can never be re-armed — drop it rather than leave
+            // a zombie that listAlarms surfaces forever.
+            val repeat = runCatching { RepeatMode.valueOf(mode) }.getOrNull()
+            if (repeat == null || !a.has("hour") || !a.has("minute")) {
+                alarms.remove(i)
+                prefs.edit().putString(KEY_ALARMS, alarms.toString()).apply()
+                AppLogger.warning(TAG, "alarm id=$alarmId mode=$mode not re-armable — dropped from prefs")
+                return
+            }
+            // Anchor the search on the just-fired slot (stored triggerAtMs,
+            // or now when the fire was late), so an early delivery can never
+            // re-arm the same slot and tight-loop the alarm.
+            val firedAtMs = maxOf(System.currentTimeMillis(), a.optLong("triggerAtMs", 0L))
+            val next = nextOccurrenceMs(a.getInt("hour"), a.getInt("minute"), repeat, firedAtMs)
+            a.put("triggerAtMs", next)
             prefs.edit().putString(KEY_ALARMS, alarms.toString()).apply()
-            AppLogger.info(TAG, "alarm id=$alarmId mode=$mode fired — removed from prefs")
+            val registered = registerExact(
+                a.optString("id"),
+                a.optInt("requestCode"),
+                a.optString("label", "Alarm"),
+                next,
+            )
+            AppLogger.info(
+                TAG,
+                "alarm id=$alarmId mode=$mode fired — re-armed for $next (registered=$registered)",
+            )
             return
         }
         AppLogger.warning(TAG, "alarm id=$alarmId fired but no matching prefs entry")
+    }
+
+    /**
+     * [T-android-alarm-boot-rearm] Re-register every persisted, still-live
+     * alarm with AlarmManager. Called from [AlarmReceiver]'s BOOT_COMPLETED /
+     * MY_PACKAGE_REPLACED branch: pending intents do not survive a reboot (or
+     * an app update), so without this sweep every offload alarm silently died.
+     *
+     * Repeating alarms re-register at their next occurrence computed from
+     * hour:minute, which also self-heals a trigger window missed while the
+     * device was powered off. ONCE alarms / timers re-register only if their
+     * stored trigger is still in the future — [sweepExpiredOnce] drops the
+     * rest first.
+     *
+     * @return the number of alarms re-registered.
+     */
+    fun rescheduleAll(): Int {
+        sweepExpiredOnce()
+        val alarms = loadAlarms()
+        val now = System.currentTimeMillis()
+        var count = 0
+        for (i in 0 until alarms.length()) {
+            val a = alarms.getJSONObject(i)
+            val id = a.optString("id")
+            val requestCode = a.optInt("requestCode")
+            // Same malformed-entry guard as cancelAllAlarms.
+            if (id.isEmpty() || requestCode == 0) continue
+            val mode = a.optString("repeatMode", "ONCE")
+            val next: Long = if (a.optString("type") == "timer" || mode == "ONCE") {
+                val triggerAt = a.optLong("triggerAtMs", 0L)
+                if (triggerAt <= now) continue
+                triggerAt
+            } else {
+                val repeat = runCatching { RepeatMode.valueOf(mode) }.getOrNull() ?: continue
+                if (!a.has("hour") || !a.has("minute")) continue
+                nextOccurrenceMs(a.getInt("hour"), a.getInt("minute"), repeat, now)
+            }
+            if (registerExact(id, requestCode, a.optString("label", "Alarm"), next)) count++
+        }
+        AppLogger.info(TAG, "rescheduleAll: re-registered $count alarm(s)")
+        return count
     }
 
     fun cancelAlarm(alarmId: String): String {
@@ -301,6 +354,62 @@ class AlarmOffloadManager(private val context: Context) {
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────
+
+    /**
+     * [T-android-alarm-rearm-chain] Next wall-clock occurrence of hour:minute
+     * strictly after [afterMs], weekend-skipped for [RepeatMode.WEEKDAYS].
+     *
+     * Anchored on "strictly after" rather than ">= now" so a receiver that
+     * fires a hair EARLY (or a stale triggerAtMs) can never re-arm the
+     * just-fired slot and tight-loop the alarm. Shared by [scheduleAlarm]
+     * (first shot), [onAlarmFired] (per-fire re-arm) and [rescheduleAll]
+     * (BOOT) so all three agree on what "next" means.
+     */
+    private fun nextOccurrenceMs(
+        hour: Int,
+        minute: Int,
+        mode: RepeatMode,
+        afterMs: Long = System.currentTimeMillis(),
+    ): Long {
+        val cal = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, hour)
+            set(Calendar.MINUTE, minute)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        while (cal.timeInMillis <= afterMs) {
+            cal.add(Calendar.DAY_OF_YEAR, 1)
+        }
+        if (mode == RepeatMode.WEEKDAYS) skipToNextWeekday(cal)
+        return cal.timeInMillis
+    }
+
+    /**
+     * Register one alarm at [triggerAtMs]. Mirrors ScheduledTaskManager's
+     * registration trio: setExactAndAllowWhileIdle first, falling back to
+     * inexact setAndAllowWhileIdle when the S+ exact-alarm permission was
+     * revoked, so a degraded permission means "fires eventually" instead of
+     * silently dropping the repeat chain. Used by the re-arm and BOOT paths,
+     * where no caller sees an error string.
+     *
+     * @return true when the alarm was registered (exactly or inexactly).
+     */
+    private fun registerExact(id: String, requestCode: Int, label: String, triggerAtMs: Long): Boolean {
+        val pi = buildPendingIntent(id, requestCode, label)
+        return try {
+            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMs, pi)
+            true
+        } catch (e: SecurityException) {
+            AppLogger.warning(TAG, "exact-alarm denied for id=$id (${e.message}); falling back to inexact")
+            try {
+                alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMs, pi)
+                true
+            } catch (t2: Throwable) {
+                AppLogger.error(TAG, "inexact fallback failed for id=$id: ${t2.message}")
+                false
+            }
+        }
+    }
 
     private fun buildPendingIntent(id: String, requestCode: Int, label: String): PendingIntent {
         val intent = Intent(context, AlarmReceiver::class.java).apply {

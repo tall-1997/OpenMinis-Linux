@@ -123,7 +123,7 @@ data class SessionTailRow(
 )
 
 @Dao
-interface ChatDao : MessageHeadDao, ChatTruncationDao {
+interface ChatDao : MessageHeadDao, ChatTruncationDao, SessionBindingDao, UsageStatsDao {
     // Sessions
     @Query("SELECT * FROM sessions ORDER BY updated_at DESC")
     fun observeSessions(): Flow<List<ChatSessionEntity>>
@@ -178,22 +178,6 @@ interface ChatDao : MessageHeadDao, ChatTruncationDao {
 
     @Query("UPDATE sessions SET model_binding = :binding, model_id = :modelId, updated_at = :updatedAt WHERE id = :id")
     suspend fun updateSessionBinding(id: String, binding: String, modelId: String, updatedAt: Long = System.currentTimeMillis())
-
-    /**
-     * Drop a session pin that names a model entry the provider list no longer has.
-     *
-     * [T-android-binding-clear-anchor] The needle used to be the bare id inside a
-     * `%…%` LIKE. Entry ids are `instance/model`, so clearing `inst/gpt-4` also
-     * un-pinned every session bound to `inst/gpt-4o` — silently dropping those
-     * users' model choice. The binding column holds compact JSON written as
-     * `{"type":"entry","entryId":"<id>"}` (ConfigBuiltins:210,
-     * HeadlessChatRunner:107), so matching the quoted `entryId` value is exact.
-     * `instr` rather than `LIKE` because the id itself is data: `_` and `%` are
-     * legal in model ids and LIKE would read them as wildcards, which would
-     * re-open the same over-match with a different spelling.
-     */
-    @Query("UPDATE sessions SET model_binding = NULL, updated_at = :updatedAt WHERE instr(model_binding, '\"entryId\":\"' || :entryId || '\"') > 0")
-    suspend fun clearBindingReferencing(entryId: String, updatedAt: Long = System.currentTimeMillis())
 
     @Query("DELETE FROM sessions WHERE id = :id")
     suspend fun deleteSession(id: String)
@@ -272,8 +256,10 @@ interface ChatDao : MessageHeadDao, ChatTruncationDao {
     suspend fun clearFolderForSessions(folderId: String)
 
     // Messages
-    @Query("$SAFE_MESSAGE_FROM WHERE session_id = :sessionId ORDER BY sort_order ASC")
-    suspend fun loadMessages(sessionId: String): List<MessageEntity>
+    // [Wave3-fix-6] The unbounded `loadMessages(sessionId)` query was deleted:
+    // its only caller (ChatRepository.loadMessages) has thrown "unbounded load
+    // disabled" for a long time. Page with loadMessagesPage /
+    // loadMessagesTail / loadMessagesTailRaw instead.
 
     @Query("$SAFE_MESSAGE_FROM WHERE id = :messageId AND session_id = :sessionId LIMIT 1")
     suspend fun getMessage(sessionId: String, messageId: String): MessageEntity?
@@ -393,8 +379,11 @@ interface ChatDao : MessageHeadDao, ChatTruncationDao {
     """)
     suspend fun loadMessagesTailRaw(sessionId: String, limit: Int, offset: Int): List<MessageEntity>
 
-    @Query("$SAFE_MESSAGE_FROM WHERE session_id = :sessionId ORDER BY sort_order ASC LIMIT 200")
-    fun observeMessages(sessionId: String): Flow<List<MessageEntity>>
+    // [Wave3-fix-5] `observeMessages(sessionId): Flow<...>` (a LIMIT 200
+    // hot-projection Flow) was deleted: it had zero collectors in the whole
+    // repository — the chat UI pages through loadSessionTail / loadOlderMessages
+    // instead, so the Flow only invited someone to collect an unbounded,
+    // silently-truncated-at-200 query. Re-add only with a bounded design.
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertMessage(message: MessageEntity)
@@ -452,49 +441,6 @@ interface ChatDao : MessageHeadDao, ChatTruncationDao {
         ORDER BY sort_order ASC
     """)
     suspend fun messageUsages(sessionId: String): List<MessageUsageRow>
-
-    /**
-     * Fetch all token usage records joined with session model_id for aggregation.
-     *
-     * [T-android-usage-orphan-rows] GH#168 (iOS a192fad0f): LEFT JOIN, not
-     * INNER JOIN. The Usage page is built entirely from this query, so any row
-     * it drops is silently missing from the user's totals. With an INNER JOIN,
-     * a message whose `sessions` row is gone — orphaned by a failed sync or
-     * migration, or a partially-deleted session — vanished from the totals even
-     * though its `token_usage` is still sitting in the table. Those tokens were
-     * really billed, so the page under-reported with nothing to indicate it.
-     *
-     * LEFT JOIN keeps those rows, which is why [UsageRecord.modelId] is
-     * nullable: it comes back NULL for an orphan, and the caller groups those
-     * under "Unknown" rather than discarding them.
-     *
-     * This does NOT recover usage from sessions the user deleted outright —
-     * deleting a session removes its message rows too. It only stops
-     * orphaned-but-present rows from being thrown away.
-     *
-     * [T-token-attribution-snapshot] The model now comes from
-     * `COALESCE(m.model_id, s.model_id)`, preferring the per-message snapshot
-     * written when the turn was persisted.
-     *
-     * `s.model_id` remains only as the fallback for rows written before that
-     * column existed. It is a single MUTABLE column per session, rewritten on
-     * every model switch (including silent failover) with no history, and the
-     * join carries no time dimension — so on its own it re-attributed a
-     * session's entire history to whatever model it currently pointed at.
-     * That is why `hasSnapshot` is selected alongside: the UI must show
-     * fallback rows as ESTIMATED rather than passing them off as measured.
-     */
-    @Query("""
-        SELECT COALESCE(m.model_id, s.model_id) AS modelId,
-               m.model_display_name  AS modelDisplayName,
-               m.provider_type       AS providerType,
-               m.provider_instance_id AS providerInstanceId,
-               (m.model_id IS NOT NULL) AS hasSnapshot,
-               m.token_usage AS tokenUsage, m.created_at AS createdAt, m.session_id AS sessionId
-        FROM messages m LEFT JOIN sessions s ON m.session_id = s.id
-        WHERE m.token_usage IS NOT NULL
-    """)
-    suspend fun allUsageRecords(): List<UsageRecord>
 
     // Last message preview for session list
     @Query("""

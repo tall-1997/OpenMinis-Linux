@@ -47,6 +47,21 @@ object ScheduledAgentRunner {
     /**
      * Fire a scheduled task.
      *
+     * [P2-template-reuse] The whole body is now [runUnattended] with:
+     *  - `reuseSession` = [resolveSessionId] (the template resolves off-main,
+     *    same `withContext(Dispatchers.IO)` wrapper as before);
+     *  - `allowFreshRow=false` — resolveSessionId's null is an ABORT (target
+     *    session gone / no provider), never a "mint a default row" request;
+     *  - `dispatchOverride` = the RerunMessage→retry / prompt branch;
+     *  - `waitForCompletion` = the caller's flag — true keeps the historic
+     *    INLINE suspend-until-done semantics (main-thread wait, GH#197);
+     *  - completion (markFired + notification) in [onCompleted].
+     *
+     * Sequence parity check (old line order vs template): readiness guards →
+     * IO session resolve → FGS only after a valid target → running log →
+     * dispatch under RUN_TIMEOUT_MS with identical runCatching error shaping
+     * → markFired → completion notification. All preserved.
+     *
      * @param waitForCompletion when true, suspend until the agent loop
      *   finishes, then mark-fired + post the completion notification before
      *   returning. When false, return as soon as the session is resolved and
@@ -72,73 +87,38 @@ object ScheduledAgentRunner {
         task: ScheduledTask,
         waitForCompletion: Boolean = true,
     ): String? {
-        // [T-android-scheduled-lateinit-crash-156] `as? MinisApp` only rules out
-        // a null / wrong-type Application — it does NOT mean the Application is
-        // INITIALIZED, which is what the old comment here claimed. Every
-        // `app.chatRepository` read below goes through a lateinit getter that
-        // throws UninitializedPropertyAccessException when onCreate
-        // early-returned (safe-mode) or aborted partway.
-        //
-        // GH#156: an alarm fires while the process is in that state and the app
-        // crashes. A scheduled task is the worst case for this because the alarm
-        // can START the process — Android creates the Application, onCreate
-        // early-returns under safe-mode, and the receiver runs against a
-        // permanently half-built app with no Activity anywhere in the picture
-        // (so MainActivity's guard never gets a say).
-        //
-        // Skipping the run is the right degradation: the task stays scheduled
-        // and its next occurrence was already armed by the receiver before this
-        // call, so a skipped fire self-heals on the following launch.
-        val app = context.applicationContext as? MinisApp ?: run {
-            AppLogger.error(TAG, "Application is not MinisApp — skipping task ${task.id}")
-            return null
-        }
-        if (!app.subsystemsReady()) {
-            AppLogger.error(
-                TAG,
-                "MinisApp subsystems not initialized (safe-mode or failed init) — skipping task ${task.id}",
-            )
-            return null
-        }
-
-        val sessionId = withContext(Dispatchers.IO) {
-            resolveSessionId(app, task)
-        } ?: return null
-
-        // Only start a foreground service after the task has a valid target;
-        // an aborted scheduled run must not leave an orphan status row.
-        // The tracker becomes the notification source when dispatch starts.
-        AgentForegroundService.startService(app)
-
-        AppLogger.info(
-            TAG,
-            "running task=${task.id} label=\"${task.label}\" " +
-                "mode=${task.targetMode.encode()} session=$sessionId wait=$waitForCompletion",
+        // [T-android-scheduled-lateinit-crash-156] The MinisApp
+        // half-initialization guard lives in the template now
+        // (`as? MinisApp` + subsystemsReady) — a skipped run leaves the task
+        // scheduled and its next occurrence armed by the receiver, so the
+        // fire self-heals on the following launch.
+        return runUnattended(
+            context = context,
+            logTag = TAG,
+            abortSuffix = "skipping task ${task.id}",
+            subject = "task ${task.id}",
+            sessionTitle = task.label.ifBlank { "Scheduled task" },
+            source = "scheduled",
+            prompt = task.prompt,
+            timeoutMs = RUN_TIMEOUT_MS,
+            reuseSession = { app -> resolveSessionId(app, task) },
+            allowFreshRow = false,
+            dispatchOverride = { app, sessionId -> dispatchForTask(app, task, sessionId) },
+            waitForCompletion = waitForCompletion,
+            onDispatched = { sessionId ->
+                AppLogger.info(
+                    TAG,
+                    "running task=${task.id} label=\"${task.label}\" " +
+                        "mode=${task.targetMode.encode()} session=$sessionId wait=$waitForCompletion",
+                )
+            },
+            onCompleted = { app, sessionId, result ->
+                val preview = (result.responseText ?: "").take(200).ifBlank { "(no response)" }
+                val ok = result.status != "Error" && result.status != "Timeout"
+                ScheduledTaskManager(app).markFired(task.id, sessionId, preview, ok = ok)
+                postCompletionNotification(app, task, sessionId, preview)
+            },
         )
-
-        if (waitForCompletion) {
-            val result = dispatch(app, task, sessionId, wait = true)
-            val preview = (result.responseText ?: "").take(200).ifBlank { "(no response)" }
-            val ok = result.status != "Error" && result.status != "Timeout"
-            ScheduledTaskManager(app).markFired(task.id, sessionId, preview, ok = ok)
-            postCompletionNotification(app, task, sessionId, preview)
-            return sessionId
-        }
-
-        // Fire-and-forget: the session is resolved and the FGS is up, so the
-        // task HAS started. Run the actual dispatch + completion entirely off
-        // the app scope (wait=true so we still mark-fired + notify when it
-        // finishes), and return the session id immediately so the UI can show
-        // "task started" without blocking on the agent loop. Leaving the editor
-        // can't cancel it because bgScope outlives the screen.
-        bgScope.launch {
-            val result = dispatch(app, task, sessionId, wait = true)
-            val preview = (result.responseText ?: "").take(200).ifBlank { "(no response)" }
-            val ok = result.status != "Error" && result.status != "Timeout"
-            ScheduledTaskManager(app).markFired(task.id, sessionId, preview, ok = ok)
-            postCompletionNotification(app, task, sessionId, preview)
-        }
-        return sessionId
     }
 
     /**
@@ -150,20 +130,23 @@ object ScheduledAgentRunner {
      *   RerunMessage → HeadlessChatRunner.retry from the chosen message id (the
      *     message is replayed; task.prompt is ignored, matching iOS
      *     RetryRunIntent which has no prompt param).
+     *
+     * Error shaping moved to the [runUnattended] template — this only selects
+     * the transport. Always dispatched with wait=true (the template decides
+     * inline-vs-bgScope).
      */
-    private suspend fun dispatch(
+    private suspend fun dispatchForTask(
         app: MinisApp,
         task: ScheduledTask,
         sessionId: String,
-        wait: Boolean,
-    ): HeadlessChatRunner.PromptResult = runCatching {
+    ): HeadlessChatRunner.PromptResult {
         val mode = task.targetMode
-        if (mode is ScheduledTargetMode.RerunMessage) {
+        return if (mode is ScheduledTargetMode.RerunMessage) {
             HeadlessChatRunner.retry(
                 context = app,
                 sessionId = sessionId,
                 messageId = mode.messageId,
-                wait = wait,
+                wait = true,
                 timeoutMs = RUN_TIMEOUT_MS,
             )
         } else {
@@ -173,17 +156,10 @@ object ScheduledAgentRunner {
                 text = task.prompt,
                 attachments = emptyList(),
                 thinkingLevel = null,
-                wait = wait,
+                wait = true,
                 timeoutMs = RUN_TIMEOUT_MS,
             )
         }
-    }.getOrElse { t ->
-        AppLogger.error(TAG, "task ${task.id} dispatch failed: ${t.message}")
-        HeadlessChatRunner.PromptResult(
-            status = "Error",
-            responseText = "Error: ${t.message}",
-            timedOut = false,
-        )
     }
 
     private suspend fun resolveSessionId(app: MinisApp, task: ScheduledTask): String? {
@@ -347,7 +323,25 @@ object ScheduledAgentRunner {
      *   (null = app default), written through [persistNewSessionRow].
      * @param reuseSession hook returning an existing session id, or null to
      *   create a fresh row via [createUnattendedSessionRow] on the IO
-     *   dispatcher (all runners resolve sessions off-main).
+     *   dispatcher (all runners resolve sessions off-main). When
+     *   [allowFreshRow] is false a null return aborts instead of creating a
+     *   row — for runners whose resolver encodes "abort" as null (scheduled
+     *   tasks validate the target session themselves and never want a
+     *   default row minted underneath them).
+     * @param allowFreshRow false disables the create-fresh-row fallback: a
+     *   null [reuseSession] result is a terminal abort (onReady(null)).
+     * @param dispatchOverride replaces the template's default
+     *   [HeadlessChatRunner.prompt] call for runners that dispatch
+     *   differently (scheduled tasks re-run via [HeadlessChatRunner.retry]).
+     *   The runCatching → PromptResult("Error") shaping ALWAYS stays in the
+     *   template, so every runner reports dispatch failures the same way.
+     * @param waitForCompletion false (default) dispatches on [bgScope] and
+     *   returns right after the prompt is handed off — fire-and-forget, with
+     *   [onCompleted] running when the loop finishes. true runs the dispatch
+     *   INLINE in the caller's coroutine and returns only after
+     *   [onCompleted]: the scheduled-task path relies on this main-thread
+     *   wait semantics (the CLI caller blocks until the run is done; a
+     *   broadcast receiver must NOT use this — GH#197).
      * @param onReady invoked exactly once with the dispatch outcome — the
      *   session id, or null on any abort before dispatch. Quick bounces it to
      *   the main looper; automation relies on the return value.
@@ -368,6 +362,9 @@ object ScheduledAgentRunner {
         timeoutMs: Long = RUN_TIMEOUT_MS,
         newSessionPermissionMode: String? = null,
         reuseSession: suspend (MinisApp) -> String? = { null },
+        allowFreshRow: Boolean = true,
+        dispatchOverride: (suspend (MinisApp, String) -> HeadlessChatRunner.PromptResult)? = null,
+        waitForCompletion: Boolean = false,
         onReady: (String?) -> Unit = {},
         onDispatched: (String) -> Unit = {},
         onCompleted: suspend (MinisApp, String, HeadlessChatRunner.PromptResult) -> Unit = { _, _, _ -> },
@@ -386,17 +383,19 @@ object ScheduledAgentRunner {
             return null
         }
         val sessionId = withContext(Dispatchers.IO) {
-            reuseSession(app) ?: createUnattendedSessionRow(
-                repo = app.chatRepository,
-                providers = app.providerRepository,
-                appContext = app,
-                sessionTitle = sessionTitle,
-                source = source,
-                permissionMode = newSessionPermissionMode,
-                taskId = subject,
-                logTag = logTag,
-                subject = subject,
-            )
+            reuseSession(app) ?: run {
+                if (allowFreshRow) createUnattendedSessionRow(
+                    repo = app.chatRepository,
+                    providers = app.providerRepository,
+                    appContext = app,
+                    sessionTitle = sessionTitle,
+                    source = source,
+                    permissionMode = newSessionPermissionMode,
+                    taskId = subject,
+                    logTag = logTag,
+                    subject = subject,
+                ) else null
+            }
         }
         if (sessionId == null) {
             onReady(null)
@@ -407,17 +406,43 @@ object ScheduledAgentRunner {
         AgentForegroundService.startService(app)
         onDispatched(sessionId)
         onReady(sessionId)
-        bgScope.launch {
-            val result = runCatching {
+
+        val dispatchCall: suspend (MinisApp, String) -> HeadlessChatRunner.PromptResult =
+            dispatchOverride ?: { a, sid ->
                 HeadlessChatRunner.prompt(
-                    context = app,
-                    sessionId = sessionId,
+                    context = a,
+                    sessionId = sid,
                     text = prompt,
                     attachments = attachments,
                     thinkingLevel = null,
                     wait = true,
                     timeoutMs = timeoutMs,
                 )
+            }
+
+        if (waitForCompletion) {
+            // [P2-template-reuse] Inline dispatch: the caller's coroutine
+            // suspends until the agent loop finishes (HeadlessChatRunner is
+            // withContext(Dispatchers.Main), so the wait lands on the main
+            // thread exactly like the pre-template scheduled-task path).
+            // onCompleted runs before the return, in the caller's context.
+            val result = runCatching {
+                dispatchCall(app, sessionId)
+            }.getOrElse { t ->
+                AppLogger.error(logTag, "${subject} dispatch failed: ${t.message}")
+                HeadlessChatRunner.PromptResult(
+                    status = "Error",
+                    responseText = "Error: ${t.message}",
+                    timedOut = false,
+                )
+            }
+            onCompleted(app, sessionId, result)
+            return sessionId
+        }
+
+        bgScope.launch {
+            val result = runCatching {
+                dispatchCall(app, sessionId)
             }.getOrElse { t ->
                 AppLogger.error(logTag, "${subject} dispatch failed: ${t.message}")
                 HeadlessChatRunner.PromptResult(

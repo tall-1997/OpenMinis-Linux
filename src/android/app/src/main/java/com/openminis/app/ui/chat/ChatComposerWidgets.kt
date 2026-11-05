@@ -163,7 +163,7 @@ internal fun AttachmentChip(
         ) {
             Icon(
                 m3Icon(Icons.Default.Close),
-                contentDescription = "移除附件",
+                contentDescription = stringResource(R.string.attachment_remove_desc),
                 tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                 modifier = Modifier.size(13.dp),
             )

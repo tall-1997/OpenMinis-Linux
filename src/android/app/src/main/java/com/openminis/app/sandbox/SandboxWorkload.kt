@@ -165,11 +165,23 @@ internal object SandboxWorkload {
         for (pid in owned) confine(pid)
     }
 
-    private fun discover(rootPid: Int): Set<Int> {
+    /**
+     * One pass over /proc: the (pid → ppid/tracer) link table plus the
+     * (pid → pgrp) table. Building it once and collecting per root keeps the
+     * 400ms sweep at ONE /proc walk regardless of how many roots are live —
+     * per-root [discover] used to redo the whole walk (status + stat read per
+     * pid) for every root, so cost scaled with roots × processes.
+     */
+    private class ProcSnapshot(val links: List<ProcLink>, val groups: Map<Int, Int>) {
+        fun collect(rootPid: Int): Set<Int> =
+            ProcessTree.collect(rootPid, links) + ProcessTree.sameGroup(rootPid, groups)
+    }
+
+    private fun snapshotProc(): ProcSnapshot {
         val links = ArrayList<ProcLink>()
         val groups = HashMap<Int, Int>()
         val proc = File("/proc")
-        val dirs = proc.listFiles() ?: return setOf(rootPid)
+        val dirs = proc.listFiles() ?: return ProcSnapshot(emptyList(), emptyMap())
         for (dir in dirs) {
             val pid = dir.name.toIntOrNull() ?: continue
             val status = runCatching { File(dir, "status").readText() }.getOrNull() ?: continue
@@ -178,8 +190,10 @@ internal object SandboxWorkload {
             val stat = runCatching { File(dir, "stat").readText() }.getOrNull()
             if (stat != null) groups[pid] = ProcessTree.parseStatPgrp(stat)
         }
-        return ProcessTree.collect(rootPid, links) + ProcessTree.sameGroup(rootPid, groups)
+        return ProcSnapshot(links, groups)
     }
+
+    private fun discover(rootPid: Int): Set<Int> = snapshotProc().collect(rootPid)
 
     private fun ensureSupervisor() {
         if (supervisorStarted) return
@@ -204,12 +218,18 @@ internal object SandboxWorkload {
         if (live.isEmpty()) return
         val now = SystemClock.elapsedRealtime()
         var owned = 0
+        // ONE /proc walk for the whole sweep: every root's collect/sameGroup
+        // runs against the same tables (per-root discover() used to redo the
+        // full walk). The per-root inputs (rootPid) and outputs (the same
+        // collect+sameGroup set union) are identical to the old per-root
+        // discover() calls.
+        val snapshot = snapshotProc()
         for (root in live) {
             if (!File("/proc/${root.pid}").exists()) {
                 roots.remove(root.pid)
                 continue
             }
-            val current = discover(root.pid)
+            val current = snapshot.collect(root.pid)
             val alive = current.filter { File("/proc/$it").exists() }.toSet()
             val set = root.sticky.observe(current, alive)
             owned += set.size

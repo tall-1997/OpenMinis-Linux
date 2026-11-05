@@ -45,7 +45,7 @@ internal class ModelGrouping(
 
     /** Set the agent-loop-visible entry ID list (individual model entries). */
     fun setAgentLoopEntryIds(ids: List<String>): Unit = synchronized(repo.configLock) {
-        repo.ensureConfigLoaded()
+        if (!repo.ensureConfigLoaded()) return
         val config = repo.workingCopy()
         config.agentLoopModelEntryIds.clear()
         // [T-android-agentloop-dup-key-crash] Dedup at the sink (preserving
@@ -60,7 +60,7 @@ internal class ModelGrouping(
 
     /** Set the agent-loop-visible group ID list. */
     fun setAgentLoopGroupIds(ids: List<String>): Unit = synchronized(repo.configLock) {
-        repo.ensureConfigLoaded()
+        if (!repo.ensureConfigLoaded()) return
         val config = repo.workingCopy()
         config.agentLoopGroupIds.clear()
         // [T-android-agentloop-dup-key-crash] Dedup at the sink (see above) so
@@ -79,7 +79,7 @@ internal class ModelGrouping(
 
     /** Append [entryId] to the agent-loop direct-pin list if not already there. */
     fun addAgentLoopEntry(entryId: String) {
-        repo.ensureConfigLoaded()
+        if (!repo.ensureConfigLoaded()) return
         val cur = repo._config.value.agentLoopModelEntryIds.toList()
         if (entryId in cur) return
         setAgentLoopEntryIds(cur + entryId)
@@ -87,7 +87,7 @@ internal class ModelGrouping(
 
     /** Remove [entryId] from the agent-loop direct-pin list. No-op if absent. */
     fun removeAgentLoopEntry(entryId: String) {
-        repo.ensureConfigLoaded()
+        if (!repo.ensureConfigLoaded()) return
         val cur = repo._config.value.agentLoopModelEntryIds.toList()
         if (entryId !in cur) return
         setAgentLoopEntryIds(cur.filterNot { it == entryId })
@@ -95,7 +95,7 @@ internal class ModelGrouping(
 
     /** Append [groupId] to the agent-loop group-pin list if not already there. */
     fun addAgentLoopGroup(groupId: String) {
-        repo.ensureConfigLoaded()
+        if (!repo.ensureConfigLoaded()) return
         val cur = repo._config.value.agentLoopGroupIds.toList()
         if (groupId in cur) return
         setAgentLoopGroupIds(cur + groupId)
@@ -103,7 +103,7 @@ internal class ModelGrouping(
 
     /** Remove [groupId] from the agent-loop group-pin list. No-op if absent. */
     fun removeAgentLoopGroup(groupId: String) {
-        repo.ensureConfigLoaded()
+        if (!repo.ensureConfigLoaded()) return
         val cur = repo._config.value.agentLoopGroupIds.toList()
         if (groupId !in cur) return
         setAgentLoopGroupIds(cur.filterNot { it == groupId })
@@ -131,10 +131,17 @@ internal class ModelGrouping(
      * Expands groups to their members, unions with individual entries, dedupes by ID,
      * and filters to entries of enabled provider instances. Mirrors iOS
      * ProviderConfigStore.resolvedAgentLoopEntries.
+     *
+     * [Wave3-fix-13] Lookups go through id→entry / id→group maps built once per
+     * call: the loop used to run linear `find` scans inside nested iterations
+     * over agent-loop ids × group members × modelEntries — O(n·m) on the
+     * request path of every agent-loop turn.
      */
     fun resolvedAgentLoopEntries(): List<ModelEntry> {
         val config = repo._config.value
         val enabledIds = config.instances.filter { it.isEnabled }.map { it.id }.toSet()
+        val entriesById = config.modelEntries.associateBy { it.id }
+        val groupsById = config.modelGroups.associateBy { it.id }
         val seen = mutableSetOf<String>()
         val out = mutableListOf<ModelEntry>()
 
@@ -146,13 +153,13 @@ internal class ModelGrouping(
 
         // Individual entries first (preserves the order the user arranged in UI)
         for (id in config.agentLoopModelEntryIds) {
-            config.modelEntries.find { it.id == id }?.let(::consider)
+            entriesById[id]?.let(::consider)
         }
         // Then group members, in group order
         for (gid in config.agentLoopGroupIds) {
-            val group = config.modelGroups.find { it.id == gid } ?: continue
+            val group = groupsById[gid] ?: continue
             for (memberId in group.memberEntryIds) {
-                config.modelEntries.find { it.id == memberId }?.let(::consider)
+                entriesById[memberId]?.let(::consider)
             }
         }
         return out
@@ -164,14 +171,14 @@ internal class ModelGrouping(
     // --- Model Group management ---
 
     fun addGroup(group: ModelGroup): Unit = synchronized(repo.configLock) {
-        repo.ensureConfigLoaded()
+        if (!repo.ensureConfigLoaded()) return
         val config = repo.workingCopy()
         config.modelGroups.add(group)
         repo.saveConfig(config)
     }
 
     fun updateGroup(group: ModelGroup): Unit = synchronized(repo.configLock) {
-        repo.ensureConfigLoaded()
+        if (!repo.ensureConfigLoaded()) return
         val config = repo.workingCopy()
         val idx = config.modelGroups.indexOfFirst { it.id == group.id }
         if (idx >= 0) {
@@ -187,7 +194,7 @@ internal class ModelGrouping(
     }
 
     fun removeGroup(groupId: String): Unit = synchronized(repo.configLock) {
-        repo.ensureConfigLoaded()
+        if (!repo.ensureConfigLoaded()) return
         val config = repo.workingCopy()
         config.modelGroups.removeAll { it.id == groupId }
         if (config.defaultPrimaryGroupId == groupId) {
@@ -228,7 +235,7 @@ internal class ModelGrouping(
      * `ORDER BY sort_order ASC`, so list position IS the stored order.
      */
     fun reorderModelGroups(newOrder: List<String>): Unit = synchronized(repo.configLock) {
-        repo.ensureConfigLoaded()
+        if (!repo.ensureConfigLoaded()) return
         val config = repo.workingCopy()
         val current = config.modelGroups.toList()
         if (current.isEmpty()) return
@@ -262,7 +269,7 @@ internal class ModelGrouping(
     var defaultPrimaryGroupId: String?
         get() = repo._config.value.defaultPrimaryGroupId
         set(value) = synchronized(repo.configLock) {
-            repo.ensureConfigLoaded()
+            if (!repo.ensureConfigLoaded()) return
             val config = repo.workingCopy()
             config.defaultPrimaryGroupId = value
             repo.saveConfig(config)
@@ -271,7 +278,7 @@ internal class ModelGrouping(
     var defaultSubGroupId: String?
         get() = repo._config.value.defaultSubGroupId
         set(value) = synchronized(repo.configLock) {
-            repo.ensureConfigLoaded()
+            if (!repo.ensureConfigLoaded()) return
             val config = repo.workingCopy()
             config.defaultSubGroupId = value
             repo.saveConfig(config)
@@ -282,7 +289,7 @@ internal class ModelGrouping(
     var voiceInputGroupId: String?
         get() = repo._config.value.voiceInputGroupId
         set(value) = synchronized(repo.configLock) {
-            repo.ensureConfigLoaded()
+            if (!repo.ensureConfigLoaded()) return
             val config = repo.workingCopy()
             config.voiceInputGroupId = value
             repo.saveConfig(config)
@@ -291,7 +298,7 @@ internal class ModelGrouping(
     var voiceOutputGroupId: String?
         get() = repo._config.value.voiceOutputGroupId
         set(value) = synchronized(repo.configLock) {
-            repo.ensureConfigLoaded()
+            if (!repo.ensureConfigLoaded()) return
             val config = repo.workingCopy()
             config.voiceOutputGroupId = value
             repo.saveConfig(config)
@@ -302,7 +309,7 @@ internal class ModelGrouping(
     var visionGroupId: String?
         get() = repo._config.value.visionGroupId
         set(value) = synchronized(repo.configLock) {
-            repo.ensureConfigLoaded()
+            if (!repo.ensureConfigLoaded()) return
             val config = repo.workingCopy()
             config.visionGroupId = value
             repo.saveConfig(config)
@@ -311,7 +318,7 @@ internal class ModelGrouping(
     var compactFallbackGroupId: String?
         get() = repo._config.value.compactFallbackGroupId
         set(value) = synchronized(repo.configLock) {
-            repo.ensureConfigLoaded()
+            if (!repo.ensureConfigLoaded()) return
             val config = repo.workingCopy()
             config.compactFallbackGroupId = value
             repo.saveConfig(config)
@@ -353,7 +360,7 @@ internal class ModelGrouping(
      * caller (ReadImageTool) then returns a clear failure text.
      */
     fun resolveVisionCandidates(loadBalanceSeed: Int = 0): List<Pair<ProviderInstance, ModelEntry>> {
-        repo.ensureConfigLoaded()
+        if (!repo.ensureConfigLoaded()) return emptyList()
         val config = repo._config.value
 
         fun providerEntry(memberId: String): Pair<ProviderInstance, ModelEntry>? {
@@ -386,7 +393,7 @@ internal class ModelGrouping(
      * after that model fails.
      */
     fun resolveCompactFallbackCandidates(): List<Pair<ProviderInstance, ModelEntry>> {
-        repo.ensureConfigLoaded()
+        if (!repo.ensureConfigLoaded()) return emptyList()
         val config = repo._config.value
         fun providerEntry(memberId: String): Pair<ProviderInstance, ModelEntry>? {
             val entry = config.modelEntries.find { it.id == memberId } ?: return null
@@ -416,7 +423,7 @@ internal class ModelGrouping(
      * ProviderConfigStore.ensureDefaultVoiceInputGroup.
      */
     fun ensureDefaultVoiceInputGroup(): String? = synchronized(repo.configLock) {
-        repo.ensureConfigLoaded()
+        if (!repo.ensureConfigLoaded()) return null
         val config = repo.workingCopy()
         config.voiceInputGroupId?.let { gid ->
             if (config.modelGroups.any { it.id == gid }) return gid
@@ -442,7 +449,7 @@ internal class ModelGrouping(
      * best voice per reply language). Mirrors iOS ensureDefaultVoiceOutputGroup.
      */
     fun ensureDefaultVoiceOutputGroup(): String? = synchronized(repo.configLock) {
-        repo.ensureConfigLoaded()
+        if (!repo.ensureConfigLoaded()) return null
         val config = repo.workingCopy()
         config.voiceOutputGroupId?.let { gid ->
             if (config.modelGroups.any { it.id == gid }) return gid
@@ -461,7 +468,7 @@ internal class ModelGrouping(
 
 
     fun resolveVoiceInputChoice(): VoiceInputChoice {
-        repo.ensureConfigLoaded()
+        if (!repo.ensureConfigLoaded()) return VoiceInputChoice(systemPreferOffline = null, entry = null)
         val config = repo._config.value
 
         fun systemChoice(memberId: String): VoiceInputChoice = VoiceInputChoice(
@@ -524,7 +531,7 @@ internal class ModelGrouping(
      * System sentinel group members are skipped: they never serve cloud ASR.
      */
     fun resolveVoiceInputCandidates(loadBalanceSeed: Int = 0): List<Pair<ProviderInstance, ModelEntry>> {
-        repo.ensureConfigLoaded()
+        if (!repo.ensureConfigLoaded()) return emptyList()
         val config = repo._config.value
 
         fun providerEntry(memberId: String): Pair<ProviderInstance, ModelEntry>? {
@@ -572,7 +579,7 @@ internal class ModelGrouping(
      * *produce* it.
      */
     fun resolveVoiceOutputChoice(): VoiceOutputChoice {
-        repo.ensureConfigLoaded()
+        if (!repo.ensureConfigLoaded()) return VoiceOutputChoice(isSystemEngine = true, entry = null)
         val config = repo._config.value
 
         fun providerEntry(memberId: String): Pair<ProviderInstance, ModelEntry>? {
@@ -626,7 +633,7 @@ internal class ModelGrouping(
      * fallback-strategy chip already promises.
      */
     fun activeVoiceGroupMemberId(output: Boolean): String? {
-        repo.ensureConfigLoaded()
+        if (!repo.ensureConfigLoaded()) return null
         val config = repo._config.value
         val gid = if (output) config.voiceOutputGroupId else config.voiceInputGroupId
         val pinnedMember = com.openminis.app.data.model.ModelSlotRef.entryId(gid)
@@ -693,7 +700,7 @@ internal class ModelGrouping(
      * instances on one host show a single deterministic representative row.
      */
     fun shadowVoiceSnapshot(): ShadowVoiceSnapshot {
-        repo.ensureConfigLoaded()
+        if (!repo.ensureConfigLoaded()) return ShadowVoiceSnapshot(emptyList(), false)
         val config = repo._config.value
         val candidates = config.instances.toList().filter { inst ->
             inst.isEnabled &&

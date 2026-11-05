@@ -6,7 +6,6 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
-import android.view.WindowManager
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -38,7 +37,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -62,10 +60,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.graphics.drawable.toBitmap
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
-import coil.ImageLoader
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import coil.request.SuccessResult
@@ -107,37 +101,9 @@ fun FullscreenImageViewer(
     // viewer's lifetime, snapshot the previous values, restore them on
     // dispose. Don't touch decorFitsSystemWindows on the activity window —
     // that's MainActivity's lifecycle concern.
-    DisposableEffect(Unit) {
-        val window = (view.context as? android.app.Activity)?.window
-            ?: findWindowViaDialog(view)
-        val controller = window?.let { WindowInsetsControllerCompat(it, view) }
-        val prevLightStatus = controller?.isAppearanceLightStatusBars
-        val prevLightNav = controller?.isAppearanceLightNavigationBars
-        @Suppress("DEPRECATION")
-        val prevStatusBarColor = window?.statusBarColor
-        @Suppress("DEPRECATION")
-        val prevNavBarColor = window?.navigationBarColor
-
-        controller?.isAppearanceLightStatusBars = false
-        controller?.isAppearanceLightNavigationBars = false
-        @Suppress("DEPRECATION")
-        window?.statusBarColor = android.graphics.Color.TRANSPARENT
-        @Suppress("DEPRECATION")
-        window?.navigationBarColor = android.graphics.Color.TRANSPARENT
-        controller?.hide(WindowInsetsCompat.Type.systemBars())
-        controller?.systemBarsBehavior =
-            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-
-        onDispose {
-            controller?.show(WindowInsetsCompat.Type.systemBars())
-            prevLightStatus?.let { controller.isAppearanceLightStatusBars = it }
-            prevLightNav?.let { controller.isAppearanceLightNavigationBars = it }
-            @Suppress("DEPRECATION")
-            prevStatusBarColor?.let { window.statusBarColor = it }
-            @Suppress("DEPRECATION")
-            prevNavBarColor?.let { window.navigationBarColor = it }
-        }
-    }
+    // T169 immersive block — now the shared implementation in
+    // DialogWindowUtils (identical capture/restore semantics, see there).
+    ActivityImmersiveSystemBarsEffect(view)
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -152,30 +118,16 @@ fun FullscreenImageViewer(
         // appearance flags to dark-bar (light icons) so any transient peek of
         // status/nav bars shows light icons on the black image canvas instead
         // of the activity's light-theme dark icons leaking through.
-        // T169: scope these mutations to a DisposableEffect so they fire
-        // exactly once per dialog composition (not on every recomposition).
-        // The dialog window itself is destroyed when the viewer dismisses,
-        // so no restore work is needed — the activity-window block above
-        // takes care of restoring the underlying activity's appearance.
-        val dialogContainer = LocalView.current.parent as? android.view.ViewGroup
-        DisposableEffect(dialogContainer) {
-            val win = dialogContainer?.let { findDialogWindow(it) }
-            win?.let { w ->
-                w.addFlags(WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS)
-                WindowCompat.setDecorFitsSystemWindows(w, false)
-                @Suppress("DEPRECATION")
-                w.statusBarColor = android.graphics.Color.TRANSPARENT
-                @Suppress("DEPRECATION")
-                w.navigationBarColor = android.graphics.Color.TRANSPARENT
-                val ctrl = WindowInsetsControllerCompat(w, w.decorView)
-                ctrl.isAppearanceLightStatusBars = false
-                ctrl.isAppearanceLightNavigationBars = false
-                ctrl.hide(WindowInsetsCompat.Type.systemBars())
-                ctrl.systemBarsBehavior =
-                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            }
-            onDispose { /* dialog window is going away — nothing to restore */ }
-        }
+        // T169: scoped to a DisposableEffect so they fire exactly once per
+        // dialog composition (not on every recomposition). The dialog window
+        // itself is destroyed when the viewer dismisses, so no restore work
+        // is needed — the activity-window effect above takes care of
+        // restoring the underlying activity's appearance.
+        DialogWindowImmersiveEffect(
+            darkTheme = false,
+            hideBars = true,
+            layoutNoLimits = true,
+        )
 
         var scale by remember { mutableFloatStateOf(1f) }
         var offsetX by remember { mutableFloatStateOf(0f) }
@@ -372,7 +324,13 @@ internal fun ImageActionButton(
 internal suspend fun loadBitmap(context: Context, model: Any): Bitmap? =
     withContext(Dispatchers.IO) {
         try {
-            val loader = ImageLoader(context)
+            // [T-android-coil-singleton] Route through the app-wide singleton
+            // loader (MinisApp implements ImageLoaderFactory — memory cache
+            // and disk cache are configured there). `ImageLoader(context)`
+            // built a fresh loader per call: each Save/Share tap paid full
+            // image-decode cost, and a pile of loader instances each pinned
+            // their own memory cache.
+            val loader = coil.Coil.imageLoader(context)
             val req = ImageRequest.Builder(context).data(model).allowHardware(false).build()
             val result = loader.execute(req)
             (result as? SuccessResult)?.drawable?.toBitmap()
@@ -486,26 +444,6 @@ internal suspend fun shareImage(context: Context, model: Any) {
 }
 
 // ── Window helpers ─────────────────────────────────────────────────────────────
-
-private fun findWindowViaDialog(view: android.view.View): android.view.Window? {
-    var v: android.view.View? = view
-    while (v != null) {
-        val ctx = v.context
-        if (ctx is android.app.Activity) return ctx.window
-        v = v.parent as? android.view.View
-    }
-    return null
-}
-
-private fun findDialogWindow(root: android.view.ViewGroup): android.view.Window? {
-    // Walk up to find the dialog's PhoneWindow via the ViewRootImpl token
-    var p: android.view.ViewParent? = root.parent
-    while (p != null) {
-        if (p is android.view.View) {
-            val ctx = p.context
-            if (ctx is android.app.Activity) return ctx.window
-        }
-        p = (p as? android.view.View)?.parent
-    }
-    return null
-}
+// The private findWindowViaDialog / findDialogWindow walkers moved to
+// DialogWindowUtils.kt (shared with ImageGalleryViewer, InlineMediaPlayer and
+// the web-preview pair).

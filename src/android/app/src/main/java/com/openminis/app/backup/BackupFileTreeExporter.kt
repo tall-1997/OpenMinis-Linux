@@ -157,7 +157,8 @@ class BackupFileTreeExporter(
      *
      * [T-restore-plaintext-scratch] `restore-work` (cacheDir, the BackupImporter's
      * DECRYPTED plaintext tree — chats, secrets.json, env-var values) and
-     * `backup-staging` (filesDir, the exporter's pre-zip scratch tree) are the
+     * `backup-staging` ([Wave3 #10a] now rooted at getExternalFilesDir(null);
+     * the exporter's pre-zip scratch tree) are the
      * same hazard in scratch form: a CACHE-category export taken while a
      * previous restore left its scratch behind would package a full plaintext
      * copy of the user's data into the next backup — and restoring that package
@@ -181,7 +182,11 @@ class BackupFileTreeExporter(
         /** cacheDir scratch of [BackupImporter] — decrypted plaintext, never user data. */
         const val RESTORE_WORK_DIR_NAME = "restore-work"
 
-        /** filesDir scratch of [BackupExporter] — pre-zip staging, never user data. */
+        /**
+         * Scratch of [BackupExporter] — pre-zip staging, never user data.
+         * [Wave3 #10a] rooted at getExternalFilesDir(null) (filesDir fallback);
+         * the name match stays so legacy filesDir leftovers are still skipped.
+         */
         const val STAGING_DIR_NAME = "backup-staging"
     }
 }

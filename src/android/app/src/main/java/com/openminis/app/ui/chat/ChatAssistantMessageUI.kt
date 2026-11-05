@@ -1,9 +1,11 @@
 package com.openminis.app.ui.chat
 
 // [T-android-split-chat] Assistant-message + tool-pill + thinking rendering
-// extracted verbatim from ChatScreen.kt: AssistantHeader, AssistantMessageView,
-// BoundsTrackedBlock, InlineErrorBanner, ToolStopButton,
-// formatToolDetailsForClipboard, ToolCallPill, ThinkingBlock.
+// extracted verbatim from ChatScreen.kt: AssistantHeader, BoundsTrackedBlock,
+// InlineErrorBanner, ToolStopButton, formatToolDetailsForClipboard,
+// ToolCallPill, ThinkingBlock. (The legacy AssistantMessageView renderer that
+// also came across was deleted as unreachable dead code — the FlatChatItem
+// path in ChatMessageListSection is the only assistant renderer.)
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
@@ -43,7 +45,6 @@ import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.DropdownMenuItem
-import com.openminis.app.BuildConfig
 import com.openminis.app.R
 import com.openminis.app.ui.settings.autoExpandThinkingEnabled
 import com.openminis.app.ui.components.MinisMenu
@@ -81,6 +82,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Replay
+import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.CircularProgressIndicator
 import kotlinx.coroutines.delay
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -138,103 +141,6 @@ internal fun AssistantHeader(speakerName: String? = null, speakerVendor: String?
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface,
         )
-    }
-}
-
-@Composable
-internal fun AssistantMessageView(message: ChatMessage, onRetry: (() -> Unit)? = null) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 2.dp),
-    ) {
-        AssistantHeader()
-
-        // Render blocks in original order — text, thinking, and tool calls interleaved
-        // exactly as they arrived in the stream (each assistant turn may contain multiple
-        // text ↔ tool_use transitions, which must be preserved for coherent reading).
-        val toolPillBlocks = message.toolBlocks.filter { it.kind == "tool_use" }
-        val lastThinkingId = message.toolBlocks.lastOrNull { it.kind == "thinking" }?.id
-        // Backward compat: if there are no text blocks but message.content is non-empty
-        // (e.g. legacy sessions saved before the text-block migration), fall back to
-        // rendering message.content after all tool blocks.
-        val hasAnyTextBlock = message.toolBlocks.any { it.kind == "text" }
-        val lastTextBlockIndex = message.toolBlocks.indexOfLast { it.kind == "text" }
-        message.toolBlocks.forEachIndexed { index, block ->
-            when (block.kind) {
-                "thinking" -> {
-                    // [T-android-thinking-forced-visible] Same gate as the
-                    // FlatChatItem path: render whenever the block carries
-                    // content. Forced-reasoning models stream reasoning_
-                    // content even with the request's reasoning field unset;
-                    // hiding by level swallows that thinking and the user
-                    // sees "model isn't thinking".
-                    if (block.content.isNotBlank() || message.isStreaming) {
-                        // [T-android-thinking-stable-expand] Same complete
-                        // signal as the FlatChatItem path (message streaming
-                        // AND no reply text after this block) — flips once
-                        // per reasoning phase, not once per tool round.
-                        ThinkingBlock(
-                            block,
-                            isStreaming = message.isStreaming && !hasReplyTextAfter(message.toolBlocks, index),
-                            isLast = block.id == lastThinkingId,
-                        )
-                    }
-                }
-                "info" -> {
-                    FallbackInfoBlock(block)
-                }
-                "text" -> {
-                    if (block.content.isNotEmpty()) {
-                        val isLastTextBlock = index == lastTextBlockIndex
-                        val streaming = message.isStreaming && isLastTextBlock
-                        // T-android-gc-storm-issue17: defensive guard on the legacy
-                        // pre-FlatChatItem path too.
-                        LargeContentGuard(
-                            content = block.content,
-                            isStreaming = streaming,
-                            stableKey = "legacy-text:${message.id}:${block.id}",
-                        ) {
-                            StreamingMarkdownText(
-                                content = block.content,
-                                // Only the trailing text block is "still streaming"; earlier
-                                // text blocks (before a tool call) are frozen.
-                                isStreaming = streaming,
-                            )
-                        }
-                    }
-                }
-                else -> {
-                    // tool_use
-                    ToolCallPill(block, allToolBlocks = toolPillBlocks)
-                }
-            }
-        }
-
-        // Typing indicator when streaming with no content yet (info-only blocks don't count)
-        val hasRealBlocks = message.toolBlocks.any { it.kind != "info" }
-        if (message.isStreaming && message.content.isEmpty() && !hasRealBlocks) {
-            TypingIndicator()
-        }
-
-        // Legacy fallback: render message.content when no text blocks exist (old sessions).
-        if (!hasAnyTextBlock && message.content.isNotEmpty()) {
-            LargeContentGuard(
-                content = message.content,
-                isStreaming = message.isStreaming,
-                stableKey = "legacy-fallback:${message.id}",
-            ) {
-                StreamingMarkdownText(
-                    content = message.content,
-                    isStreaming = message.isStreaming,
-                )
-            }
-        }
-
-        // Inline error banner (iOS: red exclamation + error text + Retry button)
-        if (message.error != null) {
-            InlineErrorBanner(error = message.error, onRetry = onRetry)
-        }
     }
 }
 
@@ -421,10 +327,14 @@ internal fun ToolCallPill(
     allToolBlocks: List<AssistantBlock> = listOf(block),
     onRetry: (() -> Unit)? = null,
     onStop: (() -> Unit)? = null,
-    onOpenTerminalWithCommand: (String) -> Unit = {},
+    // Nullable so callers that have no terminal surface (sub-agent bar,
+    // legacy call sites) simply hide the menu item instead of showing a
+    // no-op entry. The ChatMessageListSection path passes the real
+    // onOpenTerminalWithCommand callback.
+    onOpenTerminalWithCommand: ((String) -> Unit)? = null,
     // T261: detail open routes through ChatViewModel so the sheet survives
-    // LazyColumn item disposal. Default no-op for the legacy
-    // AssistantMessageView call site (currently dead code).
+    // LazyColumn item disposal. Default no-op (the sub-agent bar routes
+    // detail-open to its own inline expansion instead).
     onOpenDetail: (String) -> Unit = {},
     // [T-android-tool-bubble-longpress-menu] Long-press actions. Null
     // disables the corresponding menu item (e.g. re-run is null while
@@ -432,15 +342,6 @@ internal fun ToolCallPill(
     onRerunFromHere: (() -> Unit)? = null,
     onCopyDetails: (() -> Unit)? = null,
 ) {
-    // T-android-jank-profile: this log was firing on every ToolCallPill
-    // recomposition (every streaming token while a tool call is live),
-    // showing up as 1.6% main thread time in profiles. Logs at composable
-    // top level multiply with the number of pills × recompose rate. Gate
-    // behind BuildConfig.DEBUG so production builds skip the string-build
-    // entirely, and the rest of release builds don't pay for it.
-    if (com.openminis.app.BuildConfig.DEBUG && false) {
-        android.util.Log.d("ToolChain[UI]", "ToolCallPill render: id=${block.id} name=${block.toolName} title=${block.toolTitle} status=${block.toolStatus} contentLen=${block.content.length} argsLen=${block.toolArgs.length}")
-    }
 
     // PENDING shares RUNNING's spinner affordance — tool JSON is received but
     // execution hasn't flipped the block to RUNNING yet (brief gap). TIMEOUT
@@ -492,6 +393,22 @@ internal fun ToolCallPill(
     // wrapper below so it opens beneath the tapped bubble.
     var showToolMenu by remember { mutableStateOf(false) }
 
+    // [T-android-tool-pill-menu-consume-callbacks] The "Open in terminal"
+    // menu item mirrors the ToolDetailSheet action: a shell_execute pill
+    // can hand its command to the in-app terminal (prefilled, no auto-run).
+    // Resolved once per args/content change with the same tolerant
+    // extractShellCommand fallbacks; null hides the item (non-shell tools,
+    // placeholder command, or a caller with no terminal surface).
+    val pillShellCommand = remember(block.toolName, block.toolArgs, block.content) {
+        if (block.toolName != "shell_execute") null
+        else {
+            val args = try { org.json.JSONObject(block.toolArgs) } catch (_: Exception) { org.json.JSONObject() }
+            extractShellCommand(args, block).takeIf { it.isNotBlank() && it != "Shell command" }
+        }
+    }
+    val hasToolMenuActions = onRerunFromHere != null || onCopyDetails != null ||
+        onRetry != null || (pillShellCommand != null && onOpenTerminalWithCommand != null)
+
     // Pill stretches up to the full row width so long titles can ellipsize
     // without pushing the duration out of view. Title takes the remaining
     // space via weight(1f), duration stays fixed-width (softWrap=false).
@@ -530,7 +447,7 @@ internal fun ToolCallPill(
                 )
                 .combinedClickable(
                     onClick = { onOpenDetail(block.id) },
-                    onLongClick = if (onRerunFromHere != null || onCopyDetails != null) {
+                    onLongClick = if (hasToolMenuActions) {
                         { showToolMenu = true }
                     } else null,
                 )
@@ -638,15 +555,38 @@ internal fun ToolCallPill(
                     leadingIcon = { Icon(m3Icon(Icons.Default.ContentCopy), contentDescription = null, modifier = Modifier.size(18.dp)) },
                 )
             }
+            // [T-android-tool-pill-menu-consume-callbacks] Retry: consumes the
+            // onRetry callback the caller already passes (gated there on
+            // last-cancelled && idle && !canResume). The inline retry button
+            // was removed in T251 — the long-press menu is this pill's retry
+            // surface now.
+            if (onRetry != null) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.tool_longpress_retry)) },
+                    onClick = { showToolMenu = false; onRetry() },
+                    leadingIcon = { Icon(m3Icon(Icons.Default.Replay), contentDescription = null, modifier = Modifier.size(18.dp)) },
+                )
+            }
+            // "Open in terminal": same dispatch the ToolDetailSheet's
+            // terminal action performs — hand the shell command to the
+            // in-app terminal with the prompt pre-filled (no auto-run).
+            if (pillShellCommand != null && onOpenTerminalWithCommand != null) {
+                val cmd = pillShellCommand
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.tool_longpress_open_in_terminal)) },
+                    onClick = { showToolMenu = false; onOpenTerminalWithCommand(cmd) },
+                    leadingIcon = { Icon(m3Icon(Icons.Default.Terminal), contentDescription = null, modifier = Modifier.size(18.dp)) },
+                )
+            }
         }
       }
         // T251: removed inline Retry affordance next to cancelled/failed pills —
         // the pill's own status icon (yellow on FAILED, gray on CANCELLED) is
         // already the unified failure tip. The button was visually noisy and
-        // redundant. ToolCallPill keeps the `onRetry` parameter so upstream
-        // callers don't need to change; the lambda just isn't surfaced inline
-        // any more. retryLast() / retryFromMessage() remain reachable from
-        // other entry points (long-press menu, etc.).
+        // redundant. ToolCallPill keeps the `onRetry` parameter and surfaces
+        // it through the long-press menu ("Retry" item, see above); callers
+        // that pass null simply don't get the item. retryLast() /
+        // retryFromMessage() remain reachable from other entry points too.
         // iOS: Spacer(minLength: 0) — pill stays content-width, not full-row-width
     }
 }
