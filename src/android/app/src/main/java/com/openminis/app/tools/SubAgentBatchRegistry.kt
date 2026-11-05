@@ -209,8 +209,75 @@ object SubAgentBatchRegistry {
         return batch
     }
 
-    private fun mutateLane(
+    /** How long a repeated dispatch counts as the same wave. */
+    const val DUPLICATE_WINDOW_MS = 10 * 60_000L
+
+    /** Hex characters kept from the digest: enough to not collide in practice. */
+    private const val FINGERPRINT_CHARS = 16
+
+    /**
+     * [T-dispatch-idempotence] Stable identity of a dispatch: the set of
+     * (kind, brief) pairs, order-independent. A retried or duplicated
+     * `spawn_agent` / `dispatch_agents` / `wolfpack_run` call yields the same
+     * value, so the caller can refuse to launch a second identical wave.
+     *
+     * The prototype makes an accept idempotent by trigger id (dsh-superagent
+     * `prompts/dispatch.md:46`); we have no trigger id on this path, so the
+     * content of the wave is the identity.
+     */
+    fun fingerprintOf(argsJson: String): String {
+        val root = runCatching { org.json.JSONObject(argsJson) }.getOrNull() ?: return ""
+        val pairs = mutableListOf<String>()
+        val tasks = root.optJSONArray("tasks")
+        if (tasks != null) {
+            for (i in 0 until tasks.length()) {
+                val task = tasks.optJSONObject(i) ?: continue
+                val prompt = task.optString("prompt").trim()
+                if (prompt.isEmpty()) continue
+                pairs += laneKey(task.optString("kind"), prompt)
+            }
+        } else {
+            val prompt = root.optString("prompt").trim()
+            if (prompt.isNotEmpty()) pairs += laneKey(root.optString("kind"), prompt)
+        }
+        if (pairs.isEmpty()) return ""
+        return sha256(pairs.sorted().joinToString("\u0001")).take(FINGERPRINT_CHARS)
+    }
+
+    /** The same identity computed from a stored batch, for lookups. */
+    fun fingerprintOf(batch: Batch): String {
+        val pairs = batch.lanes.map { laneKey(it.kind, it.promptDigest) }
+        if (pairs.isEmpty()) return ""
+        return sha256(pairs.sorted().joinToString("\u0001")).take(FINGERPRINT_CHARS)
+    }
+
+    /**
+     * A live batch launched from the same briefs inside [DUPLICATE_WINDOW_MS].
+     * Null means this is genuinely new work and should be spawned.
+     */
+    fun findLiveDuplicate(
         sessionId: String,
+        context: Context?,
+        fingerprint: String,
+        nowMs: Long = System.currentTimeMillis(),
+    ): Batch? {
+        if (fingerprint.isBlank()) return null
+        return list(sessionId, context).firstOrNull { batch ->
+            !batch.complete &&
+                nowMs - batch.createdAt <= DUPLICATE_WINDOW_MS &&
+                fingerprintOf(batch) == fingerprint
+        }
+    }
+
+    private fun laneKey(kind: String, prompt: String): String =
+        kind.ifBlank { SubAgentKind.WORKER } + "\u0000" + prompt.take(MAX_DIGEST_CHARS)
+
+    private fun sha256(value: String): String =
+        java.security.MessageDigest.getInstance("SHA-256")
+            .digest(value.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+
+    private fun mutateLane(        sessionId: String,
         context: Context?,
         batchId: String,
         index: Int,

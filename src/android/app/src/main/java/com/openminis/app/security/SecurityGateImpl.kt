@@ -89,7 +89,7 @@ class SecurityGateImpl : SecurityGate {
         val SSH_READ_ACTIONS = setOf("list_hosts", "ls", "test")
         val COORDINATOR_TOOLS = setOf(
             "spawn_agent", "run_subagent", "dispatch_agents", "wolfpack_run",
-            "agent_plan", "goal", "update_goal", "cronjob", "ask_user_question", "invoke_skill",
+            "agent_plan", "agent_report", "goal", "update_goal", "cronjob", "ask_user_question", "invoke_skill",
             "skill_manage", "memory_write", "memory_get", "save_memory",
             "recall_memory", "ask_reasoning",
         )
@@ -145,7 +145,7 @@ class SecurityGateImpl : SecurityGate {
                 GateCommand(name, toolArgs, Capability.SYSTEM, Reversibility.REVERSIBLE, "沙箱代码执行")
             "spawn_agent", "run_subagent", "dispatch_agents", "wolfpack_run" ->
                 GateCommand(name, toolArgs, Capability.SYSTEM, Reversibility.REVERSIBLE, "派发子代理")
-            "agent_plan", "cronjob", "invoke_skill", "skill_manage", "ask_reasoning",
+            "agent_plan", "agent_report", "cronjob", "invoke_skill", "skill_manage", "ask_reasoning",
             "memory_write", "memory_get", "ask_user_question",
             -> GateCommand(name, toolArgs, Capability.SYSTEM, Reversibility.REVERSIBLE, "会话协调工具")
         // [T-android-jobs-registry] start/kill = sandbox execution; list/output = reads.

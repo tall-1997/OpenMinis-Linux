@@ -4,6 +4,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.NoteAdd
 import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.Alarm
+import androidx.compose.material.icons.filled.Assignment
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Code
@@ -66,6 +67,7 @@ internal fun toolAccentColor(toolName: String): Color = when (toolName) {
     "search_sessions", "read_session" -> Color(0xFF64D2FF)
     "spawn_agent", "run_subagent", "dispatch_agents", "wolfpack_run", "check_agent" -> Color(0xFF5856D6)
     "agent_plan" -> Color(0xFF5856D6)
+    "agent_report" -> Color(0xFF30B0C7)
     "update_goal" -> Color(0xFFFF2D55)
     "evolution" -> Color(0xFFAF52DE)
     "ask_user_question" -> Color(0xFF007AFF)
@@ -111,6 +113,7 @@ internal fun toolIconFor(toolName: String) = when (toolName) {
     "spawn_agent", "run_subagent", "dispatch_agents", "wolfpack_run" -> Icons.Default.Groups
     "check_agent" -> Icons.Default.FactCheck           // verify lane results
     "agent_plan" -> Icons.Default.Dashboard            // plan board
+    "agent_report" -> Icons.Default.Assignment        // structured run status
     "update_goal" -> Icons.Default.TrackChanges        // goal state
     "evolution" -> Icons.Default.AutoAwesome           // self-improvement
     "ask_user_question" -> Icons.Default.HelpOutline   // interactive prompt

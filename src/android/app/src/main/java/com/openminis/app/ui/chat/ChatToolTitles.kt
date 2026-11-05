@@ -30,6 +30,7 @@ internal fun friendlyToolTitle(toolName: String): String = when (toolName) {
     "dispatch_agents" -> "Dispatch Agents"
     "wolfpack_run" -> "Wolfpack"
     "agent_plan" -> "Agent Plan"
+    "agent_report" -> "Report"
     "execute_code" -> "Execute Code"
     "invoke_skill" -> "Invoke Skill"
     "skill_manage" -> "Manage Skill"
