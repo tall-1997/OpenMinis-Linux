@@ -21,23 +21,10 @@ import com.openminis.app.di.ChatBinder
 import com.openminis.app.util.IsoTime
 import kotlinx.coroutines.runBlocking
 
-/**
- * Built-in field registrations. Single place to add or remove a
- * setting from the agent-facing surface. Mirrors iOS
- * `ConfigRegistry+Builtins.swift`.
- */
+/** Built-in field registrations — single place to add/remove a setting from the agent-facing surface. Mirrors iOS ConfigRegistry+Builtins.swift. */
 internal object ConfigBuiltins {
 
-    /**
-     * [Wave3 #4] The live chat/session state facade, installed through AppGraph
-     * by MinisApp. Replaces this file's direct imports of
-     * `ui.chat.ChatViewModelStore` (a forbiddenImports violation — config is a
-     * non-ui layer), `SecurityGateHolder` and `ApprovalGate`: those three
-     * singletons are read by the MinisApp-side implementation of [ChatBinder],
-     * and this object only sees the interface. Uninstalled (unit tests, pre-
-     * wiring) degrades to null / ASK / false — the same "no foregrounded chat"
-     * semantics the old direct reads had.
-     */
+    /** [Wave3 #4] Live chat/session facade via AppGraph; replaces direct imports of ui.chat singletons (a forbiddenImports violation — config is a non-ui layer). Unwired degrades to null/ASK/false. */
     private val chatState: ChatBinder? get() = AppGraph.chatStateBinderOrNull()
 
     /** @return the foregrounded session id, or null when none / not wired. */

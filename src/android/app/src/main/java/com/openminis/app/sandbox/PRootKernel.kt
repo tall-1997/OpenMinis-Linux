@@ -93,22 +93,10 @@ object PRootKernel {
             return
         }
 
-        // [T-android-startup-splash-hang] The blocking boot body — refreshDns /
-        // configureUbuntuGuest file writes, registerGlobalBindMounts().mkdirs(),
-        // installHandlerStubs() writes, NativeOffloadServer.start()'s abstract-
-        // socket bind + Thread.sleep backoff and listFiles() sweep, and
-        // applyMountedFoldersSnapshot()'s ContentResolver queries +
-        // File.canExecute() checks — had no dispatcher switch, so the first
-        // interactive terminal open (and any ExecutionCoordinator auto-boot) ran
-        // all of it on the caller's thread, including Dispatchers.Main. Force it
-        // onto Dispatchers.IO. Body ORDER and the isBooted guarantee are
-        // unchanged: isBooted is set at the very end of this block, which the
-        // suspend caller sees only after withContext returns.
-        //
-        // bootMutex makes the whole body run exactly once even when both
-        // first-boot entries (ExecutionCoordinator auto-boot, TerminalSession
-        // .start) race: the loser re-checks isBooted under the lock and returns
-        // without re-running install/offload/overlay.
+        // [T-android-startup-splash-hang] The blocking boot body had no dispatcher
+        // switch, so the first terminal open (or auto-boot) ran it on the caller's
+        // thread — force onto Dispatchers.IO. Body order and the isBooted guarantee
+        // are unchanged; bootMutex keeps the whole body single-run.
         bootMutex.withLock {
         if (isBooted) {
             Log.d(TAG, "Already booted (double-checked)")
@@ -333,7 +321,7 @@ object PRootKernel {
     // PRoot's `-b host:linux` flag is per-invocation, so the diff-sync
     // applied via [applyMountedFoldersSnapshot] only affects subsequent
     // shell_execute calls — live processes won't observe a CRUD mid-flight.
-    private const val MOUNTS_LINUX_PREFIX = "/var/minis/mounts/"
+    internal const val MOUNTS_LINUX_PREFIX = "/var/minis/mounts/"
 
     // Sentinel in the read-only write-guard wrapper scripts so we can recognize
     // and remove our own wrappers (vs a user/busybox binary of the same name).
@@ -801,86 +789,6 @@ object PRootKernel {
         val hasProxy = env["http_proxy"].orEmpty().isNotEmpty()
         Log.i(TAG, "Updated proxy — ${if (hasProxy) "active" else "cleared"}")
         return env
-    }
-
-    /**
-     * Shared proot argv prefix for every spawn path — one-shot shell commands
-     * ([buildProotCommand]), the interactive Termux PTY
-     * (TerminalSession.buildTermuxArgs), the persistent shell
-     * (PersistentShell.startProcess), and RootfsManager's in-guest
-     * apt/pip/mirror helpers. These were four hand-rolled copies of the same
-     * flag list that had already drifted; they now share this builder and
-     * append only their own tail.
-     *
-     * Produces, in exactly the order all four former call sites used:
-     * ```
-     * <proot> -0 --link2symlink --kill-on-exit -r <rootfs>
-     *         -b /dev -b /proc [-b /sys] -w /root
-     *         [-b <host>:<linux> ...] [--native-offload=<socket>:<handlers>]
-     * ```
-     *
-     * `-0` runs as fake root (uid 0). `--link2symlink` [T141] translates
-     * hardlink() to symlink(): Android's /data refuses cross-directory
-     * hardlinks for app uids (EPERM), which broke busybox-applet installs.
-     * `--kill-on-exit` reaps the guest when the host process dies.
-     *
-     * Recorded per-caller differences kept as parameters (do not "normalize"
-     * them away):
-     *  - RootfsManager helpers pass bindMounts = null and
-     *    includeNativeOffload = false, and all but the apt-install run pass
-     *    includeSys = false — binding only /dev+/proc is their long-standing
-     *    behavior and the offload socket is not needed for apt/pip work.
-     *  - [bindMounts] is the CALLER's map: the one-shot command and the Termux
-     *    PTY pass the process-global [bindMounts]; PersistentShell passes its
-     *    per-session snapshot.
-     */
-    fun commonArgv(
-        prootPath: String,
-        rootfsDir: String,
-        bindMounts: Map<String, String>? = null,
-        includeSys: Boolean = true,
-        includeNativeOffload: Boolean = false,
-    ): MutableList<String> {
-        val cmd = mutableListOf(
-            prootPath,
-            "-0",
-            "--link2symlink",
-            "--kill-on-exit",
-            "-r",
-            rootfsDir,
-        )
-        // Bind essential pseudo-filesystems.
-        cmd.add("-b"); cmd.add("/dev")
-        cmd.add("-b"); cmd.add("/proc")
-        if (includeSys) { cmd.add("-b"); cmd.add("/sys") }
-        // Working directory
-        cmd.add("-w"); cmd.add("/root")
-
-        if (bindMounts != null) {
-            for ((linuxPath, hostPath) in bindMounts) {
-                cmd.add("-b")
-                cmd.add("$hostPath:$linuxPath")
-                // Log external-folder binds specifically — these are the ones
-                // that read empty when the host view is filtered, and the
-                // proot child's own EACCES on readdir is otherwise invisible
-                // in the log file. (Formerly only buildProotCommand logged
-                // this; the PTY/persistent-shell paths silently shared the
-                // same binds.)
-                if (linuxPath.startsWith(MOUNTS_LINUX_PREFIX)) {
-                    Log.i(TAG, "proot bind mount: $hostPath -> $linuxPath")
-                }
-            }
-        }
-
-        // Native offload: route registered handler names to the host-side
-        // NativeOffloadServer over the abstract unix socket.
-        if (includeNativeOffload) {
-            val handlers = NativeOffloadServer.registeredHandlers
-            if (handlers.isNotEmpty()) {
-                cmd.add("--native-offload=${NativeOffloadServer.socketName}:${handlers.joinToString(",")}")
-            }
-        }
-        return cmd
     }
 
     /**

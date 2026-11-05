@@ -456,7 +456,7 @@ class TerminalSession(private val context: Context) {
         // Shared proot prefix (formerly a hand-rolled copy — see
         // PRootKernel.commonArgv). Same flags, same order, global bind mounts
         // and the native-offload socket included.
-        val args = PRootKernel.commonArgv(
+        val args = commonArgv(
             prootPath = proot,
             rootfsDir = rootfsManager.rootfsDir.absolutePath,
             bindMounts = PRootKernel.bindMounts,

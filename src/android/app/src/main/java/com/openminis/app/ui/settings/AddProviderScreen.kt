@@ -390,18 +390,7 @@ private fun ConfigureProviderScreen(
     }
 
     var label by remember { mutableStateOf(defaultLabel) }
-    // [T-provider-name-chinese-34602, port iOS 7b283951] Flips true the
-    // first time the user types into the label field. While `false`, the
-    // LaunchedEffect below keeps `label` glued to the auto-incremented
-    // default, so adding a second OpenAI instance picks up "OpenAI 2"
-    // automatically. Once the user edits the label (even just to clear
-    // it for typing — including non-ASCII like CJK / kana / emoji),
-    // the seed is suppressed so further provider-list changes never
-    // clobber what they typed. Without this gate the `remember(config)`
-    // recomputation, combined with Compose tearing down + recreating
-    // ConfigureProviderScreen on step navigation, makes the field
-    // appear to reject Chinese — the iOS root cause Telegram 34602
-    // reported, with the same Android equivalent here.
+    // [T-provider-name-chinese-34602, port iOS 7b283951] Gate that stops the auto-incremented default label from clobbering what the user typed (incl. CJK) once the field is edited — the iOS "rejects Chinese" root cause (Telegram 34602).
     var labelEdited by remember { mutableStateOf(false) }
     androidx.compose.runtime.LaunchedEffect(defaultLabel, labelEdited) {
         if (!labelEdited) label = defaultLabel

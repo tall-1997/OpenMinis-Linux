@@ -423,9 +423,7 @@ object VirtualScreenManager {
 
         // Layer 1: our own display, our own uid.
         VirtualScreenCapture.captureViaImageReader(s.handle)?.let { bytes ->
-            return VirtualScreenCapture.writeScreenshot(
-                offloadsDir, displayId, bytes, "ImageReader", VirtualScreenCapture.JPEG_SUFFIX,
-            )
+            return VirtualScreenCapture.writeScreenshot(offloadsDir, displayId, bytes, "ImageReader", VirtualScreenCapture.JPEG_SUFFIX)
         }
 
         // Layers 2 and 3 ride the Shizuku shell.

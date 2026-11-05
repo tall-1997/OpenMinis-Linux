@@ -35,14 +35,7 @@ import kotlinx.coroutines.withContext
 
 class ProviderRepository(
     internal val context: Context,
-    /**
-     * [Wave3-fix-9] Where removed entry ids get scrubbed from the chat-session
-     * bindings and scheduled-task copies. Defaults to the legacy behaviour
-     * (AppContainer-first chat DAO lookup + lazily-built ScheduledTaskStore,
-     * moved verbatim into [LegacySessionBindingCleaner]) so construction sites
-     * need no change; the app container may inject an implementation of its
-     * choosing via [com.openminis.app.di.AppContainer].
-     */
+    /** [Wave3-fix-9] Where removed entry ids get scrubbed; defaults to legacy behaviour (moved verbatim into [LegacySessionBindingCleaner]) so construction sites need no change. */
     internal val sessionBindingCleaner: SessionBindingCleaner =
         SessionBindingCleaner.legacy(context),
 ) {
@@ -114,27 +107,11 @@ class ProviderRepository(
 
     // encryptedPrefs (provider_secrets) moved to ProviderConfigStore.
 
-    // [T-android-startup-config-stall] #753: loadConfig() does a synchronous
-    // SharedPreferences read (~3s first-touch as the XML is parsed) + a
-    // Json.decodeFromString<ProviderConfig> (~8s on a large config). It used to
-    // run INLINE in this field initializer, i.e. inside ProviderRepository's
-    // constructor, which MinisApp.onCreate() invokes on the MAIN THREAD — so
-    // cold start hung >11s. Now we start with an empty placeholder (instant, no
-    // I/O) and load the real config on Dispatchers.IO, emitting it when ready.
-    // Reactive consumers (config.collectAsState) update automatically on emit;
-    // action-time `config.value` reads tolerate the brief empty window (a send
-    // before load just has no model entry, exactly like a fresh install).
+    // [T-android-startup-config-stall] loadConfig's sync prefs read + JSON decode used to run inline in the constructor on the MAIN thread (cold start hung >11s); now we start empty and load on IO, emitting when ready.
     internal val _config = MutableStateFlow(ProviderConfig())
     val config: StateFlow<ProviderConfig> = _config.asStateFlow()
 
-    /**
-     * [T-android-startup-config-stall] False until the persisted config has
-     * been read off-thread and emitted. First-screen code that branches on
-     * `instances.isEmpty()` (the onboarding gate) reads this to avoid flashing
-     * a "no providers" / onboarding state for an existing user during the load
-     * window. Distinguishes "empty because not loaded yet" from "empty because
-     * the user genuinely has no providers".
-     */
+    /** [T-android-startup-config-stall] False until config is read off-thread and emitted; first-screen onboarding reads it to avoid flashing "no providers" during the load window. */
     // internal (was private): ProviderConfigStore.ensureConfigLoaded mutates it.
     internal val _configLoaded = MutableStateFlow(false)
     val configLoaded: StateFlow<Boolean> = _configLoaded.asStateFlow()

@@ -90,12 +90,7 @@ class ChatViewModel(
     internal val isDraft: Boolean = sessionId.startsWith("__new__")
     /** The real session ID, populated on first message for drafts. */
     internal var realSessionId: String = if (isDraft) "" else sessionId
-    /**
-     * [T-android-tts-scene-announcements] Speech sink for scene announcements,
-     * injected by the UI layer (which owns the TTS engine binding). The agent
-     * loop hands phrases to it at lifecycle boundaries; null = no engine
-     * bound yet, announcements degrade to silence. Never crashes the loop.
-     */
+    /** [T-android-tts-scene-announcements] Speech sink for scene announcements, injected by the UI layer; null = no engine bound yet (degrade to silence). */
     @Volatile
     var announcementSink: ((String) -> Unit)? = null
     /** [T-prompt-cache] Memoized session-scoped MemoryRepository;
@@ -137,12 +132,7 @@ class ChatViewModel(
         // timeout stops slow-but-few calls, and the existing depth cap stops
         // recursion.
 
-        /**
-         * Leaf LLM calls one compaction may issue in total, across every
-         * segment. The depth-3 cap alone permits 15; this cuts the worst case
-         * to a third of that while still allowing a full first split (1+2) plus
-         * one deeper rescue.
-         */
+        /** Leaf LLM calls one compaction may issue in total; the depth-3 cap alone permits 15, this cuts the worst case to 6 while allowing a full first split plus one rescue. */
         internal const val MAX_COMPACT_LLM_CALLS = 6
 
         internal const val COMPACT_SEGMENT_MIN_TOKENS = 8_000

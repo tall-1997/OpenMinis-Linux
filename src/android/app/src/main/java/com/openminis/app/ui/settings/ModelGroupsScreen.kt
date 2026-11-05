@@ -202,18 +202,7 @@ fun ModelGroupsScreen(
                     }
                 }
             } else {
-                // T313 — Section 1 (Groups).
-                //
-                // [T-android-modelgroup-reorder] The section used to be ONE
-                // LazyColumn item wrapping a SectionCard with a forEach inside
-                // — which is exactly why the groups could not be reordered:
-                // ReorderableLazyListState only sees direct LazyColumn items.
-                // Rows are now individual items keyed "group:<id>" with the
-                // per-row cardRow(first/last) treatment, the same composition
-                // the agent-loop section below has used since T186. Swipe-to-
-                // delete and tap-to-open are unchanged; dragging lives on the
-                // explicit leading handle (consistent with AgentLoopRow, and
-                // it keeps clickable/swipe gestures conflict-free).
+                // [T-android-modelgroup-reorder] Groups are individual LazyColumn items keyed "group:<id>" (not one item wrapping a forEach), so ReorderableLazyListState can reorder them; drag lives on the leading handle.
                 item("groups_section_header") {
                     SectionHeader(text = stringResource(R.string.agent_loop_models_groups))
                 }
@@ -230,18 +219,7 @@ fun ModelGroupsScreen(
                                     isLast = index == groups.lastIndex,
                                 ),
                             ) {
-                                // [T-android-swipe-row-actions] Swipe left for
-                                // Edit / Delete.
-                                //
-                                // This REPLACES a SwipeToDismissBox that called
-                                // removeGroup() the instant the swipe crossed its
-                                // threshold — no confirmation and no undo, so a
-                                // stray horizontal gesture silently destroyed a
-                                // group (and, via removeGroup, cleared it from
-                                // every default slot that referenced it). Delete
-                                // now routes through the SAME dialog copy and the
-                                // same repository call as ModelGroupDetailScreen's
-                                // "Delete Group" button; Edit opens that screen.
+                                // [T-android-swipe-row-actions] Replaces a SwipeToDismissBox that destroyed groups with no confirmation; Delete now routes through the same dialog/repo call as the detail screen.
                                 SwipeRowActions(
                                     actions = listOf(
                                         SwipeRowAction(

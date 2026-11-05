@@ -57,15 +57,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.RandomAccessFile
-/**
- * Log management screen — adopts the SettingsSection/SettingsRow toolkit
- * shared with the rest of Settings (T81). Sections:
- *   - Logging — Enable Logging switch + footer explaining capture
- *   - Log Files — daily files list (each row → LogDetailScreen)
- *   - Storage — Delete All Logs (only when files exist) + total-size footer
- *
- * Mirrors iOS LogManagementView's grouped-card layout.
- */
+// Log management screen: Logging switch, daily Log Files list, and Delete All Logs. Mirrors iOS LogManagementView.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LogManagementScreen(
@@ -74,11 +66,7 @@ fun LogManagementScreen(
     onOpenLogcat: () -> Unit = {},
 ) {
     val context = LocalContext.current
-    // T-logs-perf: capped, separated daily/crash lists. Pre-T-logs-perf the screen called AppLogger.listLogFiles() + totalSize() synchronously on
-    // the main thread inside a LaunchedEffect, AND each row called file.length() on every recomposition. With ~14 daily logs + dozens
-    // of crash files in long-running installs the directory scan + per-row stats stalled the screen for noticeable seconds. Now: stat once on
-    // Dispatchers.IO, cap each kind at 100, render LogFileMeta directly
-    // (no further stat calls).
+    // T-logs-perf: stat once on Dispatchers.IO (capped daily/crash lists), render LogFileMeta directly.
     val dailyLogs = remember { mutableStateListOf<AppLogger.LogFileMeta>() }
     val crashLogs = remember { mutableStateListOf<AppLogger.LogFileMeta>() }
     var totalSize by remember { mutableStateOf(0L) }
@@ -86,9 +74,7 @@ fun LogManagementScreen(
     var showDeleteAllConfirm by remember { mutableStateOf(false) }
     var loggingEnabled by remember { mutableStateOf(AppLogger.isEnabled(context)) }
 
-    // T-config: Logs / Config Changes segmented control. Default to
-    // "logs"; a `?tab=config-audit` deep-link query lands users straight
-    // on the audit list. Mirrors iOS LogManagementView.
+    // T-config: Logs / Config Changes segmented control; `?tab=config-audit` deep-link lands on the audit list.
     val initialTab = remember {
         com.openminis.app.deeplink.DeepLinkCoordinator.consumePendingLogsTab() ?: "logs"
     }
@@ -97,21 +83,14 @@ fun LogManagementScreen(
     val refreshTrigger = remember { mutableStateOf(0) }
     LaunchedEffect(refreshTrigger.value) {
         loading = true
-        // Daily logs are named `minis-YYYY-MM-DD.log`. Crash files are
-        // `crash-…` (Java/Kotlin) and `native-crash-…` (NDK signal handler);
-        // grouped together as one "crash" list so the user sees one
-        // chronological stream regardless of which side trapped the fault.
-        // 100 of each is far past any reasonable inspection horizon.
+        // Daily logs `minis-*.log`; crash files (`crash-…` + `native-crash-…`) merged into one chronological list.
         val (daily, crash, total) = withContext(Dispatchers.IO) {
             val d = AppLogger.listLogFileMetas(prefix = "minis-", limit = 100)
             val cJ = AppLogger.listLogFileMetas(prefix = "crash-", limit = 100)
             val cN = AppLogger.listLogFileMetas(prefix = "native-crash-", limit = 100)
-            // Merge Java + native crashes, sort newest-first by name (both
-            // share the YYYY-MM-DD_HH-mm-ss suffix that sorts cleanly), cap.
+            // Merge Java + native crashes, newest-first by name, cap.
             val merged = (cJ + cN).sortedByDescending { it.name }.take(100)
-            // totalSize sums only the displayed rows. Older / over-cap files
-            // are still on disk but excluded from the cap-100 view; the
-            // footer wording matches what the user actually sees here.
+            // totalSize sums only the displayed rows (over-cap files stay on disk, excluded from the view).
             val sum = (d.sumOf { it.sizeBytes }) + (merged.sumOf { it.sizeBytes })
             Triple(d, merged, sum)
         }
@@ -127,8 +106,7 @@ fun LogManagementScreen(
         onBack = null,
         scrollable = false,
     ) {
-        // Segmented selector lives outside the scrolling content so the
-        // tabs stay visible as the body scrolls.
+        // Segmented selector stays visible as the body scrolls.
         SingleChoiceSegmentedButtonRow(
             modifier = Modifier
                 .fillMaxWidth()
@@ -150,8 +128,7 @@ fun LogManagementScreen(
             // Audit body. Owns its own scrolling.
             ConfigAuditScreen(modifier = Modifier.fillMaxSize())
         } else {
-            // Logs body — original layout. The LazyColumn picks up
-            // viewport height since the scaffold gave us a Column slot.
+            // Logs body — original layout.
             LogsBody(
                 context = context,
                 dailyLogs = dailyLogs,
@@ -254,10 +231,7 @@ private fun LogsBody(
         }
 
         if (showStreamTraces) {
-            // [T-android-sessionlist-prefs-io] listFiles() plus a lastModified()
-            // stat for every candidate is disk IO, and it used to run in the
-            // composition body the instant the sheet opened. Empty first frame,
-            // real list from Dispatchers.IO.
+            // [T-android-sessionlist-prefs-io] Empty first frame; real list from Dispatchers.IO.
             var traceFiles by remember { mutableStateOf<List<File>>(emptyList()) }
             var traceFilesLoaded by remember { mutableStateOf(false) }
             LaunchedEffect(Unit) {
@@ -302,9 +276,7 @@ private fun LogsBody(
         }
 
         selectedTraceFile?.let { f ->
-            // [T-android-sessionlist-prefs-io] readLines() + JSON parsing of up
-            // to 400 chunk frames per open, previously a `remember(f)` in the
-            // dialog body — i.e. on the main thread inside a Compose frame.
+            // [T-android-sessionlist-prefs-io] readLines() + JSON parsing off the main thread.
             var traceBody by remember(f) { mutableStateOf<String?>(null) }
             LaunchedEffect(f) {
                 traceBody = withContext(Dispatchers.IO) {
@@ -357,8 +329,7 @@ private fun LogsBody(
             )
         }
 
-        // [T-context-assembly-preview] 上下文组装快照入口：最近一次发给模型
-        // 的 system prompt 构成明细+全文，排障"模型实际收到什么"。
+        // [T-context-assembly-preview] Context-assembly snapshot entry (what the model actually received).
         SettingsSection(header = stringResource(R.string.log_context_snapshot_section)) {
             SettingsRow(
                 title = stringResource(R.string.log_context_snapshot_view),
@@ -379,20 +350,12 @@ private fun LogsBody(
         }
 
         if (showAnswerVersions) {
-            // [T-android-sessionlist-prefs-io] Directory scan off the
-            // composition body — same reasoning as the trace list above.
+            // [T-android-sessionlist-prefs-io] Directory scan off the composition body.
             var versionFiles by remember { mutableStateOf<List<java.io.File>>(emptyList()) }
             var versionFilesLoaded by remember { mutableStateOf(false) }
             var versionDirUnavailable by remember { mutableStateOf(false) }
             LaunchedEffect(Unit) {
-                // [T-answer-versions-guest-path] The archive lives under the
-                // session's /var/minis/workspace bind — on the host that is
-                // SessionWorkspace.hostDir(filesDir, sid, "workspace") (per
-                // project when filed, else per session). A literal
-                // java.io.File("/var/minis/...") never exists on Android, so
-                // the old read (and the writer, see ChatViewModelRetryExt)
-                // silently no-op'd. This screen has no single session, so
-                // enumerate every session/project candidate and merge.
+                // [T-answer-versions-guest-path] Archive lives under the workspace bind (host path); enumerate every session/project candidate and merge.
                 val (files, sawDir) = withContext(Dispatchers.IO) {
                     answerVersionArchives(context)
                 }
@@ -438,10 +401,7 @@ private fun LogsBody(
         }
 
         selectedVersionFile?.let { f ->
-            // [T-android-sessionlist-prefs-io] The old code read the file TWICE
-            // (once for the JSON probe, once for the fallback) inside a
-            // `remember(f)` in the dialog body — a whole-archive readText on the
-            // main thread, in composition. Now one read, on IO.
+            // [T-android-sessionlist-prefs-io] One whole-archive read, on IO.
             var versionBody by remember(f) { mutableStateOf<String?>(null) }
             LaunchedEffect(f) {
                 versionBody = withContext(Dispatchers.IO) {
@@ -510,9 +470,7 @@ private fun LogsBody(
             )
         }
 
-        // While the IO load is in flight (single frame in practice, but the dir scan + 100×stat can spike on slow eMMC), show a centered
-        // spinner instead of the empty-state row — otherwise the screen
-        // briefly reads as "no logs yet" before the real list pops in.
+        // Show a spinner while the IO load is in flight (avoids a brief "no logs yet" flash).
         if (loading) {
             Box(
                 modifier = Modifier
@@ -595,27 +553,7 @@ private fun LogsBody(
 
 // ─── Log Detail Screen ─────────────────────────────────────────────────────────
 
-/**
- * T176: lazy line-index loader for the log detail viewer. The previous
- * `file.readText()` approach allocated the entire file as a single
- * String + a single `Text` Composable, which ANR'd / OOM'd at the user's
- * 33MB log. Strategy:
- *
- *  1. One pass through the file to record byte-offset of every newline.
- *     Yields a `LongArray` of ~30-50 K entries for a 33MB log
- *     (≈ 4MB heap), well below any practical limit.
- *  2. `readLine(i)` seeks to `offsets[i]` and reads a single line on
- *     demand. Cached `RandomAccessFile` so each lookup is one I/O.
- *  3. `LazyColumn` renders only viewport-visible rows + overscan, so
- *     scroll is bounded by the visible rows count, not the file size.
- *  4. `DisposableEffect.onDispose` closes the RAF when the user leaves
- *     the screen so we don't leak descriptors across navigations.
- *
- * Trade-off: the indexing pass IS a full file read, but it's
- * sequential bytewise and runs on Dispatchers.IO — measured ~200-400 ms
- * for 33MB on Pixel 4a, vs the old `readText()` path which never
- * recovered.
- */
+// T176: lazy line-index loader — one sequential IO pass records newline byte-offsets; readLine(i) seeks + reads on demand; LazyColumn renders only visible rows; DisposableEffect closes the RAF.
 private class LazyLogFile private constructor(
     private val raf: RandomAccessFile,
     val lineOffsets: LongArray,
@@ -627,9 +565,7 @@ private class LazyLogFile private constructor(
         if (index !in 0 until lineCount) return ""
         return try {
             raf.seek(lineOffsets[index])
-            // RAF.readLine reads bytes, so non-ASCII (CJK) gets mangled
-            // — log files are ASCII timestamp + UTF-8 message bodies,
-            // so read raw bytes up to the next newline and decode UTF-8.
+            // Read raw bytes up to the next newline and decode UTF-8 (RAF.readLine mangles CJK).
             val buf = ByteArray(8 * 1024)
             val sb = StringBuilder()
             while (true) {
@@ -657,9 +593,7 @@ private class LazyLogFile private constructor(
     companion object {
         fun open(file: File): LazyLogFile {
             val raf = RandomAccessFile(file, "r")
-            // First-line offset is always 0; subsequent offsets sit immediately after each newline. Dynamic LongArray growth
-            // via mutableList is fine — 30-50 K Long boxings is a few MB
-            // of churn that the GC handles easily.
+            // First-line offset is 0; subsequent offsets sit after each newline.
             val offsets = mutableListOf(0L)
             val buf = ByteArray(64 * 1024)
             var pos = 0L
@@ -673,9 +607,7 @@ private class LazyLogFile private constructor(
                 }
                 pos += n
             }
-            // Drop a trailing empty offset if the file ends with \n (the last "line" past the final newline is empty, but
-            // logs typically end with a newline so this prevents
-            // showing a blank ghost row at the bottom).
+            // Drop a trailing empty offset so a file ending in \n doesn't show a blank ghost row.
             val arr = if (offsets.size > 1 && offsets.last() >= raf.length()) {
                 offsets.dropLast(1).toLongArray()
             } else {
@@ -780,12 +712,7 @@ fun LogDetailScreen(
                         .padding(padding)
                         .padding(horizontal = 12.dp, vertical = 12.dp),
                 ) {
-                    // [T-android-log-line-keys] Stable key = line number. Without keys the LazyColumn fell back to positional identity: any change
-                    // that shifted offsets moved every row, so Compose re-bound text across rows and the user saw a full-viewport flash.
-                    // The old key also hashed `readLine(i).take(24)` — a second RAF seek per visible row on every key evaluation
-                    // (T-logs-perf regression). Unnecessary: LazyLogFile is an immutable snapshot — lineOffsets are built once in
-                    // open(), the handle is read-only, and a new instance replaces the whole list wholesale, so line number
-                    // identity is stable for as long as the snapshot lives.
+                    // [T-android-log-line-keys] Stable key = line number (the snapshot is immutable, so line-number identity is stable).
                     items(
                         count = log.lineCount,
                         key = { i -> i },
@@ -809,20 +736,7 @@ fun LogDetailScreen(
 
 // ─── Share Utilities ───────────────────────────────────────────────────────────
 
-/**
- * [T-answer-versions-guest-path] Every host directory that can back a
- * session's `/var/minis/workspace/offloads/answer-versions`, newest-first.
- *
- * The writer archives under the current session's `/var/minis/workspace`
- * bind; on the host that path is [SessionWorkspace.hostDir] — per-project
- * (`minis-workspaces/<folderId>/workspace`) when the session is filed into a
- * folder, else per-session (`minis-sessions/<id>/workspace`). This screen is
- * session-agnostic, so the browse dialog unions every candidate and merges.
- * Returns the (capped) files plus whether any answer-versions directory was
- * actually present — callers show a distinct "directory unavailable" empty
- * state instead of the generic "no archives yet" when the writer side never
- * created one.
- */
+// [T-answer-versions-guest-path] Union of every host dir backing `/var/minis/workspace/offloads/answer-versions` (per-project + per-session), newest-first; returns files + whether any dir was present.
 internal fun answerVersionArchives(context: Context): Pair<List<File>, Boolean> {
     val filesDir = context.filesDir
     val sw = com.openminis.app.sandbox.SessionWorkspace
@@ -845,17 +759,12 @@ internal fun answerVersionArchives(context: Context): Pair<List<File>, Boolean> 
 }
 
 private fun shareLogFile(context: Context, file: File) {
-    // [T-share-fileprovider-unify] Shared FileProvider helper (Issue #17 clip
-    // + double grant hardening baked in). The EXTRA_TEXT fallback below is
-    // log-specific: a log file is still useful pasted as text.
+    // [T-share-fileprovider-unify] Shared FileProvider helper; EXTRA_TEXT fallback (a log is still useful as text).
     val shared = shareViaFileProvider(
         context, file, "text/plain", context.getString(R.string.log_share_chooser),
     )
     if (shared) return
-    // Log the FileProvider failure — earlier this catch silently dropped the exception and fell back to EXTRA_TEXT, masking config bugs
-    // (e.g. a missing files-path root) as "share works but pastes the
-    // whole file as text body" UX. Now any future regression is one
-    // logcat line away from being root-caused.
+    // Log the FileProvider failure (previously swallowed, masking config bugs as "share pastes text").
     AppLogger.warning(
         "LogShare",
         "FileProvider share failed for ${file.name} — falling back to EXTRA_TEXT",

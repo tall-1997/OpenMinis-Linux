@@ -19,15 +19,7 @@ import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
 
-/**
- * A long-running PRoot shell process that persists across commands.
- * Agent commands are sent via stdin and output is captured using unique
- * end-of-command markers, similar to iOS ISHKernel.executeCommandAndWait.
- *
- * This ensures that environment variables, working directory, installed
- * packages, and running services all persist between commands within the
- * same session.
- */
+/** Long-running PRoot shell: commands via stdin, output captured via unique end-of-command markers, so env/cwd/packages/services persist across commands in a session. */
 class PersistentShell(
     private val context: Context,
     private val sessionId: String,
@@ -38,11 +30,7 @@ class PersistentShell(
         private const val MAX_OUTPUT_CHARS = 128 * 1024
         private const val TAG = "PersistentShell"
 
-        /**
-         * [T-android-shell-death-diagnosability] Death-capture windows. The
-         * head must comfortably hold proot's error line(s) printed BEFORE the
-         * multi-KB talloc leak dump; the tail shows how the output ended.
-         */
+        /** [T-android-shell-death-diagnosability] Head holds proot's pre-dump error line(s); tail shows how output ended. */
         private const val OUTPUT_HEAD_MAX = 1024
         private const val OUTPUT_TAIL_MAX = 2048
 
@@ -54,12 +42,7 @@ class PersistentShell(
     @Volatile
     private var stdinWriter: BufferedWriter? = null
 
-    /**
-     * Serializes every stdin write. executeCommand writes from its IO
-     * coroutine while applyEnvironment/refreshPath (broadcast paths outside
-     * the session mutex) can write concurrently — interleaved writes would
-     * splice two commands into one stdin line and corrupt both.
-     */
+    /** Serializes stdin writes: concurrent writers would splice two commands into one line and corrupt both. */
     private val stdinLock = Any()
 
     private val isStarting = AtomicBoolean(false)
@@ -177,13 +160,7 @@ class PersistentShell(
         }
     }
 
-    /**
-     * [T-android-seccomp-selfheal / GH#186] Once the seccomp workaround proves
-     * necessary on this device, keep it for every subsequent respawn of this
-     * shell. Without stickiness the shell would crash-and-retry on every
-     * restart, doubling startup latency for exactly the users already hitting
-     * the bug.
-     */
+    /** [T-android-seccomp-selfheal / GH#186] Sticky workaround for later respawns; without it the shell crashes-and-retries every restart, doubling startup latency. */
     @Volatile
     private var useNoSeccomp = false
 
@@ -223,7 +200,7 @@ class PersistentShell(
         // Shared proot prefix (formerly a hand-rolled copy — see
         // PRootKernel.commonArgv). Same flags, same order; the per-session
         // bind snapshot and the native-offload socket are included.
-        val cmd = PRootKernel.commonArgv(
+        val cmd = commonArgv(
             prootPath = rootfsManager.prootBinary.absolutePath,
             rootfsDir = rootfsManager.rootfsDir.absolutePath,
             bindMounts = sessionBindMounts,

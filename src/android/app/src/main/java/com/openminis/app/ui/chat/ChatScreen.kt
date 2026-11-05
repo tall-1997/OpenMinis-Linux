@@ -210,34 +210,12 @@ internal val SparkleColor2 = Color(0xFF99998C) // rgb(0.6, 0.6, 0.55)
 // PHPickerConfiguration.selectionLimit = 50.
 private const val ATTACHMENT_PICK_LIMIT = 50
 
-/**
- * One gesture window for every "the user just took the viewport" decision.
- *
- * The interrupt check and the send-follow grace used to differ (1 s vs 2 s),
- * which left a band where a small drag was still yanked back. Generation
- * cancellation in [ChatScrollController] now drops commands queued before the
- * gesture, so a single 1 s window covers a fling settle. [SEND_FOLLOW_GRACE_MS]
- * is the same value: within it the reserve-change pin bypasses isNearBottom
- * because a just-sent message makes the live anchor transiently read
- * "not at bottom".
- */
+/** One gesture window for "the user just took the viewport": a single 1 s covers a fling settle, and SEND_FOLLOW_GRACE_MS shares it so a just-sent message's transient "not at bottom" read is bypassed. */
 private const val USER_SCROLL_INTERRUPT_MS = 1_000L
 private const val SEND_FOLLOW_GRACE_MS = USER_SCROLL_INTERRUPT_MS
 
 
-/**
- * [T-android-chat-max-content-width] Reading-measure cap for the conversation
- * and the composer on a wide window.
- *
- * 900dp verbatim from iOS `AIChatView.maxContentWidth`, which returns 900 in the
- * regular horizontal size class and nil in compact. The unit maps directly: an
- * iOS point and an Android dp are both 1/160 inch at baseline density, so the
- * two platforms cap at the same physical measure.
- *
- * No explicit compact branch is needed to match "nil when compact": `widthIn`
- * is an upper bound, so on any window narrower than this — every phone, and a
- * tablet's list pane — it is inert and the content still fills the width.
- */
+/** [T-android-chat-max-content-width] Reading-measure cap for the conversation and composer; 900dp verbatim from iOS maxContentWidth (dp maps 1:1 to pt). widthIn is an upper bound, so narrower windows are unaffected. */
 private val CHAT_MAX_CONTENT_WIDTH = 900.dp
 
 

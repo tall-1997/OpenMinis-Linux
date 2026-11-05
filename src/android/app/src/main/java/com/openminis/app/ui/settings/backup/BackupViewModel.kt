@@ -25,12 +25,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
-/**
- * [T-android-backup-ui] Drives the Backup & Restore screen — Android analog of
- * iOS `BackupRunController` + BackupSettingsView state. One instance per
- * screen, serialised over BackupExporter / BackupImporter; local path only,
- * rclone destinations live in their own screens.
- */
+/** [T-android-backup-ui] Drives the Backup & Restore screen (Android analog of iOS BackupRunController + BackupSettingsView); one per screen, serialised over the exporter/importer; rclone destinations live in their own screens. */
 class BackupViewModel(app: Application) : AndroidViewModel(app) {
 
     private val db get() = AppDatabase.getInstance(getApplication())
@@ -60,12 +55,7 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
     private val _isRunning = MutableStateFlow(false)
     val isRunning: StateFlow<Boolean> = _isRunning.asStateFlow()
 
-    /**
-     * [T-android-backup-stop] The in-flight export, held so it can be
-     * cancelled. iOS keeps the same handle in BackupRunController for the same
-     * reason: "a running task nobody holds is one nobody can stop" — and the
-     * screen can be left mid-backup.
-     */
+    /** [T-android-backup-stop] In-flight export, held so it can be cancelled ("a running task nobody holds is one nobody can stop"). */
     private var exportJob: kotlinx.coroutines.Job? = null
 
     /**
@@ -82,16 +72,7 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
         job.cancel()
     }
 
-    /**
-     * [T-android-backup-destination-gate] Enabled rclone destinations, refreshed
-     * whenever the screen appears (the user may have just added one and come
-     * back). Mirrors iOS `BackupSettingsView.hasDestination`.
-     *
-     * This exists because a backup with NO destination only ever reaches the
-     * app's own sandbox — where it dies with the very app it exists to protect.
-     * iOS refuses to produce one and says so; Android used to run the export
-     * anyway and show "Backup ready", which reads as success.
-     */
+    /** [T-android-backup-destination-gate] Enabled rclone destinations, refreshed on appear. A backup with no destination only reaches the app sandbox (dies with the app it protects); iOS refuses, Android used to show a false "Backup ready". */
     private val _destinations =
         MutableStateFlow<List<com.openminis.app.backup.remote.RcloneRemoteStore.Remote>>(emptyList())
     val destinations: StateFlow<List<com.openminis.app.backup.remote.RcloneRemoteStore.Remote>> =

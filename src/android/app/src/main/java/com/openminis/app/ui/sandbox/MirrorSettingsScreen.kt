@@ -119,11 +119,7 @@ data class MirrorTestResult(
 
 // ─── Mirror Definitions ──────────────────────────────────────────────────────
 
-/**
- * Every [MirrorCatalog] display name must map here. A miss falls through to
- * the English catalog string, which is what left USTC / SJTU / npmmirror
- * untranslated on the Chinese software-source page.
- */
+/** Every [MirrorCatalog] display name must map here; a miss falls through to English, which left USTC/SJTU/npmmirror untranslated. */
 internal fun mirrorNameStringRes(name: String): Int? = when (name) {
     "Official ports" -> R.string.mirror_name_official_ports
     "Official PyPI" -> R.string.mirror_name_official_pypi
@@ -254,16 +250,7 @@ object MirrorSpeedTestViewModel {
         synchronized(this) {
             if (loaded) return
             loaded = true
-            // [T-android-mirror-prefs-io] (#20) The FIRST SharedPreferences
-            // read loads the prefs XML synchronously on the calling thread,
-            // and ensureLoaded was called straight from composition — a disk
-            // read on the main thread inside a frame, the exact pattern
-            // [T-android-sessionlist-prefs-io] fixed in SessionListViewModel
-            // (same fix shape: flag first so only one kick, then the read on
-            // IO; the SnapshotStateMaps are thread-safe so publishing from
-            // the IO coroutine is fine). Composition calls keep working
-            // unchanged; selections simply arrive a frame or two later
-            // instead of blocking the frame that renders the screen.
+            // [T-android-mirror-prefs-io] First prefs read loads XML synchronously on the caller (main thread in composition) — do it on IO; SnapshotStateMaps are thread-safe so publishing is fine.
             scope.launch {
                 val p = prefs(context.applicationContext)
                 for (cat in MirrorCategory.entries) {
