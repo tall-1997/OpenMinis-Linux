@@ -2780,4 +2780,14 @@
     <string name="memory_center_stat_failures">Blocked repeats</string>
     <string name="memory_center_stat_sediments">Compaction summaries</string>
     <string name="memory_center_stats_footer">Counted across this device; reopen this screen to refresh.</string>
+    <!-- [T-p9-revert] Three-stage revert: stage/clear/commit -->
+    <string name="chat_longpress_revert_to_here">Revert to Here</string>
+    <string name="chat_revert_done_toast">Files rolled back to this point</string>
+    <string name="chat_revert_empty_toast">Nothing to revert after this message</string>
+    <string name="chat_revert_failed_toast">Couldn\'t roll back — see logs</string>
+    <string name="chat_revert_cleared_toast">Rewind undone</string>
+    <string name="chat_revert_banner_title">Rewound to this point</string>
+    <string name="chat_revert_banner_files">%1$d file(s) restored</string>
+    <string name="chat_revert_banner_hint">Send a message to keep this, or undo the rewind.</string>
+    <string name="chat_revert_banner_undo">Undo</string>
 </resources>

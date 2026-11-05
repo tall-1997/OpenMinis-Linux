@@ -2012,4 +2012,14 @@
     <string name="memory_center_stat_sediments">Sıkıştırma özetleri</string>
     <string name="memory_center_stats_footer">Tüm cihaz genelinde sayılır; yenilemek için bu ekranı yeniden açın.</string>
     <string name="memory_section_diary_footer">Bu oturumun bellek klasöründeki günlük kayıtlar. En son üçü tam olarak eklenir; daha eski günler aranabilir bir dizin olarak listelenir.</string>
+    <!-- [T-p9-revert] Three-stage revert: stage/clear/commit -->
+    <string name="chat_longpress_revert_to_here">Buraya geri al</string>
+    <string name="chat_revert_done_toast">Dosyalar bu noktaya geri alındı</string>
+    <string name="chat_revert_empty_toast">Bu mesajdan sonra geri alınacak bir şey yok</string>
+    <string name="chat_revert_failed_toast">Geri alınamadı — kayıtlara bak</string>
+    <string name="chat_revert_cleared_toast">Geri alma iptal edildi</string>
+    <string name="chat_revert_banner_title">Bu noktaya geri sarıldı</string>
+    <string name="chat_revert_banner_files">%1$d dosya geri yüklendi</string>
+    <string name="chat_revert_banner_hint">Saklamak için mesaj gönder, ya da geri almayı iptal et.</string>
+    <string name="chat_revert_banner_undo">Geri al</string>
 </resources>

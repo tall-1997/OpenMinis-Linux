@@ -2012,4 +2012,14 @@
     <string name="memory_center_stat_sediments">Mga buod ng compaction</string>
     <string name="memory_center_stats_footer">Binilang sa buong device; buksan muli ang screen na ito para i-refresh.</string>
     <string name="memory_section_diary_footer">Mga pang-araw-araw na log sa memory folder ng session na ito. Ang tatlong pinakabago ay buong isinasama; ang mas lumang mga araw ay nakalista bilang index na maaari mong hanapin.</string>
+    <!-- [T-p9-revert] Three-stage revert: stage/clear/commit -->
+    <string name="chat_longpress_revert_to_here">Ibalik hanggang dito</string>
+    <string name="chat_revert_done_toast">Naibalik ang mga file hanggang dito</string>
+    <string name="chat_revert_empty_toast">Walang maibalik pagkatapos ng mensaheng ito</string>
+    <string name="chat_revert_failed_toast">Hindi naibalik — tingnan ang mga log</string>
+    <string name="chat_revert_cleared_toast">Na-undo ang pag-ibalik</string>
+    <string name="chat_revert_banner_title">Naibalik sa puntong ito</string>
+    <string name="chat_revert_banner_files">%1$d (na) file ang naibalik</string>
+    <string name="chat_revert_banner_hint">Magpadala ng mensahe para panatilihin ito, o i-undo ang pag-ibalik.</string>
+    <string name="chat_revert_banner_undo">I-undo</string>
 </resources>

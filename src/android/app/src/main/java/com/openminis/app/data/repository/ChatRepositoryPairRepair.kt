@@ -83,6 +83,13 @@ suspend fun ChatRepository.deleteAfterWithPairRepair(
         deleted = doomedTail.map { it.id to it.partsJson },
     )
     if (!deleteMessagesAfter(sessionId, cutoffSortOrder)) return 0
+    // [T-p9-revert-supersede] A cut at or before a staged revert's boundary
+    // removes the very tail the stage is hiding — the record must go with
+    // it (the file rollback stands: that is what the user asked for). A cut
+    // strictly after boundary+1 only shortens the hidden window, so the
+    // record survives. Placed after the delete succeeded: an aborted cut
+    // must not orphan the stage.
+    RevertStageRegistry.supersede(sessionId, cutoffSortOrder)
     if (plan.isEmpty) {
         for ((rowId, json) in keptOverrides) {
             updateMessageParts(rowId, json)

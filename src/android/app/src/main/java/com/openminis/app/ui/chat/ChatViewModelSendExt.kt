@@ -267,6 +267,17 @@ internal fun ChatViewModel.sendMessage(
         // route only describes how one instruction was carried out.
         com.openminis.app.knowledge.RouteTrackers.global.clear(activeSessionId)
 
+        // [T-p9-revert-commit-on-send] A staged revert waits for exactly
+        // this moment: the tail is still in the DB (stage only rolled files
+        // back and hid the rows in memory), so the cut MUST land before the
+        // new user message is persisted — otherwise the fresh row lands
+        // after the doomed tail and the boundary+1 cut would take it too.
+        // Fail-closed: if the cut could not be verified, drop the send (the
+        // staged banner stays up so the user can retry or undo).
+        if (!commitStagedRevertBeforeSend(activeSessionId)) {
+            return@launch
+        }
+
         if (editingId != null && !truncateBeforeEdit(editingId)) {
             // [T-anchor-lookup-fail-closed] The truncation anchor could not be
             // read, so the rows this edit would replace are still live in the

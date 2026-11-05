@@ -247,6 +247,86 @@ object FileCheckpointStore {
         return Result(!failed, lines, true, cp)
     }
 
+    /**
+     * [T-p9-revert] Restore ONLY the given [paths] from checkpoint [id] —
+     * and keep the checkpoint alive afterwards.
+     *
+     * The P9 revert stage picks, per file, the OLDEST post-boundary
+     * checkpoint; those targets span many checkpoints, and the history
+     * must survive the restore (clear() re-uses the original snapshot,
+     * and the user's manual file_checkpoint restores stay available).
+     * This is restore()'s per-entry body with two differences: entries
+     * are filtered to [paths], and the source directory is never dropped.
+     */
+    fun restoreTargets(
+        context: Context,
+        sessionId: String,
+        id: String,
+        paths: Set<String>,
+    ): Result = restoreTargets(
+        filesDir = context.filesDir,
+        sessionId = sessionId,
+        id = id,
+        paths = paths,
+        resolver = { PRootKernel.resolveSessionHostPath(sessionId, it, context) },
+    )
+
+    fun restoreTargets(
+        filesDir: File,
+        sessionId: String,
+        id: String,
+        paths: Set<String>,
+        resolver: Resolver,
+    ): Result {
+        val cp = runCatching { load(filesDir, sessionId, id) }.getOrNull()
+            ?: return Result(false, listOf("checkpoint $id not found"), false)
+        val lines = mutableListOf<String>()
+        var failed = false
+        for ((i, e) in cp.entries.withIndex()) {
+            if (e.path !in paths) continue
+            val host = resolver.resolve(e.path)
+            if (host == null) {
+                lines += "skipped ${e.path}: path no longer resolves"
+                failed = true
+                continue
+            }
+            try {
+                if (e.existed && e.payloadName != null) {
+                    // [T-checkpoint-id-guard] Same manifest-trust rule as
+                    // restore(): a payload name from disk is only trusted
+                    // after it passes the canonical-name check.
+                    if (!validPayloadName(e.payloadName!!)) {
+                        lines += "failed ${e.path}: manifest payload name is malformed"
+                        failed = true
+                        continue
+                    }
+                    val src = File(File(dirFor(filesDir, sessionId, cp.id), PAYLOAD), e.payloadName!!)
+                    host.parentFile?.mkdirs()
+                    val tmp = File(host.parentFile, ".restore-targets-${cp.id}-$i.tmp")
+                    src.copyTo(tmp, overwrite = true)
+                    if (!AtomicFileWrite.moveIntoPlace(tmp, host)) {
+                        tmp.delete()
+                        error("cannot replace ${e.path}; previous content kept")
+                    }
+                    lines += "restored ${e.path} (${e.bytes} bytes)"
+                } else {
+                    if (host.exists()) {
+                        if (!host.delete()) {
+                            lines += "failed ${e.path}: cannot delete newly-created file"
+                            failed = true
+                            continue
+                        }
+                    }
+                    lines += "removed ${e.path} (did not exist before the checkpoint)"
+                }
+            } catch (ex: Exception) {
+                lines += "failed ${e.path}: ${ex.message}"
+                failed = true
+            }
+        }
+        return Result(!failed, lines, true, cp)
+    }
+
     class Result(
         val success: Boolean,
         val lines: List<String>,

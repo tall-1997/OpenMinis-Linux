@@ -582,6 +582,11 @@ internal fun ChatViewModel.loadSession() {
         }
         refreshHistoryEdges()
 
+        // [T-p9-revert-recovery] A staged revert survives process death on
+        // disk: re-register the record (the banner comes back) and re-apply
+        // the in-memory tail trim.
+        applyStagedRevertTrim(realSessionId.takeIf { it.isNotEmpty() } ?: sessionId)
+
         // Cold-start interrupt detection: an agent loop that was killed by
         // the OS (or app force-quit) leaves agentHistory in one of four
         // tell-tale shapes. Detecting any of them lets the user tap

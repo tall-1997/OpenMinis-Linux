@@ -2016,4 +2016,14 @@
     <string name="memory_center_stat_sediments">Rezumate de compactare</string>
     <string name="memory_center_stats_footer">Numărate pe întregul dispozitiv; redeschide acest ecran pentru actualizare.</string>
     <string name="memory_section_diary_footer">Jurnalele zilnice din folderul de memorie al acestei sesiuni. Cele mai recente trei sunt injectate integral; zilele mai vechi apar ca un index în care poți căuta.</string>
+    <!-- [T-p9-revert] Three-stage revert: stage/clear/commit -->
+    <string name="chat_longpress_revert_to_here">Revenire până aici</string>
+    <string name="chat_revert_done_toast">Fișiere restaurate până la acest punct</string>
+    <string name="chat_revert_empty_toast">Nimic de anulat după acest mesaj</string>
+    <string name="chat_revert_failed_toast">Revenirea a eșuat — vezi jurnalele</string>
+    <string name="chat_revert_cleared_toast">Revenirea a fost anulată</string>
+    <string name="chat_revert_banner_title">Revenit la acest punct</string>
+    <string name="chat_revert_banner_files">%1$d fișier(e) restaurate</string>
+    <string name="chat_revert_banner_hint">Trimite un mesaj pentru a păstra, sau anulează.</string>
+    <string name="chat_revert_banner_undo">Anulează</string>
 </resources>

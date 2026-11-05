@@ -2012,4 +2012,14 @@
     <string name="memory_center_stat_sediments">Résumés de compactage</string>
     <string name="memory_center_stats_footer">Compté sur tout l\'appareil ; rouvrez cet écran pour actualiser.</string>
     <string name="memory_section_diary_footer">Journaux quotidiens du dossier mémoire de cette session. Les trois plus récents sont injectés en entier ; les jours plus anciens apparaissent sous forme d\'un index consultable.</string>
+    <!-- [T-p9-revert] Three-stage revert: stage/clear/commit -->
+    <string name="chat_longpress_revert_to_here">Revenir à ce point</string>
+    <string name="chat_revert_done_toast">Fichiers restaurés à ce point</string>
+    <string name="chat_revert_empty_toast">Rien à annuler après ce message</string>
+    <string name="chat_revert_failed_toast">Échec de la restauration — voir les journaux</string>
+    <string name="chat_revert_cleared_toast">Retour en arrière annulé</string>
+    <string name="chat_revert_banner_title">Rembobiné jusqu\'à ce point</string>
+    <string name="chat_revert_banner_files">%1$d fichier(s) restauré(s)</string>
+    <string name="chat_revert_banner_hint">Envoyez un message pour conserver ceci, ou annulez le retour.</string>
+    <string name="chat_revert_banner_undo">Annuler</string>
 </resources>

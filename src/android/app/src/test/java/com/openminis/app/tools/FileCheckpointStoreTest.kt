@@ -202,4 +202,69 @@ class FileCheckpointStoreTest {
         assertTrue(r.lines.toString(), r.lines.any { it.contains("malformed") })
         assertEquals("v2", target.readText())
     }
+
+    @Test
+    fun restoreTargetsKeepsSourceCheckpointForLaterRestores() {
+        writeTarget("original")
+        val out = FileCheckpointStore.capture(filesDir, session, listOf("/a.txt"), resolver("/a.txt" to target), label = "t")
+        assertNotNull(out.reason, out.checkpoint)
+        writeTarget("clobbered")
+        val r1 = FileCheckpointStore.restoreTargets(filesDir, session, out.checkpoint!!.id, setOf("/a.txt"), resolver("/a.txt" to target))
+        assertTrue(r1.lines.toString(), r1.success)
+        assertEquals("original", target.readText())
+        // [T-p9-revert] Unlike restore() (which drops the checkpoint on
+        // success), restoreTargets must keep it alive: the P9 plan spans
+        // many checkpoints and the history must stay available for
+        // clear() and the user's manual file_checkpoint restores.
+        writeTarget("clobbered again")
+        val r2 = FileCheckpointStore.restoreTargets(filesDir, session, out.checkpoint!!.id, setOf("/a.txt"), resolver("/a.txt" to target))
+        assertTrue(r2.lines.toString(), r2.success)
+        assertEquals("original", target.readText())
+    }
+
+    @Test
+    fun restoreTargetsRestoresOnlyTheRequestedPaths() {
+        writeTarget("original")
+        val other = File(filesDir, "workspace/other.txt")
+        other.parentFile.mkdirs()
+        other.writeText("other original")
+        val out = FileCheckpointStore.capture(
+            filesDir, session, listOf("/a.txt", "/other.txt"),
+            resolver("/a.txt" to target, "/other.txt" to other), label = "t",
+        )
+        assertNotNull(out.reason, out.checkpoint)
+        writeTarget("clobbered")
+        other.writeText("other clobbered")
+        val r = FileCheckpointStore.restoreTargets(
+            filesDir, session, out.checkpoint!!.id, setOf("/a.txt"),
+            resolver("/a.txt" to target, "/other.txt" to other),
+        )
+        assertTrue(r.lines.toString(), r.success)
+        assertEquals("original", target.readText())
+        assertEquals("other clobbered", other.readText())
+    }
+
+    @Test
+    fun restoreTargetsDeletesFileThatDidNotExistAtTheCheckpoint() {
+        val fresh = File(filesDir, "workspace/new.txt")
+        val out = FileCheckpointStore.capture(filesDir, session, listOf("/new.txt"), resolver("/new.txt" to fresh))
+        assertFalse(out.checkpoint!!.entries.single().existed)
+        fresh.parentFile.mkdirs()
+        fresh.writeText("created by the run")
+        val r = FileCheckpointStore.restoreTargets(filesDir, session, out.checkpoint!!.id, setOf("/new.txt"), resolver("/new.txt" to fresh))
+        assertTrue(r.lines.toString(), r.success)
+        assertFalse("a created file must be deleted by the rollback", fresh.exists())
+    }
+
+    @Test
+    fun restoreTargetsUnresolvablePathFailsSoft() {
+        writeTarget("original")
+        val out = FileCheckpointStore.capture(filesDir, session, listOf("/a.txt"), resolver("/a.txt" to target))
+        writeTarget("clobbered")
+        // Path no longer resolves (mount gone): skipped + failed, never a throw.
+        val r = FileCheckpointStore.restoreTargets(filesDir, session, out.checkpoint!!.id, setOf("/a.txt"), FileCheckpointStore.Resolver { null })
+        assertFalse(r.success)
+        assertTrue(r.lines.toString(), r.lines.isNotEmpty())
+        assertEquals("clobbered", target.readText())
+    }
 }
