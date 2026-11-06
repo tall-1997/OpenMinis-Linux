@@ -840,20 +840,20 @@ class ChatViewModel(
      * without a second cut. A takeLast here used to hide the middle while
      * both ends still looked present.
      */
-    val uiMessages: StateFlow<List<ChatMessage>> =
-        _messages.map { raw ->
-            // [T-bridge-message-ui-leak-android] Single UI-collection sink for
-            // EVERY path that pushes messages to the list (loadSession, live
-            // stream append, compact rebuild, snapshot reload, sync refresh…).
-            // Filter the internal role-alternation bridge here so it can never
-            // surface as a chat bubble regardless of which path produced it.
-            // Only allocate a new list when a bridge is actually present.
-            if (raw.any { it.isInternalBridge }) raw.filterNot { it.isInternalBridge } else raw
+    val uiMessages: StateFlow<List<ChatMessage>> by lazy {
+        combine(_messages, _isStreaming) { raw, streaming ->
+            // [T-bridge-message-ui-leak-android] Single UI sink for EVERY path
+            // that pushes messages to the list; the role-alternation bridge must
+            // never surface as a chat bubble. Allocate only when one is present.
+            val visible = if (raw.any { it.isInternalBridge }) raw.filterNot { it.isInternalBridge } else raw
+            // [T-android-thinking-row-follows-run] The same sink settles every "still running" claim once the run is over.
+            if (streaming) visible else settleIdleRows(visible)
         }.stateIn(
             viewModelScope,
             kotlinx.coroutines.flow.SharingStarted.Eagerly,
             emptyList(),
         )
+    }
 
     /**
      * Whether the current session has older messages above the window.

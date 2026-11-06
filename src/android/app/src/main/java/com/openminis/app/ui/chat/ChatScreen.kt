@@ -1509,9 +1509,9 @@ fun ChatScreen(
         snapshotFlow { listState.isScrollInProgress }
             .distinctUntilChanged()
             .collect { inProgress ->
-                if (!inProgress && !isNearBottom.value &&
-                    !viewModel.isStreaming.value && scrollPolicy.isPinned
-                ) {
+                // [T-android-settle-programmatic-scroll] Only a real finger lift may rearm Reading.
+                if (!inProgress && !isNearBottom.value && !viewModel.isStreaming.value && scrollPolicy.isPinned &&
+                    SettleAfterInteractionGate.isUserInteractionEnd(System.currentTimeMillis() - lastInterruptMs)) {
                     val anchor = visibleTopAnchor()
                     scrollPolicy.rearmIfDraggedAway(anchor?.first, anchor?.second ?: 0)
                 }
