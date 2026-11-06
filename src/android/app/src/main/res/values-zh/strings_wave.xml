@@ -1,35 +1,52 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Wave E 新增文案（长任务 / 定时运行 / 首页体验）。 -->
 <resources>
-    <!-- T3/T4：倒计时胶囊 + 立即执行 -->
-    <string name="sched_pill_run_now">立即执行</string>
+    <string name="mcps_search_placeholder">搜索 MCP 服务器</string>
+    <string name="mcps_search_no_match">没有与“%1$s”匹配的 MCP 服务器。</string>
+    <string name="backup_dest_configuration">配置信息</string>
+    <string name="backup_dest_type">类型</string>
+    <string name="backup_dest_name">名称</string>
+    <string name="backup_dest_backup_folder">备份文件夹</string>
+    <string name="backup_dest_added">添加时间</string>
+    <string name="backup_dest_edit_connection">编辑连接…</string>
+    <string name="backup_dest_edit_connection_title">编辑连接</string>
+    <string name="backup_dest_test_connection">测试连接</string>
+    <string name="backup_dest_connected">连接成功。</string>
+    <string name="backup_dest_remove_destination">移除目的地</string>
+    <string name="backup_dest_remove_footer">移除后将在本机忘记该服务器及其密码。服务器上已有的备份不会被删除。</string>
+    <string name="backup_dest_rename_title">重命名目的地</string>
+    <string name="backup_dest_rename_hint">仅支持字母、数字、- 和 _。</string>
+    <string name="backup_dest_save">保存</string>
+    <string name="backup_dest_remove_confirm_title">移除此目的地？</string>
+    <string name="backup_dest_remove_confirm_note">服务器上已有的备份不会被删除。</string>
+    <string name="backup_dest_remove_action">移除</string>
+    <string name="backup_dest_edit_failed">使用这些设置无法连接，因此未保存。%1$s</string>
+    <string name="backup_dest_connection_header">连接信息</string>
+    <string name="backup_dest_password_header">密码</string>
+    <string name="backup_dest_new_password">新密码</string>
+    <string name="backup_dest_password_will_clear">将清除已保存的密码。</string>
+    <string name="backup_dest_password_keep_hint">留空则保留当前密码。</string>
+    <string name="backup_dest_no_password">无密码（匿名）</string>
+    <string name="backup_dest_detail_footer">点击名称或文件夹即可修改；如需更改地址或密码，请编辑连接。</string>
+    <string name="chat_error_model_refused">模型拒绝回应此请求。请换个说法，或切换到其他模型。</string>
+    <string name="chat_error_model_refused_category">已被模型服务商的使用政策拦截（类别：%1$s）。在本对话中继续或换个说法很可能再次被拦截——请切换到其他模型，或新建对话。</string>
+    <string name="provider_sync_mark_synced">已同步</string>
+    <string name="provider_sync_mark_builtin">已回退内置列表</string>
+    <string name="appearance_show_full_thinking_title">显示完整思考</string>
+    <string name="appearance_show_full_thinking_footer">思考面板完全展开并显示全部内容。</string>
+    <string name="cd_unread_reply">未读回复</string>
     <string name="sched_pill_task_label">定时任务</string>
-    <string name="sched_pill_countdown_a11y">距下次定时运行还有 %1$s</string>
-    <string name="sched_pill_hide">隐藏本次倒计时</string>
-
-    <!-- T7：停止分档 -->
+    <string name="sched_pill_run_now">立即执行</string>
+    <string name="sched_pill_hide">隐藏</string>
     <string name="stop_menu_current_tool">仅停止当前工具</string>
     <string name="stop_menu_stop_all">全部停止</string>
     <string name="stop_menu_confirm_toggle">停止前确认</string>
-    <string name="stop_confirm_title">要停止当前运行吗？</string>
-    <string name="stop_confirm_current">停止当前运行</string>
-    <string name="stop_confirm_all">全部停止</string>
-    <string name="cd_stop_long_press_options">停止选项</string>
-
-    <!-- T6：子代理卡片 -->
-    <string name="subagent_tool_calls_fmt">%1$d 次工具调用</string>
-    <string name="subagent_steer_hint">向该子代理发送补充指令…</string>
+    <string name="stop_confirm_title">确认停止？</string>
+    <string name="stop_confirm_current">仅停止当前工具。</string>
+    <string name="stop_confirm_all">停止整个运行和所有子代理。</string>
+    <string name="subagent_steer_hint">引导此子代理…</string>
     <string name="subagent_steer_send">发送</string>
-    <string name="subagent_steer_queued">指令已加入队列，子代理下一轮读取</string>
-    <string name="subagent_steer_refused">子代理已不在运行</string>
-    <string name="subagent_stop_in_sheet">停止该子代理</string>
-    <string name="cd_subagent_steering">引导子代理</string>
-
-    <!-- T9：显示完整思考 -->
-    <string name="appearance_show_full_thinking_title">显示完整思考</string>
-    <string name="appearance_show_full_thinking_footer">开启后，思考面板默认展开并显示完整内容，而不是折叠的尾部窗口摘要。</string>
-
-    <!-- T8：首页分组视觉 -->
-    <string name="cd_group_running_comet">组内有会话正在运行</string>
-    <string name="cd_unread_reply">有未读回复</string>
+    <string name="subagent_steer_queued">引导已排队。</string>
+    <string name="subagent_steer_refused">子代理已结束，引导未发送。</string>
+    <string name="subagent_stop_in_sheet">停止子代理</string>
+    <string name="subagent_tool_calls_fmt">%1$d 次工具调用</string>
 </resources>

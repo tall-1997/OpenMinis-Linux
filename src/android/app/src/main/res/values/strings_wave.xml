@@ -1,38 +1,53 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-  Wave E additions (long tasks / scheduled runs / home experience).
-  Kept in a dedicated file so parallel waves never collide on strings.xml.
--->
 <resources>
-    <!-- T3/T4: countdown capsule + run-now -->
-    <string name="sched_pill_run_now">Run Now</string>
+    <string name="mcps_search_placeholder">Search MCP servers</string>
+    <string name="mcps_search_no_match">No MCP servers match \"%1$s\".</string>
+    <string name="backup_dest_configuration">Configuration</string>
+    <string name="backup_dest_type">Type</string>
+    <string name="backup_dest_name">Name</string>
+    <string name="backup_dest_backup_folder">Backup folder</string>
+    <string name="backup_dest_added">Added</string>
+    <string name="backup_dest_edit_connection">Edit Connection…</string>
+    <string name="backup_dest_edit_connection_title">Edit Connection</string>
+    <string name="backup_dest_test_connection">Test Connection</string>
+    <string name="backup_dest_connected">Connected.</string>
+    <string name="backup_dest_remove_destination">Remove Destination</string>
+    <string name="backup_dest_remove_footer">Removing forgets this server and its password on this device. Backups already stored on the server are left untouched.</string>
+    <string name="backup_dest_rename_title">Rename Destination</string>
+    <string name="backup_dest_rename_hint">Letters, numbers, - and _ only.</string>
+    <string name="backup_dest_save">Save</string>
+    <string name="backup_dest_remove_confirm_title">Remove this destination?</string>
+    <string name="backup_dest_remove_confirm_note">Backups already on the server are not deleted.</string>
+    <string name="backup_dest_remove_action">Remove</string>
+    <string name="backup_dest_edit_failed">Couldn’t connect with these settings, so they weren’t saved. %1$s</string>
+    <string name="backup_dest_connection_header">Connection</string>
+    <string name="backup_dest_password_header">Password</string>
+    <string name="backup_dest_new_password">New password</string>
+    <string name="backup_dest_password_will_clear">The stored password will be removed.</string>
+    <string name="backup_dest_password_keep_hint">Leave blank to keep the current password.</string>
+    <string name="backup_dest_no_password">No password (anonymous)</string>
+    <string name="backup_dest_detail_footer">Tap the name or folder to change them, or edit the connection to change the address and password.</string>
+    <string name="mount_picker_intro_message">Android doesn\'t allow mounting the whole internal storage — pick a specific folder inside it, such as Documents or Download.\n\nThe file picker that opens next belongs to the system. If a folder shows “can’t use this folder”, go into one of its subfolders, or use the system Back gesture to return here.</string>
+    <string name="chat_error_model_refused">The model declined to respond to this request. Try rephrasing, or switch to a different model.</string>
+    <string name="chat_error_model_refused_category">Blocked by the model provider\'s usage policy (category: %1$s). Continuing or rephrasing in this chat will likely be blocked again — switch to a different model, or start a new chat.</string>
+    <string name="provider_sync_mark_synced">Synced</string>
+    <string name="provider_sync_mark_builtin">Built-in list restored</string>
+    <string name="appearance_show_full_thinking_title">Show Full Thinking</string>
+    <string name="appearance_show_full_thinking_footer">Open thinking panels fully expanded with the entire content.</string>
+    <string name="cd_unread_reply">Unread reply</string>
     <string name="sched_pill_task_label">Scheduled task</string>
-    <string name="sched_pill_countdown_a11y">Next scheduled run in %1$s</string>
-    <string name="sched_pill_hide">Hide this countdown</string>
-
-    <!-- T7: two-tier stop -->
-    <string name="stop_menu_current_tool">Stop current tool only</string>
+    <string name="sched_pill_run_now">Run now</string>
+    <string name="sched_pill_hide">Hide</string>
+    <string name="stop_menu_current_tool">Stop current tool</string>
     <string name="stop_menu_stop_all">Stop everything</string>
-    <string name="stop_menu_confirm_toggle">Confirm before stop</string>
-    <string name="stop_confirm_title">Stop this run?</string>
-    <string name="stop_confirm_current">Stop current run</string>
-    <string name="stop_confirm_all">Stop everything</string>
-    <string name="cd_stop_long_press_options">Stop options</string>
-
-    <!-- T6: sub-agent card -->
-    <string name="subagent_tool_calls_fmt">%1$d tool calls</string>
-    <string name="subagent_steer_hint">Send guidance to this sub-agent…</string>
+    <string name="stop_menu_confirm_toggle">Confirm before stopping</string>
+    <string name="stop_confirm_title">Stop?</string>
+    <string name="stop_confirm_current">Stop the current tool only.</string>
+    <string name="stop_confirm_all">Stop the whole run and every sub-agent.</string>
+    <string name="subagent_steer_hint">Guide this sub-agent…</string>
     <string name="subagent_steer_send">Send</string>
-    <string name="subagent_steer_queued">Guidance queued — the sub-agent reads it next turn</string>
-    <string name="subagent_steer_refused">Sub-agent is no longer running</string>
-    <string name="subagent_stop_in_sheet">Stop this sub-agent</string>
-    <string name="cd_subagent_steering">Steer sub-agent</string>
-
-    <!-- T9: show full thinking -->
-    <string name="appearance_show_full_thinking_title">Show full thinking</string>
-    <string name="appearance_show_full_thinking_footer">When on, thinking panels open fully expanded and render the entire content instead of the collapsed tail-window summary.</string>
-
-    <!-- T8: home group visuals -->
-    <string name="cd_group_running_comet">A session in this group is running</string>
-    <string name="cd_unread_reply">Has unread reply</string>
+    <string name="subagent_steer_queued">Guidance queued.</string>
+    <string name="subagent_steer_refused">The sub-agent has finished; guidance was not sent.</string>
+    <string name="subagent_stop_in_sheet">Stop sub-agent</string>
+    <string name="subagent_tool_calls_fmt">%1$d tool calls</string>
 </resources>
