@@ -3,6 +3,12 @@
 // proxy in use answers. All state derivation lives in
 // com.openminis.app.network.NetworkStatusMonitor (started by NetworkHub.init);
 // this file only renders it, so it stays out of the session list's hot paths.
+//
+// [ownership-ratified, review R2] The cross-domain read (ui/sessions → network)
+// is a ratified exception, not drift: ui→network is an allowed direction in
+// scripts/ci/architecture-policy.json, and the split is deliberate — rendering
+// here, derivation in the network domain. Do not move state derivation into
+// this package to "fix" the layering.
 package com.openminis.app.ui.sessions
 
 import androidx.compose.foundation.background

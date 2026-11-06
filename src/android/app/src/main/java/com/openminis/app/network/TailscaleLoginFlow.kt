@@ -75,6 +75,13 @@ class TailscaleLoginFlow(
         NO_SIGN_IN_PAGE,
         /** No app could open the URL. The copy-link fallback is offered. */
         NO_BROWSER,
+        /**
+         * The sign-in page opened but the user never completed authorization
+         * within [loginTimeoutMs]. Distinct from [NO_SIGN_IN_PAGE]: the page
+         * DID open, so the advice is "finish the sign-in (or retry)" rather
+         * than "check the connection".
+         */
+        LOGIN_TIMEOUT,
     }
 
     private val _state = MutableStateFlow<State>(State.Idle)
@@ -164,14 +171,12 @@ class TailscaleLoginFlow(
                 // so a sign-in that never completed was indistinguishable from
                 // no attempt: the user came back to nothing. Surface a Failed
                 // state instead - it survives [appShown] (that path only resets
-                // an InBrowser state) and the next begin() clears it. The copy
-                // reuses Reason.NO_SIGN_IN_PAGE's string resource ("did not
-                // return a sign-in page - check the connection and try
-                // again"), whose advice is what a timeout amounts to; a
-                // dedicated tailscale_login_timeout string would need a new
-                // reason branch in NetworkSettingsScreen's mapping, which is
-                // outside this fix batch's file set.
-                _state.value = State.Failed(Reason.NO_SIGN_IN_PAGE)
+                // an InBrowser state) and the next begin() clears it. Own
+                // [Reason.LOGIN_TIMEOUT] branch (follow-up to the batch that
+                // had to reuse NO_SIGN_IN_PAGE's copy): the screen can now say
+                // "the page opened but the sign-in did not finish" instead of
+                // blaming the connection.
+                _state.value = State.Failed(Reason.LOGIN_TIMEOUT)
                 return
             }
         }

@@ -58,4 +58,9 @@
     <string name="add_provider_oauth_desc_xai">Sign in with xAI (requires SuperGrok or X Premium+)</string>
     <string name="add_provider_oauth_desc_openrouter">Sign in with OpenRouter</string>
     <string name="add_provider_oauth_desc_kimicode">Sign in with your Kimi account (Coding Plan)</string>
+
+    <!-- [FIX-R2-16] Provider list: persistent state banner while the provider
+         configuration cannot be loaded — config-protected mutations are
+         locked until a load succeeds (state in ProviderRepository). -->
+    <string name="provider_list_config_load_failed_banner">Provider configuration failed to load. Changes are locked until the app can read it again — try a provider action to retry.</string>
 </resources>

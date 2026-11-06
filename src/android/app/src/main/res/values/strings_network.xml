@@ -20,6 +20,9 @@
     <string name="network_login_in_browser">Finish signing in in the browser. Minis comes back by itself.</string>
     <string name="network_login_no_page">Tailscale did not return a sign-in page. Check the connection and try again.</string>
     <string name="network_login_no_browser">No browser could open the sign-in page. Copy the link and open it in a browser.</string>
+    <!-- [FIX-R2-7 follow-up] The page opened but the sign-in was not completed
+         in time — advice differs from network_login_no_page (connection). -->
+    <string name="network_login_timeout">The sign-in did not finish in time. Open it again and complete the sign-in in the browser.</string>
     <string name="network_login_auth_key">Log In with Auth Key</string>
     <string name="network_device_name">Device Name</string>
     <string name="network_device_name_automatic">Automatic</string>

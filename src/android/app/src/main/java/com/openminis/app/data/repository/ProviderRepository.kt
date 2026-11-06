@@ -212,17 +212,32 @@ class ProviderRepository(
     // force the lazy load — a cold process must read "not loaded yet", not
     // "all your providers are gone". Implementation + caller-audit KDoc in
     // [ProviderConfigStore].
-    // [FIX-R2-16, review §三 失败处理] While the load keeps failing (DB-version
-    // guard; the cold-start window self-heals on the next access), the 12
-    // mutation guards below used to no-op in silence. Latch it in
-    // [configLoadFailed] (state for UI to surface "changes are locked" later,
-    // not wired yet) and log it once.
+    // [FIX-R2-16, review §三 失败处理] While the config is unreadable (corrupt
+    // decode, DB-version guard), the 12 mutation guards below used to no-op in
+    // silence — and the store's real-failure path THROWS, which used to reach
+    // the Compose click handlers uncaught (AddProviderScreen save = crash).
+    // The wrapper converts the throw into a logged no-op and a latched
+    // [configLoadFailed] state; the provider list surfaces it as a banner and
+    // the state clears on the first successful load, so "changes are locked"
+    // stays truthful instead of permanent. The store's OTHER false return —
+    // a benign main-thread refusal during the cold-start window, which
+    // self-heals on the next access — must NOT latch the failure state.
     private val _configLoadFailed = MutableStateFlow(false)
     val configLoadFailed: StateFlow<Boolean> get() = _configLoadFailed
 
-    internal fun ensureConfigLoaded(): Boolean = configStore.ensureConfigLoaded().also { ok ->
-        if (ok || !_configLoadFailed.compareAndSet(false, true)) return@also
-        android.util.Log.w("ProviderRepo", "[ProviderStore] config load failed: config-protected changes no-op until a load succeeds")
+    internal fun ensureConfigLoaded(): Boolean = try {
+        configStore.ensureConfigLoaded().also { ok ->
+            if (ok) _configLoadFailed.value = false
+        }
+    } catch (e: IllegalStateException) {
+        if (!_configLoadFailed.value) {
+            android.util.Log.w(
+                "ProviderRepo",
+                "[ProviderStore] config load failed: config-protected changes no-op until a load succeeds (${e.cause?.message ?: e.message})",
+            )
+        }
+        _configLoadFailed.value = true
+        false
     }
 
     // [T-android-provider-mutator-lock] Snapshot, not the live list. The
