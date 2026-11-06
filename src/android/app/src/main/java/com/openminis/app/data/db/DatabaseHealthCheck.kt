@@ -216,14 +216,29 @@ object DatabaseHealthCheck {
             // moved the database into quarantine and then failed to move it
             // back, or may have moved it successfully and failed to write the
             // report. Either way the quarantine directory is the evidence.
+            // [T-db-gate-freshness] The database is gone — any stamp that
+            // survived belongs to a file that no longer exists.
+            DatabaseGateFreshness.invalidate(filesDir)
             return recoverOrphanedQuarantine(dbFile, filesDir, nowMs) ?: Outcome.FreshInstall
+        }
+
+        // [T-db-gate-freshness] quick_check is O(database size); inside the
+        // freshness window a previous healthy verdict stands in for the
+        // re-scan. path+size must still match, so a quarantined or replaced
+        // database can never hit this branch.
+        if (DatabaseGateFreshness.isFresh(DatabaseGateFreshness.readStamp(filesDir), dbFile, nowMs)) {
+            return Outcome.Healthy
         }
 
         val detail = runCatching { checker.quickCheck(dbFile) }
             .getOrElse { "checker crashed: ${it.javaClass.simpleName}" }
-        if (detail == null) return Outcome.Healthy
+        if (detail == null) {
+            DatabaseGateFreshness.recordHealthy(dbFile, filesDir, nowMs)
+            return Outcome.Healthy
+        }
 
         AppLogger.error(TAG, "[T-db-gate] quick_check FAILED for ${dbFile.name}: $detail")
+        DatabaseGateFreshness.invalidate(filesDir)
         val stamp = SimpleDateFormat(STAMP_PATTERN, Locale.US).format(Date(nowMs))
         val quarantineDir = File(filesDir, "$QUARANTINE_PREFIX$stamp")
 
