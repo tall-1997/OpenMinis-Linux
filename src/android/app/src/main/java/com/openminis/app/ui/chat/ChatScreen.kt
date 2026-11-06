@@ -751,6 +751,7 @@ fun ChatScreen(
             maxItems = ATTACHMENT_PICK_LIMIT,
         ),
     ) { uris: List<Uri> ->
+        com.openminis.app.service.SessionActivityTracker.setExternalPickerSuppressActive(false)
         if (uris.isEmpty()) return@rememberLauncherForActivityResult
         val limited = uris.take(ATTACHMENT_PICK_LIMIT)
         for (uri in limited) {
@@ -763,19 +764,14 @@ fun ChatScreen(
                     fileName = fileName,
                     uri = uri,
                     mimeType = mimeType,
-                    // Videos are routed as DOCUMENT for now — vision pipeline only
-                    // handles images today; videos still upload as raw files so
-                    // tools that read them (e.g. ffmpeg) get the bytes.
+                    // Videos route as DOCUMENT — the vision pipeline handles images today; videos still upload as raw files so ffmpeg-class tools get the bytes.
                     kind = if (isVideo) com.openminis.app.session.InputAttachment.Kind.DOCUMENT else com.openminis.app.session.InputAttachment.Kind.IMAGE,
                 ),
             )
         }
         if (uris.size > ATTACHMENT_PICK_LIMIT) {
-            android.widget.Toast.makeText(
-                context,
-                context.getString(R.string.attachment_pick_truncated_items, ATTACHMENT_PICK_LIMIT),
-                android.widget.Toast.LENGTH_SHORT,
-            ).show()
+            android.widget.Toast.makeText(context, context.getString(R.string.attachment_pick_truncated_items, ATTACHMENT_PICK_LIMIT), android.widget.Toast.LENGTH_SHORT)
+                .show()
         }
     }
 
@@ -803,7 +799,7 @@ fun ChatScreen(
         // gate as soon as we hear back from the camera Activity (success,
         // cancel, or system kill). Without this the floating overlay
         // would stay suppressed indefinitely after a single capture.
-        com.openminis.app.service.SessionActivityTracker.setCameraSuppressActive(false)
+        com.openminis.app.service.SessionActivityTracker.setExternalPickerSuppressActive(false)
         val uri = pendingCameraUri
         val file = pendingCameraFilePath?.let { java.io.File(it) }
         pendingCameraUri = null
@@ -843,13 +839,13 @@ fun ChatScreen(
         // takes foreground, which by #451's rule would otherwise satisfy
         // "Minis backgrounded → show overlay" and the capsule would draw
         // on top of the viewfinder. Cleared in the ActivityResult callback.
-        com.openminis.app.service.SessionActivityTracker.setCameraSuppressActive(true)
+        com.openminis.app.service.SessionActivityTracker.setExternalPickerSuppressActive(true)
         runCatching { cameraLauncher.launch(intent) }
             .onFailure {
                 AppLogger.warning("Camera", "launch failed: ${it.message}")
                 // Launch never reached the camera Activity — release the
                 // suppress flag here since the result callback won't fire.
-                com.openminis.app.service.SessionActivityTracker.setCameraSuppressActive(false)
+                com.openminis.app.service.SessionActivityTracker.setExternalPickerSuppressActive(false)
                 pendingCameraUri = null
                 pendingCameraFilePath = null
                 file.delete()
@@ -892,6 +888,7 @@ fun ChatScreen(
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenMultipleDocuments()
     ) { uris: List<Uri> ->
+        com.openminis.app.service.SessionActivityTracker.setExternalPickerSuppressActive(false)
         if (uris.isEmpty()) return@rememberLauncherForActivityResult
         val limited = uris.take(ATTACHMENT_PICK_LIMIT)
         for (uri in limited) {
@@ -4871,14 +4868,15 @@ fun ChatScreen(
                                     leadingIcon = { Icon(Icons.Default.CameraAlt, contentDescription = null) },
                                     onClick = {
                                         showAttachMenu = false
-                                        val granted = ContextCompat.checkSelfPermission(
-                                            context,
-                                            android.Manifest.permission.CAMERA,
-                                        ) == PackageManager.PERMISSION_GRANTED
-                                        if (granted) {
-                                            launchCamera()
-                                        } else {
-                                            cameraPermissionLauncher.launch(android.Manifest.permission.CAMERA)
+                                        launchExternalPickerAfterMenuDismiss {
+                                            val granted = ContextCompat.checkSelfPermission(
+                                                context, android.Manifest.permission.CAMERA,
+                                            ) == PackageManager.PERMISSION_GRANTED
+                                            if (granted) {
+                                                launchCamera()
+                                            } else {
+                                                cameraPermissionLauncher.launch(android.Manifest.permission.CAMERA)
+                                            }
                                         }
                                     },
                                 )
@@ -4887,11 +4885,13 @@ fun ChatScreen(
                                     leadingIcon = { Icon(Icons.Default.PhotoLibrary, contentDescription = null) },
                                     onClick = {
                                         showAttachMenu = false
-                                        mediaPickerLauncher.launch(
-                                            androidx.activity.result.PickVisualMediaRequest(
-                                                ActivityResultContracts.PickVisualMedia.ImageAndVideo,
-                                            ),
-                                        )
+                                        launchExternalPickerAfterMenuDismiss {
+                                            mediaPickerLauncher.launch(
+                                                androidx.activity.result.PickVisualMediaRequest(
+                                                    ActivityResultContracts.PickVisualMedia.ImageAndVideo,
+                                                ),
+                                            )
+                                        }
                                     },
                                 )
                                 DropdownMenuItem(
@@ -4899,9 +4899,7 @@ fun ChatScreen(
                                     leadingIcon = { Icon(m3Icon(Icons.Default.Description), contentDescription = null) },
                                     onClick = {
                                         showAttachMenu = false
-                                        // OpenMultipleDocuments takes a mime-
-                                        // type array; "*/*" stays the wildcard.
-                                        filePickerLauncher.launch(arrayOf("*/*"))
+                                        launchExternalPickerAfterMenuDismiss { filePickerLauncher.launch(arrayOf("*/*")) }
                                     },
                                 )
                             }

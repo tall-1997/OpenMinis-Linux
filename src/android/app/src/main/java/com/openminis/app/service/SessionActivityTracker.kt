@@ -223,22 +223,26 @@ object SessionActivityTracker {
     private const val REPLY_EXCERPT_MAX = 72
 
     /**
-     * [T-android-overlay-hide-camera] True while the user has launched the
-     * system camera (ACTION_IMAGE_CAPTURE) from inside Minis Ultra and we're
-     * waiting on the ActivityResult callback. The overlay observer in
+     * [T-android-attach-picker-suppress] True while ANY external system
+     * Activity we hand the screen to (camera ACTION_IMAGE_CAPTURE, the
+     * photo/video picker, the document picker) is on top and we're waiting
+     * on its ActivityResult callback. The overlay observer in
      * [AgentForegroundService] gates `shouldShow` on this flag so the
-     * floating capsule doesn't obstruct the camera viewfinder — Minis is
-     * technically backgrounded during the capture (the camera Activity is
-     * on top), which would otherwise satisfy the bg-only show rule from
-     * #451. Cleared in the camera launcher's result callback (success,
-     * cancel, or launch-failure) so a fresh bg event after the user
-     * returns reactivates the overlay normally.
+     * floating capsule doesn't obstruct the external UI — Minis is
+     * technically backgrounded during the handoff, which would otherwise
+     * satisfy the bg-only show rule from #451. #215 root cause: only the
+     * camera entry carried this gate, so fullscreen photo/file handoffs
+     * popped the capsule over the picker while multi-window (Minis still
+     * foregrounded) stayed clean. Set before the deferred launch in
+     * launchExternalPickerAfterMenuDismiss and cleared in each launcher's
+     * result callback (success, cancel, or launch-failure) so a fresh bg
+     * event after the user returns reactivates the overlay normally.
      */
-    private val _cameraSuppressActive = MutableStateFlow(false)
-    val cameraSuppressActive: StateFlow<Boolean> = _cameraSuppressActive.asStateFlow()
+    private val _externalPickerSuppressActive = MutableStateFlow(false)
+    val externalPickerSuppressActive: StateFlow<Boolean> = _externalPickerSuppressActive.asStateFlow()
 
-    fun setCameraSuppressActive(active: Boolean) {
-        _cameraSuppressActive.value = active
+    fun setExternalPickerSuppressActive(active: Boolean) {
+        _externalPickerSuppressActive.value = active
     }
 
     private var appContext: Context? = null
