@@ -185,10 +185,10 @@ import java.util.Date
 import java.util.concurrent.TimeUnit
 
 
-private data class CategoryStyle(val icon: ImageVector, val color: Color)
+internal data class CategoryStyle(val icon: ImageVector, val color: Color)
 
 // 16 categories matching iOS (ContentView.swift:1897-1916)
-private fun categoryStyle(category: String?): CategoryStyle {
+internal fun categoryStyle(category: String?): CategoryStyle {
     return when (category?.lowercase()) {
         "code"         -> CategoryStyle(Icons.Outlined.Code, Color(0xFFF09A37))
         "writing"      -> CategoryStyle(Icons.Outlined.Description, Color(0xFF3478F6))
@@ -258,6 +258,8 @@ data class FolderGroupBlock(
     val summaryTitle: String? = null,
     /** Newest member's category — tints the composed folder icon like iOS FolderComposedIcon. */
     val firstCategory: String? = null,
+    /** [T-android-folder-category-icon] Every member's category, recency order — the composed icon's seeds. Survives collapse (ids empties, this does not). */
+    val memberCategories: List<String?> = emptyList(),
     // [T-android-group-pause-badge-restamp] Any member with a fresh badge (24h), shown only while collapsed (iOS anyPaused); group-card filter only.
     val anyPaused: Boolean = false,
     // [T-android-group-running-ring] Any member currently running its loop; drives the collapsed card's SpinningRing (iOS anyActive). No freshness window.
@@ -341,6 +343,7 @@ internal fun partitionByFolder(
             latestUpdatedAt = m.firstOrNull()?.updatedAt ?: folder.updatedAt,
             summaryTitle = m.firstOrNull()?.title,
             firstCategory = m.firstOrNull()?.category,
+            memberCategories = m.map { it.category },
             // Early-exiting hash lookups over the pre-built snapshot — never a
             // per-member entry into the badge store.
             anyPaused = freshBadgedIds.isNotEmpty() && m.any { it.id in freshBadgedIds },
@@ -997,14 +1000,12 @@ fun SessionListScreen(
                             }
                             folderBlocks.forEach { block ->
                                 // [T-wave-e-group-visual] Hoisted once per
-                                // block: the avatar mosaic, the card and the
-                                // row render path share one member resolution.
+                                // block: card + expanded rows share it.
                                 val blockMembers = block.ids.mapNotNull(folderPartition.byId::get)
                                 item(key = "folder_${block.folder.id}") {
                                     Box(Modifier.animateItem(placementSpec = tween(250))) {
                                     FolderCard(
                                         block = block,
-                                        members = blockMembers,
                                         onToggle = {
                                             // Capture BEFORE the toggle — after it
                                             // the block still holds the old state.
@@ -2012,39 +2013,32 @@ private fun Modifier.folderSurface(
 }
 
 /**
- * Port of iOS GroupGlyphShape: the "grouped list" glyph — two rounded-square
- * rings on the left, four list lines on the right — traced from the same
- * 1024-unit SVG. Rings are even-odd so the whole glyph is a single fill.
+ * The session-group glyph: a classic folder silhouette (tab + rounded body)
+ * traced in the same 1024-unit design grid the old grouped-list rings used.
  */
 private fun groupGlyphPath(side: Float): Path = Path().apply {
-    fillType = PathFillType.EvenOdd
+    // Redesigned folder glyph (was: two rings + four list lines, read as a blank
+    // gray square at 44dp). Closed contour, no holes -> NonZero fills it solid.
+    fillType = PathFillType.NonZero
     val u = side / 1024f
+    fun X(v: Float) = v * u
+    fun Y(v: Float) = (v - 56f) * u // vertical centering offset
 
-    fun ring(x: Float, y: Float) {
-        // Outer 325.8×325.8 with r 93; inner inset by the 46.5 stroke.
-        val outer = Rect(x * u, y * u, (x + 325.8f) * u, (y + 325.8f) * u)
-        addRoundRect(RoundRect(outer, CornerRadius(93f * u)))
-        val inner = Rect(
-            outer.left + 46.5f * u, outer.top + 46.5f * u,
-            outer.right - 46.5f * u, outer.bottom - 46.5f * u,
-        )
-        addRoundRect(RoundRect(inner, CornerRadius(46.5f * u)))
-    }
-
-    fun line(cy: Float) {
-        val rect = Rect(
-            558.5f * u, (cy - 23.27f) * u,
-            (558.5f + 325.8f) * u, (cy + 23.27f) * u,
-        )
-        addRoundRect(RoundRect(rect, CornerRadius(23.27f * u)))
-    }
-
-    ring(139.6f, 139.6f)
-    ring(139.6f, 511.9f)
-    line(209.5f)
-    line(395.6f)
-    line(581.8f)
-    line(768.0f)
+    // Tab: top-left corner down the left side, across the tab top, into the body.
+    moveTo(X(205f), Y(866f))
+    lineTo(X(205f), Y(305f))
+    arcTo(Rect(X(205f), Y(254f), X(307f), Y(356f)), 180f, 90f, true) // tab top-left r51
+    lineTo(X(450f), Y(254f))
+    // Tab-to-body step: a small concave fillet (reversed sweep) so the tab melts
+    // into the body instead of a flat chamfer.
+    lineTo(X(494f), Y(337f))
+    arcTo(Rect(X(494f), Y(266f), X(626f), Y(393f)), 180f, -90f, false) // concave fillet r66
+    lineTo(X(922f), Y(374f))
+    arcTo(Rect(X(871f), Y(374f), X(973f), Y(476f)), 270f, 90f, true) // body top-right r51
+    lineTo(X(973f), Y(815f))
+    arcTo(Rect(X(871f), Y(815f), X(973f), Y(917f)), 0f, 90f, true) // body bottom-right r51
+    lineTo(X(205f), Y(866f))
+    close()
 }
 
 /**
@@ -2072,8 +2066,6 @@ private fun FolderComposedIcon(category: String?, diameter: Dp = 44.dp) {
 @Composable
 private fun FolderCard(
     block: FolderGroupBlock,
-    /** [T-wave-e-group-visuals] Member rows, newest-first — drives the 2×2 avatar mosaic. */
-    members: List<ChatSessionEntity> = emptyList(),
     onToggle: () -> Unit,
     onTogglePin: () -> Unit,
     onRename: () -> Unit,
@@ -2181,9 +2173,10 @@ private fun FolderCard(
             // expanded group's members carry their own row badges; `anyPaused`
             // already carries the 24h freshness filter — rows unfiltered).
             Box(modifier = Modifier.size(44.dp)) {
-                // [T-wave-e-group-visuals] 2×2 mosaic of the group's four
-                // most recent sessions replaces the single category glyph.
-                GroupRecentGridAvatar(members = members.map { it.title })
+                // [T-android-folder-category-icon] Category panel's own
+                // iconography: one member wears that session's glyph, two and
+                // more compose a 2/4/9 grid (ten and up truncate).
+                FolderCategoryAvatar(categories = block.memberCategories)
                 // [T-android-group-running-ring] Collapsed-only, same as the
                 // paused badge below and for the same reason: an expanded
                 // group's members carry their own rings, so a header copy
