@@ -615,9 +615,8 @@ internal fun ThinkingBlock(block: AssistantBlock, isStreaming: Boolean, isLast: 
     val context = LocalContext.current
     val autoExpandThinking = remember { autoExpandThinkingEnabled(context) }
     val showFullThinking = remember { com.openminis.app.ui.settings.showFullThinkingEnabled(context) }
-    // [T-thinking-history-visible] History opens expanded; a live block follows the setting.
     var expanded by remember(block.id) {
-        mutableStateOf(if (isStreaming) showFullThinking || (autoExpandThinking && isLast) else true)
+        mutableStateOf(if (isStreaming) showFullThinking || (autoExpandThinking && isLast) else false)
     }
     var userTouched by remember(block.id) { mutableStateOf(false) }
     var wasStreaming by remember(block.id) { mutableStateOf(isStreaming) }
@@ -743,16 +742,10 @@ internal fun ThinkingBlock(block: AssistantBlock, isStreaming: Boolean, isLast: 
         // the next token.
         AnimatedVisibility(visible = expanded && !overHardCap) {
             val scrollState = rememberScrollState()
-            // [T-thinking-render-perf-android] Render only the tail window so
-            // Compose lays out at most `thinkingWindowSize` chars. `remember`
-            // keyed on the length recomputes the substring on each token, but
-            // the cost is O(window) not O(total). Snap the cut to the next
-            // newline (within 200 chars) so we don't start mid-line.
-            // Read block.content directly — UiUpdateBatcher paces recomposition at
-            // 200-500ms, so the old 100ms poll only added lag (SideEffect on recomposition).
+            // [T-thinking-render-perf-android] Render only the tail window (O(window) not O(total));
+            // UiUpdateBatcher already paces recomposition at 200-500ms.
             val renderedContent = block.content
-            // [T-thinking-no-window] Whole reasoning; the 8k tail lost the opening.
-            val effectiveWindow = thinkingHardCap
+            val effectiveWindow = if (showFullThinking) thinkingHardCap else 8000 // 8k tail window
             val isTruncated = renderedContent.length > effectiveWindow
             val displayContent = visibleThinkingTail(renderedContent, effectiveWindow)
             ThinkingAutoFollow(
@@ -950,13 +943,10 @@ private fun ProcessStepRow(step: ProcessStepRef, onOpen: () -> Unit) {
     val isFailed = !isThinking && step.status == ToolBlockStatus.FAILED
     val block = step.block
 
-    // [T-thinking-history-visible] History opens expanded; only a live step settles.
-    var stepExpanded by remember(step.id) { mutableStateOf(step.running || block.content.isNotEmpty()) }
+    var stepExpanded by remember(step.id) { mutableStateOf(step.running) }
     var userTouched by remember(step.id) { mutableStateOf(false) }
-    var wasLive by remember(step.id) { mutableStateOf(step.running) }
     LaunchedEffect(step.id, step.running) {
-        if (step.running) wasLive = true
-        if (wasLive && !step.running && !userTouched) {
+        if (!step.running && !userTouched) {
             delay(500)
             stepExpanded = false
         }
@@ -1043,12 +1033,11 @@ private fun ProcessStepRow(step: ProcessStepRef, onOpen: () -> Unit) {
                 modifier = Modifier.size(14.dp),
             )
         }
-        // [T-thinking-history-visible] Tool steps render their body inline too.
-        if (block.content.isNotEmpty()) {
-            AnimatedVisibility(visible = stepExpanded) {
+        if (isThinking) {
+            AnimatedVisibility(visible = stepExpanded && block.content.isNotEmpty()) {
                 val scrollState = rememberScrollState()
-                val isTruncated = false
-                val displayContent = block.content
+                val isTruncated = block.content.length > 8000
+                val displayContent = visibleThinkingTail(block.content, 8000)
                 ThinkingAutoFollow(
                     blockId = block.id,
                     contentVersionValue = block.content.length,
@@ -1062,6 +1051,17 @@ private fun ProcessStepRow(step: ProcessStepRef, onOpen: () -> Unit) {
                         .heightIn(max = 300.dp)
                         .verticalScroll(scrollState),
                 ) {
+                    if (isTruncated) {
+                        Text(
+                            text = stringResource(
+                                R.string.thinking_truncated_hint,
+                                displayContent.length / 1000,
+                                block.content.length / 1000,
+                            ),
+                            fontSize = 11.sp,
+                            color = muted.copy(alpha = 0.75f),
+                        )
+                    }
                     Text(
                         text = displayContent,
                         fontSize = 12.sp,

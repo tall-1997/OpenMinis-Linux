@@ -490,16 +490,13 @@ fun ChatScreen(
     val tHangDiagAppContext = androidx.compose.ui.platform.LocalContext.current.applicationContext
     androidx.compose.runtime.DisposableEffect(sessionId) {
         ChatViewModelStore.screenEntered(sessionId)
+        viewModel.onForegroundChanged(true)
         // Stamp read on enter AND dispose so streamed rows aren't "unseen" on leave.
         com.openminis.app.data.UnreadRegistry.markRead(
             tHangDiagAppContext,
             viewModel.realSessionId.ifBlank { sessionId },
         )
-        // Enter / dispose markers around the ChatScreen lifetime so we can
-        // correlate "user tapped session X" → loadSession timings and any
-        // subsequent hang record. Ride the PerfLongCtx reentry timeline
-        // (same mechanism loadSession uses) instead of raw println — the
-        // hangCount extra is preserved.
+        // Mount/dispose markers (PerfLongCtx, hangCount extra preserved).
         com.openminis.app.diagnostics.PerfLongCtx.step(
             sessionId,
             "chatScreen.mount",
@@ -508,6 +505,7 @@ fun ChatScreen(
         onDispose {
             com.openminis.app.diagnostics.PerfLongCtx.step(sessionId, "chatScreen.unmount")
             ChatViewModelStore.screenLeft(sessionId)
+            viewModel.onForegroundChanged(false)
             // Final read stamp.
             com.openminis.app.data.UnreadRegistry.markRead(
                 tHangDiagAppContext,
