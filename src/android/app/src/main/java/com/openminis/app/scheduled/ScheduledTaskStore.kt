@@ -53,6 +53,28 @@ class ScheduledTaskStore(private val context: Context) {
         return removed && get(taskId) == null
     }
 
+    /**
+     * [T-sched-run-now, port upstream 1.16] Atomic read-modify-write of ONE
+     * row under the same lock every other mutation takes. [transform] returns
+     * the new row, or null to refuse the transition (the row is left
+     * untouched and this returns null) — the caller's claim/transition then
+     * did not happen, which is how "Run now" and the alarm agree that only
+     * ONE of them runs a given fire.
+     */
+    fun update(taskId: String, transform: (ScheduledTask) -> ScheduledTask?): ScheduledTask? {
+        var stored: ScheduledTask? = null
+        synchronized(lock) {
+            val cur = all().toMutableList()
+            val idx = cur.indexOfFirst { it.id == taskId }
+            if (idx < 0) return null
+            val next = transform(cur[idx]) ?: return null
+            cur[idx] = next
+            write(cur)
+            stored = next
+        }
+        return stored
+    }
+
     /** Exact id, or a unique prefix of at least 4 characters. */
     fun resolveId(idOrPrefix: String): String? {
         val tasks = all()

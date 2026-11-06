@@ -97,17 +97,11 @@ class PersistentShell(
 
         try {
             withContext(Dispatchers.IO) {
-                // [T-android-seccomp-selfheal / GH#186] The guest /bin/sh is
-                // itself a dynamically linked binary, so on an affected kernel
-                // it can die during dynamic linking before it ever reads a
-                // command — the shell simply never comes up, which surfaces to
-                // the user as "[Shell not running] (exit code: -1)". Give it
-                // one retry with PROOT_NO_SECCOMP=1 under the same narrow
-                // conditions used for one-shot commands.
-                //
-                // Timed around startProcess() (which sleeps 200ms before
-                // returning): if the shell is already dead when it returns, it
-                // died during that window, i.e. essentially instantly.
+                // [T-android-seccomp-selfheal / GH#186] The dynamically linked guest /bin/sh
+                // can die during dynamic linking on an affected kernel - the shell never
+                // comes up. One retry with PROOT_NO_SECCOMP=1, same narrow conditions as
+                // one-shot commands. Timed around startProcess() (sleeps 200ms): a shell
+                // already dead then died essentially instantly.
                 val spawnedAt = System.currentTimeMillis()
                 startProcess()
                 val aliveMs = System.currentTimeMillis() - spawnedAt
@@ -141,15 +135,10 @@ class PersistentShell(
                 }
             }
         } catch (t: Throwable) {
-            // [T-android-shell-spawn-outcome] Previously swallowed: the only
-            // handler here was `finally { isStarting.set(false) }`, so a throw
-            // out of startProcess() (ProcessBuilder.start() IOException —
-            // ENOENT on the proot binary, EACCES, EAGAIN under memory
-            // pressure) unwound with NOTHING written anywhere. The caller then
-            // saw isAlive == false and reported the generic "[Shell not
-            // running]", which is exactly the dead end the field reports keep
-            // hitting. Record it and rethrow — swallowing the cause is what
-            // made this class of failure undiagnosable.
+            // [T-android-shell-spawn-outcome] A throw out of startProcess() (ENOENT on
+            // proot, EACCES, EAGAIN) used to unwind with nothing written anywhere,
+            // leaving the caller's generic "[Shell not running]". Record it and rethrow
+            // - swallowing the cause made this failure class undiagnosable.
             com.openminis.app.logging.AppLogger.error(
                 TAG,
                 "spawn threw: ${t.javaClass.simpleName}: ${t.message}",
@@ -169,14 +158,10 @@ class PersistentShell(
 
         val rootfsManager = RootfsManager.getInstance(context)
 
-        // [T-android-shell-death-diagnosability] One-line spawn context in the
-        // FILE log. Field reports of "[Shell not running] (exit code: -1)" have
-        // had two distinct causes already (missing proot ELF loaders after
-        // bc2566b2, and at least one custom-ROM death we couldn't classify),
-        // and a user log that only says "process exited" cannot tell them
-        // apart. Loader presence is the first thing to rule out: without
-        // PROOT_LOADER, proot bare-execve's rootfs busybox and SELinux kills
-        // it on Android 10+ (see a25d93f7).
+        // [T-android-shell-death-diagnosability] One-line spawn context in the FILE
+        // log. "[Shell not running]" reports have had two distinct causes already;
+        // loader presence is the first thing to rule out (without PROOT_LOADER,
+        // SELinux kills proot on 10+, a25d93f7).
         com.openminis.app.logging.AppLogger.info(
             TAG,
             "spawn ctx: proot=${rootfsManager.prootBinary.exists()} " +
@@ -264,7 +249,8 @@ class PersistentShell(
             env[SeccompFallbackPolicy.NO_SECCOMP_ENV] = SeccompFallbackPolicy.NO_SECCOMP_VALUE
         }
 
-        val p = processBuilder.start()
+        // [T-shell-stall-yes-head] SIGPIPE unblocked in the child; see SpawnSignalMask.
+        val p = SpawnSignalMask.start(processBuilder)
         process = p
         SandboxWorkload.track(p, "shell:$sessionId")
         com.openminis.app.service.ActiveRunRegistry.registerProcess(sessionId, p)
@@ -298,13 +284,10 @@ class PersistentShell(
             Thread.sleep(200)
         } catch (_: InterruptedException) {}
 
-        // [T-android-shell-spawn-outcome] Record the OUTCOME of the spawn, not
-        // just that one was attempted. "Starting persistent shell process"
-        // followed by silence is the signature every field report has, and it
-        // cannot distinguish "proot is running fine" from "proot exited during
-        // the 200ms window" — the two cases that lead to completely different
-        // investigations. Logged to the FILE log (AppLogger, not Log.i) because
-        // that is what a user can actually send us; logcat is gone by then.
+        // [T-android-shell-spawn-outcome] Record the spawn OUTCOME, not just the
+        // attempt: "starting" followed by silence cannot distinguish a healthy
+        // proot from one that died in the 200ms window. FILE log, not logcat -
+        // that is what a user can actually send us.
         val alive = isAlive
         val exit = runCatching { process?.exitValue() }.getOrNull()
         val early = synchronized(outputTail) { outputHead.toString().take(300) }
@@ -444,12 +427,9 @@ class PersistentShell(
         Log.i(TAG, "Persistent shell process exited")
     }
 
-    // [T-line-budget-sync] The byte budget was raised 64→512 KiB/s
-    // (61a2d77) but this line bucket stayed at 20 lines/s, so build logs'
-    // REAL-TIME progress was still throttled ~25x below the byte budget
-    // (final tool output is unaffected — StreamSink.snapshot() keeps the
-    // full buffer to its cap). 250 lines/s ≈ 200 KiB/s of typical log text,
-    // inside the byte budget, with burst headroom for progress meters.
+    // [T-line-budget-sync] The byte budget is 512 KiB/s; 250 lines/s (~200 KiB/s
+    // of typical text) keeps real-time progress inside it with burst headroom.
+    // Captured output is unaffected (snapshot keeps everything).
     private val lineBudget = TokenBucket(ratePerSec = 250.0, burst = 500)
 
     private fun feedLines(text: String, callback: (String) -> Unit) {
@@ -606,28 +586,21 @@ class PersistentShell(
             Log.i(TAG, "caller timeout ${timeout}ms shortens class ${budget.workClass} wall ${budget.wallMs}ms → ${armed}ms")
         }
         val marker = UUID.randomUUID().toString().take(8)
-        // [T-android-ghost-cwd] Heal the shell's cwd before handing control back
-        // to the next command. This shell is long-lived, so a `cd` into a
-        // directory that a later command deletes leaves EVERY following command
-        // running inside a deleted inode: `pwd` prints the dead path and
-        // `ls`/`os.getcwd()` fail, and it never repairs itself for the rest of
-        // the session (the bug report had to kill the app). `$PWD` is used
-        // instead of `pwd` on purpose: it is a shell variable, so the probe
-        // cannot itself fail with ENOENT in the very state it detects.
+        // [T-android-ghost-cwd] A long-lived shell whose cwd was deleted stays on
+        // the dead inode for the rest of the session; heal it before the next
+        // command. `$PWD` (a shell variable) cannot itself fail with ENOENT in the
+        // very state it detects.
         val wrappedCommand = buildString {
             append(offloadExitPrelude())
             // A previous command, or the user's own script, may have turned on
             // `set -e`. That would abort the rest of a compound command and
             // skip the done marker, so the caller sees a cut-off with no code.
             append("set +e\n")
-            // [T-android-stale-stream-gate] First thing the wrapper writes.
-            // Everything the pty still holds from BEFORE this command — the
-            // previous command's late watchdog-kill notification, a late
-            // offload response, a replayed payload — arrives in THIS command's
-            // read window; the framer drops it all before BEGIN and keeps a
-            // bounded sample for ShellExecDiag. Field evidence (2026-10-04):
-            // one command's full result re-delivered under four different
-            // later tool-call ids because those bytes were never gated off.
+            // [T-android-stale-stream-gate] First thing the wrapper writes. Bytes the
+            // pty still holds from BEFORE this command arrive in this read window; the
+            // framer drops everything before BEGIN (one command's result once
+            // re-delivered under four later tool-call ids because those bytes were
+            // never gated off).
             append("echo \"__MINIS_GO_${marker}__\"\n")
             // Supervisor re-arm. Not a subshell around the command, not a trap,
             // not a second ulimit. On expiry `kill -TERM -$$` kills the group.
@@ -773,18 +746,22 @@ class PersistentShell(
 
     /**
      * Stop the persistent shell.
+     *
+     * [T-android-stop-jank] The caller is the Stop button's thread: the old
+     * order did the whole harvest inline — SandboxWorkload.release walks /proc
+     * for the process tree (3 passes), then `waitFor(500ms)` blocked on the
+     * dying process — so a tap on Stop froze the UI for the better part of a
+     * second per live shell. Now the waiting command is completed FIRST (the
+     * UI unblocks at once), the kill signal goes out synchronously, and the
+     * expensive reaping runs on a daemon thread. Nothing after the signal
+     * needs the caller to wait: the shell object is already unregistered by
+     * the coordinator before stop() runs, so no new command can reach it.
      */
     fun stop() {
         val p = process
         val cb = pendingCallback
-        try { stdinWriter?.close() } catch (_: Exception) {}
-        if (process === p) stdinWriter = null
-        SandboxWorkload.release(p, kill = true, reason = "shell-stop:$sessionId")
-        if (p != null) com.openminis.app.service.ActiveRunRegistry.unregisterProcess(sessionId, p)
-        if (p != null) com.openminis.app.service.ActiveRunContext.current()?.unregisterProcess(p)
-        p?.destroyForcibly()
-        runCatching { p?.waitFor(500, java.util.concurrent.TimeUnit.MILLISECONDS) }
-        if (process === p) process = null
+        // 1. Complete the pending command so the caller's coroutine resumes
+        //    immediately — the user-visible "stopped" feedback.
         if (cb != null && pendingCallback === cb) {
             cb.onComplete?.invoke(
                 cb.output.toString() + "\n[shell died before the command finished; later clauses did not run]",
@@ -792,6 +769,26 @@ class PersistentShell(
             )
             if (pendingCallback === cb) pendingCallback = null
         }
-        Log.i(TAG, "Persistent shell stopped")
+        // 2. Signal the death synchronously: closing stdin wakes the guest
+        //    shell, destroyForcibly() delivers SIGKILL without waiting.
+        try { stdinWriter?.close() } catch (_: Exception) {}
+        if (process === p) stdinWriter = null
+        p?.destroyForcibly()
+        if (process === p) process = null
+        if (p == null) {
+            Log.i(TAG, "Persistent shell stopped")
+            return
+        }
+        // 3. Reap off the caller thread: tree kill, registry unregistration and
+        //    the exit-code wait. Daemon so an app teardown never blocks on it.
+        Thread({
+            SandboxWorkload.release(p, kill = true, reason = "shell-stop:$sessionId")
+            com.openminis.app.service.ActiveRunRegistry.unregisterProcess(sessionId, p)
+            com.openminis.app.service.ActiveRunContext.current()?.unregisterProcess(p)
+            val exit = runCatching { p.waitFor(2, java.util.concurrent.TimeUnit.SECONDS) }
+                .getOrDefault(false)
+            if (exit) lastExitCode = runCatching { p.exitValue() }.getOrNull()
+            Log.i(TAG, "Persistent shell stopped")
+        }, "PersistentShell-reap").apply { isDaemon = true; start() }
     }
 }

@@ -41,6 +41,8 @@ internal fun ChatViewModel.resumeQueueAfterCancel() {
             return@launch
         }
 
+        // [port-upstream-1.16] Rebuild after a mid-session provider edit.
+        rebuildProviderIfEdited()
         val initialProvider = currentProvider
         if (initialProvider == null) {
             AppLogger.warning(ChatViewModel.TAG, "resumeQueueAfterCancel: no provider, dropping queue")

@@ -376,6 +376,15 @@ data class BackupSecrets(
     val providers: List<ProviderSecret> = emptyList(),
     val envVars: List<EnvVarSecret> = emptyList(),
     val mcpOAuth: List<MCPOAuthSecret> = emptyList(),
+    // [T-backup-restore-oauth] Provider OAuth token bundles (access + refresh)
+    // keyed by provider instance id. Android-only surface: iOS decoders ignore
+    // the unknown key, and older Android importers do the same
+    // (ignoreUnknownKeys), so the field is safe to add to the frozen wire.
+    val oauth: List<OauthSecret> = emptyList(),
+    // [T-backup-restore-network] Proxy passwords, one per configured proxy id.
+    // Credentials belong in secrets.json (encrypted with the separate secrets
+    // subkey), NOT in the plain settings member.
+    val proxyPasswords: List<NamedSecret> = emptyList(),
 ) {
     @Serializable
     data class ProviderSecret(
@@ -412,6 +421,23 @@ data class BackupSecrets(
         val token: String,
         val clientSecret: String? = null,
     )
+
+    /**
+     * [T-backup-restore-oauth] One provider sign-in's stored bundle: the token
+     * JSON exactly as the OAuth manager persists it (access + refresh + expiry
+     * together), plus the manual bearer override when one is set. Restoring
+     * both makes a signed-in provider usable again without re-login.
+     */
+    @Serializable
+    data class OauthSecret(
+        val instanceId: String,
+        val tokensJson: String,
+        val manualBearer: String? = null,
+    )
+
+    /** A named non-OAuth credential (a proxy password), base64 of its UTF-8 bytes. */
+    @Serializable
+    data class NamedSecret(val name: String, val value: String)
 }
 
 class BackupException(message: String, cause: Throwable? = null) : Exception(message, cause)

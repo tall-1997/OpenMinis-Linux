@@ -1952,6 +1952,12 @@ class ChatViewModel(
     internal var currentProvider: LLMProvider? = null
     internal var currentModel: LLMModel? = null
 
+    // [port-upstream-1.16][T-android-provider-edit-mid-session] Watch state
+    // for ChatViewModelProviderEditExt: instances edited since the last diff
+    // snapshot, and the snapshot itself. See rebuildProviderIfEdited().
+    @Volatile internal var pendingProviderEdits: Set<String> = emptySet()
+    internal var providerInstancesSeen: Map<String, com.openminis.app.data.model.ProviderInstance>? = null
+
     /**
      * Does the CURRENTLY RESOLVED main model natively consume image pixels?
      *
@@ -3591,12 +3597,11 @@ class ChatViewModel(
             }
         }
 
-    // T203 part 2: these MUST be declared before `init { loadSession() }` below. viewModelScope.launch defaults to Dispatchers.Main.immediate, which runs
-    // the launch body synchronously up to the first suspend point — and the launch body reads `isDraft` before its first suspend. If `isDraft` is
-    // declared further down the class, its property initializer hasn't run yet, so the read returns the JVM default (`false`), routing every draft
-    // session through the load-from-DB branch. The DB lookup misses (no row for `__new__…` keys), the function returns early, and no model name /
-    // group name is ever set on the draft chat — exactly the bug T203 was
-    // chasing through the wrong layer.
+    // T203 part 2: these MUST be declared before `init { loadSession() }` below —
+    // launch defaults to Main.immediate and runs the body to its first suspend,
+    // which reads `isDraft`; a later declaration would read the JVM default
+    // `false` and route every draft through load-from-DB, so no model/group
+    // name was ever set on the draft chat (bug T203 chased through the wrong layer).
     /** Model group ID from long-press FAB, encoded in the draft session ID.
      *  substringBefore strips the folder marker in case both are present. */
     internal val initialGroupId: String? =
@@ -3622,13 +3627,12 @@ class ChatViewModel(
                 }
             }
         }
+        // [port-upstream-1.16] Provider-edit watch — see ChatViewModelProviderEditExt.
+        startProviderEditWatch()
         loadSession()
         // [T-session-paused-badge-active-false-positive] Drive the session-list PAUSED badge directly off canResume — the authoritative "this session
-        // is interrupted (tap Resume)" flag. This is the single chokepoint over every _canResume setter (background-suspend cleanup, cancel cleanup,
-        // loadSession DB detection, …): canResume true → badge on; false (resumed / new send / completed) → badge off. Replaces both the old
-        // foreground heuristic AND clear-on-open, so a session the user merely
-        // glanced at but didn't resume keeps its badge, and a running/resolved
-        // session never shows one.
+        // is interrupted (tap Resume)" flag. Single chokepoint over every _canResume setter: canResume true → badge on; false → badge off. Replaces
+        // both the old foreground heuristic AND clear-on-open, so a session the user merely glanced at keeps its badge and a running one never shows one.
         viewModelScope.launch {
             com.openminis.app.service.OverlayComposeBus.pending.collect { req ->
                 val sid = realSessionId.ifBlank { sessionId }
@@ -3650,11 +3654,9 @@ class ChatViewModel(
             canResume.collect { interrupted ->
                 if (interrupted) {
                     // [T-android-group-pause-badge-restamp] Only a REAL interruption re-stamps the badge's entry time. This collector is the single chokepoint over every
-                    // `_canResume` setter, so it ALSO fires when loadSession merely RE-DETECTS an old interrupted tail — that is not a new entry into the paused state, and re-stamping it
-                    // there is what let a days-old pause keep looking "fresh" to the group card's 24h window forever (the more often the user opened the chat, the less able it was to
-                    // expire). The detecting site raises a sticky generation
-                    // mark before its assignment; we consume it here, once the
-                    // annotated emission has actually been observed.
+                    // `_canResume` setter, so it ALSO fires when loadSession merely RE-DETECTS an old interrupted tail — re-stamping THAT let a days-old pause look
+                    // "fresh" to the 24h window forever. The detecting site raises a sticky generation mark before its assignment; consume it here,
+                    // once the annotated emission has actually been observed.
                     val pendingGen = redetectingInterruptedTailGen
                     val isRedetection = pendingGen != consumedRedetectGen
                     if (isRedetection) consumedRedetectGen = pendingGen
@@ -4391,6 +4393,7 @@ class ChatViewModel(
             return true
         }
 
+        rebuildProviderIfEdited()
         val initialProvider = currentProvider
         if (initialProvider == null) {
             _error.value = "No provider configured"
@@ -4400,11 +4403,8 @@ class ChatViewModel(
         _error.value = null
 
         // T149 parity: revoke memory_writes in the parts we're about to drop
-        // so the on-disk daily log doesn't keep entries the user rewound past.
-        // The dropped range is: the target turn's blocks FROM the target
-        // onward (the target tool_use itself + any later same-turn blocks) +
-        // every later message. The surviving earlier blocks of the target turn
-        // are kept, so they're excluded.
+        // so the on-disk log doesn't keep entries the user rewound past.
+        // Dropped: the target turn FROM the target onward + every later message.
         val droppedTargetTail = asstMsg.copy(
             toolBlocks = asstMsg.toolBlocks.drop(blockIdx),
         )
@@ -4551,10 +4551,10 @@ class ChatViewModel(
         // [T-delete-anchor-by-id] A VISIBLE user turn, not merely one with
         // text — same predicate deleteFromMessage anchors with. A pure-image
         // prompt has blank `content` but is a real user bubble the model was
-        // answering; refusing it left the only way to re-ask a photo turn to
-        // deleting and re-typing it.
+        // answering; refusing it left re-asking a photo turn impossible.
         if (!message.isRenderedUserBubble) return
 
+        rebuildProviderIfEdited()
         val initialProvider = currentProvider
         if (initialProvider == null) {
             _error.value = "No provider configured"
@@ -4564,8 +4564,8 @@ class ChatViewModel(
         _error.value = null
 
         // T149: snapshot messages about to be truncated so we can revoke any
-        // memory_write tool blocks they contain. Without this, a retry leaves
-        // the on-disk daily log with entries the user has just rewound past.
+        // memory_write tool blocks they contain — else a retry leaves the
+        // on-disk daily log with entries the user just rewound past.
         val deletedMessages = messages.subList(index + 1, messages.size).toList()
 
         // Truncate UI messages: keep up to and including this user message.

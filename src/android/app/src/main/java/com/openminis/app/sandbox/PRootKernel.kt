@@ -193,18 +193,32 @@ object PRootKernel {
         // this in ISHShellExecutor.m:325.
         customEnvironment.putIfAbsent("CHARSET", "UTF-8")
 
-        // Tool-compat env — match iOS ISHShellExecutor.m:358-360 so scripts
-        // that run identically in both sandboxes produce identical output.
-        // NO_COLOR: suppress ANSI color in shell tools that honor the
-        //   informal NO_COLOR standard (curl, ls --color=auto, etc.).
-        // PYTHONDONTWRITEBYTECODE: don't litter the rootfs with .pyc files
-        //   next to user scripts.
-        // GOMAXPROCS=2: keep Go runtimes modest on mobile; iOS caps at 2
-        //   for the iSH emulator, same cap is a sensible default under
-        //   PRoot on Android where the sandbox is also IO-bound.
+        // [T-android-guest-utf8-locale] Under the POSIX default locale,
+        // locale-dependent output (ncurses, coreutils, Python) mangles
+        // non-ASCII; only the interactive terminal ever set a LANG. C.UTF-8
+        // is always present in the rootfs; a user/exported LANG wins via
+        // putIfAbsent.
+        customEnvironment.putIfAbsent("LANG", "C.UTF-8")
+
+        // Tool-compat env — match iOS ISHShellExecutor.m:358-360 so identical
+        // scripts produce identical output. NO_COLOR: suppress ANSI color
+        // (informal standard). PYTHONDONTWRITEBYTECODE: no .pyc litter.
+        // GOMAXPROCS=2: keep Go runtimes modest, as iOS does.
         customEnvironment.putIfAbsent("NO_COLOR", "1")
         customEnvironment.putIfAbsent("PYTHONDONTWRITEBYTECODE", "1")
         customEnvironment.putIfAbsent("GOMAXPROCS", "2")
+
+        // [T-android-git-safe-directory / port-upstream-1.16 gitconfig preset]
+        // The workspace is bind-mounted from the app's data dir; inside proot
+        // the uid does not match the owner git recorded, so every git command
+        // died with "detected dubious ownership". Preset through the documented
+        // GIT_CONFIG_* env channel (no file writes); a user-supplied
+        // GIT_CONFIG_COUNT wins via putIfAbsent.
+        customEnvironment.putIfAbsent("GIT_CONFIG_COUNT", "2")
+        customEnvironment.putIfAbsent("GIT_CONFIG_KEY_0", "safe.directory")
+        customEnvironment.putIfAbsent("GIT_CONFIG_VALUE_0", "*")
+        customEnvironment.putIfAbsent("GIT_CONFIG_KEY_1", "core.createObject")
+        customEnvironment.putIfAbsent("GIT_CONFIG_VALUE_1", "rename")
 
         // T222: PRoot's link2symlink extension creates .l2s.* sentinel files
         // alongside every hardlinked file. uv's default `hardlink` mode tries
@@ -215,12 +229,10 @@ object PRootKernel {
         // Mirrored in default_mount/etc/profile.d/minis.sh for login shells.
         customEnvironment.putIfAbsent("UV_LINK_MODE", "symlink")
 
-        // ProcessBuilder inherits Android's TMPDIR (typically
-        // /data/user/0/<pkg>/cache). PRoot treats that as a *guest* path, so
-        // it either does not exist or is the host cache Android may have
-        // wiped. dpkg/apt then fail unpacking — first seen installing
-        // ca-certificates. Always pin guest temp to /tmp. Mirrored in
-        // default_mount/etc/profile.d/minis.sh and the setup scripts.
+        // ProcessBuilder inherits Android's TMPDIR (the host cache); PRoot
+        // treats it as a *guest* path, and dpkg/apt then fail unpacking. Always
+        // pin guest temp to /tmp. Mirrored in default_mount's minis.sh and the
+        // setup scripts.
         customEnvironment["TMPDIR"] = "/tmp"
         customEnvironment["TMP"] = "/tmp"
         customEnvironment["TEMP"] = "/tmp"
@@ -266,11 +278,9 @@ object PRootKernel {
         // the execve before it runs.
         installHandlerStubs(rootfsManager.rootfsDir)
 
-        // T219-6: now that rootfs is on disk, materialize /var/minis/mounts/<name>
-        // placeholder dirs that PRoot's `-b` needs as bind targets. The earlier
-        // applyMountedFoldersSnapshot in MinisApp.onCreate ran before boot and
-        // its mkdirs went nowhere; this re-run covers the mount entries that
-        // were known at app launch.
+        // T219-6: materialize /var/minis/mounts/<name> placeholder dirs that
+        // PRoot's `-b` needs as bind targets — the pre-boot snapshot in
+        // MinisApp.onCreate ran before the rootfs existed.
         applyMountedFoldersSnapshot(context)
 
         isBooted = true
@@ -369,12 +379,10 @@ object PRootKernel {
         // (and clean up stale ones) so the bind actually takes effect.
         materializeMountTargets(context, desired.keys)
 
-        // T219-4: raw shell writes (touch/cp/mv/tee/… and `>` redirects) bypass
-        // the FileWriteTool/FileEditTool read-only guard because proot `-b` has no
-        // read-only modifier. Install shell wrappers that reject writes whose
-        // target lands under an effectively-read-only mount, so the agent gets a
-        // clear "read-only mounted folder" error in the shell instead of a write
-        // that silently no-ops (Android 10 shadow FUSE) or a confusing raw EACCES.
+        // T219-4: raw shell writes bypass the tools' read-only guard (proot
+        // `-b` has no read-only modifier). Shell wrappers reject writes under
+        // an effectively-read-only mount with a clear error, instead of a
+        // silent no-op (Android 10 shadow FUSE) or a raw EACCES.
         val readOnlyLinuxPrefixes = store?.entries?.value.orEmpty()
             .filter { it.name in desired.keys.map { k -> k.removePrefix(MOUNTS_LINUX_PREFIX) } }
             .filterNot { it.effectiveWritable }
@@ -635,14 +643,10 @@ object PRootKernel {
             else -> {
                 val granted = context.checkSelfPermission(android.Manifest.permission.READ_EXTERNAL_STORAGE) ==
                     android.content.pm.PackageManager.PERMISSION_GRANTED
-                // Issue #118: Environment.isExternalStorageLegacy() is API 29.
-                // This branch covers everything below R (30), so on our minSdk
-                // 26..28 floor the unguarded call was a hard NoSuchMethodError —
-                // and because it sits on the boot path it killed the process in
-                // Application.onCreate, ~250ms restart loop, before any user data
-                // was touched (hence "clear app data" not helping). Below 29 the
-                // scoped-storage opt-out doesn't exist as a concept: storage is
-                // unconditionally legacy, so report that statically.
+                // Issue #118: isExternalStorageLegacy() is API 29; on our
+                // minSdk 26..28 floor the unguarded call was a hard
+                // NoSuchMethodError on the boot path (a ~250ms crash loop).
+                // Below 29 storage is unconditionally legacy.
                 val legacyOptIn = if (sdk >= Build.VERSION_CODES.Q) {
                     Environment.isExternalStorageLegacy().toString()
                 } else {
@@ -848,11 +852,8 @@ object PRootKernel {
      * read another's private tree).
      */
     fun resolveHostPath(linuxPath: String): File? {
-        // Check bind mounts (longest prefix match). Iterating descendingMap()
-        // preserves the old `keys.sortedByDescending { it.length }` semantics:
-        // any two keys that both prefix-match one path are prefixes of each
-        // other, and a string that extends a prefix sorts after it, so the
-        // descending map always visits the longest match first.
+        // Bind mounts, longest prefix match: the descending map visits the
+        // longest matching key first (prefixes of each other sort by length).
         for ((mountPoint, hostBase) in bindMounts.descendingMap()) {
             if (linuxPath == mountPoint || linuxPath.startsWith("$mountPoint/")) {
                 val relativePath = linuxPath.removePrefix(mountPoint).removePrefix("/")
@@ -892,12 +893,10 @@ object PRootKernel {
             stub.setExecutable(true, false)
             created++
         }
-        // [T-stale-handler-stubs] A command that was registered in an earlier
-        // app version and then renamed/retired kept its `exit 0` stub forever:
-        // the guest invoked it and got a silent success with EMPTY output —
-        // the worst possible dead end for an agent, because there is no error
-        // to react to. Enumerate the dir and delete stubs (by exact content
-        // signature) whose name is no longer registered.
+        // [T-stale-handler-stubs] A renamed/retired command kept its `exit 0`
+        // stub forever: the guest got a silent EMPTY success — the worst dead
+        // end for an agent, no error to react to. Delete stubs (by exact
+        // content signature) whose name is no longer registered.
         binDir.listFiles()?.forEach { f ->
             if (!f.isFile || f.name in registered) return@forEach
             val body = runCatching { f.readText() }.getOrNull() ?: return@forEach
@@ -919,11 +918,9 @@ object PRootKernel {
      * Always rewritten so improvements ship with each app update.
      */
     private fun installShellWrappers(binDir: File) {
-        // busybox `top` walks all of /proc and aborts on the first unreadable
-        // /proc/<pid>/stat (Android sandbox blocks reads of other UIDs' procfs).
-        // busybox in this rootfs doesn't accept `-p PIDS` either. Workaround:
-        // simulate `top` with `ps` in a refresh loop, scoped to our session
-        // (only PIDs whose /proc/<pid>/stat is actually readable by us).
+        // busybox `top` aborts on the first unreadable /proc/<pid>/stat
+        // (Android blocks other UIDs' procfs) and takes no `-p PIDS`. Simulate
+        // it with `ps` in a refresh loop, scoped to readable PIDs.
         val topWrapper = File(binDir, "top")
         topWrapper.writeText(
             """#!/bin/sh

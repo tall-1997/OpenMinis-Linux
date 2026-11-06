@@ -136,6 +136,48 @@ object SubAgentActivityTracker {
 
     fun wasUserStopped(id: String): Boolean = id in userStopped
 
+    // ── [T-wave-e-subagent-steer, port upstream 1.16 T-sub-agents-steer] ──
+    //
+    // A steer is a supplementary instruction from the user, delivered to a
+    // RUNNING sub agent at its next turn boundary (upstream: AgentJobRegistry
+    // steerHooks + HelperRunner). The runner owns a channel per member; this
+    // registry is the UI-facing handle keyed by the tracker id.
+
+    private val steerChannels = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.channels.Channel<String>>()
+
+    /** Register the steer sink for [id]. Replaces any previous one. */
+    fun registerSteer(id: String, channel: kotlinx.coroutines.channels.Channel<String>) {
+        steerChannels[id] = channel
+    }
+
+    fun unregisterSteer(id: String) {
+        steerChannels.remove(id)
+    }
+
+    /** Create + register a steer channel for [id]; returns it for the lane to consume. */
+    fun openSteer(id: String): kotlinx.coroutines.channels.Channel<String> {
+        val ch = kotlinx.coroutines.channels.Channel<String>(kotlinx.coroutines.channels.Channel.UNLIMITED)
+        steerChannels[id] = ch
+        return ch
+    }
+
+    /** Unregister and close the steer channel (a late steer must be refused, not parked). */
+    fun closeSteer(id: String, channel: kotlinx.coroutines.channels.Channel<String>) {
+        steerChannels.remove(id)
+        channel.close()
+    }
+
+    /**
+     * Queue [message] for [id]; false when the member is gone or finished
+     * (nothing is listening any more) — the UI then says so instead of
+     * pretending the guidance will be read.
+     */
+    fun steer(id: String, message: String): Boolean {
+        if (message.isBlank()) return false
+        val channel = steerChannels[id] ?: return false
+        return channel.trySend(message.trim()).isSuccess
+    }
+
     fun isParentToolActive(parentToolId: String): Boolean =
         parentToolId.isNotBlank() && _members.value.any { it.parentToolId == parentToolId }
 

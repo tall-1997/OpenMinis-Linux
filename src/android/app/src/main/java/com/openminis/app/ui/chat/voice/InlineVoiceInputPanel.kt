@@ -70,43 +70,29 @@ import kotlinx.coroutines.withContext
 
 /**
  * [T-android-voice-panel] Inline voice input panel — Android port of iOS
- * InlineVoiceInputView + VoiceInputViewModel behaviors that map onto the
- * SpeechRecognitionManager engine stack:
+ * InlineVoiceInputView + VoiceInputViewModel behaviors:
  *
- *  • Two modes: compact (~92dp, mic only + buffered-chars hint) and expanded
- *    (transcript band + status tips + focal mic + delete + engine chip).
- *    Expanded state is remembered across sessions (VoiceModePrefs, backed by
- *    SharedPreferences), reset to expanded on text→voice entry and collapsed
- *    after a send — same rules.
- *  • Tap mic: start capture; tap again to stop ("Tap to transcribe"). The
- *    system engine also auto-stops on silence (matches iOS VAD auto-stop);
- *    finals APPEND to the running transcript, partials preview live.
- *  • Transcript mirrors into the composer text both ways; double-tap to edit
- *    (capture paused), Exit chip / mic resumes.
- *  • Delete key: tap = one char, hold = repeat delete, long-press menu-free
- *    (hold ≥2s keeps deleting; "clear all" via transcript long-press like iOS
- *    context menu is covered by the hold-to-repeat reaching empty).
- *  • Engine chip "Group · Model ⇅" opens the single-select voice-input picker.
- *  • Globe menu switches the recognition language (system engine locales).
+ *  • Two modes: compact (~92dp, mic only) and expanded (transcript band +
+ *    status tips + focal mic + delete + engine chip); the choice persists
+ *    (VoiceModePrefs), reset on text→voice entry, collapsed after a send.
+ *  • Tap mic to start/stop; system engine auto-stops on silence; finals APPEND
+ *    to the running transcript.
+ *  • Transcript mirrors into the composer both ways; double-tap to edit.
+ *  • Delete key: tap = one char, hold = repeat (reaching empty covers iOS's
+ *    "clear all").
+ *  • Engine chip opens the voice-input picker; globe menu switches language.
  */
 
 /**
- * Voice-mode runtime state (mirrors iOS VoiceModePreference).
- *
- * Distinct from [com.openminis.app.ui.chat.ComposerInputModePrefs], which is a
- * different concern: that one records which composer mode the user PREFERS
- * (written on send, currently read by nobody since auto-enter-voice was removed
- * in T-android-remove-auto-enter-voice). This object is the LIVE state of the
- * panel for the current process.
- *
- * Only [expanded] is a genuine user preference and is persisted. The other
- * three are intentionally transient:
- *  - [isVoiceActive] must start false every launch — the composer always opens
- *    in text mode (T-android-remove-auto-enter-voice); persisting it would
- *    resurrect the auto-enter behaviour that was deliberately removed.
+ * Voice-mode runtime state (mirrors iOS VoiceModePreference) — the LIVE state
+ * of the panel for the current process, distinct from
+ * [com.openminis.app.ui.chat.ComposerInputModePrefs]. Only [expanded] is
+ * persisted. The other three are transient on purpose:
+ *  - [isVoiceActive] starts false every launch — persisting it would resurrect
+ *    the removed auto-enter-voice behaviour.
  *  - [enteredFromText] is a one-shot within a single transition.
  *  - [lastSpokenAssistantKey] guards against re-reading a reply; persisting it
- *    would wrongly suppress read-aloud for that message after a restart.
+ *    would suppress read-aloud for that message after a restart.
  */
 object VoiceModePrefs {
 
@@ -238,11 +224,9 @@ fun InlineVoiceInputPanel(
         if (inputText != text) onInputTextChange(text)
     }
 
-    // Runs the correction engine over the current transcript and applies the
-    // result in place. Two outcomes are reported DIFFERENTLY on purpose: "no
-    // corrections needed" is a semantic verdict, while a timeout or API error
-    // is a failure — collapsing them would disguise an outage as "your text
-    // was fine".
+    // Runs the correction engine over the current transcript. "No corrections
+    // needed" is a semantic verdict, a timeout/API error is a failure —
+    // collapsing them would disguise an outage as "your text was fine".
     fun runCorrection() {
         val text = transcript.trim()
         if (text.isEmpty() || isCorrecting) return
@@ -267,6 +251,18 @@ fun InlineVoiceInputPanel(
             }
             val suggestion = engine.correct(text, context = convoContext)
             isCorrecting = false
+            // [T-voice-correction-stale-result, port-upstream-1.16] A
+            // correction can land long after the tap (15 s budget per model,
+            // several models in turn). If the user kept dictating, typed, or
+            // sent meanwhile, `transcript` has moved on from the snapshot —
+            // applying would overwrite newer text. Drop quietly.
+            if (transcript.trim() != text) {
+                android.util.Log.d(
+                    "InlineVoiceInputPanel",
+                    "AI correction arrived after the transcript changed - not applied",
+                )
+                return@launch
+            }
             when {
                 suggestion.hasChange -> {
                     setTranscript(suggestion.corrected)
@@ -315,16 +311,10 @@ fun InlineVoiceInputPanel(
         captureBase = transcript
         transcribeError = null
         SpeechRecognitionManager.startRecording(
-            // [T-android-vad] Commit only on a FINAL result.
-            //
-            // Previously every interim hypothesis was written straight into the
-            // composer, which is what made Android feel live while iOS waited
-            // for a silence window. The engines no longer forward partials at
-            // all, so in practice this fires once per utterance — but the guard
-            // is explicit rather than assumed, so a future engine that does
-            // emit partials cannot silently reintroduce streaming.
-            //
-            // Appending (not replacing) matches iOS: successive utterances join
+            // [T-android-vad] Commit only on a FINAL result — interim
+            // hypotheses used to stream straight into the composer. The guard
+            // is explicit so a future partial-emitting engine cannot silently
+            // reintroduce streaming. Appending matches iOS: utterances join
             // with a single space (VoiceInputPanel.swift:931).
             onPartialOrFinal = { text, isFinal ->
                 if (isEditing) return@startRecording

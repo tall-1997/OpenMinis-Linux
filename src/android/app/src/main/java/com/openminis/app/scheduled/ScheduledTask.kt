@@ -135,6 +135,11 @@ data class ScheduledTask(
     val runHistory: List<ScheduledRun> = emptyList(),
     val intervalMinutes: Long = 0,
     val fireAtMs: Long? = null,
+    // [T-sched-run-now, port upstream 1.16] The calendar slot "Run now" already
+    // fired early, so the alarm delivered for that slot (and the in-app timer
+    // reaching it) finds the run taken instead of running it a second time.
+    // null = nothing taken yet. Old rows load unchanged (optLong default null).
+    val runNowSlotMs: Long? = null,
     // [T-scheduled-new-session-permission] Only meaningful when targetMode is
     // NewSession: the tool-gate mode written onto the freshly created session
     // row. Stored as the session-persistence token ("YOYO" | "ASK") that
@@ -280,6 +285,7 @@ data class ScheduledTask(
         }
         if (intervalMinutes > 0L) put("intervalMinutes", intervalMinutes)
         if (fireAtMs != null) put("fireAtMs", fireAtMs)
+        if (runNowSlotMs != null) put("runNowSlotMs", runNowSlotMs)
         if (newSessionPermissionMode != null) put("newSessionPermissionMode", newSessionPermissionMode)
         if (newSessionFolderId != null) put("newSessionFolderId", newSessionFolderId)
     }
@@ -320,6 +326,7 @@ data class ScheduledTask(
             } ?: emptyList(),
             intervalMinutes = o.optLong("intervalMinutes", 0L),
             fireAtMs = if (o.has("fireAtMs")) o.optLong("fireAtMs") else null,
+            runNowSlotMs = if (o.has("runNowSlotMs")) o.optLong("runNowSlotMs") else null,
             newSessionPermissionMode =
                 if (o.has("newSessionPermissionMode")) o.optString("newSessionPermissionMode", null) else null,
             newSessionFolderId =

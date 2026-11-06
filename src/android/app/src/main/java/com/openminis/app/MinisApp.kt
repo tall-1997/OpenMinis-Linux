@@ -505,6 +505,21 @@ class MinisApp : Application(), ImageLoaderFactory {
             EvolutionHooks.onSessionFinished(sessionId, isError)
         }
 
+        // [T-scheduled-active-session-android, port upstream 1.16] Chats a
+        // scheduled task keeps active between its fires: hold them in the
+        // tracker (foreground service continuation, never a start) and keep
+        // their cached ChatViewModels alive across idle trims, so a follow-up
+        // run lands back into the same live context instead of a cold one.
+        appCoroutineScopes.io.launch {
+            com.openminis.app.scheduled.ScheduledSessionHold.observe(this@MinisApp)
+                .collect { held -> SessionActivityTracker.setScheduledSessions(held) }
+        }
+
+        // [T-sched-inapp-timer, port upstream 1.16] Fire timed tasks at their
+        // exact second while the process is alive / Minis is in front; the
+        // AlarmManager alarm stays the fallback for a dead or frozen process.
+        com.openminis.app.scheduled.ScheduledInAppTimer.start(this)
+
         // [T-android-config-confirm-timeout] Nudge the user before the 120s timeout when a config-confirm approval waits in background.
         val configConfirmNotifier = com.openminis.app.notification.ConfigConfirmNotifier(
             context = this,

@@ -6,7 +6,15 @@ sealed class LLMStreamChunk {
     data object Started : LLMStreamChunk()
     data class Text(val text: String) : LLMStreamChunk()
     data class Usage(val usage: LLMUsage) : LLMStreamChunk()
-    data class Finished(val stopReason: String?) : LLMStreamChunk()
+    // [port-upstream-1.16][FIX-261018-12] `refusalCategory` / `refusalExplanation`:
+    // Anthropic's `stop_details` when `stopReason` is "refusal" (e.g. category
+    // "cyber"), carried for the chat loop's user-readable refusal error. Null
+    // for every other stop reason and every other provider.
+    data class Finished(
+        val stopReason: String?,
+        val refusalCategory: String? = null,
+        val refusalExplanation: String? = null,
+    ) : LLMStreamChunk()
 
     /** Thinking/reasoning streaming event */
     data class ThinkingDelta(val text: String) : LLMStreamChunk()

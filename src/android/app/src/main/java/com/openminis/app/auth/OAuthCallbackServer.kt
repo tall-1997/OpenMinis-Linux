@@ -51,7 +51,57 @@ class OAuthCallbackServer(
             return parts.size == 4 && parts.firstOrNull() == "127" &&
                 parts.all { it.toIntOrNull()?.let { n -> n in 0..255 } == true }
         }
+
+        // ── [T-oauth-return-to-app] Which ports are waiting / already answered ──
+        // [port-upstream-1.16] Ported from upstream OAuthCallbackServer so
+        // OAuthRedirectActivity can tell a duplicate hand-over from a live one.
+
+        private class Served(val at: Long, val state: String?)
+
+        /** Ports a server is listening on right now, by instance. */
+        private val listening = java.util.concurrent.ConcurrentHashMap<Int, OAuthCallbackServer>()
+
+        /** Last callback each port answered. The state stays in memory, for equality only; never logged. */
+        private val served = java.util.concurrent.ConcurrentHashMap<Int, Served>()
+
+        /** How long an answered callback makes a matching redirect a duplicate. */
+        private const val SERVED_WINDOW_MS = 10 * 60_000L
+
+        /**
+         * Pure decision core: what OAuthRedirectActivity should do with a
+         * redirect the browser handed to the app. Chrome both requests
+         * localhost and hands the same URL to our intent-filter (field log:
+         * served at 42.000, handed over at 42.001); forwarding a callback the
+         * server already answered only meets a closed port. It is still
+         * forwarded when the server is waiting and has not answered it.
+         */
+        internal fun forwardDecision(
+            listeningNow: Boolean,
+            servedAt: Long?,
+            servedState: String?,
+            redirectState: String?,
+            now: Long,
+        ): Forward {
+            val recent = servedAt != null && now - servedAt in 0..SERVED_WINDOW_MS
+            val sameCallback = servedState == null || redirectState == null || servedState == redirectState
+            return when {
+                recent && sameCallback -> Forward.ALREADY_SERVED
+                listeningNow -> Forward.FORWARD
+                else -> Forward.NOT_LISTENING
+            }
+        }
+
+        fun forwardDecision(port: Int, redirectState: String?): Forward {
+            val s = served[port]
+            return forwardDecision(
+                listening.containsKey(port), s?.at, s?.state, redirectState,
+                android.os.SystemClock.uptimeMillis(),
+            )
+        }
     }
+
+    /** [T-oauth-return-to-app] What OAuthRedirectActivity does with a handed-over redirect. */
+    enum class Forward { FORWARD, ALREADY_SERVED, NOT_LISTENING }
 
     private var serverSocket: ServerSocket? = null
     @Volatile private var running = false
@@ -101,6 +151,9 @@ class OAuthCallbackServer(
                     return@Thread
                 }
                 Log.d(TAG, "Listening on port $boundPort")
+                // A new flow on this port: the previous flow's answer is not this one's.
+                served.remove(boundPort)
+                listening[boundPort] = this
                 while (running) {
                     val socket = serverSocket?.accept() ?: break
                     try {
@@ -152,6 +205,10 @@ class OAuthCallbackServer(
                             val code = params["code"]
                             val state = params["state"]
 
+                            // [T-oauth-return-to-app] Record BEFORE the write:
+                            // the browser can hand the same URL to
+                            // OAuthRedirectActivity the moment it has the response.
+                            served[boundPort] = Served(android.os.SystemClock.uptimeMillis(), state)
                             // Send response
                             val html = "<html><body><h1>Authorization complete</h1><p>You can close this tab.</p><script>window.close()</script></body></html>"
                             writeResponse(socket, 200, html)
@@ -162,6 +219,7 @@ class OAuthCallbackServer(
                                 onCode(code, state)
                             } else if (!err.isNullOrEmpty()) {
                                 Log.i(TAG, "OAuth callback denied: $err")
+                                served[boundPort] = Served(android.os.SystemClock.uptimeMillis(), null)
                                 onDenied?.invoke()
                                 stop()
                                 return@Thread
@@ -174,6 +232,9 @@ class OAuthCallbackServer(
                 }
             } catch (e: Exception) {
                 if (running) Log.e(TAG, "Server error", e)
+            } finally {
+                // An old server's late exit must not unregister its successor on the port.
+                listening.remove(boundPort, this)
             }
         }.start()
     }

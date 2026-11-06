@@ -220,23 +220,18 @@ internal fun OpenAIProvider.rawStreamMessage(
         // (b) evict THIS ONE connection on timeout.
         val watchState = CallWatchState()
         val call = client.newCall(request.newBuilder().tag(CallWatchState::class.java, watchState).build())
-        // [T-android-stale-conn-retry-hang] Time-to-first-byte watchdog. A
-        // request written into a dead pooled h2 tunnel (local proxy socket
-        // survives a network flap) produces NO further events — no headers,
-        // no failure — until the 600s read timeout, so the UI showed
-        // "thinking" forever.
-        //
+        // [T-android-stale-conn-retry-hang] Time-to-first-byte watchdog: a
+        // request written into a dead pooled h2 tunnel produces NO further
+        // events until the 600s read timeout — the UI showed "thinking" forever.
         // [T-android-ttfb-upload-split / #188] The window is split in two so
         // slow-but-healthy uploads aren't mistaken for a dead connection:
-        //   1. UPLOAD phase (call start → requestBodyEnd): bounded loosely by
-        //      STREAM_UPLOAD_CAP_MS. writeTimeout(30s) already catches a fully
-        //      stalled socket; this only catches slow-trickle-forever.
-        //   2. TTFB phase (requestBodyEnd → response headers): the tight
-        //      STREAM_TTFB_TIMEOUT_MS budget, measured FROM upload completion.
-        // On timeout we cancel the call AND evict just this connection so the
-        // auto-retry gets a fresh one (a sibling session's connection is never
-        // touched — no evictAll). Once headers arrive the watchdog stops and a
-        // flowing SSE stream has NO total-duration limit, as before.
+        //   1. UPLOAD phase (call start → requestBodyEnd): loose
+        //      STREAM_UPLOAD_CAP_MS (writeTimeout(30s) catches a full stall).
+        //   2. TTFB phase (requestBodyEnd → headers): tight
+        //      STREAM_TTFB_TIMEOUT_MS, measured FROM upload completion.
+        // On timeout: cancel + evict JUST this connection (no evictAll) so the
+        // auto-retry gets a fresh one. After headers, a flowing SSE stream has
+        // NO total-duration limit, as before.
         val ttfbTimedOut = java.util.concurrent.atomic.AtomicBoolean(false)
         val headersArrived = java.util.concurrent.atomic.AtomicBoolean(false)
         val callStartNanos = System.nanoTime()
@@ -287,6 +282,11 @@ internal fun OpenAIProvider.rawStreamMessage(
         } finally {
             headersArrived.set(true)
             ttfbWatchdog.cancel()
+        }
+        // [port-upstream-1.16][T-quota-codex-subscription] Codex replies, errors
+        // included: a 429 still reports usage.
+        if (isOAuth && !forceChatCompletions) {
+            com.openminis.app.quota.QuotaObservationSink.recordCodexResponse(quotaInstanceId, response.headers)
         }
         // T321: response-side diagnostic log (status + select header values).
         run {

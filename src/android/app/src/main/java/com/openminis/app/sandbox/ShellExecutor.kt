@@ -205,7 +205,8 @@ object ShellExecutor {
         var started: Process? = null
         var activeRun: com.openminis.app.service.ActiveRun? = null
         try {
-            val process = processBuilder.start()
+            // [T-shell-stall-yes-head] SIGPIPE unblocked in the child; see SpawnSignalMask.
+            val process = SpawnSignalMask.start(processBuilder)
             started = process
             runningProcesses[ownerKey] = process
             SandboxWorkload.track(process, "oneshot")

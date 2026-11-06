@@ -176,6 +176,25 @@ class BackupHistory private constructor(private val context: Context) {
         persist(records().filterNot { it.id == id })
     }
 
+    /**
+     * [T-android-backup-dest-edit] Follow a destination rename into the
+     * records. An outcome is matched back to its destination BY NAME — the
+     * "open destination" link and "delete with files" both look it up that way
+     * — so without this every record written before the rename would report
+     * the destination as removed while it is still configured under a new name.
+     */
+    @Synchronized
+    fun renameDestination(from: String, to: String) {
+        val cur = records()
+        if (cur.none { r -> r.destinations.any { it.name == from } }) return
+        persist(
+            cur.map { r ->
+                if (r.destinations.none { it.name == from }) r
+                else r.copy(destinations = r.destinations.map { if (it.name == from) it.copy(name = to) else it })
+            },
+        )
+    }
+
     @Synchronized
     fun clear() {
         persist(emptyList())

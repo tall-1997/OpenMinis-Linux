@@ -93,7 +93,14 @@ object ChatViewModelStore {
             }
         }
         val entries = models.map { (id, vm) ->
-            val pinned = (mounted[id] ?: 0) > 0 || !vm.canEvictFromMemory()
+            val pinned = (mounted[id] ?: 0) > 0 || !vm.canEvictFromMemory() ||
+                // [T-scheduled-active-session-android, port upstream 1.16] A
+                // chat a scheduled task keeps active must not be reclaimed
+                // between fires: its cached ViewModel IS the "same live
+                // context" the next fire lands into. Held set is small (one
+                // id per follow-up task), so the lookup stays cheap.
+                com.openminis.app.scheduled.ScheduledSessionHold
+                    .heldSnapshot().contains(id)
             if (pressure && !pinned) vm.trimIdleBrowser()
             IdleSessionBudget.Entry(id, lastAccess[id] ?: 0, vm.retainedTextBytes(), pinned)
         }

@@ -1,6 +1,7 @@
 package com.openminis.app.ui.settings.backup
 
 import android.content.Intent
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -53,7 +54,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.openminis.app.backup.PhoneBackupFolderStore
 import com.openminis.app.backup.remote.RcloneBackendCatalog
 import com.openminis.app.ui.settings.SettingsScaffold
+import com.openminis.app.ui.settings.SettingsRow
 import com.openminis.app.ui.settings.SettingsSection
+import com.openminis.app.ui.settings.SettingsSwitch
 import com.openminis.app.ui.settings.SettingsSwitchRow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -106,11 +109,22 @@ fun RcloneDestinationsScreen(onBack: () -> Unit) {
     }
 
     var adding by remember { mutableStateOf(false) }
+    // [T-android-backup-dest-edit] The destination whose detail page is open.
+    val detail = remember { DestinationDetailNav() }
+    BackHandler(enabled = detail.isOpen) { detail.back(vm) }
     // Name of the destination saved by the last completed save, so the list
     // can confirm it. Cleared once acknowledged.
     var justSaved by remember { mutableStateOf<String?>(null) }
 
-    SettingsScaffold(title = stringResource(R.string.backup_dest_title), onBack = onBack) {
+    SettingsScaffold(
+        title = detail.title() ?: stringResource(R.string.backup_dest_title),
+        onBack = { if (detail.isOpen) detail.back(vm) else onBack() },
+    ) {
+        if (detail.isOpen) {
+            DestinationDetailContent(vm, detail)
+            return@SettingsScaffold
+        }
+
         if (browse != null) {
             // Returning to the list on success is the whole point: the form
             // used to stay put, so a successful save looked identical to one
@@ -177,14 +191,25 @@ fun RcloneDestinationsScreen(onBack: () -> Unit) {
                 )
             } else {
                 remotes.forEachIndexed { i, r ->
-                    SettingsSwitchRow(
+                    // [T-android-backup-dest-edit] Tapping the row opens the
+                    // destination's detail page (rename, folder, connection,
+                    // remove); the switch keeps its own on/off job.
+                    SettingsRow(
                         title = r.name,
                         subtitle = stringResource(
                             R.string.backup_dest_row_subtitle,
                             r.backend.uppercase(), r.path.trimStart('/'),
                         ),
-                        checked = r.enabled,
-                        onCheckedChange = { vm.setEnabled(r.name, it) },
+                        onClick = {
+                            vm.clearError()
+                            detail.open(r.name)
+                        },
+                        trailing = {
+                            SettingsSwitch(
+                                checked = r.enabled,
+                                onCheckedChange = { vm.setEnabled(r.name, it) },
+                            )
+                        },
                         showDivider = i < remotes.lastIndex,
                     )
                 }
@@ -217,13 +242,10 @@ fun RcloneDestinationsScreen(onBack: () -> Unit) {
             }
 
             if (remotes.isNotEmpty()) {
-                Spacer(Modifier.height(8.dp))
-                remotes.forEach { r ->
-                    MinisOutlinedButton(
-                        onClick = { vm.remove(r.name) },
-                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                    ) { Text(stringResource(R.string.backup_dest_remove, r.name)) }
-                }
+                // [T-android-backup-dest-edit] No per-destination "Remove X"
+                // buttons here any more: removing lives on the detail page,
+                // behind a confirmation, as on iOS. One button per destination
+                // under the list also read as removing them in bulk.
             }
 
             error?.let {
@@ -325,21 +347,11 @@ internal fun AddServerForm(
 
         backend.fields.forEach { f ->
             Spacer(Modifier.height(8.dp))
-            OutlinedTextField(
+            ServerFieldInput(
+                field = f,
                 value = fieldValues[f.key] ?: "",
                 onValueChange = { fieldValues[f.key] = it },
-                label = {
-                    Text(
-                        if (f.isOptional) stringResource(R.string.backup_dest_field_optional, f.label)
-                        else f.label,
-                    )
-                },
-                placeholder = { Text(f.placeholder) },
-                singleLine = true,
                 enabled = !busy,
-                visualTransformation = if (f.isSecret) PasswordVisualTransformation()
-                else androidx.compose.ui.text.input.VisualTransformation.None,
-                modifier = Modifier.fillMaxWidth(),
             )
         }
 
@@ -361,13 +373,10 @@ internal fun AddServerForm(
         // it would actually help keeps the choice informed.
         if (certificateRejected) {
             Spacer(Modifier.height(16.dp))
-            SettingsSwitchRow(
-                title = stringResource(R.string.backup_dest_trust_certificate),
-                subtitle = stringResource(R.string.backup_dest_trust_certificate_warning),
+            TrustCertificateRow(
                 checked = allowInsecureTLS,
                 onCheckedChange = { allowInsecureTLS = it },
                 enabled = !busy,
-                showDivider = false,
             )
         }
 
@@ -596,7 +605,12 @@ internal fun FolderBrowser(vm: RcloneDestinationsViewModel, onSaved: (String) ->
             // savePending only invokes this on success (the catch sets _error
             // instead), so leaving the form here cannot strand a failed save
             // on a screen the user has already been navigated away from.
-            onClick = { vm.savePending(b.path) { onSaved(b.remote.name) } },
+            // [T-android-backup-dest-edit] A browser opened from a saved
+            // destination's detail page re-points the EXISTING remote instead.
+            onClick = {
+                if (b.existing) vm.applyFolder(b.path) { onSaved(b.remote.name) }
+                else vm.savePending(b.path) { onSaved(b.remote.name) }
+            },
             enabled = !busy,
             modifier = Modifier.fillMaxWidth(),
         ) { Text(stringResource(R.string.backup_dest_use_folder)) }
@@ -649,4 +663,49 @@ internal fun FolderBrowser(vm: RcloneDestinationsViewModel, onSaved: (String) ->
             },
         )
     }
+}
+
+/**
+ * One connection field of a server form. [T-android-backup-dest-edit] Shared
+ * by [AddServerForm] and the connection editor so the two cannot drift apart:
+ * same labels, same "(optional)" marking, same masking of the secret.
+ */
+@Composable
+internal fun ServerFieldInput(
+    field: RcloneBackendCatalog.Field,
+    value: String,
+    onValueChange: (String) -> Unit,
+    enabled: Boolean,
+    label: String = if (field.isOptional) {
+        stringResource(R.string.backup_dest_field_optional, field.label)
+    } else {
+        field.label
+    },
+    supportingText: String? = null,
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text(label) },
+        placeholder = { Text(field.placeholder) },
+        supportingText = supportingText?.let { { Text(it) } },
+        singleLine = true,
+        enabled = enabled,
+        visualTransformation = if (field.isSecret) PasswordVisualTransformation()
+        else androidx.compose.ui.text.input.VisualTransformation.None,
+        modifier = Modifier.fillMaxWidth(),
+    )
+}
+
+/** The self-signed certificate opt-in, offered only after a TLS refusal. */
+@Composable
+internal fun TrustCertificateRow(checked: Boolean, onCheckedChange: (Boolean) -> Unit, enabled: Boolean) {
+    SettingsSwitchRow(
+        title = stringResource(R.string.backup_dest_trust_certificate),
+        subtitle = stringResource(R.string.backup_dest_trust_certificate_warning),
+        checked = checked,
+        onCheckedChange = onCheckedChange,
+        enabled = enabled,
+        showDivider = false,
+    )
 }

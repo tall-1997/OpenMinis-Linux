@@ -117,4 +117,38 @@ object ToolOutputSpill {
         )
         return file.takeIf { it.isFile }
     }
+
+    /**
+     * [T-wave-e-progressive-reclaim] Offload an OLD oversized tool output
+     * during progressive context trimming (ProgressiveTrim L2): write the
+     * FULL text into the session's tool-spill workspace and return the guest
+     * path the model can `file_read` back, or null when there is nowhere to
+     * write (the trim stub then says the text is gone instead of pointing at
+     * a nonexistent file).
+     *
+     * Same directory as the live-spill path, but keyed by the RESULT id so
+     * re-trims of the same row overwrite their own file instead of the one a
+     * fresh spill wrote.
+     */
+    fun offloadForTrim(
+        context: Context,
+        sessionId: String,
+        toolId: String,
+        content: String,
+    ): String? {
+        if (sessionId.isBlank()) return null
+        val safeId = SAFE_ID_RE.replace(toolId, "_").ifBlank { "tool" }
+        val dir = File(
+            com.openminis.app.sandbox.SessionWorkspace.hostDir(context.filesDir, sessionId, "workspace"),
+            "tool-spill",
+        )
+        if (!dir.mkdirs() && !dir.isDirectory) return null
+        val file = File(dir, "trim-$safeId.txt")
+        return try {
+            file.writeText(content)
+            "/var/minis/workspace/tool-spill/${file.name}"
+        } catch (_: Exception) {
+            null
+        }
+    }
 }

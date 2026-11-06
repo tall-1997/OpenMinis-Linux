@@ -56,3 +56,10 @@ message(STATUS "Linking minis_crash_handler with ${_unwind_lib}")
 target_link_options(minis_crash_handler PRIVATE -Wl,--no-dependent-libraries)
 target_link_libraries(minis_crash_handler ${log-lib} "${_unwind_lib}")
 target_link_libraries(jieba_jni ${log-lib})
+
+# [T-shell-stall-yes-head] SIGPIPE mask bridge for SpawnSignalMask (see the
+# Kotlin object): lets ProcessBuilder children start with SIGPIPE unblocked so
+# guest pipelines (busybox yes | head, busybox ip addr) die instead of
+# spinning when their reader exits. No dependencies beyond log.
+add_library(sigpipe_bridge SHARED sigpipe_bridge.c)
+target_link_libraries(sigpipe_bridge ${log-lib})

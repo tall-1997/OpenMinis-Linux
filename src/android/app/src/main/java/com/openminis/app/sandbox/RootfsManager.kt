@@ -436,13 +436,11 @@ class RootfsManager private constructor(private val context: Context) {
      */
     private fun injectHostCaBundle() {
         ensureCaHookExecutable()
-        // [T-ca-export-stamp] The export walks the whole AndroidCAStore and
-        // rewrites the per-cert trees + bundle on every call. Probe the alias
-        // set first (cheap string enumeration, no cert decoding) and skip the
-        // entire rewrite when it has not changed and the previous bundle is on
-        // disk — the export is a deterministic function of that alias set, so
-        // the on-disk result is already correct. First run (no stamp) behaves
-        // exactly as before.
+        // [T-ca-export-stamp] Probe the AndroidCAStore alias set first (cheap
+        // string enumeration) and skip the whole rewrite when it has not
+        // changed and the previous bundle is on disk — the export is a
+        // deterministic function of that alias set. First run behaves as
+        // before.
         val caStamp = File(rootfsDir, "etc/ssl/.minis-ca-alias-stamp")
         val aliasProbe = ArrayList<String>()
         try {
@@ -1498,10 +1496,12 @@ class RootfsManager private constructor(private val context: Context) {
         loaderEnv: Map<String, String>,
         timeoutSec: Long,
     ): AptResult {
-        val p = ProcessBuilder(cmd)
-            .redirectErrorStream(true)
-            .apply { environment().putAll(loaderEnv) }
-            .start()
+        // [T-shell-stall-yes-head] SIGPIPE unblocked in the child; see SpawnSignalMask.
+        val p = SpawnSignalMask.start(
+            ProcessBuilder(cmd)
+                .redirectErrorStream(true)
+                .apply { environment().putAll(loaderEnv) },
+        )
         SandboxWorkload.track(p, "rootfs-proot")
         SandboxWorkload.armDeadline(p, timeoutSec * 1000L)
         val outputFuture = java.util.concurrent.CompletableFuture.supplyAsync {

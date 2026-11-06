@@ -205,13 +205,9 @@ internal suspend fun ChatViewModel.executeRunSubAgent(
         if (!multiAgentSettings.enabled.value) {
             return ToolExecutionResult("Multi-agent dispatch is disabled in Settings → Multi-agent.", false)
         }
-        // [T-android-subagent-depth-leak] The authoritative "am I a sub-agent?"
-        // test is the lane marker carried in the coroutine context: it is scoped
-        // to the coroutine, so it cannot leak, and it repairs itself by
-        // construction. The depth counter is kept only as a stale-state
-        // detector - an interrupted dispatch used to leave it above zero for the
-        // rest of the session, and gating on it turned one stopped dispatch into
-        // a session that could never dispatch again until the app was killed.
+        // [T-android-subagent-depth-leak] The authoritative test is the coroutine-scoped
+        // lane marker (cannot leak, self-repairs). The depth counter is only a stale-state
+        // detector — gating on it once bricked the session until app kill after a stopped dispatch.
         if (kotlin.coroutines.coroutineContext[SubAgentLane] != null) {
             return ToolExecutionResult("Error: sub-agents cannot spawn further sub-agents.", false)
         }
@@ -680,6 +676,7 @@ private suspend fun ChatViewModel.runOneSubAgentInner(
         )
         val subAgentJob = kotlinx.coroutines.SupervisorJob(kotlin.coroutines.coroutineContext[kotlinx.coroutines.Job])
         com.openminis.app.service.SubAgentActivityTracker.attachJob(trackerId, subAgentJob)
+        val steerChannel = com.openminis.app.service.SubAgentActivityTracker.openSteer(trackerId)
         return try {
             withContext(subAgentJob) {
             // [T-subagent-429-selfheal] Fan-out used to fire every lane in the
@@ -873,6 +870,7 @@ private suspend fun ChatViewModel.runOneSubAgentInner(
                     maxTurns = maxTurns,
                     tokenBudget = tokenBudget,
                     thinkingLevel = requestedThinking,
+                    steers = steerChannel,
                 )
             }
             com.openminis.app.service.SubAgentActivityTracker.appendLog(
@@ -995,6 +993,7 @@ private suspend fun ChatViewModel.runOneSubAgentInner(
                 runCatching { ExecutionCoordinator.sessionDidTerminate(laneId) }
                 subAgentJob.cancel()
             }
+            com.openminis.app.service.SubAgentActivityTracker.closeSteer(trackerId, steerChannel)
         }
         } finally {
             subAgentDepth.decrementAndGet()

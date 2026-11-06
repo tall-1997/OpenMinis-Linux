@@ -161,6 +161,142 @@ class RcloneRemoteStore(private val context: Context) {
         AppLogger.info(TAG, "[Rclone] remote removed: $name")
     }
 
+    // MARK: - Editing ([T-android-backup-dest-edit], port-upstream-1.16)
+
+    /** What an edit does to the stored secret. */
+    sealed interface SecretEdit {
+        /** Leave the stored secret as it is — the password field was left blank. */
+        data object Keep : SecretEdit
+        /** Remove it: the server is switched to anonymous access. */
+        data object Clear : SecretEdit
+        data class Replace(val value: String) : SecretEdit
+    }
+
+    /**
+     * Change an existing destination in place. Mirrors
+     * `RcloneRemoteStore.update` on iOS: rename, re-point the folder, and edit
+     * the connection (params, secret, TLS opt-in). Every argument is optional;
+     * null means "unchanged".
+     *
+     * ## Verify before anything is written
+     *
+     * [verify] receives the edited remote and the secret it would use, and is
+     * expected to throw when that configuration cannot connect. It runs BEFORE
+     * a single byte is persisted, so a failed test leaves the old params and
+     * the old secret exactly as they were. iOS applies first and rolls the
+     * params back on failure, which cannot restore the secret (it is not read
+     * back) — a wrong new password replaced a working one. Testing the
+     * candidate first removes the need for a rollback at all.
+     *
+     * ## Rename
+     *
+     * The secret is filed under the remote's name, so a rename moves it — new
+     * key written before the old one is dropped, so a failure in between leaves
+     * a duplicate credential rather than a remote with none.
+     *
+     * @return the remote as stored after the edit.
+     * @throws StoreException for an unknown remote, an invalid or taken name.
+     */
+    fun update(
+        name: String,
+        newName: String? = null,
+        newPath: String? = null,
+        newParams: Map<String, String>? = null,
+        secret: SecretEdit = SecretEdit.Keep,
+        allowInsecureTLS: Boolean? = null,
+        verify: ((candidate: Remote, secret: String?) -> Unit)? = null,
+    ): Remote {
+        val all = remotes
+        val i = all.indexOfFirst { it.name == name }
+        if (i < 0) throw StoreException("That destination no longer exists.")
+        val before = all[i]
+
+        val targetName = newName?.trim()?.takeIf { it != name }
+        if (targetName != null) {
+            validateRename(targetName)
+            if (all.any { it.name == targetName }) {
+                throw StoreException("A destination named \"$targetName\" already exists.")
+            }
+        }
+
+        var updated = before
+        if (targetName != null) updated = updated.copy(name = targetName)
+        if (newPath != null) updated = updated.copy(path = normalizedPath(before.backend, newPath))
+        if (newParams != null) updated = updated.copy(params = mergedParams(before.params, newParams))
+        if (allowInsecureTLS != null) updated = updated.copy(allowInsecureTLS = allowInsecureTLS)
+
+        val nextSecret = resolveSecret(loadSecret(name), secret)
+        verify?.invoke(updated, nextSecret)
+
+        // Verified (or nothing to verify): commit. Secret first, then the
+        // record, so the record never names a credential that isn't there yet.
+        val edit = secrets.edit()
+        if (targetName != null) edit.remove(name)
+        if (nextSecret.isNullOrEmpty()) edit.remove(updated.name) else edit.putString(updated.name, nextSecret)
+        edit.apply()
+        remotes = all.toMutableList().also { it[i] = updated }
+        if (targetName != null) dropRcloneSection(name)
+        AppLogger.info(TAG, "[Rclone] remote updated: $name -> ${updated.name}:/${updated.path}")
+        return updated
+    }
+
+    private fun validateRename(newName: String) {
+        if (newName.isEmpty()) throw StoreException("Choose a name for this destination.")
+        if (!newName.all { it.isLetterOrDigit() || it == '-' || it == '_' }) {
+            throw StoreException("Choose a name using letters, numbers, - or _.")
+        }
+    }
+
+    /** Whether a secret is stored for [name]. Never returns the secret itself. */
+    fun hasSecret(name: String): Boolean = !loadSecret(name).isNullOrEmpty()
+
+    /**
+     * Prove [candidate] connects, without touching the remote's live rclone
+     * section or anything stored. Throws the rclone error when it does not.
+     *
+     * The candidate is registered under a throwaway section name, listed, and
+     * the section deleted again. The name contains a `.`, which [add] and
+     * [update] never accept, so it cannot collide with a real destination.
+     * Recreating the REAL section instead would have to be undone on failure,
+     * and a backup running at the same moment would upload with the untested
+     * settings. The global TLS relaxation is widened only for the duration of
+     * the probe when the candidate asks for it, then put back.
+     */
+    fun probeConnection(candidate: Remote, secret: String?) {
+        val probe = candidate.copy(name = candidate.name + PROBE_SUFFIX)
+        try {
+            RcloneBridge.setInsecureTLS(candidate.allowInsecureTLS || remotes.any { it.allowInsecureTLS })
+            RcloneBridge.rpc(
+                "config/create",
+                mapOf(
+                    "name" to probe.name,
+                    "type" to probe.backend,
+                    "parameters" to buildConfigParams(
+                        backend = probe.backend,
+                        params = probe.params,
+                        secret = secret,
+                        obscure = ::obscureViaRclone,
+                        allowInsecureTLS = probe.allowInsecureTLS,
+                    ),
+                    "opt" to mapOf("nonInteractive" to true),
+                ),
+            )
+            RcloneBrowser.listDirectories(probe, probe.listRoot)
+        } finally {
+            dropRcloneSection(probe.name)
+            RcloneBridge.setInsecureTLS(remotes.any { it.allowInsecureTLS })
+        }
+    }
+
+    /**
+     * Delete one section from rclone's in-memory config. Used for the probe and
+     * for the old name after a rename, which would otherwise linger with the
+     * credential until the process exits. Best effort.
+     */
+    fun dropRcloneSection(name: String) {
+        runCatching { RcloneBridge.rpc("config/delete", mapOf("name" to name)) }
+    }
+
     /** Flip a remote on or off without touching its config or credential. */
     fun setEnabled(name: String, on: Boolean) {
         val all = remotes
@@ -362,6 +498,46 @@ class RcloneRemoteStore(private val context: Context) {
                 m.contains("unknown authority") ||
                 m.contains("self-signed") ||
                 m.contains("self signed")
+        }
+
+        /** See [probeConnection]: `.` is outside the destination-name alphabet. */
+        internal const val PROBE_SUFFIX = ".edit-probe"
+
+        /**
+         * Merge an edit form's values into the stored params. Merge rather than
+         * replace: the form sends only the fields it shows, and a remote may
+         * carry keys with no editor. A field cleared in the form removes its
+         * key, so an optional value can be taken away. Values are trimmed — a
+         * pasted host with a trailing space is the classic "correct address,
+         * cannot connect".
+         */
+        fun mergedParams(old: Map<String, String>, edits: Map<String, String>): Map<String, String> {
+            val out = old.toMutableMap()
+            for ((k, v) in edits) {
+                val t = v.trim()
+                if (t.isEmpty()) out.remove(k) else out[k] = t
+            }
+            return out
+        }
+
+        /** The secret an edit leaves in place: kept, cleared or replaced. */
+        fun resolveSecret(current: String?, edit: SecretEdit): String? = when (edit) {
+            SecretEdit.Keep -> current
+            SecretEdit.Clear -> null
+            is SecretEdit.Replace -> edit.value.ifEmpty { current }
+        }
+
+        /**
+         * Store a re-pointed folder the way the browser produces it. SFTP keeps
+         * a leading `/` (absolute vs home-relative are different places, see
+         * [Remote.join]); every other backend stores it fs-relative.
+         */
+        fun normalizedPath(backend: String, path: String): String {
+            val trimmed = path.trim()
+            if (RcloneBackendCatalog.usesAbsolutePaths(backend)) {
+                return if (trimmed.length > 1 && trimmed.endsWith("/")) trimmed.dropLast(1) else trimmed
+            }
+            return trimmed.trim('/')
         }
 
         private val JSON = Json { ignoreUnknownKeys = true; encodeDefaults = true }

@@ -45,6 +45,12 @@ data class LLMModel(
     // these fields existed.
     val budgetTokensMin: Int? = null,
     val budgetTokensMax: Int? = null,
+    // [port-upstream-1.16][T-anthropic-list-reported-limits] True when the
+    // endpoint itself reported context/output limits (EndpointModelLimits):
+    // the endpoint is the authority, so models.dev enrichment must not
+    // overwrite what it said. Nullable so decoding a config persisted before
+    // this field existed yields "unknown" instead of a synthesized answer.
+    val limitsReportedByEndpoint: Boolean? = null,
 ) {
     companion object {
         // Anthropic — mirrors iOS LLMTypes.swift allAnthropic.

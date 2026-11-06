@@ -10,7 +10,14 @@ import android.content.Context
  * until the next success.
  */
 enum class ModelRefreshResult {
-    SUCCESS_API, NO_KEY, PRESERVED, FAILURE,
+    SUCCESS_API,
+    /**
+     * [port-upstream-1.16][FIX-261025-18] The vendor's own list was not usable
+     * (error or 0 models), but the provider type's built-in catalog was
+     * (re-)seeded — a success for the picker, with a distinct UI wording.
+     */
+    SUCCESS_BUILTIN,
+    NO_KEY, PRESERVED, FAILURE,
     /** 404 from /v1/models */ NOT_FOUND,
     /** DNS / TLS / timeout */ CONNECTION_FAILED,
     /** 2xx body not valid JSON */ INVALID_RESPONSE,
@@ -25,7 +32,7 @@ object ProviderRefreshMarks {
         return prefs.all.mapNotNull { (id, raw) ->
             val name = raw as? String ?: return@mapNotNull null
             val result = runCatching { ModelRefreshResult.valueOf(name) }.getOrNull() ?: return@mapNotNull null
-            if (result == ModelRefreshResult.SUCCESS_API) null else id to result
+            if (result == ModelRefreshResult.SUCCESS_API || result == ModelRefreshResult.SUCCESS_BUILTIN) null else id to result
         }.toMap()
     }
 
@@ -33,14 +40,14 @@ object ProviderRefreshMarks {
 
     fun record(context: Context, instanceId: String, result: ModelRefreshResult) {
         val edit = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-        if (result == ModelRefreshResult.SUCCESS_API) edit.remove(instanceId) else edit.putString(instanceId, result.name)
+        if (result == ModelRefreshResult.SUCCESS_API || result == ModelRefreshResult.SUCCESS_BUILTIN) edit.remove(instanceId) else edit.putString(instanceId, result.name)
         edit.apply()
     }
 
     fun recordAll(context: Context, results: List<Pair<String, ModelRefreshResult>>) {
         val edit = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
         for ((id, result) in results) {
-            if (result == ModelRefreshResult.SUCCESS_API) edit.remove(id) else edit.putString(id, result.name)
+            if (result == ModelRefreshResult.SUCCESS_API || result == ModelRefreshResult.SUCCESS_BUILTIN) edit.remove(id) else edit.putString(id, result.name)
         }
         edit.apply()
     }

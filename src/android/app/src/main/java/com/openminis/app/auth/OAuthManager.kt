@@ -518,6 +518,9 @@ abstract class OAuthManager(
             .remove("oauth_${KEY_MANUAL_BEARER}_$instanceId")
             .remove(needsReauthKey(instanceId))
             .apply()
+        // [port-upstream-1.16][T-provider-quota] The credential's quota subject
+        // is gone (same hook as ProviderRepository.deleteApiKey).
+        com.openminis.app.quota.QuotaStore.credentialsChanged()
     }
 
     /** See the companion [needsReauth]. */
@@ -559,6 +562,10 @@ abstract class OAuthManager(
             .putString("oauth_tokens_$instanceId", json.toString())
             .remove(needsReauthKey(instanceId))
             .apply()
+        // [port-upstream-1.16][T-provider-quota] A fresh token is a new quota
+        // subject (same hook as ProviderRepository.saveApiKey): a Codex/Kimi/
+        // xAI login now surfaces its quota section without a restart.
+        com.openminis.app.quota.QuotaStore.credentialsChanged()
     }
 
     protected fun loadStoredTokens(): JSONObject? {
@@ -570,7 +577,13 @@ abstract class OAuthManager(
         getEncryptedPrefs().edit().putString("oauth_${key}_$instanceId", value).apply()
         // A new token bundle supersedes any needs-re-login mark (Claude /
         // Gemini / Kimi persist their bundles through this path).
-        if (key == "tokens") clearNeedsReauth()
+        if (key == "tokens") {
+            clearNeedsReauth()
+            // [port-upstream-1.16][T-provider-quota] The subclass token-write
+            // path (Claude / Gemini / Kimi / xAI / Codex) — same hook as
+            // [saveTokens] above.
+            com.openminis.app.quota.QuotaStore.credentialsChanged()
+        }
     }
 
     protected fun loadOAuthString(key: String): String? {
