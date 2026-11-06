@@ -26,6 +26,29 @@ import com.openminis.app.data.model.ProviderConfig
  * 5–30 ms on the worker thread; the expensive half was the DB rewrite, and
  * that is what replaceDiff removes.
  */
+// ── [T-android-save-off-main-thread] Persistence pipeline (queue, worker
+// scope, generation counter) lives in [ProviderConfigStore]; the facade below
+// keeps the internal surface the save-path extensions rely on. Moved here from
+// ProviderRepository when its architecture line ceiling left no room — pure
+// one-line forwards, no state, so extension form is lossless. ──
+internal val ProviderRepository.persistRequests
+    get() = configStore.persistRequests
+internal val ProviderRepository.writeScope
+    get() = configStore.writeScope
+internal val ProviderRepository.saveGeneration
+    get() = configStore.saveGeneration
+
+/** Starts the persistence worker on the first save. Idempotent. */
+internal fun ProviderRepository.ensurePersistWorker() = configStore.ensurePersistWorker()
+
+/**
+ * Suspends until every save queued before this call has reached the store.
+ * Backup/restore and any other "durability before returning" path should
+ * await it — the fire-and-forget `saveConfig` no longer implies the write
+ * landed.
+ */
+internal suspend fun ProviderRepository.awaitPersisted() = configStore.awaitPersisted()
+
 internal suspend fun ProviderRepository.persistToDbAndMirror(config: ProviderConfig): ProviderConfig {
     // First serialize without the hash so the meta row reflects the
     // exact string we put into prefs (the hash sees the mirror that

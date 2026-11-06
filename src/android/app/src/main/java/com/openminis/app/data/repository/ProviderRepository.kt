@@ -187,23 +187,13 @@ class ProviderRepository(
      */
     internal val configLock = Any()
 
-    // ── [T-android-save-off-main-thread] Persistence pipeline (queue, worker
-    // scope, generation counter) lives in [ProviderConfigStore]; the facade
-    // below keeps the internal surface the save-path extensions rely on. ──
-    internal val persistRequests get() = configStore.persistRequests
-    internal val writeScope get() = configStore.writeScope
-    internal val saveGeneration get() = configStore.saveGeneration
-
-    /** Starts the persistence worker on the first save. Idempotent. */
-    internal fun ensurePersistWorker() = configStore.ensurePersistWorker()
-
-    /**
-     * Suspends until every save queued before this call has reached the store.
-     * Backup/restore and any other "durability before returning" path should
-     * await it — the fire-and-forget `saveConfig` no longer implies the write
-     * landed.
-     */
-    internal suspend fun awaitPersisted() = configStore.awaitPersisted()
+    // The persistence-pipeline facade (persistRequests / writeScope /
+    // saveGeneration / ensurePersistWorker / awaitPersisted) moved to
+    // ProviderRepositoryPersist.kt as extensions — pure one-line forwards to
+    // [configStore]; see the note there. [hashJsonMirror] stays a member: it
+    // is taken as a bound callable reference (::hashJsonMirror) in
+    // ProviderRepositoryLoad.kt, which resolves for members, not for
+    // package-level extensions.
 
     /** Stable SHA-256 hash of the JSON mirror string; implementation in [ProviderConfigStore]. */
     internal fun hashJsonMirror(str: String): String = configStore.hashJsonMirror(str)
@@ -212,33 +202,16 @@ class ProviderRepository(
     // force the lazy load — a cold process must read "not loaded yet", not
     // "all your providers are gone". Implementation + caller-audit KDoc in
     // [ProviderConfigStore].
-    // [FIX-R2-16, review §三 失败处理] While the config is unreadable (corrupt
-    // decode, DB-version guard), the 12 mutation guards below used to no-op in
-    // silence — and the store's real-failure path THROWS, which used to reach
-    // the Compose click handlers uncaught (AddProviderScreen save = crash).
-    // The wrapper converts the throw into a logged no-op and a latched
-    // [configLoadFailed] state; the provider list surfaces it as a banner and
-    // the state clears on the first successful load, so "changes are locked"
-    // stays truthful instead of permanent. The store's OTHER false return —
-    // a benign main-thread refusal during the cold-start window, which
-    // self-heals on the next access — must NOT latch the failure state.
-    private val _configLoadFailed = MutableStateFlow(false)
-    val configLoadFailed: StateFlow<Boolean> get() = _configLoadFailed
+    // [FIX-R2-16, review §三 失败处理] While the config is unreadable the 12
+    // mutation guards below must no-op WITHOUT throwing into the Compose click
+    // handler that triggered them. Semantics (real failure latches
+    // [configLoadFailed] and returns false; success clears; the benign
+    // main-thread refusal must not latch) live in [ProviderConfigLoadGuard] —
+    // the provider list surfaces [configLoadFailed] as a banner.
+    private val configLoadGuard = ProviderConfigLoadGuard()
+    val configLoadFailed: StateFlow<Boolean> get() = configLoadGuard.failed
 
-    internal fun ensureConfigLoaded(): Boolean = try {
-        configStore.ensureConfigLoaded().also { ok ->
-            if (ok) _configLoadFailed.value = false
-        }
-    } catch (e: IllegalStateException) {
-        if (!_configLoadFailed.value) {
-            android.util.Log.w(
-                "ProviderRepo",
-                "[ProviderStore] config load failed: config-protected changes no-op until a load succeeds (${e.cause?.message ?: e.message})",
-            )
-        }
-        _configLoadFailed.value = true
-        false
-    }
+    internal fun ensureConfigLoaded(): Boolean = configLoadGuard.ensure(configStore)
 
     // [T-android-provider-mutator-lock] Snapshot, not the live list. The
     // declared type is List, but the backing object is the MutableList that
