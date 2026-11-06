@@ -1,5 +1,6 @@
 package com.openminis.app.data
 
+import com.openminis.app.data.repository.fullBodyForCopy
 import android.content.Context
 import com.openminis.app.data.repository.ChatRepository
 import com.openminis.app.data.repository.SkillRepository
@@ -108,10 +109,17 @@ class SessionForkManager(
             if (!com.openminis.app.data.body.Admission.tryAdmit(pageBytes)) break
             try {
             for (msg in page) {
+                // [T-body-spill-copy] loadMessagesPage projects offloaded rows to
+                // the "body stored (N bytes)" placeholder. Copying that verbatim
+                // made every offloaded message in the duplicate a small inline
+                // stub with body_ref = NULL — the body file stayed on disk but
+                // nothing pointed at it any more. Resolve the real body first so
+                // appendMessage re-references the same content-addressed blob.
+                val fullParts = chatRepository.fullBodyForCopy(msg)
                 val newMsg = chatRepository.appendMessage(
                     sessionId = new.id,
                     role = msg.role,
-                    partsJson = msg.partsJson,
+                    partsJson = fullParts,
                     tokenUsage = msg.tokenUsage,
                     reasoningContent = msg.reasoningContent,
                 )

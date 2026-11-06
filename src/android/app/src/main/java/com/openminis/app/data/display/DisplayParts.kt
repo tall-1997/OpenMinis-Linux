@@ -21,6 +21,59 @@ internal object DisplayParts {
         return bodyBytes > ResourceLimits.INLINE_BODY_BYTES && projected.length < bodyBytes
     }
 
+    /**
+     * [T-body-spill-stub] True when [json] is the offload placeholder that
+     * [com.openminis.app.data.repository.ChatRepository.storeBody] writes in
+     * place of an oversized body.
+     *
+     * The placeholder is VALID JSON shaped exactly like a normal text message,
+     * which is what made the bug invisible: when the blob could not be read,
+     * hydration fell back to `messages.parts_json`, got the placeholder, parsed
+     * it happily and painted "body stored (N bytes)" as if the model had said
+     * it. Anything treating projected parts as content must screen this out
+     * first.
+     */
+    fun isStub(json: String?): Boolean {
+        if (json.isNullOrBlank()) return false
+        val parts = try {
+            JSONArray(json)
+        } catch (_: Exception) {
+            return false
+        }
+        if (parts.length() != 1) return false
+        val part = parts.optJSONObject(0) ?: return false
+        if (part.optString("type") != "text") return false
+        val value = part.optString("value", "")
+        return value.startsWith(STUB_PREFIX) || value.startsWith(OMITTED_PREFIX)
+    }
+
+    /**
+     * [T-body-spill-stub] Display fallback built from the `preview` column.
+     *
+     * The preview is `<8KB raw head>\n␞<plain text>`; the raw head is usually
+     * truncated JSON, so only the tail after the sentinel is safe to show. When
+     * a row predates the sentinel the whole cell is the raw head, and the text
+     * is recomputed from it. Null when nothing human survived, so the caller
+     * keeps its generic note instead of painting an empty bubble.
+     */
+    fun previewNote(preview: String?, maxChars: Int = PREVIEW_NOTE_CHARS): String? {
+        if (preview.isNullOrBlank()) return null
+        val sentinel = com.openminis.app.data.repository.PREVIEW_SENTINEL
+        val head = preview.substringBefore(sentinel)
+        val human = preview.substringAfter(sentinel, "").trim().ifEmpty {
+            com.openminis.app.data.repository.ChatRepository.extractTextPreview(head).orEmpty().trim()
+        }
+        if (human.isBlank()) return null
+        val body = if (human.length > maxChars) human.take(maxChars) + "…" else human
+        return note(body)
+    }
+
+    const val STUB_PREFIX = "body stored ("
+    const val OMITTED_PREFIX = "body omitted"
+
+    /** Chars kept from a preview when it stands in for a missing body. */
+    const val PREVIEW_NOTE_CHARS = 4_000
+
     fun shrink(raw: String): String {
         val parts = try {
             JSONArray(raw)

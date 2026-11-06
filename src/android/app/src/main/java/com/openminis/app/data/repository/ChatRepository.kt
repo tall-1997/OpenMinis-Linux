@@ -260,34 +260,29 @@ class ChatRepository(
     /**
      * Replace projected stubs with complete, display-sized JSON. One body is
      * read at a time and discarded after shrinking. The stored row is unchanged.
+     *
+     * [T-body-spill-stub] A body that cannot be read falls back to the `preview`
+     * column and only then to a generic note. Falling back to `parts_json` was
+     * the bug: for an offloaded row that column IS the "body stored (N bytes)"
+     * placeholder, which is valid JSON, so it parsed cleanly and the bubble
+     * rendered the placeholder as if the model had said it.
      */
     suspend fun hydrateDisplayRows(rows: List<MessageEntity>): List<MessageEntity> {
         if (rows.none { DisplayParts.needsHydration(it.bodyRef, it.bodyBytes, it.partsJson) }) return rows
-        val store = filesDir?.let { BodyStore(File(it, "bodies")) }
+        val store = bodyStore()
         return rows.map { row ->
             if (!DisplayParts.needsHydration(row.bodyRef, row.bodyBytes, row.partsJson)) {
                 row
             } else {
                 val raw = readDisplayBody(row, store)
-                val parts = if (raw.isNullOrBlank()) {
-                    DisplayParts.note("这条消息的原文在本地，但这次没能读出来。")
-                } else {
-                    DisplayParts.shrink(raw)
+                val parts = when {
+                    raw != null && !DisplayParts.isStub(raw) -> DisplayParts.shrink(raw)
+                    else -> DisplayParts.previewNote(row.preview)
+                        ?: DisplayParts.note("这条消息的原文在本地，但这次没能读出来。")
                 }
                 if (parts == row.partsJson) row else row.copy(partsJson = parts)
             }
         }
-    }
-
-    private suspend fun readDisplayBody(row: MessageEntity, store: BodyStore?): String? {
-        val ref = row.bodyRef
-        if (!ref.isNullOrBlank() && store != null) {
-            val bytes = runCatching {
-                store.read(ref, maxBytes = ResourceLimits.MAX_DECLARED_UNCOMPRESSED)
-            }.getOrNull()
-            if (bytes != null && bytes.isNotEmpty()) return bytes.toString(Charsets.UTF_8)
-        }
-        return runCatching { dao.loadRawPartsJson(row.id) }.getOrNull()
     }
 
     suspend fun loadMessageIds(sessionId: String, pageSize: Int = 500): Set<String> {
