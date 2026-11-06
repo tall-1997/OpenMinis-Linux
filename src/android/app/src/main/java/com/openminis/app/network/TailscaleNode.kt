@@ -3,8 +3,6 @@ package com.openminis.app.network
 
 import android.content.Context
 import com.openminis.app.logging.AppLogger
-import com.openminis.rclone.gomobile.Gomobile
-import com.openminis.rclone.gomobile.LogSink
 import java.io.File
 import org.json.JSONObject
 
@@ -58,18 +56,16 @@ object TailscaleNode {
     @Synchronized
     fun installLogger() {
         if (loggerInstalled) return
-        Gomobile.tsSetLogger(object : LogSink {
-            override fun line(line: String) {
-                // [FEAT-261021-05] A proxy / the node failing N times in a row.
-                NetworkAlertCenter.ingest(line)
-                // The entry's own lines already carry [Net][Entry|Policy|Proxy|Dial].
-                val text = if (line.startsWith("[Net][")) redact(line) else "[Net][TS] " + redact(line)
-                // tailscale's verbose levels ([v1] / [v2] and its structured
-                // "[v\u0000JSON]" lines - dozens per netmap update) go to the
-                // Verbose log level only; Info keeps state changes and errors.
-                if (isVerbose(line)) AppLogger.debug(TAG, text) else AppLogger.info(TAG, text)
-            }
-        })
+        GomobileNet.tsSetLogger { line ->
+            // [FEAT-261021-05] A proxy / the node failing N times in a row.
+            NetworkAlertCenter.ingest(line)
+            // The entry's own lines already carry [Net][Entry|Policy|Proxy|Dial].
+            val text = if (line.startsWith("[Net][")) redact(line) else "[Net][TS] " + redact(line)
+            // tailscale's verbose levels ([v1] / [v2] and its structured
+            // "[v\u0000JSON]" lines - dozens per netmap update) go to the
+            // Verbose log level only; Info keeps state changes and errors.
+            if (isVerbose(line)) AppLogger.debug(TAG, text) else AppLogger.info(TAG, text)
+        }
         loggerInstalled = true
     }
 
@@ -102,7 +98,7 @@ object TailscaleNode {
         AppLogger.info(TAG, "[Net][TS] start hostname=$hostname authKey=${if (authKey.isNullOrEmpty()) "none" else "provided"} dir=noBackupFiles/tailscale")
         val t0 = System.nanoTime()
         try {
-            call(Gomobile.tsStart(authKey.orEmpty(), hostname, dir.absolutePath))
+            call(GomobileNet.tsStart(authKey.orEmpty(), hostname, dir.absolutePath))
             AppLogger.info(TAG, "[Net][TS] start ok in ${"%.2f".format((System.nanoTime() - t0) / 1e9)}s")
         } catch (e: NodeException) {
             AppLogger.error(TAG, "[Net][TS] start FAILED: ${redact(e.message.orEmpty())}")
@@ -112,23 +108,23 @@ object TailscaleNode {
 
     /** Accepts (true) or ignores subnet routes peers advertise. */
     fun setAcceptRoutes(on: Boolean) {
-        call(Gomobile.tsSetAcceptRoutes(on))
+        call(GomobileNet.tsSetAcceptRoutes(on))
         AppLogger.info(TAG, "[Net][TS] accept subnet routes = $on")
     }
 
     /** Uses the peer with Tailscale IP `ip` as exit node ("" = none). */
     fun setExitNode(ip: String) {
-        call(Gomobile.tsSetExitNode(ip))
+        call(GomobileNet.tsSetExitNode(ip))
         AppLogger.info(TAG, "[Net][TS] exit node = ${ip.ifEmpty { "none" }}")
     }
 
     fun stop() {
-        call(Gomobile.tsStop())
+        call(GomobileNet.tsStop())
         AppLogger.info(TAG, "[Net][TS] stopped")
     }
 
     fun logout() {
-        call(Gomobile.tsLogout())
+        call(GomobileNet.tsLogout())
         AppLogger.info(TAG, "[Net][TS] logged out")
     }
 
@@ -136,14 +132,14 @@ object TailscaleNode {
      * running, backendState, authURL, tailscaleIPs, dnsName, tailnet,
      * magicDNSSuffix, peers[], socks, error.
      */
-    fun status(): JSONObject = callObject(Gomobile.tsStatus())
+    fun status(): JSONObject = callObject(GomobileNet.tsStatus())
 
     /** Prefixes reachable through the tailnet now, and the MagicDNS suffix. */
-    fun routes(): JSONObject = callObject(Gomobile.tsRoutes())
+    fun routes(): JSONObject = callObject(GomobileNet.tsRoutes())
 
     /** Dials `address` ("host:port") through the tailnet; milliseconds. */
     fun dialTest(address: String, timeoutMs: Int = 8000): Long =
-        callObject(Gomobile.tsDialTest(address, timeoutMs.toLong())).optLong("ms", -1)
+        callObject(GomobileNet.tsDialTest(address, timeoutMs.toLong())).optLong("ms", -1)
 
     // Local SOCKS5 entry (nethub)
 
@@ -159,7 +155,7 @@ object TailscaleNode {
         // so neither its [Net] lines nor the [Net][Alert] ones reached the app.
         installLogger()
         entryTouched = true
-        val r = callObject(Gomobile.netConfigure(config.toString()))
+        val r = callObject(GomobileNet.netConfigure(config.toString()))
         val port = r.optInt("port", 0)
         val password = r.optString("password")
         if (port <= 0 || password.isEmpty()) throw NodeException("local entry did not report its port")
@@ -167,14 +163,14 @@ object TailscaleNode {
     }
 
     fun stopEntry() {
-        call(Gomobile.netStop())
+        call(GomobileNet.netStop())
     }
 
     // [FEAT-261021-11] Transparent forwarding for proot's xnet extension.
 
     /** nethub.HookSnapshot for [tag] given the device's networks (CIDRs). */
     fun hookRoutes(tag: String, local: List<String>): JSONObject =
-        callObject(Gomobile.netHookRoutes(tag, org.json.JSONArray(local).toString()))
+        callObject(GomobileNet.netHookRoutes(tag, org.json.JSONArray(local).toString()))
 
     /**
      * [FEAT-261021-23] hookRoutes plus the stage 2 fields - udpHook,
@@ -182,14 +178,14 @@ object TailscaleNode {
      * MinisNetHookRoutes2).
      */
     fun hookRoutes2(tag: String, local: List<String>, resolvers: List<String>): JSONObject =
-        callObject(Gomobile.netHookRoutes2(tag, org.json.JSONArray(local).toString(), org.json.JSONArray(resolvers).toString()))
+        callObject(GomobileNet.netHookRoutes2(tag, org.json.JSONArray(local).toString(), org.json.JSONArray(resolvers).toString()))
 
     data class XparentPorts(val port4: Int, val port6: Int, val udpPort: Int)
 
     /** Starts (or keeps) the listener; its ports (0 = none). */
     fun xparentStart(mapDir: String, tag: String): XparentPorts {
         installLogger()
-        val r = callObject(Gomobile.netXparentStart(mapDir, tag))
+        val r = callObject(GomobileNet.netXparentStart(mapDir, tag))
         return XparentPorts(r.optInt("port4"), r.optInt("port6"), r.optInt("udpPort"))
     }
 
@@ -198,40 +194,40 @@ object TailscaleNode {
      * app (iOS MinisNetShellProbe): {udp:{ms|error}, dns:[{name,via,rule,rcode,answers,ms,error}]}.
      */
     fun shellProbe(resolver: String, names: List<String>, timeoutMs: Int = 5000): JSONObject =
-        callObject(Gomobile.netShellProbe(resolver, org.json.JSONArray(names).toString(), timeoutMs.toLong()))
+        callObject(GomobileNet.netShellProbe(resolver, org.json.JSONArray(names).toString(), timeoutMs.toLong()))
 
     fun xparentStop() {
-        runCatching { call(Gomobile.netXparentStop()) }
+        runCatching { call(GomobileNet.netXparentStop()) }
     }
 
     /** {port4, port6, connections, failures} */
-    fun xparentStatus(): JSONObject = callObject(Gomobile.netXparentStatus())
+    fun xparentStatus(): JSONObject = callObject(GomobileNet.netXparentStatus())
 
     /** {listening, addr, httpAddr, connections, failures} */
-    fun entryStatus(): JSONObject = callObject(Gomobile.netStatus())
+    fun entryStatus(): JSONObject = callObject(GomobileNet.netStatus())
 
     /** {alive, addr, httpAddr, active, connections, failures, goroutines, heapMB} (iOS MinisNetHealth). */
-    fun health(): JSONObject = callObject(Gomobile.netHealth())
+    fun health(): JSONObject = callObject(GomobileNet.netHealth())
 
     /** Connects to the entry as a client would (auth + relay); milliseconds. Throws with stage/class. */
-    fun selfTest(timeoutMs: Int = 5000): Long = callObject(Gomobile.netSelfTest(timeoutMs.toLong())).optLong("ms", -1)
+    fun selfTest(timeoutMs: Int = 5000): Long = callObject(GomobileNet.netSelfTest(timeoutMs.toLong())).optLong("ms", -1)
 
     /** iOS MinisNetDiagnose's checks, from Go: {checks:[{name,status,detail,ms}], runtime}. */
-    fun goDiagnose(timeoutMs: Int = 8000): JSONObject = callObject(Gomobile.netDiagnose(timeoutMs.toLong()))
+    fun goDiagnose(timeoutMs: Int = 8000): JSONObject = callObject(GomobileNet.netDiagnose(timeoutMs.toLong()))
 
     /** Where a connection from `tag` to `host` would go: {kind, route}. */
-    fun decide(tag: String, host: String): JSONObject = callObject(Gomobile.netDecide(tag, host))
+    fun decide(tag: String, host: String): JSONObject = callObject(GomobileNet.netDecide(tag, host))
 
     /**
      * Dials `address` for `tag` exactly as an entry client would be routed.
      * Returns the raw envelope's fields so a failure keeps its kind/route.
      */
     fun probe(tag: String, address: String, timeoutMs: Int = 8000): JSONObject {
-        val obj = JSONObject(Gomobile.netProbe(tag, address, timeoutMs.toLong()))
+        val obj = JSONObject(GomobileNet.netProbe(tag, address, timeoutMs.toLong()))
         return obj.optJSONObject("result") ?: obj
     }
 
     /** Connects through one upstream proxy to `target`; milliseconds. */
     fun testUpstream(upstream: JSONObject, target: String, timeoutMs: Int = 8000): Long =
-        callObject(Gomobile.netTestUpstream(upstream.toString(), target, timeoutMs.toLong())).optLong("ms", -1)
+        callObject(GomobileNet.netTestUpstream(upstream.toString(), target, timeoutMs.toLong())).optLong("ms", -1)
 }

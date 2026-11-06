@@ -6,7 +6,6 @@ import android.net.ConnectivityManager
 import android.net.LinkProperties
 import android.net.Network
 import com.openminis.app.logging.AppLogger
-import com.openminis.rclone.gomobile.Gomobile
 import java.net.Inet6Address
 import java.net.NetworkInterface
 import org.json.JSONArray
@@ -61,11 +60,11 @@ object TailscalePathMonitor {
 
     private fun update(ifName: String, reason: String) {
         val pushed = runCatching {
-            val r = JSONObject(Gomobile.tsSetInterfaces(interfacesJson().toString()))
+            val r = JSONObject(GomobileNet.tsSetInterfaces(interfacesJson().toString()))
             if (!r.optBoolean("ok")) r.optString("error") else null
         }.getOrElse { it.message }
-        Gomobile.tsSetDefaultRouteInterface(ifName)
-        Gomobile.tsNetworkChanged()
+        GomobileNet.tsSetDefaultRouteInterface(ifName)
+        GomobileNet.tsNetworkChanged()
         val changed = ifName != lastInterface
         lastInterface = ifName
         if (changed || pushed != null) {

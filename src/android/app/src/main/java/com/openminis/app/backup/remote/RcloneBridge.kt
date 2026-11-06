@@ -90,7 +90,11 @@ object RcloneBridge {
      */
     private fun applySocksProxy(socks: String) {
         if (socks == lastAppliedSocks) return
-        val reply = runCatching { Gomobile.rcloneSetSocks(socks) }.getOrElse { "{\"ok\":false,\"error\":\"${it.javaClass.simpleName}\"}" }
+        val reply = runCatching {
+            // [T-gomobile-optional-net] Routed through the bridge: `rcloneSetSocks`
+            // is part of the ts/net contract that the shipped AAR may not export yet.
+            com.openminis.app.network.GomobileNet.rcloneSetSocks(socks)
+        }.getOrElse { "{\"ok\":false,\"error\":\"${it.javaClass.simpleName}\"}" }
         if (!reply.startsWith("{\"ok\":true")) {
             AppLogger.warning(TAG, "[Net][Backup] couldn't set rclone SFTP/FTP socks_proxy: $reply")
             return
