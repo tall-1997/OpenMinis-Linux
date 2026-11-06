@@ -7,10 +7,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
@@ -155,12 +151,6 @@ internal fun ChatFlatItemRow(
                                 ),
                         ) {
                         when (item) {
-
-                            // [T-port-fold-tools] A folded run of tool calls: one row, members behind a tap.
-                            is com.openminis.app.ui.chat.FlatChatItem.AssistantToolGroup -> {
-                                var open by rememberSaveable(item.key) { mutableStateOf(item.expanded) }
-                                ToolGroupRow(item.copy(expanded = open)) { open = !open }
-                            }
                             is FlatChatItem.UserBubble -> {
                                 // User bubbles intentionally don't register
                                 // MinisTextKit shards — long-press on a user
