@@ -42,8 +42,6 @@ internal sealed class FlatChatItem {
         override fun equals(other: Any?): Boolean {
             if (this === other) return true
             if (other !is UserBubble) return false
-            // ChatMessage is a data class; reuse its equals (cheap for user
-            // bubbles which carry short content and small attachment lists).
             return message == other.message
         }
         override fun hashCode(): Int = message.hashCode()
@@ -118,9 +116,7 @@ internal sealed class FlatChatItem {
                 blockIndex == other.blockIndex &&
                 isLastBlockOfMessage == other.isLastBlockOfMessage &&
                 messageIsStreaming == other.messageIsStreaming &&
-                // Content equality (not length): same-length replacements must invalidate.
                 rawText == other.rawText &&
-                // Whole-message markdown only feeds Copy Markdown; keep the cheap check.
                 messageMarkdown.length == other.messageMarkdown.length &&
                 showTranslate == other.showTranslate &&
                 segmentText == other.segmentText &&
@@ -145,17 +141,7 @@ internal sealed class FlatChatItem {
         val messageId: String,
         val block: AssistantBlock,
         val isLast: Boolean,
-        // [T-android-thinking-stable-expand] Complete stream signal: message
-        // streaming AND no readable reply text after this block (see
-        // hasReplyTextAfter). The old trailing-block signal flipped on every
-        // tool_use / new thinking block in a multi-round loop, re-triggering
-        // the 500ms auto-collapse each round — the reported show/hide
-        // flicker. Now it only flips when the reply starts or the stream
-        // ends: one collapse per reasoning phase.
         val messageIsStreaming: Boolean,
-        // T300: thinking level captured at the message's creation. Null
-        // for assistant messages restored from DB (legacy / pre-T300) —
-        // the renderer falls back to the chat's current level.
         val messageThinkingLevel: com.openminis.app.data.model.ThinkingLevel? = null,
         private val keySuffix: String = "",
     ) : FlatChatItem() {
@@ -416,15 +402,9 @@ private const val SEGMENT_MIN_STEPS = 2
  * can never drift from what the rows actually render.
  */
 private fun effectiveBlocks(message: ChatMessage, activeSubAgentToolIds: Set<String>): List<AssistantBlock> {
-    // Finished group utterances drop their tool cards. A live speaker still
-    // shows the current thinking block or tool card.
     val hideSpeakerTools = !message.speakerName.isNullOrBlank() &&
         !message.isStreaming && !message.isAwaitingModelResponse
     if (!hideSpeakerTools && activeSubAgentToolIds.isEmpty()) return message.toolBlocks
-    // A sub-agent transcript card is hidden only while its run is still
-    // live in the top bar — the bar and the card would otherwise show the
-    // same run twice. Once the run finishes the bar drops it, so the card
-    // must come back here: with the old "hide whenever the bar is on" rule a
     // completed sub-agent left no trace anywhere on the session page.
     fun hiddenSubAgent(block: AssistantBlock): Boolean =
         isSubAgentTranscriptCard(block) &&
