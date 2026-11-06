@@ -373,7 +373,7 @@ class AgentForegroundService : Service() {
                 SessionActivityTracker.lastReplyExcerpt,
                 SessionActivityTracker.currentSessionId,
                 SessionActivityTracker.currentToolTitle,
-                SessionActivityTracker.cameraSuppressActive,
+                SessionActivityTracker.externalPickerSuppressActive,
                 SessionActivityTracker.lastToolName,
                 SessionActivityTracker.lastToolTitle,
                 SessionActivityTracker.lastToolStatus,
@@ -395,7 +395,7 @@ class AgentForegroundService : Service() {
                     lastReplyExcerpt = values[6] as String?,
                     currentSessionId = values[7] as String?,
                     toolTitle = values[8] as String?,
-                    cameraSuppress = values[9] as Boolean,
+                    externalPickerSuppress = values[9] as Boolean,
                     lastToolName = values[10] as String?,
                     lastToolTitle = values[11] as String?,
                     lastToolStatus = values[12] as String?,
@@ -430,7 +430,7 @@ class AgentForegroundService : Service() {
         val lastReplyExcerpt: String?,
         val currentSessionId: String?,
         val toolTitle: String?,
-        val cameraSuppress: Boolean,
+        val externalPickerSuppress: Boolean,
         val lastToolName: String?,
         val lastToolTitle: String?,
         val lastToolStatus: String?,
@@ -522,13 +522,13 @@ class AgentForegroundService : Service() {
         // home-screen visit.
         val isBusy = state.hasActiveStream || state.isRunning
         if (wasBusy && !isBusy && !state.isForeground && state.enabled &&
-            hasPerm && !state.cameraSuppress
+            hasPerm && !state.externalPickerSuppress
         ) {
             hasCompletionPending = true
         }
         wasBusy = isBusy
         val shouldShow = state.enabled && hasPerm && !state.isForeground &&
-            !state.cameraSuppress &&
+            !state.externalPickerSuppress &&
             (isBusy || hasCompletionPending)
         // [Wave3 #15] Muted-category debug gate — was an ungated Log.d per
         // flow emission (every token / tool-status tick).
@@ -536,7 +536,7 @@ class AgentForegroundService : Service() {
             "OverlayState",
             "applyOverlayState fg=${state.isForeground} enabled=${state.enabled} " +
                 "perm=$hasPerm streaming=${state.hasActiveStream} toolRunning=${state.isRunning} " +
-                "cameraSuppress=${state.cameraSuppress} completionPending=$hasCompletionPending " +
+                "externalPickerSuppress=${state.externalPickerSuppress} completionPending=$hasCompletionPending " +
                 "toolName=${state.toolName} toolTitle=${state.toolTitle} shouldShow=$shouldShow shown=${controller.isShown}",
         )
         // [T-bg-overlay phase 2 fix] Permission nudge — the user opted in
@@ -556,7 +556,7 @@ class AgentForegroundService : Service() {
         // `onDismissByUser` → `dismissOverlay()`), the capsule should
         // reappear. Toggle-off / no-perm also leave tracker state alone
         // so a subsequent re-enable picks up where we left off.
-        if (state.isForeground || !state.enabled || !hasPerm || state.cameraSuppress) {
+        if (state.isForeground || !state.enabled || !hasPerm || state.externalPickerSuppress) {
             // [T-android-overlay-completion-pending] Foreground means the
             // user saw the reply in-app — drop the pending linger so a
             // later backgrounding doesn't re-pop a stale completion.
