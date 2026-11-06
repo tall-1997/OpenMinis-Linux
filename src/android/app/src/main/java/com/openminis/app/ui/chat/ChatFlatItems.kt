@@ -1034,7 +1034,7 @@ internal fun buildFlatChatItems(
             out.add(dedupe(FlatChatItem.AssistantError(message.id, it)))
         }
     }
-    return out
+    return if (foldAiProcess) applyToolFolds(out) else out
 }
 
 internal fun shouldShowToolUseRow(block: AssistantBlock, showCompletedToolCards: Boolean): Boolean {
