@@ -655,39 +655,20 @@ internal fun buildFlatChatItems(
     // message can hold several cards.
     expandedProcessIds: Set<String> = emptySet(),
     activeSubAgentToolIds: Set<String> = emptySet(),
-    // [P-process-card-dup] Index the frozen/live builds split at: the frozen
+    // [T-live-round-inline] Index the frozen/live builds split at: the frozen
     // prefix passes its own (truncated) size, the live suffix passes its
-    // fromIndex, and a plain full build leaves the default -1. A process run
-    // whose last block ends exactly at `processCardBoundary - 1` continues
-    // into the streamed message, so BOTH builds would fold it and BOTH would
-    // emit its card row — the "一次运行两张过程卡" the user saw on a resumed
-    // run (two step lists, one stuck ✅ next to one spinner, and collapse
-    // state keyed on a row that disappears the next tick). The rule that
-    // settles it: the row belongs to the side that can actually SEE the run
-    // finish, i.e. the live side. So the frozen build suppresses the row
-    // (while still folding the run's blocks — dropping the fold too would
-    // leak the steps inline beside the live card), and the live build emits
-    // it as the first of its rows. See [ProcessSegment.deferredCard].
+    // fromIndex, and a plain full build leaves -1. A run whose last block ends
+    // at `processCardBoundary - 1` continues into the streamed message: it
+    // belongs to the RUNNING round, which never cards, so the frozen build must
+    // not hide its blocks behind a card either. Such a run is marked
+    // [ProcessSegment.deferredCard] and renders inline on both sides — hiding
+    // it on one side while the other owns the card dropped its steps entirely.
     processCardBoundary: Int = -1,
 ): List<FlatChatItem> {
     val out = mutableListOf<FlatChatItem>()
     val usedKeys = if (seedKeys.isEmpty()) mutableSetOf() else seedKeys.toMutableSet()
     val roundSplit = if (foldAiProcess) {
         splitRounds(messages, activeSubAgentToolIds, processCardBoundary, fromIndex)
-    } else null
-    // [P-process-card-dup] The card the frozen prefix handed to this suffix
-    // build: its run stops at the last frozen message, so its natural row
-    // position (that message's blocks) is outside `fromIndex` and would
-    // otherwise never be emitted at all. It goes first — directly after the
-    // frozen steps it summarises and before the streamed reply that followed
-    // them, which is exactly where a full single-pass build would have put it.
-    val boundaryCard: Pair<ChatRound, ProcessSegment>? = if (roundSplit != null && fromIndex > 0 &&
-        processCardBoundary == fromIndex
-    ) {
-        roundSplit.roundAt(fromIndex - 1)?.let { round ->
-            round.segments.firstOrNull { it.deferredCard && it.lastMessageIdx == fromIndex - 1 }
-                ?.let { round to it }
-        }
     } else null
     fun dedupe(item: FlatChatItem): FlatChatItem {
         // Defensive: duplicated keys crash LazyColumn. If any slip through, suffix
@@ -726,14 +707,6 @@ internal fun buildFlatChatItems(
         )
     }
     for (idx in fromIndex until messages.size) {
-        // [P-process-card-dup] The card the frozen prefix deferred to this
-        // suffix build lands FIRST, ahead of every row of the streamed
-        // message: under reverseLayout that puts it directly below the steps
-        // it summarises and above the reply that followed them — the same
-        // order a single-pass build produces.
-        if (idx == fromIndex) {
-            boundaryCard?.let { (round, segment) -> out.add(dedupe(processCard(round, segment))) }
-        }
         val rawMessage = messages[idx]
         // Speaker / sub-agent visibility filters live in [effectiveBlocks] so
         // the round pre-pass and this row loop can never disagree about what
@@ -820,7 +793,12 @@ internal fun buildFlatChatItems(
         // them whenever ANY card existed in the round, which silently
         // dropped the lone thinking (user: "只有一步思考的气泡被丢弃了").
         val foldedBlockIds: Set<String> =
-            if (round == null || isSystem) emptySet() else round.segments.flatMapTo(mutableSetOf()) { it.blockIds }
+            if (round == null || isSystem || round.isRunning) emptySet()
+            // [T-live-round-inline] A run crossing the frozen/live build split
+            // belongs to the RUNNING round on the live side even when the
+            // frozen prefix cannot see the streaming message, so it can never
+            // card: both sides render its blocks inline and the steps survive.
+            else round.segments.filterNot { it.deferredCard }.flatMapTo(mutableSetOf()) { it.blockIds }
         val roundFolded = foldedBlockIds.isNotEmpty()
         val replyText = AssistantReplyText.joined(blocks)
         // [T-android-fold-toolonly-blank] A turn whose entire visible payload
@@ -971,11 +949,9 @@ internal fun buildFlatChatItems(
             }
             // [P-process-card] The card follows the run's LAST block, so under
             // reverseLayout it sits visually ABOVE the reply that comes next.
-            if (round != null && !isSystem) {
-                // [P-process-card-dup] A `deferredCard` run is the one the
-                // frozen prefix handed to this build — its row is emitted at
-                // the head of the live rows instead, never down here at a
-                // message the suffix build does not render.
+            if (round != null && !isSystem && !round.isRunning) {
+                // A `deferredCard` run belongs to the running round and never
+                // cards: its steps render inline on both sides of the split.
                 val segment = round.segments.firstOrNull {
                     it.lastMessageIdx == idx && it.lastBlockId == block.id && !it.deferredCard
                 }
