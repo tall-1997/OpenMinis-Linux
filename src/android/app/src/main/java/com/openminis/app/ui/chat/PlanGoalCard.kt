@@ -72,19 +72,30 @@ private const val EXIT_SETTLE_MS = 400L
 private fun goalKey(goal: SessionGoalEntity): String = "${goal.sessionId}@${goal.updatedAt}"
 
 /**
+ * [T-goal-enter-suppress] Whether a freshly loaded goal row must stay off
+ * the header on this mount. A goal that is already COMPLETE before it was
+ * ever displayed here (no snapshot in [displayed]) has no in-session
+ * completion to celebrate — suppressing it means re-entering a session
+ * never replays the green linger for work finished in an earlier visit,
+ * while a goal that completes while its row is visible still lingers.
+ * Mirrors dsh's completed-todo convergence (a done todo stays done and
+ * quiet instead of re-animating on every entry).
+ */
+internal fun goalEntersSuppressed(
+    snapshot: SessionGoalEntity,
+    displayed: SessionGoalEntity?,
+): Boolean = snapshot.status == GoalStatus.COMPLETE && displayed == null
+
+/**
  * Compact token count. Shared with [GoalSheet].
  *
- * [T-android-format-converge] Body moved to [formatTokenCount]; this keeps
- * the goal-card profile (trailing-zero trim + the historical /100, /100_000
- * scaling — see [formatTokenCount]'s tenXQuirk note: the KDoc examples below
- * do NOT match the code's actual 10x-inflated output, which this wave
- * preserves verbatim).
- *
- * KDoc of record: 1234 → "1.2k", 1234567 → "1.2M" (intended);
- * actual output: 1234 → "12.3k", 1234567 → "12.3M".
+ * [T-goal-token-format-fix] Normal k/M magnitude: 1234 → "1.2k",
+ * 1234567 → "1.2M" — the same scale the Token Usage sheet and the usage
+ * footer use. The historical 10x scaling (1234 → "12.3k") made the goal
+ * badge disagree with every other token readout in the app.
  */
 internal fun formatGoalTokens(value: Long): String =
-    formatTokenCount(value, trimTrailingZero = true, tenXQuirk = true)
+    formatTokenCount(value, trimTrailingZero = true, tenXQuirk = false)
 
 /**
  * [T-plan-board-ui] [T-goal-card] Live card above the composer, one surface
@@ -176,13 +187,22 @@ internal fun PlanGoalCard(viewModel: ChatViewModel, modifier: Modifier = Modifie
     // vanished or dismissed row exits through the same linger path as the
     // board. Keying on dismissedGoalKey re-runs this after a completion
     // dismissal so the snapshot is cleaned up.
+    // [T-goal-enter-suppress] A row that is already COMPLETE before it was
+    // ever displayed on this mount has no in-session completion to
+    // celebrate: it is suppressed on entry (dsh completed-todo convergence)
+    // instead of replaying the green linger every time the session opens.
     LaunchedEffect(goal, sid, dismissedGoalKey) {
         // Snapshot: `goal` is a delegated property, so the smart cast the
         // assignment needs must come from a local val.
         val snapshot = goal
         if (snapshot != null && goalKey(snapshot) != dismissedGoalKey) {
-            goalDisplay = snapshot
-            headerVisible = true
+            if (goalEntersSuppressed(snapshot, goalDisplay)) {
+                dismissedGoalKey = goalKey(snapshot)
+                goalDisplay = null
+            } else {
+                goalDisplay = snapshot
+                headerVisible = true
+            }
         } else if (headerVisible) {
             delay(EMPTY_LINGER_MS)
             headerVisible = false
