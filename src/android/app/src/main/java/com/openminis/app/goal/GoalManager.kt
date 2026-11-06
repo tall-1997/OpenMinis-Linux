@@ -58,6 +58,25 @@ class GoalManager internal constructor(private val persistence: GoalPersistence)
             }
         }
 
+    /**
+     * [T-goal-created-with-plan] Model-side creation, the counterpart of the
+     * harness's `create_goal`: when the agent opens a plan board for a
+     * long-running objective, the objective is recorded as the session Goal in
+     * the same step instead of being lost with the tool arguments.
+     *
+     * Idempotent by design — unlike [createByUser]. A model may re-emit the
+     * board (op=replace is a full-list rewrite) or retry a tool call; creating
+     * a Goal twice must not fail the turn, and must never overwrite an
+     * objective the human set. An existing Goal is returned untouched.
+     */
+    suspend fun createByModel(sessionId: String, objective: String, tokenBudget: Long? = null): SessionGoalEntity = locked(sessionId) {
+        persistence.load(sessionId)?.let { return@locked it }
+        GoalStateMachine.create(sessionId, objective, tokenBudget, System.currentTimeMillis()).also {
+            persistence.insert(it)
+            bump()
+        }
+    }
+
     suspend fun setPausedByUser(sessionId: String, paused: Boolean): SessionGoalEntity? = locked(sessionId) {
         val current = persistence.load(sessionId) ?: return@locked null
         val updated = if (paused) GoalStateMachine.pause(current, System.currentTimeMillis())

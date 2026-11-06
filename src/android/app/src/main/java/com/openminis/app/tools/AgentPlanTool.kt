@@ -402,11 +402,21 @@ object AgentPlanTool {
             "The board is a full-list REPLACE on every change: use op=replace with the complete list of items " +
             "(ids are optional — reuse an item's id to keep it stable, omit it to mint one). " +
             "Create the board when the work spans 3+ steps or several tool rounds, one item per deliverable step; " +
+            // [T-goal-created-with-plan] The board states the steps, the Goal
+            // states what they are FOR. Creating a board without an objective
+            // left the Goal card empty and the purpose only in the transcript.
+            "ALWAYS pass objective on add/replace: the concrete completion goal of the whole " +
+            "task, in one sentence — it becomes the session Goal and survives the turn. " +
             "flip the item you are on to active, and to done the moment it lands - in the turn the work happens. " +
             "update/remove need no ids either: target an item by its 1-based number from the snapshot, its exact " +
             "title, or a unique title prefix. Skip the board for single-shot answers and one-command lookups.",
         parameters = mapOf(
             "tool_title" to AgentToolParam("string", "A concise 5-10 word summary shown to the user."),
+            "objective" to AgentToolParam(
+                "string",
+                "What this whole task must achieve, in one sentence — the completion objective. " +
+                    "Recorded as the session Goal when the board is created; an existing Goal is never overwritten.",
+            ),
             "op" to AgentToolParam("string", "add, update, remove, list, clear, or replace.", enumValues = listOf("add", "update", "remove", "list", "clear", "replace")),
             "id" to AgentToolParam("string", "Plan item id for update/remove. You can also pass its 1-based number (shown in the snapshot), its exact title, or a unique title prefix."),
             "title" to AgentToolParam("string", "Task title."),
@@ -430,7 +440,7 @@ object AgentPlanTool {
             ),
         ),
         required = listOf("tool_title", "op"),
-        propertyOrdering = listOf("tool_title", "op", "id", "title", "description", "status", "position", "plans"),
+        propertyOrdering = listOf("tool_title", "objective", "op", "id", "title", "description", "status", "position", "plans"),
     )
 
     /**

@@ -270,11 +270,26 @@ internal suspend fun ChatViewModel.executeTool(
             com.openminis.app.tools.WolfpackTool.toSpawnArgs(argsJson),
             toolId, toolBlocks, assistantId, currentText,
         )
-        com.openminis.app.tools.AgentPlanTool.NAME -> com.openminis.app.tools.AgentPlanTool.execute(
-            argsJson,
-            activeSessionId,
-            context,
-        )
+        com.openminis.app.tools.AgentPlanTool.NAME -> {
+            val planResult = com.openminis.app.tools.AgentPlanTool.execute(
+                argsJson,
+                activeSessionId,
+                context,
+            )
+            // [T-goal-created-with-plan] Opening or rewriting the board also
+            // records the session Goal, so the objective does not die with the
+            // tool arguments. Best-effort: a Goal that cannot be written must
+            // not fail an otherwise successful board update.
+            runCatching {
+                com.openminis.app.tools.PlanGoalSync.onBoardWritten(
+                    argsJson,
+                    planResult.success,
+                    activeSessionId,
+                    chatRepository,
+                )
+            }
+            planResult
+        }
         // [T-work-report] Structured status for this run; also the data behind
         // the stage re-injected into every request.
         com.openminis.app.tools.AgentReportTool.NAME ->
