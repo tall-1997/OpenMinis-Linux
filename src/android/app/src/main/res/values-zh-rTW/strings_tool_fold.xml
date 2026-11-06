@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- [T-port-fold-tools] Fold consecutive tool calls. Translations copied from iOS Localizable.xcstrings. -->
+<resources>
+    <string name="tool_fold_setting_title">摺疊連續的工具呼叫</string>
+    <string name="tool_fold_section">工具呼叫</string>
+    <string name="tool_fold_setting_footer">連續的工具呼叫會合併為一行顯示。輕點即可查看每次呼叫。</string>
+    <string name="tool_fold_ran_n_tools">已執行 %1$d 個工具</string>
+    <string name="tool_fold_n_failed">%1$d 個失敗</string>
+    <string name="tool_fold_n_cancelled">%1$d 個已取消</string>
+    <string name="tool_fold_expand_hint">顯示每次工具呼叫</string>
+    <string name="tool_fold_collapse_hint">收合工具呼叫</string>
+</resources>

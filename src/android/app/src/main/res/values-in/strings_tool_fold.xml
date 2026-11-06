@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- [T-port-fold-tools] Fold consecutive tool calls. Translations copied from iOS Localizable.xcstrings. -->
+<resources>
+    <string name="tool_fold_setting_title">Ringkas panggilan alat berturut-turut</string>
+    <string name="tool_fold_section">Panggilan alat</string>
+    <string name="tool_fold_setting_footer">Panggilan alat berturut-turut ditampilkan sebagai satu baris. Ketuk untuk melihat setiap panggilan.</string>
+    <string name="tool_fold_ran_n_tools">Menjalankan %1$d alat</string>
+    <string name="tool_fold_n_failed">%1$d gagal</string>
+    <string name="tool_fold_n_cancelled">%1$d dibatalkan</string>
+    <string name="tool_fold_expand_hint">Menampilkan setiap panggilan alat</string>
+    <string name="tool_fold_collapse_hint">Menyembunyikan panggilan alat</string>
+</resources>
