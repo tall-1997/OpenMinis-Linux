@@ -66,7 +66,19 @@ import kotlinx.coroutines.launch
 internal fun GoalSheet(viewModel: ChatViewModel) {
     var open by remember { mutableStateOf(false) }
     val requests by GoalSheetSignal.requests.collectAsStateWithLifecycle()
-    LaunchedEffect(requests) { if (requests > 0) open = true }
+    // [T-goal-sheet-no-auto-pop] `requests` is a counter that never DECREASES,
+    // and the old `if (requests > 0) open = true` therefore fired on every
+    // first composition once anyone had ever opened the sheet: coming back to a
+    // running session re-popped the goal sheet every single time. Seed the
+    // "already seen" mark with the value standing at composition and only react
+    // to a genuine NEW bump while this screen is on screen.
+    var seen by remember { mutableStateOf(requests) }
+    LaunchedEffect(requests) {
+        if (requests != seen) {
+            seen = requests
+            open = true
+        }
+    }
     if (!open) return
     ModalBottomSheet(
         onDismissRequest = { open = false },

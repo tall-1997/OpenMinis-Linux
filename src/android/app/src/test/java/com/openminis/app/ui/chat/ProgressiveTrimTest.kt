@@ -92,9 +92,12 @@ class ProgressiveTrimTest {
         assertEquals(ProgressiveTrim.Level.STRIP_OLD_THINKING, ProgressiveTrim.levelFor(69, 100))
         assertEquals(ProgressiveTrim.Level.STUB_LARGE_TOOL_OUTPUTS, ProgressiveTrim.levelFor(70, 100))
         assertEquals(ProgressiveTrim.Level.STUB_LARGE_TOOL_OUTPUTS, ProgressiveTrim.levelFor(84, 100))
-        // [T-wave-e-progressive-reclaim] L3: whole old iterations merge.
-        assertEquals(ProgressiveTrim.Level.MERGE_OLD_STEPS, ProgressiveTrim.levelFor(85, 100))
-        assertEquals(ProgressiveTrim.Level.MERGE_OLD_STEPS, ProgressiveTrim.levelFor(120, 100))
+        // [T-no-merge-old-steps] L3 (merge whole iterations) is never selected:
+        // it is the only tier that DROPS messages, and dropping them took the
+        // finished rounds' tool cards out of the transcript. The ladder tops out
+        // at stubbing bulk, which keeps every message and every tool id.
+        assertEquals(ProgressiveTrim.Level.STUB_LARGE_TOOL_OUTPUTS, ProgressiveTrim.levelFor(85, 100))
+        assertEquals(ProgressiveTrim.Level.STUB_LARGE_TOOL_OUTPUTS, ProgressiveTrim.levelFor(120, 100))
     }
 
     @Test
