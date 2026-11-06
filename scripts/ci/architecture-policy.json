@@ -137,7 +137,7 @@
     "src/android/app/src/main/java/com/openminis/app/service/AgentForegroundService.kt": 1310,
     "src/android/app/src/main/java/com/openminis/app/service/ToolOverlayController.kt": 1003,
     "src/android/app/src/main/java/com/openminis/app/speech/SystemSpeechRecognitionEngine.kt": 1098,
-    "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatAssistantMessageUI.kt": 1136,
+    "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatAssistantMessageUI.kt": 1130,
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatFlatItems.kt": 1225,
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatMiscViews.kt": 883,
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatModelPickerSheet.kt": 822,

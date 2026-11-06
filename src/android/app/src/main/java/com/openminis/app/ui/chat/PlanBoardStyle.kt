@@ -117,9 +117,18 @@ internal fun PlanBoardBody(
     allDone: Boolean,
     expanded: Boolean,
     onToggle: () -> Unit,
+    /**
+     * [T-plan-goal-one-row] The session Goal's objective, when one exists.
+     *
+     * The goal used to own a separate 44dp header row above this one, so a chat
+     * with both a goal and a board spent ~90dp of the composer's space on two
+     * lines that answer the same question ("what is this, how far along").
+     * The objective takes over the summary line's title slot instead.
+     */
+    goalObjective: String? = null,
 ) {
     val accent = if (allDone) ToolCheckColor else MaterialTheme.colorScheme.primary
-    val title: String? = if (allDone) {
+    val title: String? = goalObjective?.takeIf { it.isNotBlank() } ?: if (allDone) {
         stringResource(R.string.plan_board_all_done)
     } else {
         planBoardCurrentStep(board)?.title

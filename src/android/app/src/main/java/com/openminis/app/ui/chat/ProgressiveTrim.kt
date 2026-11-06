@@ -129,7 +129,13 @@ internal object ProgressiveTrim {
         }
         val ratio = untrimmedTokens.toDouble() / windowTokens.toDouble()
         return when {
-            ratio >= LEVEL3_WINDOW_FRACTION -> Level.MERGE_OLD_STEPS
+            // [T-no-merge-old-steps] MERGE_OLD_STEPS is never selected. It is
+            // the one tier that DROPS whole tool iterations and replaces them
+            // with an index block, and the transcript is rebuilt from the same
+            // history: the user's tool cards disappeared from finished rounds
+            // and the reasoning between them read as never having happened.
+            // Levels 1-2 keep every message and every tool id, so pairing and
+            // the rendered cards survive; only bulk is reduced.
             ratio >= LEVEL2_WINDOW_FRACTION -> Level.STUB_LARGE_TOOL_OUTPUTS
             ratio >= LEVEL1_WINDOW_FRACTION -> Level.STRIP_OLD_THINKING
             else -> Level.NONE

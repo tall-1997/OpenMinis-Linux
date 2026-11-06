@@ -222,11 +222,11 @@ internal fun PlanGoalCard(viewModel: ChatViewModel, modifier: Modifier = Modifie
             Column(
                 Modifier.padding(horizontal = 14.dp, vertical = 2.dp).animateContentSize(),
             ) {
-                AnimatedVisibility(
-                    visible = headerVisible,
-                    enter = fadeIn(tween(ENTER_ANIM_MS)) + expandVertically(tween(ENTER_ANIM_MS)),
-                    exit = fadeOut(tween(EXIT_ANIM_MS)) + shrinkVertically(tween(EXIT_ANIM_MS)),
-                ) {
+                // [T-plan-goal-one-row] ONE row, not two. When a board exists it
+                // owns the row and carries the goal's objective in its title;
+                // the standalone goal header only appears for a goal WITHOUT a
+                // board. The divider that separated them is gone with it.
+                if (headerVisible && !boardVisible) {
                     goalDisplay?.let { goal ->
                         GoalHeaderRow(
                             goal = goal,
@@ -236,12 +236,6 @@ internal fun PlanGoalCard(viewModel: ChatViewModel, modifier: Modifier = Modifie
                             },
                         )
                     }
-                }
-                if (headerVisible && boardVisible) {
-                    HorizontalDivider(
-                        modifier = Modifier.padding(vertical = 2.dp),
-                        color = planCardHairline,
-                    )
                 }
                 AnimatedVisibility(
                     visible = boardVisible,
@@ -255,6 +249,7 @@ internal fun PlanGoalCard(viewModel: ChatViewModel, modifier: Modifier = Modifie
                             total = total,
                             allDone = allDone,
                             expanded = expanded,
+                            goalObjective = goalDisplay?.objective,
                             onToggle = {
                                 expanded = !expanded
                                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
