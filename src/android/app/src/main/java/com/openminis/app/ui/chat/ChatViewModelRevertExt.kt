@@ -27,12 +27,20 @@ import kotlinx.coroutines.launch
  */
 
 /**
- * The tail trimmed by stage(), kept so clear() can re-append it verbatim.
- * Re-derived on every session load (applyStagedRevertTrim), so it survives
- * process death; all access happens on the main dispatcher (the load
- * funnel assigns _messages on main, and the actions run in viewModelScope).
+ * The tails trimmed by stage(), keyed by OWNING session id so clear() can
+ * re-append them verbatim. Keyed — not a single file-level var — because
+ * several ChatViewModel instances (and one VM hosting several sessions over
+ * its lifetime) interleave on the main dispatcher: a single var let another
+ * session's [applyStagedRevertTrim] wipe this session's tail (a cached-VM
+ * revisit then showed the banner but Undo silently re-appended nothing), and
+ * let a draft's early-returning loadSession carry a previous session's tail
+ * into the promoted session's next stage (undo spliced foreign message rows
+ * into the new chat). Re-derived on every session load
+ * ([applyStagedRevertTrim]), so it survives process death; all access
+ * happens on the main dispatcher (the load funnel assigns _messages on
+ * main, and the actions run in viewModelScope).
  */
-private var revertTrimmedTail: List<ChatMessage> = emptyList()
+private val revertTrimmedTails = HashMap<String, List<ChatMessage>>()
 
 internal val ChatViewModel.revertStageFlow
     get() = RevertStageRegistry.flowFor(realSessionId.takeIf { it.isNotEmpty() } ?: sessionId)
@@ -44,7 +52,7 @@ internal fun ChatViewModel.revertToHere(messageId: String) {
         val sid = realSessionId.takeIf { it.isNotEmpty() } ?: sessionId
         when (val outcome = chatRepository.stageSessionRevert(context, sid, messageId)) {
             is RevertStageOutcome.Ok -> {
-                trimMessagesToBoundary(outcome.record.boundaryMessageId)
+                trimMessagesToBoundary(sid, outcome.record.boundaryMessageId)
                 toast(R.string.chat_revert_done_toast)
             }
             RevertStageOutcome.Empty -> toast(R.string.chat_revert_empty_toast)
@@ -66,10 +74,10 @@ internal fun ChatViewModel.undoRevert() {
         val sid = realSessionId.takeIf { it.isNotEmpty() } ?: sessionId
         if (RevertStageRegistry.get(sid) == null) return@launch
         val filesOk = chatRepository.clearSessionRevert(context, sid)
-        if (revertTrimmedTail.isNotEmpty()) {
-            _messages.value = _messages.value + revertTrimmedTail
+        val tail = revertTrimmedTails.remove(sid).orEmpty()
+        if (tail.isNotEmpty()) {
+            _messages.value = _messages.value + tail
         }
-        revertTrimmedTail = emptyList()
         if (filesOk) toast(R.string.chat_revert_cleared_toast)
     }
 }
@@ -82,7 +90,7 @@ internal fun ChatViewModel.undoRevert() {
  */
 internal suspend fun ChatViewModel.commitStagedRevertBeforeSend(sid: String): Boolean {
     val record = RevertStageRegistry.get(sid) ?: return true
-    revertTrimmedTail = emptyList()
+    revertTrimmedTails.remove(sid)
     val ok = chatRepository.commitSessionRevert(context, sid, record)
     if (ok) {
         // Mirror truncateBeforeEdit's post-cut hygiene exactly: agentHistory
@@ -104,17 +112,17 @@ internal suspend fun ChatViewModel.commitStagedRevertBeforeSend(sid: String): Bo
  * and re-apply the in-memory tail trim. Called from the load funnel.
  */
 internal fun ChatViewModel.applyStagedRevertTrim(sessionId: String) {
-    revertTrimmedTail = emptyList()
+    revertTrimmedTails.remove(sessionId)
     val record = RevertStageStore.load(context.filesDir, sessionId) ?: run {
         // No record on disk: clear any stale registry entry for this session.
         RevertStageRegistry.forceDrop(sessionId)
         return
     }
     RevertStageRegistry.set(sessionId, record, RevertStageStore.fileFor(context.filesDir, sessionId))
-    trimMessagesToBoundary(record.boundaryMessageId)
+    trimMessagesToBoundary(sessionId, record.boundaryMessageId)
 }
 
-private fun ChatViewModel.trimMessagesToBoundary(boundaryMessageId: String) {
+private fun ChatViewModel.trimMessagesToBoundary(sessionId: String, boundaryMessageId: String) {
     val painted = _messages.value
     val idx = painted.indexOfFirst { it.id == boundaryMessageId }
     if (idx < 0) {
@@ -128,8 +136,11 @@ private fun ChatViewModel.trimMessagesToBoundary(boundaryMessageId: String) {
     // PREVIOUS boundary) is still hidden and still belongs to the history
     // after THIS boundary — splice it on. The painted list only reaches
     // the previous boundary, so painted-tail + old tail reconstructs the
-    // full hidden window [boundary+1 .. end] for undo to re-append.
-    revertTrimmedTail = painted.subList(idx + 1, painted.size).toList() + revertTrimmedTail
+    // full hidden window [boundary+1 .. end] for undo to re-append. The old
+    // tail is keyed to THIS session — a previous session's tail must never
+    // splice into it (the cross-session contamination the keyed map fixes).
+    revertTrimmedTails[sessionId] =
+        painted.subList(idx + 1, painted.size).toList() + revertTrimmedTails[sessionId].orEmpty()
     _messages.value = painted.subList(0, idx + 1).toList()
 }
 

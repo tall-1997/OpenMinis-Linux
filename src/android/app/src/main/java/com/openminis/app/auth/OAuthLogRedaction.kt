@@ -1,5 +1,7 @@
 package com.openminis.app.auth
 
+// [port-upstream-1.16] Ported from OpenMinis 1.16-beta (verbatim).
+
 /**
  * [T-android-oauth-log-redact] Log-safe renderings of OAuth secrets.
  *

@@ -28,11 +28,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
+import com.openminis.app.util.Format
 import java.io.File
 
 /**
- * Manages a single Android WebView for browser automation.
- * Mirrors iOS BrowserUseManager.
+ * Manages a single Android WebView for browser automation (mirrors iOS).
  */
 class BrowserUseManager(
     val webView: WebView,
@@ -1220,7 +1220,7 @@ class BrowserUseManager(
                 if (json.has("error")) {
                     BrowserActionResult.error(json.getString("error"))
                 } else {
-                    BrowserActionResult(text = formatJSONResult(json))
+                    BrowserActionResult(text = formatJsonResult(json))
                 }
             } else {
                 BrowserActionResult(text = raw)
@@ -1302,7 +1302,7 @@ class BrowserUseManager(
                 appendLine("Fetched $finalURL")
                 appendLine("  Status: $status")
                 appendLine("  Content-Type: $contentType")
-                appendLine("  Size: ${formatBytes(size)}")
+                appendLine("  Size: ${Format.formatBytes(size.toLong())}")
                 append("  Filename: $filename")
             }
 
@@ -1554,7 +1554,7 @@ class BrowserUseManager(
                 if (json.has("error")) {
                     BrowserActionResult.error(json.getString("error"))
                 } else {
-                    BrowserActionResult(text = formatJSONResult(json))
+                    BrowserActionResult(text = formatJsonResult(json))
                 }
             } else {
                 BrowserActionResult(text = raw)

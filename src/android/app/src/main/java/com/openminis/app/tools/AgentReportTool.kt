@@ -88,6 +88,18 @@ object AgentReportStore {
     @Serializable
     private data class Stored(val reports: List<Report> = emptyList())
 
+    /**
+     * The ONE normalization point: blank -> "__default__", then
+     * [ExecutionCoordinator.ownerSessionId] to the owning session. [file] and
+     * [lock] normalize the RAW session id they are given through this exactly
+     * once; callers never pass a pre-normalized key.
+     *
+     * [FIX-R2-12, review §三 空值与边界] [file] used to apply ownerSessionId to
+     * the output of [key] again (and loadLocked passed it an already-keyed id)
+     * - hidden coupling that only worked while the mapping was idempotent.
+     * Collapsed here, so load/save can never disagree about which file a
+     * session maps to.
+     */
     private fun key(sessionId: String): String =
         ExecutionCoordinator.ownerSessionId(sessionId.ifBlank { "__default__" })
 
@@ -96,14 +108,14 @@ object AgentReportStore {
 
     private fun file(context: Context?, sessionId: String): File? {
         context ?: return null
-        val owner = ExecutionCoordinator.ownerSessionId(key(sessionId))
+        val owner = key(sessionId)
         return File(File(SessionWorkspace.base(context.filesDir, owner), DIR_NAME), FILE_NAME)
     }
 
     private fun loadLocked(sessionId: String, context: Context?): MutableList<Report> {
         val k = key(sessionId)
         memory[k]?.let { return it }
-        val f = file(context, k)
+        val f = file(context, sessionId)
         val loaded: MutableList<Report> = if (f == null || !f.isFile) {
             mutableListOf()
         } else {
@@ -125,7 +137,10 @@ object AgentReportStore {
     private fun saveLocked(sessionId: String, context: Context?, reports: List<Report>) {
         val retained = reports.takeLast(MAX_HISTORY)
         memory[key(sessionId)] = retained.toMutableList()
-        version.value += 1
+        // [FIX-R2-11, review §三 异步与并发] Atomic read-modify-write: two
+        // sessions saving concurrently must not lose one refresh (a plain
+        // `version.value += 1` read-modifies between threads).
+        version.update { it + 1 }
         val f = file(context, sessionId) ?: return
         runCatching {
             f.parentFile?.mkdirs()

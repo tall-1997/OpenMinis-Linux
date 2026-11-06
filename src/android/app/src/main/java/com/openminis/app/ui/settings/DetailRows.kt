@@ -46,6 +46,20 @@ import com.openminis.app.ui.theme.m3Icon
  *                        iOS LabeledContent)
  *   - [StatDetailRow]  — compact two-text SpaceBetween row (UsageStats)
  *   - [DetailDivider]  — inset hairline; per-screen inset/alpha via params
+ *
+ * Boundary with `SettingsComponents.kt` (same package): that file hosts the
+ * Settings* system — `SettingsScaffold` / `SettingsSection` / `SettingsRow` /
+ * `SettingsSwitchRow` / `SettingsValueRow` / `SettingsChoiceRow` /
+ * `SettingsCardBlock` — the title/subtitle + icon + trailing-slot rows with
+ * auto-inset dividers used by the standard settings list screens
+ * (Appearance, About, AddProvider, EnvironmentVariables, …). This file serves
+ * the screens whose rows do not fit that shape and keeps their ported
+ * visuals: SkillsManagementScreen, BackupAndRestoreScreen,
+ * BackupHistoryDetailScreen (label-value / arbitrary-content rows) and
+ * UsageStatsScreen (dense stat lines). Rule of thumb: a standard settings
+ * list row goes to Settings*; a detail, table-like or stat row stays here —
+ * do not merge the two families, their divider and padding conventions
+ * differ on purpose.
  */
 
 /** A grouped card section matching iOS List section style (SkillsManagement). */

@@ -1,3 +1,5 @@
+// [port-upstream-1.16] Ported from OpenMinis/OpenMinis@main (com.openminis.app.scheduled
+// domain), adapted to this tree's task store and hold APIs; divergences marked.
 package com.openminis.app.scheduled
 
 import android.content.Context
@@ -79,7 +81,14 @@ object ScheduledInAppTimer {
                 continue
             }
             // Just before the slot, so the claim takes the run this wait was for.
-            val ok = ScheduledRunNow.start(app, due.task.id, now = due.at - 1)
+            // [FIX-R2-9, review §三 异步与并发] A throw here would kill the whole
+            // collectLatest below - the in-process timer would then never fire
+            // again for any task until the process died. Swallow and log; the
+            // run's key lands in `tried` either way, so the next store change
+            // re-plans from a clean slate.
+            val ok = runCatching { ScheduledRunNow.start(app, due.task.id, now = due.at - 1) }
+                .onFailure { AppLogger.error(TAG, "task=${due.task.id} ${due.runKey} run-now start crashed: ${it.javaClass.simpleName}: ${it.message}") }
+                .getOrDefault(false)
             val lateMs = System.currentTimeMillis() - due.at
             AppLogger.info(TAG, "task=${due.task.id} ${due.runKey} fired=$ok late=${lateMs}ms")
         }

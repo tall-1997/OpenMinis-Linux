@@ -235,8 +235,14 @@ fun NetworkSettingsScreen(
                             com.openminis.app.network.TailscaleLoginFlow.State.OpeningPage -> stringResource(R.string.network_login_opening)
                             com.openminis.app.network.TailscaleLoginFlow.State.InBrowser -> stringResource(R.string.network_login_in_browser)
                             is com.openminis.app.network.TailscaleLoginFlow.State.Failed -> stringResource(
-                                if (l.reason == com.openminis.app.network.TailscaleLoginFlow.Reason.NO_BROWSER) R.string.network_login_no_browser
-                                else R.string.network_login_no_page,
+                                // Exhaustive over the reason enum: a new reason
+                                // fails compilation here instead of falling into
+                                // a wrong-advice else branch.
+                                when (l.reason) {
+                                    com.openminis.app.network.TailscaleLoginFlow.Reason.NO_BROWSER -> R.string.network_login_no_browser
+                                    com.openminis.app.network.TailscaleLoginFlow.Reason.LOGIN_TIMEOUT -> R.string.network_login_timeout
+                                    com.openminis.app.network.TailscaleLoginFlow.Reason.NO_SIGN_IN_PAGE -> R.string.network_login_no_page
+                                },
                             )
                             else -> null
                         },

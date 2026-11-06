@@ -22,6 +22,10 @@ class ProviderEditsTest {
         providerType = ProviderType.openAI,
         credentialType = ProviderCredential.apiKey,
         useResponsesAPI = responses,
+        // Fixed: the default is System.currentTimeMillis(), so two identical
+        // instances built across a millisecond boundary compared unequal and
+        // the "added provider is not an edit" assertion failed intermittently.
+        createdAt = 0L,
     )
 
     @Test

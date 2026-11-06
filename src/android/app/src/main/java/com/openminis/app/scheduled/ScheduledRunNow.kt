@@ -1,3 +1,5 @@
+// [port-upstream-1.16] Ported from OpenMinis/OpenMinis@main (com.openminis.app.scheduled
+// domain), adapted to this tree's task store and hold APIs; divergences marked.
 package com.openminis.app.scheduled
 
 import android.content.Context
@@ -29,7 +31,7 @@ object ScheduledRunNow {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val inFlight = HashSet<String>()
 
-    /** A "Run now" of [taskId] is being started (claimed, run not yet handed off). */
+    /** A "Run now" of [taskId] is being started (claim through run handoff). */
     fun isStarting(taskId: String): Boolean = synchronized(inFlight) { taskId in inFlight }
 
     /** Whether the menu offers "Run now": only while counting down to an unclaimed run. */
@@ -40,14 +42,30 @@ object ScheduledRunNow {
         taskId in ScheduledSessionHold.runningTaskIds.value.keys
 
     /**
-     * Start the pending run of [taskId] now. Returns false, silently, when it
-     * cannot: a start already in progress, a run already running, or nothing
-     * pending any more (fired by its alarm meanwhile, disabled, exhausted).
+     * Start the pending run of [taskId] now. Returns whether a start was
+     * handed off: false, silently, when it cannot even be attempted (a start
+     * already in progress, or a run already running - both decided without
+     * touching the store); true otherwise, with the claim's own outcome logged
+     * here rather than returned: nothing pending any more (fired by its alarm
+     * meanwhile, disabled, exhausted), or a claim / handoff failure.
+     *
+     * [FIX-R2-10, review §三 主线程 IO] The claim runs on this object's scope,
+     * not on the caller's thread: the UI click paths (ScheduledCountdownPill /
+     * SessionRunNowMenuItem) call this on Main, and the claim is a
+     * SharedPreferences `commit()` plus [ScheduledTaskManager]'s
+     * notification-channel init - both synchronous disk / system work that
+     * must not run there. The atomic claim itself (alarm vs "Run now") is
+     * unchanged, only deferred by the hop.
+     *
+     * [FIX-R2-9, review §三 异步与并发] [inFlight] is cleared in a `finally`,
+     * so a claim that throws (or any other unexpected failure) can no longer
+     * leave the task permanently "already starting" for the life of the
+     * process.
      */
     fun start(
         context: Context,
         taskId: String,
-        manager: ScheduledTaskManager = ScheduledTaskManager(context.applicationContext),
+        manager: ScheduledTaskManager? = null,
         now: Long = System.currentTimeMillis(),
     ): Boolean {
         synchronized(inFlight) {
@@ -56,28 +74,32 @@ object ScheduledRunNow {
                 return false
             }
         }
-        // Checked under the store lock, before this start counts as running.
-        val claimed = manager.claimRunNow(taskId, now, isRunning = ::isRunning)
-        if (claimed == null) {
-            synchronized(inFlight) { inFlight.remove(taskId) }
-            AppLogger.info(TAG, "task=$taskId not started: no pending run to take")
-            return false
-        }
-        // Held like the alarm holds it, so the chat reads "running" from here;
-        // run() keeps its own hold until the fire's loop ends.
-        ScheduledSessionHold.beginRun(taskId)
-        synchronized(inFlight) { inFlight.remove(taskId) }
         val app = context.applicationContext
         scope.launch {
             try {
-                ScheduledAgentRunner.run(app, claimed, waitForCompletion = false)
+                // Checked under the store lock, before this start counts as running.
+                // The manager (and its notification channel) is built here too, so
+                // no constructor work lands on the caller's thread either.
+                val claimed = (manager ?: ScheduledTaskManager(app)).claimRunNow(taskId, now, isRunning = ::isRunning)
+                if (claimed == null) {
+                    AppLogger.info(TAG, "task=$taskId not started: no pending run to take")
+                    return@launch
+                }
+                // Held like the alarm holds it, so the chat reads "running" from here;
+                // run() keeps its own hold until the fire's loop ends.
+                ScheduledSessionHold.beginRun(taskId)
+                AppLogger.info(TAG, "task=$taskId started now")
+                try {
+                    ScheduledAgentRunner.run(app, claimed, waitForCompletion = false)
+                } finally {
+                    ScheduledSessionHold.endRun(taskId)
+                }
             } catch (t: Throwable) {
                 AppLogger.error(TAG, "task=$taskId run now failed: ${t.message}")
             } finally {
-                ScheduledSessionHold.endRun(taskId)
+                synchronized(inFlight) { inFlight.remove(taskId) }
             }
         }
-        AppLogger.info(TAG, "task=$taskId started now")
         return true
     }
 }

@@ -83,11 +83,24 @@ object WebViewNetworkProxy {
      * For WebViewClient.onReceivedHttpAuthRequest: answers the local entry's
      * proxy challenge and returns true; false for any other site's auth
      * request, which the caller handles as before.
+     *
+     * [FIX-R2-8, review §三 WebView 407 / §6.2] Upstream accepts ANY loopback
+     * authority here (bare "127.0.0.1", "localhost", every "127.0.0.1:*"
+     * prefix). A local app can serve its own 407 with realm "Minis" on an
+     * arbitrary port and a remote page can reach it over a bypassed loopback
+     * fetch (loopback is never proxied), so the prefix match handed that
+     * server the entry's per-process password. Tighten the with-port case to
+     * the exact authority the proxy override points at ([applied], i.e.
+     * "127.0.0.1:$httpPort"); the bare-host accepts stay because Chromium
+     * delivers the entry's own proxy challenge as a bare host name, which no
+     * authority string can be distinguished from when the port is not
+     * reported - the page-loopback guard below remains the second gate.
      */
     fun answerAuth(handler: HttpAuthHandler, host: String?, realm: String?, pageUrl: String?): Boolean {
         val c = credentials ?: return false
         if (realm != REALM) return false
-        if (host != null && host != "127.0.0.1" && host != "localhost" && !host.startsWith("127.0.0.1:")) return false
+        val authority = applied
+        if (host != null && host != authority && host != "127.0.0.1" && host != "localhost") return false
         // Loopback pages bypass the proxy, so a challenge while one is shown
         // comes from a local server, not the entry: never hand it the password.
         val pageHost = pageUrl?.let { runCatching { android.net.Uri.parse(it).host }.getOrNull() }

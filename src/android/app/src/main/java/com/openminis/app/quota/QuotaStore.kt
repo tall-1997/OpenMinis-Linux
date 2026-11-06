@@ -714,11 +714,25 @@ object QuotaStore {
             val tmp = File(target.parentFile, "store.json.tmp")
             tmp.writeText(QuotaStoreFile.encode(file))
             if (!tmp.renameTo(target)) {
-                target.delete()
-                tmp.renameTo(target)
+                // [FIX-R2-15] Upstream's rescue deleted the target BEFORE the retry, so a
+                // second rename failure lost the last good store with it. Move the target
+                // aside to .broken, retry, delete the copy on success, restore it on
+                // failure; failures log concrete paths and state, not just a class name.
+                val broken = File(target.parentFile, target.name + ".broken")
+                broken.delete()
+                val movedAside = target.renameTo(broken)
+                val restored = tmp.renameTo(target)
+                if (movedAside && !restored && !broken.renameTo(target)) {
+                    AppLogger.error(TAG, "[Quota] persist: previous store stuck at ${broken.absolutePath}")
+                }
+                if (!restored) {
+                    AppLogger.error(TAG, "[Quota] persist failed: rename ${tmp.absolutePath} -> ${target.absolutePath} (tmpExists=${tmp.exists()} movedAside=$movedAside targetExists=${target.exists()}); in-memory cache kept")
+                } else if (movedAside) {
+                    broken.delete()
+                }
             }
         } catch (e: Exception) {
-            AppLogger.error(TAG, "[Quota] persist failed: ${e.javaClass.simpleName}")
+            AppLogger.error(TAG, "[Quota] persist failed: ${e.javaClass.simpleName}: ${e.message} (target ${target.absolutePath})")
         }
     }
 

@@ -91,12 +91,12 @@ internal fun StopButtonWithOptions(
         CircularProgressIndicator(
             modifier = Modifier.size(46.dp),
             strokeWidth = 2.dp,
-            color = Color(0xFFFF3B30),
+            color = ToolErrorColor,
         )
         Box(
             modifier = Modifier
                 .size(38.dp)
-                .background(Color(0xFFFF3B30), CircleShape)
+                .background(ToolErrorColor, CircleShape)
                 .clip(CircleShape)
                 .combinedClickable(
                     onClick = {

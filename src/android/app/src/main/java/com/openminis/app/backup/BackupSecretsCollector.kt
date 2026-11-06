@@ -20,7 +20,14 @@ import java.io.File
 internal object BackupSecretsCollector {
     private const val TAG = "Backup"
 
-    fun collect(context: Context, staging: File, categories: Set<BackupCategory>) {
+    /**
+     * Stages the credential values into `staging/secrets.json`.
+     *
+     * @return the number of credential entries staged (provider secrets +
+     * env vars + OAuth token bundles + proxy passwords), for callers that
+     * want to surface how many credentials a package carries.
+     */
+    fun collect(context: Context, staging: File, categories: Set<BackupCategory>): Int {
         val app = context.applicationContext as? com.openminis.app.MinisApp
 
         val providerSecrets =
@@ -51,9 +58,11 @@ internal object BackupSecretsCollector {
         val oauthSecrets =
             if (BackupCategory.PROVIDERS in categories) {
                 runCatching {
-                    com.openminis.app.util.EncryptedPrefsFactory
+                    // One open per file per process (the factory caches); open
+                    // once here and reuse it for both enumeration and reads.
+                    val prefs = com.openminis.app.util.EncryptedPrefsFactory
                         .safeCreate(context, "oauth_prefs")
-                        .all
+                    prefs.all
                         .mapNotNull { (key, value) ->
                             val id = key.removePrefix("oauth_tokens_")
                             val tokens = value as? String
@@ -61,9 +70,8 @@ internal object BackupSecretsCollector {
                             BackupSecrets.OauthSecret(
                                 instanceId = id,
                                 tokensJson = tokens,
-                                manualBearer = (com.openminis.app.util.EncryptedPrefsFactory
-                                    .safeCreate(context, "oauth_prefs")
-                                    .getString("oauth_manual_bearer_token_$id", null)),
+                                manualBearer = prefs
+                                    .getString("oauth_manual_bearer_token_$id", null),
                             )
                         }
                 }.getOrDefault(emptyList())
@@ -87,7 +95,7 @@ internal object BackupSecretsCollector {
 
         if (providerSecrets.isEmpty() && envSecrets.isEmpty() &&
             oauthSecrets.isEmpty() && proxyPasswords.isEmpty()
-        ) return
+        ) return 0
 
         val secrets = BackupSecrets(
             providers = providerSecrets,
@@ -103,5 +111,7 @@ internal object BackupSecretsCollector {
             "[Backup] package contains UNENCRYPTED credentials (stage 3a): " +
                 "providers=${providerSecrets.size} envVars=${envSecrets.size}"
         )
+        return providerSecrets.size + envSecrets.size +
+            oauthSecrets.size + proxyPasswords.size
     }
 }

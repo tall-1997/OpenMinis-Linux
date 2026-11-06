@@ -244,7 +244,13 @@ object NetworkHub {
                 httpPort = r.httpPort
                 password = r.password
             } catch (e: Exception) {
-                val msg = "Local entry: " + (e.message ?: e.javaClass.simpleName)
+                // [FIX-R2-5, review §三 敏感信息] Same redaction as the
+                // Tailscale branch above: review 6.2 found no credentials in
+                // the Go netConfigure error envelope today, but the message
+                // goes verbatim to the settings status row (and, once wired, a
+                // banner) - redact login-link-shaped content anyway so a future
+                // Go error cannot leak one.
+                val msg = "Local entry: " + TailscaleNode.redact(e.message ?: e.javaClass.simpleName)
                 failure = listOfNotNull(failure, msg).joinToString("; ")
                 AppLogger.error(TAG, "[Net][Entry] configure failed: $msg -> direct routes go direct, proxy / tailscale routes are blocked until it works")
             }
@@ -372,7 +378,12 @@ object NetworkHub {
             if (!listening) {
                 AppLogger.warning(TAG, "[Net][Entry] entry on ${_entryPort.value} is not listening -> proxy / tailscale routes blocked, direct routes direct, until it restarts")
                 NetworkRuntime.publish(NetworkRuntime.snapshot.copy(port = null, httpPort = null, password = "", entryDown = true))
-                applyNow(applyGeneration.incrementAndGet(), restartNode = false, authKey = null)
+                // [FIX-R2-4, review §三 verifyEntry 代号竞争] This used to inline
+                // applyGeneration.incrementAndGet() + applyNow, superseding any
+                // user apply that was queued (its result was then dropped at the
+                // generation check and _applying was left out of sync). Go
+                // through apply() so the restart queues like every other apply.
+                apply(restartNode = false)
             }
         }
     }

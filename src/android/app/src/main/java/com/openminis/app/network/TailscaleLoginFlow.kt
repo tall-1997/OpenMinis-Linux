@@ -75,6 +75,13 @@ class TailscaleLoginFlow(
         NO_SIGN_IN_PAGE,
         /** No app could open the URL. The copy-link fallback is offered. */
         NO_BROWSER,
+        /**
+         * The sign-in page opened but the user never completed authorization
+         * within [loginTimeoutMs]. Distinct from [NO_SIGN_IN_PAGE]: the page
+         * DID open, so the advice is "finish the sign-in (or retry)" rather
+         * than "check the connection".
+         */
+        LOGIN_TIMEOUT,
     }
 
     private val _state = MutableStateFlow<State>(State.Idle)
@@ -160,7 +167,16 @@ class TailscaleLoginFlow(
             }
             if (now() - started >= loginTimeoutMs) {
                 AppLogger.warning(TAG, "[Net][TS] login: timed out after ${loginTimeoutMs}ms in the browser")
-                _state.value = State.Idle
+                // [FIX-R2-7, review §三 失败处理] This used to drop back to Idle,
+                // so a sign-in that never completed was indistinguishable from
+                // no attempt: the user came back to nothing. Surface a Failed
+                // state instead - it survives [appShown] (that path only resets
+                // an InBrowser state) and the next begin() clears it. Own
+                // [Reason.LOGIN_TIMEOUT] branch (follow-up to the batch that
+                // had to reuse NO_SIGN_IN_PAGE's copy): the screen can now say
+                // "the page opened but the sign-in did not finish" instead of
+                // blaming the connection.
+                _state.value = State.Failed(Reason.LOGIN_TIMEOUT)
                 return
             }
         }

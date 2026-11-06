@@ -24,6 +24,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.openminis.app.R
+import com.openminis.app.ui.theme.IosRed
 import com.openminis.app.ui.theme.decorLinearSweep
 import com.openminis.app.ui.theme.monetIconTint
 import kotlin.math.PI
@@ -288,7 +289,7 @@ internal fun UnreadDot(modifier: Modifier = Modifier) {
             style = Stroke(width = ringWidth),
         )
         drawCircle(
-            color = Color(0xFFFF3B30),
+            color = IosRed,
             radius = size.minDimension / 2f - ringWidth,
         )
     }

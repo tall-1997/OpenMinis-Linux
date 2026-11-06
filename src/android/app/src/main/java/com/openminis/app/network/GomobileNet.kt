@@ -1,3 +1,8 @@
+// [port-upstream-1.16] Project-local reflection shim, not present upstream in this form:
+// upstream's TailscaleNode/NetworkHub call the gomobile binding
+// (com.openminis.rclone.gomobile.Gomobile) directly; this tree routes the same entry-point
+// names and envelopes through reflection so a binding built without the network core
+// compiles and degrades at runtime instead of breaking the build (see the KDoc below).
 package com.openminis.app.network
 
 import com.openminis.app.logging.AppLogger

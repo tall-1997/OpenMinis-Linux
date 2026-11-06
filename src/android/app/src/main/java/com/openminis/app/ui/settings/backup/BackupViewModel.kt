@@ -226,8 +226,8 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
     fun clearError() { _errorText.value = null }
 
     /**
-     * Run an export. Credentials are an explicit user choice and are never
-     * emitted into an unencrypted package.
+     * Run an export. An unencrypted package carries the credentials in
+     * plaintext (disclosed by the backup_encrypt_footer_off_creds footer).
      */
     fun startExport(passphrase: String?) {
         if (_isRunning.value) return
@@ -246,9 +246,9 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
                 .getString(com.openminis.app.R.string.backup_err_passphrase_required)
             return
         }
-        // Encryption is a user choice. Credentials are still opt-in and the
-        // unencrypted export warning is shown by the backup screen/exporter;
-        // do not turn that warning into a forced encryption policy.
+        // Encryption is a user choice. Credentials are always included, and
+        // the unencrypted-package risk is disclosed by the backup screen's
+        // footer; do not turn that warning into a forced encryption policy.
         _isRunning.value = true
         _lastResult.value = null
         _statusText.value = getApplication<Application>()

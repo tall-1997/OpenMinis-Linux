@@ -1,5 +1,7 @@
 package com.openminis.app.ui.chat
 
+// [port-upstream-1.16] Ported from OpenMinis 1.16-beta (verbatim).
+
 /**
  * [T-android-thinking-row-follows-run] The "… is thinking" row must not
  * outlive the run.
