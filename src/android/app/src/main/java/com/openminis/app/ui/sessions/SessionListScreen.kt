@@ -173,6 +173,8 @@ import com.openminis.app.ui.theme.m3Icon
 import com.openminis.app.ui.theme.monetIconTint
 import com.openminis.app.data.repository.ChatRepository
 import com.openminis.app.data.repository.ProviderRepository
+import com.openminis.app.data.repository.sessionListEntryRevealed
+import com.openminis.app.data.repository.sessionListStallSpinner
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -495,6 +497,8 @@ fun SessionListScreen(
         }
     }
     val isInitialLoadComplete by viewModel.isInitialLoadComplete.collectAsStateWithLifecycle()
+    // [T-android-sessionlist-snapshot-restore] painted from last run's cache.
+    val isSnapshotRestored by viewModel.isSnapshotRestored.collectAsStateWithLifecycle()
     val isSearchActive by viewModel.isSearchActive.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val isSearching by viewModel.isSearching.collectAsStateWithLifecycle()
@@ -788,19 +792,15 @@ fun SessionListScreen(
                 .fillMaxSize()
                 .padding(padding),
         ) {
-            // Main content — empty frame until the first DB emission lands
-            // (otherwise `sessions.isEmpty()` reads true for the brief window
-            // before Room delivers and onboarding flashes over user history).
-            // [T-android-sessionlist-prefs-io] 3s timeout fallback: a first
-            // emission that never arrives (VM-constructor stall, hung query)
-            // shows the recovering label instead of permanent black.
+            // Main content. `sessions.isEmpty()` reads true for the brief window
+            // before Room delivers — [T-android-sessionlist-snapshot-restore] snapshot reveals it.
             var loadTimedOut by remember { mutableStateOf(false) }
             LaunchedEffect(Unit) {
                 delay(3_000L)
                 if (!isInitialLoadComplete) loadTimedOut = true
             }
-            if (isInitialLoadComplete || loadTimedOut) Column(modifier = Modifier.fillMaxSize()) {
-                if (!isInitialLoadComplete) {
+            if (sessionListEntryRevealed(isInitialLoadComplete, loadTimedOut, isSnapshotRestored)) Column(modifier = Modifier.fillMaxSize()) {
+                if (sessionListStallSpinner(isInitialLoadComplete, isSnapshotRestored, sessions.isNotEmpty())) {
                     // Transient stall fallback — spin while we wait for the
                     // Room emission. Not a permanent state.
                     Box(

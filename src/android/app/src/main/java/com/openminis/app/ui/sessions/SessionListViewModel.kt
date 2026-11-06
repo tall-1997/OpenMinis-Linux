@@ -136,6 +136,15 @@ class SessionListViewModel(
     private val _isInitialLoadComplete = MutableStateFlow(false)
     val isInitialLoadComplete: StateFlow<Boolean> = _isInitialLoadComplete.asStateFlow()
 
+    /**
+     * [T-android-sessionlist-snapshot-restore] True once the previous run's
+     * snapshot is painted; independent of [isInitialLoadComplete]. Render gate reads it.
+     */
+    private val _isSnapshotRestored = MutableStateFlow(false)
+    val isSnapshotRestored: StateFlow<Boolean> = _isSnapshotRestored.asStateFlow()
+
+    private var dbEmissionLanded = false
+
     // Search
     val searchQuery = MutableStateFlow("")
     val isSearchActive = MutableStateFlow(false)
@@ -212,19 +221,30 @@ class SessionListViewModel(
      * performs the first touch on IO, after which every main-thread access
      * returns the cached instance.
      */
-    private val uiPrefs by lazy { context.getSharedPreferences("session_list_ui", Context.MODE_PRIVATE) }
+    internal val uiPrefs by lazy { context.getSharedPreferences("session_list_ui", Context.MODE_PRIVATE) }
     val collapsedFolderIds = MutableStateFlow<Set<String>>(emptySet())
 
-    private fun loadCollapsedFolderIds() {
-        viewModelScope.launch(Dispatchers.IO) {
-            val ids = uiPrefs.getStringSet("collapsedFolderIds", emptySet())?.toSet() ?: emptySet()
-            collapsedFolderIds.value = ids
+    /**
+     * [T-android-sessionlist-snapshot-restore] Paint the previous run's list
+     * before the first Room emission lands; read on IO, decide+assign on main
+     * so the snapshot never overwrites fresher DB data.
+     */
+    private fun restoreSessionListSnapshot() {
+        viewModelScope.launch {
+            val snapshot = withContext(Dispatchers.IO) {
+                SessionListSnapshotCache.readSnapshot(context.applicationContext)
+            }
+            val decision = snapshotRestoreDecision(dbEmissionLanded, snapshot)
+            if (decision == SnapshotRestoreDecision.RESTORE) {
+                val payload = snapshot ?: error("RESTORE decision without a snapshot")
+                _allSessions.value = payload.sessions.map { it.toEntity() }
+                folders.value = payload.folders.map { it.toEntity() }
+                _isSnapshotRestored.value = true
+                Log.d(TAG, "snapshot restored: ${payload.sessions.size} sessions")
+            } else {
+                Log.d(TAG, "snapshot restore skipped: $decision")
+            }
         }
-    }
-
-    private fun setCollapsedFolders(ids: Set<String>) {
-        collapsedFolderIds.value = ids
-        uiPrefs.edit().putStringSet("collapsedFolderIds", ids).apply()
     }
 
     /**
@@ -317,11 +337,9 @@ class SessionListViewModel(
     private var newTopBaselineSeeded = false
 
     init {
-        // [T-android-sessionlist-prefs-io] Kick the collapsed-folder prefs load
-        // on IO. Deliberately OUTSIDE the safe-mode await below — folder
-        // collapse state has nothing to do with the crash gate and must not
-        // wait for the user to dismiss the share dialog.
+        // [T-android-sessionlist-prefs-io] prefs load runs IO, outside the safe-mode await.
         loadCollapsedFolderIds()
+        restoreSessionListSnapshot()
         // T-android-crash-safe-mode-v2: gate the cold-start session list
         // observer behind the safe-mode flag. The Room observable issues a
         // full SELECT on first collect; if a malformed row was contributing
@@ -350,14 +368,19 @@ class SessionListViewModel(
             }
             chatRepository.observeSessions().collect {
                 _allSessions.value = it
+                dbEmissionLanded = true
                 if (!_isInitialLoadComplete.value) _isInitialLoadComplete.value = true
                 detectNewTopSession(it)
+                SessionListSnapshotCache.writeAsync(context.applicationContext, it, folders.value)
             }
         }
         // [T-android-session-grouping] Started alongside the session collector,
         // not after it — see `folders` for why ordering matters on first paint.
         viewModelScope.launch {
-            chatRepository.observeFolders().collect { folders.value = it }
+            chatRepository.observeFolders().collect {
+                folders.value = it
+                SessionListSnapshotCache.writeAsync(context.applicationContext, _allSessions.value, it)
+            }
         }
         viewModelScope.launch {
             combine(searchQuery, isSearchActive) { q, active -> q to active }
@@ -374,10 +397,8 @@ class SessionListViewModel(
                     if (active && q.isNotBlank()) {
                         val results = chatRepository.searchSessions(q)
                         searchResults.value = results
-                        // Compute per-session content snippets off the main
-                        // thread. Sessions whose title already matches don't
-                        // need a snippet — we only walk messages when the
-                        // title doesn't contain the query.
+                        // Content snippets off-main; rows whose title
+                        // already matches don't need one.
                         val snips = withContext(Dispatchers.IO) {
                             buildContentHits(results, q)
                         }
@@ -1156,30 +1177,17 @@ class SessionListViewModel(
     fun hasProviders(): Boolean = providerRepository.instances.isNotEmpty()
 
     /**
-     * [T-android-search-jump] Snippet + message anchor for every session
-     * whose title does NOT contain [query] (case-insensitive): scan its
-     * messages to find the first hit in extracted text content and build a
-     * ~100-char snippet around it. Sessions with no content hit are omitted
-     * — the row falls back to its existing lastMessage preview.
-     *
-     * The matched row's id rides along as the anchor: `firstSnippetPerSession`
-     * already selects it, so the anchor costs nothing here and saves ChatScreen
-     * a re-query when the tap lands.
-     *
-     * Runs on Dispatchers.IO; caller is responsible for thread switching.
+     * [T-android-search-jump] Snippet + anchor pipeline; pure row→map steps
+     * live in SessionListSearchExt.kt. This wrapper narrows the entity and
+     * performs the DAO query. Runs on Dispatchers.IO; caller switches.
      */
-    internal data class ContentHits(
-        val snippets: Map<String, String>,
-        val anchors: Map<String, String>,
-    )
-
     private suspend fun buildContentHits(
         sessions: List<ChatSessionEntity>,
         query: String,
     ): ContentHits {
         if (query.isBlank() || sessions.isEmpty()) return ContentHits(emptyMap(), emptyMap())
         val q = query.lowercase()
-        val needingSnippet = sessions.filterNot { it.title.orEmpty().lowercase().contains(q) }
+        val needingSnippet = pruneSessionsNeedingSnippet(sessions.map { SessionSearchRow(it.id, it.title) }, q)
         if (needingSnippet.isEmpty()) return ContentHits(emptyMap(), emptyMap())
         val rows = chatRepository.searchDao().firstSnippetPerSession(
             sessionIds = needingSnippet.map { it.id },
@@ -1187,14 +1195,6 @@ class SessionListViewModel(
             radius = 50,
             windowChars = query.length + 100,
         )
-        val snippets = HashMap<String, String>(rows.size)
-        val anchors = HashMap<String, String>(rows.size)
-        for (row in rows) {
-            val body = row.headText.replace('\n', ' ').replace('\r', ' ')
-            if (body.isBlank()) continue
-            snippets[row.sessionId] = "…$body…"
-            if (row.id.isNotBlank()) anchors[row.sessionId] = row.id
-        }
-        return ContentHits(snippets, anchors)
+        return buildSnippetMaps(rows.map { SessionSnippetRow(it.id, it.sessionId, it.headText) })
     }
 }
