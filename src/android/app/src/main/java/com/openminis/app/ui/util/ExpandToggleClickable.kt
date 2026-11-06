@@ -1,4 +1,4 @@
-﻿package com.openminis.app.ui.util
+package com.openminis.app.ui.util
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource

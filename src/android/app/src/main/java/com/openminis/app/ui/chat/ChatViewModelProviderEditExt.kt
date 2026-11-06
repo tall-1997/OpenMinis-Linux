@@ -51,12 +51,34 @@ internal fun ChatViewModel.rebuildProviderIfEdited() {
     val entry = providerRepository.config.value.modelEntries.find { it.id == entryId } ?: return
     val id = entry.providerInstanceId
     if (id !in pendingProviderEdits) return
-    pendingProviderEdits = pendingProviderEdits - id
-    val instance = providerRepository.instance(id) ?: return
-    if (!providerRepository.hasAnyCredential(instance)) return
+    // [FIX-R2-13, review §三 逻辑] The pending edit is consumed only where the
+    // outcome is known; it used to be dropped up front, so a deleted instance
+    // or a missing credential left the chat on the OLD endpoint (with the edit
+    // silently gone) until the session was switched.
+    val instance = providerRepository.instance(id)
+    if (instance == null) {
+        // The instance is gone - nothing exists to rebuild (review 6.2: not
+        // even a ProviderFactory re-resolution has anything to resolve), and
+        // keeping the id would retry every turn. Drop it with a warning; a
+        // credential saved later re-queues the id via ProviderCredentialEdits,
+        // and a re-added instance arrives with a new config snapshot anyway.
+        pendingProviderEdits = pendingProviderEdits - id
+        AppLogger.warning(
+            ChatViewModel.TAG,
+            "[provider-edit] instance ${id.take(8)} no longer exists; dropping pending edit (chat keeps the previous provider)",
+        )
+        return
+    }
+    if (!providerRepository.hasAnyCredential(instance)) {
+        // Edit stays pending: the next saved credential re-triggers the
+        // rebuild on the next turn, config change or not. Cheap set lookups
+        // meanwhile; no warning, this is an expected in-between state.
+        return
+    }
     val apiKey = providerRepository.usableApiKey(instance) ?: ""
     currentProvider = ProviderFactory.create(instance, apiKey, currentModel ?: entry.model, context)
     _providerName.value = instance.label.ifEmpty { entry.model.provider }
+    pendingProviderEdits = pendingProviderEdits - id
     AppLogger.info(
         ChatViewModel.TAG,
         "[provider-edit] rebuilt provider for edited instance ${id.take(8)} (responses=${instance.useResponsesAPI})",

@@ -1,5 +1,7 @@
 package com.openminis.app.provider.voice
 
+// [port-upstream-1.16] Ported from OpenMinis 1.16-beta (verbatim).
+
 import org.json.JSONArray
 import org.json.JSONObject
 import java.nio.ByteBuffer

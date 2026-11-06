@@ -45,12 +45,29 @@ object NetworkHttp {
         val t = tag ?: DEFAULT_TAG
         val snap = NetworkRuntime.snapshot
         val ep = snap.endpoint(t) ?: return base
-        val httpPort = ep.httpPort ?: return base
+        val routeDirect = snap.route(t) == NetworkRoute.Direct
+        // [FIX-R2-1, review 2.4] Upstream returns `base` (direct) here whenever
+        // the entry's HTTP front is not listening (`ep.httpPort ?: return base`,
+        // upstream NetworkHttp.kt:48) - an intentional upstream tradeoff: the
+        // whole-entry-down state is already fail-closed through endpoint()'s
+        // entryDown branch, and for what is left it accepts the pre-module
+        // direct behaviour instead of failing requests. This port tightens the
+        // remaining gap, because returning base here lets proxy / Tailscale-
+        // routed requests leave from the device's own address in the partial
+        // state (SOCKS port bound, HTTP front's ephemeral bind failed,
+        // entryDown=false) - the exact silent fail-open [FIX-261025-11] closed
+        // for a dead entry, and it can persist for a whole background FGS
+        // session (the 30 s health check runs only in front). Fail closed
+        // instead: a non-direct route gets the BLOCKED selector (loopback :1 -
+        // refused at once, never a hang, and the EntrySelector probe restarts
+        // the entry), while a direct route keeps the pre-module direct
+        // behaviour, same as [EntrySelector.fallbackDirect].
+        val httpPort = ep.httpPort ?: if (routeDirect) return base else NetworkRuntime.BLOCKED_PORT
         synchronized(cache) {
             val perBase = cache.getOrPut(base) { HashMap() }
             perBase[t]?.let { if (it.generation == snap.generation) return it.client }
             val derived = base.newBuilder()
-                .proxySelector(EntrySelector(httpPort, fallbackDirect = snap.route(t) == NetworkRoute.Direct))
+                .proxySelector(EntrySelector(httpPort, fallbackDirect = routeDirect))
                 .proxyAuthenticator(entryAuthenticator(t, ep.password))
                 .build()
             perBase[t] = Derived(snap.generation, derived)
@@ -157,9 +174,15 @@ object NetworkHttp {
         private fun entry(): EntrySelector? {
             val snap = NetworkRuntime.snapshot
             val ep = snap.endpoint(tag) ?: return null
-            val httpPort = ep.httpPort ?: return null
+            val routeDirect = snap.route(tag) == NetworkRoute.Direct
+            // [FIX-R2-1, review 2.4] Same predicate as [client] (upstream falls
+            // back to the base selector - direct or system proxy - when the
+            // entry's HTTP front is not listening): a non-direct route fails
+            // closed through the BLOCKED selector instead of silently bypassing
+            // the user's proxy / exit node.
+            val httpPort = ep.httpPort ?: if (routeDirect) return null else NetworkRuntime.BLOCKED_PORT
             current?.let { (gen, sel) -> if (gen == snap.generation) return sel }
-            return EntrySelector(httpPort, fallbackDirect = snap.route(tag) == NetworkRoute.Direct)
+            return EntrySelector(httpPort, fallbackDirect = routeDirect)
                 .also { current = snap.generation to it }
         }
 

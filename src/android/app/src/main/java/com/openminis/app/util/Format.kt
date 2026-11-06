@@ -30,8 +30,13 @@ object Format {
         else -> "${seconds}s"
     }
 
-    /** Media position/duration clock: `"0:00"` / `"3:05"` / `"12:59"`. */
+    /**
+     * Media position/duration clock: `"0:00"` / `"3:05"` / `"12:59"`.
+     * Non-positive input clamps to `"0:00"` — a zero/negative position or a
+     * not-yet-reported duration renders as the clock start, never `"0:-2"`.
+     */
     fun formatMediaClock(ms: Int): String {
+        if (ms <= 0) return "0:00"
         val totalSec = ms / 1000
         val min = totalSec / 60
         val sec = totalSec % 60

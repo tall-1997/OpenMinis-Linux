@@ -5160,8 +5160,6 @@ class ChatViewModel(
         streamSession.updateAssistantMessage(id, content, isStreaming, toolBlocks, isAwaitingModelResponse)
     }
 
-    internal fun effectiveContent(id: String): String? = streamSession.effectiveContent(id)
-
     internal fun flushStreamingDelta(id: String) = streamSession.flushStreamingDelta(id)
 
     internal fun flushAllStreamingDeltas() = streamSession.flushAllStreamingDeltas()

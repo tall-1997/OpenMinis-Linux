@@ -395,15 +395,29 @@ internal class StreamSessionController(
     }
 
     /**
-     * Read a message's content + toolBlocks honoring any active streaming
-     * delta. Use this from non-render code that needs the "current" view of
-     * a message during a live turn (e.g. agent history builders, persistence
-     * snapshots) without forcing the render layer to consult the delta map.
+     * The freshest known delta for [id]: the parked [StreamFlushState
+     * .pendingContent] when one exists, else the last PUBLISHED side-channel
+     * delta. pendingContent is updated on EVERY suppressed tick — a throttled
+     * trailing publish AND every tick parked by the [publishPaused] gate,
+     * which never touches the side channel at all — so whenever it is set it
+     * is at least as fresh as the published delta. The length comparison only
+     * guards a pathological mid-turn content shrink, where the published
+     * (longer) value stays the safer flush.
      */
-    fun effectiveContent(id: String): String? {
-        val delta = streamingById.value[id]
-        if (delta != null) return delta.content
-        return messages.value.firstOrNull { it.id == id }?.content
+    private fun freshestDeltaFor(id: String): StreamingDelta? {
+        val st = streamFlushStates[id]
+        val pending = st?.pendingContent
+        if (st != null && pending != null) {
+            val published = streamingById.value[id]
+            if (published == null || pending.length >= published.content.length) {
+                return StreamingDelta(
+                    content = pending,
+                    toolBlocks = snapshotAssistantBlocks(st.pendingBlocks),
+                    isAwaitingModelResponse = st.pendingAwaiting,
+                )
+            }
+        }
+        return streamingById.value[id]
     }
 
     /**
@@ -412,9 +426,19 @@ internal class StreamSessionController(
      * exit paths (cancel / error / retry / resume / clearChat) so the
      * canonical message reflects all accumulated content even if the last
      * [updateAssistantMessage] call had isStreaming=true.
+     *
+     * [review 2.1 background-pause-gate] The flushed delta prefers the parked
+     * pendingContent over the published side-channel entry: while the
+     * background gate holds, fresh content ONLY accumulates in pendingContent
+     * (publish() parks without touching [_streamingById]), so flushing the
+     * published value wrote pre-pause text back into the bubble and
+     * clearStreamFlushState then dropped everything streamed since — the
+     * stopped bubble visibly regressed. The same preference covers the
+     * foreground window where the last delta sits unpublished in a trailing
+     * job at stop time.
      */
     fun flushStreamingDelta(id: String) {
-        val delta = streamingById.value[id] ?: return
+        val delta = freshestDeltaFor(id) ?: return
         val current = messages.value
         val idx = current.indexOfLast { it.id == id }
         if (idx >= 0) {
@@ -438,12 +462,21 @@ internal class StreamSessionController(
 
     /** Drain ALL outstanding streaming deltas (called on global resets). */
     fun flushAllStreamingDeltas() {
+        // Snapshot the freshest delta per id BEFORE clearing the flush
+        // states: clearAllStreamFlushStates drops pendingContent, and a
+        // delta parked by the background gate or a trailing job at this
+        // moment is the freshest content the turn produced (same rationale
+        // as [flushStreamingDelta]). streamFlushStates keys are included so
+        // a stream that started under the pause gate — never published to
+        // the side channel at all — still drains into the canonical list.
+        val freshest = (streamingById.value.keys + streamFlushStates.keys)
+            .associateWith { freshestDeltaFor(it) }
         clearAllStreamFlushStates()
-        val pending = streamingById.value
-        if (pending.isEmpty()) return
+        if (freshest.isEmpty()) return
         val current = messages.value.toMutableList()
         var changed = false
-        for ((id, delta) in pending) {
+        for ((id, delta) in freshest) {
+            if (delta == null) continue
             val idx = current.indexOfLast { it.id == id }
             if (idx < 0) continue
             current[idx] = current[idx].copy(

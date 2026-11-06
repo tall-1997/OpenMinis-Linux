@@ -23,12 +23,7 @@ object Digest {
     fun sha256Hex(input: String): String = sha256Hex(input.toByteArray(Charsets.UTF_8))
 
     /** SHA-256 of [bytes], as lowercase hex. */
-    fun sha256Hex(bytes: ByteArray): String {
-        val digest = MessageDigest.getInstance("SHA-256").digest(bytes)
-        val sb = StringBuilder(digest.size * 2)
-        for (b in digest) sb.append("%02x".format(b))
-        return sb.toString()
-    }
+    fun sha256Hex(bytes: ByteArray): String = toHex(MessageDigest.getInstance("SHA-256").digest(bytes))
 
     /**
      * Streaming SHA-256 of [input] (read to EOF; the stream is NOT closed),
@@ -42,7 +37,11 @@ object Digest {
             if (n <= 0) break
             md.update(buf, 0, n)
         }
-        val digest = md.digest()
+        return toHex(md.digest())
+    }
+
+    /** Lowercase hex rendering of a message digest (two chars per byte). */
+    private fun toHex(digest: ByteArray): String {
         val sb = StringBuilder(digest.size * 2)
         for (b in digest) sb.append("%02x".format(b))
         return sb.toString()

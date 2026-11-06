@@ -35,7 +35,6 @@ import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.IconButton
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PlayCircleFilled
@@ -43,7 +42,6 @@ import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.outlined.BrokenImage
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -68,7 +66,9 @@ import coil.compose.AsyncImagePainter
 import coil.compose.SubcomposeAsyncImage
 import coil.compose.SubcomposeAsyncImageContent
 import coil.request.ImageRequest
+import com.openminis.app.logging.AppLogger
 import com.openminis.app.ui.DisplayBitmapLimits.limitDisplaySize
+import com.openminis.app.util.Format
 import com.openminis.app.ui.theme.LocalChatPalette
 import com.openminis.app.ui.theme.ChatColors
 // [T-android-markdown-no-chat-dep] (#15) The two symbols below are the ONLY
@@ -270,7 +270,7 @@ internal fun MinisVideoBlock(block: MarkdownParser.Block.Video) {
                 val bmp = retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
                 bmp
             } catch (t: Throwable) {
-                android.util.Log.w("MdMedia", "video thumbnail failed: ${t.message}")
+                AppLogger.warning("MdMedia", "video thumbnail failed: ${t.message}")
                 null
             } finally {
                 try { retriever.release() } catch (_: Throwable) {}
@@ -336,6 +336,13 @@ internal fun MinisVideoBlock(block: MarkdownParser.Block.Video) {
 
 // -- Audio block (inline play/pause + progress) --
 
+/**
+ * [review P2 hardcoded] Position-poll cadence while audio plays: 5 fps is
+ * smooth enough for a progress bar and cheap enough for a per-tick
+ * `currentPosition` binder call.
+ */
+private const val PLAYBACK_POSITION_POLL_MS = 200L
+
 @Composable
 internal fun MinisAudioBlock(block: MarkdownParser.Block.Audio) {
     val context = LocalContext.current
@@ -366,7 +373,7 @@ internal fun MinisAudioBlock(block: MarkdownParser.Block.Audio) {
                 prepared = true
             }
             setOnErrorListener { _, what, extra ->
-                android.util.Log.w("MdMedia", "audio error what=$what extra=$extra")
+                AppLogger.warning("MdMedia", "audio error what=$what extra=$extra")
                 prepared = false
                 true
             }
@@ -383,7 +390,7 @@ internal fun MinisAudioBlock(block: MarkdownParser.Block.Audio) {
         while (isPlaying && player != null) {
             positionMs = try { player.currentPosition } catch (_: Throwable) { 0 }
             if (!player.isPlaying) { isPlaying = false; break }
-            delay(200)
+            delay(PLAYBACK_POSITION_POLL_MS)
         }
     }
     DisposableEffect(player) {
@@ -455,7 +462,7 @@ internal fun MinisAudioBlock(block: MarkdownParser.Block.Audio) {
             )
             if (durationMs > 0) {
                 Text(
-                    text = "${formatMs(positionMs)} / ${formatMs(durationMs)}",
+                    text = "${Format.formatMediaClock(positionMs)} / ${Format.formatMediaClock(durationMs)}",
                     style = MaterialTheme.typography.labelSmall,
                     color = subtle,
                     modifier = Modifier.padding(top = 2.dp),
@@ -469,12 +476,4 @@ internal fun MinisAudioBlock(block: MarkdownParser.Block.Audio) {
             modifier = Modifier.width(28.dp).height(28.dp),
         )
     }
-}
-
-private fun formatMs(ms: Int): String {
-    if (ms <= 0) return "0:00"
-    val totalSec = ms / 1000
-    val m = totalSec / 60
-    val s = totalSec % 60
-    return "%d:%02d".format(m, s)
 }

@@ -160,7 +160,18 @@ class TailscaleLoginFlow(
             }
             if (now() - started >= loginTimeoutMs) {
                 AppLogger.warning(TAG, "[Net][TS] login: timed out after ${loginTimeoutMs}ms in the browser")
-                _state.value = State.Idle
+                // [FIX-R2-7, review §三 失败处理] This used to drop back to Idle,
+                // so a sign-in that never completed was indistinguishable from
+                // no attempt: the user came back to nothing. Surface a Failed
+                // state instead - it survives [appShown] (that path only resets
+                // an InBrowser state) and the next begin() clears it. The copy
+                // reuses Reason.NO_SIGN_IN_PAGE's string resource ("did not
+                // return a sign-in page - check the connection and try
+                // again"), whose advice is what a timeout amounts to; a
+                // dedicated tailscale_login_timeout string would need a new
+                // reason branch in NetworkSettingsScreen's mapping, which is
+                // outside this fix batch's file set.
+                _state.value = State.Failed(Reason.NO_SIGN_IN_PAGE)
                 return
             }
         }

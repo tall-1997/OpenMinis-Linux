@@ -102,8 +102,14 @@ internal fun ChatViewModel.withGoalAndPlanContext(
  * Null before the first report, so a chat that has not used the tool pays nothing
  * for it.
  */
-internal fun ChatViewModel.workReportPrompt(): String? =
+internal fun ChatViewModel.workReportPrompt(): String? = runCatching {
+    // [review 2.3 corrupt-report] stagePrompt re-loads report.json and THROWS
+    // on a corrupt file ("... delete it to reset") — unwrapped, that IOException
+    // would brick EVERY request assembly for the session with no self-heal.
+    // Same policy as [planBoardPrompt] above: the prompt path degrades to no
+    // block instead of failing the turn; the tool surfaces the corruption.
     com.openminis.app.tools.AgentReportStore.stagePrompt(activeSessionId, context)
+}.getOrNull()
 
 /**
  * [T-lane-awareness] Lanes that are still working, rendered from the registry.

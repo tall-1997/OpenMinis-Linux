@@ -91,7 +91,12 @@ internal data class LiveStatus(
         if (text.length <= max) text else text.take(max - 1).trimEnd() + "…"
 
     companion object {
-        /** Android shows a chip's text whole up to about seven characters. */
+        /**
+         * Chip text budget. Android truncates a chip around seven CJK-wide
+         * glyphs, so the cap is measured in latin width: 12 narrow latin
+         * characters occupy roughly the same run of seven full-width CJK
+         * glyphs, keeping mixed-language headlines on one line.
+         */
         const val CHIP_MAX = 12
 
         /** Big-island headline budget; the 模板库's "≤4 CJK" in latin width. */

@@ -1,4 +1,8 @@
-// [port-upstream-1.16] Ported from OpenMinis/OpenMinis@main (com.openminis.app.network domain), kept verbatim unless marked otherwise.
+// [port-upstream-1.16] Ported from OpenMinis/OpenMinis@main (com.openminis.app.network domain),
+// kept verbatim unless marked otherwise. Deliberate divergences (this project, review R2):
+// xnetForwardingEnabled gates the whole feature off until --xnet is wired into PRootArgv
+// (upstream wires prootArgs into its four shell builders), and prootSupportsXnet waits with
+// a timeout before reading output. Both are marked [FIX-R2-2]/[FIX-R2-3] inline.
 package com.openminis.app.network
 
 import android.content.Context
@@ -72,9 +76,35 @@ object ShellTransparentNet {
 
     fun offReason(): String? = lastOffReason
 
+    /**
+     * [FIX-R2-3, review 2.6] Master switch for the whole xnet feature. Upstream
+     * 1.16 wires [prootArgs] into every shell builder (PRootKernel :771,
+     * FreshProcessShell :279, TerminalSession :494, PersistentShell :264, and
+     * asserts so in its ShellTransparentNetTest), so its routes file, Go
+     * listener and network callbacks all have a consumer. This port did not
+     * carry that wiring over - the shell argv here is assembled by the single
+     * sandbox/PRootArgv `commonArgv` builder, which does not append
+     * `--xnet=` yet - so nothing consumes `--xnet` and everything below was
+     * pure overhead: a daemon thread recomputing the routes file on every
+     * runtime publish / network change / health check, plus a resident Go
+     * listener. Off until the wiring lands; to enable, append
+     * `ShellTransparentNet.prootArgs(...)` (or its result) in
+     * PRootArgv.commonArgv and flip this flag. See the review R2 item 3.
+     */
+    @Volatile
+    var xnetForwardingEnabled: Boolean = false
+
     /** Called from NetworkHub.init: removes what an earlier process left behind. */
     fun init(context: Context) {
         if (routesPath != null) return
+        // [FIX-R2-3] Until proot --xnet is wired into the shell argv builder,
+        // register nothing and start nothing - the routes file would name a
+        // feature no proot command uses. offReason() reports why, so the
+        // diagnostics page says this instead of a bare "forwarding is off".
+        if (!xnetForwardingEnabled) {
+            lastOffReason = "proot --xnet is not wired into the shell argv builder yet (see xnetForwardingEnabled)"
+            return
+        }
         val dir = File(context.filesDir, "net").apply { mkdirs() }
         routesFile = File(dir, "xnet.routes")
         mapDir = File(dir, "xnet-map")
@@ -284,21 +314,38 @@ object ShellTransparentNet {
 
     @Volatile
     private var prootSupport: Boolean? = null
+    /** [FIX-R2-2] First-call mutex: two shell builds racing must probe once, not twice. */
+    private val prootSupportLock = Any()
 
     /**
      * Whether the proot binary knows `--xnet` (a build with an older proot
      * would reject the option and every shell command with it). Asked once.
+     *
+     * [FIX-R2-2, review §三] Upstream reads the process output to EOF and only
+     * then waits with a timeout - a proot that starts and hangs (no tty, a
+     * wedged exec) makes [readText] block forever on the calling thread, and
+     * the `waitFor` timeout never gets a chance to fire. Wait with the timeout
+     * FIRST and destroy the process on it, then read whatever was printed;
+     * double-checked under a lock so concurrent first callers share one probe.
      */
     fun prootSupportsXnet(proot: File): Boolean {
         prootSupport?.let { return it }
-        val ok = runCatching {
-            val p = ProcessBuilder(proot.absolutePath, "--help").redirectErrorStream(true).start()
-            val text = p.inputStream.bufferedReader().readText()
-            p.waitFor(3, TimeUnit.SECONDS)
-            text.contains("--xnet")
-        }.getOrDefault(false)
-        prootSupport = ok
-        AppLogger.info(TAG, "[Net][Xparent] proot ${if (ok) "supports" else "does NOT support"} --xnet")
-        return ok
+        synchronized(prootSupportLock) {
+            prootSupport?.let { return it }
+            val ok = runCatching {
+                val p = ProcessBuilder(proot.absolutePath, "--help").redirectErrorStream(true).start()
+                // Wait first: if proot never exits, we must not block on its
+                // stdout - kill it and treat "no answer" as "does not know it".
+                if (!p.waitFor(3, TimeUnit.SECONDS)) {
+                    p.destroy()
+                    AppLogger.warning(TAG, "[Net][Xparent] proot --help did not exit within 3s; assuming no --xnet")
+                    return false
+                }
+                p.inputStream.bufferedReader().readText().contains("--xnet")
+            }.getOrDefault(false)
+            prootSupport = ok
+            AppLogger.info(TAG, "[Net][Xparent] proot ${if (ok) "supports" else "does NOT support"} --xnet")
+            return ok
+        }
     }
 }

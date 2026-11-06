@@ -3,6 +3,7 @@ package com.openminis.app.data.repository
 import android.content.Context
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.sandbox.ExecutionCoordinator
+import com.openminis.app.tools.AtomicFileWrite
 import com.openminis.app.sandbox.SessionWorkspace
 import com.openminis.app.tools.FileCheckpointStore
 import java.io.File
@@ -110,19 +111,28 @@ internal object RevertStageStore {
     fun fileFor(filesDir: File, sessionId: String): File =
         File(SessionWorkspace.base(filesDir, ExecutionCoordinator.ownerSessionId(sessionId)), FILE_NAME)
 
+    /**
+     * Persist the record atomically. Throws (instead of the old
+     * log-and-swallow) when the write did not verifiably land, so the stage
+     * flow can report [RevertStageOutcome.Failed] instead of silently
+     * orphaning the undo basis.
+     *
+     * [review 2.9 atomic-write] Delegates to [AtomicFileWrite] — the
+     * hand-rolled tmp+rename it replaces had a "rename failed → delete dst →
+     * retry" fallback that destroyed the PREVIOUS record before the new one
+     * was in place (the anti-pattern AtomicFileWrite's KDoc names), and it
+     * never verified the bytes landed. The explicit [temp] sibling keeps the
+     * on-disk temp name (".revert-stage.tmp") stable for leftover sweeps.
+     */
     fun save(filesDir: File, sessionId: String, record: StagedRevert) {
-        try {
-            val dst = fileFor(filesDir, sessionId)
-            dst.parentFile?.mkdirs()
-            val tmp = File(dst.parentFile, ".revert-stage.tmp")
-            tmp.writeText(encode(record))
-            if (!tmp.renameTo(dst)) {
-                dst.delete()
-                check(tmp.renameTo(dst)) { "cannot persist revert record" }
-            }
-        } catch (e: Exception) {
-            AppLogger.error("RevertStageStore", "save failed: ${e.message}")
-        }
+        val dst = fileFor(filesDir, sessionId)
+        dst.parentFile?.mkdirs()
+        val written = AtomicFileWrite.write(
+            dst,
+            encode(record),
+            temp = File(dst.parentFile, ".revert-stage.tmp"),
+        )
+        check(written != null) { "cannot persist revert record" }
     }
 
     fun load(filesDir: File, sessionId: String): StagedRevert? {
@@ -285,6 +295,32 @@ internal suspend fun ChatRepository.stageSessionRevert(
         "cannot snapshot current state — refusing to stage without an undo basis",
     )
 
+    val record = StagedRevert(
+        sessionId = sessionId,
+        boundaryMessageId = boundaryMessageId,
+        boundarySortOrder = boundary.sortOrder,
+        boundaryCreatedAt = boundary.createdAt,
+        originalCheckpointId = original?.id,
+        plan = plan,
+        stagedAt = System.currentTimeMillis(),
+    )
+    // [review P2 stage-order] Persist the undo basis BEFORE rolling any file
+    // back. The old order (restore targets → save record) left the tree
+    // rolled back with NO record on disk when the save failed — the stage
+    // was invisible (no banner) and undo impossible. Save-first means a
+    // failed persist aborts the stage with every planned file still
+    // untouched; the just-captured original checkpoint is dropped so it
+    // cannot linger as an unreferenced post-boundary capture.
+    try {
+        RevertStageStore.save(context.filesDir, sessionId, record)
+    } catch (e: Exception) {
+        original?.id?.let { orig ->
+            runCatching { FileCheckpointStore.drop(context.filesDir, sessionId, orig) }
+        }
+        return@withContext RevertStageOutcome.Failed("cannot persist revert record: ${e.message}")
+    }
+    RevertStageRegistry.set(sessionId, record, RevertStageStore.fileFor(context.filesDir, sessionId))
+
     val lines = mutableListOf<String>()
     plan.forEach { pr ->
         val r = runCatching {
@@ -296,18 +332,6 @@ internal suspend fun ChatRepository.stageSessionRevert(
             lines += r.lines
         }
     }
-
-    val record = StagedRevert(
-        sessionId = sessionId,
-        boundaryMessageId = boundaryMessageId,
-        boundarySortOrder = boundary.sortOrder,
-        boundaryCreatedAt = boundary.createdAt,
-        originalCheckpointId = original?.id,
-        plan = plan,
-        stagedAt = System.currentTimeMillis(),
-    )
-    RevertStageStore.save(context.filesDir, sessionId, record)
-    RevertStageRegistry.set(sessionId, record, RevertStageStore.fileFor(context.filesDir, sessionId))
     RevertStageOutcome.Ok(record, lines)
 }
 

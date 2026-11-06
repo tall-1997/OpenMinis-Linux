@@ -77,7 +77,16 @@ private fun NetworkStatusPills() {
             )
         }
         for (proxy in NetworkStatusMonitor.proxiesInUse(settings)) {
-            val level = NetworkStatusMonitor.proxyLevel(proxy.id, proxyHealth, failing.keys)
+            // [FIX-R2-6, review §三 失败处理] An entry configure failure takes
+            // every proxied route down at once (the entry is their common
+            // front) - show the pills as unavailable instead of a stale
+            // per-proxy probe result. Derivation lives in
+            // NetworkStatusMonitor; this file only renders.
+            val level = if (NetworkStatusMonitor.entryConfigureFailed(lastError)) {
+                NetworkStatusMonitor.ProxyLevel.UNAVAILABLE
+            } else {
+                NetworkStatusMonitor.proxyLevel(proxy.id, proxyHealth, failing.keys)
+            }
             StatusPill(
                 color = proxyPillColor(level),
                 text = proxy.displayName,

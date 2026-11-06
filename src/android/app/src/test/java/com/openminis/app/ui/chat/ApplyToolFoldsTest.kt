@@ -1,4 +1,4 @@
-﻿package com.openminis.app.ui.chat
+package com.openminis.app.ui.chat
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -74,5 +74,20 @@ class ApplyToolFoldsTest {
         assertTrue(folded.first() === before)
         assertTrue(folded.last() === after)
         assertTrue(folded[1] is FlatChatItem.AssistantToolGroup)
+    }
+
+    // [FIX-R2-14] A run nothing non-tool follows folds against nothing: it
+    // stays as rows the user can open and compare (a turn cancelled after its
+    // tools, or the list simply ending on a run).
+    @Test
+    fun `a run at the end of the list stays unfolded`() {
+        val items = listOf(toolItem(), toolItem())
+        assertEquals(items, applyToolFolds(items))
+    }
+
+    @Test
+    fun `a run followed by the next message's tools stays unfolded`() {
+        val items = listOf(toolItem(msg = "a"), toolItem(msg = "a"), toolItem(msg = "b"), toolItem(msg = "b"))
+        assertEquals(items, applyToolFolds(items))
     }
 }

@@ -1,5 +1,7 @@
 package com.openminis.app.ui.chat
 
+// [port-upstream-1.16] Ported from OpenMinis 1.16-beta (verbatim).
+
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer

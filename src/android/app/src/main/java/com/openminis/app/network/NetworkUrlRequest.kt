@@ -62,7 +62,21 @@ object NetworkUrlRequest {
     /** The routed OkHttp client for [tag], or null when HttpURLConnection is used unchanged. */
     internal fun routedClient(tag: String): OkHttpClient? {
         val ep = NetworkRuntime.endpoint(tag) ?: return null
-        if (ep.httpPort == null) return null
+        if (ep.httpPort == null) {
+            // [FIX-R2-1, review missed-finding B] Upstream returns null for
+            // every route here (upstream NetworkUrlRequest.kt:63-66), sending
+            // skill downloads, browser downloads and image loads out as plain
+            // HttpURLConnection direct while the entry's HTTP front is down.
+            // Same root and same tightening as [NetworkHttp.client]: a
+            // non-direct route must not silently bypass the user's proxy /
+            // exit node, so it gets the BLOCKED client (loopback :1, refused at
+            // once, probe restarts the entry); a direct route keeps the
+            // pre-module direct request.
+            if (NetworkRuntime.snapshot.route(tag) != NetworkRoute.Direct) {
+                return NetworkHttp.client(tag, baseClient)
+            }
+            return null
+        }
         return NetworkHttp.client(tag, baseClient)
     }
 

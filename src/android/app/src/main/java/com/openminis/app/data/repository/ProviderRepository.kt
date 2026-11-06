@@ -180,15 +180,10 @@ class ProviderRepository(
     /**
      * Lock guarding all mutate-and-save sequences against concurrent writers
      * (notably the `for instance in enabled { scope.launch { autoRefreshModels(...) } }`
-     * fan-out in [refreshAllModelsIfNeeded] / [triggerBackgroundRefreshIfStale]).
-     *
-     * Without this lock, two parallel `replaceEntries(instanceA, …)` and
-     * `replaceEntries(instanceB, …)` calls share the same `_config.value`
-     * reference (its inner ArrayLists are the same objects across reads),
-     * so one's `removeAll` / `addAll` runs while the other's `saveConfig`
-     * is mid-`Json.encodeToString` — that's the
-     * `ConcurrentModificationException → ArrayList.next` crash captured on
-     * Pixel 6 / 4a.
+     * fan-out in [refreshAllModelsIfNeeded] / [triggerBackgroundRefreshIfStale]):
+     * without it two parallel mutators share one `_config.value` reference and
+     * one's list mutation runs while the other's saveConfig is mid-encode —
+     * the ConcurrentModificationException crash captured on Pixel 6 / 4a.
      */
     internal val configLock = Any()
 
@@ -214,11 +209,21 @@ class ProviderRepository(
     internal fun hashJsonMirror(str: String): String = configStore.hashJsonMirror(str)
 
     // internal (was private): the debug server's read-only provider.* handlers
-    // read `config.value` directly and must be able to force the lazy load —
-    // on a cold process they otherwise report an EMPTY config, which reads as
-    // "all your providers are gone" rather than "not loaded yet".
-    // Implementation (and the full caller-audit KDoc) in [ProviderConfigStore].
-    internal fun ensureConfigLoaded() = configStore.ensureConfigLoaded()
+    // force the lazy load — a cold process must read "not loaded yet", not
+    // "all your providers are gone". Implementation + caller-audit KDoc in
+    // [ProviderConfigStore].
+    // [FIX-R2-16, review §三 失败处理] While the load keeps failing (DB-version
+    // guard; the cold-start window self-heals on the next access), the 12
+    // mutation guards below used to no-op in silence. Latch it in
+    // [configLoadFailed] (state for UI to surface "changes are locked" later,
+    // not wired yet) and log it once.
+    private val _configLoadFailed = MutableStateFlow(false)
+    val configLoadFailed: StateFlow<Boolean> get() = _configLoadFailed
+
+    internal fun ensureConfigLoaded(): Boolean = configStore.ensureConfigLoaded().also { ok ->
+        if (ok || !_configLoadFailed.compareAndSet(false, true)) return@also
+        android.util.Log.w("ProviderRepo", "[ProviderStore] config load failed: config-protected changes no-op until a load succeeds")
+    }
 
     // [T-android-provider-mutator-lock] Snapshot, not the live list. The
     // declared type is List, but the backing object is the MutableList that
@@ -237,12 +242,7 @@ class ProviderRepository(
      * not take it: `_config.value` is the object collectors are iterating, and
      * mutating its lists in place throws ConcurrentModificationException *in
      * the reader's* frame — reproduced on Pixel 6 as a crash inside
-     * UnifiedModelPickerSheet's LazyColumn while three imports ran
-     * concurrently:
-     *
-     *   ArrayList$Itr.checkForComodification → UnifiedModelPickerSheet
-     *     → LazyListIntervalContent.<init> → Snapshot.observe
-     *
+     * UnifiedModelPickerSheet's LazyColumn while three imports ran concurrently.
      * saveConfig already EMITS defensive copies; the gap was that the next
      * mutator read that emitted object back and mutated it. Copy-on-write here
      * closes the loop: a mutator never touches a published object, so whatever

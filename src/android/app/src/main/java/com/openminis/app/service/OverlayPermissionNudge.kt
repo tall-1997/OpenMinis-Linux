@@ -6,9 +6,9 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
-import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.openminis.app.R
+import com.openminis.app.logging.AppLogger
 
 /**
  * [T-bg-overlay phase 2 fix] The one-shot "grant Display over other apps" nudge.
@@ -64,9 +64,9 @@ internal object OverlayPermissionNudge {
                 .build()
             app.getSystemService(NotificationManager::class.java)
                 ?.notify(AgentForegroundService.OVERLAY_NUDGE_NOTIFICATION_ID, nudge)
-            Log.d(TAG, "overlay permission nudge posted (SAW not granted but toggle is ON)")
+            AppLogger.debug(TAG, "overlay permission nudge posted (SAW not granted but toggle is ON)")
         } catch (t: Throwable) {
-            Log.w(TAG, "overlay permission nudge failed: ${t.message}", t)
+            AppLogger.warning(TAG, "overlay permission nudge failed: ${t.message}")
         }
     }
 }

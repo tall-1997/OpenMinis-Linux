@@ -57,6 +57,11 @@ internal suspend fun ChatViewModel.finishStoppedRun(
     withContext(NonCancellable + Dispatchers.Main.immediate) {
         capturedAssistantId?.let(::flushStreamingDelta)
         if (activeSessionId == stoppedSessionId) {
+            // [review 2.1 background-pause-gate] The flush above now drains
+            // the FRESHEST delta (parked pendingContent included) into the
+            // canonical list first — reading `captured` before that flush
+            // would rescue the pre-pause text and re-persist a regressed
+            // bubble. Keep this read strictly after the flush.
             val captured = _messages.value.firstOrNull { it.id == capturedAssistantId }
             // [T-android-stop-dup-row] Only rescue the canonical cumulative
             // content when this run committed nothing durable yet; otherwise

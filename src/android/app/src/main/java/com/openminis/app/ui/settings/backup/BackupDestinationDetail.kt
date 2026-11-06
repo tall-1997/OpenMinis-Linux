@@ -1,5 +1,7 @@
 package com.openminis.app.ui.settings.backup
 
+// [port-upstream-1.16] Ported from OpenMinis 1.16-beta (adapted to this codebase's settings scaffolding).
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -22,7 +24,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -36,6 +37,7 @@ import com.openminis.app.ui.settings.SettingsRow
 import com.openminis.app.ui.settings.SettingsSection
 import com.openminis.app.ui.settings.SettingsSwitchRow
 import com.openminis.app.ui.settings.SettingsValueRow
+import com.openminis.app.ui.theme.IosGreen
 import java.text.DateFormat
 import java.util.Date
 
@@ -128,9 +130,6 @@ internal fun DestinationDetailContent(vm: RcloneDestinationsViewModel, nav: Dest
 
     var renaming by remember { mutableStateOf(false) }
     var confirmRemove by remember { mutableStateOf(false) }
-    var testing by remember { mutableStateOf(false) }
-    // (ok, message) of the last test; reset when the destination changes.
-    var testResult by remember(r) { mutableStateOf<Pair<Boolean, String?>?>(null) }
 
     val backend = RcloneBackendCatalog.backend(r.backend)
     SettingsSection(
@@ -204,6 +203,52 @@ internal fun DestinationDetailContent(vm: RcloneDestinationsViewModel, nav: Dest
         )
     }
 
+    TestAndRemoveSection(
+        vm = vm,
+        remote = r,
+        busy = busy,
+        onRemoveClick = { confirmRemove = true },
+    )
+
+    if (renaming) {
+        RenameDialog(
+            remote = r,
+            onDismiss = { renaming = false },
+            onRename = { draft ->
+                renaming = false
+                vm.rename(r.name, draft) { nav.renamed(it.name) }
+            },
+        )
+    }
+
+    if (confirmRemove) {
+        RemoveConfirmDialog(
+            onConfirm = {
+                confirmRemove = false
+                vm.remove(r.name)
+                nav.close()
+            },
+            onDismiss = { confirmRemove = false },
+        )
+    }
+}
+
+/**
+ * The "test connection" / "remove destination" section of
+ * [DestinationDetailContent], extracted as a pure move. Owns the
+ * (ok, message) result of the last test, reset when [remote] changes.
+ */
+@Composable
+private fun TestAndRemoveSection(
+    vm: RcloneDestinationsViewModel,
+    remote: RcloneRemoteStore.Remote,
+    busy: Boolean,
+    onRemoveClick: () -> Unit,
+) {
+    var testing by remember { mutableStateOf(false) }
+    // (ok, message) of the last test; reset when the destination changes.
+    var testResult by remember(remote) { mutableStateOf<Pair<Boolean, String?>?>(null) }
+
     SettingsSection(
         footer = stringResource(R.string.backup_dest_remove_footer),
     ) {
@@ -213,7 +258,7 @@ internal fun DestinationDetailContent(vm: RcloneDestinationsViewModel, nav: Dest
             onClick = if (testing) null else ({
                 testing = true
                 testResult = null
-                vm.testConnection(r.name) { ok, msg ->
+                vm.testConnection(remote.name) { ok, msg ->
                     testing = false
                     testResult = ok to msg
                 }
@@ -225,7 +270,7 @@ internal fun DestinationDetailContent(vm: RcloneDestinationsViewModel, nav: Dest
                     testResult?.first == true -> Text(
                         stringResource(R.string.backup_dest_connected),
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFF34A853),
+                        color = IosGreen,
                     )
                 }
             },
@@ -243,75 +288,86 @@ internal fun DestinationDetailContent(vm: RcloneDestinationsViewModel, nav: Dest
         SettingsRow(
             title = stringResource(R.string.backup_dest_remove_destination),
             titleColor = MaterialTheme.colorScheme.error,
-            onClick = if (busy) null else ({ confirmRemove = true }),
+            onClick = if (busy) null else onRemoveClick,
             showChevron = false,
             showDivider = false,
         )
     }
+}
 
-    if (renaming) {
-        var draft by remember { mutableStateOf(r.name) }
-        AlertDialog(
-            onDismissRequest = { renaming = false },
-            title = { Text(stringResource(R.string.backup_dest_rename_title)) },
-            text = {
-                Column {
-                    Text(
-                        stringResource(R.string.backup_dest_rename_hint),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = draft,
-                        onValueChange = { draft = it },
-                        label = { Text(stringResource(R.string.backup_dest_name)) },
-                        singleLine = true,
-                    )
-                }
-            },
-            confirmButton = {
-                MinisTextButton(
-                    onClick = {
-                        renaming = false
-                        vm.rename(r.name, draft) { nav.renamed(it.name) }
-                    },
-                    enabled = draft.trim().isNotEmpty(),
-                ) { Text(stringResource(R.string.backup_dest_save)) }
-            },
-            dismissButton = {
-                MinisTextButton(onClick = { renaming = false }) {
-                    Text(stringResource(R.string.backup_dest_cancel))
-                }
-            },
-        )
-    }
+/**
+ * The rename dialog of [DestinationDetailContent], extracted as a pure move.
+ * The draft starts from the destination's current name; [onRename] receives
+ * it once the user confirms.
+ */
+@Composable
+private fun RenameDialog(
+    remote: RcloneRemoteStore.Remote,
+    onDismiss: () -> Unit,
+    onRename: (String) -> Unit,
+) {
+    var draft by remember { mutableStateOf(remote.name) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.backup_dest_rename_title)) },
+        text = {
+            Column {
+                Text(
+                    stringResource(R.string.backup_dest_rename_hint),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = draft,
+                    onValueChange = { draft = it },
+                    label = { Text(stringResource(R.string.backup_dest_name)) },
+                    singleLine = true,
+                )
+            }
+        },
+        confirmButton = {
+            MinisTextButton(
+                onClick = { onRename(draft) },
+                enabled = draft.trim().isNotEmpty(),
+            ) { Text(stringResource(R.string.backup_dest_save)) }
+        },
+        dismissButton = {
+            MinisTextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.backup_dest_cancel))
+            }
+        },
+    )
+}
 
-    if (confirmRemove) {
-        AlertDialog(
-            onDismissRequest = { confirmRemove = false },
-            title = { Text(stringResource(R.string.backup_dest_remove_confirm_title)) },
-            // Say what is NOT destroyed — "remove" otherwise reads as though it
-            // deletes the backups stored there.
-            text = { Text(stringResource(R.string.backup_dest_remove_confirm_note)) },
-            confirmButton = {
-                MinisTextButton(onClick = {
-                    confirmRemove = false
-                    vm.remove(r.name)
-                    nav.close()
-                }) {
-                    Text(
-                        stringResource(R.string.backup_dest_remove_action),
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
-            },
-            dismissButton = {
-                MinisTextButton(onClick = { confirmRemove = false }) {
-                    Text(stringResource(R.string.backup_dest_cancel))
-                }
-            },
-        )
-    }
+/**
+ * The remove-destination confirmation of [DestinationDetailContent],
+ * extracted as a pure move.
+ */
+@Composable
+private fun RemoveConfirmDialog(
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.backup_dest_remove_confirm_title)) },
+        // Say what is NOT destroyed — "remove" otherwise reads as though it
+        // deletes the backups stored there.
+        text = { Text(stringResource(R.string.backup_dest_remove_confirm_note)) },
+        confirmButton = {
+            MinisTextButton(onClick = onConfirm) {
+                Text(
+                    stringResource(R.string.backup_dest_remove_action),
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+        },
+        dismissButton = {
+            MinisTextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.backup_dest_cancel))
+            }
+        },
+    )
 }
 
 /**

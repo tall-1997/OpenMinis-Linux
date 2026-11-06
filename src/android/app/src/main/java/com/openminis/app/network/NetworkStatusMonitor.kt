@@ -39,7 +39,8 @@ object NetworkStatusMonitor {
     val proxyHealth: StateFlow<Map<String, ProxyHealth>> = _proxyHealth.asStateFlow()
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val probedAt = HashMap<String, Pair<ProxyServer, Long>>()
+    /** proxy id -> (what the probe connected through, when). [FIX-R2-17] key, not the whole row. */
+    private val probedAt = HashMap<String, Pair<String, Long>>()
     private val inFlight = HashSet<String>()
     private var tickJob: Job? = null
     @Volatile
@@ -117,14 +118,21 @@ object NetworkStatusMonitor {
         for (proxy in proxiesInUse(s)) {
             if (proxy.id in inFlight) continue
             val last = probedAt[proxy.id]
-            if (last != null && last.first == proxy && now - last.second < PROBE_INTERVAL_MS) continue
+            // [FIX-R2-17, review §三 网络/安全] Key the cache on what the probe
+            // actually connects through (id+host+port+kind), not whole-row
+            // equality: a rename or bypass edit must not throw away a fresh
+            // result and re-send the up-to-8s blocking probe.
+            if (last != null && last.first == probeKey(proxy) && now - last.second < PROBE_INTERVAL_MS) continue
             probe(proxy, now)
         }
     }
 
+    /** [FIX-R2-17] The probe-relevant fingerprint of a proxy row. */
+    private fun probeKey(p: ProxyServer): String = "${p.id}|${p.host}|${p.port}|${p.kind}"
+
     private fun probe(proxy: ProxyServer, now: Long) {
         inFlight += proxy.id
-        probedAt[proxy.id] = proxy to now
+        probedAt[proxy.id] = probeKey(proxy) to now
         if (proxy.id !in _proxyHealth.value) _proxyHealth.update { it + (proxy.id to ProxyHealth.CHECKING) }
         scope.launch {
             val health = runCatching { NetworkHub.testProxy(proxy, NetworkHub.proxyPassword(proxy.id)) }.fold(
@@ -177,4 +185,17 @@ object NetworkStatusMonitor {
         lastError == null -> TailscaleLevel.CONNECTING
         else -> TailscaleLevel.NOT_CONNECTED
     }
+
+    /**
+     * [FIX-R2-6, review §三 失败处理] Whether the last apply failed to
+     * CONFIGURE the local entry (NetworkHub.lastError's entry half - port
+     * occupied, Go error). While it lasts every proxied route is down no
+     * matter what its own probe last said, so the home pills color their
+     * proxy state with this instead. The entry failure has no banner surface
+     * of its own (NetworkAlertCenter only ingests Go-side [Net][Alert] lines),
+     * so this derivation is the minimal user-visible hook; the reason text
+     * stays in Settings > Network.
+     */
+    fun entryConfigureFailed(lastError: String?): Boolean =
+        lastError != null && lastError.startsWith("Local entry: ")
 }

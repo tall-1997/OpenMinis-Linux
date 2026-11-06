@@ -1,5 +1,7 @@
 package com.openminis.app.ui.chat
 
+// [port-upstream-1.16] Ported from OpenMinis 1.16-beta (adapted from the iOS ToolFoldPlanner; logic re-expressed for this codebase).
+
 /**
  * [T-port-fold-tools] Decides which runs of consecutive tool calls in one
  * assistant message the chat list folds into a single "Ran N tools · 9s" row.

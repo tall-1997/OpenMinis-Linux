@@ -4,6 +4,7 @@ import android.content.Context
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 
 /**
  * [T-wave-e-unread-dot] Which chats carry a reply the user has not seen.
@@ -44,13 +45,15 @@ object UnreadRegistry {
         val now = System.currentTimeMillis()
         cache[sessionId] = now
         prefs(context).edit().putLong(KEY_PREFIX + sessionId, now).apply()
-        _revision.value += 1
+        // [FIX-R2-11, review §三 异步与并发] Atomic bump: concurrent markRead /
+        // forget must not lose a revision (read-modify-write between threads).
+        _revision.update { it + 1 }
     }
 
     fun forget(context: Context, sessionId: String) {
         cache.remove(sessionId)
         prefs(context).edit().remove(KEY_PREFIX + sessionId).apply()
-        _revision.value += 1
+        _revision.update { it + 1 }
     }
 
     /** [sessionUpdatedAt] newer than the read stamp = unseen reply. Pure. */
