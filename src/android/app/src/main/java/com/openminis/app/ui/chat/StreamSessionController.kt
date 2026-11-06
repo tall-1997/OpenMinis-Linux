@@ -75,6 +75,17 @@ internal class StreamSessionController(
     private val streamFlushStates = HashMap<String, StreamFlushState>()
 
     /**
+     * [T-perf-background-session] Background-session pause gate. When true the
+     * controller keeps accumulating deltas (into each message's pendingContent)
+     * but does NOT publish them to [_streamingById], so a background chat that is
+     * still streaming no longer drives recomposition / message-list copies while
+     * the user is elsewhere. The turn's canonical persist still runs at stream
+     * end. [resumePublishing] flushes every parked delta and clears the gate.
+     */
+    @Volatile
+    var publishPaused: Boolean = false
+
+    /**
      * [T-android-stream-flush-review] Cancel a message's pending trailing flush
      * and drop its throttle accumulator. Call from EVERY stream-termination
      * path (natural end, cancel, turn-limit, retry-truncate, clearChat) so a
@@ -89,6 +100,29 @@ internal class StreamSessionController(
     fun clearAllStreamFlushStates() {
         streamFlushStates.values.forEach { it.trailingJob?.cancel() }
         streamFlushStates.clear()
+    }
+
+    /**
+     * [T-perf-background-session] Clear the background gate and drain every
+     * parked delta into [_streamingById] in one go. Called when the chat becomes
+     * the foreground session again, so the transcript catches up to the live
+     * stream without a per-token recomposition storm while it was backgrounded.
+     */
+    fun resumePublishing() {
+        if (!publishPaused) return
+        publishPaused = false
+        for ((id, st) in streamFlushStates) {
+            val pc = st.pendingContent
+            if (pc == null) continue
+            st.pendingContent = null
+            streamingById.value = streamingById.value + (
+                id to StreamingDelta(
+                    content = pc,
+                    toolBlocks = snapshotAssistantBlocks(st.pendingBlocks),
+                    isAwaitingModelResponse = st.pendingAwaiting,
+                )
+            )
+        }
     }
 
     /** Cancel + drop flush states for any message id NOT in [keptIds] (retry/truncate). */
@@ -199,6 +233,14 @@ internal class StreamSessionController(
              * false path — see [T-android-stream-flush-reentry].
              */
             fun publish(text: String, blocks: List<AssistantBlock>, awaiting: Boolean): Boolean {
+                if (publishPaused) {
+                    // Background gate: park the freshest delta, don't touch the
+                    // side channel. resumePublishing() drains it on foreground.
+                    st.pendingContent = text
+                    st.pendingBlocks = blocks
+                    st.pendingAwaiting = awaiting
+                    return false
+                }
                 val at = System.currentTimeMillis()
                 if (!UIBus.admit(at, criticalEvent = false)) {
                     st.pendingContent = text

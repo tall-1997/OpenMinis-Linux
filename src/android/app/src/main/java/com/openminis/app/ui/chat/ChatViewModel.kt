@@ -75,8 +75,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 import com.openminis.app.util.IsoTime
-// [T-android-split-chat] StreamingDelta / ChatMessage / QueuedPrompt /
-// ToolBlockStatus / SlashCommand / AssistantBlock moved verbatim to ChatModels.kt.
+// [T-android-split-chat] StreamingDelta / ChatMessage / QueuedPrompt / ToolBlockStatus / SlashCommand / AssistantBlock moved verbatim to ChatModels.kt.
 class ChatViewModel(
     internal val sessionId: String,
     internal val chatRepository: ChatRepository,
@@ -120,17 +119,8 @@ class ChatViewModel(
         internal val HTTP_5XX_STATUS_RE = Regex("""\[5\d{2}\]""")
         // ── [T-android-compact-runaway] Compaction budgets ──────────────
         //
-        // Compaction had no ceiling of any kind. Its only time bound was the
-        // provider's OkHttp readTimeout (10 minutes on every provider), and
-        // the split-retry path could issue up to 1+2+4+8 = 15 SEQUENTIAL leaf
-        // calls before depth 3 stopped it. Slow-but-not-timing-out calls (a
-        // rate-limited or queued model at ~80s each) therefore added up to
-        // roughly 20 minutes of apparent hang — which matches the report.
-        //
-        // Three independent ceilings now bound it, because each catches a case
-        // the others miss: the call budget stops fan-out, the wall-clock
-        // timeout stops slow-but-few calls, and the existing depth cap stops
-        // recursion.
+        // Compaction had no ceiling: only the provider readTimeout (10m) and a 1+2+4+8=15
+        // sequential-leaf retry. Three ceilings now bound it — call budget, wall-clock, depth.
 
         /** Leaf LLM calls one compaction may issue in total; the depth-3 cap alone permits 15, this cuts the worst case to 6 while allowing a full first split plus one rescue. */
         internal const val MAX_COMPACT_LLM_CALLS = 6
@@ -1276,6 +1266,12 @@ class ChatViewModel(
     private fun clearAllStreamFlushStates() = streamSession.clearAllStreamFlushStates()
     internal fun retainStreamFlushStates(keptIds: Set<String>) =
         streamSession.retainStreamFlushStates(keptIds)
+
+    /** [T-perf-background-session] Foreground publishes the stream; background parks deltas (no recomposition). */
+    internal fun onForegroundChanged(isForeground: Boolean) {
+        if (isForeground) streamSession.resumePublishing()
+        else streamSession.publishPaused = true
+    }
 
     /**
      * Composer draft. Owned by VM so it survives navigation (e.g. push EnvVars
