@@ -56,7 +56,7 @@ class OpenAIProvider private constructor(
      * heuristic incorrectly drags an OAuth bearer onto the Codex
      * Responses backend at chatgpt.com, where it 404s.
      */
-    private val forceChatCompletions: Boolean = false,
+    internal val forceChatCompletions: Boolean = false,
     /**
      * [T-provider-custom-user-agent] Per-provider User-Agent override.
      * null/blank → default UA; non-blank → replaces User-Agent on every
@@ -97,6 +97,13 @@ class OpenAIProvider private constructor(
      * cache. Null → no custom rules (identical to Phase-1 built-in-only behaviour).
      */
     var thinkingRuleInstanceId: String? = null
+
+    /**
+     * [port-upstream-1.16][T-quota-codex-subscription] Instance tag set by
+     * ProviderFactory for Codex OAuth instances, so replies' x-codex-* headers
+     * reach the quota store. Null = not quota-tracked.
+     */
+    var quotaInstanceId: String? = null
 
     /**
      * [T-android-xai-priority] Whether this provider speaks xAI's Priority
@@ -331,10 +338,8 @@ class OpenAIProvider private constructor(
      */
     private fun Request.Builder.applyKeyAuth(token: String): Request.Builder =
         // [T-empty-key-compat-endpoints] A keyless third-party endpoint
-        // (ollama, LM Studio, LiteLLM, private relays) is a supported
-        // configuration. Send NO auth header rather than a malformed
-        // `Authorization: Bearer ` / empty `api-key:` — strict gateways
-        // reject the empty form, an absent header is universally fine.
+        // (ollama, LM Studio, private relays) is supported: send NO auth
+        // header — the empty form is rejected, absent is universally fine.
         if (token.isEmpty()) this
         else if (isAzure) header("api-key", token)
         else header("Authorization", "Bearer $token")
@@ -1083,17 +1088,12 @@ class OpenAIProvider private constructor(
             } catch (_: Exception) {
                 throw LLMError.ProviderError("Video create: not JSON (${contentType.take(40)})")
             }
-            // [T-video-poll-url-from-create] Poll under the mount point that ACTUALLY
-            // answered 2xx, not under basePath. The candidate list above deliberately
-            // tries host-root URLs (`https://host/videos`, the absolute override) for
-            // relays that do not mount the videos API under `/v1`; rebuilding the poll
-            // URL from `basePath` then asked `https://host/v1/videos/<id>` for a job
-            // created at `https://host/videos` — a 404 on exactly the relays that had
-            // required the host-root create, and only AFTER the user had spent the
-            // quota. Stripping the create path off the create URL is the identity
-            // mapping for every candidate shape (`$basePath$path` and `hostRootURL$path`
-            // both end in `path`); an override that does not end in it falls back to
-            // basePath, which is the historical behaviour.
+            // [T-video-poll-url-from-create] Poll under the mount point that
+            // ACTUALLY answered 2xx, not basePath: relays that need the host-root
+            // create 404 the `basePath/v1/videos/<id>` poll — after the user had
+            // already spent the quota. Stripping the create path off its URL is
+            // the identity mapping for every candidate shape; a non-matching
+            // override falls back to basePath (historical behaviour).
             val pollBase = url.removeSuffix(path).let { if (it == url) basePath else it }
             return resolveVideoJob(json, token, path, pollBase)
             }

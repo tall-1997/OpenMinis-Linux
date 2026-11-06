@@ -137,6 +137,8 @@ fun UnifiedModelPickerSheet(
     var menuEntryId by remember { mutableStateOf<String?>(null) }
     var entryToDelete by remember { mutableStateOf<ModelEntry?>(null) }
     var hiddenExpanded by remember { mutableStateOf(false) }
+    // [port-upstream-1.16][T-provider-quota P2] Provider header badge tap → quota sheet.
+    var quotaSheetInstanceId by remember { mutableStateOf<String?>(null) }
 
     fun select(id: String?) {
         onSelect(id)
@@ -256,17 +258,6 @@ fun UnifiedModelPickerSheet(
                         // (ChatModelPickerSheet group card): GREEN check,
                         // blue Layers glyph, icon+text strategy badge,
                         // bodySmall member count, 24dp circled chevron.
-                        //
-                        // The group stays CHECKED while the effective
-                        // choice is one of its own members — group
-                        // membership and entry selection are separate
-                        // axes, exactly as iOS models them
-                        // (isGroupSelected == currentGroupId, tested
-                        // independently of the entry's isActive). Keying
-                        // this on `selectedId == null` alone made
-                        // pinning a member look like leaving the group,
-                        // even though the group is still what's bound
-                        // and still what the override falls back to.
                         val groupSelected =
                             selectedId == null ||
                                 boundGroup.memberEntryIds.contains(selectedId)
@@ -320,10 +311,6 @@ fun UnifiedModelPickerSheet(
                                 }
                             }
                             // Count what the expansion can actually
-                            // RENDER, not the raw member-id count —
-                            // otherwise a member that no longer
-                            // resolves still inflates the number and
-                            // the row promises rows it can't show.
                             Text(
                                 stringResource(
                                     R.string.voice_input_picker_group_models,
@@ -344,13 +331,6 @@ fun UnifiedModelPickerSheet(
                     if (groupExpanded) {
                         // Fall back to the VIRTUAL system entries: the
                         // default voice groups are seeded with
-                        // "__builtin_system_speech__/…" member ids,
-                        // which are synthesized on demand and never
-                        // live in config.modelEntries. Resolving only
-                        // against modelEntries dropped every member of
-                        // those groups, so "2 models" expanded to an
-                        // empty list. Same fallback ModelGroupDetail
-                        // already uses.
                         val members = boundGroup.memberEntryIds.mapNotNull { id ->
                             config.modelEntries.find { it.id == id }
                                 ?: SystemVoiceEntries.resolve(id)
@@ -367,13 +347,6 @@ fun UnifiedModelPickerSheet(
                             // serves the next request, from EITHER
                             // source: an explicit override pointing at
                             // it, or (group-follow) the member the
-                            // group routes to. iOS fills the member
-                            // checkmark from exactly this
-                            // (UnifiedModelPicker expandedEntryRow's
-                            // isActive), not from the override alone —
-                            // a filled circle here means "this is the
-                            // one", which is the question the
-                            // expansion exists to answer.
                             val isActive = if (selectedId != null) {
                                 selectedId == entry.id
                             } else {
@@ -498,11 +471,6 @@ fun UnifiedModelPickerSheet(
                     // [T-android-system-voice-catalog] Every device TTS
                     // voice as its own selectable row — what makes the
                     // iOS System section list "Tingting (Chinese)…,
-                    // Anna (German)…" individually. The voice choice is
-                    // a system-engine detail (VoiceOutputState pref),
-                    // layered under the entry-level selection: tapping a
-                    // voice both records it and selects the system
-                    // engine. Auto (the plain row above) clears it.
                     if (modalityFilter == PickerModalityFilter.AUDIO_OUTPUT) {
                         systemVoices
                             .filter { matches(it.label) }
@@ -552,12 +520,6 @@ fun UnifiedModelPickerSheet(
             // [T-android-picker-per-row-items] (#6) One LazyColumn item per
             // provider card SEGMENT: the header, then one item per ENTRY row.
             // The old single-item card composed header + every model row of
-            // the provider in one frame (same defect as
-            // modelEntryPickerItems — hundreds of rows composed on sheet
-            // open, none skippable during scroll). Each segment paints its
-            // own slice of the section card (surfaceContainerHigh, 14dp
-            // corners, first/last shaping) via [PickerCardSegment]; stacked
-            // segments read as the same card the old PickerSectionCard drew.
             item(key = "ph_${inst.id}") {
                 PickerCardSegment(isFirst = true, isLast = collapsed) {
                     // Provider header — main picker's embedded header:
@@ -570,6 +532,13 @@ fun UnifiedModelPickerSheet(
                             collapsedInstanceIds =
                                 if (collapsed) collapsedInstanceIds - inst.id
                                 else collapsedInstanceIds + inst.id
+                        },
+                        // [port-upstream-1.16][T-provider-quota P2] The account's
+                        // balance / quota right after the name; tap opens the sheet.
+                        trailing = {
+                            com.openminis.app.ui.quota.QuotaSectionHeaderBadge(inst.id) {
+                                quotaSheetInstanceId = inst.id
+                            }
                         },
                     )
                 }
@@ -678,6 +647,14 @@ fun UnifiedModelPickerSheet(
         )
     }
 
+    // [port-upstream-1.16][T-provider-quota P2] The header badge's detail sheet.
+    quotaSheetInstanceId?.let { instanceId ->
+        com.openminis.app.ui.quota.QuotaDetailSheet(
+            instanceId = instanceId,
+            onDismiss = { quotaSheetInstanceId = null },
+        )
+    }
+
     // [T-model-picker-longpress-delete] removeEntry cascades groups/pins and
     // is unrecoverable here — confirm first.
     entryToDelete?.let { entry ->
@@ -736,6 +713,14 @@ private fun PickerEntryRow(
                 // FlowRow, NOT Row: an overflowing Row squeezes chips into
                 // vertical letter columns; FlowRow wraps whole chips instead.
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), itemVerticalAlignment = Alignment.CenterVertically) {
+                    // [port-upstream-1.16][T-provider-quota P2] Only a warning
+                    // on a pool bound to THIS model; the account is on the header.
+                    if (showBadges) {
+                        com.openminis.app.ui.quota.ModelQuotaHintView(
+                            instanceId = entry.providerInstanceId,
+                            modelId = entry.model.id,
+                        )
+                    }
                     Text(
                         if (showBadges) entry.baseModel.id else entry.model.id,
                         style = MaterialTheme.typography.labelSmall,

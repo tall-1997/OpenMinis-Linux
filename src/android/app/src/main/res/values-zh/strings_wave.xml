@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Wave E 新增文案（长任务 / 定时运行 / 首页体验）。 -->
+<resources>
+    <!-- T3/T4：倒计时胶囊 + 立即执行 -->
+    <string name="sched_pill_run_now">立即执行</string>
+    <string name="sched_pill_task_label">定时任务</string>
+    <string name="sched_pill_countdown_a11y">距下次定时运行还有 %1$s</string>
+    <string name="sched_pill_hide">隐藏本次倒计时</string>
+
+    <!-- T7：停止分档 -->
+    <string name="stop_menu_current_tool">仅停止当前工具</string>
+    <string name="stop_menu_stop_all">全部停止</string>
+    <string name="stop_menu_confirm_toggle">停止前确认</string>
+    <string name="stop_confirm_title">要停止当前运行吗？</string>
+    <string name="stop_confirm_current">停止当前运行</string>
+    <string name="stop_confirm_all">全部停止</string>
+    <string name="cd_stop_long_press_options">停止选项</string>
+
+    <!-- T6：子代理卡片 -->
+    <string name="subagent_tool_calls_fmt">%1$d 次工具调用</string>
+    <string name="subagent_steer_hint">向该子代理发送补充指令…</string>
+    <string name="subagent_steer_send">发送</string>
+    <string name="subagent_steer_queued">指令已加入队列，子代理下一轮读取</string>
+    <string name="subagent_steer_refused">子代理已不在运行</string>
+    <string name="subagent_stop_in_sheet">停止该子代理</string>
+    <string name="cd_subagent_steering">引导子代理</string>
+
+    <!-- T9：显示完整思考 -->
+    <string name="appearance_show_full_thinking_title">显示完整思考</string>
+    <string name="appearance_show_full_thinking_footer">开启后，思考面板默认展开并显示完整内容，而不是折叠的尾部窗口摘要。</string>
+
+    <!-- T8：首页分组视觉 -->
+    <string name="cd_group_running_comet">组内有会话正在运行</string>
+    <string name="cd_unread_reply">有未读回复</string>
+</resources>

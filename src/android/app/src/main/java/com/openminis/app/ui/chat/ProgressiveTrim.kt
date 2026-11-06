@@ -24,30 +24,41 @@ import com.openminis.app.data.model.LLMMessage
  *
  *   - < 50% of window  → Level.NONE (no trimming)
  *   - ≥ 50%            → STRIP_OLD_THINKING
- *   - ≥ 70%            → + STUB_LARGE_TOOL_OUTPUTS
+ *   - ≥ 70%            → + STUB_LARGE_TOOL_OUTPUTS (offload-backed)
+ *   - ≥ 85%            → + MERGE_OLD_STEPS (collapse old tool iterations)
  *
- * The compact threshold (ContextPolicy, default 90%) sits ABOVE the trim
- * tiers, so trimming gets a chance to pull the payload back under the
- * compact line first. Levels are computed from the UNTRIMMED estimate —
- * monotone in history growth — so the projection cannot oscillate between
- * turns (a usage-based level would: trim → smaller usage → level drops →
- * untrimmed again → usage rises …).
+ * [T-wave-e-progressive-reclaim, port upstream 1.16 ContextTrimPlanner] The
+ * ladder is ordered cheapest-first: reasoning echo (pure token cost) → big
+ * tool outputs (offloaded to the session workspace, stub says the model can
+ * `file_read` the full text back) → old consecutive tool iterations merged
+ * into one index block each (upstream L4 "collapse to index"). The compact
+ * threshold (ContextPolicy, default 90%) sits ABOVE the trim tiers, so
+ * trimming gets a chance to pull the payload back under the compact line
+ * first. Levels are computed from the UNTRIMMED estimate — monotone in
+ * history growth — so the projection cannot oscillate between turns (a
+ * usage-based level would: trim → smaller usage → level drops → untrimmed
+ * again → usage rises …).
  *
  * Safety invariants (all provider-agnostic):
  *   - Never removes a message or breaks a tool_use/tool_result pair —
  *     stubbing keeps the ToolResult part with its id, so pairing logic
  *     (ToolPairing / dropOrphanedToolParts / ResponsesToolPairing) is
- *     unaffected.
+ *     unaffected. MERGE_OLD_STEPS is the one tier that DROPS messages, and
+ *     it only ever drops a whole iteration (assistant + its tool-result
+ *     carriers together), replacing them with an index block — no orphaned
+ *     tool_use survives.
  *   - Never touches anything inside the CURRENT round (after the last
  *     user message) or the last [PROTECTED_RECENT_MESSAGES] messages.
- *   - Never touches user content or assistant text — only reasoning and
- *     oversized tool outputs.
+ *   - Never touches user content or assistant text (except the index block
+ *     appended to the index host message) — only reasoning, oversized tool
+ *     outputs and whole old iterations.
  *   - Stripping `reasoningContent` degrades to `null`, which every echo
  *     path already handles as "reasoning never captured" (OpenAI sends
  *     `""` field-presence placeholder; Anthropic compat proxies accept an
  *     empty thinking block) — the exact shape of pre-thinking-era history.
  *
- * Pure function of (list, level) — unit-testable without Robolectric.
+ * Pure apart from [Offloader], which the caller backs with real disk writes
+ * (ToolOutputSpill's session workspace). Unit-testable without Robolectric.
  * The level decision [levelFor] is likewise pure.
  */
 internal object ProgressiveTrim {
@@ -56,6 +67,9 @@ internal object ProgressiveTrim {
 
     /** At/above this fraction, additionally stub large old tool outputs. */
     internal const val LEVEL2_WINDOW_FRACTION: Double = 0.70
+
+    /** At/above this fraction, additionally merge old tool iterations. */
+    internal const val LEVEL3_WINDOW_FRACTION: Double = 0.85
 
     /** Messages at the tail are never trimmed, regardless of level. */
     internal const val PROTECTED_RECENT_MESSAGES: Int = 40
@@ -74,10 +88,33 @@ internal object ProgressiveTrim {
     /** Head of a stubbed tool result kept verbatim, for recognition. */
     internal const val TOOL_RESULT_STUB_HEAD_CHARS: Int = 160
 
+    /**
+     * [T-wave-e-progressive-reclaim] Newest tool iterations MERGE_OLD_STEPS
+     * never touches (upstream `keepRecentIterations`): the last few
+     * iterations carry the task's working state.
+     */
+    internal const val MERGE_KEEP_RECENT_ITERATIONS: Int = 6
+
+    /** [T-wave-e-progressive-reclaim] Index block caps the listed steps (upstream INDEX_MAX_LINES). */
+    internal const val MERGE_INDEX_MAX_LINES: Int = 60
+
+    /**
+     * Writes [content] to durable storage and returns the guest path the
+     * model can `file_read`, or null when it could not (the stub then says
+     * the text is gone instead of pointing at a nonexistent file).
+     */
+    fun interface Offloader {
+        fun offload(content: String, toolId: String, toolName: String): String?
+    }
+
+    /** A no-disk offloader: stubs never claim a retrievable path. */
+    internal val NO_OFFLOAD = Offloader { _, _, _ -> null }
+
     enum class Level {
         NONE,
         STRIP_OLD_THINKING,
         STUB_LARGE_TOOL_OUTPUTS,
+        MERGE_OLD_STEPS,
     }
 
     /**
@@ -92,6 +129,7 @@ internal object ProgressiveTrim {
         }
         val ratio = untrimmedTokens.toDouble() / windowTokens.toDouble()
         return when {
+            ratio >= LEVEL3_WINDOW_FRACTION -> Level.MERGE_OLD_STEPS
             ratio >= LEVEL2_WINDOW_FRACTION -> Level.STUB_LARGE_TOOL_OUTPUTS
             ratio >= LEVEL1_WINDOW_FRACTION -> Level.STRIP_OLD_THINKING
             else -> Level.NONE
@@ -104,7 +142,11 @@ internal object ProgressiveTrim {
      * work); otherwise a new list with copies of only the affected
      * messages.
      */
-    fun trim(messages: List<LLMMessage>, level: Level): List<LLMMessage> {
+    fun trim(
+        messages: List<LLMMessage>,
+        level: Level,
+        offloader: Offloader = NO_OFFLOAD,
+    ): List<LLMMessage> {
         if (level == Level.NONE) return messages
         if (messages.size <= PROTECTED_RECENT_MESSAGES) return messages
 
@@ -145,18 +187,18 @@ internal object ProgressiveTrim {
                 working = working.copy(reasoningContent = null)
                 changed = true
             }
-            // L2: stub oversized tool outputs. Bytes (imageData) are NOT
+            // L2: offload oversized tool outputs. Bytes (imageData) are NOT
             // trimmed here: ImageBudget already elides old images at the
             // provider boundary with a re-fetchable path placeholder;
             // double-handling would race its budget math.
-            if (level == Level.STUB_LARGE_TOOL_OUTPUTS && working.contentParts.isNotEmpty()) {
+            if (level >= Level.STUB_LARGE_TOOL_OUTPUTS && working.contentParts.isNotEmpty()) {
                 var partsChanged = false
                 val stubbedParts = working.contentParts.map { part ->
                     if (part is AgentContentPart.ToolResult &&
                         part.content.length > TOOL_RESULT_STUB_THRESHOLD_CHARS
                     ) {
                         partsChanged = true
-                        part.copy(content = stubTextFor(part.content))
+                        part.copy(content = offloadStub(part, offloader))
                     } else {
                         part
                     }
@@ -168,11 +210,183 @@ internal object ProgressiveTrim {
             }
             out.add(working)
         }
-        return if (changed) out else messages
+        if (level < Level.MERGE_OLD_STEPS) return if (changed) out else messages
+
+        // [T-wave-e-progressive-reclaim] L3: merge old consecutive tool
+        // iterations into an index block (upstream ContextTrimPlanner L4).
+        // Input here is the L1/L2-processed list; iteration boundaries are
+        // unaffected by both (stubbing keeps part ids).
+        val merged = mergeOldSteps(out, lastUserIdx, firstTrimmableIdx)
+        return merged ?: if (changed) out else messages
     }
 
-    private fun stubTextFor(content: String): String =
-        "[tool output trimmed for context: ${content.length} chars total, first " +
-            "$TOOL_RESULT_STUB_HEAD_CHARS kept]\n" +
-            content.take(TOOL_RESULT_STUB_HEAD_CHARS)
+    // ── L2: offload-backed stub ─────────────────────────────────────────
+
+    private fun offloadStub(part: AgentContentPart.ToolResult, offloader: Offloader): String {
+        val content = part.content
+        val path = offloader.offload(content, part.id, part.name)
+        val head = content.take(TOOL_RESULT_STUB_HEAD_CHARS)
+        return if (!path.isNullOrEmpty()) {
+            buildString {
+                append("[tool output offloaded to save context — ").append(content.length)
+                append(" chars. Full output saved to ").append(path)
+                append(" — use file_read to retrieve it if needed.]\n")
+                append(head)
+            }
+        } else {
+            // No disk to offload to: tell the truth (the full text is gone),
+            // the same contract ToolOutputSpill.cappedPreview keeps.
+            buildString {
+                append("[tool output trimmed for context: ").append(content.length)
+                append(" chars total, first ").append(TOOL_RESULT_STUB_HEAD_CHARS)
+                append(" kept]\n")
+                append(head)
+            }
+        }
+    }
+
+    // ── L3: merge old tool iterations ───────────────────────────────────
+
+    /**
+     * One iteration: an assistant message plus the user-role messages that
+     * carry ITS tool results (upstream ContextTrimPlanner.Iteration). A
+     * carrier that also holds text (a compaction summary appended after the
+     * results) is [Iteration.pinned] — it can be shrunk elsewhere but never
+     * dropped here.
+     */
+    internal data class Iteration(
+        val assistantIdx: Int,
+        val carrierIdx: List<Int>,
+        val pinned: Boolean,
+        /** True when at least one carrier holds a ToolResult for this iteration's ToolUse ids. */
+        val paired: Boolean,
+    )
+
+    internal fun iterations(messages: List<LLMMessage>): List<Iteration> {
+        val out = mutableListOf<Iteration>()
+        var i = 0
+        while (i < messages.size) {
+            val m = messages[i]
+            if (m.role != LLMMessage.Role.ASSISTANT) { i++; continue }
+            val useIds = m.contentParts.filterIsInstance<AgentContentPart.ToolUse>()
+            if (useIds.isEmpty()) { i++; continue }
+            val ids = useIds.mapTo(HashSet()) { it.id }
+            val carriers = mutableListOf<Int>()
+            var pinned = false
+            var paired = false
+            var j = i + 1
+            while (j < messages.size) {
+                val c = messages[j]
+                if (c.role != LLMMessage.Role.USER) break
+                val results = c.contentParts.filterIsInstance<AgentContentPart.ToolResult>()
+                if (results.isEmpty() || results.none { it.id in ids }) break
+                carriers += j
+                paired = true
+                if (c.contentParts.any { it !is AgentContentPart.ToolResult }) pinned = true
+                j++
+            }
+            out += Iteration(i, carriers, pinned, paired)
+            i = maxOf(i + 1, j)
+        }
+        return out
+    }
+
+    /**
+     * Collapse the oldest iterations (beyond [MERGE_KEEP_RECENT_ITERATIONS],
+     * and only ones fully inside the trimmable prefix / outside the current
+     * round / unpinned) into an index block appended to the last plain user
+     * message before the collapsed range — upstream's "index host". Returns
+     * null when nothing was collapsible (caller keeps the input).
+     */
+    internal fun mergeOldSteps(
+        messages: List<LLMMessage>,
+        lastUserIdx: Int,
+        firstTrimmableIdx: Int,
+    ): List<LLMMessage>? {
+        val its = iterations(messages)
+        if (its.isEmpty()) return null
+        val keepFrom = (its.size - MERGE_KEEP_RECENT_ITERATIONS).coerceAtLeast(0)
+        val collapsible = its.take(keepFrom).filter { it.paired && !it.pinned }
+            .filter { it.assistantIdx < firstTrimmableIdx }
+            .filter { it.carrierIdx.all { c -> c < firstTrimmableIdx } }
+            .filter { lastUserIdx < 0 || it.assistantIdx < lastUserIdx }
+        if (collapsible.isEmpty()) return null
+        val dropIdx = collapsible.flatMapTo(HashSet()) { listOf(it.assistantIdx) + it.carrierIdx }
+        val firstDropped = collapsible.minOf { it.assistantIdx }
+        // The index host: the last plain user message BEFORE the collapsed
+        // range that survives (not itself dropped). None → prepend a
+        // synthetic user turn (upstream does the same).
+        var hostAt = -1
+        for (i in 0 until firstDropped) {
+            if (i in dropIdx) continue
+            if (messages[i].role == LLMMessage.Role.USER) hostAt = i
+        }
+        val index = indexText(messages, collapsible)
+        val out = ArrayList<LLMMessage>(messages.size - dropIdx.size)
+        var indexInserted = false
+        for ((i, msg) in messages.withIndex()) {
+            if (i in dropIdx) continue
+            out.add(msg)
+            if (i == hostAt) {
+                out.add(
+                    LLMMessage(
+                        role = LLMMessage.Role.USER,
+                        content = index,
+                        contentParts = listOf(AgentContentPart.Text(index)),
+                    ),
+                )
+                indexInserted = true
+            }
+        }
+        if (!indexInserted) {
+            out.add(
+                0,
+                LLMMessage(
+                    role = LLMMessage.Role.USER,
+                    content = index,
+                    contentParts = listOf(AgentContentPart.Text(index)),
+                ),
+            )
+        }
+        return out
+    }
+
+    /**
+     * Index of collapsed iterations, newest [MERGE_INDEX_MAX_LINES] listed,
+     * the rest counted (upstream ContextTrimPlanner.indexText). The model is
+     * told the full records stay in the chat history and big outputs are on
+     * disk at the paths shown — do not redo a step listed as ok.
+     */
+    internal fun indexText(messages: List<LLMMessage>, collapsed: List<Iteration>): String {
+        val lines = mutableListOf<String>()
+        val counts = linkedMapOf<String, Int>()
+        for ((n, it) in collapsed.withIndex()) {
+            val asst = messages[it.assistantIdx]
+            val results = it.carrierIdx
+                .flatMap { c -> messages[c].contentParts.filterIsInstance<AgentContentPart.ToolResult>() }
+                .associateBy { it.id }
+            for (u in asst.contentParts.filterIsInstance<AgentContentPart.ToolUse>()) {
+                counts[u.name] = (counts[u.name] ?: 0) + 1
+                val r = results[u.id]
+                val status = when { r == null -> "no result"; r.isError -> "error"; else -> "ok" }
+                val path = r?.content?.let { c ->
+                    Regex("saved to: (\\S+)").find(c)?.groupValues?.getOrNull(1)
+                        ?: Regex("saved to (\\S+)").find(c)?.groupValues?.getOrNull(1)
+                }
+                lines += "#${n + 1} ${u.name} → $status${path?.let { " ($it)" } ?: ""}"
+            }
+        }
+        if (lines.isEmpty()) return ""
+        val shown = lines.takeLast(MERGE_INDEX_MAX_LINES)
+        val hidden = lines.size - shown.size
+        val summary = counts.entries.joinToString(", ") { "${it.key} ${it.value}" }
+        return buildString {
+            append("[Minis context] ${collapsed.size} earlier step(s) of this task were merged to save context. ")
+            append("Their full records stay in the chat history; large outputs are on disk at the paths shown. ")
+            append("Do not redo a step listed as ok - use file_read on its output path if you need the details. ")
+            append("Tool calls merged: $summary.")
+            if (hidden > 0) append(" ($hidden older line(s) not listed)")
+            shown.forEach { append("\n"); append(it) }
+        }
+    }
 }

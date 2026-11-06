@@ -343,6 +343,8 @@ internal fun PickerProviderCardHeader(
     label: String,
     expanded: Boolean,
     onToggle: () -> Unit,
+    /** [port-upstream-1.16][T-provider-quota P2] Badge slot left of the chevron. */
+    trailing: (@Composable () -> Unit)? = null,
 ) {
     Row(
         modifier = Modifier
@@ -359,6 +361,7 @@ internal fun PickerProviderCardHeader(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(1f),
         )
+        trailing?.invoke()
         PickerCollapseChevron(expanded = expanded, onToggle = onToggle)
     }
     HorizontalDivider(

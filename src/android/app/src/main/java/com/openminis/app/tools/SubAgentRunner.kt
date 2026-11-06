@@ -83,6 +83,11 @@ object SubAgentRunner {
         temperature: Double? = null,
         tokenBudget: SubAgentTokenBudget? = null,
         thinkingLevel: ThinkingLevel = ThinkingLevel.ULTRA,
+        // [T-wave-e-subagent-steer, port upstream 1.16 T-sub-agents-steer]
+        // User guidance queued while the lane runs; drained at every turn
+        // boundary into a user-role message so the child reads it before its
+        // next move. Null = no steering for this lane.
+        steers: kotlinx.coroutines.channels.ReceiveChannel<String>? = null,
     ): ToolExecutionResult {
         val briefed = SubAgentBrief.wrap(userPrompt, kind = kind, role = role, writePaths = writePaths)
         // Defensive: duplicate tool names reach providers as duplicate schemas
@@ -117,6 +122,25 @@ object SubAgentRunner {
                 turn++
                 runCatching { onStep(turn, "") }
                 runCatching { onUi(UiEvent.Phase("思考中")) }
+                // [T-wave-e-subagent-steer] Drain guidance queued since the
+                // last boundary BEFORE the next model call, so the child
+                // reacts to it instead of reading it after the fact. The
+                // wrapper marks the provenance and tells the child it may
+                // adjust course without restarting.
+                if (steers != null) {
+                    while (true) {
+                        val steer = steers.tryReceive().getOrNull() ?: break
+                        if (steer.isBlank()) continue
+                        history.add(
+                            LLMMessage(
+                                role = LLMMessage.Role.USER,
+                                content = "[steer] The user sent this supplementary instruction while you were " +
+                                    "working; incorporate it into the remaining work (do not restart from scratch):\n" + steer,
+                            ),
+                        )
+                        runCatching { onStep(turn, "steer received") }
+                    }
+                }
                 var announcedSpeak = false
                 var textSeg = 0
                 var thinkSeg = 0

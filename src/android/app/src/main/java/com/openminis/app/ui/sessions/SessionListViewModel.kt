@@ -172,7 +172,6 @@ class SessionListViewModel(
      */
     val searchAnchors = MutableStateFlow<Map<String, String>>(emptyMap())
 
-    // The list to actually show: search results when searching, otherwise all sessions
     val displayedSessions: StateFlow<List<ChatSessionEntity>> = combine(
         _allSessions, searchResults, searchQuery, isSearchActive, com.openminis.app.tools.AgentReportStore.attentionSessions
     ) { all, results, q, active, attention ->
@@ -399,6 +398,7 @@ class SessionListViewModel(
             chatRepository.deleteSession(id)
             ChatViewModelStore.release(id)
             com.openminis.app.service.SessionBadgeStore.clear(id)
+            com.openminis.app.data.UnreadRegistry.forget(context, id)
         }
     }
 

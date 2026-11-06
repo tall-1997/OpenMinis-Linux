@@ -2,6 +2,7 @@ package com.openminis.app.data.repository
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.openminis.app.data.model.ModelEntry
 import com.openminis.app.data.model.ProviderCredential
 import com.openminis.app.data.model.ProviderInstance
 import com.openminis.app.data.model.ProviderType
@@ -316,7 +317,13 @@ internal class ModelCatalogCache(
         // catalog is a per-credential refresh. Same API address used to make
         // every sibling provider look freshly synced.
         if (liveForce) {
-            return if (apiKey == null) ModelRefreshResult.NO_KEY
+            if (apiKey == null) return ModelRefreshResult.NO_KEY
+            // [port-upstream-1.16][FIX-261025-18] Without the provider's own
+            // list, catch up with the built-in one (never removes or rewrites
+            // an entry). A failed/empty refresh that reseeded missing built-ins
+            // reports SUCCESS_BUILTIN rather than a bare failure — the picker
+            // is not empty and the UI says so.
+            return if (addMissingBuiltInModels(instance)) ModelRefreshResult.SUCCESS_BUILTIN
             else lastFetchError ?: ModelRefreshResult.FAILURE
         }
 
@@ -334,9 +341,45 @@ internal class ModelCatalogCache(
             return ModelRefreshResult.SUCCESS_API
         } else if (isThirdParty) {
             android.util.Log.i("ProviderRepo", "Third-party endpoint, no models.dev match — preserving existing models for ${instance.label}")
+            // [port-upstream-1.16][FIX-261025-18] Built-in catch-up runs here
+            // too: a third-party OpenAI-compat base never seeds (addInstance
+            // skips it), so a failed refresh has nothing to reseed — the call
+            // is a no-op and PRESERVED stands. Official bases DO reseed.
+            addMissingBuiltInModels(instance)
             return ModelRefreshResult.PRESERVED
         }
-        return if (apiKey == null) ModelRefreshResult.NO_KEY else ModelRefreshResult.FAILURE
+        return if (apiKey == null) ModelRefreshResult.NO_KEY
+        else if (addMissingBuiltInModels(instance)) ModelRefreshResult.SUCCESS_BUILTIN
+        else ModelRefreshResult.FAILURE
+    }
+
+    /**
+     * [port-upstream-1.16][FIX-261025-18] Adds the provider type's built-in
+     * models this instance lacks, for an instance [ProviderRepository.addInstance]
+     * would seed with them. Never removes or changes an entry: it only brings
+     * the list up to what deleting and re-adding the provider would give.
+     * Returns whether anything was added.
+     */
+    private fun addMissingBuiltInModels(instance: ProviderInstance): Boolean {
+        // Same seed rule as addInstance: OAuth always, API-key only off a
+        // third-party OpenAI-compatible base (which must not inherit allOpenAI).
+        val seeds = instance.credentialType == ProviderCredential.oauth ||
+            !repo.configStore.isThirdPartyOpenAICompat(instance)
+        if (!seeds) return false
+        synchronized(repo.configLock) {
+            repo.ensureConfigLoaded()
+            val config = repo.workingCopy()
+            val have = config.modelEntries
+                .filter { it.providerInstanceId == instance.id }
+                .map { it.baseModel.id }
+                .toSet()
+            val missing = instance.providerType.builtInModels.filter { it.id !in have }
+            if (missing.isEmpty()) return false
+            config.modelEntries.addAll(missing.map { ModelEntry(providerInstanceId = instance.id, baseModel = it) })
+            repo.saveConfig(config)
+            android.util.Log.i("ProviderRepo", "[ModelList] ${instance.label}: added built-in ${missing.map { it.id }}")
+            return true
+        }
     }
 
     /**

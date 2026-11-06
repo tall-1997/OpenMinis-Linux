@@ -96,10 +96,27 @@ internal suspend fun ChatViewModel.executeShellCommand(
         // status ("Running: shell_execute") set by the dispatch loop is
         // sufficient.
 
+        // [diag] sessionId vs realSessionId mismatch was the root cause
+        // of the Chinese-emoji filename "disappears" bug. `activeSessionId`
+        // resolves to the persisted id once `ensureSession()` has run, so
+        // every shell runs in a directory that survives VM recreation.
+        val dispatchSessionId = kotlin.coroutines.coroutineContext[SubAgentLane]?.id ?: activeSessionId
+        // [port-upstream-1.16 / FIX-261025-05] Take the session's stop epoch
+        // BEFORE the countdown: a Stop tapped while the countdown runs (or
+        // during the bash install below) moves the epoch, and the command must
+        // then never start instead of waiting out the Stop and running anyway.
+        val stopEpoch = ExecutionCoordinator.stopEpoch(dispatchSessionId)
         // Delay execution: block the agent flow without occupying the shell,
         // allowing other concurrent tasks to use it during the wait period.
         if (delaySec > 0) {
             for (remaining in delaySec downTo 1) {
+                // [port-upstream-1.16 / FIX-261025-05] The countdown itself
+                // bails out the moment the session is stopped.
+                if (ExecutionCoordinator.stoppedSince(dispatchSessionId, stopEpoch)) {
+                    return ToolExecutionResult(
+                        ExecutionCoordinator.NOT_STARTED_OUTPUT, false, toolTitle = toolTitle,
+                    )
+                }
                 val idx = toolBlocks.indexOfFirst { it.id == toolId }
                 if (idx >= 0) {
                     val mm = remaining / 60
@@ -122,7 +139,6 @@ internal suspend fun ChatViewModel.executeShellCommand(
         // of the Chinese-emoji filename "disappears" bug. `activeSessionId`
         // resolves to the persisted id once `ensureSession()` has run, so
         // every shell runs in a directory that survives VM recreation.
-        val dispatchSessionId = kotlin.coroutines.coroutineContext[SubAgentLane]?.id ?: activeSessionId
         android.util.Log.w("ShellExecDiag",
             "executeShell dispatch=$dispatchSessionId rawSessionId=$sessionId realSessionId=$realSessionId isDraft=$isDraft cmd=${command.take(120).replace('\n', ' ')}")
 
@@ -174,6 +190,7 @@ internal suspend fun ChatViewModel.executeShellCommand(
             command = command,
             timeout = timeoutSec * 1000L,
             resourceClass = resourceClass,
+            stopEpoch = stopEpoch,
             lineCallback = lc@{ rawLine ->
                 // Strip any OSC MinisOpenURL markers emitted by
                 // /usr/local/bin/minis-open and forward the captured

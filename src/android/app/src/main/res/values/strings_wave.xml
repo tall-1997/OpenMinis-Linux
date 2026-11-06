@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Wave E additions (long tasks / scheduled runs / home experience).
+  Kept in a dedicated file so parallel waves never collide on strings.xml.
+-->
+<resources>
+    <!-- T3/T4: countdown capsule + run-now -->
+    <string name="sched_pill_run_now">Run Now</string>
+    <string name="sched_pill_task_label">Scheduled task</string>
+    <string name="sched_pill_countdown_a11y">Next scheduled run in %1$s</string>
+    <string name="sched_pill_hide">Hide this countdown</string>
+
+    <!-- T7: two-tier stop -->
+    <string name="stop_menu_current_tool">Stop current tool only</string>
+    <string name="stop_menu_stop_all">Stop everything</string>
+    <string name="stop_menu_confirm_toggle">Confirm before stop</string>
+    <string name="stop_confirm_title">Stop this run?</string>
+    <string name="stop_confirm_current">Stop current run</string>
+    <string name="stop_confirm_all">Stop everything</string>
+    <string name="cd_stop_long_press_options">Stop options</string>
+
+    <!-- T6: sub-agent card -->
+    <string name="subagent_tool_calls_fmt">%1$d tool calls</string>
+    <string name="subagent_steer_hint">Send guidance to this sub-agent…</string>
+    <string name="subagent_steer_send">Send</string>
+    <string name="subagent_steer_queued">Guidance queued — the sub-agent reads it next turn</string>
+    <string name="subagent_steer_refused">Sub-agent is no longer running</string>
+    <string name="subagent_stop_in_sheet">Stop this sub-agent</string>
+    <string name="cd_subagent_steering">Steer sub-agent</string>
+
+    <!-- T9: show full thinking -->
+    <string name="appearance_show_full_thinking_title">Show full thinking</string>
+    <string name="appearance_show_full_thinking_footer">When on, thinking panels open fully expanded and render the entire content instead of the collapsed tail-window summary.</string>
+
+    <!-- T8: home group visuals -->
+    <string name="cd_group_running_comet">A session in this group is running</string>
+    <string name="cd_unread_reply">Has unread reply</string>
+</resources>

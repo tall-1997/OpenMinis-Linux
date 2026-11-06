@@ -3,6 +3,7 @@ package com.openminis.app.service
 import android.content.Context
 import android.os.SystemClock
 import android.util.Log
+import com.openminis.app.logging.AppLogger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -256,7 +257,38 @@ object SessionActivityTracker {
      */
     private fun shouldRunService(): Boolean =
         _activeSessions.value.isNotEmpty() ||
-            (presenceKeepAliveEnabled() && _presentSessions.value.isNotEmpty())
+            (presenceKeepAliveEnabled() && _presentSessions.value.isNotEmpty()) ||
+            // [T-scheduled-active-session-android, port upstream 1.16] A chat
+            // waiting on its own scheduled task is not finished: keep the
+            // process alive between fires. See setScheduledSessions for why
+            // it never STARTS it.
+            _scheduledSessions.value.isNotEmpty()
+
+    /**
+     * [T-scheduled-active-session-android, port upstream 1.16] Chats a
+     * scheduled task keeps ACTIVE between its fires (ScheduledSessionHold).
+     * Keeps the foreground service running when it is already up, but never
+     * starts one by itself: the alarm (or the in-app timer) starts the
+     * service when the run is due, so nothing needs the hold before that.
+     */
+    private val _scheduledSessions = MutableStateFlow<Set<String>>(emptySet())
+    val scheduledSessions: StateFlow<Set<String>> = _scheduledSessions.asStateFlow()
+
+    /** Like the active set: refreshes a running service, never starts one. */
+    fun setScheduledSessions(sessions: Set<String>) {
+        if (_scheduledSessions.value == sessions) return
+        val old = _scheduledSessions.value
+        _scheduledSessions.value = sessions
+        // Presence unaffected — a held chat is nobody's foreground. Only the
+        // service continuation may flip on this edge.
+        if (old.isNotEmpty() || sessions.isNotEmpty()) {
+            AppLogger.debug(
+                TAG,
+                "Scheduled sessions: ${sessions.size} [${sessions.joinToString(",") { it.take(8) }}]",
+            )
+            updateService()
+        }
+    }
 
     /**
      * [Wave3 #5] Presence keep-alive toggle. Key declared HERE on purpose:
@@ -578,7 +610,22 @@ object SessionActivityTracker {
     /**
      * Returns whether a specific session is currently active.
      */
+    /**
+     * Streaming-only activity read. Kept SEPARATE from the scheduled hold on
+     * purpose: historic callers (interrupted-tail detection, debug dumps)
+     * branch on "is an agent loop in flight right now", which a scheduled
+     * wait between fires must not claim.
+     */
     fun isActive(sessionId: String): Boolean = sessionId in _activeSessions.value
+
+    /**
+     * [T-scheduled-active-session-android, port upstream 1.16] The union read
+     * for "this chat is still working": streaming ([isActive]) or a scheduled
+     * task of its own still due ([scheduledSessions]). New callers — Stop
+     * semantics, UI busy affordances — read this.
+     */
+    fun isBusyOrHeld(sessionId: String): Boolean =
+        sessionId in _activeSessions.value || sessionId in _scheduledSessions.value
 
     /**
      * Updates the current tool status displayed in the notification.

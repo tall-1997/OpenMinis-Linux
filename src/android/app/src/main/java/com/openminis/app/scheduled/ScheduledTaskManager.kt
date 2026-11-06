@@ -100,22 +100,36 @@ class ScheduledTaskManager(private val context: Context) {
      * Called by the receiver after firing — for repeating tasks, schedule
      * the next occurrence. ONCE tasks get disabled in-place (enabled=false)
      * so they linger in the list with their lastResult* metadata visible.
+     *
+     * [T-sched-run-now, port upstream 1.16] Now answers whether THIS alarm
+     * delivery is a real fire that should run: false when the slot was
+     * already taken by "Run now" (or the in-app timer) — the caller skips
+     * the run and the next occurrence is armed instead.
      */
-    fun rescheduleNext(taskId: String) {
-        val t = store.get(taskId) ?: return
+    fun rescheduleNext(taskId: String): Boolean {
+        val t = store.get(taskId) ?: return false
         if (t.repeatMode == ScheduledRepeatMode.ONCE) {
             // Mark fired ONCE task as disabled — keep row so the user can
             // see its last result, re-enable if they want to re-run.
             store.upsert(t.copy(enabled = false))
-            return
+            return true
         }
         if (t.repeatMode == ScheduledRepeatMode.INTERVAL) {
             val intervalMs = t.intervalMinutes * 60_000L
-            if (intervalMs <= 0L) return
+            if (intervalMs <= 0L) return false
             val updated = t.copy(fireAtMs = System.currentTimeMillis() + intervalMs)
             store.upsert(updated)
             registerAlarm(updated)
-            return
+            return true
+        }
+        // [T-sched-run-now] A slot "Run now" already fired early must not run
+        // again from its alarm: the run-now claim recorded the slot
+        // ([ScheduledTask.runNowSlotMs]); a delivery inside the late window
+        // (Doze can hold an alarm minutes) is that stale registration.
+        if (calendarSlotTakenByRunNow(t, System.currentTimeMillis())) {
+            AppLogger.info(TAG, "task ${t.id}: slot already run by Run now — not running")
+            registerAlarm(t)
+            return false
         }
         // [T-scheduled-end-window-autodisable] ScheduledTask's active-window
         // contract says repeating tasks "auto-disable once the end date has
@@ -132,9 +146,41 @@ class ScheduledTaskManager(private val context: Context) {
                 "task ${t.id}: no future slot (end of active window) — disabling",
             )
             store.upsert(t.copy(enabled = false))
-            return
+            return false
         }
         registerAlarm(t)
+        return true
+    }
+
+    /**
+     * [T-sched-run-now, port upstream 1.16] "Run now": take the task's
+     * PENDING next run and mark it fired in ONE atomic store step — the same
+     * lock and the same transition the alarm's fire uses, so the alarm and
+     * "Run now" can never both run the same run. The loser finds the slot
+     * taken (recorded in [ScheduledTask.runNowSlotMs]) and the alarm path
+     * turns itself away in [rescheduleNext]. The next alarm is re-armed for
+     * the run after the taken one.
+     *
+     * Returns the row to run, or null when there is nothing to take:
+     * disabled, no pending slot, or [isRunning] says a run of it is already
+     * in progress (checked under the store lock, not only when the menu
+     * opened).
+     */
+    fun claimRunNow(
+        taskId: String,
+        now: Long = System.currentTimeMillis(),
+        isRunning: (String) -> Boolean = { false },
+    ): ScheduledTask? {
+        val stored = store.update(taskId) { cur ->
+            if (isRunning(cur.id)) return@update null
+            runNowTransition(cur, now)
+        } ?: return null
+        if (stored.enabled && stored.nextTriggerMs(now) != null) registerAlarm(stored) else cancelAlarm(taskId)
+        AppLogger.info(
+            TAG,
+            "run now task=$taskId slot=${stored.runNowSlotMs} enabled=${stored.enabled} next=${stored.nextTriggerMs(now)}",
+        )
+        return stored
     }
 
     fun markFired(taskId: String, sessionId: String?, resultPreview: String?, ok: Boolean = true) {
@@ -200,9 +246,48 @@ class ScheduledTaskManager(private val context: Context) {
 
     companion object {
         private const val TAG = "ScheduledTaskManager"
+
+        /**
+         * [T-sched-run-now] Identity of the task's pending run, for a
+         * compare-and-set in the in-app timer: the planned slot. null when
+         * nothing is pending. Pure, for tests. Lives on the companion (like
+         * upstream 1.16) so the timer and the alarm race it statelessly.
+         */
+        internal fun pendingRunKey(t: ScheduledTask, now: Long): String? =
+            if (!t.enabled) null else t.nextTriggerMs(now)?.let { "slot:$it" }
+
+        internal fun runNowTransition(t: ScheduledTask, now: Long): ScheduledTask? {
+            if (!t.enabled) return null
+            val slot = t.nextTriggerMs(now) ?: return null
+            return when (t.repeatMode) {
+                ScheduledRepeatMode.ONCE -> t.copy(runNowSlotMs = slot, enabled = false)
+                ScheduledRepeatMode.INTERVAL ->
+                    t.copy(
+                        runNowSlotMs = slot,
+                        fireAtMs = slot + (t.intervalMinutes * 60_000L).coerceAtLeast(60_000L),
+                    )
+                else -> t.copy(runNowSlotMs = slot)
+            }
+        }
+
+        internal fun calendarSlotTakenByRunNow(t: ScheduledTask, now: Long): Boolean {
+            val slot = t.runNowSlotMs ?: return false
+            return now >= slot - ALARM_EARLY_SLACK_MS && now <= slot + RUN_NOW_LATE_WINDOW_MS
+        }
+
         const val ACTION_FIRE = "com.openminis.app.scheduled.FIRE"
         const val EXTRA_TASK_ID = "task_id"
         const val CHANNEL_ID = "minis_scheduled_tasks"
         private const val CHANNEL_NAME = "Scheduled Tasks"
+
+        /**
+         * [T-sched-run-now, port upstream 1.16] Tolerance for a delivery
+         * judged against a slot: exact alarms are not delivered early, so
+         * anything well before the slot is a stale registration.
+         */
+        internal const val ALARM_EARLY_SLACK_MS = 5_000L
+
+        /** [T-sched-run-now] How late an alarm for a taken slot may still arrive. */
+        internal const val RUN_NOW_LATE_WINDOW_MS = 30 * 60_000L
     }
 }

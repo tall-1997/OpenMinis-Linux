@@ -54,6 +54,11 @@ class RcloneDestinationsViewModel(app: Application) : AndroidViewModel(app) {
         val remote: RcloneRemoteStore.Remote,
         val path: String,
         val entries: List<RcloneBrowser.Entry>,
+        // [T-android-backup-dest-edit] True when the browser was opened from a
+        // saved destination's detail page: the chosen folder then re-points the
+        // EXISTING remote (applyFolder) instead of saving the pending new one
+        // (savePending).
+        val existing: Boolean = false,
     )
 
     /**
@@ -88,6 +93,159 @@ class RcloneDestinationsViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch(Dispatchers.IO) {
             runCatching { store.remove(name) }
             _remotes.value = runCatching { store.remotes }.getOrDefault(emptyList())
+        }
+    }
+
+    // MARK: - [T-android-backup-dest-edit] Editing a saved destination
+
+    /** Whether [name] has a stored secret — drives the editor's footer, never shows it. */
+    fun hasSecret(name: String): Boolean = store.hasSecret(name)
+
+    /**
+     * Rename a destination. History records follow the new name, and the old
+     * rclone section is dropped so its credential does not linger under a name
+     * nothing refers to any more.
+     */
+    fun rename(name: String, newName: String, onDone: (RcloneRemoteStore.Remote) -> Unit) {
+        if (_busy.value) return
+        _busy.value = true
+        _error.value = null
+        viewModelScope.launch {
+            try {
+                val updated = withContext(Dispatchers.IO) {
+                    val r = store.update(name = name, newName = newName)
+                    if (r.name != name) {
+                        com.openminis.app.backup.BackupHistory.get(getApplication())
+                            .renameDestination(name, r.name)
+                        store.dropRcloneSection(name)
+                        store.syncToRclone()
+                    }
+                    r
+                }
+                refresh()
+                onDone(updated)
+            } catch (e: Exception) {
+                _error.value = e.message ?: "Couldn't rename the destination."
+            } finally {
+                _busy.value = false
+            }
+        }
+    }
+
+    /**
+     * Save edited connection settings — only if they connect.
+     *
+     * [values] are the form's non-secret fields. The candidate is probed under
+     * a throwaway rclone section first ([RcloneRemoteStore.probeConnection]);
+     * on failure nothing is written and the destination keeps working with its
+     * old settings and password.
+     */
+    fun saveConnection(
+        name: String,
+        values: Map<String, String>,
+        secret: RcloneRemoteStore.SecretEdit,
+        allowInsecureTLS: Boolean,
+        onDone: (RcloneRemoteStore.Remote) -> Unit,
+    ) {
+        if (_busy.value) return
+        _busy.value = true
+        _error.value = null
+        viewModelScope.launch {
+            try {
+                val updated = withContext(Dispatchers.IO) {
+                    val r = store.update(
+                        name = name,
+                        newParams = values,
+                        secret = secret,
+                        allowInsecureTLS = allowInsecureTLS,
+                        verify = { candidate, candidateSecret ->
+                            try {
+                                store.probeConnection(candidate, candidateSecret)
+                            } catch (e: Exception) {
+                                throw ProbeFailed(e)
+                            }
+                        },
+                    )
+                    store.syncToRclone()
+                    r
+                }
+                _certificateRejected.value = false
+                refresh()
+                onDone(updated)
+            } catch (e: ProbeFailed) {
+                val msg = e.cause?.message ?: "Could not connect to the server."
+                AppLogger.error(TAG, "[Rclone] edit of '$name' not saved, connection failed: $msg")
+                _error.value = getApplication<Application>()
+                    .getString(com.openminis.app.R.string.backup_dest_edit_failed, msg)
+                if (!allowInsecureTLS && RcloneRemoteStore.looksLikeCertificateFailure(msg)) {
+                    _certificateRejected.value = true
+                }
+            } catch (e: Exception) {
+                _error.value = e.message ?: "Couldn't save the connection."
+            } finally {
+                _busy.value = false
+            }
+        }
+    }
+
+    /** Wraps a failed connection probe so it is told apart from a store error. */
+    private class ProbeFailed(cause: Exception) : Exception(cause.message, cause)
+
+    /** List [name]'s backup folder; reports "Connected." or the rclone error. */
+    fun testConnection(name: String, onResult: (ok: Boolean, message: String?) -> Unit) {
+        val r = store.remote(name) ?: return
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    store.syncToRclone()
+                    RcloneBrowser.listDirectories(r, r.listRoot)
+                }
+            }
+            onResult(
+                result.isSuccess,
+                result.exceptionOrNull()?.let { it.message ?: it.javaClass.simpleName },
+            )
+        }
+    }
+
+    /** Open the folder browser on a saved server, starting at its current folder. */
+    fun browseExisting(name: String) {
+        val r = store.remote(name) ?: return
+        if (_busy.value) return
+        _busy.value = true
+        _error.value = null
+        viewModelScope.launch {
+            try {
+                val entries = withContext(Dispatchers.IO) {
+                    store.syncToRclone()
+                    RcloneBrowser.listDirectories(r, r.listRoot)
+                }
+                _browse.value = BrowseState(r, r.listRoot, entries, existing = true)
+            } catch (e: Exception) {
+                _error.value = e.message ?: "Could not open that folder."
+            } finally {
+                _busy.value = false
+            }
+        }
+    }
+
+    /** Store the folder picked in [browseExisting]'s browser. */
+    fun applyFolder(path: String, onDone: (RcloneRemoteStore.Remote) -> Unit) {
+        val b = _browse.value ?: return
+        _busy.value = true
+        viewModelScope.launch {
+            try {
+                val updated = withContext(Dispatchers.IO) {
+                    store.update(name = b.remote.name, newPath = path)
+                }
+                refresh()
+                _browse.value = null
+                onDone(updated)
+            } catch (e: Exception) {
+                _error.value = e.message ?: "Could not save the folder."
+            } finally {
+                _busy.value = false
+            }
         }
     }
 

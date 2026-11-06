@@ -73,6 +73,8 @@ fun ChatViewModel.retryLast() {
     // clears miss rows stranded further up — sweep memory + persisted.
     sweepStaleInlineErrors()
 
+    // [port-upstream-1.16] Rebuild after a mid-session provider edit — see rebuildProviderIfEdited.
+    rebuildProviderIfEdited()
     val initialProvider = currentProvider ?: return
     var provider: LLMProvider = initialProvider
     _error.value = null

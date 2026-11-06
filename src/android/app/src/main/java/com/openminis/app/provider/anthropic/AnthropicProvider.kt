@@ -63,6 +63,13 @@ class AnthropicProvider(
     override val defaultMaxOutputTokens: Int get() = 64_000
 
     /**
+     * [port-upstream-1.16][T-quota-claude-subscription] Instance tag set by
+     * ProviderFactory for OAuth instances, so replies' usage headers reach the
+     * quota store. Null = not quota-tracked.
+     */
+    var quotaInstanceId: String? = null
+
+    /**
      * [T-android-enhanced-cache] Enhanced Cache toggle — when true, every
      * `cache_control: ephemeral` breakpoint carries `ttl:"1h"` (1-hour cache
      * TTL) instead of the default 5-minute TTL, and the
@@ -107,6 +114,7 @@ class AnthropicProvider(
         val body = buildRequestBody(messages, systemPrompt, maxTokens, stream = false, temperature = temperature, imageParts = imageParts, tools = tools, thinkingLevel = thinkingLevel)
         val request = buildRequest(body.toString(), body)
         val response = client.newCall(request).execute()
+        if (isOAuth) com.openminis.app.quota.QuotaObservationSink.recordAnthropicResponse(quotaInstanceId, response.headers)
         val responseBody = response.body?.string() ?: ""
 
         if (!response.isSuccessful) {
@@ -165,6 +173,8 @@ class AnthropicProvider(
             ?.invokeOnCompletion { call.cancel() }
         val response = com.openminis.app.provider.StreamTtfb.execute(call, "Anthropic")
         val durationMs = System.currentTimeMillis() - startTime
+        // [T-quota-claude-subscription] Errors included: a 429 still reports usage.
+        if (isOAuth) com.openminis.app.quota.QuotaObservationSink.recordAnthropicResponse(quotaInstanceId, response.headers)
 
         if (!response.isSuccessful) {
             val errorBody = response.body?.string() ?: ""
@@ -186,11 +196,9 @@ class AnthropicProvider(
                     )
                 )
             }
-            // [T-llm-error-secret-mask] This line goes to logcat, which
-            // AppLogger's LogcatTailer copies into filesDir/logs/*.log — the very
-            // files CONTRIBUTING.md asks users to attach to GitHub issues. The
-            // upstream body is not ours to trust, so it is masked like the
-            // LLMError message is.
+            // [T-llm-error-secret-mask] Logcat feeds filesDir/logs/*.log (the
+            // files CONTRIBUTING.md asks users to attach), and the upstream body
+            // is not ours to trust — mask it like the LLMError message is.
             android.util.Log.e(
                 "AnthropicProvider",
                 "Stream failed: ${response.code} isOAuth=$isOAuth body=${com.openminis.app.util.SecretMasking.mask(errorBody.take(300))}",
@@ -235,18 +243,12 @@ class AnthropicProvider(
                 val eventType = event.safeOptString("type", "")
 
                 when (eventType) {
-                    // [T-anthropic-sse-error-event] `data: {"type":"error",
-                    // "error":{"type":"overloaded_error","message":…}}` is how
-                    // Anthropic (and every Anthropic-compatible relay) reports a
-                    // mid-stream refusal. There was no branch for it, so the
-                    // event was silently discarded, the stream then completed
-                    // with no content and no finish reason, and
-                    // failOnSilentEmptyCompletion re-labelled the whole turn as
-                    // a generic "empty response" TransientError — wrong retry
-                    // budget (an authentication_error got retried), wrong group
-                    // fallback trigger and a hint that points at the network
-                    // instead of the credential. Map it through the SAME mapper
-                    // the HTTP path uses.
+                    // [T-anthropic-sse-error-event] `data: {"type":"error", …}` is
+                    // how Anthropic (and every compatible relay) reports a mid-stream
+                    // failure. Unhandled, the stream "completed" with no content and
+                    // no finish reason and failOnSilentEmptyCompletion mis-labelled
+                    // it an empty response — wrong retry budget, wrong fallback
+                    // trigger. Map it through the SAME mapper the HTTP path uses.
                     "error" -> throw mapStreamErrorEvent(event)
                     "message_start" -> {
                         send(LLMStreamChunk.Started)
@@ -307,9 +309,16 @@ class AnthropicProvider(
                         event.optJSONObject("usage")?.let { usage ->
                             send(LLMStreamChunk.Usage(parseUsage(usage)))
                         }
-                        val stopReason = event.optJSONObject("delta")
-                            ?.safeOptString("stop_reason", "")?.ifEmpty { null }
-                        send(LLMStreamChunk.Finished(stopReason))
+                        val delta = event.optJSONObject("delta")
+                        val stopReason = delta?.safeOptString("stop_reason", "")?.ifEmpty { null }
+                        // [FIX-261018-12] A refusal's stop_details says why
+                        // (category "cyber", the policy explanation).
+                        val details = if (stopReason == "refusal") delta?.optJSONObject("stop_details") else null
+                        send(LLMStreamChunk.Finished(
+                            stopReason,
+                            refusalCategory = details?.safeOptString("category", "")?.ifEmpty { null },
+                            refusalExplanation = details?.safeOptString("explanation", "")?.ifEmpty { null },
+                        ))
                     }
                 }
             }
@@ -391,20 +400,14 @@ class AnthropicProvider(
             SamplingIdentity.of(this), model.id, temperature, thinkingLevel.isEnabled,
         )?.let { body.put("temperature", it) }
 
-        // Thinking / extended thinking. Two protocol shapes:
-        //   - Claude 4.6+ (adaptive): thinking.type="adaptive" + output_config.effort.
-        //     The legacy budget_tokens form is silently ignored on the wire, which is
-        //     the exact "thinking enabled but no thoughts" symptom seen on 4.7.
-        //   - Claude <=4.5 (legacy): thinking.type="enabled" + budget_tokens. For these
-        //     Anthropic also requires temperature=1 on the request.
-        // Claude 4.6+ rejects temperature outright (handled by the temperature guard
-        // above; we don't re-inject it here).
-        // [T-thinking-rules-phase2] WHICH shape applies is decided by
-        // ThinkingRuleResolver.anthropicThinkingShape — one place owns every vendor's
-        // thinking contract. Emission stays here because Android's Anthropic body also
-        // carries `display`/`output_config`/`temperature` companions that the abstract
-        // shape deliberately does not model. Behaviour is byte-for-byte unchanged, pinned
-        // by ThinkingWireGeminiAnthropicSnapshotTest.
+        // Thinking / extended thinking. Two shapes: Claude 4.6+ adaptive
+        // (thinking.type="adaptive" + output_config.effort; the legacy form is
+        // silently ignored — the "thinking on but no thoughts" symptom) and
+        // <=4.5 legacy (budget_tokens + temperature=1; 4.6+ rejects temperature,
+        // guarded above). [T-thinking-rules-phase2] WHICH shape is
+        // ThinkingRuleResolver.anthropicThinkingShape's call; emission stays here
+        // for the companions the abstract shape does not model. Pinned by
+        // ThinkingWireGeminiAnthropicSnapshotTest.
         val thinkShape = ThinkingRuleResolver.anthropicThinkingShape(
             model.id, model.supportsReasoning, thinkingLevel, maxTokens,
         )
@@ -416,15 +419,11 @@ class AnthropicProvider(
         if (thinkingLevel.isEnabled) {
             if (modelUsesAdaptiveThinking(model.id)) {
                 // [T-anthropic-thinking-display] Explicitly request summarized
-                // thinking. This is the SECOND half of the "thinking on but no
-                // thoughts shown" fix (first half: dropping the redact-thinking
-                // beta, f24e3f07). adaptive thinking has a separate `display`
-                // field: "summarized" returns readable thinking text; "omitted"
-                // leaves the thinking block empty (only a signature) — identical
-                // to being redacted. Newer models default `display` to "omitted"
-                // (Opus 4.7+ / Fable-tier), so without setting it Claude Sonnet 5
-                // etc. still show no thinking text even after the beta was
-                // removed. Pin it to "summarized" regardless of the model default.
+                // thinking — the SECOND half of the "thinking on but no thoughts"
+                // fix (first half: dropping the redact-thinking beta, f24e3f07).
+                // "summarized" returns readable text; "omitted" (the default on
+                // Opus 4.7+/Fable-tier) leaves the block empty but for a signature.
+                // Pin it regardless of the model default.
                 body.put("thinking", JSONObject().apply {
                     put("type", "adaptive")
                     put("display", "summarized")
@@ -444,15 +443,28 @@ class AnthropicProvider(
                     }
                 }
             }
-        } else if (modelUsesAdaptiveThinking(model.id)) {
-            // Adaptive-generation models (4.6+/5) think by DEFAULT when the
-            // request carries no thinking field at all — "off" must be sent
-            // explicitly, or small-maxTokens calls burn the whole budget on
-            // thinking_tokens and return zero text (iOS ea86dd8a observed:
-            // max_tokens=256 → stop_reason=max_tokens, thinking_tokens=256/256,
-            // empty body). Legacy (<=4.5) models default to no thinking, so
-            // absence is fine there.
-            body.put("thinking", JSONObject().put("type", "disabled"))
+        } else {
+            // Thinking OFF. [T-claude5-thinking-off] The literal is per model
+            // (offThinking): omitting the field is NOT off on Claude 5 — it is
+            // adaptive thinking at default effort, so OFF callers (titles, voice
+            // correction) used to think at full effort (iOS ef86ed890). 4.6-4.x
+            // and Sonnet 5 take `disabled`; <=4.5 are off by default — omit.
+            when (offThinking(model.id)) {
+                OffThinking.OMIT -> Unit
+                OffThinking.DISABLED ->
+                    body.put("thinking", JSONObject().put("type", "disabled"))
+                OffThinking.BETWEEN_TOOLS ->
+                    body.put("thinking", JSONObject().put("type", "between_tools"))
+                OffThinking.LOW_EFFORT -> {
+                    // Thinking cannot be switched off on this model: ask for as
+                    // little as it allows, in the same shape as the enabled path.
+                    body.put("thinking", JSONObject().apply {
+                        put("type", "adaptive")
+                        put("display", "summarized")
+                    })
+                    body.put("output_config", JSONObject().put("effort", "low"))
+                }
+            }
         }
 
         // System prompt blocks — mirrors iOS AnthropicProvider.resolveSystemPrompt.
@@ -461,11 +473,10 @@ class AnthropicProvider(
             body.put("system", systemArray)
         }
 
-        // Tools: enable eager_input_streaming on every tool (GA feature, no beta
-        // header required) so the SDK streams partial tool input JSON as it's
-        // generated — mirrors iOS `RequestBodyPatcher.injectEagerInputStreaming`.
-        // cache_control: ephemeral goes on the *last* tool, matching the first of
-        // the four prompt-cache breakpoints Anthropic honors.
+        // Tools: eager_input_streaming on every tool (GA, no beta header) so
+        // partial tool input JSON streams — mirrors iOS
+        // injectEagerInputStreaming. cache_control goes on the *last* tool,
+        // matching the first of Anthropic's four prompt-cache breakpoints.
         if (tools.isNotEmpty()) {
             val toolsArray = JSONArray()
             for ((i, tool) in tools.withIndex()) {
@@ -599,15 +610,13 @@ class AnthropicProvider(
             if (msg.contentParts.isNotEmpty()) {
                 val contentArray = JSONArray()
                 // [T-android-anthropic-thinking-echo] (issue #70) Prepend the
-                // synthesized thinking block FIRST so it precedes text/tool_use
-                // (Anthropic requires the thinking block to lead the assistant
-                // turn). Replay captured reasoning verbatim; fall back to an
-                // empty string as a field-presence placeholder for turns whose
-                // reasoning was never captured (interrupted stream, history from
-                // before thinking was on, cross-provider session) — without it
-                // the compat proxy still 400s. Mirrors iOS
-                // injectThinkingBlocksForCompatProxy (unsigned block, no
-                // signature). User turns never carry thinking.
+                // synthesized thinking block FIRST — Anthropic requires it to lead
+                // the assistant turn. Replay captured reasoning verbatim; fall
+                // back to an empty string as a field-presence placeholder for
+                // turns whose reasoning was never captured (interrupted stream,
+                // pre-thinking history, cross-provider session) — without it the
+                // compat proxy still 400s. Mirrors iOS
+                // injectThinkingBlocksForCompatProxy (unsigned, no signature).
                 if (echoThinking && msg.role == LLMMessage.Role.ASSISTANT) {
                     contentArray.put(JSONObject().apply {
                         put("type", "thinking")
@@ -644,9 +653,8 @@ class AnthropicProvider(
                             if (imageData != null && imageMimeType != null) {
                                 // T-imgsize: belt-and-braces — history tool-result
                                 // screenshots can be raw 12-megapixel PNGs that
-                                // never went through the composer's budget pass.
-                                // Re-encode in-place if a single part already blows
-                                // the per-image cap so we don't 413 on replay.
+                                // skipped the composer budget; re-encode in-place
+                                // so replay doesn't 413.
                                 val safeBytes = ImageBudget.compressUnderBudget(imageData)
                                 val safeMime = if (safeBytes === imageData) imageMimeType else "image/jpeg"
                                 resultContent.put(JSONObject().apply {
@@ -690,11 +698,9 @@ class AnthropicProvider(
                 if (isLastUser && imageParts.isNotEmpty()) {
                     val contentArray = JSONArray()
                     for (part in imageParts) {
-                        // T-imgsize: backstop for the legacy ImagePart path used
-                        // when contentParts is empty (older user-message shape
-                        // pre-T132). Composer already runs ImageBudget but this
-                        // arm is also reached on session restore where
-                        // contentParts may not be populated.
+                        // T-imgsize: backstop for the legacy ImagePart path
+                        // (contentParts empty — older shape / session restore).
+                        // Composer already runs ImageBudget; this arm does not.
                         val safeBytes = ImageBudget.compressUnderBudget(part.data)
                         val safeMime = if (safeBytes === part.data) part.mimeType else "image/jpeg"
                         contentArray.put(JSONObject().apply {
@@ -714,9 +720,8 @@ class AnthropicProvider(
                 } else if (echoThinking && msg.role == LLMMessage.Role.ASSISTANT) {
                     // [T-android-anthropic-thinking-echo] (issue #70) Assistant
                     // turn with no structured parts (plain-text reply, or history
-                    // rehydrated without contentParts). Still must carry its
-                    // thinking block, so materialize the string content into an
-                    // array with the thinking block first.
+                    // rehydrated without contentParts) still carries its thinking
+                    // block: materialize the string into an array, thinking first.
                     val contentArray = JSONArray()
                     contentArray.put(JSONObject().apply {
                         put("type", "thinking")
@@ -763,10 +768,9 @@ class AnthropicProvider(
             if (j > i + 1 || contentBlocks.isNotEmpty()) {
                 // Reorder assistant content: thinking first, then text/image,
                 // then tool_use last. Anthropic rejects text before thinking and
-                // text after tool_use in the same turn; when several assistant
-                // messages merge (T-android-anthropic-thinking-echo, issue #70)
-                // this hoists every synthesized thinking block ahead of the text
-                // so the merged turn still leads with thinking.
+                // text after tool_use in one turn; when several assistant messages
+                // merge (issue #70) this hoists every synthesized thinking block
+                // ahead of the text so the merged turn still leads with thinking.
                 if (role == "assistant") {
                     val thinking = contentBlocks.filter { it.optString("type") == "thinking" }
                     val other = contentBlocks.filter {
@@ -909,6 +913,32 @@ class AnthropicProvider(
             return major > 4 || (major == 4 && minor >= 6)
         }
 
+        /** How "thinking off" goes on the wire; see [Companion.offThinking]. */
+        enum class OffThinking { OMIT, DISABLED, BETWEEN_TOOLS, LOW_EFFORT }
+
+        /**
+         * [port-upstream-1.16][T-claude5-thinking-off] How "thinking off" is
+         * encoded on the wire for this model. Port of iOS
+         * `AnthropicProvider.offThinking(for:)` (ef86ed890) — the vendor's
+         * per-model contract: `disabled` 400s on Sonnet 5.5 / Opus 5.5+, an
+         * absent field means adaptive thinking at DEFAULT effort on Claude 5,
+         * and Opus 5+ takes low effort instead of `disabled` (the vendor warns
+         * disabled leaks tool calls into text on tool-heavy workloads). An
+         * unknown future 5+ model takes LOW_EFFORT too: every adaptive model
+         * accepts adaptive thinking, while `disabled` / `between_tools` are
+         * per-model and 400 where unsupported.
+         */
+        fun offThinking(modelId: String): OffThinking {
+            val (major, minor) = parseClaudeVersion(modelId) ?: return OffThinking.OMIT
+            if (major < 4 || (major == 4 && minor < 6)) return OffThinking.OMIT
+            if (major == 4) return OffThinking.DISABLED
+            if (major == 5 && modelId.lowercase().contains("sonnet")) {
+                if (minor == 0) return OffThinking.DISABLED
+                if (minor == 5) return OffThinking.BETWEEN_TOOLS
+            }
+            return OffThinking.LOW_EFFORT
+        }
+
         /**
          * [T-android-claude-opus48-thinking-toggle] (Sow Sow 38845/38850) True
          * when this Claude model supports extended thinking — i.e. the Deep
@@ -956,27 +986,18 @@ class AnthropicProvider(
         fun thinkingBudget(maxTokens: Int, level: ThinkingLevel): Int {
             if (level == ThinkingLevel.OFF) return 0
             // [T-thinking-ladder-shared] Non-positive maxTokens cannot host any
-            // budget (Anthropic 400s on budget_tokens >= max_tokens, and 0 is the
-            // vendor default). Previously `minOf(cap, 0)` produced 0 for every level
-            // anyway, so this preserves the value while stating the intent.
-            // [T-thinking-ladder-shared] `budgetFor` coerces into `[FLOOR, capacity-1]`
-            // BEFORE its own degenerate branch, so a capacity at or below FLOOR (512)
-            // throws instead of degrading. This subsumes the old `maxTokens < 2` guard
-            // (and the `maxTokens > 1` condition on the pullback below): a
-            // budget_tokens under the 512 floor cannot be expressed on this ladder at
-            // all, so emit none — the caller's `if (budgetTokens > 0)` gate then leaves
-            // `thinking` off entirely. Previously `minOf(cap, 0)` produced 0 for these
-            // anyway, so the returned VALUE is unchanged for every input.
+            // budget (Anthropic 400s on budget_tokens >= max_tokens; 0 is the
+            // vendor default) — the VALUE is unchanged. `budgetFor` coerces into
+            // `[FLOOR, capacity-1]` before its own degenerate branch, so a capacity
+            // at or below FLOOR (512) throws: a budget under the floor cannot be
+            // expressed, so emit none — the caller's `> 0` gate leaves it off.
             if (maxTokens <= ThinkingLadder.FLOOR) return 0
             val cap = ThinkingLadder.budgetFor(level, maxTokens)
-            // Anthropic requires budget_tokens STRICTLY LESS THAN max_tokens; an equal
-            // value is a 400 ("thinking.budget_tokens must be less than
-            // max_tokens"). [T-thinking-ladder-shared] ThinkingLadder already returns
-            // a value < maxTokens (its top rung is 15/16 of capacity), so this
-            // pullback is now a belt-and-braces assertion of an API invariant rather
-            // than the mechanism that was silently collapsing four levels together.
-            // It is kept deliberately: the requirement is the API's, not ours, and a
-            // future ladder change must not be able to trip a 400.
+            // Anthropic requires budget_tokens STRICTLY LESS THAN max_tokens; an
+            // equal value is a 400. ThinkingLadder already returns a value <
+            // maxTokens (top rung is 15/16 of capacity), so this pullback is a
+            // belt-and-braces assertion of the API's own invariant — kept so a
+            // future ladder change cannot trip a 400.
             val clamped = minOf(cap, maxTokens)
             return if (clamped >= maxTokens) maxTokens - 1 else clamped
         }
@@ -1008,13 +1029,10 @@ class AnthropicProvider(
      * for the same pattern.
      */
     private fun buildRequest(bodyStr: String, body: JSONObject): Request {
-        // T192: `basePath` may already end in `/v1` because
-        // `ProviderInstance.effectiveBaseURL` appends `/v1` when
-        // `appendV1Suffix=true` and the user-entered base doesn't end in `/v1`.
-        // Without stripping here we'd produce `…/v1/v1/messages` for Anthropic-
-        // compatible endpoints (DeepSeek, Bailian, etc.). Mirrors
-        // `AnthropicProvider.swift::stripV1Suffix` (iOS) so the same custom
-        // base URL works on both platforms.
+        // T192: `basePath` may already end in `/v1` (effectiveBaseURL appends it
+        // when `appendV1Suffix=true`); without stripping we'd produce
+        // `…/v1/v1/messages` on Anthropic-compatible endpoints (DeepSeek,
+        // Bailian). Mirrors iOS `AnthropicProvider.swift::stripV1Suffix`.
         val cleanBase = basePath.trimEnd('/').let {
             if (it.endsWith("/v1")) it.dropLast(3).trimEnd('/') else it
         }
@@ -1025,33 +1043,19 @@ class AnthropicProvider(
             .header("content-type", "application/json")
 
         // OkHttp forbids multiple values for the same header slot via `.header(...)`,
-        // so build a combined anthropic-beta string and set it once.
-        //
-        // For OAuth (Claude Code) credentials we mimic the real CLI as closely as
-        // possible — Anthropic's backend uses the *combination* of anthropic-beta,
-        // User-Agent, and X-Stainless-* headers to decide whether the request is
-        // coming from the official CLI or a third-party client. Non-CLI requests
-        // get downgraded (extra-usage billing, silently-disabled thinking on 4.7).
-        // Aligned with sub2api FullClaudeCodeMimicryBetas / DefaultHeaders
-        // (Wei-Shaw/sub2api backend/internal/pkg/claude/constants.go).
-        //
-        // For API-key / custom endpoints we only carry the betas actually needed
-        // by the request body; we must NOT include oauth-2025-04-20 or
-        // claude-code-20250219 there because those signal Claude-Code-only
-        // surface and get rejected on plain API-key auth.
+        // so build a combined anthropic-beta string and set it once. OAuth (Claude
+        // Code) mimics the real CLI — the backend reads the *combination* of
+        // anthropic-beta + UA + X-Stainless-* to decide CLI vs third-party and
+        // downgrades the latter. API-key / custom endpoints carry only the betas
+        // the request needs: oauth-2025-04-20 / claude-code-20250219 signal
+        // Claude-Code-only surface and are rejected on plain API-key auth.
         val betaFlags = mutableListOf<String>()
         if (isOAuth) {
             // [T-anthropic-redact-thinking] Deliberately OMIT
-            // "redact-thinking-2026-02-12" from the Claude-Code mimicry betas.
-            // When present, Anthropic redacts the plaintext of `thinking` content
-            // blocks (returns an empty `thinking` string with only a `signature`),
-            // so a reasoning model runs (usage.thinking_tokens > 0) but the App
-            // can't show any thinking text. The official Claude Code CLI only adds
-            // this beta when `showThinkingSummaries` is unset/false (confirmed via
-            // CLI de-obfuscation, anthropics/claude-code#31326, and the
-            // code.claude.com model-config docs); omitting it is equivalent to
-            // `showThinkingSummaries: true` — pure UI visibility, no effect on
-            // reasoning quality or token budget. All other mimicry betas stay.
+            // "redact-thinking-2026-02-12": present, it redacts `thinking`
+            // plaintext (empty thinking + signature only). The CLI adds it only
+            // when `showThinkingSummaries` is unset/false (claude-code#31326);
+            // omitting is equivalent to true — pure UI visibility. Other betas stay.
             betaFlags.addAll(listOf(
                 "claude-code-20250219",
                 "oauth-2025-04-20",
@@ -1099,10 +1103,9 @@ class AnthropicProvider(
             builder.header("Authorization", "Bearer $apiKey")
         } else if (apiKey.isEmpty()) {
             // [T-empty-key-compat-endpoints] Keyless third-party
-            // Anthropic-compatible endpoint: send NO auth header rather than
-            // a malformed `Bearer ` / empty x-api-key that strict relays
-            // reject. Only reachable for custom-endpoint instances — routing
-            // never builds a keyless provider for the official API.
+            // Anthropic-compatible endpoint: send NO auth header rather than a
+            // malformed `Bearer ` / empty x-api-key strict relays reject.
+            // Custom-endpoint instances only — the official API is never keyless.
         } else if (isCustomEndpoint) {
             builder.header("Authorization", "Bearer $apiKey")
         } else {
@@ -1110,13 +1113,10 @@ class AnthropicProvider(
         }
 
         // [T-provider-custom-user-agent] Applied last so a non-blank override
-        // wins over the OAuth claude-cli UA above. null/blank → fall back to
-        // the branded Minis UA on the regular apiKey path, but on the OAuth
-        // path keep the claude-cli/2.1.195 fingerprint set at line ~779 (the
-        // Anthropic OAuth backend pairs UA + X-Stainless-* and rejects calls
-        // whose UA doesn't match the registered client identity). T-android-
-        // default-ua: pass defaultUserAgent=null on OAuth, branded default
-        // everywhere else.
+        // wins over the OAuth claude-cli UA above. null/blank → branded Minis UA
+        // on the apiKey path, but on OAuth keep the claude-cli/2.1.195
+        // fingerprint: the backend pairs UA + X-Stainless-* and rejects calls
+        // whose UA doesn't match the registered client identity.
         builder.applyUserAgentOverride(
             customUserAgent,
             defaultUserAgent = if (isOAuth) null else com.openminis.app.provider.MinisUserAgent.DEFAULT,

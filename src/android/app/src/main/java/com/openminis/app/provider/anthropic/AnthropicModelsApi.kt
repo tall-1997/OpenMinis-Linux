@@ -181,7 +181,22 @@ object AnthropicModelsApi {
                 // catalogued yet (e.g. Opus 4.8). Both OAuth and API-key direct
                 // Anthropic instances flow through here.
                 val reasoning = if (AnthropicProvider.supportsThinking(id)) true else null
-                parsed.add(LLMModel(id, displayName, "Anthropic", supportsReasoning = reasoning))
+                // [port-upstream-1.16][T-anthropic-list-reported-limits] An
+                // Anthropic-compatible relay that reports `context_length` /
+                // `max_output_tokens` (any spelling EndpointModelLimits reads)
+                // is the authority on them, as on the OpenAI-compatible path.
+                // This list read none: a relay serving `cn:deepseek-v4-pro`
+                // with a 1M window landed with no window and fell to its
+                // family's 128K guess.
+                val (reportedContext, reportedOutput) =
+                    com.openminis.app.provider.EndpointModelLimits.read(obj)
+                parsed.add(LLMModel(
+                    id, displayName, "Anthropic",
+                    contextWindow = reportedContext,
+                    maxOutputTokens = reportedOutput,
+                    limitsReportedByEndpoint = if (reportedContext != null || reportedOutput != null) true else null,
+                    supportsReasoning = reasoning,
+                ))
             }
             android.util.Log.i("AnthropicModels", "Parsed ${parsed.size} models: ${parsed.map { it.id }.joinToString()}")
             if (parsed.isEmpty()) return fallback

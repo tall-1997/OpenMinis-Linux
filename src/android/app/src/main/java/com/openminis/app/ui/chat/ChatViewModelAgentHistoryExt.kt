@@ -274,12 +274,24 @@ internal fun ChatViewModel.progressivelyTrimmed(list: List<LLMMessage>): List<LL
     val untrimmed = estimateMessagesTokens(list)
     val level = ProgressiveTrim.levelFor(untrimmed, window)
     if (level == ProgressiveTrim.Level.NONE) return list
-    val trimmed = ProgressiveTrim.trim(list, level)
+    // [T-wave-e-progressive-reclaim] L2 offloads old big tool outputs into
+    // the session workspace so the stub can offer a `file_read` path back;
+    // without a session to hang the file on the stub tells the truth instead.
+    val offloadSessionId = realSessionId.ifBlank { sessionId }
+    val offloader = ProgressiveTrim.Offloader { content, toolId, _ ->
+        com.openminis.app.tools.ToolOutputSpill.offloadForTrim(
+            context = context.applicationContext,
+            sessionId = offloadSessionId,
+            toolId = toolId,
+            content = content,
+        )
+    }
+    val trimmed = ProgressiveTrim.trim(list, level, offloader)
     if (trimmed !== list) {
         AppLogger.info(
             ChatViewModel.TAG,
             "[ProgressiveTrim] level=$level window=$window untrimmedEst=$untrimmed " +
-                "messages=${list.size} — stripped old reasoning / stubbed large tool outputs",
+                "messages=${list.size} → ${trimmed.size} — reclaimed old reasoning / tool outputs / step iterations",
         )
     }
     return trimmed

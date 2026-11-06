@@ -108,12 +108,9 @@ class BackupImporter(
     }
 
     /**
-     * Restore from an already-extracted package directory.
-     *
-     * Serialised process-wide with export: two concurrent restores share
-     * mutable destinations (the same session directories, the same provider
-     * config), so overlapping them corrupts state no rollback can describe
-     * (iOS review I3).
+     * Restore from an already-extracted package directory. Serialised
+     * process-wide with export: overlapping restores share mutable
+     * destinations no rollback can describe (iOS review I3).
      */
     suspend fun import(
         packageRoot: File,
@@ -131,8 +128,8 @@ class BackupImporter(
         onCount: ((Progress) -> Unit)?,
     ): Report {
         val started = System.currentTimeMillis()
-        // iOS zips through NSFileCoordinator, which wraps the tree in an outer
-        // folder, so the real root may be one level down.
+        // iOS wraps the tree in an outer NSFileCoordinator folder: the real
+        // root may be one level down.
         val root = BackupZip.packageRoot(extractedRoot)
         val reader = BackupPackageReader(root)
         val manifest = reader.readManifest()
@@ -143,9 +140,8 @@ class BackupImporter(
             sourcePlatform = manifest.app.platform,
         )
 
-        // Downgrade guard before anything else: a manifest with its
-        // `encryption` block stripped would otherwise make every category read
-        // zero records and report success on an empty restore.
+        // Downgrade guard first: a manifest with its `encryption` block
+        // stripped must not read as a successful empty restore.
         reader.assertNoUndeclaredEncryption(manifest)
 
         var keys: BackupCrypto.Keys? = null
@@ -161,9 +157,8 @@ class BackupImporter(
             report.wasEncrypted = true
         }
 
-        // The decrypted plaintext scratch tree, when this package is
-        // encrypted. Tracked here so importBody's finally can wipe it — see
-        // [T-restore-plaintext-scratch] below the decrypt call.
+        // Decrypted plaintext scratch tree, tracked so the finally below can
+        // wipe it — see [T-restore-plaintext-scratch].
         var scratchWork: File? = null
 
         try {
@@ -180,9 +175,8 @@ class BackupImporter(
                 }
             }
 
-            // Decrypt every member up front. Done as one pass rather than
-            // lazily per category so a wrong-key failure surfaces before any
-            // data has been written to the device.
+            // Decrypt every member in one pass so a wrong-key failure
+            // surfaces before any data is written.
             val work = if (keys != null) {
                 onProgress?.invoke("Decrypting…")
                 decryptMembers(root, keys).also { scratchWork = it }
@@ -191,11 +185,10 @@ class BackupImporter(
             }
 
             // [T-restore-plaintext-scratch] A package whose CACHE tree addresses
-            // `cache/restore-work/…` would restore back INTO the very directory
-            // the decrypted scratch tree lives in — CACHE lands before
-            // PROVIDERS/env-vars in ORDER, so the clobber happens mid-run, over
-            // the still-unread secrets.json and chat bodies. Refuse such a
-            // package outright rather than half-restoring over our own feet.
+            // `cache/restore-work/…` would restore back INTO the decrypted
+            // scratch tree mid-run (CACHE precedes PROVIDERS/env-vars in ORDER).
+            // Refuse it via assertNoScratchCollision rather than clobbering the
+            // still-unread secrets.json and chat bodies.
 
             val fileIndex = readFileIndex(work)
             val wanted = options.categories
@@ -206,13 +199,11 @@ class BackupImporter(
                 assertNoScratchCollision(scratch, fileIndex)
             }
 
-            // Order matters: chats writes sessions before the messages that
-            // reference them.
+            // Chats writes sessions before the messages that reference them.
             for (category in ORDER.filter { it in wanted }) {
                 onProgress?.invoke("Restoring ${category.key}…")
-                // The manifest's own count for this category — what the button
-                // needs for the "/ total" half. Absent on an older package, in
-                // which case the UI shows a bare running count.
+                // The manifest's count for the "/ total" half of the button;
+                // absent on an older package → a bare running count.
                 val total = manifest.categories[category.key]?.entries?.takeIf { it > 0 }
                 onCount?.invoke(Progress(category.key, 0, total))
                 val report0: (Int) -> Unit = { done ->
@@ -233,7 +224,15 @@ class BackupImporter(
                         )
                         BackupCategory.MEMORY -> importMemory(work)
                         BackupCategory.MCP_SERVERS -> importMcpServers(work)
-                        BackupCategory.PROVIDERS -> importProviders(work)
+                        BackupCategory.PROVIDERS -> {
+                            // [T-backup-restore-settings] Prefs ride with the
+                            // providers category, applied after its data. The
+                            // block still yields the providers report — the
+                            // when's result type feeds the per-category log.
+                            val providersReport = importProviders(work)
+                            importSettings(work)
+                            providersReport
+                        }
                         BackupCategory.ENVIRONMENT_VARIABLES -> importEnvironmentVariables(work)
                         else -> null
                     }
@@ -243,15 +242,9 @@ class BackupImporter(
                 }
                 categoryReport?.let {
                     report.categories.add(it)
-                    // [T-android-restore-logging] Per-category outcome, on
-                    // disk. The summary below only reports totals, so a
-                    // category that wrote 500 of 2350 records read exactly like
-                    // one that wrote everything — and the numbers that say
-                    // WHICH ("skipped", "unreadable") lived only on the
-                    // completion screen, which is gone the moment it is
-                    // dismissed. Diagnosing the real restore meant grepping a
-                    // 2.65 GB package to infer what the importer had already
-                    // counted.
+                    // [T-android-restore-logging] Per-category outcome on disk:
+                    // the summary only reports totals, so a partial category
+                    // once read exactly like a complete one.
                     val declared = total?.toString() ?: "?"
                     AppLogger.info(
                         TAG,
@@ -262,8 +255,7 @@ class BackupImporter(
                             (it.failed?.let { f -> " FAILED=$f" } ?: "")
                     )
                     // A category that wrote materially less than the manifest
-                    // promised is the signal that matters, and it is easy to
-                    // miss inside a line of counters.
+                    // promised is the signal that matters.
                     val wrote = it.imported + it.updated
                     if (total != null && wrote < total) {
                         AppLogger.warning(
@@ -276,9 +268,8 @@ class BackupImporter(
             }
 
             if (report.totalMissingBlobs > 0) {
-                // Surfaced rather than buried: the user must be told their
-                // package was incomplete while they still have the source
-                // device to re-export from.
+                // Surfaced while the user still has the source device to
+                // re-export from.
                 report.warnings.add(
                     "${report.totalMissingBlobs} file(s) were listed in the backup but their " +
                         "content was missing from the package."
@@ -294,14 +285,10 @@ class BackupImporter(
             return report
         } finally {
             keys?.destroy()
-            // [T-restore-plaintext-scratch] decryptMembers() writes EVERY
-            // decrypted member — chats, provider secrets.json, env-var values —
-            // as plaintext under cacheDir/restore-work. Wiping the keys alone
-            // left that full plaintext copy of the user's data sitting on disk
-            // until the OS evicted the cache or the NEXT restore's first pass
-            // deleted it (and until then a CACHE-category export could sweep it
-            // into a new package). Scrub the scratch tree on every exit path,
-            // including failure paths after partial decryption.
+            // [T-restore-plaintext-scratch] decryptMembers() writes every
+            // decrypted member as plaintext under cacheDir/restore-work; wipe
+            // the scratch tree on every exit path, failure paths included (a
+            // CACHE-category export could otherwise sweep it into a package).
             scratchWork?.let { w ->
                 runCatching { w.deleteRecursively() }
                     .onFailure {
@@ -316,23 +303,22 @@ class BackupImporter(
     private suspend fun importChats(
         root: File,
         fileIndex: List<BackupFileIndexEntry>,
-        // Called as messages land. Chats is the only category long enough for
-        // the count to matter — the rest finish before a number could be read.
+        // Called as messages land — the only category long enough for the
+        // count to be readable.
         onCount: ((Int) -> Unit)? = null,
     ): CategoryReport {
         val report = CategoryReport(BackupCategory.CHATS.key)
         val dao = db.chatDao()
         val dataDir = File(root, "data")
 
-        // Restore content-addressed message bodies before rows point at them.
+        // Content-addressed message bodies first, before rows point at them.
         val bodyRoot = File(context.filesDir, "bodies")
         BackupRestoreFiles.restore(root, fileIndex, BackupCategory.CHATS, bodyRoot) { path ->
             if (!path.startsWith("chats/_bodies/")) null
             else File(bodyRoot, path.removePrefix("chats/_bodies/"))
         }
 
-        // Folders first: sessions carry a folderId, so applying folders
-        // beforehand means the reference resolves immediately.
+        // Folders first, so session folderIds resolve on arrival.
         readJsonl(dataDir, "folders") { rec ->
             val f = rec.obj ?: return@readJsonl
             val id = f.str("id") ?: return@readJsonl
@@ -353,10 +339,7 @@ class BackupImporter(
                     origin = f.str("origin") ?: FolderEntity.ORIGIN_MANUAL,
                     sortIndex = f.int("sortIndex") ?: 0,
                     pinnedAt = f.millis("pinnedAt"),
-                    // iOS names this field `desc` (ChatStore.Folder.desc);
-                    // Android's exporter writes `description`. Accept both, or
-                    // a folder restored from an iPhone silently loses its
-                    // one-line description.
+                    // iOS writes `desc`, Android `description` — accept both.
                     description = f.str("description") ?: f.str("desc"),
                     createdAt = f.millis("createdAt") ?: incomingUpdated,
                     updatedAt = incomingUpdated,
@@ -368,31 +351,20 @@ class BackupImporter(
         // Sessions before messages — a message row needs its parent to exist,
         // and the schema enforces it with a foreign key.
         val restoredSessionIds = mutableSetOf<String>()
-        // [XSessionDiag] Restore wall clock, sampled once rather than per row —
-        // the comparison below only needs "roughly now", and calling
-        // currentTimeMillis() inside a loop over thousands of records would be
-        // needless work in the hot import path.
+        // [XSessionDiag] Restore wall clock, sampled once — the comparison only
+        // needs "roughly now", not per-row precision in the hot import path.
         val nowMs = System.currentTimeMillis()
-        // [T-android-restore-logging] Raw record counts, independent of the
-        // report's imported/updated split: a session can be counted "skipped"
-        // (locally newer) and still be a legitimate parent, so the report alone
-        // cannot answer "is every session in the package present in the DB?" —
-        // which is exactly the question a message-loss investigation asks.
+        // [T-android-restore-logging] Raw record counts: a session counted
+        // "skipped" (locally newer) is still a legitimate message parent, which
+        // the report alone cannot show.
         var sessionsSeen = 0
         readJsonl(dataDir, "sessions") { rec ->
             sessionsSeen += 1
             val envelope = rec.obj ?: return@readJsonl
             // [T-android-restore-ios-session-nesting] iOS nests the session
-            // under a "session" key, with wrapper fields like memoryEnabled as
-            // its SIBLINGS; Android writes those same fields flat. Reading only
-            // the flat shape made every record from an iPhone backup look like
-            // it had no id, so all 2350 sessions were counted "unreadable" and
-            // skipped — and because a message row needs its parent session to
-            // satisfy the foreign key, every message went with them. The
-            // restore then reported success having written no chats at all.
-            //
-            // Merge the two levels rather than picking one: inner fields win
-            // (that is the record proper), outer fields fill in the wrapper.
+            // under a "session" key with wrapper fields as SIBLINGS; Android
+            // writes the same fields flat. Merge the two levels — inner wins,
+            // outer fills the wrapper — so one reader handles both.
             val s = envelope.unwrapNested("session")
             val id = s.str("id")
             if (id == null) {
@@ -401,9 +373,8 @@ class BackupImporter(
             }
             val incomingUpdated = s.millis("updatedAt") ?: 0
             val existing = dao.getSession(id)
-            // Merge (§8.2): newer updatedAt wins. Without this comparison an
-            // older backup would silently overwrite work the user did after it
-            // was taken.
+            // Merge (§8.2): newer updatedAt wins, so an older backup cannot
+            // silently overwrite post-backup work.
             if (existing != null && existing.updatedAt >= incomingUpdated) {
                 report.skipped += 1
                 restoredSessionIds.add(id)
@@ -429,18 +400,11 @@ class BackupImporter(
             )
             if (existing == null) report.imported += 1 else report.updated += 1
             restoredSessionIds.add(id)
-            // [XSessionDiag] Hypothesis 1: a restored session keeps the BACKUP's
-            // own updatedAt (incomingUpdated above), not the restore wall clock.
-            // A session the user was using on the source device shortly before
-            // exporting therefore lands looking "recently active", and auto launch
-            // mode resumes it as the landing chat — see the launch/auto line in
-            // AppNavigation.
-            //
-            // Deliberately logged ONLY for rows that would still be inside the
-            // 15-minute auto-resume window at restore time: a backup can hold
-            // thousands of sessions, and logging every one would be exactly the
-            // high-frequency noise this diagnostic is supposed to avoid. Those
-            // are also the only rows that can produce the reported symptom.
+            // [XSessionDiag] A restored session keeps the BACKUP's updatedAt, so
+            // one in use shortly before export lands looking "recently active"
+            // and auto launch resumes it. Logged ONLY inside the 15-minute
+            // auto-resume window — those are the rows that can produce the
+            // symptom; everything else is noise.
             if (nowMs - incomingUpdated < XSESSION_DIAG_AUTO_WINDOW_MS) {
                 AppLogger.info(
                     TAG,
@@ -462,18 +426,16 @@ class BackupImporter(
         // The manifest counts MESSAGES for the chats category, so this is the
         // loop whose progress the button reports.
         var seen = 0
-        // Messages dropped for want of a parent row, and the distinct sessions
-        // they pointed at — the ratio tells a truncated-sessions story apart
-        // from a few genuinely dangling rows.
+        // Orphans + their distinct sessions: the ratio tells a
+        // truncated-sessions story apart from a few dangling rows.
         var orphanedMessages = 0
         val orphanSessionIds = mutableSetOf<String>()
-        // Old exports may omit sortOrder or contain the legacy default 0 for
-        // every row. Allocate a unique monotonic cursor per session while
-        // importing so later keyset/range paging cannot loop over the same
-        // sort_order and strand the middle of the transcript.
+        // Old exports may omit sortOrder or carry the legacy 0 everywhere:
+        // allocate a unique monotonic cursor per session so later keyset
+        // paging cannot loop over the same sort_order.
         val nextSortBySession = mutableMapOf<String, Int>()
-        // Snapshot existing cursors before entering the synchronous JSONL reader;
-        // the per-record callback must remain non-suspending.
+        // Snapshot existing cursors before the synchronous JSONL reader; the
+        // per-record callback must remain non-suspending.
         val usedSortBySession = restoredSessionIds.associateWith { id ->
             dao.sortOrders(id).toMutableSet()
         }.toMutableMap()
@@ -487,9 +449,8 @@ class BackupImporter(
             return assigned
         }
         readJsonl(dataDir, "messages") { rec ->
-            // Every 200 records, not every one: at ~50k messages a per-record
-            // StateFlow emit would post more frames than the UI can draw and
-            // the counter would blur rather than inform.
+            // Every 200 records: at ~50k messages a per-record emit would blur
+            // rather than inform.
             if (++seen % 200 == 0) onCount?.invoke(seen)
             val m = rec.obj ?: return@readJsonl
             val id = m.str("id")
@@ -498,15 +459,12 @@ class BackupImporter(
                 report.unreadable += 1
                 return@readJsonl
             }
-            // A message whose session was skipped as locally-newer still
-            // belongs to a session that exists; one whose session is absent
-            // entirely would violate the foreign key.
+            // A message whose session was skipped as locally-newer still has a
+            // parent row; one whose session is absent entirely violates the
+            // foreign key.
             if (dao.getSession(sessionId) == null) {
-                // [T-android-restore-logging] The single most destructive skip
-                // in the importer: it silently discards a message because its
-                // parent session is absent. 356 of 500 sessions restored empty
-                // on a real package and this branch was where every one of
-                // those messages went — with nothing on disk to say so.
+                // [T-android-restore-logging] The importer's most destructive
+                // skip — logged, never silent again.
                 orphanedMessages += 1
                 orphanSessionIds.add(sessionId)
                 report.skipped += 1
@@ -538,10 +496,8 @@ class BackupImporter(
                     bodySha = m.str("bodySha"),
                     // errorInfo is device-local (§0.2) and is never restored.
                     errorInfo = null,
-                    // [T-token-attribution-snapshot] Absent in packages written
-                    // before this existed (and in any category the other
-                    // platform hasn't updated yet) — null then, which is
-                    // exactly the "estimated" state the Usage page renders.
+                    // [T-token-attribution-snapshot] Absent in older packages —
+                    // null then, the "estimated" state the Usage page renders.
                     modelId = m.str("modelId"),
                     modelDisplayName = m.str("modelDisplayName"),
                     providerType = m.str("providerType"),
@@ -591,20 +547,9 @@ class BackupImporter(
         }
 
         // [T-android-restore-preview] Rebuild each restored session's
-        // `last_message` from the messages just written.
-        //
-        // iOS does not carry the field: of 2350 session records in a real
-        // iPhone package, ZERO had `lastMessage` — Android's exporter writes
-        // it, iOS's does not. The importer only ever READ it, so every session
-        // restored from an iPhone landed with a null preview and the home list
-        // rendered "No messages yet" over a session holding a thousand
-        // messages.
-        //
-        // Derived, not transported: the preview is a function of the newest
-        // message, so recomputing it locally is both correct for any writer
-        // and immune to the two disagreeing. Uses the same extractTextPreview
-        // the live chat path uses, so a tool-only turn shows its tool summary
-        // rather than falling through to the same empty string.
+        // `last_message`. iOS packages carry no such field (0 of 2350 real
+        // records had it). Derived, not transported: recompute from the newest
+        // message via the same extractTextPreview the live chat path uses.
         for (sid in restoredSessionIds) {
             val parts = dao.lastMessageParts(sid) ?: continue
             val preview = ChatRepository.extractTextPreview(parts) ?: continue
@@ -747,9 +692,8 @@ class BackupImporter(
             return report
         }
         val config = parsed.config
-        // Instances the package carried but this build could not decode at all.
-        // Counted individually so the report says "1 of 8 unreadable" rather
-        // than failing the whole category.
+        // Undecodable instances counted individually, so the report says
+        // "1 of 8 unreadable" instead of failing the category.
         report.unreadable += parsed.droppedInstances
         if (parsed.droppedInstances > 0) {
             AppLogger.warning(
@@ -790,8 +734,90 @@ class BackupImporter(
             }
             report.credentialsRestored = restored
             report.credentialsKept = kept
+
+            // [T-backup-restore-oauth] Full sign-in restore: the bundle goes
+            // back under the same key shape the OAuth manager reads at login,
+            // so a restored provider is signed in without a re-login. Every
+            // key and value comes from the package - no literals here.
+            if (secrets.oauth.isNotEmpty()) {
+                var oauthRestored = 0
+                val prefs = com.openminis.app.util.EncryptedPrefsFactory.safeCreate(context, "oauth_prefs")
+                val editor = prefs.edit()
+                for (o in secrets.oauth) {
+                    if (o.instanceId.isBlank() || o.tokensJson.isBlank()) continue
+                    editor.putString("oauth_tokens_${o.instanceId}", o.tokensJson)
+                    o.manualBearer?.let { editor.putString("oauth_manual_bearer_token_${o.instanceId}", it) }
+                    oauthRestored++
+                }
+                editor.apply()
+                if (oauthRestored > 0) {
+                    report.credentialsRestored += oauthRestored
+                    AppLogger.info(TAG, "[Restore] oauth sign-ins restored: $oauthRestored")
+                }
+            }
+
+            // [T-backup-restore-network] Proxy passwords back into their
+            // encrypted store, keyed by the proxy ids the settings restore
+            // re-creates.
+            for (p in secrets.proxyPasswords) {
+                val pass = runCatching {
+                    String(android.util.Base64.decode(p.value, android.util.Base64.NO_WRAP))
+                }.getOrNull() ?: continue
+                com.openminis.app.network.NetworkSecrets.setPassword(context, p.name, pass)
+            }
         }
         return report
+    }
+
+    /**
+     * [T-backup-restore-settings] Apply the `data/settings.json` snapshot
+     * (network settings JSON + tool-limit prefs). Absent member (older
+     * package, or an iOS one) → nothing to do. Only whitelisted tool-limit
+     * keys are applied; the network blob decodes through
+     * [com.openminis.app.network.NetworkSettingsStore], whose tolerant decode
+     * discards anything this build cannot understand.
+     */
+    private fun importSettings(root: File) {
+        val f = File(root, "data/settings.json")
+        if (!f.isFile) return
+        val body = runCatching { org.json.JSONObject(f.readText()) }.getOrNull() ?: return
+
+        body.optString("network").takeIf { it.isNotBlank() }?.let { raw ->
+            runCatching {
+                com.openminis.app.network.NetworkSettingsStore.save(
+                    context,
+                    com.openminis.app.network.NetworkSettingsStore.decode(raw),
+                )
+            }
+            AppLogger.info(TAG, "[Restore] network settings applied")
+        }
+
+        val limits = body.optJSONObject("toolLimits") ?: return
+        // Whitelist: exactly the prefs ToolLimitPrefs owns - a package cannot
+        // plant arbitrary SharedPreferences entries.
+        val allowed = setOf(
+            "shellTimeoutSec", "fileReadMaxChars", "fileReadMaxLines",
+            "subagentMaxTurns", "mainSessionMaxTurns",
+        )
+        val editor = context.getSharedPreferences(
+            com.openminis.app.data.ToolLimitPrefs.PREFS, android.content.Context.MODE_PRIVATE,
+        ).edit()
+        var applied = 0
+        for (key in limits.keys()) {
+            if (key !in allowed) continue
+            when (val v = limits.opt(key)) {
+                // Braces: Kotlin 2.1's when grammar has no `-> stmt; stmt`
+                // entries (a `;`-sequence must be a block body).
+                is Int -> { editor.putInt(key, v); applied++ }
+                is Long -> { editor.putLong(key, v); applied++ }
+                is Boolean -> { editor.putBoolean(key, v); applied++ }
+                is String -> { editor.putString(key, v); applied++ }
+            }
+        }
+        if (applied > 0) {
+            editor.apply()
+            AppLogger.info(TAG, "[Restore] tool limits applied: $applied")
+        }
     }
 
     /**
@@ -932,24 +958,21 @@ class BackupImporter(
     }
 
     /**
-     * Read one JSONL family, including its rollover shards.
+     * Read one JSONL family, including its rollover shards (name order, hence
+     * the writer's zero-padding). §2.2 rule 3: a line that fails to parse is
+     * skipped, never fatal.
      *
-     * §2.2 rule 3: a line that fails to parse is skipped, never fatal — it may
-     * come from a newer writer. Shards are read in name order, which is why the
-     * writer zero-pads them.
+     * `inline` so the callback can suspend: every caller writes each record to
+     * the DAO as it arrives.
      */
-    // `inline` so the callback can suspend: every caller writes each record to
-    // the DAO as it arrives, which is the whole point of streaming.
     private inline fun readJsonl(dataDir: File, baseName: String, onRecord: (Envelope) -> Unit) {
         val shards = (dataDir.listFiles() ?: emptyArray())
             .filter { it.isFile && (it.name == "$baseName.jsonl" ||
                 (it.name.startsWith("$baseName-") && it.name.endsWith(".jsonl"))) }
             .sortedBy { it.name }
         for (shard in shards) {
-            // Plain reader loop rather than `forEachLine { runCatching { … } }`:
-            // both of those take the callback as a non-inline lambda, which
-            // would force `crossinline` here and forbid the `return@readJsonl`
-            // the callers use in place of `continue`.
+            // Plain reader loop: a non-inline lambda would force `crossinline`
+            // and forbid the `return@readJsonl` the callers use as `continue`.
             shard.bufferedReader().use { reader ->
                 while (true) {
                     val line = reader.readLine() ?: break
@@ -971,18 +994,10 @@ class BackupImporter(
     /**
      * List form, for the one family small enough to hold whole.
      *
-     * [T-android-restore-jsonl-oom] Everything else streams. `messages.jsonl`
-     * is one line per message across every session ever backed up, and
-     * materialising it as `List<Envelope>` — a parsed `JsonObject` tree per
-     * message, all live at once — is what exhausted a Pixel 6's 512MB heap
-     * mid-restore:
-     *
-     *     OutOfMemoryError: Failed to allocate a 48 byte allocation with
-     *     2470096 free bytes ... at BackupImporter.readJsonl(BackupImporter.kt:643)
-     *
-     * The heap climbed 324MB → 463MB over six seconds of back-to-back GCs
-     * before giving up. Nothing needed the list: every caller was a `for` loop
-     * that used each record once and dropped it, so the peak was pure waste.
+     * [T-android-restore-jsonl-oom] Everything else streams. Materialising
+     * `messages.jsonl` — one parsed `JsonObject` tree per message, all live at
+     * once — exhausted a Pixel 6's 512MB heap mid-restore with every caller
+     * using each record exactly once; the list was pure waste.
      */
     private fun readJsonlList(dataDir: File, baseName: String): List<Envelope> =
         mutableListOf<Envelope>().also { out -> readJsonl(dataDir, baseName) { out.add(it) } }
@@ -994,11 +1009,8 @@ class BackupImporter(
 
         /**
          * [XSessionDiag] Mirror of the auto launch-mode freshness window in
-         * `AppNavigation` (15 min). Diagnostic-only: it decides which restored
-         * sessions are worth a log line, and is deliberately NOT wired into the
-         * navigation decision — duplicating the value keeps this logging free of
-         * any behavioural coupling. If the navigation threshold ever changes,
-         * this one only affects how much we log.
+         * `AppNavigation` (15 min). Diagnostic-only: decides which restored
+         * sessions get a log line, never wired into any behaviour.
          */
         private const val XSESSION_DIAG_AUTO_WINDOW_MS = 15L * 60 * 1000
 
@@ -1113,27 +1125,18 @@ class BackupImporter(
             BackupCategory.CACHE,
             BackupCategory.MEMORY,
             BackupCategory.MCP_SERVERS,
-            // Providers before env-vars: both pull VALUES from secrets.json, but
-            // provider import is where credentials for BOTH are applied on iOS.
-            // On Android env-var values are keyed by name and applied in
-            // importEnvironmentVariables, so the two are independent; keep
-            // providers first for parity with the iOS restore order.
+            // Providers before env-vars, for parity with the iOS restore
+            // order; on Android the two are independent.
             BackupCategory.PROVIDERS,
             BackupCategory.ENVIRONMENT_VARIABLES,
         )
 
         /**
          * [T-android-restore-ios-session-nesting] Flatten `{outer…, key:{inner…}}`
-         * into one object, inner winning.
-         *
-         * iOS wraps some records — a session arrives as
-         * `{"memoryEnabled":true,"session":{"id":…,"title":…}}` — while Android
-         * writes the same information flat. Merging instead of choosing means
-         * one reader handles both, and the wrapper's own fields
-         * (`memoryEnabled`) stay reachable by their plain names.
-         *
-         * Returns `this` unchanged when [key] is absent or is not an object,
-         * so a flat Android record costs nothing.
+         * into one object, inner winning — iOS wraps some records (a session
+         * arrives as `{"memoryEnabled":true,"session":{…}}`) while Android
+         * writes them flat; merging keeps one reader for both. Returns `this`
+         * unchanged when [key] is absent or not an object.
          */
         private fun JsonObject.unwrapNested(key: String): JsonObject {
             val inner = (this[key] as? JsonObject) ?: return this
@@ -1151,11 +1154,8 @@ class BackupImporter(
             this[key]?.runCatching { jsonPrimitive.content.toBooleanStrict() }?.getOrNull()
 
         /**
-         * Parse an ISO-8601 instant into epoch millis.
-         *
-         * iOS writes dates as ISO-8601 strings, but a package written by a
-         * future build (or by a tool) could carry a numeric epoch, so both are
-         * accepted — §2.2's tolerance rule applied to a value, not just a key.
+         * Parse an ISO-8601 instant into epoch millis; a numeric epoch is also
+         * accepted (§2.2's tolerance applied to a value, not just a key).
          */
         fun JsonObject.millis(key: String): Long? {
             val raw = str(key) ?: return null

@@ -91,7 +91,10 @@ class ProgressiveTrimTest {
         assertEquals(ProgressiveTrim.Level.STRIP_OLD_THINKING, ProgressiveTrim.levelFor(50, 100))
         assertEquals(ProgressiveTrim.Level.STRIP_OLD_THINKING, ProgressiveTrim.levelFor(69, 100))
         assertEquals(ProgressiveTrim.Level.STUB_LARGE_TOOL_OUTPUTS, ProgressiveTrim.levelFor(70, 100))
-        assertEquals(ProgressiveTrim.Level.STUB_LARGE_TOOL_OUTPUTS, ProgressiveTrim.levelFor(120, 100))
+        assertEquals(ProgressiveTrim.Level.STUB_LARGE_TOOL_OUTPUTS, ProgressiveTrim.levelFor(84, 100))
+        // [T-wave-e-progressive-reclaim] L3: whole old iterations merge.
+        assertEquals(ProgressiveTrim.Level.MERGE_OLD_STEPS, ProgressiveTrim.levelFor(85, 100))
+        assertEquals(ProgressiveTrim.Level.MERGE_OLD_STEPS, ProgressiveTrim.levelFor(120, 100))
     }
 
     @Test
@@ -273,5 +276,106 @@ class ProgressiveTrimTest {
                 assertEquals(list[idx].content, msg.content)
             }
         }
+    }
+
+    // ── [T-wave-e-progressive-reclaim] L2 offload-backed stubs ──────
+
+    @Test
+    fun `stub rides the offload path and offers file_read back`() {
+        val offloaded = mutableListOf<String>()
+        val offloader = ProgressiveTrim.Offloader { content, _, _ ->
+            offloaded += content
+            "/var/minis/workspace/tool-spill/trim-call_0.txt"
+        }
+        val list = toolSession()
+        val trimmed = ProgressiveTrim.trim(list, ProgressiveTrim.Level.STUB_LARGE_TOOL_OUTPUTS, offloader)
+        assertTrue("old big outputs must be offloaded", offloaded.isNotEmpty())
+        val stubbed = trimmed.asSequence()
+            .flatMap { it.contentParts }
+            .filterIsInstance<AgentContentPart.ToolResult>()
+            .first { it.content.startsWith("[tool output offloaded") }
+        assertTrue(stubbed.content.contains("file_read"))
+        assertTrue(stubbed.content.contains("/var/minis/workspace/tool-spill/trim-call_0.txt"))
+        // The stub keeps a recognisable verbatim head of the original: the
+        // head the stub shows must be a prefix of what was handed offload.
+        val shownHead = stubbed.content.substringAfter("]\n")
+        assertTrue(offloaded.any { it.startsWith(shownHead) })
+    }
+
+    @Test
+    fun `offload failure keeps the honest no-path stub`() {
+        val offloader = ProgressiveTrim.Offloader { _, _, _ -> null }
+        val list = toolSession()
+        val trimmed = ProgressiveTrim.trim(list, ProgressiveTrim.Level.STUB_LARGE_TOOL_OUTPUTS, offloader)
+        val stubbed = trimmed.asSequence()
+            .flatMap { it.contentParts }
+            .filterIsInstance<AgentContentPart.ToolResult>()
+            .first { it.content.startsWith("[tool output trimmed") }
+        assertFalse(stubbed.content.contains("file_read"))
+    }
+
+    // ── [T-wave-e-progressive-reclaim] L3: merge old iterations ─────
+
+    @Test
+    fun `merge collapses old iterations into one index block`() {
+        // 25 rounds = 75 messages; the protected tail is 40, so rounds 0..11
+        // (assistant idx 1..34) are trimmable and older than the kept 6.
+        val list = toolSession(rounds = 25)
+        val trimmed = ProgressiveTrim.trim(list, ProgressiveTrim.Level.MERGE_OLD_STEPS)
+        assertTrue("merge must shrink the projection", trimmed.size < list.size)
+        // Exactly ONE index block lands, on a user-role carrier.
+        val indexMsgs = trimmed.filter { it.content.startsWith("[Minis context]") }
+        assertEquals(1, indexMsgs.size)
+        assertEquals(LLMMessage.Role.USER, indexMsgs[0].role)
+        assertTrue(indexMsgs[0].content.contains("shell"))
+        assertTrue(indexMsgs[0].content.contains("file_read"))
+    }
+
+    @Test
+    fun `merge never orphans a tool_use or a tool_result`() {
+        val list = toolSession(rounds = 25)
+        val trimmed = ProgressiveTrim.trim(list, ProgressiveTrim.Level.MERGE_OLD_STEPS)
+        val useIds = trimmed.flatMap { it.contentParts }
+            .filterIsInstance<AgentContentPart.ToolUse>()
+            .map { it.id }
+            .toSet()
+        val resultIds = trimmed.flatMap { it.contentParts }
+            .filterIsInstance<AgentContentPart.ToolResult>()
+            .map { it.id }
+            .toSet()
+        assertTrue(useIds.isNotEmpty())
+        assertEquals("every surviving use keeps its result and vice versa", useIds, resultIds)
+    }
+
+    @Test
+    fun `merge keeps the most recent iterations intact`() {
+        val list = toolSession(rounds = 25)
+        val trimmed = ProgressiveTrim.trim(list, ProgressiveTrim.Level.MERGE_OLD_STEPS)
+        // The last PROTECTED_RECENT_MESSAGES messages pass through verbatim.
+        assertEquals(
+            list.takeLast(ProgressiveTrim.PROTECTED_RECENT_MESSAGES),
+            trimmed.takeLast(ProgressiveTrim.PROTECTED_RECENT_MESSAGES),
+        )
+    }
+
+    @Test
+    fun `merge level on a session with nothing collapsible is a no-op`() {
+        // 8 rounds = 24 messages — all inside the 40-message protected tail,
+        // so no iteration is trimmable and the input survives as-is.
+        val list = toolSession(rounds = 8)
+        assertSame(list, ProgressiveTrim.trim(list, ProgressiveTrim.Level.MERGE_OLD_STEPS))
+    }
+
+    @Test
+    fun `index text lists tool names statuses and output paths`() {
+        val (use, result) = toolRound(0, "out — saved to: /var/minis/workspace/tool-spill/x.txt")
+        val messages = listOf(user("q", 0), use, result)
+        val its = ProgressiveTrim.iterations(messages)
+        assertEquals(1, its.size)
+        assertTrue("iteration must be paired", its[0].paired)
+        val text = ProgressiveTrim.indexText(messages, its)
+        assertTrue(text.contains("shell"))
+        assertTrue(text.contains("ok"))
+        assertTrue(text.contains("/var/minis/workspace/tool-spill/x.txt"))
     }
 }

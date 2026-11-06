@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -80,12 +81,25 @@ fun SubAgentLiveBar(
             // the phase literals below it stay data sentinels (the tracker
             // service emits them and both sides compare on them).
             val indexLabel = stringResource(R.string.subagent_index_of_total, m.index, m.total)
+            // [T-wave-e-subagent-card] The chip now carries the task
+            // description (the spawn prompt's title) alongside the N/M label,
+            // the tool-call count and the latest output line, so the user can
+            // tell lanes apart and see progress without opening the sheet.
+            val toolCalls = m.steps.count { it.kind == "tool" }
+            val toolCountLabel = if (toolCalls > 0) stringResource(R.string.subagent_tool_calls_fmt, toolCalls) else ""
+            val latestLine = m.steps.lastOrNull { it.body.isNotBlank() }?.body
+                ?.lineSequence()?.firstOrNull { it.isNotBlank() }?.take(60).orEmpty()
             val label = buildString {
                 if (m.index > 0 && m.total > 0) append(indexLabel)
-                else append(m.title.take(12))
+                if (m.title.isNotBlank()) {
+                    if (isNotEmpty()) append(" · ")
+                    append(m.title.take(12))
+                }
                 append(" · ").append(m.phase.ifBlank { "思考中" })
                 m.currentTool.takeIf { it.isNotBlank() }?.let { append(" · ").append(subAgentToolTitle(it, "")) }
                 if (m.turnCap > 0) append(" · ${m.turnIndex.coerceAtLeast(1)}/${m.turnCap}")
+                if (toolCountLabel.isNotEmpty()) append(" · ").append(toolCountLabel)
+                if (latestLine.isNotEmpty()) append(" · ").append(latestLine)
             }
             Row(
                 modifier = Modifier
@@ -124,6 +138,7 @@ fun SubAgentLiveBar(
         SubAgentDetailSheet(
             member = detailMember,
             onDismiss = { detailMemberId = null },
+            onStop = onStop,
         )
     }
 }
@@ -133,6 +148,7 @@ fun SubAgentLiveBar(
 private fun SubAgentDetailSheet(
     member: SubAgentActivityTracker.Member,
     onDismiss: () -> Unit,
+    onStop: (String) -> Unit = {},
 ) {
     val phase = member.phase.ifBlank { "思考中" }
     var expandedToolId by remember(member.id) { mutableStateOf<String?>(null) }
@@ -243,6 +259,66 @@ private fun SubAgentDetailSheet(
                     }
                 }
             }
+            // [T-wave-e-subagent-card] Steering row: a supplementary
+            // instruction delivered to the RUNNING child at its next turn
+            // boundary (SubAgentRunner drains the channel). Refused with a
+            // toast-ish inline message when the lane already ended.
+            SubAgentSteerRow(
+                memberId = member.id,
+                memberTitle = member.title,
+                onStop = onStop,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SubAgentSteerRow(
+    memberId: String,
+    memberTitle: String,
+    onStop: (String) -> Unit,
+) {
+    var text by remember { mutableStateOf("") }
+    var feedback by remember { mutableStateOf<String?>(null) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            androidx.compose.material3.OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                placeholder = { Text(stringResource(R.string.subagent_steer_hint), fontSize = 13.sp, maxLines = 1) },
+                modifier = Modifier.weight(1f),
+                textStyle = TextStyle(fontSize = 14.sp, color = ChatColors.primaryText),
+                singleLine = true,
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            androidx.compose.material3.TextButton(
+                onClick = {
+                    val sent = SubAgentActivityTracker.steer(memberId, text)
+                    feedback = context.getString(
+                        if (sent) R.string.subagent_steer_queued else R.string.subagent_steer_refused,
+                    )
+                    if (sent) text = ""
+                },
+                enabled = text.isNotBlank(),
+            ) {
+                Text(stringResource(R.string.subagent_steer_send))
+            }
+        }
+        feedback?.let {
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(text = it, fontSize = 11.sp, color = ChatColors.primaryText.copy(alpha = 0.55f))
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        androidx.compose.material3.TextButton(
+            onClick = { onStop(memberId) },
+            modifier = Modifier.padding(start = 0.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.subagent_stop_in_sheet),
+                color = Color(0xFFFF3B30),
+                fontSize = 13.sp,
+            )
         }
     }
 }

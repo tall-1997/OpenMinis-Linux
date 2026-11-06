@@ -614,13 +614,13 @@ internal fun ThinkingBlock(block: AssistantBlock, isStreaming: Boolean, isLast: 
     // where the same UserDefaults gate sits at the one-shot auto-expand site.
     val context = LocalContext.current
     val autoExpandThinking = remember { autoExpandThinkingEnabled(context) }
-    var expanded by remember(block.id) { mutableStateOf(autoExpandThinking && isLast && isStreaming) }
+    val showFullThinking = remember { com.openminis.app.ui.settings.showFullThinkingEnabled(context) }
+    var expanded by remember(block.id) { mutableStateOf(showFullThinking || (autoExpandThinking && isLast && isStreaming)) }
     var userTouched by remember(block.id) { mutableStateOf(false) }
     var wasStreaming by remember(block.id) { mutableStateOf(isStreaming) }
     LaunchedEffect(block.id, isStreaming) {
-        // Collapse only on a real active->finished edge. Historic/non-active
-        // thinking blocks can be rendered while their assistant turn streams.
-        if (wasStreaming && !isStreaming && !userTouched) {
+        // Collapse only on a real active->finished edge (showFullThinking keeps it open).
+        if (wasStreaming && !isStreaming && !userTouched && !showFullThinking) {
             delay(500)
             expanded = false
         }
@@ -746,14 +746,13 @@ internal fun ThinkingBlock(block: AssistantBlock, isStreaming: Boolean, isLast: 
             // keyed on the length recomputes the substring on each token, but
             // the cost is O(window) not O(total). Snap the cut to the next
             // newline (within 200 chars) so we don't start mid-line.
-            // [T-android-thinking-poll-removal] Read block.content directly —
-            // the VM-side UiUpdateBatcher already paces recomposition at
-            // 200-500ms, so the old 100ms poll only added lag between the
-            // state write and the frame that showed it. ThinkingAutoFollow
-            // publishes its SideEffect on recomposition, not on the poll.
+            // Read block.content directly — UiUpdateBatcher paces recomposition at
+            // 200-500ms, so the old 100ms poll only added lag (SideEffect on recomposition).
             val renderedContent = block.content
-            val isTruncated = renderedContent.length > thinkingWindowSize
-            val displayContent = visibleThinkingTail(renderedContent, thinkingWindowSize)
+            // Full-thinking lifts the inline window to the hard cap (entire reasoning, not the tail).
+            val effectiveWindow = if (showFullThinking) thinkingHardCap else thinkingWindowSize
+            val isTruncated = renderedContent.length > effectiveWindow
+            val displayContent = visibleThinkingTail(renderedContent, effectiveWindow)
             ThinkingAutoFollow(
                 blockId = block.id,
                 contentVersionValue = block.content.length,

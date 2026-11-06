@@ -156,6 +156,10 @@ internal fun ChatViewModel.sendMessage(
     // inside the send button's tap closure).
     if (!internalGoalRun && _hasInjectedShareContent.value) _hasInjectedShareContent.value = false
 
+    // [port-upstream-1.16][T-android-provider-edit-mid-session] A provider
+    // edited (key / base URL / API type) since the last turn is rebuilt here,
+    // so the change applies to THIS turn, not after a re-entry.
+    rebuildProviderIfEdited()
     val initialProvider = currentProvider
     if (initialProvider == null) {
         _error.value = "No provider configured"

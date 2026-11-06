@@ -486,13 +486,15 @@ fun ChatScreen(
     // T311: publish "this is the active chat" while ChatScreen is composed,
     // so `minis-config session.*` reads/writes target it. Mirrors iOS
     // `AIChatViewModel.activeSessionId` which is updated on appear / disappear.
-    // [T-HANG-DIAG] capture the application context so we can read the
-    // current hang count from non-composable scopes below. LocalContext is
-    // already used elsewhere in this file via `context`, but DisposableEffect
-    // is a non-composable scope so we lift the read up here.
+    // [T-HANG-DIAG] App context for the hang count — DisposableEffect is non-composable, so lift the read here.
     val tHangDiagAppContext = androidx.compose.ui.platform.LocalContext.current.applicationContext
     androidx.compose.runtime.DisposableEffect(sessionId) {
         ChatViewModelStore.screenEntered(sessionId)
+        // Stamp read on enter AND dispose so streamed rows aren't "unseen" on leave.
+        com.openminis.app.data.UnreadRegistry.markRead(
+            tHangDiagAppContext,
+            viewModel.realSessionId.ifBlank { sessionId },
+        )
         // Enter / dispose markers around the ChatScreen lifetime so we can
         // correlate "user tapped session X" → loadSession timings and any
         // subsequent hang record. Ride the PerfLongCtx reentry timeline
@@ -506,6 +508,11 @@ fun ChatScreen(
         onDispose {
             com.openminis.app.diagnostics.PerfLongCtx.step(sessionId, "chatScreen.unmount")
             ChatViewModelStore.screenLeft(sessionId)
+            // Final read stamp.
+            com.openminis.app.data.UnreadRegistry.markRead(
+                tHangDiagAppContext,
+                viewModel.realSessionId.ifBlank { sessionId },
+            )
             // T-android-new-chat-empty-residue: drop sessions materialised by
             // a settings toggle (ensureSession via /memory, /thinking, etc.)
             // but never sent a real message. VM guards on streaming + DB count
@@ -2061,6 +2068,7 @@ fun ChatScreen(
             if (showSubAgentBar) {
                 SubAgentLiveBar(sessionId = sessionId, onStop = com.openminis.app.service.SubAgentActivityTracker::stop)
             }
+            ScheduledCountdownPill(currentSessionId = { viewModel.realSessionId.ifBlank { sessionId } })
             ChatGateBanners(
                 approvals = pendingApprovals,
                 intercepts = interceptEvents,
@@ -2481,11 +2489,14 @@ fun ChatScreen(
                     // now, so the down-FAB shows and no follower moves the
                     // viewport out from under the highlight.
                     scrollPolicy.landReading(targetKey, topOffset)
-                    // Hold the pulse, then fade it out. Clearing `active`
-                    // (rather than the id) keeps the highlight state reusable:
-                    // a same-session re-tap re-enters this effect and
-                    // re-lights it without fighting a stale id.
-                    kotlinx.coroutines.delay(2400)
+                    // Hold the highlight until streaming moves content under it or the user
+                    // scrolls away (5-min bound guards a forgotten highlight).
+                    val landedSize = viewModel.uiMessages.value.size
+                    withTimeoutOrNull(300_000L) {
+                        snapshotFlow {
+                            listState.isScrollInProgress to viewModel.uiMessages.value.size
+                        }.first { (scrolling, size) -> scrolling || size != landedSize }
+                    }
                     searchFocusActive = false
                 }
 
@@ -5411,31 +5422,19 @@ fun ChatScreen(
                             // between idle and streaming (the ring appears
                             // around the 38dp button instead of resizing it),
                             // so the message list does not jump.
-                            Box(
-                                modifier = Modifier.size(46.dp),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                androidx.compose.material3.CircularProgressIndicator(
-                                    modifier = Modifier.size(46.dp),
-                                    strokeWidth = 2.dp,
-                                    color = Color(0xFFFF3B30),
-                                )
-                                Box(
-                                    modifier = Modifier
-                                        .size(38.dp)
-                                        .background(Color(0xFFFF3B30), CircleShape)
-                                        .clip(CircleShape)
-                                        .clickable { viewModel.cancelStream() },
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Icon(
-                                        Icons.Default.Stop,
-                                        contentDescription = stringResource(R.string.cd_stop),
-                                        tint = Color.White,
-                                        modifier = Modifier.size(20.dp),
-                                    )
-                                }
-                            }
+                            // Tap = confirm-or-stop; long-press = scope menu (tool/all + confirm toggle).
+                            StopButtonWithOptions(
+                                sessionId = viewModel.realSessionId.ifBlank { sessionId },
+                                onStopRun = { viewModel.cancelStream() },
+                                onStopAll = {
+                                    // The run first, then every sub agent working for this chat.
+                                    viewModel.cancelStream()
+                                    val sid = viewModel.realSessionId
+                                    com.openminis.app.service.SubAgentActivityTracker.members.value
+                                        .filter { it.parentSessionId == sid || it.parentSessionId == sessionId }
+                                        .forEach { com.openminis.app.service.SubAgentActivityTracker.stop(it.id) }
+                                },
+                            )
                         } else {
                             // Streaming with content → Send-into-queue; Idle with content → Send.
                             // Idle without text or attachments → disabled.

@@ -127,7 +127,15 @@ object ExecutionCoordinator {
         timeout: Long = 600_000L,
         lineCallback: ((String) -> Unit)? = null,
         resourceClass: SandboxResourceGate.ResourceClass = SandboxResourceGate.ResourceClass.AUTO,
+        // [port-upstream-1.16 / FIX-261025-05] The session's stop epoch when the
+        // CALLER's tool call began. A tool that waits before running its command
+        // (a `delay` countdown, a bash install) passes the value it took at its
+        // start, so a Stop during that wait still keeps the command from
+        // starting. Null = taken here.
+        stopEpoch: Long? = null,
     ): CommandResult {
+        val epoch = stopEpoch ?: stopEpoch(sessionId)
+        if (stoppedSince(sessionId, epoch)) return notStarted(sessionId, "before it was queued")
         MCPToolPolicy.blockedMessage(appContext, command)?.let { msg ->
             lineCallback?.invoke(msg)
             return CommandResult(output = msg, exitCode = 1, durationMs = 0)
@@ -143,6 +151,11 @@ object ExecutionCoordinator {
 
         return mutex.withLock {
         lastIdle.remove(sessionId)
+        // [port-upstream-1.16 / FIX-261025-05] Queued behind a running command:
+        // the Stop killed that command's process group, so its result returns
+        // and the mutex opens — without this check the queued command then ran
+        // to completion even though the user had stopped the turn.
+        if (stoppedSince(sessionId, epoch)) return@withLock notStarted(sessionId, "while queued")
         try {
         // [T-yoyo-root-deletion] Under YOYO the gate has already shown a
         // mustPrompt confirmation for a root deletion before the command reaches
@@ -181,6 +194,10 @@ object ExecutionCoordinator {
             limits = { SandboxMemoryPressure.executionLimits(appContext) },
             onWaiting = { lineCallback?.invoke(it) },
         ) {
+            // [port-upstream-1.16 / FIX-261025-05] Admitted out of the resource
+            // gate's wait queue (memory pressure, the deadline lane): a Stop
+            // that arrived while waiting must not start the command.
+            if (stoppedSince(sessionId, epoch)) return@withCommandLock notStarted(sessionId, "when it was admitted")
             val budget = BudgetClassifier.classify(command, resourceClass)
             // [T-timeout-honored] The caller may shorten the class wall but
             // never extend it, and the setup floor always survives (a killed
@@ -198,6 +215,10 @@ object ExecutionCoordinator {
             val startTime = System.currentTimeMillis()
 
             // Auto-boot PRoot if not already booted
+            // [port-upstream-1.16 / FIX-261025-05] "沙盒启动中" gate: boot takes
+            // seconds on a cold start; a Stop during it keeps the command from
+            // ever reaching the shell.
+            if (stoppedSince(sessionId, epoch)) return@withCommandLock notStarted(sessionId, "while the sandbox was booting")
             if (!PRootKernel.isBooted) {
                 Log.i(TAG, "[$sessionId] Auto-booting PRootKernel")
                 PRootKernel.boot(appContext)
@@ -226,6 +247,11 @@ object ExecutionCoordinator {
             // persistent shell remains alive. Refresh both PATH and bash's
             // command hash before every command so the next command sees it.
             shell.refreshPath()
+
+            // [port-upstream-1.16 / FIX-261025-05] Last checkpoint before the
+            // command is written to the shell's stdin. Past this point the
+            // process exists and the ordinary group kill (stop()) applies.
+            if (stoppedSince(sessionId, epoch)) return@withCommandLock notStarted(sessionId, "before it started")
 
             val (rawOutput, exitCode) = shell.executeCommand(
                 command = command,
@@ -426,10 +452,14 @@ object ExecutionCoordinator {
      * Called when a session is closed. Stops and removes the shell.
      */
     fun sessionDidTerminate(sessionId: String) {
+        bumpStopEpoch(sessionId)
         terminateOne(sessionId)
         if (!isLaneSession(sessionId)) {
             val prefix = lanePrefix(sessionId)
-            shells.keys.filter { it.startsWith(prefix) }.forEach { terminateOne(it) }
+            shells.keys.filter { it.startsWith(prefix) }.forEach {
+                bumpStopEpoch(it)
+                terminateOne(it)
+            }
         }
     }
 
@@ -445,15 +475,50 @@ object ExecutionCoordinator {
     }
 
     /**
+     * [port-upstream-1.16 / FIX-261025-05] Per-session Stop counter. A command
+     * compares it with the value its tool call began with, so a Stop that came
+     * while it was still waiting — a `delay` countdown, the resource-gate queue,
+     * PRoot boot, a bash install — keeps it from starting, even though no
+     * process existed for the Stop to kill.
+     */
+    private val stopEpochs = ConcurrentHashMap<String, java.util.concurrent.atomic.AtomicLong>()
+
+    fun stopEpoch(sessionId: String): Long = stopEpochs[sessionId]?.get() ?: 0L
+
+    fun stoppedSince(sessionId: String, epoch: Long): Boolean = stopEpoch(sessionId) != epoch
+
+    private fun bumpStopEpoch(sessionId: String) {
+        stopEpochs.computeIfAbsent(sessionId) { java.util.concurrent.atomic.AtomicLong() }.incrementAndGet()
+    }
+
+    /** What a command stopped before it started answers. Read by the model. */
+    const val NOT_STARTED_OUTPUT =
+        "[Cancelled] Stopped by the user before the command started; nothing was run."
+
+    private fun notStarted(sessionId: String, phase: String): CommandResult {
+        com.openminis.app.logging.AppLogger.info(TAG, "[stop-tool] [$sessionId] command stopped $phase - not run")
+        return CommandResult(output = NOT_STARTED_OUTPUT, exitCode = 130, durationMs = 0L)
+    }
+
+    /**
      * Stop the shell for a specific session (e.g. user tapped cancel).
      * The shell process is killed; next command will recreate it.
      */
     fun stopCurrentCommand(sessionId: String? = null) {
         if (sessionId != null) {
+            // [port-upstream-1.16] Only a Stop aimed at a session moves its
+            // epoch: the session-less form is the shell restart after a mount
+            // change (MinisApp), not a user Stop.
+            bumpStopEpoch(sessionId)
             stopOne(sessionId)
             if (!isLaneSession(sessionId)) {
                 val prefix = lanePrefix(sessionId)
-                shells.keys.filter { it.startsWith(prefix) }.forEach { stopOne(it) }
+                shells.keys.filter { it.startsWith(prefix) }.forEach {
+                    // Lane commands dispatch under their own lane id; their
+                    // epoch moves too, or a queued lane command would start.
+                    bumpStopEpoch(it)
+                    stopOne(it)
+                }
             }
         } else {
             // Stop all sessions (legacy/fallback)

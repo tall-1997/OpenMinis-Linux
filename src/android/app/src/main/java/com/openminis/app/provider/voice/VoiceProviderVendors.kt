@@ -39,11 +39,31 @@ class GroqVoiceProvider(providerId: String, baseURL: String, apiKey: String?) :
     override fun defaultVoiceInputModel() = "whisper-large-v3-turbo"
 }
 
-// -- Alibaba Bailian (OpenAI-compatible, only default models differ) ----------
+// -- Alibaba Bailian (OpenAI-compatible TTS; ASR on chat completions) ---------
 
 class AlibabaVoiceProvider(providerId: String, baseURL: String, apiKey: String?) :
     VoiceProvider(providerId, baseURL, apiKey) {
-    override fun defaultVoiceInputModel() = "paraformer-realtime-v2"
+    override fun defaultVoiceInputModel() = CloudAsrProtocols.BAILIAN_ASR_MODEL
+
+    /**
+     * [FIX-261022-06, OpenMinis#469] The compatible mode has no
+     * /audio/transcriptions (404); its ASR is qwen3-asr-flash on
+     * /chat/completions with the clip in an `input_audio` part. The old
+     * default, paraformer-realtime-v2, is WebSocket-only.
+     */
+    override suspend fun transcribe(request: VoiceInputRequest): VoiceInputResponse {
+        val model = CloudAsrProtocols.bailianModel(request.model)
+        val body = CloudAsrProtocols.bailianBody(model, request.audioData, request.language)
+        val builder = Request.Builder()
+            .url(composedUrlString("/v1/chat/completions"))
+            .post(body.toString().toRequestBody("application/json".toMediaType()))
+        applyVoiceAuth(builder)
+        val data = executeRequest(builder.build())
+        val (text, seconds) = CloudAsrProtocols.bailianParse(String(data, Charsets.UTF_8))
+            ?: throw VoiceProviderException.Parse("Unexpected Bailian ASR response format")
+        return VoiceInputResponse(text = text, language = request.language, durationSeconds = seconds)
+    }
+
     override fun defaultVoiceOutputModel() = "cosyvoice-v2"
     override fun defaultVoiceOutputVoice() = "longxiaochun"
 }
@@ -86,13 +106,9 @@ class MiniMaxVoiceProvider(providerId: String, baseURL: String, apiKey: String?)
         val url = composedUrlString(voiceOutputEndpointPath())
         // MiniMax-specific shape: speed becomes an integer 0~200.
         val speedInt = ((request.speed ?: 1.0f) * 100).toInt()
-        // [T-voice-minimax-quicktest-2054] The picker (where model entries
-        // double as voices) passes the MODEL id in `voice`. MiniMax voice ids
-        // are a SEPARATE namespace, so sending the model id as voice_id fails
-        // with 2054 "voice id not exist" — which is exactly what Quick Test hit
-        // on speech-2.8-hd / -turbo while iOS passed. Treat voice == model as
-        // "no voice selected" and fall back to the default. Port of the iOS
-        // guard in VoiceProvider+Vendors.swift.
+        // [T-voice-minimax-quicktest-2054] Model entries double as voices in the
+        // picker; a MiniMax model id is never a valid voice_id (2054), so treat
+        // voice == model as "no voice selected" and use the default.
         val requestedVoice = if (request.voice == request.model) null else request.voice
         val body = JSONObject().apply {
             put("model", request.model ?: defaultVoiceOutputModel())
@@ -134,11 +150,8 @@ class MiniMaxVoiceProvider(providerId: String, baseURL: String, apiKey: String?)
                 throw VoiceProviderException.Parse("MiniMax TTS error [$code]: $msg")
             }
         }
-        // [T-voice-minimax-quicktest-2054] Current t2a_v2 (api.minimaxi.com,
-        // verified on iOS 2026-07-24) nests HEX-encoded audio at `data.audio`;
-        // older deployments returned base64 at `audio.audio`. Android only knew
-        // the legacy shape, so even a request that succeeded upstream would
-        // have failed to parse. Try hex first, then base64, matching iOS.
+        // [T-voice-minimax-quicktest-2054] Current t2a_v2 nests HEX-encoded audio
+        // at `data.audio`; older deployments returned base64 at `audio.audio`.
         json?.optJSONObject("data")?.optString("audio")?.takeIf { it.isNotEmpty() }?.let { enc ->
             decodeHex(enc)?.let { return it }
             runCatching { Base64.decode(enc, Base64.DEFAULT) }.getOrNull()?.let { return it }
@@ -237,14 +250,14 @@ class DoubaoVoiceProvider(providerId: String, apiKey: String?) :
 
     override fun buildVoiceInputRequest(request: VoiceInputRequest): Request {
         val url = composedUrlString(voiceInputEndpointPath())
-        val body = JSONObject()
-            .put("user", JSONObject().put("uid", "minis_user"))
-            .put("audio", JSONObject().put("data", Base64.encodeToString(request.audioData, Base64.NO_WRAP)))
-            .put("request", JSONObject().put("model_name", "bigmodel"))
+        // [FIX-261022-06] doubaoBody enables ITN + punctuation; doubaoResource
+        // lets a granted "volc.*" resource id be entered as the model.
+        val resource = CloudAsrProtocols.doubaoResource(request.model)
+        val body = CloudAsrProtocols.doubaoBody(request.audioData)
         val builder = Request.Builder()
             .url(url)
             .post(body.toString().toRequestBody("application/json".toMediaType()))
-            .header("X-Api-Resource-Id", "volc.bigasr.auc_turbo")
+            .header("X-Api-Resource-Id", resource)
             .header("X-Api-Request-Id", UUID.randomUUID().toString())
             .header("X-Api-Sequence", "-1")
         applyVoiceAuth(builder)
@@ -282,68 +295,82 @@ class XunfeiVoiceProvider(
     // Xunfei authenticates via a signed URL, not a header.
     override fun applyVoiceAuth(builder: Request.Builder) {}
 
-    override fun buildVoiceInputRequest(request: VoiceInputRequest): Request {
-        val url = buildSignedURL(host = "iat-api.xfyun.cn", path = "/v2/iat", date = Date())
-        val body = JSONObject()
-            .put("header", JSONObject().put("app_id", appId).put("status", 3))
-            .put(
-                "parameter",
-                JSONObject().put(
-                    "iat",
-                    JSONObject()
-                        .put("domain", "iat")
-                        .put("language", request.language ?: "zh_cn")
-                        .put("accent", "mandarin")
-                        .put(
-                            "result",
-                            JSONObject()
-                                .put("encoding", "utf8")
-                                .put("compress", "raw")
-                                .put("format", "json"),
-                        ),
-                ),
-            )
-            .put(
-                "payload",
-                JSONObject().put(
-                    "audio",
-                    JSONObject()
-                        .put("encoding", "raw")
-                        .put("sample_rate", 16000)
-                        .put("channels", 1)
-                        .put("bit_depth", 16)
-                        .put("status", 3)
-                        .put("audio", Base64.encodeToString(request.audioData, Base64.NO_WRAP)),
-                ),
-            )
-        return Request.Builder()
-            .url(url)
-            .post(body.toString().toRequestBody("application/json".toMediaType()))
-            .build()
+    /**
+     * [FIX-261022-06, OpenMinis#469] Dictation is the v2 WebSocket API
+     * (wss://iat-api.xfyun.cn/v2/iat): 16 kHz mono PCM framed like a live
+     * microphone, then `{"data":{"status":2}}`. (A one-shot HTTP POST in
+     * another API's shape never worked.) A session takes at most 60 s, so
+     * longer clips run as several sessions whose text is joined.
+     */
+    override suspend fun transcribe(request: VoiceInputRequest): VoiceInputResponse {
+        val pcm = CloudAsrProtocols.pcm16kMono(request.audioData)
+            ?: throw VoiceProviderException.Parse("iFlytek dictation needs WAV (PCM) audio")
+        val language = CloudAsrProtocols.xunfeiLanguage(request.language)
+        val text = StringBuilder()
+        for (segment in CloudAsrProtocols.xunfeiSegments(pcm)) {
+            text.append(dictate(CloudAsrProtocols.xunfeiFrames(segment, appId, language)))
+        }
+        return VoiceInputResponse(
+            text = text.toString(),
+            language = request.language,
+            durationSeconds = pcm.size / (2.0 * CloudAsrProtocols.PCM_RATE),
+        )
     }
 
-    override fun parseVoiceInputResponse(data: ByteArray, request: VoiceInputRequest): VoiceInputResponse {
-        val json = runCatching { JSONObject(String(data, Charsets.UTF_8)) }.getOrNull()
-            ?: throw VoiceProviderException.Parse("Unexpected Xunfei ASR response format")
-        if (json.optJSONObject("header")?.optInt("code", -1) != 0) {
-            throw VoiceProviderException.Parse("Unexpected Xunfei ASR response format")
-        }
-        val b64Text = json.optJSONObject("payload")?.optJSONObject("result")?.optString("text")
-            ?.takeIf { it.isNotEmpty() }
-            ?: throw VoiceProviderException.Parse("Unexpected Xunfei ASR response format")
-        val textJson = runCatching {
-            JSONObject(String(Base64.decode(b64Text, Base64.DEFAULT), Charsets.UTF_8))
-        }.getOrNull() ?: throw VoiceProviderException.Parse("Unexpected Xunfei ASR response format")
+    /** One dictation session: sends [frames] at the live pace and collects the result. */
+    private suspend fun dictate(frames: List<String>): String {
+        val url = buildSignedURL(host = "iat-api.xfyun.cn", path = "/v2/iat", date = Date())
+            .replaceFirst("https://", "wss://")
+        val result = CloudAsrProtocols.XunfeiResult()
+        val done = kotlinx.coroutines.CompletableDeferred<String>()
+        val socket = httpClient.newWebSocket(
+            Request.Builder().url(url).build(),
+            object : WebSocketListener() {
+                override fun onMessage(webSocket: WebSocket, text: String) {
+                    try {
+                        if (result.accept(text)) {
+                            webSocket.close(1000, null)
+                            done.complete(result.text)
+                        }
+                    } catch (e: CloudAsrProtocols.XunfeiResult.Failure) {
+                        webSocket.cancel()
+                        done.completeExceptionally(
+                            if (e.code == 10005 || e.code == 11200 || e.code == 10313) {
+                                VoiceProviderException.Parse(
+                                    "${e.message} (check the App ID, API Key and API Secret, " +
+                                        "and that dictation is enabled)",
+                                )
+                            } else {
+                                VoiceProviderException.Parse(e.message ?: "iFlytek error ${e.code}")
+                            },
+                        )
+                    }
+                }
 
-        val sb = StringBuilder()
-        val ws = textJson.optJSONArray("ws") ?: JSONArray()
-        for (i in 0 until ws.length()) {
-            val cw = ws.optJSONObject(i)?.optJSONArray("cw") ?: continue
-            for (j in 0 until cw.length()) {
-                cw.optJSONObject(j)?.optString("w")?.let { sb.append(it) }
+                override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                    webSocket.close(1000, null)
+                    done.complete(result.text)
+                }
+
+                override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                    val code = response?.code
+                    done.completeExceptionally(
+                        if (code == 401 || code == 403) VoiceProviderException.Auth() else t,
+                    )
+                }
+            },
+        )
+        try {
+            // OkHttp queues sends until the handshake completes.
+            for (frame in frames) {
+                if (done.isCompleted) break
+                socket.send(frame)
+                kotlinx.coroutines.delay(CloudAsrProtocols.XUNFEI_CHUNK_INTERVAL_MS)
             }
+            return kotlinx.coroutines.withTimeout(30_000) { done.await() }
+        } finally {
+            socket.cancel()
         }
-        return VoiceInputResponse(text = sb.toString(), language = request.language)
     }
 
     /**
@@ -757,22 +784,14 @@ class MimoVoiceProvider(providerId: String, baseURL: String, apiKey: String?) :
  * OpenRouter voice — Android port of iOS `OpenRouterVoiceProvider`
  * (iOS 1946b0b2 for TTS, 1f23fd02 for ASR).
  *
- * OpenRouter does not implement OpenAI's dedicated TTS endpoint at all:
- * `POST /api/v1/audio/speech` answers `{"error":{"message":"Model <id> does
- * not exist","code":400}}` for EVERY model id, including `openai/tts-1`. That
- * 400 — the endpoint being absent, not a missing model — is what users saw for
- * every OpenRouter voice entry from fish-audio to gpt-audio.
- *
- * ASR is split across TWO endpoints serving DISJOINT model sets:
- *   - `/v1/audio/transcriptions` takes dedicated ASR models only
- *     (`openai/whisper-1` works; a chat model there returns the same 400);
- *   - `/v1/chat/completions` with an `input_audio` part takes audio-capable
- *     CHAT models (gemini-3.6-flash, gpt-audio-mini), and explicitly REJECTS
- *     whisper ("is a transcription model and cannot be used with the
- *     chat/completions endpoint").
- *
- * So neither half can be routed by provider type alone — the split is per
- * model, and OpenRouter's own error text is the specification.
+ * OpenRouter answers `{"error":{"message":"Model <id> does not exist"}}` for
+ * EVERY id at its `/audio/speech` endpoint (the endpoint is absent, not the
+ * model) — that 400 is what users saw for every OpenRouter voice entry. ASR
+ * splits across two endpoints with DISJOINT model sets: `/v1/audio/
+ * transcriptions` takes dedicated ASR models only, and `/v1/chat/completions`
+ * with an `input_audio` part takes audio-capable CHAT models while explicitly
+ * rejecting whisper. Neither half routes by provider type alone — the split
+ * is per model, and OpenRouter's own error text is the specification.
  */
 class OpenRouterVoiceProvider(providerId: String, baseURL: String, apiKey: String?) :
     VoiceProvider(providerId, baseURL, apiKey) {
@@ -798,20 +817,13 @@ class OpenRouterVoiceProvider(providerId: String, baseURL: String, apiKey: Strin
 
         /**
          * Ids that belong to the `/audio/transcriptions` endpoint. Deliberately
-         * narrow and name-based: a false positive sends a working chat model to
-         * the endpoint that 400s.
-         *
-         * Every pattern was probed against the live endpoint rather than
-         * guessed, because OpenRouter publishes no catalogue for them: GET
-         * /api/v1/models lists the chat models and contains no ASR id at all,
-         * yet `openai/whisper-1` transcribes fine. Confirmed working there:
-         * `openai/whisper-1`, `openai/gpt-4o-transcribe`,
-         * `openai/gpt-4o-mini-transcribe`, `deepgram/nova-3`.
-         *
-         * Deepgram is matched VENDOR-qualified, never by the bare engine name:
-         * a bare "nova-2"/"nova-3" also matches `amazon/nova-2-lite-v1`, a chat
-         * model in the catalogue that would then be misrouted into the very 400
-         * this class exists to remove.
+         * narrow and name-based — a false positive sends a working chat model
+         * to the endpoint that 400s. OpenRouter publishes no catalogue for
+         * these (the models list has no ASR id), so every pattern was probed
+         * against the live endpoint: whisper-1, gpt-4o(-mini)-transcribe,
+         * deepgram/nova-3 confirmed working there. Deepgram is matched
+         * VENDOR-qualified: a bare "nova-3" also matches the chat model
+         * `amazon/nova-2-lite-v1` and would misroute into that 400.
          */
         fun isDedicatedTranscriptionModel(modelId: String): Boolean {
             val id = modelId.lowercase(Locale.ROOT)
@@ -853,20 +865,13 @@ class OpenRouterVoiceProvider(providerId: String, baseURL: String, apiKey: Strin
     }
 
     /**
-     * Pick the `audio.voice` value.
-     *
-     * Callers disagree on what [VoiceOutputRequest.voice] means: for vendors
-     * where a catalog entry IS a voice (ElevenLabs voice_id, Doubao speaker)
-     * the entry id is passed straight through, and Quick Test follows that
-     * convention. For chat-audio the model and the voice are separate axes, so
-     * that convention arrives as `voice: "openai/gpt-audio"` and the upstream
-     * answers "Invalid value: 'openai/gpt-audio'. Supported values are:
-     * 'alloy', …" — a second 400 hiding behind the first.
-     *
-     * So: honour a voice the vendor actually knows, otherwise fall back to the
-     * default rather than forwarding something certain to fail. An
-     * unrecognised-but-real voice (if OpenAI adds one) degrades to the default
-     * instead of erroring, the safer direction for TTS.
+     * Pick the `audio.voice` value. For entry-is-voice vendors the entry id
+     * passes straight through; for chat-audio the model and voice are separate
+     * axes, so that id arrives as `voice: "openai/gpt-audio"` and the upstream
+     * answers "Invalid value" — a second 400 hiding behind the first. So:
+     * honour a voice the vendor actually knows, else fall back to the default;
+     * an unrecognised-but-real voice degrades to the default instead of
+     * erroring, the safer direction for TTS.
      */
     private fun resolvedVoice(requested: String?, modelId: String): String {
         val want = requested?.takeIf { it.isNotEmpty() } ?: return defaultVoiceOutputVoice()
@@ -880,19 +885,14 @@ class OpenRouterVoiceProvider(providerId: String, baseURL: String, apiKey: Strin
     }
 
     /**
-     * The only route that produces audio is `POST /v1/chat/completions` in the
-     * audio-preview shape, with three hard constraints (each verified against
-     * the live API):
-     *   - `modalities: ["text","audio"]` + `audio: {voice, format}`;
-     *   - `stream: true` is MANDATORY — otherwise "Audio output requires
-     *     stream: true";
-     *   - while streaming, `audio.format` accepts ONLY `pcm16` — `wav` returns
-     *     "does not support 'wav' when stream=true".
-     *
-     * The SSE body is an ordinary chat-completions stream with two extra fields
-     * per delta: `audio.data` (base64 PCM16 chunk) and `audio.transcript`. We
-     * accumulate the PCM and wrap it in a WAV container, because the caller
-     * feeds this to MediaPlayer/ExoPlayer and headerless PCM is not openable.
+     * The only audio route is `POST /v1/chat/completions` in the audio-preview
+     * shape, with three hard constraints (each verified against the live API):
+     * `modalities: ["text","audio"]` + `audio: {voice, format}`; `stream:
+     * true` MANDATORY ("Audio output requires stream: true"); while streaming
+     * `audio.format` accepts ONLY `pcm16`. The SSE deltas carry `audio.data`
+     * (base64 PCM16) + `audio.transcript`; the PCM is accumulated and wrapped
+     * in a WAV container because MediaPlayer/ExoPlayer cannot open headerless
+     * PCM.
      */
     override suspend fun synthesize(request: VoiceOutputRequest): ByteArray {
         val modelId = request.model ?: defaultVoiceOutputModel()

@@ -538,6 +538,11 @@ fun ProviderDetailScreen(
             SettingsRow(
                 title = stringResource(if (isRefreshing) R.string.provider_detail_refreshing else R.string.provider_detail_refresh_models),
                 subtitle = refreshNote?.let { note ->
+                    // [port-upstream-1.16] Distinct wording per outcome: a
+                    // vendor success says SYNCED (was: the same "unchanged"
+                    // mark as PRESERVED, so a real refresh read as a no-op);
+                    // a failed/empty vendor list that reseeded built-ins says
+                    // BUILTIN — the list came back, not from the endpoint.
                     stringResource(when (note) {
                         ModelRefreshResult.NO_KEY -> R.string.provider_sync_mark_nokey
                         ModelRefreshResult.PRESERVED -> R.string.provider_sync_mark_unchanged
@@ -545,7 +550,8 @@ fun ProviderDetailScreen(
                         ModelRefreshResult.NOT_FOUND -> R.string.provider_sync_mark_not_found
                         ModelRefreshResult.CONNECTION_FAILED -> R.string.provider_sync_mark_connection
                         ModelRefreshResult.INVALID_RESPONSE -> R.string.provider_sync_mark_invalid
-                        ModelRefreshResult.SUCCESS_API -> R.string.provider_sync_mark_unchanged
+                        ModelRefreshResult.SUCCESS_API -> R.string.provider_sync_mark_synced
+                        ModelRefreshResult.SUCCESS_BUILTIN -> R.string.provider_sync_mark_builtin
                     })
                 },
                 onClick = if (isRefreshing) {
@@ -594,12 +600,9 @@ fun ProviderDetailScreen(
                             // [T-android-model-row-hide-action] Long-press opens a
                             // menu (hide/delete) instead of straight delete:
                             // hiding was reachable only via the detail screen
-                            // (five steps vs iOS's one tap on an eye button).
-                            // A menu, not a trailing icon — the trailing slot
-                            // is a fixed 72dp badge area keeping the chevron
-                            // column aligned; a button there would rag it.
-                            // Built-ins can't be deleted (repo re-creates
-                            // them) but hiding works.
+                            // (five steps vs iOS's one tap). A menu, not a
+                            // trailing icon — that slot is a fixed 72dp badge
+                            // area keeping the chevron column aligned.
                             onLongClick = { menuEntryId = entry.id },
                         ),
                 ) {
@@ -817,14 +820,11 @@ private fun OAuthCredentialBlock(
     val scope = rememberCoroutineScope()
 
     // [T-android-openai-oauth-signout-signin-stuck] Drive the Sign In / Sign Out
-    // toggle off LOCAL Compose state instead of the `storedKey` parameter, which
-    // is read once per parent composition (a plain val) and never updates after
-    // a sign-out/sign-in. Without this the screen kept showing "Sign Out" after a
-    // logout (UI never refreshed) AND the Sign In branch was never reached
-    // because its gate was the same stale `storedKey.isNotEmpty()` — so a failed
-    // sign-out left Sign In dead too. `displayedKey` mirrors the live credential
-    // so the masked token / connected dot refresh together. Mirrors iOS
-    // ProviderInstanceDetailView's `oauthRefreshTrigger.toggle()`.
+    // toggle off LOCAL Compose state instead of the `storedKey` parameter (read
+    // once per composition, never updates): the stale gate showed "Sign Out"
+    // after logout and left Sign In dead. `displayedKey` mirrors the live
+    // credential so the masked token / connected dot refresh together. Mirrors
+    // iOS ProviderInstanceDetailView's `oauthRefreshTrigger.toggle()`.
     var displayedKey by remember(instance.id) { mutableStateOf(storedKey) }
     // [T-oauth-keep-credentials] Rejected refresh → red dot + hint instead of
     // the green one; cleared automatically when a fresh bundle lands.

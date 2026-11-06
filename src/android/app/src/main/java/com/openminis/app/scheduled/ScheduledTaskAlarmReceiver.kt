@@ -56,7 +56,15 @@ class ScheduledTaskAlarmReceiver : BroadcastReceiver() {
                     }
                     // Schedule the next occurrence FIRST so a long-running
                     // prompt doesn't block tomorrow's fire even if we crash.
-                    manager.rescheduleNext(taskId)
+                    // [T-sched-run-now, port upstream 1.16] A false return
+                    // means the slot was already taken by "Run now" / the
+                    // in-app timer — the next occurrence is armed, this
+                    // delivery is dropped.
+                    val due = manager.rescheduleNext(taskId)
+                    if (!due) {
+                        AppLogger.info(TAG, "task $taskId slot taken by run-now — skipping fire")
+                        return@withTimeout
+                    }
 
                     // [GH#197] waitForCompletion=false is load-bearing, not a
                     // tweak. With the default (true) this call suspends until

@@ -5,7 +5,10 @@ import android.content.SharedPreferences
 import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
-import java.io.File
+import java.security.KeyStore
+import javax.crypto.Cipher
+import javax.crypto.SecretKey
+import javax.crypto.spec.GCMParameterSpec
 
 /**
  * T-android-keystore-aead-fail: self-healing wrapper around
@@ -18,55 +21,135 @@ import java.io.File
  * exception bubbles to the main thread and the app dies in a relaunch
  * loop because every cold start hits the same lazy init.
  *
- * Strategy:
- *  1. Try the normal create.
- *  2. On any crypto error: drop ONLY this file's own prefs XML and retry
- *     once. The user loses this store's credentials (re-paste the API key /
- *     re-login OAuth) but the app boots.
- *  3. If recreate still fails: hand back an in-memory store. The rest of the
- *     app sees an empty, read-write store and never crashes, and nothing
- *     persists.
+ * [T-android-keystore-no-cascade] (port-upstream-1.16) The earlier version
+ * deleted the XML with File.delete(), which leaves the process-wide
+ * SharedPreferences cache holding the old keyset, so the rebuild re-read it
+ * and always failed; callers that construct a store per call (backup page,
+ * OAuth routing checks) re-ran the whole wipe on every call; and nothing ever
+ * distinguished "this file's keyset is orphaned" from "the master key itself
+ * is gone", so a healthy key could be blamed for one bad store.
  *
- * [T-android-keystore-cascade] Two things the earlier version did that are
- * deliberately gone:
- *  - It deleted [MasterKey.DEFAULT_MASTER_KEY_ALIAS] and the shared Tink
- *    keyset prefs. The alias AND the keyset blobs are app-wide — every
- *    encrypted file (provider_secrets, oauth_prefs, ssh_host_secrets,
- *    mcp_*_secrets, env_var_values, …) decrypts through them. One store
- *    throwing AEADBadTag therefore destroyed the key material for all the
- *    others: a single corrupted store escalated into total credential loss,
- *    and each victim then ran this same wipe on its own next launch.
- *  - It fell back to a plain-text SharedPreferences. That is not a safety
- *    net, it is a silent downgrade: every credential entered afterwards was
- *    written unencrypted to `_plain_fallback.xml` for the life of the
- *    install, while the log line claimed "credentials lost".
+ * Strategy now (isolated per store: rebuild only the damaged segment):
+ *  1. One open per file per process, under a lock ([cache]).
+ *  2. Try the normal create, then once more (a Keystore hiccup must not cost
+ *     data).
+ *  3. Still failing: probe the master key with an encrypt/decrypt round trip.
+ *     If it works, only THIS file's keyset is orphaned - drop just this file
+ *     via deleteSharedPreferences (clears the framework cache too). Only a
+ *     master key that cannot encrypt at all is recreated; every store under
+ *     it is unreadable already, so that costs nothing extra. Either way the
+ *     loss is bounded to the one store and logged loudly.
+ *  4. Rebuild failing even then: an in-memory store, so the app keeps running
+ *     without crashing and NOTHING reaches disk unencrypted - this tree
+ *     deliberately refuses the plain-text downgrade upstream falls back to
+ *     ([T-android-keystore-cascade]); the user re-enters the store's
+ *     credentials after relaunch instead of having them sit in the clear.
  */
 object EncryptedPrefsFactory {
     private const val TAG = "EncryptedPrefsFactory"
 
-    fun safeCreate(context: Context, fileName: String): SharedPreferences {
-        runCatching { return build(context, fileName) }
-            .onFailure { Log.w(TAG, "first create($fileName) failed: ${it.message}") }
+    private val lock = Any()
+    private val cache = HashMap<String, SharedPreferences>()
 
-        // Self-heal this file only. Shared key material stays untouched — see
-        // [T-android-keystore-cascade].
-        runCatching {
-            val dir = File(context.applicationInfo.dataDir, "shared_prefs")
-            File(dir, "$fileName.xml").delete()
-        }.onFailure { Log.w(TAG, "wipe of $fileName.xml failed: ${it.message}") }
+    fun safeCreate(context: Context, fileName: String): SharedPreferences =
+        cached(fileName) { open(AndroidOps(context.applicationContext), fileName) }
 
-        runCatching { return build(context, fileName) }
-            .onFailure {
-                Log.e(TAG, "rebuild($fileName) failed: ${it.message}", it)
-            }
+    /** One instance per file per process; the lock also serialises every create. */
+    internal fun cached(fileName: String, create: () -> SharedPreferences): SharedPreferences =
+        synchronized(lock) { cache.getOrPut(fileName, create) }
 
-        Log.e(
-            TAG,
-            "Encrypted storage unavailable for $fileName — falling back to an " +
-                "IN-MEMORY store. Anything written here is lost on restart; " +
-                "nothing is written to disk unencrypted.",
-        )
-        return InMemorySharedPreferences()
+    /** Test hook: forget opened stores. */
+    internal fun resetCacheForTest() = synchronized(lock) { cache.clear() }
+
+    /** Everything [open] needs from the platform; a fake drives it in unit tests. */
+    internal interface Ops {
+        fun build(fileName: String): SharedPreferences
+        /** True when the shared master key can still encrypt and decrypt. */
+        fun masterKeyWorks(): Boolean
+        /** Delete this one store, on disk and in the process-wide prefs cache. */
+        fun discardStore(fileName: String)
+        fun deleteMasterKey()
+        /** The last-resort non-persisting store (see the class KDoc, step 4). */
+        fun inMemory(): SharedPreferences
+        fun log(priority: Int, msg: String, t: Throwable? = null)
+    }
+
+    internal fun open(ops: Ops, fileName: String): SharedPreferences {
+        fun attempt(label: String, priority: Int = Log.WARN): SharedPreferences? = try {
+            ops.build(fileName)
+        } catch (t: Throwable) {
+            ops.log(priority, "$label($fileName) failed: ${t.javaClass.simpleName}: ${t.message}", t)
+            null
+        }
+
+        attempt("first create")?.let { return it }
+        attempt("retry create")?.let { return it }
+
+        if (ops.masterKeyWorks()) {
+            ops.log(Log.WARN, "master key OK - discarding only $fileName (its keyset was wrapped by another key)")
+            ops.discardStore(fileName)
+        } else {
+            ops.log(Log.ERROR, "master key unusable - recreating it; discarding $fileName")
+            ops.deleteMasterKey()
+            ops.discardStore(fileName)
+        }
+
+        attempt("rebuild", Log.ERROR)?.let { return it }
+
+        ops.log(Log.ERROR, "Encrypted storage unavailable for $fileName - using a NON-PERSISTING in-memory store")
+        return ops.inMemory()
+    }
+
+    private class AndroidOps(private val context: Context) : Ops {
+        override fun build(fileName: String): SharedPreferences {
+            val masterKey = MasterKey.Builder(context, MasterKey.DEFAULT_MASTER_KEY_ALIAS)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
+            return EncryptedSharedPreferences.create(
+                context,
+                fileName,
+                masterKey,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
+            )
+        }
+
+        override fun masterKeyWorks(): Boolean = (1..2).any { roundTrip() }
+
+        private fun roundTrip(): Boolean = runCatching {
+            val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+            // No key at all: nothing to recreate, and nothing to blame on it.
+            val key = ks.getKey(MasterKey.DEFAULT_MASTER_KEY_ALIAS, null) as? SecretKey
+                ?: return@runCatching true
+            val probe = "minis-keystore-probe".toByteArray()
+            val enc = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE, key) }
+            val sealed = enc.doFinal(probe)
+            val dec = Cipher.getInstance("AES/GCM/NoPadding")
+                .apply { init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, enc.iv)) }
+            dec.doFinal(sealed).contentEquals(probe)
+        }.onFailure { log(Log.WARN, "master key probe failed: ${it.javaClass.simpleName}: ${it.message}") }
+            .getOrDefault(false)
+
+        override fun discardStore(fileName: String) {
+            runCatching { context.deleteSharedPreferences(fileName) }
+                .onFailure { log(Log.WARN, "discard $fileName failed: ${it.message}") }
+        }
+
+        override fun deleteMasterKey() {
+            runCatching {
+                val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+                if (ks.containsAlias(MasterKey.DEFAULT_MASTER_KEY_ALIAS)) {
+                    ks.deleteEntry(MasterKey.DEFAULT_MASTER_KEY_ALIAS)
+                }
+            }.onFailure { log(Log.WARN, "delete master key failed: ${it.message}") }
+        }
+
+        override fun inMemory(): SharedPreferences = InMemorySharedPreferences()
+
+        override fun log(priority: Int, msg: String, t: Throwable?) {
+            if (t != null && priority >= Log.ERROR) Log.println(priority, TAG, msg + "\n" + Log.getStackTraceString(t))
+            else Log.println(priority, TAG, msg)
+        }
     }
 
     private fun build(context: Context, fileName: String): SharedPreferences {

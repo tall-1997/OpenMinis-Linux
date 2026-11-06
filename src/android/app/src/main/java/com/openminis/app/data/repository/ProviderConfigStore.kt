@@ -553,6 +553,11 @@ internal class ProviderConfigStore(
         // entries so stale-keyed providers can't linger past the cap —
         // [T-provider-factory-race] without touching unrelated instances.
         com.openminis.app.provider.ProviderFactory.invalidateInstance(instanceId)
+        // [port-upstream-1.16][T-android-provider-edit-mid-session] A key write
+        // is an instance edit for the open-chat watch: the encrypted-prefs key
+        // store is invisible to the config flow. (The quota side already hooks
+        // ProviderRepository.saveApiKey / deleteApiKey, the wrappers above this.)
+        ProviderCredentialEdits.changed(instanceId)
     }
 
     fun loadApiKey(instanceId: String): String? {
@@ -585,6 +590,7 @@ internal class ProviderConfigStore(
         // memo 缓存失效 —— 否则已构造的 provider 继续用旧 key 存活，
         // 删 key 后重加同实例仍是旧 key 生效。
         com.openminis.app.provider.ProviderFactory.invalidateInstance(instanceId)
+        ProviderCredentialEdits.changed(instanceId)
     }
 
     // ── [T-credential-pool-x] Multi-account credential pool API ─────────
@@ -607,6 +613,7 @@ internal class ProviderConfigStore(
         credentialPool.setKeys(instanceId, next)
         _credentialRevision.value = _credentialRevision.value + 1
         com.openminis.app.provider.ProviderFactory.invalidateInstance(instanceId)
+        ProviderCredentialEdits.changed(instanceId)
         return true
     }
 
@@ -624,6 +631,7 @@ internal class ProviderConfigStore(
         }
         _credentialRevision.value = _credentialRevision.value + 1
         com.openminis.app.provider.ProviderFactory.invalidateInstance(instanceId)
+        ProviderCredentialEdits.changed(instanceId)
         return true
     }
 
@@ -660,5 +668,21 @@ internal class ProviderConfigStore(
             if (other.quotaGroupId != quotaGroup) continue
             credentialPool.markCooled(other.id, lastIndex, System.currentTimeMillis() + coolFor)
         }
+    }
+}
+
+/**
+ * [port-upstream-1.16][T-android-provider-edit-mid-session] Edits the key store
+ * makes that the `providerRepository.config` flow cannot see (saved / removed
+ * API key, pool rotation). Port of upstream's same-named object: consumed by
+ * ChatViewModel's provider-edit watch so an open chat rebuilds its provider
+ * before the next turn.
+ */
+object ProviderCredentialEdits {
+    private val _ids = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 64)
+    val ids: kotlinx.coroutines.flow.SharedFlow<String> = _ids
+
+    fun changed(instanceId: String) {
+        _ids.tryEmit(instanceId)
     }
 }

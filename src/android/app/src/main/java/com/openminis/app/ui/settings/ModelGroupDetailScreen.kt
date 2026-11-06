@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -97,6 +98,7 @@ fun ModelGroupDetailScreen(
     val config by providerRepository.config.collectAsStateWithLifecycle()
     val group = config.modelGroups.find { it.id == groupId }
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var quotaSheetInstanceId by remember { mutableStateOf<String?>(null) }
 
     if (group == null) {
         onBack()
@@ -109,11 +111,7 @@ fun ModelGroupDetailScreen(
     val focusManager = LocalFocusManager.current
     var strategy by remember { mutableStateOf(group.strategy) }
     var fallbackStrategy by remember { mutableStateOf(group.fallbackStrategy) }
-    // T312: Session Defaults — keyed on group.id so navigating to another
-    // group via NavBackStack rebuilds these from the new group's persisted
-    // values. Using `group` as key would also re-fire on every config
-    // refresh (since `group` is recomputed from the StateFlow each
-    // recomposition); id-keyed remember is the stable alternative.
+    // T312: keyed on group.id (stable across nav/config-refresh; `group` key would re-fire each recomposition).
     var defaultThinkingLevel by remember(group.id) {
         mutableStateOf(group.defaultThinkingLevel)
     }
@@ -216,10 +214,7 @@ fun ModelGroupDetailScreen(
                     header = stringResource(R.string.model_group_detail_routing_strategy),
                     footer = stringResource(RoutingStrategyUi.footerRes(strategy)),
                 ) {
-                    // [T-routing-strategy-x] All seven strategies share one
-                    // choice-row template; labels live in RoutingStrategyUi so
-                    // group rows and this editor can never disagree. Only the
-                    // last row drops its divider.
+                    // [T-routing-strategy-x] Shared choice-row template; labels in RoutingStrategyUi.
                     RoutingStrategy.entries.forEach { candidate ->
                         SettingsChoiceRow(
                             title = stringResource(RoutingStrategyUi.titleRes(candidate)),
@@ -358,7 +353,15 @@ fun ModelGroupDetailScreen(
                         ReorderableItem(reorderState, key = entryId) { _ ->
                             ListItem(
                                 modifier = Modifier.alpha(if (providerDisabled) 0.4f else 1f),
-                                headlineContent = { Text(entry.model.displayName) },
+                                headlineContent = {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(entry.model.displayName)
+                                        if (instance != null && !providerDisabled) {
+                                            Spacer(Modifier.width(6.dp))
+                                            com.openminis.app.ui.quota.ModelQuotaMemberPill(instanceId = entry.providerInstanceId, modelId = entry.model.id) { quotaSheetInstanceId = entry.providerInstanceId }
+                                        }
+                                    }
+                                },
                                 supportingContent = {
                                     if (providerDisabled) {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -683,6 +686,8 @@ fun ModelGroupDetailScreen(
             },
         )
     }
+
+    quotaSheetInstanceId?.let { com.openminis.app.ui.quota.QuotaDetailSheet(instanceId = it, onDismiss = { quotaSheetInstanceId = null }, halfHeight = false) }
 }
 
 /**

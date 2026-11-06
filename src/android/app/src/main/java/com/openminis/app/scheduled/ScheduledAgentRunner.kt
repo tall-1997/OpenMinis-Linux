@@ -92,6 +92,12 @@ object ScheduledAgentRunner {
         // (`as? MinisApp` + subsystemsReady) — a skipped run leaves the task
         // scheduled and its next occurrence armed by the receiver, so the
         // fire self-heals on the following launch.
+        // [T-scheduled-active-session-android, port upstream 1.16] Held for
+        // the whole run: covers the handoff before the turn starts and the
+        // LAST fire of a task the alarm already disabled — the two moments
+        // the persisted store alone cannot hold the target chat for.
+        com.openminis.app.scheduled.ScheduledSessionHold.beginRun(task.id)
+        try {
         return runUnattended(
             context = context,
             logTag = TAG,
@@ -119,6 +125,9 @@ object ScheduledAgentRunner {
                 postCompletionNotification(app, task, sessionId, preview)
             },
         )
+        } finally {
+            com.openminis.app.scheduled.ScheduledSessionHold.endRun(task.id)
+        }
     }
 
     /**
