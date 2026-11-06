@@ -8,18 +8,18 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * [P-process-card] Fold contracts.
+ * [P-process-card] Fold contracts under the process-card model.
  *
  * A round = one user message + the assistant/system messages after it up to
- * the next user message. A SETTLED round folds each run of ≥ 2 steps into one
- * card. A RUNNING round never cards: its thinking and tool rows render in
- * order at their own positions, and [applyToolFolds] merges a run of adjacent
- * finished tools into one "Ran N tools" row. A single step stays inline.
+ * the next user message. Inside a round, reply text splits the process into
+ * runs, and each run of ≥ 2 steps (thinking or tool, including a tool that
+ * is still running) becomes one card. A single step stays inline.
  *
  * Cards own their steps: collapsed or expanded, the steps render inside the
  * card, never back in the list. The expansion key is the card's own key
  * (`<round key>--<first step id>`), not the message id, so opening one card
- * never opens another.
+ * never opens another. A running card reports the live step; reply text ends
+ * the card immediately.
  */
 class ChatFlatItemsProcessFoldTest {
 
@@ -60,7 +60,6 @@ class ChatFlatItemsProcessFoldTest {
 
     private fun kinds(items: List<FlatChatItem>): List<String> = items.map { item ->
         when (item) {
-                is FlatChatItem.AssistantToolGroup -> "toolgroup"
             is FlatChatItem.UserBubble -> "user"
             is FlatChatItem.AssistantHeader -> "header"
             is FlatChatItem.AssistantMarkdownBlock -> "md"
@@ -250,10 +249,9 @@ class ChatFlatItemsProcessFoldTest {
     }
 
     @Test
-    fun `a streaming turn renders its steps inline instead of a card`() {
-        // [T-live-round-inline] The running round owns no card: thinking and
-        // tool rows render at their own positions, so a tool that is still
-        // running cannot disappear behind a summary while it works.
+    fun `reply text settles the card while the message keeps streaming`() {
+        // The card model drops "输出中": the run's reply text IS its end, so
+        // the card reports settled even mid-stream and its steps stay inside.
         val items = buildFlatChatItems(
             listOf(
                 assistant(
@@ -265,27 +263,30 @@ class ChatFlatItemsProcessFoldTest {
             foldAiProcess = true,
         )
         val k = kinds(items)
-        assertEquals(
-            listOf("header", "thinking", "tool:bash", "md"),
-            k.filter { it in setOf("header", "summary", "thinking", "tool:bash", "md") },
-        )
-        assertTrue(items.filterIsInstance<FlatChatItem.AssistantProcessSummary>().isEmpty())
+        // Reply text ends the card the moment it arrives, even while the
+        // message is still streaming — "输出中" was dropped because it would
+        // flash for one frame. The steps render inside the card.
+        assertEquals(listOf("header", "summary", "md"), k.filter { it in setOf("header", "summary", "thinking", "tool:bash", "md") })
+        val summary = items.filterIsInstance<FlatChatItem.AssistantProcessSummary>().single()
+        assertFalse(summary.running)
     }
 
     @Test
-    fun `a running round renders inline and cards once it settles`() {
+    fun `running card settles when the reply text arrives`() {
+        // A run with a live step is a live card: it auto-expands, the header
+        // names what is happening, the duration ticks. Its reply text ends
+        // the run — the card settles there and its header shows the
+        // settled counts.
         val live = buildFlatChatItems(
             listOf(assistant(streaming = true, blocks = listOf(thinking(), tool(id = "t1"), tool(id = "t2", status = ToolBlockStatus.RUNNING)))),
             showCompletedToolCards = false,
             foldAiProcess = true,
         )
         val liveRows = kinds(live)
-        assertEquals(
-            "live rows: $liveRows",
-            listOf("header", "thinking", "tool:bash", "tool:bash"),
-            liveRows.filter { it in setOf("header", "summary", "thinking", "tool:bash") },
-        )
-        assertTrue(live.filterIsInstance<FlatChatItem.AssistantProcessSummary>().isEmpty())
+        // Everything the run owns is in the card; no reply text yet, so the
+        // turn has nothing left to earn a header.
+        assertEquals("live rows: $liveRows", listOf("summary"), liveRows.filter { it in setOf("header", "summary", "thinking", "tool:bash") })
+        assertTrue(live.filterIsInstance<FlatChatItem.AssistantProcessSummary>().single().running)
 
         val finished = buildFlatChatItems(
             listOf(assistant(streaming = false, blocks = listOf(thinking(), tool(id = "t1"), tool(id = "t2"), text()))),
@@ -298,48 +299,22 @@ class ChatFlatItemsProcessFoldTest {
     }
 
     @Test
-    fun `a live run of adjacent tools folds into one group row`() {
-        // [T-live-round-inline] The running round renders its steps in the
-        // list, so the list-level fold is what keeps a long parallel run
-        // readable: three adjacent finished calls become one row and the
-        // single pills disappear.
-        val items = buildFlatChatItems(
-            listOf(
-                assistant(
-                    streaming = true,
-                    blocks = listOf(tool(id = "t1"), tool(id = "t2"), tool(id = "t3"), text("tx1", "answer")),
-                ),
-            ),
-            showCompletedToolCards = false,
-            foldAiProcess = true,
-        )
-        val groups = items.filterIsInstance<FlatChatItem.AssistantToolGroup>()
-        assertEquals("rows=${kinds(items)}", 1, groups.size)
-        assertEquals(3, groups.single().toolCount)
-        assertEquals(listOf("t1", "t2", "t3"), groups.single().memberIds)
-        assertEquals(0, items.count { it is FlatChatItem.AssistantToolUse })
-        assertTrue(kinds(items).contains("md"))
-    }
-
-    @Test
-    fun `an awaiting round renders inline until the turn settles`() {
-        // Awaiting (between tool rounds) is still a running round: no card.
+    fun `awaiting keeps the run live until its reply text settles it`() {
+        // Awaiting (between tool rounds) is a running round: with no reply
+        // text yet the run can still take steps, so the card is live.
         val live = buildFlatChatItems(
             listOf(assistant(awaiting = true, blocks = listOf(thinking(), tool()))),
             showCompletedToolCards = false,
             foldAiProcess = true,
         )
         val liveRows = kinds(live)
-        assertEquals(
-            "live rows: $liveRows",
-            listOf("header", "thinking", "tool:bash"),
-            liveRows.filter { it in setOf("header", "summary", "thinking", "tool:bash") },
-        )
-        assertTrue(live.filterIsInstance<FlatChatItem.AssistantProcessSummary>().isEmpty())
+        assertEquals("live rows: $liveRows", listOf("summary"), liveRows.filter { it in setOf("header", "summary", "thinking", "tool:bash") })
+        assertTrue(live.filterIsInstance<FlatChatItem.AssistantProcessSummary>().single().running)
 
-        // The settled turn still folds its run into the round card.
+        // The reply text ends the run and the card header shows the
+        // settled counts.
         val settled = buildFlatChatItems(
-            listOf(assistant(blocks = listOf(thinking(), tool(), text()))),
+            listOf(assistant(awaiting = true, blocks = listOf(thinking(), tool(), text()))),
             showCompletedToolCards = false,
             foldAiProcess = true,
         )
@@ -539,7 +514,7 @@ class ChatFlatItemsProcessFoldTest {
         )
 
     @Test
-    fun `a run crossing the build split stays inline on both sides`() {
+    fun `streamed step continuing the boundary run yields one running card`() {
         val streaming = assistant(
             id = "a2",
             streaming = true,
@@ -551,37 +526,37 @@ class ChatFlatItemsProcessFoldTest {
         val frozen = boundaryBuild(resumedMessages, fromIndex = 0, boundary = 2)
         val live = boundaryBuild(all, fromIndex = 2, boundary = 2)
         val rows = frozen + live
-        // [T-live-round-inline] The run belongs to the running round, so no
-        // side may card it: the frozen prefix keeps its own steps inline and
-        // the live suffix adds the step it can see. Neither side hides the
-        // other's blocks, so nothing disappears.
-        assertTrue(
-            "rows=${kinds(rows)}",
-            rows.filterIsInstance<FlatChatItem.AssistantProcessSummary>().isEmpty(),
-        )
-        assertEquals(1, rows.count { it is FlatChatItem.AssistantThinking })
-        val tools = rows.filterIsInstance<FlatChatItem.AssistantToolUse>()
-        assertEquals(listOf("t1", "t2"), tools.map { it.block.id })
+        val cards = rows.filterIsInstance<FlatChatItem.AssistantProcessSummary>()
+        assertEquals("rows=${kinds(rows)}", 1, cards.size)
+        val card = cards.single()
+        // Owned by the LIVE build: the run is still in flight, so the single
+        // surviving card is the spinning one, not the frozen ✅.
+        assertTrue(card.running)
+        assertEquals(listOf("th1", "t1", "t2"), card.steps.map { it.id })
+        // Keyed on the round's user message, identical in both builds.
+        assertEquals("u1--th1", card.messageId)
+        // The run's steps never leak back into the list beside the card.
+        assertEquals(0, rows.count { it is FlatChatItem.AssistantThinking })
+        assertEquals(0, rows.count { it is FlatChatItem.AssistantToolUse })
     }
 
     @Test
-    fun `a run the streamed reply closes keeps its steps across the split`() {
-        // The run's last block sits in the FROZEN range. It is still a running
-        // round (the streamed message is part of it), so the reply text must
-        // not turn it into a card nobody can complete: both sides stay inline.
+    fun `run closed by the streamed reply still gets its card from the live build`() {
+        // The run's last block sits in the FROZEN range, so the live build
+        // cannot emit it from inside the row loop — it takes the hand-over and
+        // puts the card first, right below the steps it summarises. Suppressing
+        // without handing over would drop the card and its steps entirely.
         val streaming = assistant(id = "a2", streaming = true, blocks = listOf(text("tx1", "answer")))
         val all = resumedMessages + streaming
         val frozen = boundaryBuild(resumedMessages, fromIndex = 0, boundary = 2)
         val live = boundaryBuild(all, fromIndex = 2, boundary = 2)
         val rows = frozen + live
-        assertTrue(
-            "rows=${kinds(rows)}",
-            rows.filterIsInstance<FlatChatItem.AssistantProcessSummary>().isEmpty(),
-        )
-        // The frozen side owns the steps; the live side only the reply text.
-        assertEquals(1, rows.count { it is FlatChatItem.AssistantThinking })
-        assertEquals(1, rows.count { it is FlatChatItem.AssistantToolUse })
-        assertTrue(kinds(rows).contains("md"))
+        val cards = rows.filterIsInstance<FlatChatItem.AssistantProcessSummary>()
+        assertEquals("rows=${kinds(rows)}", 1, cards.size)
+        assertEquals("u1--th1", cards.single().messageId)
+        assertFalse(cards.single().running)
+        assertSame(live.first(), cards.single())
+        assertEquals(0, rows.count { it is FlatChatItem.AssistantThinking })
     }
 
     @Test
@@ -679,10 +654,10 @@ class ChatFlatItemsProcessFoldTest {
     }
 
     @Test
-    fun `a running tool stays in the list while its round runs`() {
-        // [T-live-round-inline] The list is the only copy while the turn runs:
-        // the running tool renders at its own position and the header keeps
-        // naming it, so nothing teleports when it finishes.
+    fun `a running tool is reported by the card instead of the list`() {
+        // The card is the only copy: a running tool renders inside it and the
+        // header names it, so nothing teleports when it finishes. The run has
+        // no reply text yet — text would end the card (see the settle tests).
         val blocks = listOf(thinking(), tool(id = "t2", status = ToolBlockStatus.RUNNING))
         val running = buildFlatChatItems(
             listOf(assistant(streaming = true, blocks = blocks)),
@@ -690,11 +665,11 @@ class ChatFlatItemsProcessFoldTest {
             foldAiProcess = true,
         )
         val k = kinds(running)
-        assertTrue("running tool must render in the list", k.contains("tool:bash"))
-        assertTrue(k.contains("thinking"))
-        assertTrue(running.filterIsInstance<FlatChatItem.AssistantProcessSummary>().isEmpty())
-        val pill = running.filterIsInstance<FlatChatItem.AssistantToolUse>().single()
-        assertEquals(ToolBlockStatus.RUNNING, pill.block.toolStatus)
+        assertFalse("running tool must not duplicate in the list", k.contains("tool:bash"))
+        val summary = running.filterIsInstance<FlatChatItem.AssistantProcessSummary>().single()
+        assertTrue("card must be live while one of its steps runs", summary.running)
+        assertEquals("tool", summary.activity)
+        assertTrue(summary.steps.any { it.id == "t2" && it.running })
     }
 
     // ── [T-process-summary-duration] aggregated fold-bar duration ──
