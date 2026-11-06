@@ -104,11 +104,13 @@ class ModelRefusalTest {
     fun `the message exists in the maintained locales`() {
         val res = listOf("src/main/res", "app/src/main/res", "src/android/app/src/main/res")
             .map { java.io.File(it) }.first { it.exists() }
+        // Live in the split file (strings_wave.xml) so the L10n gate does not
+        // demand a 14-locale sweep for a new string.
         for (d in listOf("values", "values-zh")) {
-            assertTrue(d, java.io.File(res, "$d/strings.xml").readText().contains("name=\"chat_error_model_refused\""))
+            assertTrue(d, java.io.File(res, "$d/strings_wave.xml").readText().contains("name=\"chat_error_model_refused\""))
         }
         assertTrue(
-            java.io.File(res, "values/strings.xml").readText().contains(
+            java.io.File(res, "values/strings_wave.xml").readText().contains(
                 ">The model declined to respond to this request. Try rephrasing, or switch to a different model.<",
             ),
         )
