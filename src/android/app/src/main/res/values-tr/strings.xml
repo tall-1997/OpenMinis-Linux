@@ -2022,4 +2022,16 @@
     <string name="chat_revert_banner_files">%1$d dosya geri yüklendi</string>
     <string name="chat_revert_banner_hint">Saklamak için mesaj gönder, ya da geri almayı iptal et.</string>
     <string name="chat_revert_banner_undo">Geri al</string>
+    <string name="model_group_detail_first_token_timeout">İlk token zaman aşımı</string>
+    <string name="model_group_detail_first_token_timeout_footer">İlk token için en fazla beklenecek saniye; aşınca yedek üyeye geçilir. Boş = varsayılan (sohbet 45 sn, akıl yürütme 90 sn).</string>
+    <string name="model_group_detail_first_token_timeout_placeholder">Varsayılan (sohbet 45 sn / akıl yürütme 90 sn)</string>
+    <string name="model_group_detail_member_weights">Üye ağırlıkları</string>
+    <string name="model_group_detail_member_weights_footer">Ağırlıklı yönlendirmeyi kontrol eder: ağırlık ne kadar yüksekse seçim o kadar sık olur. 1 nötrdür.</string>
+    <string name="model_group_detail_weight_decrease">Ağırlığı azalt</string>
+    <string name="model_group_detail_weight_increase">Ağırlığı artır</string>
+    <string name="model_group_detail_quota_window_footer">Birincil üye penceredeki gönderimler bitene kadar hizmet verir, sonra sıfırlanana dek yedek devralır. Bir değeri düzenlemek pencereyi hemen sıfırlar.</string>
+    <string name="model_group_detail_quota_total_placeholder">Pencere başına gönderim</string>
+    <string name="model_group_detail_quota_period_placeholder">Pencere süresi (saat)</string>
+    <string name="model_group_detail_quota_window_reset_snackbar">Kota penceresi sıfırlandı — birincil üye yeniden hizmet veriyor</string>
+    <string name="model_group_detail_quota_window_remaining">Bu pencerede kalan: %1$d gönderim</string>
 </resources>

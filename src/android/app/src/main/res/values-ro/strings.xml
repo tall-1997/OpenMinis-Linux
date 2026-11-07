@@ -2026,4 +2026,16 @@
     <string name="chat_revert_banner_files">%1$d fișier(e) restaurate</string>
     <string name="chat_revert_banner_hint">Trimite un mesaj pentru a păstra, sau anulează.</string>
     <string name="chat_revert_banner_undo">Anulează</string>
+    <string name="model_group_detail_first_token_timeout">Timeout primul token</string>
+    <string name="model_group_detail_first_token_timeout_footer">Secunde maxime de așteptare a primului token înainte de trecerea la rezervă. Gol = implicit (chat 45 s, raționament 90 s).</string>
+    <string name="model_group_detail_first_token_timeout_placeholder">Implicit (chat 45 s / raționament 90 s)</string>
+    <string name="model_group_detail_member_weights">Ponderi membri</string>
+    <string name="model_group_detail_member_weights_footer">Controlează rutarea ponderată: cu cât ponderea e mai mare, cu atât membrul e ales mai des. 1 este neutru.</string>
+    <string name="model_group_detail_weight_decrease">Scade ponderea</string>
+    <string name="model_group_detail_weight_increase">Crește ponderea</string>
+    <string name="model_group_detail_quota_window_footer">Membrul principal deservește până se epuizează trimiterile ferestrei, apoi rezerva preia până la resetare. Editarea oricărei valori resetează imediat fereastra.</string>
+    <string name="model_group_detail_quota_total_placeholder">Trimiteri pe fereastră</string>
+    <string name="model_group_detail_quota_period_placeholder">Durata ferestrei (ore)</string>
+    <string name="model_group_detail_quota_window_reset_snackbar">Fereastra de cotă a fost resetată — membrul principal deservește din nou</string>
+    <string name="model_group_detail_quota_window_remaining">Rămase în această fereastră: %1$d trimiteri</string>
 </resources>

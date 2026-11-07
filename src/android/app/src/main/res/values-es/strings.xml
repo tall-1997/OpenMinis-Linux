@@ -2022,4 +2022,16 @@
     <string name="chat_revert_banner_files">%1$d archivo(s) restaurado(s)</string>
     <string name="chat_revert_banner_hint">Envía un mensaje para mantener esto, o deshaz la reversión.</string>
     <string name="chat_revert_banner_undo">Deshacer</string>
+    <string name="model_group_detail_first_token_timeout">Tiempo de espera del primer token</string>
+    <string name="model_group_detail_first_token_timeout_footer">Segundos máximos de espera del primer token antes de cambiar al respaldo. Vacío = predeterminado (chat 45 s, razonamiento 90 s).</string>
+    <string name="model_group_detail_first_token_timeout_placeholder">Predeterminado (chat 45 s / razonamiento 90 s)</string>
+    <string name="model_group_detail_member_weights">Pesos de miembros</string>
+    <string name="model_group_detail_member_weights_footer">Controla el enrutamiento ponderado: a mayor peso, más frecuente la selección. 1 es neutro.</string>
+    <string name="model_group_detail_weight_decrease">Reducir peso</string>
+    <string name="model_group_detail_weight_increase">Aumentar peso</string>
+    <string name="model_group_detail_quota_window_footer">El miembro principal atiende hasta agotar los envíos de la ventana; luego el respaldo toma el control hasta el reinicio. Editar cualquier valor reinicia la ventana.</string>
+    <string name="model_group_detail_quota_total_placeholder">Envíos por ventana</string>
+    <string name="model_group_detail_quota_period_placeholder">Duración de la ventana (horas)</string>
+    <string name="model_group_detail_quota_window_reset_snackbar">Ventana de cuota reiniciada: el miembro principal vuelve a atender</string>
+    <string name="model_group_detail_quota_window_remaining">Restantes en esta ventana: %1$d envíos</string>
 </resources>

@@ -2104,4 +2104,16 @@
     <string name="chat_revert_banner_files">已還原 %1$d 個檔案</string>
     <string name="chat_revert_banner_hint">傳送訊息以保留，或取消回溯。</string>
     <string name="chat_revert_banner_undo">復原</string>
+    <string name="model_group_detail_first_token_timeout">首 Token 逾時</string>
+    <string name="model_group_detail_first_token_timeout_footer">等待第一個 Token 的最長秒數，逾時則切換備用成員。留空使用預設值（對話 45 秒、推理 90 秒）。</string>
+    <string name="model_group_detail_first_token_timeout_placeholder">預設（對話 45 秒 / 推理 90 秒）</string>
+    <string name="model_group_detail_member_weights">成員權重</string>
+    <string name="model_group_detail_member_weights_footer">控制加權路由：權重越高，被選中的機率越大；1 為普通權重。</string>
+    <string name="model_group_detail_weight_decrease">減少權重</string>
+    <string name="model_group_detail_weight_increase">增加權重</string>
+    <string name="model_group_detail_quota_window_footer">主要成員服務完視窗內的傳送次數後，由備用成員接管，直到視窗重設。編輯任一數值會立即重設視窗。</string>
+    <string name="model_group_detail_quota_total_placeholder">每視窗傳送次數</string>
+    <string name="model_group_detail_quota_period_placeholder">視窗時長（小時）</string>
+    <string name="model_group_detail_quota_window_reset_snackbar">配額視窗已重設，主要成員重新開始服務</string>
+    <string name="model_group_detail_quota_window_remaining">本視窗剩餘：%1$d 次</string>
 </resources>

@@ -41,6 +41,19 @@ object GroupRoutingState {
      */
     const val SMART_COMPLEX_CHARS = 12_000
 
+    /**
+     * [T-routing-strategy-x-fix] Single source of truth for the smart
+     * lane's complexity signal. A long prompt, attached media or a
+     * tool-heavy turn all count as complex; the UI must not re-derive this
+     * with its own inline threshold (that duplicated [SMART_COMPLEX_CHARS]
+     * once and silently drifted).
+     */
+    fun isComplexRequest(
+        messageChars: Int,
+        attachmentCount: Int = 0,
+        toolUseCount: Int = 0,
+    ): Boolean = messageChars >= SMART_COMPLEX_CHARS || attachmentCount > 0 || toolUseCount > 0
+
     /** Cooldown applied to a member when a 429 carries no usable Retry-After. */
     const val DEFAULT_COOLDOWN_MS = 30_000L
 
@@ -58,10 +71,6 @@ object GroupRoutingState {
     private val quotaRemaining = mutableMapOf<String, Int>()
     // entryId -> times this process picked the member (leastUsed signal).
     private val servingCounts = mutableMapOf<String, Int>()
-    // groupId -> entryId most recently picked by this process, so the
-    // error path can cool down "the model that just 429'd" without knowing
-    // anything about the provider that produced the error.
-    private val servingEntry = mutableMapOf<String, String>()
 
     // [T-credential-pool-x] groupId -> provider instanceId most recently
     // picked by this process, so the error path can cool the credential
@@ -75,8 +84,31 @@ object GroupRoutingState {
         cooldownUntil.clear()
         quotaRemaining.clear()
         servingCounts.clear()
-        servingEntry.clear()
         servingInstance.clear()
+    }
+
+    /**
+     * [T-routing-strategy-x-fix] Drop every per-group routing state for a
+     * deleted group (round-robin cursor, quota counter, serving-instance
+     * bookmark). Without this the maps leaked stale entries forever and a
+     * later group reusing the id could inherit a dead cursor or quota.
+     */
+    fun clearGroupState(groupId: String) {
+        roundRobinCursors.remove(groupId)
+        quotaRemaining.remove(groupId)
+        servingInstance.remove(groupId)
+    }
+
+    /**
+     * [T-routing-strategy-x-fix] Trim per-entry state to the entries that
+     * still exist in some group. Cooldown windows and least-used counters
+     * keyed by entryId otherwise survive member removal (and even group
+     * deletion), silently warming a stale cold-start for a new member that
+     * reuses the id.
+     */
+    fun pruneEntryStates(activeEntryIds: Set<String>) {
+        cooldownUntil.keys.retainAll(activeEntryIds)
+        servingCounts.keys.retainAll(activeEntryIds)
     }
 
     /**
@@ -89,15 +121,14 @@ object GroupRoutingState {
         cooldownUntil[entryId] = maxOf(cooldownUntil[entryId] ?: 0L, untilMs)
     }
 
-    /** Record which entry serves the group right now (error-path lookup). */
-    fun noteServing(groupId: String, entryId: String) {
-        servingEntry[groupId] = entryId
+    /** Record that [entryId] served a pick (leastUsed signal). */
+    fun noteServed(entryId: String) {
         servingCounts[entryId] = (servingCounts[entryId] ?: 0) + 1
     }
 
     /**
      * [T-credential-pool-x] Record which provider INSTANCE serves the group
-     * right now — the credential-cooldown analogue of [noteServing].  The
+     * right now — the credential-cooldown analogue of [noteServed].  The
      * entry alone cannot identify the pool slot: a group member entry only
      * points at the provider instance, and the credential pick already
      * happened inside it.
@@ -112,27 +143,27 @@ object GroupRoutingState {
      * instance or the error is not a quota/key signal.
      */
     fun markCredentialCooldownFor(groupId: String?, error: LLMError, repository: ProviderRepository) {
-        val instanceId = groupId?.let { servingInstance(it) } ?: return
+        val instanceId = groupId?.let { servingInstance[it] } ?: return
         repository.markCredentialCooled(instanceId, error)
     }
 
     /**
-     * [T-credential-pool-x] Entry + credential cooldown in one step — the
-     * single call path from the agent loop's 429/容量 error branch.
+     * [T-routing-strategy-x-fix] Entry + credential cooldown in one step —
+     * the single call path from the agent loop's 429/容量 error branch.
+     * [entryId] is the member that actually produced the error and is
+     * passed in explicitly: the previous design re-derived it from a
+     * "serving entry" bookmark, which concurrent turns could overwrite
+     * between the pick and the error — cooling the wrong member.
      */
-    fun markRoutingCooldownFor(groupId: String?, error: LLMError, repository: ProviderRepository) {
-        markServingCooldownFor(groupId, error)
+    fun markRoutingCooldownFor(
+        entryId: String?,
+        groupId: String?,
+        error: LLMError,
+        repository: ProviderRepository,
+    ) {
+        markServingCooldownFor(entryId, error)
         markCredentialCooldownFor(groupId, error, repository)
     }
-
-    /** The entry this process most recently picked for [groupId], if any. */
-    fun servingEntry(groupId: String): String? = servingEntry[groupId]
-
-    /**
-     * [T-credential-pool-x] The provider instanceId this process most
-     * recently picked for [groupId], if any.
-     */
-    fun servingInstance(groupId: String): String? = servingInstance[groupId]
 
     /**
      * Pure selection over [members] (already filtered by capability and
@@ -154,8 +185,7 @@ object GroupRoutingState {
         if (members.isEmpty()) return null
         // Cooldown filter shared by every strategy; an all-cooled pool
         // degrades back to the original members rather than stalling.
-        val active = members.filter { (cooldownUntil[it.id] ?: 0L) <= nowMs }
-            .ifEmpty { members }
+        val active = cooledActive(members, nowMs)
         return when (group.strategy) {
             RoutingStrategy.fallback -> {
                 val hit = preferredEntryId?.let { pid -> active.firstOrNull { it.id == pid } }
@@ -204,26 +234,111 @@ object GroupRoutingState {
                     )
                 }
             }
-            RoutingStrategy.smart -> Pick(
-                if (complexRequest) active.first() else active.last(),
-                if (complexRequest) {
-                    "smart: complex request → primary member"
-                } else {
-                    "smart: light request → budget member"
-                },
-            )
+            RoutingStrategy.smart -> {
+                // All-cooled pool degrades (see cooledActive): availability
+                // outranks the budget lane, so the soonest-to-recover member
+                // serves rather than the budget slot (possibly the latest
+                // to recover).
+                val allCooled = active.all { (cooldownUntil[it.id] ?: 0L) > nowMs }
+                Pick(
+                    if (complexRequest || allCooled) active.first() else active.last(),
+                    when {
+                        allCooled -> "smart: all members cooling — soonest to recover"
+                        complexRequest -> "smart: complex request → primary member"
+                        else -> "smart: light request → budget member"
+                    },
+                )
+            }
         }
     }
 
     /**
+     * [T-routing-strategy-x-fix] Ordered fail-over chain for capability
+     * lanes (vision / compact fallback / voice input). Unlike [pick], which
+     * decides one serving member per call, this produces the whole ordered
+     * candidate list a fail-over caller walks. State effects keep [pick]'s
+     * contract: the quota window is pre-deducted once per chain build (a
+     * failed send is not refunded), the round-robin cursor advances once,
+     * cooldowns are honored by every strategy and an all-cooled pool
+     * degrades back to the original order. Every strategy returns the full
+     * reordered pool — callers can keep failing over to the end.
+     */
+    fun pickChain(
+        group: ModelGroup,
+        members: List<ModelEntry>,
+        sessionKey: String,
+        nowMs: Long = System.currentTimeMillis(),
+        usageCounts: Map<String, Int>? = null,
+        complexRequest: Boolean = false,
+    ): List<ModelEntry> {
+        if (members.isEmpty()) return emptyList()
+        val active = cooledActive(members, nowMs)
+        return when (group.strategy) {
+            RoutingStrategy.fallback -> active
+            RoutingStrategy.loadBalance -> {
+                val offset = Math.floorMod(sessionKey.hashCode(), active.size)
+                active.drop(offset) + active.take(offset)
+            }
+            RoutingStrategy.roundRobin -> {
+                val cursor = roundRobinCursors.getOrDefault(group.id, 0)
+                roundRobinCursors[group.id] = cursor + 1
+                val offset = Math.floorMod(cursor, active.size)
+                active.drop(offset) + active.take(offset)
+            }
+            RoutingStrategy.weighted -> {
+                val weights = active.map { m -> (group.memberWeights[m.id] ?: 1).coerceAtLeast(1) }
+                // Descending weights with stable tie-break: the heavy member
+                // is tried first, equal weights keep the original order.
+                active.mapIndexed { i, m -> Triple(i, m, weights[i]) }
+                    .sortedWith(
+                        compareByDescending<Triple<Int, ModelEntry, Int>> { it.third }
+                            .thenBy { it.first },
+                    )
+                    .map { it.second }
+            }
+            RoutingStrategy.leastUsed -> {
+                val counts = usageCounts ?: servingCounts
+                active.sortedBy { counts[it.id] ?: 0 }
+            }
+            RoutingStrategy.quotaWindow -> {
+                val remaining = syncedQuota(group, nowMs)
+                if (remaining > 0) {
+                    quotaRemaining[group.id] = remaining - 1
+                    active
+                } else {
+                    // Backup leads the fail-over; the primary is the tail of
+                    // last resort (mirrors pick's getOrNull(1) semantics).
+                    active.drop(1) + active.take(1)
+                }
+            }
+            RoutingStrategy.smart -> {
+                val allCooled = active.all { (cooldownUntil[it.id] ?: 0L) > nowMs }
+                if (complexRequest || allCooled) active else active.reversed()
+            }
+        }
+    }
+
+    /** Cooldown gate shared by [pick] and [pickChain]. */
+    private fun cooledActive(members: List<ModelEntry>, nowMs: Long): List<ModelEntry> {
+        val usable = members.filter { (cooldownUntil[it.id] ?: 0L) <= nowMs }
+        if (usable.isNotEmpty()) return usable
+        // All-cooled pool degrades to soonest-to-recover order instead of
+        // stalling — quotaWindow's primary slot and smart's strong slot stay
+        // pointed at the member that comes back first, so a cooled member is
+        // never chosen merely because its original slot happened to be first.
+        return members.sortedBy { cooldownUntil[it.id] ?: 0L }
+    }
+
+    /**
      * Running quota counter with window-reset: first access seeds from the
-     * group config; once nowMs passes quotaWindowResetAt the counter refills
-     * to quotaWindowTotal. The group config stays authoritative — editing
-     * it in settings outlives this cache because a group object rebuilt
-     * from config with a changed remaining value only takes effect after a
-     * reset or when the process state is dropped. To make an edit take
-     * effect immediately the settings screen syncs the counter via
-     * [syncQuotaWindow].
+     * persisted snapshot, refills when the window passes, and stays cached
+     * in between. The group config; once nowMs passes quotaWindowResetAt
+     * the counter refills to quotaWindowTotal. The group config stays
+     * authoritative — editing it in settings outlives this cache because a
+     * group object rebuilt from config with a changed remaining value only
+     * takes effect after a reset or when the process state is dropped. To
+     * make an edit take effect immediately the settings screen syncs the
+     * counter via [syncQuotaWindow].
      */
     private fun syncedQuota(group: ModelGroup, nowMs: Long): Int {
         val stored = quotaRemaining[group.id]
@@ -247,19 +362,28 @@ object GroupRoutingState {
     }
 
     /**
+     * [T-routing-strategy-x-fix] Live remaining-sends view for the settings
+     * UI (quota-window editor). Seeds lazily from the persisted snapshot the
+     * same way [pick] does, and refills on a passed reset — the editor shows
+     * the same number the router will actually serve next.
+     */
+    fun currentQuotaRemaining(group: ModelGroup): Int =
+        syncedQuota(group, System.currentTimeMillis())
+
+    /**
      * [T-routing-strategy-x] Park the serving group member after a 429 or a
      * permanent capacity rejection so subsequent turns route around the
      * exhausted channel. The same-provider retry and group fallback still
      * handle the current turn; the cooldown only shapes future picks.
      * Honours Retry-After when the provider reported one.
      */
-    fun markServingCooldownFor(groupId: String?, error: LLMError) {
-        val serving = groupId?.let { servingEntry(it) } ?: return
+    fun markServingCooldownFor(entryId: String?, error: LLMError) {
+        if (entryId == null) return
         val retryAfterMs = (error as? LLMError.RateLimited)
             ?.retryAfterSeconds
             ?.takeIf { it > 0 }
             ?.let { it * 1_000L }
-        markCooldown(serving, System.currentTimeMillis() + (retryAfterMs ?: DEFAULT_COOLDOWN_MS))
+        markCooldown(entryId, System.currentTimeMillis() + (retryAfterMs ?: DEFAULT_COOLDOWN_MS))
     }
 
     /**

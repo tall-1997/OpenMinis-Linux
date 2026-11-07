@@ -1,6 +1,7 @@
 package com.openminis.app.data.repository
 
 import android.content.SharedPreferences
+import com.openminis.app.data.GroupRoutingState
 import com.openminis.app.data.model.ModelEntry
 import com.openminis.app.data.model.ModelGroup
 import com.openminis.app.data.model.ProviderConfig
@@ -175,6 +176,9 @@ internal class ModelGrouping(
         val config = repo.workingCopy()
         config.modelGroups.add(group)
         repo.saveConfig(config)
+        GroupRoutingState.pruneEntryStates(
+            config.modelGroups.flatMap { it.memberEntryIds }.toSet(),
+        )
     }
 
     fun updateGroup(group: ModelGroup): Unit = synchronized(repo.configLock) {
@@ -188,8 +192,12 @@ internal class ModelGrouping(
             // state back inside a working copy, quietly undoing the invariant.
             config.modelGroups[idx] = group.copy(
                 memberEntryIds = group.memberEntryIds.toMutableList(),
+                memberWeights = group.memberWeights.toMap(),
             )
             repo.saveConfig(config)
+            GroupRoutingState.pruneEntryStates(
+                config.modelGroups.flatMap { it.memberEntryIds }.toSet(),
+            )
         }
     }
 
@@ -217,6 +225,13 @@ internal class ModelGrouping(
         }
         config.agentLoopGroupIds.removeAll { it == groupId }
         repo.saveConfig(config)
+        // [T-routing-strategy-x-fix] Drop the deleted group's routing state
+        // (cursor/quota/instance bookmark) and trim cooldown/least-used
+        // entries down to the members that still exist.
+        GroupRoutingState.clearGroupState(groupId)
+        GroupRoutingState.pruneEntryStates(
+            config.modelGroups.flatMap { it.memberEntryIds }.toSet(),
+        )
     }
 
 
@@ -353,10 +368,11 @@ internal class ModelGrouping(
     /**
      * [T-android-vision-group] Ordered vision-capable fail-over candidates from
      * the bound Vision Group. Mirrors resolveVoiceInputCandidates: filters
-     * members to enabled instances whose model declares image input, honours
-     * the group's routing strategy (`fallback` keeps order; `loadBalance`
-     * rotates the start by [loadBalanceSeed] so separate reads spread across
-     * members). Returns [] when no group is bound or no member is usable — the
+     * members to enabled instances whose model declares image input, then
+     * orders them with [com.openminis.app.data.GroupRoutingState.pickChain]
+     * so EVERY routing strategy shapes the fail-over chain (cooldowns,
+     * weights, usage, quota and rotation — not just fallback/loadBalance).
+     * Returns [] when no group is bound or no member is usable — the
      * caller (ReadImageTool) then returns a clear failure text.
      */
     fun resolveVisionCandidates(loadBalanceSeed: Int = 0): List<Pair<ProviderInstance, ModelEntry>> {
@@ -374,21 +390,21 @@ internal class ModelGrouping(
         val pinned = com.openminis.app.data.model.ModelSlotRef.entryId(gid)
         if (pinned != null) return listOfNotNull(providerEntry(pinned))
         val group = config.modelGroups.find { it.id == gid } ?: return emptyList()
-        var members = group.memberEntryIds.mapNotNull { providerEntry(it) }
-        if (group.strategy == RoutingStrategy.loadBalance && members.size > 1) {
-            val offset = kotlin.math.abs(loadBalanceSeed) % members.size
-            members = members.drop(offset) + members.take(offset)
-        }
-        val out = mutableListOf<Pair<ProviderInstance, ModelEntry>>()
-        for (m in members) {
-            if (out.none { it.second.id == m.second.id }) out.add(m)
-        }
-        return out
+        val usable = group.memberEntryIds.mapNotNull { providerEntry(it) }
+            .distinctBy { it.second.id }
+        val ordered = com.openminis.app.data.GroupRoutingState.pickChain(
+            group = group,
+            members = usable.map { it.second },
+            sessionKey = loadBalanceSeed.toString(),
+        )
+        return ordered.mapNotNull { entry -> usable.firstOrNull { it.second.id == entry.id } }
     }
 
     /**
      * Compact fallback candidates from Defaults → Compact fallback.
-     * Pinned entry or group members; skips disabled instances. The compact
+     * Pinned entry or group members; skips disabled instances and orders
+     * the group members with [com.openminis.app.data.GroupRoutingState.pickChain]
+     * so the bound group's strategy shapes the fail-over chain. The compact
      * path still prefers the current session model and only walks this list
      * after that model fails.
      */
@@ -405,12 +421,14 @@ internal class ModelGrouping(
         val pinned = com.openminis.app.data.model.ModelSlotRef.entryId(gid)
         if (pinned != null) return listOfNotNull(providerEntry(pinned))
         val group = config.modelGroups.find { it.id == gid } ?: return emptyList()
-        val out = mutableListOf<Pair<ProviderInstance, ModelEntry>>()
-        for (id in group.memberEntryIds) {
-            val m = providerEntry(id) ?: continue
-            if (out.none { it.second.id == m.second.id }) out.add(m)
-        }
-        return out
+        val usable = group.memberEntryIds.mapNotNull { providerEntry(it) }
+            .distinctBy { it.second.id }
+        val ordered = com.openminis.app.data.GroupRoutingState.pickChain(
+            group = group,
+            members = usable.map { it.second },
+            sessionKey = kotlin.random.Random.nextInt().toString(),
+        )
+        return ordered.mapNotNull { entry -> usable.firstOrNull { it.second.id == entry.id } }
     }
 
 
@@ -523,12 +541,12 @@ internal class ModelGrouping(
      * [T-voice-asr-group-failover] Ordered ASR fail-over candidates: the
      * explicit override first (if usable and provider-backed), then every
      * usable member of the Voice Input group, ordered per the group's routing
-     * strategy — `fallback` keeps group order, `loadBalance` rotates the start
-     * position by [loadBalanceSeed] so separate capture sessions spread across
-     * members (mirrors ModelGroupRouter's per-session rotation for text chat,
-     * and iOS VoiceProviderResolver.resolvedInputCandidates). An explicit
-     * System override returns [] — the caller uses the System engine directly.
-     * System sentinel group members are skipped: they never serve cloud ASR.
+     * strategy by [com.openminis.app.data.GroupRoutingState.pickChain] so
+     * every strategy shapes the chain (mirrors ModelGroupRouter's per-session
+     * rotation for text chat, and iOS VoiceProviderResolver's
+     * resolvedInputCandidates). An explicit System override returns [] — the
+     * caller uses the System engine directly. System sentinel group members
+     * are skipped: they never serve cloud ASR.
      */
     fun resolveVoiceInputCandidates(loadBalanceSeed: Int = 0): List<Pair<ProviderInstance, ModelEntry>> {
         if (!repo.ensureConfigLoaded()) return emptyList()
@@ -551,15 +569,19 @@ internal class ModelGrouping(
         val gid = config.voiceInputGroupId
         val group = gid?.let { g -> config.modelGroups.find { it.id == g } }
         if (group != null) {
-            var members = group.memberEntryIds
+            val usable = group.memberEntryIds
                 .filter { !it.startsWith(SystemVoiceIds.BUILTIN_PROVIDER_ID) }
                 .mapNotNull { providerEntry(it) }
-            if (group.strategy == RoutingStrategy.loadBalance && members.size > 1) {
-                val offset = kotlin.math.abs(loadBalanceSeed) % members.size
-                members = members.drop(offset) + members.take(offset)
-            }
-            for (m in members) {
-                if (out.none { it.second.id == m.second.id }) out.add(m)
+                .distinctBy { it.second.id }
+            val ordered = com.openminis.app.data.GroupRoutingState.pickChain(
+                group = group,
+                members = usable.map { it.second },
+                sessionKey = loadBalanceSeed.toString(),
+            )
+            for (entry in ordered) {
+                val pair = usable.firstOrNull { it.second.id == entry.id } ?: continue
+                // Skip members already represented by the explicit override.
+                if (out.none { it.second.id == pair.second.id }) out.add(pair)
             }
         }
         return out

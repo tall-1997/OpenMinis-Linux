@@ -2789,4 +2789,16 @@
     <string name="chat_revert_banner_files">%1$d file(s) restored</string>
     <string name="chat_revert_banner_hint">Send a message to keep this, or undo the rewind.</string>
     <string name="chat_revert_banner_undo">Undo</string>
+    <string name="model_group_detail_first_token_timeout">First-Token Timeout</string>
+    <string name="model_group_detail_first_token_timeout_footer">Seconds to wait for the first token before falling back. Leave empty for the default (45s chat / 90s reasoning).</string>
+    <string name="model_group_detail_first_token_timeout_placeholder">Default (45s chat / 90s reasoning)</string>
+    <string name="model_group_detail_member_weights">Member Weights</string>
+    <string name="model_group_detail_member_weights_footer">Controls weighted routing — higher weights are picked more often. 1 is neutral.</string>
+    <string name="model_group_detail_weight_decrease">Decrease weight</string>
+    <string name="model_group_detail_weight_increase">Increase weight</string>
+    <string name="model_group_detail_quota_window_footer">The primary member serves until the window’s sends run out, then the backup takes over until the window resets. Editing either value resets the window now.</string>
+    <string name="model_group_detail_quota_total_placeholder">Sends per window</string>
+    <string name="model_group_detail_quota_period_placeholder">Window length (hours)</string>
+    <string name="model_group_detail_quota_window_reset_snackbar">Quota window reset — primary member serves again</string>
+    <string name="model_group_detail_quota_window_remaining">Remaining this window: %1$d sends</string>
 </resources>

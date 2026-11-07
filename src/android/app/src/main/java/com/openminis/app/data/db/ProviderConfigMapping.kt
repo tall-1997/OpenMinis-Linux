@@ -13,6 +13,7 @@ import com.openminis.app.data.model.ProviderType
 import com.openminis.app.data.model.RoutingStrategy
 import com.openminis.app.data.model.ThinkingLevel
 import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 
@@ -151,6 +152,18 @@ fun ProviderConfig.toSnapshot(
             defaultThinkingLevel = g.defaultThinkingLevel?.name,
             contextLimitTokens = g.contextLimitTokens,
             lastContextLimitTokens = g.lastContextLimitTokens,
+            // [T-routing-strategy-x-fix] Scheduling knobs must round-trip
+            // through Room too — the pre-fix build only carried them in the
+            // JSON mirror, so every cold start re-defaulted them.
+            memberWeightsJson = jsonForBlobs.encodeToString(
+                MapSerializer(String.serializer(), Int.serializer()),
+                g.memberWeights,
+            ),
+            firstTokenTimeoutMs = g.firstTokenTimeoutMs,
+            quotaWindowRemaining = g.quotaWindowRemaining,
+            quotaWindowTotal = g.quotaWindowTotal,
+            quotaWindowPeriodMs = g.quotaWindowPeriodMs,
+            quotaWindowResetAt = g.quotaWindowResetAt,
             memberEntryIdsJson = jsonForBlobs.encodeToString(
                 ListSerializer(String.serializer()),
                 translatedMembers,
@@ -285,6 +298,20 @@ fun ProviderConfigSnapshot.toProviderConfig(jsonForBlobs: Json): ProviderConfig 
             defaultThinkingLevel = row.defaultThinkingLevel?.let { ThinkingLevel.decoded(it) },
             contextLimitTokens = row.contextLimitTokens,
             lastContextLimitTokens = row.lastContextLimitTokens,
+            // [T-routing-strategy-x-fix] Scheduling knobs decode from their
+            // Room columns; a corrupt weights blob degrades to an empty map
+            // (uniform wheel) instead of blowing up the whole store load.
+            memberWeights = runCatching {
+                jsonForBlobs.decodeFromString(
+                    MapSerializer(String.serializer(), Int.serializer()),
+                    row.memberWeightsJson,
+                )
+            }.getOrDefault(emptyMap()).toMap(),
+            firstTokenTimeoutMs = row.firstTokenTimeoutMs,
+            quotaWindowRemaining = row.quotaWindowRemaining,
+            quotaWindowTotal = row.quotaWindowTotal,
+            quotaWindowPeriodMs = row.quotaWindowPeriodMs,
+            quotaWindowResetAt = row.quotaWindowResetAt,
         )
     }.toMutableList()
 

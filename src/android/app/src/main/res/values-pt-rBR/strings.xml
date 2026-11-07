@@ -2022,4 +2022,16 @@
     <string name="chat_revert_banner_files">%1$d arquivo(s) restaurado(s)</string>
     <string name="chat_revert_banner_hint">Envie uma mensagem para manter, ou desfaça a reversão.</string>
     <string name="chat_revert_banner_undo">Desfazer</string>
+    <string name="model_group_detail_first_token_timeout">Tempo limite do primeiro token</string>
+    <string name="model_group_detail_first_token_timeout_footer">Segundos máximos de espera pelo primeiro token antes de alternar para o reserva. Vazio = padrão (chat 45 s, raciocínio 90 s).</string>
+    <string name="model_group_detail_first_token_timeout_placeholder">Padrão (chat 45 s / raciocínio 90 s)</string>
+    <string name="model_group_detail_member_weights">Pesos dos membros</string>
+    <string name="model_group_detail_member_weights_footer">Controla o roteamento ponderado: quanto maior o peso, mais frequente a escolha. 1 é neutro.</string>
+    <string name="model_group_detail_weight_decrease">Reduzir peso</string>
+    <string name="model_group_detail_weight_increase">Aumentar peso</string>
+    <string name="model_group_detail_quota_window_footer">O membro principal atende até esgotar os envios da janela; depois o reserva assume até a redefinição. Editar qualquer valor redefine a janela.</string>
+    <string name="model_group_detail_quota_total_placeholder">Envios por janela</string>
+    <string name="model_group_detail_quota_period_placeholder">Duração da janela (horas)</string>
+    <string name="model_group_detail_quota_window_reset_snackbar">Janela de cota redefinida — o membro principal volta a atender</string>
+    <string name="model_group_detail_quota_window_remaining">Restantes nesta janela: %1$d envios</string>
 </resources>

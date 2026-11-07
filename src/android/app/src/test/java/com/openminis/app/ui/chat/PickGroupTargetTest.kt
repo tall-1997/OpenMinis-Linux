@@ -133,6 +133,35 @@ class PickGroupTargetTest {
     }
 
     @Test
+    fun `audio need routes to the audio member`() {
+        val text = entry("text", "text")
+        val audio = entry("audio", "text", "audio_input")
+        val picked = pickGroupTarget(
+            group(RoutingStrategy.fallback),
+            listOf(text, audio),
+            null,
+            setOf(ModelCapability.AUDIO_INPUT),
+            "s1",
+        )
+        assertEquals("audio", picked?.first?.id)
+    }
+
+    @Test
+    fun `audio need with no capable member keeps the pool and reports why`() {
+        val a = entry("a", "text")
+        val b = entry("b", "text")
+        val picked = pickGroupTarget(
+            group(RoutingStrategy.fallback),
+            listOf(a, b),
+            null,
+            setOf(ModelCapability.AUDIO_INPUT),
+            "s1",
+        )
+        assertEquals("a", picked?.first?.id)
+        assertEquals(true, picked?.second?.contains("no group member has") == true)
+    }
+
+    @Test
     fun `no need yields a null reason`() {
         val a = entry("a", "text")
         val picked = pickGroupTarget(group(RoutingStrategy.fallback), listOf(a), null, emptySet(), "s1")

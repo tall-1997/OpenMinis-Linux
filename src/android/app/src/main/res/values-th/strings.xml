@@ -2022,4 +2022,16 @@
     <string name="chat_revert_banner_files">กู้คืนไฟล์แล้ว %1$d รายการ</string>
     <string name="chat_revert_banner_hint">ส่งข้อความเพื่อยืนยัน หรือยกเลิกการย้อนกลับ</string>
     <string name="chat_revert_banner_undo">ยกเลิก</string>
+    <string name="model_group_detail_first_token_timeout">เวลารอโทเคนแรก</string>
+    <string name="model_group_detail_first_token_timeout_footer">จำนวนวินาทีสูงสุดที่รอโทเคนแรกก่อนสลับไปสมาชิกสำรอง เว้นว่าง = ค่าเริ่มต้น (แชท 45 วิ, การใช้เหตุผล 90 วิ)</string>
+    <string name="model_group_detail_first_token_timeout_placeholder">ค่าเริ่มต้น (แชท 45 วิ / การใช้เหตุผล 90 วิ)</string>
+    <string name="model_group_detail_member_weights">น้ำหนักสมาชิก</string>
+    <string name="model_group_detail_member_weights_footer">ควบคุมการจัดเส้นทางแบบถ่วงน้ำหนัก: น้ำหนักยิ่งสูง ยิ่งถูกเลือกบ่อย 1 คือค่าปกติ</string>
+    <string name="model_group_detail_weight_decrease">ลดน้ำหนัก</string>
+    <string name="model_group_detail_weight_increase">เพิ่มน้ำหนัก</string>
+    <string name="model_group_detail_quota_window_footer">สมาชิกหลักให้บริการจนกว่าจำนวนการส่งในหน้าต่างจะหมด จากนั้นสมาชิกสำรองรับช่วงต่อจนกว่าจะรีเซ็ต การแก้ไขค่าใดค่าหนึ่งจะรีเซ็ตหน้าต่างทันที</string>
+    <string name="model_group_detail_quota_total_placeholder">จำนวนส่งต่อหน้าต่าง</string>
+    <string name="model_group_detail_quota_period_placeholder">ความยาวหน้าต่าง (ชั่วโมง)</string>
+    <string name="model_group_detail_quota_window_reset_snackbar">รีเซ็ตหน้าต่างโควตาแล้ว — สมาชิกหลักกลับมาให้บริการ</string>
+    <string name="model_group_detail_quota_window_remaining">เหลือในหน้าต่างนี้: %1$d ครั้ง</string>
 </resources>

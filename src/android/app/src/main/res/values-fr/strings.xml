@@ -2022,4 +2022,16 @@
     <string name="chat_revert_banner_files">%1$d fichier(s) restauré(s)</string>
     <string name="chat_revert_banner_hint">Envoyez un message pour conserver ceci, ou annulez le retour.</string>
     <string name="chat_revert_banner_undo">Annuler</string>
+    <string name="model_group_detail_first_token_timeout">Délai du premier jeton</string>
+    <string name="model_group_detail_first_token_timeout_footer">Secondes maximales d’attente du premier jeton avant bascule vers le secours. Vide = défaut (chat 45 s, raisonnement 90 s).</string>
+    <string name="model_group_detail_first_token_timeout_placeholder">Défaut (chat 45 s / raisonnement 90 s)</string>
+    <string name="model_group_detail_member_weights">Poids des membres</string>
+    <string name="model_group_detail_member_weights_footer">Contrôle le routage pondéré : plus le poids est élevé, plus le membre est choisi. 1 est neutre.</string>
+    <string name="model_group_detail_weight_decrease">Réduire le poids</string>
+    <string name="model_group_detail_weight_increase">Augmenter le poids</string>
+    <string name="model_group_detail_quota_window_footer">Le membre principal répond jusqu’à épuisement des envois de la fenêtre, puis le secours prend le relais jusqu’à la réinitialisation. Modifier une valeur réinitialise la fenêtre.</string>
+    <string name="model_group_detail_quota_total_placeholder">Envois par fenêtre</string>
+    <string name="model_group_detail_quota_period_placeholder">Durée de la fenêtre (heures)</string>
+    <string name="model_group_detail_quota_window_reset_snackbar">Fenêtre de quota réinitialisée — le membre principal répond à nouveau</string>
+    <string name="model_group_detail_quota_window_remaining">Restants dans cette fenêtre : %1$d envois</string>
 </resources>

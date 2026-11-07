@@ -47,8 +47,9 @@ internal fun pickGroupTarget(
         complexRequest = complexRequest,
     ) ?: return null
     // Error-path bookkeeping: the agent loop cools down "the member that
-    // just 429'd" via GroupRoutingState.servingEntry(group.id).
-    GroupRoutingState.noteServing(group.id, pick.entry.id)
+    // just 429'd" by passing its entryId explicitly to
+    // GroupRoutingState.markRoutingCooldownFor.
+    GroupRoutingState.noteServed(pick.entry.id)
     val reason = listOfNotNull(decision.reason, pick.reason)
         .joinToString("; ")
         .ifBlank { null }
@@ -156,8 +157,9 @@ internal fun ChatViewModel.resolveProviderFromGroup(
     preferredEntryId: String? = null,
     needed: Set<ModelCapability> = emptySet(),
     pinActiveEntry: Boolean = true,
+    complexRequest: Boolean = false,
 ): Boolean {
-    val resolved = resolveGroupTargetEntry(groupId, preferredEntryId, needed) ?: return false
+    val resolved = resolveGroupTargetEntry(groupId, preferredEntryId, needed, complexRequest) ?: return false
     resolved.second?.let { SessionActivityTracker.updateToolStatus(it.take(80)) }
     return applyGroupEntry(resolved.first, groupId, pinActiveEntry)
 }
