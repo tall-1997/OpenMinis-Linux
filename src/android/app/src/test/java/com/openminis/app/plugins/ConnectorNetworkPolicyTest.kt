@@ -77,4 +77,19 @@ class ConnectorNetworkPolicyTest {
         assertNotNull(FetchUrlGuard.blockedReason("http://127.0.0.1/"))
         assertNotNull(FetchUrlGuard.blockedReason("http://169.254.169.254/"))
     }
+
+    @Test fun `private network grant migrates from legacy fingerprint slot`() {
+        val legacyKey = "allow_private_" + connectorScopePrefix("trusted") + "deadbeef"
+        assertEquals(true, ConnectorNetworkPolicy.legacyAllowsPrivate(mapOf(legacyKey to true), "trusted"))
+        assertEquals(false, ConnectorNetworkPolicy.legacyAllowsPrivate(mapOf(legacyKey to false), "trusted"))
+        // The stable slot itself is authoritative, not a legacy pick.
+        assertNull(
+            ConnectorNetworkPolicy.legacyAllowsPrivate(
+                mapOf("allow_private_" + connectorScopePrefix("trusted") + "private" to true),
+                "trusted",
+            ),
+        )
+        // No legacy entry → default (allowed) comes from the caller.
+        assertNull(ConnectorNetworkPolicy.legacyAllowsPrivate(emptyMap<String, Boolean>(), "trusted"))
+    }
 }

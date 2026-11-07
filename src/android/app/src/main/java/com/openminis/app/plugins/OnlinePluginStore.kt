@@ -47,17 +47,51 @@ object OnlinePluginStore {
         }
     }
 
+    // [T-plugin-key-stable-identity] #283: keys are keyed by the connector
+    // scope (derived from the stable catalog id), NOT by the full
+    // configurationKey() fingerprint. The fingerprint folds in every tool
+    // summary and param description, so any remote-catalog wording tweak used
+    // to orphan the key — the visible result was "every update blanks the key
+    // and asks for it again". Secrets now survive catalog rewording;
+    // isInstalled() still gates tool availability, just not secret visibility.
+    private fun apiKeyStorageKey(pluginId: String): String =
+        connectorScopePrefix(pluginId) + "apikey"
+
+    /** Pure migration pick: first non-blank legacy fingerprint key under the scope. */
+    internal fun legacyApiKey(legacy: Map<String, *>, pluginId: String): String? {
+        val prefix = connectorScopePrefix(pluginId)
+        val stableKey = apiKeyStorageKey(pluginId)
+        return legacy.keys.asSequence()
+            .filter { it.startsWith(prefix) && it != stableKey }
+            .mapNotNull { legacy[it] as? String }
+            .firstOrNull { it.isNotBlank() }
+    }
+
     fun apiKey(context: Context, plugin: PluginRegistry.RemotePlugin): String? {
-        if (!isInstalled(context, plugin)) return null
         val prefs = EncryptedPrefsFactory.safeCreate(context, KEYS_FILE)
-        return prefs.getString(plugin.configurationKey(), null)?.takeIf { it.isNotBlank() }
+        val stableKey = apiKeyStorageKey(plugin.id)
+        prefs.getString(stableKey, null)?.takeIf { it.isNotBlank() }?.let { return it }
+        val recovered = legacyApiKey(prefs.all, plugin.id) ?: return null
+        prefs.edit().putString(stableKey, recovered).apply()
+        return recovered
     }
 
     fun setApiKey(context: Context, plugin: PluginRegistry.RemotePlugin, key: String?) {
         val prefs = EncryptedPrefsFactory.safeCreate(context, KEYS_FILE)
-        val storageKey = plugin.configurationKey()
-        if (key.isNullOrBlank()) prefs.edit().remove(storageKey).apply()
-        else prefs.edit().putString(storageKey, key.trim()).apply()
+        val stableKey = apiKeyStorageKey(plugin.id)
+        if (key.isNullOrBlank()) {
+            // Clear every key variant under the scope: the stable key must stay
+            // the single authoritative slot, or migration would resurrect a
+            // cleared key from a stale fingerprint entry on the next read.
+            prefs.edit().apply {
+                remove(stableKey)
+                prefs.all.keys
+                    .filter { it.startsWith(connectorScopePrefix(plugin.id)) && it != stableKey }
+                    .forEach(::remove)
+            }.apply()
+        } else {
+            prefs.edit().putString(stableKey, key.trim()).apply()
+        }
     }
 
     fun toolDefinitions(context: Context): List<AgentToolDefinition> {
