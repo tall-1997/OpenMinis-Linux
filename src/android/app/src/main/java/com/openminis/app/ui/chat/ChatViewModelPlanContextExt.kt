@@ -69,7 +69,12 @@ internal fun ChatViewModel.liveRecallPrompt(): String? {
     ) ?: return null
     val hits = engine.recall(query)
     if (hits.isEmpty()) return null
-    return engine.formatAsPromptFragment(hits).takeIf { it.isNotBlank() }
+    val fragment = engine.formatAsPromptFragment(hits).takeIf { it.isNotBlank() } ?: return null
+    // [T-memory-recall-count] Count entries that actually reached the prompt:
+    // display metadata only (ranking no longer feeds on it), kept for future
+    // strength-style signals.
+    engine.acceptRecallBatch(hits.map { it.source to it.line })
+    return fragment
 }
 
 private const val ASSISTANT_TAIL_CHARS = 400

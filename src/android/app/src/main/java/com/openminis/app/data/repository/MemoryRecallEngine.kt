@@ -12,30 +12,49 @@ import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
-import kotlin.math.log2
 
 /**
  * Lightweight memory recall engine (port of XINCODE `MemoryRecall.kt`).
  *
  * Unlike XINCODE we do NOT depend on an embedding / vector service — the
- * sandbox has no LLM backend wired for embeddings. Instead this engine
- * does keyword-based FTS over ALL historical memory entries (GLOBAL.md +
- * every daily log) and scores them by:
+ * sandbox has no LLM backend wired for embeddings. Instead this engine does
+ * keyword FTS over the DAILY MEMORY LOGS (every `YYYY-MM-DD.md`) and scores
+ * candidates with a compact BM25:
  *
- *   score = keywordHits  +  recencyBoost  +  recallCountBoost
+ *   score = 2.0 * bm25(kw tokens)  +  0.5 * recency  +  0.2 * headline
  *
- * where:
- *   - keywordHits    = count of extracted query keywords found in the entry text
- *   - recencyBoost   = decays linearly over [RECENCY_WINDOW_DAYS]; recent entries score higher
- *   - recallCountBoost = min(0.10 * log2(recallCount+1), 0.15) — frequently recalled mems get a slight permanent bump (mirrors XINCODE's M3-1)
+ * [T-android-memory-recall-r2] Two structural fixes over the original raw
+ * sum (`kwHits + recency + recallBonus`), which let generic GLOBAL rules
+ * outscore on-topic diary entries:
+ *
+ *  1. **GLOBAL.md is not a recall candidate.** Its full text is injected
+ *     verbatim into the system prompt on EVERY turn (MemoryFragmentBuilder),
+ *     so recalling it is pure duplication that consumed the whole budget:
+ *     the sidecar showed the same three GLOBAL lines injected 20–30 times
+ *     while diary entries never surfaced. Recall now serves what is NOT
+ *     already standing context — the dated logs from both scopes.
+ *  2. **Scoring is IDF-weighted and length-normalised.** The old raw hit
+ *     count let high-frequency 2-grams ("什么", "问题") match generic rule
+ *     lines for every query, and long lines accumulate more substring hits
+ *     than short ones. BM25's idf + length normalisation fixes both; the
+ *     recall-count bonus is REMOVED from the score (it was a positive
+ *     feedback loop — injected → scored higher → re-injected) and survives
+ *     only as displayed metadata (`RecallHit.recallCount`).
+ *
+ * ## Hygiene
+ * HTML comment ranges (`<!-- … -->`), separator-only and punctuation-only
+ * lines are skipped, so template scaffolding never becomes a "memory".
  *
  * ## Aging (M3-1 "后半" / MemoryDecay)
  * Entries not recalled for > [ARCHIVE_AFTER_DAYS] days are still returned by
  * keyword match but flagged with `archived=true`; the caller can choose to
  * surface them with a faded style or omit them from auto-injection.
  *
- * ## Entry count limit
- * At most [RECALL_LIMIT] entries are returned per query, matching XINCODE.
+ * ## Limits
+ * At most [RECALL_LIMIT] entries are returned per query; a single file
+ * contributes at most [CANDIDATE_LIMIT] candidate lines and at most
+ * [MAX_HITS_PER_FILE] of the final picks, so one dense file cannot fill the
+ * budget with near-duplicates.
  *
  * ## Thread safety
  * The recall-count map is a ConcurrentHashMap; all reads/writes are atomic.
@@ -57,14 +76,20 @@ class MemoryRecallEngine(
 
     companion object {
         private const val TAG = "MemoryRecallEngine"
-        private const val GLOBAL_FILE = "GLOBAL.md"
         private const val RECALL_LIMIT = 4
+        /** Per-file cap on the scoring pool, applied after df/idf are computed over the whole corpus. */
         private const val CANDIDATE_LIMIT = 48
+        /** Per-file cap on the FINAL picks (diversity across sources). */
+        internal const val MAX_HITS_PER_FILE = 2
         private const val RECENCY_WINDOW_DAYS = 30L
         private const val ARCHIVE_AFTER_DAYS = 90L
-        private const val RECALL_BOOST_COEFF = 0.10
-        private const val RECALL_BOOST_MAX = 0.15
         private const val RECALL_COUNTS_FILE = ".recall-counts.json"
+        // BM25 parameters (standard defaults) for the keyword score.
+        private const val BM25_K1 = 1.2
+        private const val BM25_B = 0.75
+        private const val KW_WEIGHT = 2.0
+        private const val RECENCY_WEIGHT = 0.5
+        private const val HEADLINE_BONUS = 0.2
         /** [T-memory-recall-hygiene] Upper bound on characters tokenized per query. */
         internal const val QUERY_CHAR_CAP = 1200
 
@@ -122,7 +147,7 @@ class MemoryRecallEngine(
 
         /** "GLOBAL.md" ⇒ "global", "2026-09-18.md" ⇒ "2026-09-18". */
         private fun dayKeyOf(fileName: String): String =
-            if (fileName == GLOBAL_FILE) "global" else fileName.removeSuffix(".md")
+            if (fileName == MemoryRepository.GLOBAL_FILE) "global" else fileName.removeSuffix(".md")
     }
 
     /** recallCount — persisted to a JSON sidecar so the boost survives restarts. */
@@ -195,8 +220,10 @@ class MemoryRecallEngine(
     }
 
     /**
-     * Run a targeted recall: search all memory files for [query] keywords,
-     * score, and return the top [RECALL_LIMIT] hits.
+     * Run a targeted recall over the DAILY memory logs: hygiene-filter the
+     * lines, score candidates with a compact BM25 (IDF + length
+     * normalisation), and return the top [RECALL_LIMIT] picks with a
+     * per-file diversity cap.
      */
     fun recall(query: String): List<RecallHit> {
         val keywords = extractKeywords(query)
@@ -209,86 +236,133 @@ class MemoryRecallEngine(
         memo?.let { (memoedQuery, memoedHits) -> if (memoedQuery == query) return memoedHits }
 
         val today = LocalDate.now()
-        val files = scanMemoryFiles()
-        val candidates = mutableListOf<RecallHit>()
 
-        for (file in files) {
+        // ── pass 1: collect candidate lines (hygiene-filtered) ─────────────
+        // [T-memory-recall-hygiene] HTML comment ranges, separator-only and
+        // punctuation-only lines are template scaffolding, not memories.
+        class Raw(val file: String, val line: String, val day: String, val isHeadline: Boolean, val kwTokens: List<String>)
+        val raws = mutableListOf<Raw>()
+
+        for (file in scanMemoryFiles()) {
             val relName = file.name
-            val isGlobal = relName == GLOBAL_FILE
             val lines = runCatching { file.readLines() }.getOrNull() ?: continue
             val dayStr = dayKeyOf(relName)
+            var inHtmlComment = false
 
             for (line in lines) {
                 val trimmed = line.trim()
                 if (trimmed.isEmpty()) continue
+                if (inHtmlComment) {
+                    if (trimmed.contains("-->")) inHtmlComment = false
+                    continue
+                }
+                if (trimmed.startsWith("<!--")) {
+                    if (!trimmed.contains("-->")) inHtmlComment = true
+                    continue
+                }
+                // Separator / decoration lines ("---", "===", pure punctuation).
+                if (trimmed.none { it.isLetterOrDigit() }) continue
+
+                val kwTokens = keywords.filter { trimmed.contains(it, ignoreCase = true) }
+                if (kwTokens.isEmpty()) continue
                 // Headline / bullet / section lines are higher signal than body prose.
                 val isHeadline = trimmed.startsWith("#") || trimmed.startsWith("-") ||
                     trimmed.startsWith("*") || trimmed.startsWith(">")
-
-                val kwHits = keywords.count { kw ->
-                    trimmed.contains(kw, ignoreCase = true)
-                }
-                if (kwHits == 0) continue
-
-                // Recency: entries from today score full, decaying over the window.
-                val recencyBoost = if (isGlobal) 0.5 // GLOBAL.md always mildly relevant
-                else {
-                    val entryDay = runCatching {
-                        LocalDate.parse(dayStr, DateTimeFormatter.ISO_LOCAL_DATE)
-                    }.getOrNull() ?: continue
-                    // ChronoUnit gives a signed difference: negative for future
-                    // dates, positive for the past. The old `today.unaryMinus()
-                    // .until(entryDay)` was inverted (and negative for every
-                    // real, i.e. past, entry) so recencyBoost always clamped to
-                    // 0.0 and recency scoring was effectively dead.
-                    val daysAgo = ChronoUnit.DAYS.between(entryDay, today).coerceAtLeast(0L)
-                    if (daysAgo > RECENCY_WINDOW_DAYS) 0.0
-                    else 1.0 - (daysAgo.toDouble() / RECENCY_WINDOW_DAYS)
-                }
-
-                // Recall-count boost (M3-1): log2 growth, capped. The key must
-                // match [acceptRecall] exactly or the boost never accumulates.
-                val rcKey = "$dayStr:$trimmed"
-                val rc = recallCounts.getOrPut(rcKey) { AtomicInteger(0) }
-                val recallBonus = (RECALL_BOOST_COEFF * log2(rc.get().toDouble() + 1.0))
-                    .coerceAtMost(RECALL_BOOST_MAX)
-
-                val score = kwHits.toDouble() + recencyBoost + recallBonus
-                // Give headline lines a small priority tie-break.
-                val finalScore = score + (if (isHeadline) 0.3 else 0.0)
-
-                // [T-memory-recall-explain] Human-readable breakdown for callers
-                // that surface *why* an entry matched (Settings → Memory debug).
-                val detail = "kw=$kwHits recency=${"%.2f".format(recencyBoost)} recall=${"%.2f".format(recallBonus)}"
-
-                candidates.add(RecallHit(relName, trimmed, dayStr, finalScore, rc.get(), false, detail))
+                raws.add(Raw(relName, trimmed, dayStr, isHeadline, kwTokens))
             }
         }
+        if (raws.isEmpty()) return emptyList()
 
-        // Aging (M3-1 后半): entries older than ARCHIVE_AFTER_DAYS are still
-        // returned by keyword match but flagged `archived=true` so the caller
-        // can fade / drop them. They must NOT be filtered out here — the old
-        // pipeline dropped them BEFORE the map() that set the flag, so
-        // `archived` was always false and old memories silently vanished.
-        val cutoff = today.minusDays(ARCHIVE_AFTER_DAYS)
-        val fileHits = candidates
-            .map { hit ->
-                val entryDay = runCatching {
-                    LocalDate.parse(hit.day, DateTimeFormatter.ISO_LOCAL_DATE)
-                }.getOrNull()
-                // "global" (unparseable) entries are never archived.
-                hit.copy(archived = entryDay?.isBefore(cutoff) == true)
+        // ── pass 2: BM25 over the candidate pool ───────────────────────────
+        // [T-memory-recall-idf] Corpus statistics (df / N / avgLen) must see
+        // EVERY keyword-hit line: a per-file cap applied before df would
+        // under-count files whose overflow was dropped and inflate their idf.
+        val df = HashMap<String, Int>()
+        for (r in raws) for (t in r.kwTokens.distinct()) df.merge(t, 1, Int::plus)
+        val poolSize = raws.size.toDouble()
+        val avgLen = raws.sumOf { it.line.length }.toDouble() / poolSize
+        // Per-file scoring-pool cap, applied AFTER corpus statistics: a single
+        // dense file still cannot own the pool, while idf stays whole-corpus.
+        val pool = raws.groupBy { it.file }.values.flatMap { it.take(CANDIDATE_LIMIT) }
+
+        fun idf(token: String): Double {
+            val d = df[token]?.coerceAtLeast(1) ?: 1
+            return kotlin.math.ln(1.0 + poolSize / d)
+        }
+
+        fun occurrences(haystack: String, needle: String): Int {
+            var count = 0
+            var idx = 0
+            while (true) {
+                idx = haystack.indexOf(needle, idx, ignoreCase = true)
+                if (idx < 0) break
+                count++
+                idx += needle.length
             }
+            return count
+        }
 
-        val merged = fileHits.sortedByDescending { it.score }.take(RECALL_LIMIT)
+        val cutoff = today.minusDays(ARCHIVE_AFTER_DAYS)
+        val scored = pool.map { r ->
+            val lenNorm = BM25_B * (1.0 - r.line.length / avgLen.coerceAtLeast(1.0))
+            var kw = 0.0
+            for (t in r.kwTokens.distinct()) {
+                val tf = occurrences(r.line, t).toDouble()
+                kw += idf(t) * (tf * (BM25_K1 + 1.0)) / (tf + BM25_K1 * (1.0 - lenNorm).coerceAtLeast(0.05))
+            }
+            val entryDay = runCatching { LocalDate.parse(r.day, DateTimeFormatter.ISO_LOCAL_DATE) }.getOrNull()
+            val daysAgo = entryDay?.let { ChronoUnit.DAYS.between(it, today).coerceAtLeast(0L) }
+            // Recency: recent entries mildly preferred; undated lines neutral.
+            val recency = when {
+                daysAgo == null -> 0.3
+                daysAgo > RECENCY_WINDOW_DAYS -> 0.0
+                else -> 1.0 - (daysAgo.toDouble() / RECENCY_WINDOW_DAYS)
+            }
+            val score = KW_WEIGHT * kw + RECENCY_WEIGHT * recency +
+                (if (r.isHeadline) HEADLINE_BONUS else 0.0)
+            // [T-memory-recall-explain] Human-readable breakdown for callers
+            // that surface *why* an entry matched (Settings → Memory debug).
+            val rcKey = "${r.day}:${r.line}"
+            val rc = recallCounts.getOrPut(rcKey) { AtomicInteger(0) }
+            val detail = "bm25=${"%.2f".format(kw)} recency=${"%.2f".format(recency)}"
+            RecallHit(
+                source = r.file,
+                line = r.line,
+                day = r.day,
+                score = score,
+                recallCount = rc.get(),
+                // Aging (M3-1 后半): old entries stay searchable, flagged for
+                // the caller to fade. Undated lines are never archived.
+                archived = entryDay?.isBefore(cutoff) == true,
+                scoreDetail = detail,
+            )
+        }
+
+        // ── pass 3: diversity-aware top-K ──────────────────────────────────
+        val merged = mutableListOf<RecallHit>()
+        val perFilePicks = HashMap<String, Int>()
+        for (hit in scored.sortedByDescending { it.score }) {
+            if (merged.size >= RECALL_LIMIT) break
+            // Near-duplicate guard FIRST (a skipped line must not consume a
+            // per-file slot): same file, one line's 30-char head is the
+            // other's prefix (an annotation appended to an already-picked line).
+            val head = hit.line.take(30)
+            if (merged.any { m -> m.source == hit.source && (m.line.startsWith(head) || hit.line.startsWith(m.line.take(30))) }) continue
+            val used = perFilePicks.merge(hit.source, 1, Int::plus) ?: 1
+            if (used > MAX_HITS_PER_FILE) continue
+            merged += hit
+        }
         memo = query to merged
         return merged
     }
 
     /**
-     * Accept a recalled entry — bumps its recallCount so frequently-accessed
-     * memories score higher next time (M3-1 boost). Should be called when an
-     * entry is actually injected into the prompt.
+     * Accept a recalled entry — bumps its persisted recallCount. The count no
+     * longer contributes to the ranking score ([T-android-memory-recall-r2]:
+     * "injected → scored higher → re-injected" was a positive feedback loop
+     * that let three GLOBAL lines own the budget); it survives as displayed
+     * metadata and for future strength-style signals. Called when an entry
+     * is injected into the prompt.
      */
     fun acceptRecall(source: String, line: String) {
         acceptRecallBatch(listOf(source to line))
@@ -352,11 +426,15 @@ class MemoryRecallEngine(
         recallCounts.entries.associate { it.key to it.value.get() }.toSortedMap()
 
     private fun scanMemoryFiles(): List<File> {
+        // [T-android-memory-recall-r2] GLOBAL.md (BOTH scopes) is never a
+        // recall candidate: its full text rides in the system prompt every
+        // turn, so recalling it is pure duplication that used to consume the
+        // whole budget. Recall serves the dated logs — content that is NOT
+        // already standing context.
+        val isSearchable = { f: File -> f.isFile && f.extension == "md" && f.name != MemoryRepository.GLOBAL_FILE }
         val memoryDir = memoryDirProvider()
         val session = if (memoryDir.isDirectory) {
-            memoryDir.listFiles()
-                ?.filter { it.isFile && (it.extension == "md" || it.name == "GLOBAL.md") }
-                .orEmpty()
+            memoryDir.listFiles()?.filter(isSearchable).orEmpty()
         } else {
             emptyList()
         }
@@ -364,9 +442,7 @@ class MemoryRecallEngine(
         // copy wins, because that is the one the verbatim window shows.
         val sharedDir = sharedDirProvider?.invoke()
         val shared = if (sharedDir != null && sharedDir.isDirectory) {
-            sharedDir.listFiles()
-                ?.filter { it.isFile && (it.extension == "md" || it.name == "GLOBAL.md") }
-                .orEmpty()
+            sharedDir.listFiles()?.filter(isSearchable).orEmpty()
         } else {
             emptyList()
         }

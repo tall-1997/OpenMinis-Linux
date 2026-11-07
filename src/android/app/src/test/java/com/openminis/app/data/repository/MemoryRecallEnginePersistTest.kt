@@ -9,14 +9,18 @@ import java.nio.file.Files
 /**
  * [T-memory-recall-persist] Recall counts survive process restarts via the
  * `.recall-counts.json` sidecar, and scoreDetail explains the composition.
+ *
+ * [T-android-memory-recall-r2] GLOBAL.md is no longer a recall candidate
+ * (its full text rides in the system prompt every turn), so the fixtures
+ * below use a dated log file. The recall-count bump persists as metadata
+ * but no longer contributes to the ranking score.
  */
 class MemoryRecallEnginePersistTest {
 
     private fun tempDir(): File = Files.createTempDirectory("recall").toFile()
 
     private fun engineWith(dir: File): MemoryRecallEngine {
-        File(dir, "GLOBAL.md").writeText("用户偏好：安静模式\n中午的咖啡店在楼下\n")
-        File(dir, "2026-10-03.md").writeText("今天讨论了记忆检索方案\n")
+        File(dir, "2026-10-03.md").writeText("用户偏好：安静模式\n中午的咖啡店在楼下\n")
         return MemoryRecallEngine.fromDir(dir)!!
     }
 
@@ -24,8 +28,8 @@ class MemoryRecallEnginePersistTest {
     fun acceptRecallIncrementsAndPersistsAcrossInstances() {
         val dir = tempDir()
         val e1 = engineWith(dir)
-        e1.acceptRecall("GLOBAL.md", "用户偏好：安静模式")
-        e1.acceptRecall("GLOBAL.md", "用户偏好：安静模式")
+        e1.acceptRecall("2026-10-03.md", "用户偏好：安静模式")
+        e1.acceptRecall("2026-10-03.md", "用户偏好：安静模式")
 
         val sidecar = File(dir, ".recall-counts.json")
         assertTrue("sidecar must exist after acceptRecall", sidecar.isFile)
@@ -39,19 +43,20 @@ class MemoryRecallEnginePersistTest {
     }
 
     @Test
-    fun recallCountsBoostIsAppliedAndDetailExplainsScore() {
+    fun recallCountIsCarriedAsMetadataAndDetailExplainsTheScore() {
         val dir = tempDir()
-        // Bump the GLOBAL entry hard so its recall boost is at the max.
         val e1 = engineWith(dir)
-        repeat(12) { e1.acceptRecall("GLOBAL.md", "用户偏好：安静模式") }
+        repeat(12) { e1.acceptRecall("2026-10-03.md", "用户偏好：安静模式") }
 
         val e2 = MemoryRecallEngine.fromDir(dir)!!
-        val hits = e2.recall("安静")
-        assertTrue("query must match the bumped line", hits.isNotEmpty())
+        val hits = e2.recall("安静模式")
+        assertTrue("query must match the line", hits.isNotEmpty())
         val hit = hits.first()
-        assertEquals("global", hit.day)
-        assertTrue("recall boost must be visible in scoreDetail", hit.scoreDetail.contains("recall="))
-        assertTrue("boosted entry must out-score the unboosted daily entry", hit.recallCount >= 10)
+        assertEquals(12, hit.recallCount)
+        assertTrue(
+            "scoreDetail must explain the BM25 + recency composition",
+            hit.scoreDetail.contains("bm25=") && hit.scoreDetail.contains("recency="),
+        )
     }
 
     @Test
