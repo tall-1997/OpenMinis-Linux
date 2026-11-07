@@ -41,6 +41,8 @@ import com.openminis.app.offload.HostSuManager
 import com.openminis.app.offload.OffloadPermissionManager
 import com.openminis.app.offload.PrivacyPermissionPolicy
 import com.openminis.app.offload.ShizukuManager
+import com.openminis.app.vscreen.VirtualScreenManager
+import com.openminis.app.vscreen.tier.ProbeResult
 import com.openminis.app.ui.components.MinisMenu
 import com.openminis.app.ui.components.MinisTextButton
 import kotlinx.coroutines.delay
@@ -297,6 +299,31 @@ fun OffloadPermissionScreen(
             // the setup walkthrough even after the manager is already ready.
             onStatusRowClick = onOpenPrivilegedBackend,
         )
+
+        // [T-android-vscreen-tier] Read-only tier states for the agent-owned
+        // virtual screens. The rows light up as the user roots the device or
+        // grants Shizuku; there are no action rows here — the agent drives
+        // the screens through the virtual_screen tool, and a fresh probe is
+        // taken the next time it creates one.
+        SettingsSection(
+            header = stringResource(R.string.perm_section_vscreen_tiers),
+            footer = stringResource(R.string.perm_vscreen_tiers_footer),
+        ) {
+            val tierSheet = remember { VirtualScreenManager.tierSheet }
+            TierStateRow(
+                titleRes = R.string.perm_vscreen_tier_root,
+                state = tierSheet[com.openminis.app.vscreen.tier.VscreenTier.ROOT],
+            )
+            TierStateRow(
+                titleRes = R.string.perm_vscreen_tier_shizuku,
+                state = tierSheet[com.openminis.app.vscreen.tier.VscreenTier.SHIZUKU],
+            )
+            TierStateRow(
+                titleRes = R.string.perm_vscreen_tier_native,
+                state = tierSheet[com.openminis.app.vscreen.tier.VscreenTier.NATIVE],
+                showDivider = false,
+            )
+        }
 
         Spacer(Modifier.height(16.dp))
     }
@@ -599,4 +626,35 @@ private fun shizukuActionTitleRes(state: ShizukuManager.State): Int = when (stat
     ShizukuManager.State.NOT_RUNNING -> R.string.shizuku_open_btn
     ShizukuManager.State.NEED_PERMISSION -> R.string.shizuku_grant_btn
     ShizukuManager.State.READY -> 0  // never displayed (systemReady=true)
+}
+
+/**
+ * [T-android-vscreen-tier] One tier's probe state as a read-only row. The
+ * reason line carries the probe's honest wording (why root/Shizuku is
+ * unavailable, or why a create attempt degraded the tier) verbatim — this
+ * is the same text the agent sees in the tool result.
+ */
+@Composable
+private fun TierStateRow(
+    titleRes: Int,
+    state: ProbeResult?,
+    showDivider: Boolean = true,
+) {
+    val subtitle = when (state) {
+        is ProbeResult.Available -> stringResource(R.string.perm_vscreen_tier_ready)
+        is ProbeResult.Degraded -> stringResource(R.string.perm_vscreen_tier_degraded) + " — " + state.reason
+        is ProbeResult.Unavailable -> state.reason
+        null -> stringResource(R.string.perm_vscreen_tier_unknown)
+    }
+    val tint = when (state) {
+        is ProbeResult.Available -> IosGreen
+        is ProbeResult.Degraded -> IosOrange
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    SettingsRow(
+        title = stringResource(titleRes),
+        subtitle = subtitle,
+        titleColor = tint,
+        showDivider = showDivider,
+    )
 }

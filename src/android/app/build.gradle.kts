@@ -1,4 +1,7 @@
 import java.util.Properties
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
+import java.io.FileOutputStream
 
 // Local instrumentation escape hatch. The release build type is minified by
 // R8, and the minified androidTest APK shares the app's classloader; runner
@@ -587,5 +590,108 @@ tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
         exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
         showCauses = true
         showStackTraces = true
+    }
+}
+
+// ── [T-android-vscreen-tier] Root-tier virtual display host ──────────────
+// Compiles vd-host/src/main/java/vdhost/Main.java (a ~250-line app_process
+// host that creates the privileged virtual display on root devices) against
+// android.jar, dexes it with d8 from the r8 artifact this build already
+// resolves, and packages classes.dex as an APK asset. The host is NOT part
+// of the app's sourceSets: it lives on android.app.ActivityThread (hidden
+// API) that the app module must never reference directly, and it must stay
+// a dex jar the su lane can deploy to /data/local/tmp verbatim.
+// vdisplay-android's build chain (javac against android.jar + d8) is the
+// proven shape; the r8 artifact is pinned to the version AGP itself pulls,
+// so no second toolchain version is floating.
+val vdHostR8 by configurations.creating
+val vdHostBoot by configurations.creating
+dependencies {
+    vdHostR8("com.android.tools:r8:8.3.37")
+    // The host lives on android.app.ActivityThread (hidden API) — the public
+    // android.jar does not carry it. Robolectric's android-all jar is the
+    // full framework + libcore compile target (the vdisplay-android build
+    // chain uses exactly this version); the host only touches stable APIs
+    // (systemMain, DisplayManager, ImageReader), so an API-35 jar is fine.
+    vdHostBoot("org.robolectric:android-all:14-robolectric-10818077")
+}
+
+val vdHostSourceDir = layout.projectDirectory.dir("../vd-host/src/main/java")
+val vdHostWorkDir = layout.buildDirectory.dir("vdhost")
+
+/**
+ * Root-tier host build as FOUR built-in task types (Exec / Zip / JavaExec /
+ * Zip): configuration-cache-safe by construction — no script closures, no
+ * injected services, every argument statically known at configuration time.
+ * Chain: javac (against the robolectric android-all framework jar, which
+ * carries the hidden ActivityThread API the host needs) → classes.jar → d8
+ * → classes.dex packaged as the .jar-shaped asset `app_process` expects.
+ *
+ * The android-all resolution lives inside afterEvaluate so the task chain is
+ * registered once AGP's evaluation is done. The javac binary is resolved at
+ * configuration time — a JVM-local lookup that does not touch AGP state.
+ */
+val vdHostJavac = org.gradle.internal.jvm.Jvm.current().javacExecutable.absolutePath
+
+afterEvaluate {
+    val bootJar = vdHostBoot.singleFile.absolutePath
+
+    val compileVdHostJava = tasks.register<Exec>("compileVdHostJava") {
+        description = "Compiles vdhost.Main against android.jar"
+        executable = vdHostJavac
+        val classesDir = vdHostWorkDir.get().dir("classes").asFile
+        args(
+            "-source", "11", "-target", "11",
+            "-encoding", "UTF-8",
+            "-cp", bootJar,
+            "-d", classesDir.absolutePath,
+            vdHostSourceDir.file("vdhost/Main.java").asFile.absolutePath,
+        )
+        outputs.dir(classesDir)
+    }
+
+    val jarVdHostClasses = tasks.register<Zip>("jarVdHostClasses") {
+        description = "Bundles the vd-host classes for d8"
+        dependsOn(compileVdHostJava)
+        from(vdHostWorkDir.get().dir("classes"))
+        archiveFileName = "vd-host-classes.jar"
+        destinationDirectory = vdHostWorkDir.map { it.dir("intermediate") }
+    }
+
+    val dexVdHost = tasks.register<JavaExec>("dexVdHost") {
+        description = "Dexes the vd-host classes with d8"
+        dependsOn(jarVdHostClasses)
+        classpath = vdHostR8
+        mainClass.set("com.android.tools.r8.D8")
+        args(
+            "--release", "--min-api", "26",
+            "--lib", bootJar,
+            "--output", vdHostWorkDir.get().dir("dex").asFile.absolutePath,
+            vdHostWorkDir.get().file("intermediate/vd-host-classes.jar").asFile.absolutePath,
+        )
+        outputs.dir(vdHostWorkDir.get().dir("dex"))
+    }
+
+    val buildVdHostJar = tasks.register<Zip>("buildVdHostJar") {
+        description = "Packages classes.dex as the vd-host asset jar"
+        dependsOn(dexVdHost)
+        from(vdHostWorkDir.map { it.dir("dex") }) { include("classes.dex") }
+        archiveFileName = "minis_vd_host.jar"
+        destinationDirectory = vdHostWorkDir.map { it.dir("assets/vdhost") }
+    }
+
+    tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }.configureEach {
+        dependsOn(buildVdHostJar)
+    }
+}
+
+// The host jar rides the standard asset merge: a build-dir assets root added
+// to the main source set, with every asset merge depending on the build task
+// (a source change rebuilds the jar before any APK merge).
+android {
+    sourceSets {
+        getByName("main") {
+            assets.srcDir(vdHostWorkDir.map { it.dir("assets") })
+        }
     }
 }

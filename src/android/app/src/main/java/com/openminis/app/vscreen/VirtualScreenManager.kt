@@ -10,6 +10,15 @@ import android.os.Looper
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.offload.HostSuFallback
 import com.openminis.app.offload.ShizukuManager
+import com.openminis.app.vscreen.tier.CreateRequestSanitizer
+import com.openminis.app.vscreen.tier.DisplayProvider
+import com.openminis.app.vscreen.tier.NativeDisplayProvider
+import com.openminis.app.vscreen.tier.ProbeResult
+import com.openminis.app.vscreen.tier.RootDisplayProvider
+import com.openminis.app.vscreen.tier.ShizukuDisplayProvider
+import com.openminis.app.vscreen.tier.TierStateMachine
+import com.openminis.app.vscreen.tier.VscreenTier
+import com.openminis.app.vscreen.tier.VscreenTierOrchestrator
 import java.io.File
 
 /**
@@ -76,14 +85,11 @@ object VirtualScreenManager {
     private const val TAG = "VirtualScreenManager"
 
     const val MAX_SCREENS = 2
-    const val DEFAULT_WIDTH = 1080
-    const val DEFAULT_HEIGHT = 1920
-    const val DEFAULT_DPI = 320
 
-    private const val MIN_EDGE = 320
-    private const val MAX_EDGE = 4096
-    private const val MIN_DPI = 120
-    private const val MAX_DPI = 640
+    // [T-android-vscreen-tier] Clamping defaults moved to CreateRequestSanitizer.
+    const val DEFAULT_WIDTH = CreateRequestSanitizer.DEFAULT_WIDTH
+    const val DEFAULT_HEIGHT = CreateRequestSanitizer.DEFAULT_HEIGHT
+    const val DEFAULT_DPI = CreateRequestSanitizer.DEFAULT_DPI
 
     private const val TMP_PREFIX = "/data/local/tmp/minis_vs_"
 
@@ -126,10 +132,28 @@ object VirtualScreenManager {
         @Volatile var spillbackWatching: Boolean = false,
         /** IME policy outcome of the async apply after create (null = unknown yet). */
         @Volatile var imePolicyNote: String? = null,
+        /**
+         * [T-android-vscreen-tier] Which provisioning lane created this
+         * screen (ROOT / SHIZUKU / NATIVE). Fixed at creation — a privilege
+         * upgrade never migrates a live screen, it only affects NEW creates.
+         */
+        val tier: VscreenTier = VscreenTier.NATIVE,
     )
 
     sealed class CreateOutcome {
-        data class Created(val screen: VirtualScreen, val evicted: VirtualScreen?) : CreateOutcome()
+        data class Created(
+            val screen: VirtualScreen,
+            val evicted: VirtualScreen?,
+            /** Why lower-priority tiers were skipped, when any were. */
+            val fallbackNote: String? = null,
+            /**
+             * [T-android-vscreen-tier] The provisioning provider's own note
+             * (the ROOT ladder's resolved flags, the SHIZUKU owner info) —
+             * surfaced verbatim in the tool result next to the tier's
+             * standard guidance.
+             */
+            val providerNote: String? = null,
+        ) : CreateOutcome()
         data class FactoryMissing(val message: String) : CreateOutcome()
         data class Failed(val message: String) : CreateOutcome()
     }
@@ -145,17 +169,12 @@ object VirtualScreenManager {
         data class Failed(val message: String) : CommandOutcome()
     }
 
-    /** Which display-targeting form the ROM's `input` command accepts. */
-    internal enum class InputDisplayForm { UNKNOWN, DASH_D, LONG_DISPLAY, NONE }
-
     private val screens = LinkedHashMap<Int, VirtualScreen>()
     private val lock = Any()
 
     @Volatile private var installedFactory: DisplayHandleFactory? = null
     @Volatile private var shellRunnerOverride: ShellRunner? = null
     @Volatile private var shizukuGuardOverride: (() -> String?)? = null
-    @Volatile private var inputFormProbe: InputDisplayForm? = null
-    @Volatile private var screencapProbe: Boolean? = null
 
     // ── [T-android-vscreen2] component wiring lives in VirtualScreenUpkeep ──
 
@@ -244,9 +263,11 @@ object VirtualScreenManager {
     // ─── create / list / destroy ──────────────────────────────────────────
 
     /**
-     * Create a virtual display (app-level DisplayManager; no Shizuku). The
-     * display is created with NO surface — the target app can still be
-     * started and driven on it, but nothing renders (recorded tradeoff).
+     * Create a virtual display through the tier ladder
+     * ([VscreenTierOrchestrator]: ROOT → SHIZUKU → NATIVE, first success
+     * wins; failures mark the tier degraded and fall through). The ladder
+     * runs OUTSIDE the registry lock — a root deployment can block for
+     * seconds — and only the screen registration takes it.
      *
      * [T-android-vscreen2] After the display exists: leftover mute entries
      * are reconciled (leftover restore), and the per-display IME policy is
@@ -257,41 +278,55 @@ object VirtualScreenManager {
      * and never fails the create.
      */
     fun create(width: Int, height: Int, dpi: Int, label: String?, context: Context?): CreateOutcome {
-        val factory = ensureFactory(context)
+        // Environment-missing short circuit (pre-refactor semantics): with
+        // no app context NO tier can work — the NATIVE factory needs one to
+        // reach DisplayManager and the ROOT host needs one to read its
+        // deploy asset. Reported as FactoryMissing before the ladder runs so
+        // the tool layer keeps mapping it to UNSUPPORTED.
+        if (context == null && installedFactory == null) {
+            return CreateOutcome.FactoryMissing(
+                "no display factory installed and no app context available — " +
+                    "virtual_screen needs an Android context to create displays",
+            )
+        }
+        val orchestrator = ensureTierLadder(context)
             ?: return CreateOutcome.FactoryMissing(
                 "no display factory installed and no app context available — " +
                     "virtual_screen needs an Android context to create displays",
             )
-        val w = sanitizeEdge(width, DEFAULT_WIDTH)
-        val h = sanitizeEdge(height, DEFAULT_HEIGHT)
-        // 0 = unspecified → default; otherwise clamp (2000dpi reads as 640).
-        val d = when {
-            dpi == 0 -> DEFAULT_DPI
-            dpi < MIN_DPI -> MIN_DPI
-            dpi > MAX_DPI -> MAX_DPI
-            else -> dpi
-        }
-        val name = (label ?: "minis-virtual-screen").take(64)
-        synchronized(lock) {
-            val evicted = evictLeastRecentlyUsed()
-            val handle = runCatching { factory.create(name, w, h, d) }.getOrElse {
-                return CreateOutcome.Failed("display factory failed: ${it.message}")
-            } ?: return CreateOutcome.Failed(
-                "DisplayManager.createVirtualDisplay returned null — the device refused " +
-                    "the virtual display (ROM policy or a system display limit)",
-            )
-            val now = System.currentTimeMillis()
-            val screen = VirtualScreen(handle.displayId, w, h, d, name, now)
-            screen.handle = handle
-            screens[screen.displayId] = screen
-            AppLogger.info(TAG, "created display ${screen.displayId} ${w}x${h}@${d}dpi" +
-                (evicted?.let { " (evicted LRU display ${it.displayId})" } ?: ""))
-            // Leftover restore (mute ledger entries of dead displays) — cheap when empty.
-            runCatching { reconcileState() }
-                .onFailure { AppLogger.warning(TAG, "reconcile after create failed: ${it.message}") }
-            upkeep.applyImePolicyAsync(screen)
-            scheduleReap()
-            return CreateOutcome.Created(screen, evicted)
+        val req = CreateRequestSanitizer.sanitize(width, height, dpi, label)
+        return when (val step = orchestrator.create(req, context)) {
+            is VscreenTierOrchestrator.Orchestrated -> synchronized(lock) {
+                val evicted = evictLeastRecentlyUsed()
+                val now = System.currentTimeMillis()
+                val screen = VirtualScreen(
+                    step.displayId, req.width, req.height, req.dpi, req.label, now,
+                    tier = step.tier,
+                )
+                // A provider running outside this process (Shizuku public
+                // display, root host) returns its handle on the outcome;
+                // NATIVE keeps the handle through the shared factory seam.
+                screen.handle = step.handle
+                screens[screen.displayId] = screen
+                AppLogger.info(
+                    TAG,
+                    "created display ${screen.displayId} ${req.width}x${req.height}@${req.dpi}dpi " +
+                        "tier=${step.tier.name.lowercase()}" +
+                        (evicted?.let { " (evicted LRU display ${it.displayId})" } ?: ""),
+                )
+                // Leftover restore (mute ledger entries of dead displays) — cheap when empty.
+                runCatching { reconcileState() }
+                    .onFailure { AppLogger.warning(TAG, "reconcile after create failed: ${it.message}") }
+                upkeep.applyImePolicyAsync(screen)
+                scheduleReap()
+                CreateOutcome.Created(
+                    screen, evicted,
+                    step.fallbackNotes.takeIf { it.isNotEmpty() }?.joinToString("; "),
+                    providerNote = step.note,
+                )
+            }
+            is VscreenTierOrchestrator.OrchestratedFailure ->
+                CreateOutcome.Failed(step.summary)
         }
     }
 
@@ -318,6 +353,11 @@ object VirtualScreenManager {
         val clearedHandoff = runCatching { handoffController()?.clearForDestroyedDisplay(displayId) }
             .getOrNull()
         removed.handle?.release()
+        // [T-android-vscreen-tier] Tier-specific teardown (the ROOT host's
+        // stop sentinel; NATIVE/SHIZUKU are no-ops here — their handles
+        // release the display directly).
+        runCatching { activeTierProviders[removed.tier]?.destroy(displayId) }
+            .onFailure { AppLogger.warning(TAG, "tier destroy on display $displayId failed: ${it.message}") }
         scheduleReap()
         return DestroyReport(removed, restored, clearedHandoff != null)
     }
@@ -474,153 +514,12 @@ object VirtualScreenManager {
         return VirtualScreenCapture.writeScreenshot(offloadsDir, displayId, bytes, "chunked base64")
     }
 
-    /** Probe: does this ROM's screencap accept `-d`? Null = inconclusive (try the capture). */
-    internal fun screencapSupportsDisplayFlag(): Boolean? {
-        screencapProbe?.let { return it }
-        val r = runShell(arrayOf("screencap", "-h"), 5_000L)
-        val text = r.combined
-        if (text.isBlank()) return null
-        val supported = text.contains("-d") && text.lowercase().contains("display")
-        screencapProbe = supported
-        return supported
-    }
+    /** Probe delegate: see [VscreenDisplayProbes] (extracted for the line ceiling). */
+    internal fun screencapSupportsDisplayFlag(): Boolean? =
+        VscreenDisplayProbes.screencapSupportsDisplayFlag(::runShell)
 
-    // ─── drive (input) ────────────────────────────────────────────────────
-
-    fun tap(displayId: Int, x: Int, y: Int): CommandOutcome =
-        driveInput(displayId, listOf("tap", x.toString(), y.toString()))
-
-    fun swipe(displayId: Int, x1: Int, y1: Int, x2: Int, y2: Int, durationMs: Int?): CommandOutcome {
-        val sub = mutableListOf("swipe", x1.toString(), y1.toString(), x2.toString(), y2.toString())
-        if (durationMs != null && durationMs > 0) sub.add(durationMs.toString())
-        return driveInput(displayId, sub)
-    }
-
-    fun text(displayId: Int, text: String): CommandOutcome {
-        if (text.isBlank()) return CommandOutcome.Failed("text is required for the text action")
-        // `input text` maps %s to a space on older ROMs where a literal space
-        // breaks the argv; newer ROMs accept both forms.
-        return driveInput(displayId, listOf("text", text.replace(" ", "%s")))
-    }
-
-    fun key(displayId: Int, key: String): CommandOutcome {
-        val code = KEYCODES[key.trim().lowercase()] ?: key.trim().toIntOrNull()
-        if (code == null) {
-            return CommandOutcome.Failed(
-                "key must be back, home, enter, or a numeric Android keycode",
-            )
-        }
-        return driveInput(displayId, listOf("keyevent", code.toString()))
-    }
-
-    /**
-     * Inject input through Shizuku `input`. The display-targeting flag drifted
-     * across Android versions (`input -d <id> <cmd>` vs `--display` vs none),
-     * so the form is PROBED at runtime (usage output first; one harmless
-     * corner tap on OUR display when the ROM prints no usage) and cached.
-     * A ROM without display targeting returns [CommandOutcome.NotSupported]
-     * with the accessibility-stack fallback hint instead of guessing.
-     */
-    private fun driveInput(displayId: Int, sub: List<String>): CommandOutcome {
-        val s = screen(displayId) ?: return CommandOutcome.NotFound(notFoundMessage(displayId))
-        touch(s)
-        shizukuUnavailableMessage()?.let { return CommandOutcome.ShizukuUnavailable(it) }
-        val outOfBounds = boundsMessage(s, sub)
-        if (outOfBounds != null) return CommandOutcome.Failed(outOfBounds)
-        val form = inputDisplayForm(displayId)
-        if (form == InputDisplayForm.NONE) {
-            return CommandOutcome.NotSupported(
-                "this ROM's `input` command has no display targeting (probed via its usage " +
-                    "output and a probe tap) — injections always land on the physical screen, " +
-                    "so they were refused. Fallbacks: the accessibility stack (ui_read / " +
-                    "ui_action) if the Accessibility permission is granted, or " +
-                    "shell_execute -> android-shizuku-cli exec 'input -d <id> <cmd>'.",
-            )
-        }
-        val argv = when (form) {
-            InputDisplayForm.DASH_D ->
-                (arrayOf("input", "-d", displayId.toString()) + sub.toTypedArray())
-            InputDisplayForm.LONG_DISPLAY ->
-                (arrayOf("input", "--display", displayId.toString()) + sub.toTypedArray())
-            else -> return CommandOutcome.NotSupported("input display form unresolved")
-        }
-        val r = runShell(argv, 8_000L)
-        return if (r.exitCode == 0) {
-            CommandOutcome.Ok(displayId, "injected ${sub.joinToString(" ")} on display $displayId")
-        } else {
-            CommandOutcome.Failed(
-                "input on display $displayId failed: ${r.combined.ifBlank { "exitCode=${r.exitCode}" }}",
-            )
-        }
-    }
-
-    /**
-     * Coordinates are model-supplied and must be plain integers in range —
-     * the virtual display's coordinate space is exactly the size it was
-     * created with, so an out-of-range tap is a wasted round trip reported
-     * honestly instead of silently clamped by the display.
-     */
-    private fun boundsMessage(s: VirtualScreen, sub: List<String>): String? {
-        var i = 0
-        while (i < sub.size) {
-            if (sub[i] == "tap" || sub[i] == "swipe") {
-                val count = if (sub[i] == "tap") 2 else 4
-                if (i + count >= sub.size) return null
-                // Coordinates alternate x/y starting at j=1: odd = x (width), even = y (height).
-                for (j in 1..count) {
-                    val v = sub[i + j].toIntOrNull() ?: return null
-                    val axis = if (j % 2 == 1) s.width else s.height
-                    if (v < 0 || v > axis) {
-                        return "coordinate ${sub[i + j]} falls outside virtual screen " +
-                            "${s.width}x${s.height} (display ${s.displayId}) — " +
-                            "check the latest screenshot's dimensions"
-                    }
-                }
-                i += count
-            }
-            i++
-        }
-        return null
-    }
-
-    internal fun inputDisplayForm(displayId: Int): InputDisplayForm {
-        inputFormProbe?.let { return it }
-        val help = runShell(arrayOf("input"), 5_000L)
-        val resolved = formFromHelp(help.combined)
-            .takeIf { it != InputDisplayForm.UNKNOWN }
-            ?: probeByRun(displayId)
-        inputFormProbe = resolved
-        return resolved
-    }
-
-    /** Usage-output probe: `--display` wins over `-d`, a no-display help is NONE. */
-    internal fun formFromHelp(help: String): InputDisplayForm {
-        if (help.isBlank()) return InputDisplayForm.UNKNOWN
-        val lower = help.lowercase()
-        return when {
-            lower.contains("--display") -> InputDisplayForm.LONG_DISPLAY
-            !lower.contains("display") -> InputDisplayForm.NONE
-            Regex("-d\\b").containsMatchIn(help) -> InputDisplayForm.DASH_D
-            else -> InputDisplayForm.NONE
-        }
-    }
-
-    /**
-     * The ROM printed no usage text — probe by running one harmless tap at
-     * (1,1) on OUR display in each known form; the first that exits 0 wins.
-     */
-    private fun probeByRun(displayId: Int): InputDisplayForm {
-        for (form in listOf(InputDisplayForm.DASH_D, InputDisplayForm.LONG_DISPLAY)) {
-            val argv = when (form) {
-                InputDisplayForm.DASH_D ->
-                    arrayOf("input", "-d", displayId.toString(), "tap", "1", "1")
-                else ->
-                    arrayOf("input", "--display", displayId.toString(), "tap", "1", "1")
-            }
-            if (runShell(argv, 5_000L).exitCode == 0) return form
-        }
-        return InputDisplayForm.NONE
-    }
+    internal fun inputDisplayForm(displayId: Int): VscreenDisplayProbes.InputDisplayForm =
+        VscreenDisplayProbes.inputDisplayForm(::runShell, displayId)
 
     // ─── seams and helpers ────────────────────────────────────────────────
 
@@ -640,6 +539,77 @@ object VirtualScreenManager {
         }
         return installedFactory
     }
+
+    // ── [T-android-vscreen-tier] the tier ladder ──────────────────────────
+
+    /** Production ladder, in priority order (ROOT → SHIZUKU → NATIVE). */
+    private val productionTierProviders: Map<VscreenTier, DisplayProvider> = mapOf(
+        VscreenTier.ROOT to RootDisplayProvider(HostSuFallback::run),
+        VscreenTier.SHIZUKU to ShizukuDisplayProvider { upkeep.displayService() },
+        VscreenTier.NATIVE to NativeDisplayProvider { ctx -> ensureFactory(ctx) },
+    )
+
+    /**
+     * Test ladder override: [resetForTest] pins the ladder to NATIVE-ONLY so
+     * the pre-refactor behaviour (FakeFactory in, FakeDisplay out) stays
+     * byte-identical — the existing suite asserts the NATIVE path, and tier
+     * tests install their own fakes through [tierProvidersOverride] instead
+     * of probing real su/Shizuku state on the JVM.
+     */
+    @Volatile internal var tierProvidersOverride: Map<VscreenTier, DisplayProvider>? = null
+
+    private val activeTierProviders: Map<VscreenTier, DisplayProvider>
+        get() = tierProvidersOverride ?: productionTierProviders
+
+    @Volatile private var installedTierState: TierStateMachine? = null
+
+    /**
+     * The create attempt chain over the probe sheet. Lazy like the factory:
+     * the probe cache needs the app context for its prefs file, so the first
+     * tool call installs it; tests get a MemoryPrefs-backed state machine
+     * from [resetForTest].
+     */
+    private fun ensureTierLadder(context: Context?): VscreenTierOrchestrator? {
+        installedTierState?.let { return VscreenTierOrchestrator(it, activeTierProviders) }
+        if (context == null) return null
+        synchronized(lock) {
+            // Seed the upkeep's app context HERE, not only in hand_to_user:
+            // the SHIZUKU tier's service client needs it, and a user who never
+            // hand_to_users would otherwise see Shizuku permanently
+            // "unreachable" even when granted.
+            if (upkeep.appContext == null) {
+                upkeep.appContext = context.applicationContext
+            }
+            if (installedTierState == null) {
+                installedTierState = TierStateMachine(
+                    activeTierProviders,
+                    SharedPrefsVscreenPrefs(context.applicationContext),
+                )
+            }
+        }
+        return VscreenTierOrchestrator(installedTierState!!, activeTierProviders)
+    }
+
+    /**
+     * Tier states for UI / tool results. SNAPSHOT read only — no fingerprint
+     * check, no probing (both can spawn a 3s `command -v su` on non-root
+     * devices, and this getter runs on the MAIN thread from the settings
+     * screen). Fresh probing happens on the create path's background thread.
+     */
+    val tierSheet: Map<VscreenTier, ProbeResult>
+        get() = installedTierState?.sheetSnapshot ?: emptyMap()
+
+    /**
+     * [T-android-vscreen-tier] Upgrade hint for the list result when a
+     * better tier is available than the one a live screen runs on. Never
+     * migrates anything — the model decides whether to recreate. Best-effort
+     * by design: reads the cached sheet (no probing, see [tierSheet]) so a
+     * `list` call can never stall on a su probe; the hint catches up on the
+     * next create, which is when a tier switch can actually happen.
+     */
+    fun tierUpgradeHint(): String? = installedTierState?.upgradeHintFromSnapshot(
+        synchronized(lock) { screens.values.map { it.tier }.toSet() },
+    )
 
     /**
      * OWN_CONTENT_ONLY class (API 19+; project minSdk is 26, so no runtime
@@ -674,13 +644,13 @@ object VirtualScreenManager {
             }
         }
 
-    private fun runShell(argv: Array<String>, timeoutMs: Long): ShizukuManager.ProcessResult =
+    internal fun runShell(argv: Array<String>, timeoutMs: Long): ShizukuManager.ProcessResult =
         (shellRunnerOverride ?: defaultShellRunner).run(argv, timeoutMs)
 
-    private fun shizukuUnavailableMessage(): String? =
+    internal fun shizukuUnavailableMessage(): String? =
         (shizukuGuardOverride ?: defaultShizukuGuard).invoke()
 
-    private fun touch(s: VirtualScreen) {
+    internal fun touch(s: VirtualScreen) {
         s.lastUsedAtMs = System.currentTimeMillis()
         scheduleReap()
     }
@@ -743,17 +713,11 @@ object VirtualScreenManager {
         runCatching { muter().restoreForDisplay(victim.displayId) }
             .onFailure { AppLogger.warning(TAG, "mute restore on evict failed: ${it.message}") }
         runCatching { handoffController()?.clearForDestroyedDisplay(victim.displayId) }
+        runCatching { activeTierProviders[victim.tier]?.destroy(victim.displayId) }
         return victim
     }
 
-    private fun sanitizeEdge(value: Int, default: Int): Int = when {
-        value <= 0 -> default
-        value < MIN_EDGE -> MIN_EDGE
-        value > MAX_EDGE -> MAX_EDGE
-        else -> value
-    }
-
-    private fun notFoundMessage(displayId: Int): String =
+    internal fun notFoundMessage(displayId: Int): String =
         "no virtual screen with display_id=$displayId — use action=list for live displays, " +
             "or action=create to make one"
 
@@ -776,18 +740,22 @@ object VirtualScreenManager {
         installedFactory = factory
         shellRunnerOverride = shell
         shizukuGuardOverride = guard
-        inputFormProbe = null
-        screencapProbe = null
+        VscreenDisplayProbes.resetForTest()
         // [T-android-vscreen2] component state lives in [VirtualScreenUpkeep]:
         // fresh defaults (MemoryPrefs) unless overridden, no leftover context.
         upkeep.resetForTest(muter, mover, controller)
+        // [T-android-vscreen-tier] NATIVE-only ladder + fresh probe cache:
+        // the pre-refactor behaviour (fake factory in, display out) stays
+        // byte-identical, and no real su/Shizuku probe ever runs on the JVM.
+        tierProvidersOverride = mapOf(
+            VscreenTier.NATIVE to NativeDisplayProvider { ctx -> ensureFactory(ctx) },
+        )
+        installedTierState = TierStateMachine(tierProvidersOverride!!, MemoryPrefs())
         schedulerOverride = scheduler
         reapPosted.set(false)
         AudioMuter.cachedUser = null
     }
 
-    /** back / home / enter mapped to the universally-safe numeric keycodes. */
-    private val KEYCODES = mapOf("back" to 4, "home" to 3, "enter" to 66)
 
     // ── [T-android-vscreen2] constants ────────────────────────────────────
 

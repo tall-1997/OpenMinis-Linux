@@ -105,6 +105,61 @@ class VscreenUserService : IVscreenService.Stub() {
         }.getOrDefault(false)
     }
 
+    // ── [T-android-vscreen-tier] public displays (shell-uid owner) ────────
+
+    /**
+     * System context for the display service, created once. This process has
+     * no Application; `ActivityThread.systemMain()` hands out the system
+     * context the same way the app_process hosts (vdisplay-android mode) get
+     * one. The context is then RE-PACKAGED to com.android.shell:
+     * DisplayManagerService validates that the caller's package name matches
+     * its uid, and the system context's package ("android") does not match
+     * uid 2000 — the shell package does, which is what makes the owner
+     * branch of `am start --display` accept app launches on our display.
+     */
+    private val shellDisplayContext: android.content.Context? by lazy {
+        runCatching {
+            val atClass = Class.forName("android.app.ActivityThread")
+            val thread = atClass.getMethod("systemMain").invoke(null)
+            @Suppress("DEPRECATION")
+            val sys = atClass.getMethod("getSystemContext").invoke(thread) as android.content.Context
+            sys.createPackageContext(
+                "com.android.shell",
+                android.content.Context.CONTEXT_INCLUDE_CODE or
+                    android.content.Context.CONTEXT_IGNORE_SECURITY,
+            )
+        }.getOrNull()
+    }
+
+    /** Displays this service created; [destroyPublicDisplay] releases them. */
+    private val ownedDisplays = HashMap<Int, android.hardware.display.VirtualDisplay>()
+
+    override fun createPublicDisplay(
+        name: String,
+        width: Int,
+        height: Int,
+        dpi: Int,
+        surface: android.view.Surface?,
+    ): Int = runCatching {
+        val ctx = shellDisplayContext ?: return -1
+        val dm = ctx.getSystemService(android.content.Context.DISPLAY_SERVICE)
+            as android.hardware.display.DisplayManager
+        val vd = dm.createVirtualDisplay(
+            name, width, height, dpi, surface,
+            android.hardware.display.DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC or
+                android.hardware.display.DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY,
+            null, null,
+        ) ?: return -1
+        val id = vd.display.displayId
+        synchronized(ownedDisplays) { ownedDisplays[id] = vd }
+        id
+    }.getOrDefault(-1)
+
+    override fun destroyPublicDisplay(displayId: Int): Boolean {
+        val vd = synchronized(ownedDisplays) { ownedDisplays.remove(displayId) } ?: return false
+        return runCatching { vd.release() }.isSuccess
+    }
+
     override fun destroy() {
         exitProcess(0)
     }
@@ -118,7 +173,7 @@ class VscreenUserService : IVscreenService.Stub() {
          * service process with the new code (client passes it in
          * Shizuku.UserServiceArgs.version).
          */
-        const val VERSION = 1
+        const val VERSION = 2
 
         private const val MAX_TASKS = 100
 

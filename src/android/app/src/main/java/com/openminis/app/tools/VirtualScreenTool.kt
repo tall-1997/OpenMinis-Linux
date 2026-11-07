@@ -7,6 +7,11 @@ import com.openminis.app.sandbox.SessionWorkspace
 import com.openminis.app.vscreen.HandoffController
 import com.openminis.app.vscreen.HandoffStateMachine
 import com.openminis.app.vscreen.VirtualScreenManager
+import com.openminis.app.vscreen.key
+import com.openminis.app.vscreen.swipe
+import com.openminis.app.vscreen.tap
+import com.openminis.app.vscreen.text
+import com.openminis.app.vscreen.tier.VscreenTier
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -203,14 +208,22 @@ object VirtualScreenTool {
                         put("height", s.height)
                         put("dpi", s.dpi)
                         put("label", s.label)
+                        // [T-android-vscreen-tier] Which lane provisioned the
+                        // screen (root / shizuku / native) — the model reads
+                        // this to know whether third-party apps can start on
+                        // the display and where screenshots come from.
+                        put("tier", s.tier.name.lowercase())
+                        outcome.fallbackNote?.let { put("fallback_note", it) }
                         if (outcome.evicted != null) {
                             put("evicted_display_id", outcome.evicted.displayId)
                         }
+                        // The provider's own note (resolved privileged flags,
+                        // owner info) rides next to the tier's guidance.
+                        val providerNote = outcome.providerNote
                         put(
                             "note",
-                            "The display has no surface and renders nothing; the target app " +
-                                "still starts and receives input on it. Use action=launch to " +
-                                "start an app, action=screenshot to verify, action=destroy to release.",
+                            if (providerNote.isNullOrBlank()) createNote(s.tier)
+                            else createNote(s.tier) + " " + providerNote,
                         )
                     }.toString(),
                     true,
@@ -438,6 +451,7 @@ object VirtualScreenTool {
                     put("height", s.height)
                     put("dpi", s.dpi)
                     put("label", s.label)
+                    put("tier", s.tier.name.lowercase())
                     put("created_at_ms", s.createdAtMs)
                     put("last_used_at_ms", s.lastUsedAtMs)
                     s.imePolicyNote?.let { put("ime_policy", it) }
@@ -457,6 +471,9 @@ object VirtualScreenTool {
                 put("ok", true)
                 put("count", count)
                 put("displays", arr)
+                // [T-android-vscreen-tier] A privilege upgrade NEVER migrates
+                // live screens; this hint lets the model decide to recreate.
+                VirtualScreenManager.tierUpgradeHint()?.let { put("upgrade_available", true); put("upgrade_hint", it) }
                 if (count == 0) {
                     put("note", "No virtual displays yet. Use action=create to make one.")
                 }
@@ -523,6 +540,23 @@ object VirtualScreenTool {
     private fun intArg(obj: JSONObject, key: String): Int? = ToolArgs.strictInt(obj, key)
 
     private fun displayIdOrZero(obj: JSONObject): Int = intArg(obj, "display_id") ?: 0
+
+    /**
+     * [T-android-vscreen-tier] Tier-aware create guidance: what the display
+     * renders (or not), where screenshots come from, and what the model can
+     * start on it.
+     */
+    private fun createNote(tier: VscreenTier): String = when (tier) {
+        VscreenTier.ROOT,
+        VscreenTier.SHIZUKU,
+        -> "Public display owned by the ${if (tier == VscreenTier.ROOT) "root host" else "shell uid"}: " +
+            "third-party apps can start on it and input targeting works via the command lane. " +
+            "Use action=launch to start an app, action=screenshot to verify, action=destroy to release."
+        VscreenTier.NATIVE ->
+            "The display has no surface and renders nothing; the target app " +
+                "still starts and receives input on it. Use action=launch to " +
+                "start an app, action=screenshot to verify, action=destroy to release."
+    }
 
     private fun missingDisplayId(toolTitle: String): ToolExecutionResult = ToolExecutionResult(
         "Error: display_id is required — use action=create first, then action=list to see live displays.",
