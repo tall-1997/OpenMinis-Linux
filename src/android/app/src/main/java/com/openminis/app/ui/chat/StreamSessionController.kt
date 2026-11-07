@@ -137,8 +137,11 @@ internal class StreamSessionController(
     // box-drawing streams don't pin the flush rate to the per-token cadence.
     // [T-android-throttle-ladder-converge] Ladder body moved to
     // [StreamingThrottle.ladderFor]; the flush surface uses the default 200ms
-    // first tier.
-    fun streamFlushThrottleMs(len: Int): Long = StreamingThrottle.ladderFor(len)
+    // first tier. [T-android-tail-sprint] A large unflushed backlog (gateway
+    // tail burst / smooth-forwarding relay) clamps the tier to the sprint
+    // cadence so the display chases the arrival.
+    fun streamFlushThrottleMs(len: Int, unflushedChars: Int): Long =
+        StreamingThrottle.throttleFor(len, unflushedChars)
 
     fun updateAssistantMessage(
         id: String,
@@ -217,11 +220,11 @@ internal class StreamSessionController(
                 toolContentChanged
             val now = System.currentTimeMillis()
             val elapsed = now - st.lastFlushMs
-            val throttle = streamFlushThrottleMs(content.length)
             val newChunk = if (content.length > st.lastFlushedLen) {
                 content.substring(st.lastFlushedLen.coerceAtMost(content.length))
             } else ""
             val unflushed = content.length - st.lastFlushedLen
+            val throttle = streamFlushThrottleMs(content.length, unflushed)
             val newlineFlush = content.length < newlineFlushMaxLen &&
                 newChunk.contains('\n') &&
                 unflushed >= newlineFlushMinChars

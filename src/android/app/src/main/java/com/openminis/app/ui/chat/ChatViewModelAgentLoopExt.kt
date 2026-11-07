@@ -149,8 +149,8 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
     // delta gate only applies to short inputs, where the pill's command/url
     // preview benefits from the lower latency; the rest of the ladder is
     // shared.
-    fun textDeltaThrottleMs(len: Int): Long =
-        StreamingThrottle.ladderFor(len, firstTierMs = 150L)
+    fun textDeltaThrottleMs(len: Int, unflushedChars: Int): Long =
+        StreamingThrottle.throttleFor(len, unflushedChars, firstTierMs = 150L)
     // Fallback state — mirrors iOS streamWithGroupFallback.
     // [T-android-model-switch-midrun-adopt] Both are reassigned at the top of
     // every request when the user picked a different model since the previous
@@ -714,7 +714,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     pendingChunkSb.append(strippedDelta)
                     val len = turnTextSb.length
                     val unflushed = len - lastFlushedLen
-                    val throttle = textDeltaThrottleMs(len)
+                    val throttle = textDeltaThrottleMs(len, unflushed)
                     val newlineFlush = len < 5_000 && chunk.text.contains('\n') && unflushed >= 50
                     val nowMs = System.currentTimeMillis()
                     if (nowMs - lastUiUpdateMs >= throttle || newlineFlush) {
