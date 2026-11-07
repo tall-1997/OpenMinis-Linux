@@ -12,9 +12,7 @@ import android.media.ImageReader
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.Looper
-import java.io.BufferedOutputStream
 import java.io.DataInputStream
-import java.io.FileOutputStream
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
@@ -99,7 +97,12 @@ object DisplayHostMain {
             server.soTimeout = 0
             while (true) {
                 val socket = server.accept()
-                socket.use { handleClient(it, displayId, reader, width, height, vd, context) }
+                // One client at a time. EOF or STOP ends the host: a client
+                // that vanished must not leave an orphan display behind.
+                val keepServing = socket.use {
+                    handleClient(it, displayId, reader, width, height, vd, context)
+                }
+                if (!keepServing) return
             }
         }
     }
@@ -112,13 +115,13 @@ object DisplayHostMain {
         height: Int,
         vd: VirtualDisplay,
         context: Context,
-    ) {
+    ): Boolean {
         val input = DataInputStream(socket.getInputStream())
         val out = socket.getOutputStream()
         out.write("READY $displayId\n".toByteArray())
         out.flush()
         while (true) {
-            val line = readLine(input) ?: return
+            val line = readLine(input) ?: return false
             when {
                 line == "PING" -> {
                     out.write("PONG $displayId\n".toByteArray())
@@ -143,7 +146,7 @@ object DisplayHostMain {
                 line == "STOP" -> {
                     out.write("BYE\n".toByteArray())
                     out.flush()
-                    return
+                    return false
                 }
                 else -> {
                     out.write("ERR unknown\n".toByteArray())

@@ -30,6 +30,7 @@ internal class HostDisplayClient private constructor(
 
     @Synchronized
     private fun shot(): ByteArray? = runCatching {
+        if (dead) return null
         out.write("SHOT\n".toByteArray())
         out.flush()
         val header = readLine() ?: return null
@@ -37,20 +38,29 @@ internal class HostDisplayClient private constructor(
         val length = header.removePrefix("JPEG ").trim().toInt()
         if (length <= 0) return null
         ByteArray(length).also { input.readFully(it) }
+    }.onFailure {
+        // A read timeout / EOF means the host is gone or wedged: mark it dead so
+        // the manager removes the zombie instead of retrying a dead socket.
+        dead = true
     }.getOrNull()
 
     @Synchronized
     fun launch(component: String): Boolean = runCatching {
+        if (dead) return false
         out.write("LAUNCH $component\n".toByteArray())
         out.flush()
         readLine() == "OK"
-    }.getOrDefault(false)
+    }.onFailure { dead = true }.getOrDefault(false)
 
     /** False once the host socket or its process is gone ([T-android-vscreen-host]). */
     val isAlive: Boolean
-        get() = !socket.isClosed && process?.isAlive != false
+        get() = !dead && !socket.isClosed && (process == null || process.isAlive)
 
     override val hostAlive: Boolean get() = isAlive
+
+    /** Set on any IO failure: a dead socket must never look alive to the manager. */
+    @Volatile
+    private var dead = false
 
     override fun acquireLatestFrame(): android.media.Image? = null
 
@@ -75,6 +85,12 @@ internal class HostDisplayClient private constructor(
 
     companion object {
         private const val TAG = "VdHostClient"
+
+        /** Bounded host boot: two failing layers must not cost the tool 24s. */
+        private const val HOST_START_TIMEOUT_MS = 6_000L
+
+        /** Socket read timeout: a wedged host must never block the caller forever. */
+        private const val IO_TIMEOUT_MS = 10_000
 
         /**
          * Start the host for [backend] (ROOT via `su`, SHIZUKU via
@@ -114,6 +130,9 @@ internal class HostDisplayClient private constructor(
                 runCatching { owned?.destroy() }
                 return null
             }
+            // Every later read is bounded: a wedged host must never park the
+            // tool thread on a blocking socket read.
+            runCatching { socket.soTimeout = IO_TIMEOUT_MS }
             val id = runCatching {
                 val line = socket.getInputStream().bufferedReader().readLine() ?: return null
                 line.removePrefix("READY ").trim().toIntOrNull()
@@ -157,7 +176,7 @@ internal class HostDisplayClient private constructor(
 
         /** Poll the loopback port until the host is listening (bounded). */
         private fun connect(port: Int): Socket? {
-            val deadline = System.currentTimeMillis() + 12_000L
+            val deadline = System.currentTimeMillis() + HOST_START_TIMEOUT_MS
             while (System.currentTimeMillis() < deadline) {
                 val socket = runCatching {
                     Socket().apply { connect(InetSocketAddress("127.0.0.1", port), 500) }

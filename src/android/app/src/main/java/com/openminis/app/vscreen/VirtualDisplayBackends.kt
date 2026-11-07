@@ -67,14 +67,6 @@ internal class VdBackendPlanner(
             .filter { it.available }
             .sortedWith(compareBy({ isCoolingDown(it.backend, nowMs) }, { it.backend.ordinal }))
 
-    /** Why [backend] is not in [planned] (or that it is cooling down). */
-    fun skipReason(backend: VdBackend, probes: List<VdBackendProbe>, nowMs: Long): String? {
-        val probe = probes.firstOrNull { it.backend == backend } ?: return "not probed"
-        if (!probe.available) return probe.detail
-        if (isCoolingDown(backend, nowMs)) return "cooling down after a failure: ${probe.detail}"
-        return null
-    }
-
     companion object {
         const val DEFAULT_COOLDOWN_MS = 5 * 60_000L
     }

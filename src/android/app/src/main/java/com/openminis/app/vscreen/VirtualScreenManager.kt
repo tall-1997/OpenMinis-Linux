@@ -365,6 +365,12 @@ object VirtualScreenManager {
             )
         }
         val muteNote = upkeep.muteForLaunch(displayId, cleanPkg)
+        // [T-android-vscreen-host] Host-owned display: launch from inside the
+        // host (owner privileges; works without Shizuku when SU started it).
+        (s.handle as? HostDisplayClient)?.takeIf { it.launch(component) }?.let {
+            SpillbackWatcher.watch(s, upkeep.mover(), upkeep.muter(), upkeep.handoffController())
+            return CommandOutcome.Ok(displayId, "started $component on display $displayId (host)\n$muteNote")
+        }
         val argv = arrayOf("am", "start", "-W", "--display", displayId.toString(), "-n", component)
         val r = runShell(argv, 15_000L)
         val out = r.combined.trim()

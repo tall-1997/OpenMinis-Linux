@@ -1,7 +1,7 @@
 package com.openminis.app.vscreen
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
+import org.junit.Assert.assertFalse
 import org.junit.Test
 
 /**
@@ -36,7 +36,7 @@ class VdBackendPlannerTest {
         val all = probes(root = false)
         val plan = planner.plan(all, 0L)
         assertEquals(listOf(VdBackend.SHIZUKU, VdBackend.NATIVE), plan.map { it.backend })
-        assertEquals("no KSU/SU", planner.skipReason(VdBackend.ROOT, all, 0L))
+        assertEquals("no KSU/SU", all.first { it.backend == VdBackend.ROOT }.detail)
     }
 
     @Test
@@ -62,7 +62,7 @@ class VdBackendPlannerTest {
         val planner = VdBackendPlanner(cooldownMs = 10_000L)
         planner.noteFailure(VdBackend.SHIZUKU, 0L)
         planner.noteSuccess(VdBackend.SHIZUKU)
-        assertNull(planner.skipReason(VdBackend.SHIZUKU, probes(), 1L))
+        assertFalse(planner.isCoolingDown(VdBackend.SHIZUKU, 1L))
         assertEquals(VdBackend.ROOT, planner.plan(probes(), 1L).first().backend)
     }
 

@@ -70,3 +70,11 @@
 -dontwarn com.jcraft.jsch.**
 -dontwarn org.bouncycastle.**
 -dontwarn com.jcraft.jzlib.**
+
+# [T-android-vscreen-host] The privileged virtual-display host is launched with
+# pp_process by class name and its main is invoked reflectively by the
+# runtime, so R8 must keep both or SU/Shizuku display creation silently dies in
+# release builds (debug builds are not minified and would hide it).
+-keep class com.openminis.app.vscreen.DisplayHostMain {
+    public static void main(java.lang.String[]);
+}
