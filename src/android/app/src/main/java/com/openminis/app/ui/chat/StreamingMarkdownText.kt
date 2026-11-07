@@ -230,11 +230,11 @@ internal val InlineCodeCornerRadius = 6.dp
 // line on dense streams while keeping short replies responsive.
 //   < 500  : 200ms   < 2000 : 300ms   < 32K : 500ms
 //   < 64K  : 1000ms  < 128K : 1500ms  else  : 2000ms
-// [T-android-throttle-ladder-converge] Ladder body moved to
-// [StreamingThrottle.ladderFor]; the parse surface uses the default 200ms
-// first tier.
-internal fun streamingThrottleFor(content: String): Long =
-    StreamingThrottle.ladderFor(content.length)
+// [T-android-throttle-ladder-converge] default 200ms first tier;
+// [T-android-tail-sprint] the parse hop clamps to PARSE_SPRINT_MS (a
+// full-document parse is the Scudo-OOM budget), never the 300ms flush sprint.
+internal fun streamingThrottleFor(content: String, unflushedChars: Int): Long =
+    StreamingThrottle.throttleFor(content.length, unflushedChars, sprintMs = StreamingThrottle.PARSE_SPRINT_MS)
 
 
 @Composable

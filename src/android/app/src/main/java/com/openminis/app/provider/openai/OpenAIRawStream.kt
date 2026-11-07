@@ -441,40 +441,36 @@ internal fun OpenAIProvider.rawStreamMessage(
         data class ResponsesToolCallAccumulator(var callId: String = "", var name: String = "", val args: StringBuilder = StringBuilder(), var started: Boolean = false, var lastSentArgsLen: Int = 0)
         val responsesToolCalls = mutableMapOf<String, ResponsesToolCallAccumulator>()
         // One-shot info log the first time the Responses API streams a reasoning
-        // delta — useful for confirming the Thinking pipeline is wired up when
-        // diagnosing "I set thinking high but see nothing" reports.
+        // delta — confirms the Thinking pipeline is wired up.
         var sawReasoningDelta = false
-        // Accumulates the opaque reasoning_content blob across SSE deltas so we
-        // can echo the exact server-emitted value back on the next turn. Tracked
-        // separately from ThinkingDelta concatenation because DeepSeek V4 emits
-        // `reasoning_content: ""` legitimately (non-thinking turns) and the
-        // empty string must round-trip — fabricating placeholder text causes
-        // the model to in-context-learn it (see T249 / T257 history).
+        // Opaque reasoning_content blob echoed back verbatim on the next turn:
+        // DeepSeek V4 emits `reasoning_content: ""` legitimately and the empty
+        // string must round-trip — fabricating placeholder text causes
+        // in-context learning (see T249 / T257 history).
         val reasoningAccum = StringBuilder()
         var sawReasoningField = false
-        // [T-android-think-prefix-stream] One parser per streaming turn. Handles
-        // ALL models: a turn with no `<think>` prefix passes through verbatim, so
-        // there is no vendor allowlist to keep in sync (the old `hasThinkTags`
-        // heuristic only armed extraction for DashScope/qwen ids, which meant
-        // MiniMax M3 relied on the mid-stream `text.contains("<think>")` fallback).
+        // [T-android-think-prefix-stream] One parser per streaming turn, all
+        // models: no `<think>` prefix passes through verbatim (no vendor
+        // allowlist; MiniMax M3 relied on the mid-stream contains fallback).
         val thinkParser = ThinkPrefixStreamParser()
 
-        // T321: turn-level SSE counters for empty-response triage.
+        // T321 counters + [T-android-stream-pace] first/last event clock —
+        // streamMs in the tail tally separates a relay that buffered-then-burst
+        // (long streamMs after the gateway finished) from client-side lag.
         var sseEventCount = 0
         var contentLen = 0
-        // [T-android-incomplete-keep-partial] True once a text delta carried at
-        // least one non-whitespace character. See the response.incomplete handler.
+        var firstEventAtMs = 0L
+        var lastEventAtMs = 0L
+        // [T-android-incomplete-keep-partial] a text delta carried real content.
         var sawNonBlankText = false
         var reasoningLen = 0
         var toolCallEventCount = 0
         var sawFinishReason = false
         var sawUsageBlock = false
-        // [T-android-responses-missing-finished] Hoisted out of the try block so
-        // the stream tail can emit Finished for streams that end WITHOUT a
-        // `data: [DONE]` sentinel — see the emission site after the read loop.
+        // [T-android-responses-missing-finished] hoisted so the stream tail can
+        // emit Finished when the relay closes without a `data: [DONE]`.
         var finishReason: String? = null
-        // True once the [DONE] branch has emitted Finished, so the tail below
-        // does not send a second one.
+        // True once the [DONE] branch has emitted Finished.
         var sentFinished = false
 
         try {
@@ -526,6 +522,9 @@ internal fun OpenAIProvider.rawStreamMessage(
                     )
                 }
                 sseEventCount++
+                val nowMs = System.currentTimeMillis()
+                if (firstEventAtMs == 0L) firstEventAtMs = nowMs
+                lastEventAtMs = nowMs
 
                 // T321: per-event delta-field summary. Only counts/lengths,
                 // never the actual delta text — keeps log volume bounded.
@@ -1027,7 +1026,8 @@ internal fun OpenAIProvider.rawStreamMessage(
                 com.openminis.app.logging.AppLogger.info(
                     "OpenAIProvider",
                     "[T321] stream complete: events=$sseEventCount contentLen=$contentLen " +
-                        "reasoningLen=$reasoningLen toolCallEvents=$toolCallEventCount sawUsage=$sawUsageBlock"
+                        "reasoningLen=$reasoningLen toolCallEvents=$toolCallEventCount sawUsage=$sawUsageBlock " +
+                        "streamMs=${if (firstEventAtMs == 0L) 0 else lastEventAtMs - firstEventAtMs}"
                 )
             }
         } catch (e: Exception) {

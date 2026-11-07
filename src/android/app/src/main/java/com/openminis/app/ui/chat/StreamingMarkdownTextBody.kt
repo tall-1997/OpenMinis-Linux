@@ -36,8 +36,13 @@ internal fun StreamingMarkdownTextBody(
         snapshotFlow { content }
             .conflate()
             .collect { latest ->
+                // [T-android-tail-sprint] Backlog measured against what is
+                // on screen (value), not the last flush: the flush gate may
+                // have delivered seconds of text while this hop still shows
+                // the older value, and the parse cadence must chase that.
+                val unflushed = latest.length - value.length
                 value = latest
-                delay(streamingThrottleFor(latest))
+                delay(streamingThrottleFor(latest, unflushed))
             }
     }
     // [T-android-inline-parse-offmain] Theme snapshot for off-main prewarm.
