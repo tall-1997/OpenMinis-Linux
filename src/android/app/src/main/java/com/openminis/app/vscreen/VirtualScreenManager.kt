@@ -76,6 +76,12 @@ object VirtualScreenManager {
         val lifecycle: VdLifecycle get() = VdLifecycle.RUNNING
 
         /**
+         * A JPEG frame when this display is owned by a privileged host
+         * (frames arrive over its socket, not through an ImageReader here).
+         */
+        val captureJpeg: ByteArray? get() = null
+
+        /**
          * Latest frame rendered on the display, or null when none is
          * available yet. The caller owns the returned [Image] and must
          * close it. The display surface stays attached — [release] is the
@@ -110,6 +116,8 @@ object VirtualScreenManager {
         @Volatile var spillbackWatching: Boolean = false,
         /** IME policy outcome of the async apply after create (null = unknown yet). */
         @Volatile var imePolicyNote: String? = null,
+        /** [T-android-vscreen-layers] Which layer created (and owns) this display. */
+        val backend: VdBackend = VdBackend.NATIVE,
     ) {
         /** [T-android-vscreen-vd] Platform-reported state of this display. */
         val lifecycle: VdLifecycle get() = handle?.lifecycle ?: VdLifecycle.RUNNING
@@ -138,19 +146,14 @@ object VirtualScreenManager {
     private val screens = LinkedHashMap<Int, VirtualScreen>()
     private val lock = Any()
 
-    /** [T-android-vscreen-layers] Privileged host process (root / shell uid), null until deployed. */
+    /** [T-android-vscreen-layers] Privileged host process (root / shell uid). */
     @Volatile
     private var privilegedHost: PrivilegedDisplayHost? = null
 
-    /** Test/DI seam for the privileged host. */
-    internal fun setPrivilegedHost(host: PrivilegedDisplayHost?) {
-        privilegedHost = host
-    }
-
     /**
-     * [T-android-vscreen-layers] The layers usable right now, highest priority
-     * first (SU/KSU → Shizuku → native). Exposed via `action=list` so installing
-     * root later shows up as an upgrade path instead of a silent difference.
+     * [T-android-vscreen-layers] Layers usable right now, highest priority
+     * first (SU/KSU → Shizuku → native). Exposed via `action=list` so a later
+     * root install reads as an upgrade path, not a silent difference.
      */
     fun backendPlan(nowMs: Long = System.currentTimeMillis()): List<VdBackendProbe> =
         VdBackends.status(privilegedHost != null, nowMs)
@@ -248,20 +251,12 @@ object VirtualScreenManager {
     // ─── create / list / destroy ──────────────────────────────────────────
 
     /**
-     * Create a virtual display (app-level DisplayManager; no Shizuku).
+     * Create a virtual display. Geometry omitted by the caller follows the
+     * PHYSICAL panel (plus any `wm` override when a shell is available).
      *
-     * Geometry omitted by the caller follows the PHYSICAL panel
-     * ([VirtualDisplayRuntime.physicalSpec]) so apps render at native metrics
-     * and screenshots match what the phone would show; the 1080x1920@320
-     * constants are only the no-context fallback.
-     *
-     * [T-android-vscreen2] After the display exists: leftover mute entries
-     * are reconciled (leftover restore), and the per-display IME policy is
-     * applied ASYNC best-effort through the user service (Android 12+,
-     * DISPLAY_IME_POLICY_HIDING) so the headless screen can never pull the
-     * keyboard away from the user — the outcome lands on
-     * [VirtualScreen.imePolicyNote] for the next list result, never blocks
-     * and never fails the create.
+     * [T-android-vscreen-layers] Creation goes SU/KSU → Shizuku → native,
+     * falling through on refusal; [T-android-vscreen2] then reconciles the mute
+     * ledger and applies the IME policy best-effort, never failing the create.
      */
     fun create(width: Int, height: Int, dpi: Int, label: String?, context: Context?): CreateOutcome {
         val factory = ensureFactory(context)
@@ -287,14 +282,19 @@ object VirtualScreenManager {
         val name = (label ?: "minis-virtual-screen").take(64)
         synchronized(lock) {
             val evicted = evictLeastRecentlyUsed()
-            val handle = runCatching { factory.create(name, w, h, d) }.getOrElse {
-                return CreateOutcome.Failed("display factory failed: ${it.message}")
-            } ?: return CreateOutcome.Failed(
-                "DisplayManager.createVirtualDisplay returned null — the device refused " +
-                    "the virtual display (ROM policy or a system display limit)",
+            // [T-android-vscreen-layers] SU/KSU → Shizuku → native, with the
+            // per-layer cooldown/fallback handled by the planner.
+            val acquired = VdBackends.acquire(
+                privilegedHost,
+                { l, ww, hh, dd -> runCatching { factory.create(l, ww, hh, dd) }.getOrNull() },
+                name, w, h, d,
+            ) ?: return CreateOutcome.Failed(
+                "no layer could create the display: SU/Shizuku host and the native " +
+                    "DisplayManager path both refused (see action=list layers for why)",
             )
+            val handle = acquired.first
             val now = System.currentTimeMillis()
-            val screen = VirtualScreen(handle.displayId, w, h, d, name, now)
+            val screen = VirtualScreen(handle.displayId, w, h, d, name, now, backend = acquired.second)
             screen.handle = handle
             screens[screen.displayId] = screen
             AppLogger.info(TAG, "created display ${screen.displayId} ${w}x${h}@${d}dpi" +
@@ -415,14 +415,11 @@ object VirtualScreenManager {
     // ─── screenshot (layered) ─────────────────────────────────────────────
 
     /**
-     * Capture the virtual display. Layer 1 (ImageReader, app-uid, no
-     * Shizuku) → layer 2 (Shizuku screencap + cp into [offloadsDir]) →
-     * layer 3 (Shizuku screencap + chunked base64 through stdout). All
-     * layers end with app-side bytes written under [offloadsDir]; the
-     * returned guest path is `/var/minis/offloads/<file>` so `read_image`
-     * resolves it. `uiautomator dump` has NO display parameter, so a text
-     * accessibility-tree dump of the virtual screen is not possible — the
-     * screenshot is the only read surface.
+     * Capture the display: host socket (privileged owner) → ImageReader
+     * (app-uid) → Shizuku screencap+cp → Shizuku chunked base64. Every layer
+     * writes under [offloadsDir] and returns `/var/minis/offloads/<file>` for
+     * `read_image`; `uiautomator dump` has no display parameter, so this is the
+     * only read surface.
      */
     fun screenshot(displayId: Int, offloadsDir: File?): CommandOutcome {
         val s = screen(displayId) ?: return CommandOutcome.NotFound(notFoundMessage(displayId))
@@ -438,6 +435,13 @@ object VirtualScreenManager {
             )
         }
         offloadsDir.mkdirs()
+
+        // Layer 0 [T-android-vscreen-host]: a privileged host owns the frames.
+        s.handle?.captureJpeg?.let { bytes ->
+            return VirtualScreenCapture.writeScreenshot(
+                offloadsDir, displayId, bytes, "Host", VirtualScreenCapture.JPEG_SUFFIX,
+            )
+        }
 
         // Layer 1: our own display, our own uid.
         VirtualScreenCapture.captureViaImageReader(s.handle)?.let { bytes ->
@@ -654,16 +658,18 @@ object VirtualScreenManager {
         synchronized(lock) {
             if (installedFactory == null) {
                 installedFactory = buildRealFactory(context.applicationContext)
+                if (privilegedHost == null) {
+                    val app = context.applicationContext
+                    privilegedHost = PrivilegedDisplayHost { backend, spec, _ ->
+                        HostDisplayClient.start(app, backend, spec)
+                    }
+                }
             }
         }
         return installedFactory
     }
 
-    /**
-     * OWN_CONTENT_ONLY class (API 19+; project minSdk is 26, so no runtime
-     * gate is needed). Creation, the ImageReader surface and the lifecycle
-     * callback all live in [VirtualDisplayRuntime].
-     */
+    /** OWN_CONTENT_ONLY (API 19+; minSdk 26); creation + callback live in [VirtualDisplayRuntime]. */
     private fun buildRealFactory(app: Context): DisplayHandleFactory =
         VirtualDisplayRuntime.handleFactory(app)
 

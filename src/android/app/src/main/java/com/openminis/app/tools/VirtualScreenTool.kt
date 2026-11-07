@@ -441,6 +441,8 @@ object VirtualScreenTool {
                     put("height", s.height)
                     put("dpi", s.dpi)
                     put("label", s.label)
+                    // [T-android-vscreen-layers] Which layer owns this display.
+                    put("backend", s.backend.name.lowercase())
                     put("created_at_ms", s.createdAtMs)
                     put("last_used_at_ms", s.lastUsedAtMs)
                     // [T-android-vscreen-vd] Platform-reported lifecycle

@@ -85,13 +85,17 @@ internal class VdBackendPlanner(
  * display. The host is the piece that makes [VdBackend.ROOT] /
  * [VdBackend.SHIZUKU] creation possible: a `VirtualDisplay` dies with the
  * process that created it, so a one-shot `app_process` call cannot hold one —
- * the host must stay alive and serve frames.
+ * the host must stay alive and serve frames ([DisplayHostMain]).
  *
- * Null in the manager until such a host is deployed; the planner then reports
- * those layers as unavailable with this reason and falls through to NATIVE.
+ * Bound in production to [HostDisplayClient.start]; null in tests or before
+ * the bootstrap ran, and the planner then reports those layers unavailable.
  */
 internal fun interface PrivilegedDisplayHost {
-    fun create(spec: DisplaySpec, label: String): Int?
+    fun create(
+        backend: VdBackend,
+        spec: DisplaySpec,
+        label: String,
+    ): VirtualScreenManager.DisplayHandle?
 }
 
 /**
@@ -139,5 +143,37 @@ internal object VdBackends {
     fun noteFailure(backend: VdBackend, nowMs: Long) = planner.noteFailure(backend, nowMs)
 
     fun noteSuccess(backend: VdBackend) = planner.noteSuccess(backend)
+
+    /**
+     * Try every planned layer in order and return the first handle that worked,
+     * together with the layer that produced it. Failures feed the cooldown, so
+     * a broken layer is skipped next time instead of costing 12s per create;
+     * the native layer is always attempted as the last resort.
+     */
+    fun acquire(
+        host: PrivilegedDisplayHost?,
+        native: (String, Int, Int, Int) -> VirtualScreenManager.DisplayHandle?,
+        label: String,
+        width: Int,
+        height: Int,
+        dpi: Int,
+    ): Pair<VirtualScreenManager.DisplayHandle, VdBackend>? {
+        val now = System.currentTimeMillis()
+        for (probe in plan(host != null, now)) {
+            val handle = runCatching {
+                if (probe.backend == VdBackend.NATIVE) {
+                    native(label, width, height, dpi)
+                } else {
+                    host?.create(probe.backend, DisplaySpec(width, height, dpi), label)
+                }
+            }.getOrNull()
+            if (handle != null) {
+                noteSuccess(probe.backend)
+                return handle to probe.backend
+            }
+            noteFailure(probe.backend, now)
+        }
+        return null
+    }
 }
 
