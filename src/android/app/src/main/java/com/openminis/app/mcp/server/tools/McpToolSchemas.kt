@@ -91,7 +91,7 @@ internal object McpToolSchemas {
     })
 
     val scheduleTaskCreate = "Create a scheduled task that fires an agent prompt. " +
-        "Schedule: '30m', '2h', '1d' (once) or 'every 30m' / 'every 2h' / 'every 1d' (repeating)."
+        "Schedule: any duration like '90s', '7m', '1h30m' (once) or 'every 15m' (repeating); units s/m/h/d combinable."
 
     val scheduleTaskCreateSchema = schema("schedule", "prompt", props = JSONObject().apply {
         put("name", prop("string"))

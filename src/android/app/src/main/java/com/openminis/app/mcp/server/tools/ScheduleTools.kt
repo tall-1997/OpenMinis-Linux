@@ -59,7 +59,7 @@ private fun scheduleTaskCreate(deps: McpToolDeps, arguments: JSONObject): McpSer
     }
     CronScheduler.parseSchedule(schedule)
         ?: return McpToolShared.error(
-            "Error: schedule must look like '30m', '2h', '1d', or 'every 30m'/'every 2h'/'every 1d'"
+            "Error: schedule must look like '90s', '7m', '1h30m', or 'every 15m'/'every 1h30m' (units s/m/h/d, combinable)"
         )
     val (manager, err) = taskManager(deps)
     if (manager == null) return err!!

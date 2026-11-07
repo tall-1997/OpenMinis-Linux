@@ -30,11 +30,11 @@ object CronJobTool {
     fun definition(): AgentToolDefinition = AgentToolDefinition(
         name = NAME,
         description = "Create, list, or remove AlarmManager scheduled tasks that run an agent prompt. " +
-            "Prefer this for delay/interval schedules (30m, 2h, every 2h). A created task fires as a " +
+            "Prefer this for delay/interval schedules (7m, 45m, every 15m). A created task fires as a " +
             "follow-up in the chat that scheduled it, so results come back to that conversation. " +
             "Clock-of-day HH:MM tasks " +
-            "can also be managed via minis-scheduled. Schedules: '30m'/'2h'/'1d' (once) or " +
-            "'every 30m'/'every 2h'/'every 1d' (repeating).",
+            "can also be managed via minis-scheduled. Schedules: any duration — '90s'/'7m'/'45m'/'3h'/'1d'/'1h30m' " +
+            "(once) or 'every 15m'/'every 1h30m' (repeating); units s/m/h/d combinable.",
         parameters = mapOf(
             "tool_title" to AgentToolParam(
                 "string",
@@ -48,7 +48,7 @@ object CronJobTool {
             "name" to AgentToolParam("string", "Short label for create."),
             "schedule" to AgentToolParam(
                 "string",
-                "For create: '30m', '2h', '1d', or 'every 30m' / 'every 2h' / 'every 1d'.",
+                "For create: any duration like '90s', '7m', '45m', '3h', '1d', '1h30m', or 'every 15m' / 'every 1h30m'.",
             ),
             "prompt" to AgentToolParam("string", "Agent prompt to run when the task fires."),
             "id" to AgentToolParam("string", "Task id or a unique id prefix for remove (from list)."),
@@ -117,7 +117,7 @@ object CronJobTool {
                 ScheduledTargetMode.AppendToSession(ownerSessionId)
             },
         ) ?: return ToolExecutionResult(
-            "Error: schedule must look like '30m', '2h', '1d', or 'every 30m'/'every 2h'/'every 1d'",
+            "Error: schedule must look like '90s', '7m', '1h30m', or 'every 15m'/'every 1h30m' (units s/m/h/d, combinable)",
             false,
         )
         val saved = manager.create(task)

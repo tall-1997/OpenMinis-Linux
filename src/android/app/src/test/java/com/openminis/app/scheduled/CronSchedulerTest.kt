@@ -39,6 +39,36 @@ class CronSchedulerTest {
     }
 
     @Test
+    fun parseAnyDurationUnits() {
+        val s = CronScheduler.parseSchedule("90s")!!
+        assertEquals("once", s.kind)
+        assertEquals(90 * 1000L, s.firstDelayMs)
+
+        val combo = CronScheduler.parseSchedule("1h30m")!!
+        assertEquals(90 * 60_000L, combo.firstDelayMs)
+
+        val spaced = CronScheduler.parseSchedule("2 h 15 m")!!
+        assertEquals(135 * 60_000L, spaced.firstDelayMs)
+
+        val every = CronScheduler.parseSchedule("every 7m")!!
+        assertEquals("interval", every.kind)
+        assertEquals(7L, every.intervalMinutes)
+        assertEquals(7 * 60_000L, every.firstDelayMs)
+
+        val sub = CronScheduler.parseSchedule("every 90s")!!
+        assertEquals(2L, sub.intervalMinutes) // sub-minute cadence rounds up
+    }
+
+    @Test
+    fun parseRejectsNonChunkSuffixes() {
+        assertNull(CronScheduler.parseSchedule("every 30m later"))
+        assertNull(CronScheduler.parseSchedule("1h x"))
+        assertNull(CronScheduler.parseSchedule("h1"))
+        assertNull(CronScheduler.parseSchedule("99999999999999999999m"))
+        assertNull(CronScheduler.parseSchedule("0s"))
+    }
+
+    @Test
     fun intervalNextTriggerWalksForward() {
         val now = 1_700_000_000_000L
         val task = ScheduledTask(

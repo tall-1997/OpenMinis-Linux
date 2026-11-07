@@ -18,7 +18,7 @@ import java.util.UUID
 object ScheduledTaskCodec {
 
     /**
-     * Parse a cron-style schedule ("30m", "2h", "1d", "every 30m", …) and
+     * Parse a schedule ("7m", "90s", "1h30m", "every 15m", …) and
      * build the [ScheduledTask] it describes, with `fireAtMs` fixed to
      * now + firstDelay and the clock fields derived from that instant.
      * Returns null when [schedule] is unparseable (the caller renders its own
