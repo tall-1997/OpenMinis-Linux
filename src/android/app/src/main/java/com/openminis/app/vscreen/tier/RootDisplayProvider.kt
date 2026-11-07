@@ -89,9 +89,22 @@ class RootDisplayProvider(
     }
 
     override fun destroy(displayId: Int) {
-        val state = readHostState() ?: return
-        if (state.displayId != displayId) return
-        su.run(arrayOf(VdHostProtocol.requestStopCommand()), 5_000L)
+        // FIRE-AND-FORGET on a daemon thread — this is called from the idle
+        // reap on the MAIN looper and from the create path's registry LOCK
+        // (LRU eviction), where a 0.2–2s su spawn would stall frames or
+        // block every screen() call. Stop semantics are asynchronous by
+        // design: the sentinel is polled by the host once a second, so the
+        // caller needs no completion signal.
+        Thread {
+            try {
+                val state = readHostState() ?: return@Thread
+                if (state.displayId != displayId) return@Thread
+                su.run(arrayOf(VdHostProtocol.requestStopCommand()), 5_000L)
+                AppLogger.info(TAG, "root host stop requested for display $displayId (async)")
+            } catch (t: Throwable) {
+                AppLogger.warning(TAG, "async host stop failed: ${t.message}")
+            }
+        }.apply { isDaemon = true; name = "minis-vd-host-stop" }.start()
     }
 
     // ── internals ─────────────────────────────────────────────────────────

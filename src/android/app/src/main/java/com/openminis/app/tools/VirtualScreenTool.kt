@@ -217,7 +217,14 @@ object VirtualScreenTool {
                         if (outcome.evicted != null) {
                             put("evicted_display_id", outcome.evicted.displayId)
                         }
-                        put("note", createNote(s.tier))
+                        // The provider's own note (resolved privileged flags,
+                        // owner info) rides next to the tier's guidance.
+                        val providerNote = outcome.providerNote
+                        put(
+                            "note",
+                            if (providerNote.isNullOrBlank()) createNote(s.tier)
+                            else createNote(s.tier) + " " + providerNote,
+                        )
                     }.toString(),
                     true,
                     toolTitle = toolTitle,

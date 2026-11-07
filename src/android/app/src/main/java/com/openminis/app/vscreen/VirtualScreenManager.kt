@@ -146,6 +146,13 @@ object VirtualScreenManager {
             val evicted: VirtualScreen?,
             /** Why lower-priority tiers were skipped, when any were. */
             val fallbackNote: String? = null,
+            /**
+             * [T-android-vscreen-tier] The provisioning provider's own note
+             * (the ROOT ladder's resolved flags, the SHIZUKU owner info) —
+             * surfaced verbatim in the tool result next to the tier's
+             * standard guidance.
+             */
+            val providerNote: String? = null,
         ) : CreateOutcome()
         data class FactoryMissing(val message: String) : CreateOutcome()
         data class Failed(val message: String) : CreateOutcome()
@@ -315,6 +322,7 @@ object VirtualScreenManager {
                 CreateOutcome.Created(
                     screen, evicted,
                     step.fallbackNotes.takeIf { it.isNotEmpty() }?.joinToString("; "),
+                    providerNote = step.note,
                 )
             }
             is VscreenTierOrchestrator.OrchestratedFailure ->
@@ -565,6 +573,13 @@ object VirtualScreenManager {
         installedTierState?.let { return VscreenTierOrchestrator(it, activeTierProviders) }
         if (context == null) return null
         synchronized(lock) {
+            // Seed the upkeep's app context HERE, not only in hand_to_user:
+            // the SHIZUKU tier's service client needs it, and a user who never
+            // hand_to_users would otherwise see Shizuku permanently
+            // "unreachable" even when granted.
+            if (upkeep.appContext == null) {
+                upkeep.appContext = context.applicationContext
+            }
             if (installedTierState == null) {
                 installedTierState = TierStateMachine(
                     activeTierProviders,
@@ -575,18 +590,25 @@ object VirtualScreenManager {
         return VscreenTierOrchestrator(installedTierState!!, activeTierProviders)
     }
 
-    /** Tier states for UI / tool results (probe cache contents). */
+    /**
+     * Tier states for UI / tool results. SNAPSHOT read only — no fingerprint
+     * check, no probing (both can spawn a 3s `command -v su` on non-root
+     * devices, and this getter runs on the MAIN thread from the settings
+     * screen). Fresh probing happens on the create path's background thread.
+     */
     val tierSheet: Map<VscreenTier, ProbeResult>
-        get() = installedTierState?.sheet(null) ?: emptyMap()
+        get() = installedTierState?.sheetSnapshot ?: emptyMap()
 
     /**
      * [T-android-vscreen-tier] Upgrade hint for the list result when a
      * better tier is available than the one a live screen runs on. Never
-     * migrates anything — the model decides whether to recreate.
+     * migrates anything — the model decides whether to recreate. Best-effort
+     * by design: reads the cached sheet (no probing, see [tierSheet]) so a
+     * `list` call can never stall on a su probe; the hint catches up on the
+     * next create, which is when a tier switch can actually happen.
      */
-    fun tierUpgradeHint(): String? = installedTierState?.upgradeAvailable(
+    fun tierUpgradeHint(): String? = installedTierState?.upgradeHintFromSnapshot(
         synchronized(lock) { screens.values.map { it.tier }.toSet() },
-        null,
     )
 
     /**

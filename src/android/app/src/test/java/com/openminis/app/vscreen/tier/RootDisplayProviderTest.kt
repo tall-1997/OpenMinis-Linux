@@ -101,9 +101,16 @@ class RootDisplayProviderTest {
         val su = ScriptedSu()
         su.script("cat", ok(stateText))
         provider(su).destroy(42)
+        // Fire-and-forget: the stop rides a daemon thread, so poll briefly.
+        val deadline = System.currentTimeMillis() + 2_000
+        while (System.currentTimeMillis() < deadline &&
+            su.calls.none { it.contains("touch ${VdHostProtocol.STOP_PATH}") }
+        ) Thread.sleep(20)
         assertTrue(su.calls.any { it.contains("touch ${VdHostProtocol.STOP_PATH}") })
-        su.calls.clear()
+        // A foreign display id must never stop the host.
+        val touchesBefore = su.calls.count { it.contains("touch") }
         provider(su).destroy(43)
-        assertTrue("foreign display ids are ignored", su.calls.none { it.contains("touch") })
+        Thread.sleep(300)
+        assertEquals(touchesBefore, su.calls.count { it.contains("touch") })
     }
 }

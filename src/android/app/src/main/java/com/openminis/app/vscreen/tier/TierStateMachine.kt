@@ -42,7 +42,21 @@ class TierStateMachine(
     private val _sheet = MutableStateFlow<Map<VscreenTier, ProbeResult>>(emptyMap())
     val sheet: StateFlow<Map<VscreenTier, ProbeResult>> = _sheet.asStateFlow()
 
+    /**
+     * Pure cache read — NO fingerprint check, NO probing, safe on the MAIN
+     * thread and inside the registry lock. The maintenance work (fingerprint
+     * invalidation, backoff re-probes) only ever runs inside [sheet], which
+     * the create path calls on a background thread. Consumers that must not
+     * block (settings UI, the list tool's upgrade hint) read this snapshot;
+     * a stale entry is honest "last known state", not a wrong one.
+     */
+    val sheetSnapshot: Map<VscreenTier, ProbeResult>
+        get() = _sheet.value
+
     @Volatile private var lastFingerprint: String? = null
+
+    @Volatile private var fpCache: String? = null
+    @Volatile private var fpCacheAtMs: Long = 0L
 
     init {
         synchronized(lock) { restoreFromPrefs() }
@@ -55,7 +69,7 @@ class TierStateMachine(
      * next create pays it, which is exactly when the answer matters).
      */
     fun sheet(context: Context?): Map<VscreenTier, ProbeResult> = synchronized(lock) {
-        val fp = runCatching { fingerprint() }.getOrDefault("unknown")
+        val fp = cachedFingerprint()
         if (lastFingerprint != null && fp != lastFingerprint) {
             AppLogger.info(TAG, "privilege fingerprint changed ($lastFingerprint -> $fp); invalidating probes")
             invalidateTransientLocked()
@@ -80,12 +94,35 @@ class TierStateMachine(
         _sheet.value
     }
 
+    /**
+     * The privilege fingerprint can spawn a `command -v su` (~3s timeout on
+     * devices without root) — never call it per sheet() read. A 60s TTL
+     * cache bounds the cost to one spawn per minute while still noticing a
+     * newly granted root / Shizuku within a create's decision window.
+     */
+    private fun cachedFingerprint(): String {
+        val now = nowMs()
+        fpCache?.let { if (now - fpCacheAtMs < FINGERPRINT_TTL_MS) return it }
+        val fresh = runCatching { fingerprint() }.getOrDefault("unknown")
+        fpCache = fresh
+        fpCacheAtMs = now
+        return fresh
+    }
+
     /** Records a probe result (capped reason, persisted). */
     fun put(tier: VscreenTier, result: ProbeResult) = synchronized(lock) { putLocked(tier, result) }
 
     /** Marks a tier degraded after a failed create attempt. */
     fun markDegraded(tier: VscreenTier, reason: String) =
         put(tier, ProbeResult.Degraded(reason.take(MAX_REASON), nowMs()))
+
+    /**
+     * Upgrade hint from the CACHED sheet only — no probing, no fingerprint.
+     * The list tool's best-effort hint must never stall; a privilege change
+     * is picked up by the next create's full [sheet] run.
+     */
+    fun upgradeHintFromSnapshot(liveTiers: Set<VscreenTier>): String? =
+        TierSelector.upgradeHint(liveTiers, _sheet.value)
 
     /**
      * Upgrade hint for the list result, or null when live screens already
@@ -97,6 +134,8 @@ class TierStateMachine(
     /** Test/reset hook: forget everything (next sheet() re-probes). */
     fun resetForTest() = synchronized(lock) {
         lastFingerprint = null
+        fpCache = null
+        fpCacheAtMs = 0L
         prefs.remove(KEY)
         _sheet.value = emptyMap()
     }
@@ -191,5 +230,8 @@ class TierStateMachine(
 
         /** A degraded tier waits this long before the next create re-probes it. */
         const val BACKOFF_MS = 10 * 60_000L
+
+        /** Privilege-fingerprint cache window (bounds su-probe spawns). */
+        const val FINGERPRINT_TTL_MS = 60_000L
     }
 }

@@ -95,12 +95,16 @@ class TierStateMachineTest {
 
     @Test
     fun `a fingerprint change invalidates non-degraded entries`() {
+        var now = 1_000L
         var fp = "fp0"
         val native = FakeProvider(VscreenTier.NATIVE, ProbeResult.Available(emptySet()))
-        val sm = machine(fingerprint = { fp }, providers = *arrayOf(native))
+        val sm = machine(nowMs = { now }, fingerprint = { fp }, providers = *arrayOf(native))
         sm.sheet(null)
         assertEquals(1, native.probes)
+        // The fingerprint read is TTL-cached (it can spawn a su probe); the
+        // change is noticed on the first read past the cache window.
         fp = "fp1"
+        now += TierStateMachine.FINGERPRINT_TTL_MS
         sm.sheet(null)
         assertEquals("invalidated by the fingerprint change", 2, native.probes)
     }
