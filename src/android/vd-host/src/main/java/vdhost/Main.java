@@ -12,9 +12,16 @@ import android.os.HandlerThread;
 import android.os.Looper;
 import android.view.Display;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.InetAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.nio.ByteBuffer;
 
 /**
  * [T-android-vscreen-tier] Root-tier virtual display host: run by
@@ -31,14 +38,21 @@ import java.io.IOException;
  *
  * Protocol (mirrored by VdHostProtocol.kt in the app):
  *   /data/local/tmp/minis_vd.state  — "display=", "pid=", "size=", "flags=",
- *                                     "beat=" lines; rewritten every heartbeat
+ *                                     "port=", "beat=" lines; rewritten every
+ *                                     heartbeat
  *   /data/local/tmp/minis_vd.stop   — sentinel: release + delete state + exit
+ *   127.0.0.1:<port>                — loopback screenshot server: the client
+ *                                     sends "SHOT\n", the host answers
+ *                                     "JPEG <len>\n" + <len> bytes, or
+ *                                     "ERR <reason>\n"
  *
- * The ImageReader DRAINS frames (count only, never stores): a virtual
+ * The ImageReader DRAINS frames (count + latest RGBA copy): a virtual
  * display without a live consumer surface sleeps (WMS display-off token)
  * and then drops every injected input event, which is why the surface is
- * attached at create and never detached. Screenshots go through
- * `screencap -d` on the root lane, so no frame ever leaves this process.
+ * attached at create and never detached. Screenshots ride the host's
+ * loopback JPEG lane when it is up (the "port=" line in the state file);
+ * `screencap -d` on the root lane stays as the fallback for hosts that
+ * predate the lane.
  *
  * Screen metrics are read from the MAIN display at start and never
  * hardcoded — a hardcoded size/dpi poisons app font caches when the task
@@ -67,6 +81,15 @@ public final class Main {
     static final long HEARTBEAT_MS = 30_000;
 
     static volatile int frames = 0;
+
+    /** Port of the loopback screenshot server; -1 when the bind failed. */
+    static volatile int shotPort = -1;
+
+    /** Latest drained frame as raw RGBA_8888 bytes; replaced on every frame. */
+    static final Object FRAME_LOCK = new Object();
+    static byte[] latestFrame = null;
+    static int frameW = 0;
+    static int frameH = 0;
 
     /** Result of one create attempt down the ladder. */
     static final class Created {
@@ -97,7 +120,27 @@ public final class Main {
             Image img = null;
             try {
                 img = r.acquireLatestImage();
-                if (img != null) frames++;
+                if (img != null) {
+                    frames++;
+                    // Copy the RGBA buffer out — the Image is only valid
+                    // until close(), and the JPEG encode happens later on
+                    // the SHOT path. Row-by-row copy: rowStride may exceed
+                    // width*4 (alignment padding).
+                    Image.Plane plane = img.getPlanes()[0];
+                    ByteBuffer buf = plane.getBuffer();
+                    int rowStride = plane.getRowStride();
+                    int iw = img.getWidth(), ih = img.getHeight();
+                    byte[] out = new byte[iw * ih * 4];
+                    for (int row = 0; row < ih; row++) {
+                        buf.position(row * rowStride);
+                        buf.get(out, row * iw * 4, iw * 4);
+                    }
+                    synchronized (FRAME_LOCK) {
+                        latestFrame = out;
+                        frameW = iw;
+                        frameH = ih;
+                    }
+                }
             } catch (Throwable ignored) {
             } finally {
                 if (img != null) img.close();
@@ -123,6 +166,7 @@ public final class Main {
         }
 
         int id = created.display.getDisplay().getDisplayId();
+        startShotServer();
         writeState(id, w, h, dpi, created.flags);
         System.out.println("VD_READY display=" + id + " flags=" + created.flags
             + " size=" + w + "x" + h + "@" + dpi);
@@ -160,6 +204,7 @@ public final class Main {
             fw.write("pid=" + android.os.Process.myPid() + "\n");
             fw.write("size=" + w + "x" + h + "@" + dpi + "\n");
             fw.write("flags=" + flags + "\n");
+            fw.write("port=" + shotPort + "\n");
             fw.write("beat=" + (System.currentTimeMillis() / 1000) + "\n");
         } catch (IOException e) {
             System.out.println("STATE_WRITE_FAILED " + e);
@@ -170,6 +215,82 @@ public final class Main {
         if (!tmp.renameTo(target)) {
             target.delete();
             tmp.renameTo(target);
+        }
+    }
+
+    /**
+     * Binds the loopback screenshot server (port picked by the kernel) and
+     * serves SHOT commands on a daemon thread. A bind failure is not fatal —
+     * the state file then carries port=-1 and screenshots fall back to
+     * `screencap -d` on the root lane.
+     */
+    static void startShotServer() {
+        try {
+            ServerSocket ss = new ServerSocket(0, 4, InetAddress.getByName("127.0.0.1"));
+            shotPort = ss.getLocalPort();
+            Thread t = new Thread(() -> serveShots(ss), "minis-vd-shot");
+            t.setDaemon(true);
+            t.start();
+        } catch (IOException e) {
+            System.out.println("SHOT_BIND_FAILED " + e);
+        }
+    }
+
+    /** One connection = one command: SHOT → "JPEG <len>\n" + bytes, else "ERR". */
+    static void serveShots(ServerSocket ss) {
+        while (true) {
+            try (Socket c = ss.accept()) {
+                c.setSoTimeout(10_000);
+                // Read the command line byte-by-byte: no buffered reader on
+                // this socket, so nothing can ever steal bytes meant for a
+                // later binary reply.
+                InputStream is = c.getInputStream();
+                StringBuilder cmdBuf = new StringBuilder();
+                while (true) {
+                    int b = is.read();
+                    if (b < 0 || b == '\n') break;
+                    if (b != '\r') cmdBuf.append((char) b);
+                }
+                String cmd = cmdBuf.toString();
+                OutputStream os = c.getOutputStream();
+                if (!"SHOT".equals(cmd)) {
+                    os.write("ERR unknown command\n".getBytes());
+                } else {
+                    byte[] jpeg = latestJpeg();
+                    if (jpeg == null) {
+                        os.write("ERR no frame rendered yet\n".getBytes());
+                    } else {
+                        os.write(("JPEG " + jpeg.length + "\n").getBytes());
+                        os.write(jpeg);
+                    }
+                }
+                os.flush();
+            } catch (Throwable ignored) {
+                // One bad client must not kill the lane; keep accepting.
+            }
+        }
+    }
+
+    /** Encodes the latest drained frame to JPEG; null when nothing rendered yet. */
+    static byte[] latestJpeg() {
+        byte[] rgba;
+        int w, h;
+        synchronized (FRAME_LOCK) {
+            rgba = latestFrame;
+            w = frameW;
+            h = frameH;
+        }
+        if (rgba == null) return null;
+        try {
+            android.graphics.Bitmap bmp = android.graphics.Bitmap.createBitmap(
+                w, h, android.graphics.Bitmap.Config.ARGB_8888);
+            bmp.copyPixelsFromBuffer(ByteBuffer.wrap(rgba));
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, bos);
+            bmp.recycle();
+            return bos.toByteArray();
+        } catch (Throwable t) {
+            return null;
         }
     }
 

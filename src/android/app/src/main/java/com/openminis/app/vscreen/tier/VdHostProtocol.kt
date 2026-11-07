@@ -29,6 +29,11 @@ object VdHostProtocol {
         val dpi: Int,
         val flags: Int,
         val beatEpochSec: Long,
+        /**
+         * Port of the host's loopback JPEG server; -1 when the host predates
+         * the lane (never wrote the line) or its bind failed.
+         */
+        val port: Int = -1,
     )
 
     /**
@@ -43,6 +48,7 @@ object VdHostProtocol {
         var h = -1
         var dpi = -1
         var flags = -1
+        var port = -1
         var beat = -1L
         for (line in text.lineSequence()) {
             val idx = line.indexOf('=')
@@ -59,11 +65,15 @@ object VdHostProtocol {
                     dpi = m.groupValues[3].toInt()
                 }
                 "flags" -> flags = value.toIntOrNull() ?: return null
+                // The port line is OPTIONAL: hosts predating the JPEG lane
+                // never write it, and a garbled port must not invalidate a
+                // state file that is otherwise perfectly fresh.
+                "port" -> value.toIntOrNull()?.takeIf { it > 0 }?.let { port = it }
                 "beat" -> beat = value.toLongOrNull() ?: return null
             }
         }
         if (displayId <= 0 || pid <= 0 || w <= 0 || h <= 0 || dpi <= 0 || flags < 0 || beat < 0) return null
-        return HostState(displayId, pid, w, h, dpi, flags, beat)
+        return HostState(displayId, pid, w, h, dpi, flags, beat, port)
     }
 
     fun isHeartbeatFresh(state: HostState, nowEpochSec: Long): Boolean =
@@ -99,6 +109,55 @@ object VdHostProtocol {
 
     /** Removes the stop sentinel so a (re)started host does not exit at once. */
     fun clearStopCommand(): String = "rm -f $STOP_PATH"
+
+    // ── loopback JPEG lane (vdhost.Main SHOT server) ───────────────────
+
+    const val SHOT_COMMAND = "SHOT\n"
+    const val SHOT_HEADER_PREFIX = "JPEG "
+
+    /**
+     * Parses the host's reply header: "JPEG <len>" → the byte count, any
+     * error line ("ERR …") or junk → null. Pure so the contract runs on the
+     * JVM next to the state-file tests.
+     */
+    fun parseShotHeader(line: String): Int? =
+        if (line.startsWith(SHOT_HEADER_PREFIX)) {
+            line.removePrefix(SHOT_HEADER_PREFIX).trim().toIntOrNull()?.takeIf { it > 0 }
+        } else null
+
+    /** What the screenshot lane should do about the host's JPEG server. */
+    sealed interface HostJpegDecision {
+        /** Not a host-owned screen — the lane does not apply, fall through. */
+        object Skip : HostJpegDecision
+
+        /** The host is provably dead — the manager destroys the corpse. */
+        data class DeadHost(val reason: String) : HostJpegDecision
+
+        /** Host predates the JPEG lane (no port line) — fall through. */
+        object NoLane : HostJpegDecision
+
+        /** Talk to the host's loopback JPEG server on this port. */
+        data class TryShot(val port: Int) : HostJpegDecision
+    }
+
+    /**
+     * Routes the root-tier screenshot lane: only ROOT screens are
+     * host-owned; a missing state file or a stale heartbeat means the host
+     * died and the screen is a corpse; a missing port means an old host jar
+     * without the lane. Pure so tests pin every branch.
+     */
+    fun hostJpegDecision(
+        tier: VscreenTier,
+        state: HostState?,
+        heartbeatFresh: Boolean?,
+    ): HostJpegDecision =
+        when {
+            tier != VscreenTier.ROOT -> HostJpegDecision.Skip
+            state == null -> HostJpegDecision.DeadHost("host state file is gone")
+            heartbeatFresh != true -> HostJpegDecision.DeadHost("host heartbeat is stale")
+            state.port <= 0 -> HostJpegDecision.NoLane
+            else -> HostJpegDecision.TryShot(state.port)
+        }
 
     private val SIZE_REGEX = Regex("(\\d+)x(\\d+)@(\\d+)")
 }

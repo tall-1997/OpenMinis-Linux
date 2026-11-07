@@ -41,6 +41,21 @@ class VdHostProtocolTest {
     }
 
     @Test
+    fun `port line rides along when the host has a jpeg lane`() {
+        val s = VdHostProtocol.parseState(validState + "\nport=51777")!!
+        assertEquals(51777, s.port)
+    }
+
+    @Test
+    fun `missing or garbled port line keeps the state valid with port -1`() {
+        // Hosts predating the JPEG lane never write the line.
+        assertEquals(-1, VdHostProtocol.parseState(validState)!!.port)
+        // A garbled port must not invalidate an otherwise fresh state file.
+        assertEquals(-1, VdHostProtocol.parseState(validState + "\nport=garbage")!!.port)
+        assertEquals(-1, VdHostProtocol.parseState(validState + "\nport=0")!!.port)
+    }
+
+    @Test
     fun `heartbeat freshness honours the stale threshold`() {
         val s = VdHostProtocol.parseState(validState)!!
         assertTrue(VdHostProtocol.isHeartbeatFresh(s, 1_700_000_000L + VdHostProtocol.HEARTBEAT_MAX_AGE_SEC))
@@ -73,5 +88,45 @@ class VdHostProtocolTest {
             VdHostProtocol.cleanupCommand(1234),
         )
         assertEquals("rm -f ${VdHostProtocol.STATE_PATH} ${VdHostProtocol.STOP_PATH}", VdHostProtocol.cleanupCommand(0))
+    }
+
+    @Test
+    fun `parseShotHeader reads the JPEG length and rejects the rest`() {
+        assertEquals(123_456, VdHostProtocol.parseShotHeader("JPEG 123456"))
+        assertNull(VdHostProtocol.parseShotHeader("ERR no frame rendered yet"))
+        assertNull(VdHostProtocol.parseShotHeader("unknown junk"))
+        assertNull(VdHostProtocol.parseShotHeader("JPEG 0"))
+        assertNull(VdHostProtocol.parseShotHeader("JPEG -5"))
+        assertNull(VdHostProtocol.parseShotHeader("JPEG "))
+    }
+
+    @Test
+    fun `hostJpegDecision routes by tier liveness and lane presence`() {
+        val state = VdHostProtocol.parseState(validState + "\nport=51777")!!
+        val laneless = VdHostProtocol.parseState(validState)!!
+        assertEquals(
+            VdHostProtocol.HostJpegDecision.Skip,
+            VdHostProtocol.hostJpegDecision(VscreenTier.NATIVE, state, true),
+        )
+        assertEquals(
+            VdHostProtocol.HostJpegDecision.Skip,
+            VdHostProtocol.hostJpegDecision(VscreenTier.SHIZUKU, state, true),
+        )
+        assertTrue(
+            VdHostProtocol.hostJpegDecision(VscreenTier.ROOT, null, null)
+                is VdHostProtocol.HostJpegDecision.DeadHost,
+        )
+        assertTrue(
+            VdHostProtocol.hostJpegDecision(VscreenTier.ROOT, state, false)
+                is VdHostProtocol.HostJpegDecision.DeadHost,
+        )
+        assertEquals(
+            VdHostProtocol.HostJpegDecision.NoLane,
+            VdHostProtocol.hostJpegDecision(VscreenTier.ROOT, laneless, true),
+        )
+        assertEquals(
+            VdHostProtocol.HostJpegDecision.TryShot(51777),
+            VdHostProtocol.hostJpegDecision(VscreenTier.ROOT, state, true),
+        )
     }
 }
