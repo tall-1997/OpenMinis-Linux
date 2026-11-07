@@ -1235,6 +1235,12 @@ fun ChatScreen(
     val hasHardwareKeyboard = configuration.keyboard == android.content.res.Configuration.KEYBOARD_QWERTY &&
         configuration.hardKeyboardHidden == android.content.res.Configuration.HARDKEYBOARDHIDDEN_NO
 
+    // [T-android-send-follow-race] Bumped on every send; SendFollowAwaitEffect
+    // (below, after flatItems) snaps once THIS user message joins the flat
+    // list — the in-handler scrolls fire before sendMessage's state lands and
+    // on an ended session hit the PREVIOUS turn's tail.
+    var sendFollowSeq by remember { mutableLongStateOf(0L) }
+
     /**
      * [T-android-hwkeyboard-keep-focus] Release the composer after a send —
      * except on a hardware keyboard, where focus is kept so the user can keep
@@ -1275,11 +1281,8 @@ fun ChatScreen(
         viewModel.sendMessage(rawText)
         noteSendForInputModePref()
         scrollPolicy.pin()
-        coroutineScope.launch {
-            tracedScrollToItem("SEND-PATH/initial", 0, 0)
-            kotlinx.coroutines.delay(100)
-            tracedScrollToItem("SEND-PATH/settle", 0, 0)
-        }
+        // SendFollowEffects: initial snap + await-the-row + settle pipeline.
+        sendFollowSeq++
     }
     // Last drag-stop. Content-driven follow is suppressed briefly after a
     // gesture even when the viewport is still "near bottom"; the controller's
@@ -1339,36 +1342,14 @@ fun ChatScreen(
     LaunchedEffect(imeBottomPx) {
         if (!scrollPolicy.isPinned && isNearBottom.value) scrollPolicy.pin()
     }
-    // [T-android-tool-autoscroll] Start-of-turn edge from ViewModel: resume() /
-    // retryLast() / retryFromMessage() / rerunFromToolBlock() emit Unit on
-    // forceScrollToBottom because they don't append a new user-message row, so
-    // LE(messages.size) below skips them. Without this collector the "Minis is
-    // thinking…" placeholder stays parked behind the input bar until the first
-    // streamed token finally bumps the auto-follow tuple.
+    // [T-android-tool-autoscroll] Start-of-turn edge from ViewModel: resume/retry/
+    // rerun emit Unit on forceScrollToBottom because they don't append a new
+    // user-message row, so LE(messages.size) below skips them. Only a PINNED
+    // viewport follows — a reader keeps their place; the down-FAB is the way back.
     LaunchedEffect(listState, viewModel) {
         viewModel.forceScrollToBottom.collect {
-            // [T-android-scroll-policy] Only a PINNED viewport follows
-            // resume/retry/rerun. These emissions arrive unbidden (queued
-            // retries, auto-resume while the user is elsewhere) and used to
-            // unconditionally clear userScrolledAway + jump to the bottom —
-            // one of the three surviving jump paths of the reading-history
-            // bug. A reader keeps their place; the down-FAB is the way back.
             if (!scrollPolicy.allowsContentScroll()) return@collect
             tracedScrollToItem("FORCE-SCROLL-TO-BOTTOM(resume/retry/rerun)", 0, 0)
-        }
-    }
-    // Auto-scroll on user-send: explicit "show me the next response"
-    // gesture, fires regardless of current scroll position.
-    LaunchedEffect(messages.size) {
-        val lastMsg = messages.lastOrNull() ?: return@LaunchedEffect
-        if (lastMsg.role != "user") return@LaunchedEffect
-        // [T-android-scroll-away-retain] 发送按钮回调已显式 pin；此 LE 是
-        // 兜底路径（enqueue-while-streaming 等），只更新 lastUserAppendMs
-        // 供 sendGrace 窗口使用。用户正在读历史时，排队消息到达不应把
-        // 视口弹回底部 —— 只在 Pinned 时吸附。
-        lastUserAppendMs = System.currentTimeMillis()
-        if (scrollPolicy.isPinned) {
-            tracedScrollToItem("LE(messages.size)USER-SEND-SNAP", 0, 0)
         }
     }
     // T128: streaming auto-follow when the user is at the bottom.
@@ -1460,9 +1441,6 @@ fun ChatScreen(
             .sample(120L)
             .collect {
                 if (!viewModel.isStreaming.value) return@collect
-                // 视口必须确实锚在最新一条的底部才跟随。停在上一条回复里
-                // （index 离开 0）或停在最新一条中部（偏移不为 0）都不跳，
-                // 否则新一轮回复开始时正在阅读的位置会被拽到底部。
                 val sinceInterrupt = System.currentTimeMillis() - lastInterruptMs
                 if (ScrollAnchor.shouldFollow(
                         isPinned = scrollPolicy.isPinned,
@@ -2309,6 +2287,20 @@ fun ChatScreen(
                 // the list below actually renders, so the pin and the list
                 // can never disagree about whether a tail row exists.
                 SideEffect { composedTailRows = flatItems.size }
+
+                // [T-android-send-follow-race] See [SendFollowEffects]:
+                // initial snap + await-the-row + settle, and the
+                // enqueue-while-streaming user-send snap.
+                SendFollowEffects(
+                    seq = sendFollowSeq,
+                    messagesSize = messages.size,
+                    lastMessage = messages.lastOrNull(),
+                    isPinned = scrollPolicy.isPinned,
+                    flatItems = flatItems,
+                    snap = { source -> tracedScrollToItem(source, 0, 0) },
+                    onConsumed = { sendFollowSeq = 0L },
+                    onUserAppend = { lastUserAppendMs = System.currentTimeMillis() },
+                )
 
                 // [T-android-message-usage-footer] Flat row key → usage for
                 // the LAST row of each non-streaming assistant reply that has
