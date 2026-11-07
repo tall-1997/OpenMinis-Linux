@@ -2601,4 +2601,16 @@
     <string name="chat_revert_banner_files">已还原 %1$d 个文件</string>
     <string name="chat_revert_banner_hint">发送消息以保留，或撤销回滚。</string>
     <string name="chat_revert_banner_undo">撤销</string>
+    <string name="model_group_detail_first_token_timeout">首 Token 超时</string>
+    <string name="model_group_detail_first_token_timeout_footer">等待首个 Token 的最长秒数，超时则切换备用成员。留空使用默认值（对话 45 秒、推理 90 秒）。</string>
+    <string name="model_group_detail_first_token_timeout_placeholder">默认（对话 45 秒 / 推理 90 秒）</string>
+    <string name="model_group_detail_member_weights">成员权重</string>
+    <string name="model_group_detail_member_weights_footer">控制加权路由：权重越高，被选中的概率越大；1 为普通权重。</string>
+    <string name="model_group_detail_weight_decrease">减少权重</string>
+    <string name="model_group_detail_weight_increase">增加权重</string>
+    <string name="model_group_detail_quota_window_footer">主成员服务完窗口内的发送次数后，由备用成员接管，直到窗口重置。编辑任一数值会立即重置窗口。</string>
+    <string name="model_group_detail_quota_total_placeholder">每窗口发送次数</string>
+    <string name="model_group_detail_quota_period_placeholder">窗口时长（小时）</string>
+    <string name="model_group_detail_quota_window_reset_snackbar">配额窗口已重置，主成员重新开始服务</string>
+    <string name="model_group_detail_quota_window_remaining">本窗口剩余：%1$d 次</string>
 </resources>

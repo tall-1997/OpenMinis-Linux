@@ -45,7 +45,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ProviderConfigMetaEntity::class,
         ProviderThinkingRuleEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class ProviderDatabase : RoomDatabase() {
@@ -119,6 +119,26 @@ abstract class ProviderDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * [T-routing-strategy-x-fix] Persist the five strategies' scheduling
+         * knobs (member weights, first-token timeout, quota window) into the
+         * provider_model_groups table. Pre-fix builds only carried them in the
+         * JSON mirror, so every Room round-trip dropped the values; the
+         * DB-snapshot-first load path re-defaulted them on each cold start.
+         * Pure additive nullable ALTERs: existing rows read as defaults
+         * (empty weights, null timeout, null quota) — no data rewrite.
+         */
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.addColumnIfMissing("provider_model_groups", "member_weights_json", "TEXT NOT NULL DEFAULT '{}'")
+                db.addColumnIfMissing("provider_model_groups", "first_token_timeout_ms", "INTEGER")
+                db.addColumnIfMissing("provider_model_groups", "quota_window_remaining", "INTEGER")
+                db.addColumnIfMissing("provider_model_groups", "quota_window_total", "INTEGER")
+                db.addColumnIfMissing("provider_model_groups", "quota_window_period_ms", "INTEGER")
+                db.addColumnIfMissing("provider_model_groups", "quota_window_reset_at", "INTEGER")
+            }
+        }
+
         fun getInstance(context: Context): ProviderDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -126,7 +146,7 @@ abstract class ProviderDatabase : RoomDatabase() {
                     ProviderDatabase::class.java,
                     "provider.db",
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                     .build()
                     .also { INSTANCE = it }
             }

@@ -1,6 +1,5 @@
 package com.openminis.app.ui.settings
 import com.openminis.app.ui.theme.m3Icon
-import com.openminis.app.ui.theme.IosIndigo
 import com.openminis.app.ui.theme.IosPurple
 
 import androidx.compose.foundation.layout.Box
@@ -21,7 +20,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DragHandle
-import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Warning
@@ -37,7 +35,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -54,13 +51,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
-import com.openminis.app.data.model.FallbackStrategy
+import com.openminis.app.data.GroupRoutingState
 import com.openminis.app.data.model.RoutingStrategy
+import com.openminis.app.data.repository.editedQuotaWindow
 import com.openminis.app.data.model.ThinkingLevel
 import com.openminis.app.provider.effectiveMaxThinkingLevel
 import com.openminis.app.data.repository.ProviderRepository
@@ -73,8 +73,8 @@ import com.openminis.app.ui.components.MinisButton
 import com.openminis.app.ui.components.MinisOutlinedButton
 import com.openminis.app.ui.components.MinisTextButton
 import com.openminis.app.ui.components.SectionTextField
+import com.openminis.app.ui.components.SettingsRowDivider
 import com.openminis.app.ui.RoutingStrategyUi
-import kotlin.math.roundToInt
 
 /**
  * Detail / edit screen for one ModelGroup. Adopted T79 sectioned style:
@@ -117,6 +117,19 @@ fun ModelGroupDetailScreen(
     }
     var contextLimitTokens by remember(group.id) {
         mutableStateOf(group.contextLimitTokens)
+    }
+    // [T-routing-strategy-x-fix] Text buffers for the three scheduling-knob
+    // editors. Keyed on group.id so a config refresh (which rebuilds
+    // `group`) doesn't clobber an in-progress edit.
+    val context = LocalContext.current
+    var firstTokenText by remember(group.id) {
+        mutableStateOf(group.firstTokenTimeoutMs?.toString() ?: "")
+    }
+    var quotaTotalText by remember(group.id) {
+        mutableStateOf(group.quotaWindowTotal?.toString() ?: "")
+    }
+    var quotaPeriodHoursText by remember(group.id) {
+        mutableStateOf(group.quotaWindowPeriodMs?.div(3_600_000L)?.toString() ?: "")
     }
 
     // Local copy of member IDs for live reorder
@@ -229,34 +242,137 @@ fun ModelGroupDetailScreen(
                 }
             }
 
+            // ── First-token timeout (group override, all strategies) ──
+            item {
+                SettingsSection(
+                    header = stringResource(R.string.model_group_detail_first_token_timeout),
+                    footer = stringResource(R.string.model_group_detail_first_token_timeout_footer),
+                ) {
+                    SettingsCardBlock {
+                        SectionTextField(
+                            value = firstTokenText,
+                            onValueChange = { input -> firstTokenText = input.filter { it.isDigit() } },
+                            placeholder = stringResource(R.string.model_group_detail_first_token_timeout_placeholder),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+                            fieldModifier = Modifier.onFocusChanged { fs ->
+                                if (!fs.isFocused) {
+                                    val seconds = firstTokenText.toIntOrNull()?.takeIf { it > 0 }
+                                    if (seconds != group.firstTokenTimeoutMs) {
+                                        providerRepository.updateGroup(
+                                            group.copy(firstTokenTimeoutMs = seconds),
+                                        )
+                                    }
+                                }
+                            },
+                        )
+                    }
+                }
+            }
+
+            // ── Member weights (weighted routing) ────────────────────
+            if (strategy == RoutingStrategy.weighted) {
+                item {
+                    SettingsSection(
+                        header = stringResource(R.string.model_group_detail_member_weights),
+                        footer = stringResource(R.string.model_group_detail_member_weights_footer),
+                    ) {
+                        SettingsCardBlock {
+                            memberIds.forEachIndexed { idx, memberId ->
+                                val entry = config.modelEntries.find { it.id == memberId }
+                                if (entry != null) {
+                                    Column {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 6.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            Text(
+                                                text = entry.model.displayName,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                maxLines = 1,
+                                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                                modifier = Modifier.weight(1f),
+                                            )
+                                            PlusMinusStepper(
+                                                value = group.memberWeights[memberId] ?: 1,
+                                                min = 1,
+                                                max = 99,
+                                                onValueChange = { newWeight ->
+                                                    providerRepository.updateGroup(
+                                                        group.copy(
+                                                            memberWeights = group.memberWeights + (memberId to newWeight),
+                                                        ),
+                                                    )
+                                                },
+                                                decreaseContentDescription = stringResource(R.string.model_group_detail_weight_decrease),
+                                                increaseContentDescription = stringResource(R.string.model_group_detail_weight_increase),
+                                            )
+                                        }
+                                        if (idx != memberIds.lastIndex) SettingsRowDivider()
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ── Quota window (quotaWindow routing) ───────────────────
+            if (strategy == RoutingStrategy.quotaWindow) {
+                item {
+                    // Editing either value re-arms the whole window via the
+                    // pure editedQuotaWindow math (remaining refills to the new
+                    // total, resetAt moves to now + period), then the live
+                    // router state is synced so the very next pick sees it.
+                    val applyQuotaWindow: () -> Unit = {
+                        val edit = editedQuotaWindow(
+                            current = group,
+                            totalText = quotaTotalText,
+                            periodHoursText = quotaPeriodHoursText,
+                            nowMs = System.currentTimeMillis(),
+                        )
+                        if (edit != null) {
+                            providerRepository.updateGroup(
+                                group.copy(
+                                    quotaWindowTotal = edit.total,
+                                    quotaWindowPeriodMs = edit.periodMs,
+                                    quotaWindowResetAt = edit.resetAt,
+                                    quotaWindowRemaining = edit.remaining,
+                                ),
+                            )
+                            edit.remaining?.let { GroupRoutingState.syncQuotaWindow(group.id, it) }
+                            coroutineScope.launch {
+                                snackbarHostState.showSnackbar(
+                                    context.getString(R.string.model_group_detail_quota_window_reset_snackbar),
+                                )
+                            }
+                        }
+                    }
+                    QuotaWindowEditorSection(
+                        group = group,
+                        quotaTotalText = quotaTotalText,
+                        onQuotaTotalTextChange = { quotaTotalText = it },
+                        quotaPeriodHoursText = quotaPeriodHoursText,
+                        onQuotaPeriodHoursTextChange = { quotaPeriodHoursText = it },
+                        applyQuotaWindow = applyQuotaWindow,
+                        focusManager = focusManager,
+                    )
+                }
+            }
+
             // ── Fallback Trigger (only when strategy = fallback) ──────
             if (strategy == RoutingStrategy.fallback) {
                 item {
-                    SettingsSection(
-                        header = stringResource(R.string.model_group_detail_fallback_trigger),
-                        footer = when (fallbackStrategy) {
-                            FallbackStrategy.default -> stringResource(R.string.model_group_detail_fallback_default_footer)
-                            FallbackStrategy.always -> stringResource(R.string.model_group_detail_fallback_always_footer)
+                    FallbackTriggerSection(
+                        group = group,
+                        fallbackStrategy = fallbackStrategy,
+                        onFallbackStrategyChange = { next ->
+                            fallbackStrategy = next
+                            providerRepository.updateGroup(group.copy(fallbackStrategy = next))
                         },
-                    ) {
-                        SettingsChoiceRow(
-                            title = stringResource(R.string.common_default),
-                            selected = fallbackStrategy == FallbackStrategy.default,
-                            onSelect = {
-                                fallbackStrategy = FallbackStrategy.default
-                                providerRepository.updateGroup(group.copy(fallbackStrategy = FallbackStrategy.default))
-                            },
-                        )
-                        SettingsChoiceRow(
-                            title = stringResource(R.string.model_group_detail_always),
-                            selected = fallbackStrategy == FallbackStrategy.always,
-                            onSelect = {
-                                fallbackStrategy = FallbackStrategy.always
-                                providerRepository.updateGroup(group.copy(fallbackStrategy = FallbackStrategy.always))
-                            },
-                            showDivider = false,
-                        )
-                    }
+                    )
                 }
             }
 
@@ -549,66 +665,19 @@ fun ModelGroupDetailScreen(
                             }
                         }
                     }
-                    val contextEnabled = contextLimitTokens != null
-                    // T-android-ctx-slider-cap (port iOS fa77f493): the slider
-                    // is now a fixed 7-stop ladder decoupled from member-model
-                    // metadata. We no longer derive an `unlimitedTokens` cap
-                    // from `max(member.contextWindow)`, because that field is
-                    // unreliable (image-output / router models report no
-                    // window, falling through to the 128K heuristic default)
-                    // and silently shrunk the picker. Per-model enforcement
-                    // still happens at runtime via the consumer of
-                    // `contextLimitTokens` (min(groupLimit, modelLimit)).
-                    SettingsSwitchRow(
-                        title = stringResource(R.string.model_group_detail_limit_context_window),
-                        checked = contextEnabled,
-                        onCheckedChange = { on ->
-                            if (on) {
-                                // Restore last user-selected value verbatim,
-                                // defaulting to 128K for first-time activation.
-                                val restored = group.lastContextLimitTokens ?: 128_000
-                                contextLimitTokens = restored
-                                providerRepository.updateGroup(
-                                    group.copy(
-                                        contextLimitTokens = restored,
-                                        lastContextLimitTokens = restored,
-                                    )
+                    ContextLimitSection(
+                        group = group,
+                        contextLimitTokens = contextLimitTokens,
+                        onContextLimitTokensChange = { contextLimitTokens = it },
+                        onPersist = { tokens, last ->
+                            providerRepository.updateGroup(
+                                group.copy(
+                                    contextLimitTokens = tokens,
+                                    lastContextLimitTokens = last,
                                 )
-                            } else {
-                                // Stash the current value into lastContextLimitTokens
-                                // before nulling contextLimitTokens, so toggle ON
-                                // can restore it (even after navigating away).
-                                val stash = contextLimitTokens
-                                contextLimitTokens = null
-                                providerRepository.updateGroup(
-                                    group.copy(
-                                        contextLimitTokens = null,
-                                        lastContextLimitTokens = stash
-                                            ?: group.lastContextLimitTokens,
-                                    )
-                                )
-                            }
+                            )
                         },
-                        icon = Icons.Default.Memory,
-                        iconColor = IosIndigo,
-                        showDivider = contextEnabled,
                     )
-                    if (contextEnabled) {
-                        ContextLimitSlider(
-                            value = contextLimitTokens,
-                            unlimitedLabel = stringResource(R.string.model_group_detail_unlimited),
-                            maxContextLabel = stringResource(R.string.model_group_detail_max_context),
-                            onValueChange = { newTokens ->
-                                contextLimitTokens = newTokens
-                                providerRepository.updateGroup(
-                                    group.copy(
-                                        contextLimitTokens = newTokens,
-                                        lastContextLimitTokens = newTokens,
-                                    )
-                                )
-                            },
-                        )
-                    }
                 }
             }
 
@@ -688,111 +757,4 @@ fun ModelGroupDetailScreen(
     }
 
     quotaSheetInstanceId?.let { com.openminis.app.ui.quota.QuotaDetailSheet(instanceId = it, onDismiss = { quotaSheetInstanceId = null }, halfHeight = false) }
-}
-
-/**
- * Discrete-step max-context slider that mirrors iOS `ContextLimitSlider`
- * (ModelGroupDetailView.swift, fa77f493). Step labels:
- * 32K / 64K / 128K / 200K / 400K / 1M / Unlimited.
- *
- * Fixed 7-stop ladder, always shown verbatim regardless of which models (if
- * any) are in the group. The previous behaviour clipped the ladder to the
- * largest member-declared context window, but model metadata is unreliable
- * (e.g. image-output / router models report no window and fall through to
- * the 128K heuristic default) and the per-model field is already enforced
- * at runtime when assembling requests via `min(groupLimit, modelLimit)`.
- * Keeping the ladder fixed makes the UI a pure user-intent slider —
- * "I want this group to cap context at N" — and removes the entire family
- * of bugs where adding/removing a model would silently shrink the picker.
- *
- * The "Unlimited" stop maps to `Int.MAX_VALUE` in the binding; the runtime
- * consumer treats anything `>= Int.MAX_VALUE` as "no override, use the
- * model's native window".
- */
-private const val CONTEXT_LIMIT_UNLIMITED_SENTINEL: Int = Int.MAX_VALUE
-
-private val CONTEXT_LIMIT_PRESETS = listOf(
-    32_000,
-    64_000,
-    128_000,
-    200_000,
-    400_000,
-    1_000_000,
-)
-
-private fun formatPresetLabel(tokens: Int): String =
-    if (tokens >= 1_000_000) "${tokens / 1_000_000}M" else "${tokens / 1_000}K"
-
-@Composable
-private fun ContextLimitSlider(
-    value: Int?,
-    unlimitedLabel: String,
-    maxContextLabel: String,
-    onValueChange: (Int) -> Unit,
-) {
-    data class Step(val label: String, val tokens: Int)
-    val steps = remember(unlimitedLabel) {
-        CONTEXT_LIMIT_PRESETS.map { Step(formatPresetLabel(it), it) } +
-            Step(unlimitedLabel, CONTEXT_LIMIT_UNLIMITED_SENTINEL)
-    }
-    // Track the selected stop by index. Snap to nearest stop <= value
-    // so legacy saved values (e.g. 350K) land on the next stop down (200K).
-    var selectedIndex by remember(steps, value) {
-        mutableStateOf(
-            when {
-                value == null -> steps.lastIndex
-                value >= CONTEXT_LIMIT_UNLIMITED_SENTINEL -> steps.lastIndex
-                else -> steps.indexOfLast { it.tokens <= value }.takeIf { it >= 0 } ?: 0
-            }
-        )
-    }
-    val currentLabel: String = run {
-        val v = value
-        when {
-            v == null -> steps.last().label
-            v >= CONTEXT_LIMIT_UNLIMITED_SENTINEL -> unlimitedLabel
-            else -> steps.firstOrNull { it.tokens == v }?.label ?: "${v / 1000}K"
-        }
-    }
-    SettingsCardBlock {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = maxContextLabel,
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.weight(1f),
-            )
-            Text(
-                text = currentLabel,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.SemiBold,
-            )
-        }
-        Slider(
-            value = selectedIndex.toFloat(),
-            onValueChange = { newIndex ->
-                val idx = newIndex.roundToInt().coerceIn(0, steps.lastIndex)
-                if (idx != selectedIndex) {
-                    selectedIndex = idx
-                    onValueChange(steps[idx].tokens)
-                }
-            },
-            valueRange = 0f..steps.lastIndex.toFloat().coerceAtLeast(1f),
-            steps = (steps.size - 2).coerceAtLeast(0),
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Row {
-            Text(
-                steps.first().label,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.weight(1f),
-            )
-            Text(
-                unlimitedLabel,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
 }

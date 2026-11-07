@@ -2030,4 +2030,16 @@
     <string name="chat_revert_banner_files">Восстановлено файлов: %1$d</string>
     <string name="chat_revert_banner_hint">Отправьте сообщение, чтобы сохранить, или отмените откат.</string>
     <string name="chat_revert_banner_undo">Отменить</string>
+    <string name="model_group_detail_first_token_timeout">Тайм-аут первого токена</string>
+    <string name="model_group_detail_first_token_timeout_footer">Максимальное время ожидания первого токена в секундах, затем переход на резерв. Пусто = по умолчанию (чат 45 с, рассуждение 90 с).</string>
+    <string name="model_group_detail_first_token_timeout_placeholder">По умолчанию (чат 45 с / рассуждение 90 с)</string>
+    <string name="model_group_detail_member_weights">Веса участников</string>
+    <string name="model_group_detail_member_weights_footer">Управляет взвешенной маршрутизацией: чем выше вес, тем чаще выбор. 1 — нейтрально.</string>
+    <string name="model_group_detail_weight_decrease">Уменьшить вес</string>
+    <string name="model_group_detail_weight_increase">Увеличить вес</string>
+    <string name="model_group_detail_quota_window_footer">Основной участник отвечает, пока не исчерпаны отправки окна, затем резерв берёт управление до сброса. Изменение любого значения сбрасывает окно.</string>
+    <string name="model_group_detail_quota_total_placeholder">Отправок за окно</string>
+    <string name="model_group_detail_quota_period_placeholder">Длина окна (часы)</string>
+    <string name="model_group_detail_quota_window_reset_snackbar">Окно квоты сброшено — основной участник снова отвечает</string>
+    <string name="model_group_detail_quota_window_remaining">Осталось в этом окне: %1$d</string>
 </resources>

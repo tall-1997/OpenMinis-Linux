@@ -190,8 +190,10 @@ internal fun ChatViewModel.sendMessage(
         // any attachment counts as complex and goes to the strong (first)
         // member; a short plain-text turn rides the budget (last) member.
         // Cheap on purpose — no tokenizer, just the user-visible text.
-        val complexTurn = trimmed.length >= GroupRoutingState.SMART_COMPLEX_CHARS ||
-            currentAttachments.isNotEmpty()
+        val complexTurn = GroupRoutingState.isComplexRequest(
+            messageChars = trimmed.length,
+            attachmentCount = currentAttachments.size,
+        )
         resolveGroupTargetEntry(
             groupIdForCaps,
             _activeEntryId.value,

@@ -2019,4 +2019,16 @@
     <string name="chat_revert_banner_files">%1$d 個のファイルを復元</string>
     <string name="chat_revert_banner_hint">メッセージを送信して確定、または巻き戻しを取り消します。</string>
     <string name="chat_revert_banner_undo">元に戻す</string>
+    <string name="model_group_detail_first_token_timeout">最初のトークンまでのタイムアウト</string>
+    <string name="model_group_detail_first_token_timeout_footer">最初のトークンを待つ最大秒数。超過するとバックアップに切り替わります。空欄はデフォルト（チャット45秒・推論90秒）。</string>
+    <string name="model_group_detail_first_token_timeout_placeholder">デフォルト（チャット45秒 / 推論90秒）</string>
+    <string name="model_group_detail_member_weights">メンバーの重み</string>
+    <string name="model_group_detail_member_weights_footer">重み付きルーティングを制御します。重みが大きいほど選ばれやすく、1が標準です。</string>
+    <string name="model_group_detail_weight_decrease">重みを減らす</string>
+    <string name="model_group_detail_weight_increase">重みを増やす</string>
+    <string name="model_group_detail_quota_window_footer">プライマリメンバーがウィンドウ内の送信回数を使い切るまで応答し、その後リセットまでバックアップが引き継ぎます。どちらかの値を編集するとウィンドウが即リセットされます。</string>
+    <string name="model_group_detail_quota_total_placeholder">ウィンドウあたりの送信回数</string>
+    <string name="model_group_detail_quota_period_placeholder">ウィンドウの長さ（時間）</string>
+    <string name="model_group_detail_quota_window_reset_snackbar">クォータウィンドウをリセットしました。プライマリメンバーが再び応答します</string>
+    <string name="model_group_detail_quota_window_remaining">このウィンドウの残り：%1$d回</string>
 </resources>

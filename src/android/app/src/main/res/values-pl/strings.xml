@@ -2029,4 +2029,16 @@
     <string name="chat_revert_banner_files">Przywrócono pliki: %1$d</string>
     <string name="chat_revert_banner_hint">Wyślij wiadomość, aby zachować, lub cofnij.</string>
     <string name="chat_revert_banner_undo">Cofnij</string>
+    <string name="model_group_detail_first_token_timeout">Limit czasu pierwszego tokena</string>
+    <string name="model_group_detail_first_token_timeout_footer">Maksymalny czas oczekiwania na pierwszy token w sekundach, po którym przejmuje zapasowy. Puste = domyślne (czat 45 s, rozumowanie 90 s).</string>
+    <string name="model_group_detail_first_token_timeout_placeholder">Domyślne (czat 45 s / rozumowanie 90 s)</string>
+    <string name="model_group_detail_member_weights">Wagi członków</string>
+    <string name="model_group_detail_member_weights_footer">Steruje routingiem ważonym: im wyższa waga, tym częstszy wybór. 1 jest neutralna.</string>
+    <string name="model_group_detail_weight_decrease">Zmniejsz wagę</string>
+    <string name="model_group_detail_weight_increase">Zwiększ wagę</string>
+    <string name="model_group_detail_quota_window_footer">Członek główny obsługuje do wyczerpania wysyłek w oknie, potem zapasowy przejmuje do resetu. Edycja dowolnej wartości natychmiast resetuje okno.</string>
+    <string name="model_group_detail_quota_total_placeholder">Wysyłki na okno</string>
+    <string name="model_group_detail_quota_period_placeholder">Długość okna (godziny)</string>
+    <string name="model_group_detail_quota_window_reset_snackbar">Zresetowano okno limitu — członek główny znowu obsługuje</string>
+    <string name="model_group_detail_quota_window_remaining">Pozostało w tym oknie: %1$d wysyłek</string>
 </resources>

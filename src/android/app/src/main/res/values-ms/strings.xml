@@ -2022,4 +2022,16 @@
     <string name="chat_revert_banner_files">%1$d fail dipulihkan</string>
     <string name="chat_revert_banner_hint">Hantar mesej untuk menyimpan ini, atau batalkan.</string>
     <string name="chat_revert_banner_undo">Batalkan</string>
+    <string name="model_group_detail_first_token_timeout">Masa tamat token pertama</string>
+    <string name="model_group_detail_first_token_timeout_footer">Saat maksimum menunggu token pertama sebelum beralih ke sandaran. Kosong = lalai (sembang 45 s, penaakulan 90 s).</string>
+    <string name="model_group_detail_first_token_timeout_placeholder">Lalai (sembang 45 s / penaakulan 90 s)</string>
+    <string name="model_group_detail_member_weights">Pemberat ahli</string>
+    <string name="model_group_detail_member_weights_footer">Mengawal penghalaan berpemberat: semakin tinggi pemberat, semakin kerap dipilih. 1 adalah neutral.</string>
+    <string name="model_group_detail_weight_decrease">Kurangkan pemberat</string>
+    <string name="model_group_detail_weight_increase">Tambah pemberat</string>
+    <string name="model_group_detail_quota_window_footer">Ahli utama berkhidmat sehingga hantaran tetingkap habis, kemudian sandaran mengambil alih sehingga tetapan semula. Mengedit sebarang nilai menetapkan semula tetingkap serta-merta.</string>
+    <string name="model_group_detail_quota_total_placeholder">Hantaran setiap tetingkap</string>
+    <string name="model_group_detail_quota_period_placeholder">Tempoh tetingkap (jam)</string>
+    <string name="model_group_detail_quota_window_reset_snackbar">Tetingkap kuota ditetapkan semula — ahli utama berkhidmat semula</string>
+    <string name="model_group_detail_quota_window_remaining">Baki dalam tetingkap ini: %1$d hantaran</string>
 </resources>

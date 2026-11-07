@@ -2019,4 +2019,16 @@
     <string name="chat_revert_banner_files">파일 %1$d개 복원됨</string>
     <string name="chat_revert_banner_hint">메시지를 보내 유지하거나 되돌리기를 취소하세요.</string>
     <string name="chat_revert_banner_undo">취소</string>
+    <string name="model_group_detail_first_token_timeout">첫 토큰 시간 초과</string>
+    <string name="model_group_detail_first_token_timeout_footer">첫 토큰을 기다리는 최대 시간(초)입니다. 초과 시 백업 멤버로 전환됩니다. 비우면 기본값(채팅 45초, 추론 90초)이 적용됩니다.</string>
+    <string name="model_group_detail_first_token_timeout_placeholder">기본값(채팅 45초 / 추론 90초)</string>
+    <string name="model_group_detail_member_weights">멤버 가중치</string>
+    <string name="model_group_detail_member_weights_footer">가중치 라우팅을 제어합니다. 가중치가 높을수록 자주 선택되며 1이 기본값입니다.</string>
+    <string name="model_group_detail_weight_decrease">가중치 줄이기</string>
+    <string name="model_group_detail_weight_increase">가중치 늘리기</string>
+    <string name="model_group_detail_quota_window_footer">기본 멤버가 창의 전송 횟수를 모두 사용하면 창이 재설정될 때까지 백업 멤버가 이어받습니다. 값을 편집하면 창이 즉시 재설정됩니다.</string>
+    <string name="model_group_detail_quota_total_placeholder">창당 전송 횟수</string>
+    <string name="model_group_detail_quota_period_placeholder">창 길이(시간)</string>
+    <string name="model_group_detail_quota_window_reset_snackbar">할당량 창이 재설정되어 기본 멤버가 다시 응답합니다</string>
+    <string name="model_group_detail_quota_window_remaining">이번 창 남은 횟수: %1$d회</string>
 </resources>

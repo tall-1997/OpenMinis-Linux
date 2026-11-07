@@ -2022,4 +2022,16 @@
     <string name="chat_revert_banner_files">%1$d Datei(en) wiederhergestellt</string>
     <string name="chat_revert_banner_hint">Sende eine Nachricht, um dies zu behalten, oder mache den Rücklauf rückgängig.</string>
     <string name="chat_revert_banner_undo">Rückgängig</string>
+    <string name="model_group_detail_first_token_timeout">First-Token-Timeout</string>
+    <string name="model_group_detail_first_token_timeout_footer">Maximale Wartezeit auf das erste Token in Sekunden, danach übernimmt das Backup. Leer = Standard (Chat 45 s, Reasoning 90 s).</string>
+    <string name="model_group_detail_first_token_timeout_placeholder">Standard (Chat 45 s / Reasoning 90 s)</string>
+    <string name="model_group_detail_member_weights">Mitgliedergewichte</string>
+    <string name="model_group_detail_member_weights_footer">Steuert gewichtetes Routing – je höher das Gewicht, desto häufiger die Auswahl. 1 ist neutral.</string>
+    <string name="model_group_detail_weight_decrease">Gewicht verringern</string>
+    <string name="model_group_detail_weight_increase">Gewicht erhöhen</string>
+    <string name="model_group_detail_quota_window_footer">Das primäre Mitglied bedient, bis die Sendungen des Fensters aufgebraucht sind, dann übernimmt das Backup bis zum Reset. Das Bearbeiten eines Werts setzt das Fenster sofort zurück.</string>
+    <string name="model_group_detail_quota_total_placeholder">Sendungen pro Fenster</string>
+    <string name="model_group_detail_quota_period_placeholder">Fensterlänge (Stunden)</string>
+    <string name="model_group_detail_quota_window_reset_snackbar">Kontingentfenster zurückgesetzt – primäres Mitglied bedient wieder</string>
+    <string name="model_group_detail_quota_window_remaining">Verbleibend in diesem Fenster: %1$d Sendungen</string>
 </resources>

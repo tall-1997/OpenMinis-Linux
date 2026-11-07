@@ -2022,4 +2022,16 @@
     <string name="chat_revert_banner_files">%1$d (na) file ang naibalik</string>
     <string name="chat_revert_banner_hint">Magpadala ng mensahe para panatilihin ito, o i-undo ang pag-ibalik.</string>
     <string name="chat_revert_banner_undo">I-undo</string>
+    <string name="model_group_detail_first_token_timeout">Timeout ng unang token</string>
+    <string name="model_group_detail_first_token_timeout_footer">Pinakamataas na segundo ng paghihintay sa unang token bago lumipat sa reserba. Blangko = default (chat 45 s, pangangatwiran 90 s).</string>
+    <string name="model_group_detail_first_token_timeout_placeholder">Default (chat 45 s / pangangatwiran 90 s)</string>
+    <string name="model_group_detail_member_weights">Timbang ng mga miyembro</string>
+    <string name="model_group_detail_member_weights_footer">Kinokontrol ang weighted na pagruruta: mas mataas ang timbang, mas madalas mapili. Neutral ang 1.</string>
+    <string name="model_group_detail_weight_decrease">Bawasan ang timbang</string>
+    <string name="model_group_detail_weight_increase">Dagdagan ang timbang</string>
+    <string name="model_group_detail_quota_window_footer">Nagsisilbi ang pangunahing miyembro hanggang maubos ang mga pagpapadala sa window, pagkatapos ay sasalo ang reserba hanggang mag-reset. Ang pag-edit ng anumang halaga ay agad na nagre-reset ng window.</string>
+    <string name="model_group_detail_quota_total_placeholder">Mga pagpapadala bawat window</string>
+    <string name="model_group_detail_quota_period_placeholder">Haba ng window (oras)</string>
+    <string name="model_group_detail_quota_window_reset_snackbar">Na-reset ang window ng quota — muling nagsisilbi ang pangunahing miyembro</string>
+    <string name="model_group_detail_quota_window_remaining">Natitira sa window na ito: %1$d pagpapadala</string>
 </resources>

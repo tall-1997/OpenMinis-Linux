@@ -2027,4 +2027,16 @@
     <string name="chat_revert_banner_files">%1$d file dipulihkan</string>
     <string name="chat_revert_banner_hint">Kirim pesan untuk menyimpan ini, atau batalkan.</string>
     <string name="chat_revert_banner_undo">Batalkan</string>
+    <string name="model_group_detail_first_token_timeout">Waktu tunggu token pertama</string>
+    <string name="model_group_detail_first_token_timeout_footer">Detik maksimal menunggu token pertama sebelum beralih ke cadangan. Kosong = bawaan (chat 45 dtk, penalaran 90 dtk).</string>
+    <string name="model_group_detail_first_token_timeout_placeholder">Bawaan (chat 45 dtk / penalaran 90 dtk)</string>
+    <string name="model_group_detail_member_weights">Bobot anggota</string>
+    <string name="model_group_detail_member_weights_footer">Mengontrol perutean berbobot: semakin tinggi bobot, semakin sering dipilih. 1 netral.</string>
+    <string name="model_group_detail_weight_decrease">Kurangi bobot</string>
+    <string name="model_group_detail_weight_increase">Tambah bobot</string>
+    <string name="model_group_detail_quota_window_footer">Anggota utama melayani hingga kiriman jendela habis, lalu cadangan mengambil alih hingga reset. Mengedit nilai apa pun langsung mereset jendela.</string>
+    <string name="model_group_detail_quota_total_placeholder">Kiriman per jendela</string>
+    <string name="model_group_detail_quota_period_placeholder">Durasi jendela (jam)</string>
+    <string name="model_group_detail_quota_window_reset_snackbar">Jendela kuota direset — anggota utama melayani lagi</string>
+    <string name="model_group_detail_quota_window_remaining">Sisa di jendela ini: %1$d kiriman</string>
 </resources>
