@@ -71,7 +71,8 @@ object VirtualDisplayRuntime {
                 .setFlags(flags)
                 .setSurface(surface)
                 .build()
-            dm.createVirtualDisplay(config, callback, null)
+            // Signature order is (config, Handler, Callback) — Handler first.
+            dm.createVirtualDisplay(config, null, callback)
         } else {
             @Suppress("DEPRECATION")
             dm.createVirtualDisplay(label, width, height, dpi, surface, flags, callback, null)
