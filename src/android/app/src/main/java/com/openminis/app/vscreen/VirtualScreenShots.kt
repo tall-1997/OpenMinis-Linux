@@ -3,7 +3,6 @@ package com.openminis.app.vscreen
 import com.openminis.app.offload.ShizukuManager
 import com.openminis.app.vscreen.tier.HostDisplayClient
 import com.openminis.app.vscreen.tier.VdHostProtocol
-import com.openminis.app.vscreen.tier.VscreenDisplayProbes
 import com.openminis.app.vscreen.tier.VscreenTier
 import com.openminis.app.vscreen.VirtualScreenManager.CommandOutcome
 import java.io.File
