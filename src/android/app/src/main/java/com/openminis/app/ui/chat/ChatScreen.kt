@@ -2285,25 +2285,24 @@ fun ChatScreen(
                 // scrolled away, the JumpToBottom FAB is the explicit
                 // affordance to return.
 
-                // Flatten each message into multiple LazyColumn items so that older blocks
-                // (text / tool pills / thinking) are frozen LazyList items while only the
-                // last streaming block changes height. This keeps scroll-hovering stable:
-                // LazyListState anchors on a stable item key + pixel offset, and inserting
-                // or growing the trailing item never disturbs earlier items.
-                //
-                // T94: long sessions (hundreds of messages, deep tool chains) made the
-                // flatten step expensive enough to stall composition on the main thread —
-                // every streaming token recomposed the parent and re-ran the O(N · blocks)
-                // walk inside `remember`, producing visible jank and ANRs on slower
-                // devices. Run the flatten on Dispatchers.Default and publish the result
-                // through a snapshot-state field so the LazyColumn renders the previous
-                // frame's list while the next one computes. Keyed on `sessionId` so a
-                // chat-switch resets the cache; LaunchedEffect(messages) reruns the
-                // computation on every new emission.
+                // Flatten each message into multiple LazyColumn items so older
+                // blocks stay frozen and only the live block changes height.
+                // T94: the flatten runs off the composition thread (published
+                // through snapshot state); LaunchedEffect(messages) recomputes
+                // it per emission, keyed on sessionId so a switch resets it.
                 var flatItems by remember(sessionId) {
                     mutableStateOf<List<FlatChatItem>>(emptyList())
                 }
                 var flatItemsVersion by remember(sessionId) { mutableLongStateOf(0L) }
+                // [T-android-follow-new-rows] New rows insert at index 0 under
+                // reverseLayout: the old anchor shifts to index 1, which the follow
+                // gate (index 0) then rejects for the rest of the turn — the viewport
+                // stays where the previous turn ended. Pin while still following.
+                LaunchedEffect(flatItems.size) {
+                    if (scrollPolicy.isPinned && !isUserDragging) {
+                        tracedScrollToItem("tail-rows/insert", 0, 0)
+                    }
+                }
                 // [T-android-entry-pin-before-compose] Publish the composed
                 // tail size to the entry pin, which waits on it. Same value
                 // the list below actually renders, so the pin and the list
