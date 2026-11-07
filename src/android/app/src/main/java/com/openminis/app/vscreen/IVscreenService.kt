@@ -64,6 +64,24 @@ interface IVscreenService : IInterface {
      */
     fun setDisplayImePolicy(displayId: Int, policy: Int): Boolean
 
+    /**
+     * [T-android-vscreen-tier] Creates a PUBLIC virtual display owned by the
+     * shell uid (2000), rendering into [surface] handed over the binder from
+     * the app process — the `am start --display` owner branch, the only
+     * non-root way to host a third-party app on a virtual display. Returns
+     * the display id, or -1 when this ROM refused (bubbles nothing).
+     */
+    fun createPublicDisplay(
+        name: String,
+        width: Int,
+        height: Int,
+        dpi: Int,
+        surface: android.view.Surface?,
+    ): Int
+
+    /** Releases a display created by [createPublicDisplay]. False when unknown. */
+    fun destroyPublicDisplay(displayId: Int): Boolean
+
     /** Asks the service process to exit (Shizuku stops unbound services anyway). Oneway. */
     fun destroy()
 
@@ -76,6 +94,10 @@ interface IVscreenService : IInterface {
         const val CODE_MOVE_ROOT_TASK = 3
         const val CODE_SET_IME_POLICY = 4
         const val CODE_DESTROY = 16777114
+
+        // [T-android-vscreen-tier] public-display transactions (tier ladder).
+        const val CODE_CREATE_PUBLIC = 5
+        const val CODE_DESTROY_PUBLIC = 6
 
         /** Marshals the binder Shizuku handed over into an [IVscreenService]. */
         fun asInterface(binder: IBinder?): IVscreenService? {
@@ -119,6 +141,24 @@ interface IVscreenService : IInterface {
                     val policy = data.readInt()
                     reply?.writeNoException()
                     reply?.writeInt(if (setDisplayImePolicy(displayId, policy)) 1 else 0)
+                }
+                CODE_CREATE_PUBLIC -> {
+                    data.checkToken()
+                    val name = data.readString() ?: ""
+                    val width = data.readInt()
+                    val height = data.readInt()
+                    val dpi = data.readInt()
+                    val surface = data.readParcelable<android.view.Surface>(
+                        android.view.Surface::class.java.classLoader,
+                    )
+                    reply?.writeNoException()
+                    reply?.writeInt(createPublicDisplay(name, width, height, dpi, surface))
+                }
+                CODE_DESTROY_PUBLIC -> {
+                    data.checkToken()
+                    val displayId = data.readInt()
+                    reply?.writeNoException()
+                    reply?.writeInt(if (destroyPublicDisplay(displayId)) 1 else 0)
                 }
                 CODE_DESTROY -> {
                     // Oneway semantics: the process exits without a reply.
@@ -187,6 +227,46 @@ interface IVscreenService : IInterface {
                 data.writeInt(displayId)
                 data.writeInt(policy)
                 remote.transact(CODE_SET_IME_POLICY, data, reply, 0)
+                reply.readException()
+                reply.readInt() != 0
+            } finally {
+                data.recycle()
+                reply.recycle()
+            }
+        }
+
+        override fun createPublicDisplay(
+            name: String,
+            width: Int,
+            height: Int,
+            dpi: Int,
+            surface: android.view.Surface?,
+        ): Int {
+            val data = Parcel.obtain()
+            val reply = Parcel.obtain()
+            return try {
+                data.writeToken()
+                data.writeString(name)
+                data.writeInt(width)
+                data.writeInt(height)
+                data.writeInt(dpi)
+                data.writeParcelable(surface, 0)
+                remote.transact(CODE_CREATE_PUBLIC, data, reply, 0)
+                reply.readException()
+                reply.readInt()
+            } finally {
+                data.recycle()
+                reply.recycle()
+            }
+        }
+
+        override fun destroyPublicDisplay(displayId: Int): Boolean {
+            val data = Parcel.obtain()
+            val reply = Parcel.obtain()
+            return try {
+                data.writeToken()
+                data.writeInt(displayId)
+                remote.transact(CODE_DESTROY_PUBLIC, data, reply, 0)
                 reply.readException()
                 reply.readInt() != 0
             } finally {

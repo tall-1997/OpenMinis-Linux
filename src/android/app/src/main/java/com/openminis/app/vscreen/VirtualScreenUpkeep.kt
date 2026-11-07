@@ -91,6 +91,14 @@ internal class VirtualScreenUpkeep(
     }
 
     /**
+     * [T-android-vscreen-tier] A live user-service binder for the tier
+     * ladder's SHIZUKU provider (public display creation runs in the
+     * shell-uid service process). Null when no app context or the bind
+     * failed — callers treat that as "tier unavailable", never retry-spam.
+     */
+    fun displayService(): IVscreenService? = serviceClient()?.obtain()
+
+    /**
      * The handoff controller for the hand_to_user flow. Stateless over prefs
      * (state lives in [HandoffStore]) so the cached instance never diverges;
      * [context] only seeds the app context on first use (notification +
