@@ -98,6 +98,15 @@ object VirtualScreenManager {
         val displayId: Int
 
         /**
+         * Platform-reported lifecycle of the display surface. Defaults to
+         * [VdLifecycle.RUNNING] so fakes and privileged-host handles (which
+         * have no app-side [VirtualDisplay.Callback]) stay valid — only the
+         * real app-uid factory overrides it, which is what lets the
+         * screenshot lane detect and clean up a platform-stopped display.
+         */
+        val lifecycle: VdLifecycle get() = VdLifecycle.RUNNING
+
+        /**
          * Latest frame rendered on the display, or null when none is
          * available yet. The caller owns the returned [Image] and must
          * close it. The display surface stays attached — [release] is the
@@ -454,6 +463,21 @@ object VirtualScreenManager {
     fun screenshot(displayId: Int, offloadsDir: File?): CommandOutcome {
         val s = screen(displayId) ?: return CommandOutcome.NotFound(notFoundMessage(displayId))
         touch(s)
+
+        // [T-android-vscreen3] Dead-screen cleanup: a platform-stopped display
+        // can never produce another frame — destroy the corpse and tell the
+        // agent to re-create, instead of letting every read attempt fail
+        // while the zombie keeps its LRU slot.
+        s.handle?.let { handle ->
+            if (handle.lifecycle == VdLifecycle.STOPPED) {
+                destroy(displayId)
+                return CommandOutcome.Failed(
+                    "display $displayId was stopped by the platform (its surface was released) — " +
+                        "the corpse has been destroyed; create a new virtual screen and retry",
+                )
+            }
+        }
+
         if (offloadsDir == null) {
             return CommandOutcome.Failed(
                 "no app context available — cannot write the screenshot file",
@@ -621,19 +645,24 @@ object VirtualScreenManager {
         DisplayHandleFactory { label, w, h, dpi ->
             val dm = app.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager
             val reader = ImageReader.newInstance(w, h, PixelFormat.RGBA_8888, 2)
-            val vd = runCatching {
-                dm?.createVirtualDisplay(
-                    label, w, h, dpi, reader.surface,
-                    DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY,
-                    null, null,
-                )
-            }.getOrNull()
+            val state = VirtualDisplayState()
+            val vd = dm?.let {
+                runCatching {
+                    VirtualDisplayRuntime.create(
+                        it, label, w, h, dpi, reader.surface,
+                        DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY,
+                        state,
+                    )
+                }.getOrNull()
+            }
             if (vd == null) {
                 runCatching { reader.close() }
                 null
             } else {
                 object : DisplayHandle {
                     override val displayId: Int = vd.display.displayId
+                    override val lifecycle: VdLifecycle
+                        get() = state.lifecycle
                     override fun acquireLatestFrame(): Image? =
                         runCatching { reader.acquireLatestImage() }.getOrNull()
                     override fun release() {
