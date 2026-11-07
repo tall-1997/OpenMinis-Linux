@@ -168,7 +168,7 @@ class VirtualScreenToolTest {
     // ── result shapes ─────────────────────────────────────────────────────
 
     @Test
-    fun `create returns display_id and the no-surface note`() {
+    fun `create returns display_id and the off-screen surface note`() {
         val r = run("""{"action":"create","tool_title":"t"}""")
         assertTrue(r.success)
         val json = org.json.JSONObject(r.output)
@@ -176,7 +176,9 @@ class VirtualScreenToolTest {
         assertEquals(1080, json.getInt("width"))
         assertEquals(1920, json.getInt("height"))
         assertEquals(320, json.getInt("dpi"))
-        assertTrue(json.getString("note").contains("renders nothing"))
+        // [T-android-vscreen-vd] The display is backed by an app-owned
+        // ImageReader surface; the old "renders nothing" note was stale.
+        assertTrue(json.getString("note").contains("ImageReader"))
     }
 
     @Test

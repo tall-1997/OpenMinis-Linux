@@ -1,10 +1,8 @@
 package com.openminis.app.vscreen
 
 import android.content.Context
-import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
 import android.media.Image
-import android.media.ImageReader
 import android.os.Handler
 import android.os.Looper
 import com.openminis.app.logging.AppLogger
@@ -29,27 +27,16 @@ import java.io.File
  *   screenshot           — layered, see below.
  *   tap/swipe/text/key   — Shizuku `input` with display targeting, probed.
  *
- * Screenshot layers (R&D: every layer is probed, never assumed):
- *   1. ImageReader attached to our OWN display (app-uid, no Shizuku, no
- *      permission at all).
- *   2. Shizuku `screencap -d <id>` to /data/local/tmp, then `cp` into the
- *      app-readable offloads dir (works with root-mode Shizuku; adb-mode
- *      shell usually cannot write app data dirs — probed, not assumed).
- *   3. Chunked base64 through Shizuku stdout — [ShizukuManager.runProcess]
- *      bounds its output with BoundedOutputBuffer (64KB head + 64KB tail and
- *      a marker in between), so a whole-PNG base64 CANNOT ride one call;
- *      chunks stay under the head cap and are concatenated here.
+ * Screenshot layers (probed, never assumed): (1) our own ImageReader, app-uid,
+ * no permission; (2) Shizuku `screencap -d` + `cp` into the offloads dir;
+ * (3) chunked base64 through Shizuku stdout (BoundedOutputBuffer caps one
+ * call, so chunks stay under the head cap and are concatenated here).
  *
- * Surface contract (root cause of T-android-vscreen3): the display is
- * created WITH a surface — an app-owned ImageReader attached for the
- * display's WHOLE lifetime. A surface-less virtual display is put to
- * sleep by the platform (WMS holds an internal "Display-off" sleep
- * token), which hides its windows and drops every injected input event,
- * so a transiently-attached capture surface can never be driven.
- * OWN_CONTENT_ONLY keeps the frames private to our reader (the user's
- * screen shows nothing) at the cost of compositing on our display while
- * it lives — bounded by [MAX_SCREENS] and the idle release. Screenshots
- * read the reader directly; there is no attach/detach churn.
+ * Surface contract (T-android-vscreen3): the display is created WITH an
+ * ImageReader surface for its WHOLE lifetime — a surface-less virtual display
+ * is put to sleep by the platform and drops every injected input event.
+ * OWN_CONTENT_ONLY keeps frames private to our reader; screenshots read the
+ * reader directly, with no attach/detach churn.
  *
  * Caps and seams:
  *   - At most [MAX_SCREENS] displays; the least-recently-used one is released
@@ -58,19 +45,9 @@ import java.io.File
  *     the LRU, probe and degradation logic run on the JVM in tests without
  *     DisplayManager, Shizuku or a device (ShizukuBackendStateTest style).
  *
- * V2 ([T-android-vscreen2], DSH AGENT-SCREEN-V2.md semantics, self-written):
- *   - SILENT LEDGER: apps started on a screen are muted via Shizuku
- *     `appops PLAY_AUDIO ignore` (previous mode recorded in prefs); the
- *     original value is restored when the app leaves the screen — destroy,
- *     LRU eviction, hand_to_user, or the leftover reconcile.
- *   - HAND_TO_USER: [HandoffController] moves the display's top task to the
- *     main display (user service binder first, shell probe table second),
- *     restores its sound and posts the "needs you" notification; the three
- *     user choices drive a pure [HandoffStateMachine] persisted in prefs.
- *   - TASK MOVE: [TaskMover] with runtime probing; every failure is honest.
- *   - SPILLOVER RECOVERY: a 3s watcher after launch pulls jumped-back apps
- *     to the agent screen (best effort).
- *   - IDLE RELEASE: screens idle for [IDLE_RELEASE_MS] destroy themselves.
+ * V2 ([T-android-vscreen2]): silent ledger, hand-to-user, task moves,
+ * spillover recovery and idle release live in [VirtualScreenUpkeep],
+ * [HandoffController] and [TaskMover].
  */
 object VirtualScreenManager {
     private const val TAG = "VirtualScreenManager"
@@ -90,6 +67,13 @@ object VirtualScreenManager {
     /** Live handle over one created virtual display. Test seam. */
     interface DisplayHandle {
         val displayId: Int
+
+        /**
+         * Lifecycle reported by [android.hardware.display.VirtualDisplay.Callback]
+         * ([T-android-vscreen-vd]). Defaults to RUNNING so test fakes and
+         * pre-callback handles need no change.
+         */
+        val lifecycle: VdLifecycle get() = VdLifecycle.RUNNING
 
         /**
          * Latest frame rendered on the display, or null when none is
@@ -126,7 +110,10 @@ object VirtualScreenManager {
         @Volatile var spillbackWatching: Boolean = false,
         /** IME policy outcome of the async apply after create (null = unknown yet). */
         @Volatile var imePolicyNote: String? = null,
-    )
+    ) {
+        /** [T-android-vscreen-vd] Platform-reported state of this display. */
+        val lifecycle: VdLifecycle get() = handle?.lifecycle ?: VdLifecycle.RUNNING
+    }
 
     sealed class CreateOutcome {
         data class Created(val screen: VirtualScreen, val evicted: VirtualScreen?) : CreateOutcome()
@@ -150,6 +137,23 @@ object VirtualScreenManager {
 
     private val screens = LinkedHashMap<Int, VirtualScreen>()
     private val lock = Any()
+
+    /** [T-android-vscreen-layers] Privileged host process (root / shell uid), null until deployed. */
+    @Volatile
+    private var privilegedHost: PrivilegedDisplayHost? = null
+
+    /** Test/DI seam for the privileged host. */
+    internal fun setPrivilegedHost(host: PrivilegedDisplayHost?) {
+        privilegedHost = host
+    }
+
+    /**
+     * [T-android-vscreen-layers] The layers usable right now, highest priority
+     * first (SU/KSU → Shizuku → native). Exposed via `action=list` so installing
+     * root later shows up as an upgrade path instead of a silent difference.
+     */
+    fun backendPlan(nowMs: Long = System.currentTimeMillis()): List<VdBackendProbe> =
+        VdBackends.status(privilegedHost != null, nowMs)
 
     @Volatile private var installedFactory: DisplayHandleFactory? = null
     @Volatile private var shellRunnerOverride: ShellRunner? = null
@@ -244,9 +248,12 @@ object VirtualScreenManager {
     // ─── create / list / destroy ──────────────────────────────────────────
 
     /**
-     * Create a virtual display (app-level DisplayManager; no Shizuku). The
-     * display is created with NO surface — the target app can still be
-     * started and driven on it, but nothing renders (recorded tradeoff).
+     * Create a virtual display (app-level DisplayManager; no Shizuku).
+     *
+     * Geometry omitted by the caller follows the PHYSICAL panel
+     * ([VirtualDisplayRuntime.physicalSpec]) so apps render at native metrics
+     * and screenshots match what the phone would show; the 1080x1920@320
+     * constants are only the no-context fallback.
      *
      * [T-android-vscreen2] After the display exists: leftover mute entries
      * are reconciled (leftover restore), and the per-display IME policy is
@@ -262,14 +269,20 @@ object VirtualScreenManager {
                 "no display factory installed and no app context available — " +
                     "virtual_screen needs an Android context to create displays",
             )
-        val w = sanitizeEdge(width, DEFAULT_WIDTH)
-        val h = sanitizeEdge(height, DEFAULT_HEIGHT)
-        // 0 = unspecified → default; otherwise clamp (2000dpi reads as 640).
+        // 0 = unspecified → the phone's own panel; constants are the fallback.
+        val spec = if (width <= 0 || height <= 0 || dpi <= 0) {
+            context?.let { ctx ->
+                VirtualDisplayRuntime.specWithRootOverride(ctx) { cmd ->
+                    runShell(arrayOf("sh", "-c", cmd), 1_500L).combined
+                }
+            }
+        } else null
+        val w = sanitizeEdge(if (width > 0) width else spec?.width ?: DEFAULT_WIDTH, DEFAULT_WIDTH)
+        val h = sanitizeEdge(if (height > 0) height else spec?.height ?: DEFAULT_HEIGHT, DEFAULT_HEIGHT)
         val d = when {
-            dpi == 0 -> DEFAULT_DPI
-            dpi < MIN_DPI -> MIN_DPI
-            dpi > MAX_DPI -> MAX_DPI
-            else -> dpi
+            dpi > 0 -> dpi.coerceIn(MIN_DPI, MAX_DPI)
+            spec != null -> spec.dpi.coerceIn(MIN_DPI, MAX_DPI)
+            else -> DEFAULT_DPI
         }
         val name = (label ?: "minis-virtual-screen").take(64)
         synchronized(lock) {
@@ -414,6 +427,11 @@ object VirtualScreenManager {
     fun screenshot(displayId: Int, offloadsDir: File?): CommandOutcome {
         val s = screen(displayId) ?: return CommandOutcome.NotFound(notFoundMessage(displayId))
         touch(s)
+        // [T-android-vscreen-vd] A stopped display can never yield a frame:
+        // say so instead of letting every capture layer fail with "no frame".
+        VirtualDisplayRuntime.captureBlockedReason(s.lifecycle)?.let {
+            return CommandOutcome.Failed(it)
+        }
         if (offloadsDir == null) {
             return CommandOutcome.Failed(
                 "no app context available — cannot write the screenshot file",
@@ -643,36 +661,11 @@ object VirtualScreenManager {
 
     /**
      * OWN_CONTENT_ONLY class (API 19+; project minSdk is 26, so no runtime
-     * gate is needed). The reader's surface is attached AT CREATE and never
-     * detached — see the class KDoc surface contract. A null-surface display
-     * would sleep immediately and drop every injected input event.
+     * gate is needed). Creation, the ImageReader surface and the lifecycle
+     * callback all live in [VirtualDisplayRuntime].
      */
     private fun buildRealFactory(app: Context): DisplayHandleFactory =
-        DisplayHandleFactory { label, w, h, dpi ->
-            val dm = app.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager
-            val reader = ImageReader.newInstance(w, h, PixelFormat.RGBA_8888, 2)
-            val vd = runCatching {
-                dm?.createVirtualDisplay(
-                    label, w, h, dpi, reader.surface,
-                    DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY,
-                    null, null,
-                )
-            }.getOrNull()
-            if (vd == null) {
-                runCatching { reader.close() }
-                null
-            } else {
-                object : DisplayHandle {
-                    override val displayId: Int = vd.display.displayId
-                    override fun acquireLatestFrame(): Image? =
-                        runCatching { reader.acquireLatestImage() }.getOrNull()
-                    override fun release() {
-                        runCatching { vd.release() }
-                        runCatching { reader.close() }
-                    }
-                }
-            }
-        }
+        VirtualDisplayRuntime.handleFactory(app)
 
     private fun runShell(argv: Array<String>, timeoutMs: Long): ShizukuManager.ProcessResult =
         (shellRunnerOverride ?: defaultShellRunner).run(argv, timeoutMs)

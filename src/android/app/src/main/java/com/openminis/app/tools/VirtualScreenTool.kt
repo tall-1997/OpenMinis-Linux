@@ -6,6 +6,7 @@ import com.openminis.app.data.model.AgentToolParam
 import com.openminis.app.sandbox.SessionWorkspace
 import com.openminis.app.vscreen.HandoffController
 import com.openminis.app.vscreen.HandoffStateMachine
+import com.openminis.app.vscreen.VirtualDisplayRuntime
 import com.openminis.app.vscreen.VirtualScreenManager
 import org.json.JSONArray
 import org.json.JSONObject
@@ -16,10 +17,12 @@ import org.json.JSONObject
  * One tool, ten actions, cronjob-style (multi-action precedent
  * [JobTools] / [CronJobTool]):
  *
- *  - `create`     (width?, height?, dpi?) — new virtual display, default
- *    1080x1920@320; at most 2, the least-recently-used is released. Returns a
- *    `display_id`. The display has no surface, so it renders nothing — the
- *    app still starts and receives input on it; verify state via screenshot.
+ *  - `create`     (width?, height?, dpi?) — new virtual display; omitted
+ *    geometry follows the phone's own panel (DisplayManager mode + density),
+ *    1080x1920@320 only when no context is available; at most 2, the
+ *    least-recently-used is released. Returns a `display_id`. The display is
+ *    backed by an app-owned ImageReader surface, so it renders off-screen and
+ *    screenshots read that surface directly.
  *    Apps launched there are muted (PLAY_AUDIO via appops, original mode
  *    restored when they leave) and the display tries to keep the keyboard
  *    with the user (IME policy, Android 12+ via the Shizuku user service).
@@ -76,9 +79,9 @@ object VirtualScreenTool {
             "Magisk/KernelSU when Shizuku is unavailable). Requires Shizuku or host su " +
             "(Magisk/KernelSU) for launch, " +
             "screenshot fallbacks, input and hand_to_user; create/list/destroy need none. " +
-            "Actions: 'create' (width/height/dpi, default 1080x1920@320) makes a display and " +
-            "returns a display_id (at most 2 live, least-recently-used is released; the display " +
-            "renders nothing — the app still starts and receives input, verify state via " +
+            "Actions: 'create' (width/height/dpi, omitted = the phone's own panel) makes a display and " +
+            "returns a display_id (at most 2 live, least-recently-used is released; it renders into an " +
+            "app-owned surface off-screen — the app still starts and receives input, capture it via " +
             "screenshot; apps launched there are muted via appops until they leave the display); " +
             "'launch' (display_id, package, optional activity) starts an app on that display and " +
             "reports whether the mute took effect; 'screenshot' (display_id) captures it and " +
@@ -105,9 +108,9 @@ object VirtualScreenTool {
                 "One of: create, launch, screenshot, tap, swipe, text, key, hand_to_user, list, destroy.",
                 enumValues = ACTIONS,
             ),
-            "width" to AgentToolParam("integer", "For create: display width in pixels (default 1080)."),
-            "height" to AgentToolParam("integer", "For create: display height in pixels (default 1920)."),
-            "dpi" to AgentToolParam("integer", "For create: display density (default 320)."),
+            "width" to AgentToolParam("integer", "For create: display width in pixels (default: the phone's panel width)."),
+            "height" to AgentToolParam("integer", "For create: display height in pixels (default: the phone's panel height)."),
+            "dpi" to AgentToolParam("integer", "For create: display density (default: the phone's density)."),
             "display_id" to AgentToolParam(
                 "integer",
                 "For launch/screenshot/tap/swipe/text/key/hand_to_user/destroy: the display_id " +
@@ -208,9 +211,9 @@ object VirtualScreenTool {
                         }
                         put(
                             "note",
-                            "The display has no surface and renders nothing; the target app " +
-                                "still starts and receives input on it. Use action=launch to " +
-                                "start an app, action=screenshot to verify, action=destroy to release.",
+                            "The display renders into an app-owned ImageReader surface " +
+                                "(off-screen). Use action=launch to start an app, " +
+                                "action=screenshot to capture it, action=destroy to release.",
                         )
                     }.toString(),
                     true,
@@ -440,6 +443,11 @@ object VirtualScreenTool {
                     put("label", s.label)
                     put("created_at_ms", s.createdAtMs)
                     put("last_used_at_ms", s.lastUsedAtMs)
+                    // [T-android-vscreen-vd] Platform-reported lifecycle
+                    // (VirtualDisplay.Callback): a paused display still has its
+                    // last frame, a stopped one is dead and cannot capture.
+                    put("lifecycle", s.lifecycle.name.lowercase())
+                    VirtualDisplayRuntime.stateNote(s.lifecycle)?.let { put("lifecycle_note", it) }
                     s.imePolicyNote?.let { put("ime_policy", it) }
                     VirtualScreenManager.handoffNote(s.displayId)?.let { put("handoff", it) }
                     VirtualScreenManager.consumeSpillbackNote(s.displayId)?.let { put("spillback", it) }
@@ -452,11 +460,25 @@ object VirtualScreenTool {
             )
         }
         val count = arr.length()
+        // [T-android-vscreen-layers] Which privilege layer owns creation right
+        // now (SU/KSU → Shizuku → native). An unavailable higher layer says
+        // what is missing, so installing root later is a visible upgrade path.
+        val layers = JSONArray()
+        for (p in VirtualScreenManager.backendPlan()) {
+            layers.put(
+                JSONObject().apply {
+                    put("backend", p.backend.name.lowercase())
+                    put("available", p.available)
+                    put("detail", p.detail)
+                },
+            )
+        }
         return ToolExecutionResult(
             JSONObject().apply {
                 put("ok", true)
                 put("count", count)
                 put("displays", arr)
+                put("layers", layers)
                 if (count == 0) {
                     put("note", "No virtual displays yet. Use action=create to make one.")
                 }
