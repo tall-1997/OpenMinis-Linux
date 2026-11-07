@@ -3,68 +3,47 @@ package com.openminis.app.ui.chat
 // [port-upstream-1.16] Ported from OpenMinis 1.16-beta (verbatim).
 
 /**
- * [T-android-settle-programmatic-scroll] Decides whether the post-drag
- * "settle" re-pin (T170, mirrors iOS settleAfterInteraction) may fire.
+ * [T-android-settle-programmatic-scroll] Decides whether a scroll-end may flip
+ * the viewport from Pinned into Reading.
  *
- * The settle exists for one situation: the user's finger was on the list, the
- * streaming auto-follow was suppressed while they dragged, content grew in the
- * meantime, and the finger lifted near the bottom — so one extra pin catches
- * the growth that was missed. It was driven from the
- * `isScrollInProgress -> false` edge, which is wrong: the auto-follow glide is
- * itself a `listState.scroll { }` block, so every glide that finished also
- * flipped that edge and the settle snapped `scrollToItem(0, 0)` on top of it.
- * Measured on a Pixel 4a during a 300-paragraph stream: 103 settle fires in
- * one turn, and on screen a repeating pattern of an eased glide followed by an
- * instant jump — the "来回抖" the user reported. Programmatic scrolls emit no
- * DragInteraction; only a real finger lift records [msSinceDrag]'s timestamp.
+ * Two checkpoints decide ownership:
+ *  - `DragInteraction.Stop` (finger lift) settles it immediately: still at the
+ *    bottom → keep following, anywhere else → Reading anchored where the user
+ *    stopped;
+ *  - a fling keeps scrolling AFTER the finger is up, so when the drag carried
+ *    the viewport off-bottom the authoritative checkpoint is the
+ *    `isScrollInProgress` falling edge.
  *
- * Pure so it can be unit-tested; the composable passes its own state in.
+ * The second checkpoint sees EVERY falling edge — the streaming auto-follow
+ * glide, the pin-to-bottom jump and a queued settle all end programmatic
+ * scrolls without a finger. Only a drag raises `dragEndPending`, and that flag
+ * is consumed by the first scroll-end after it, so those programmatic endings
+ * cannot rearm anything. The flag deliberately has no deadline: a hard fling
+ * can run for several seconds, and a time window measured from the finger lift
+ * classified exactly those endings as "programmatic" — the viewport stayed
+ * Pinned and the next streamed token yanked it back to the bottom.
  */
 object SettleAfterInteractionGate {
 
     /**
-     * How long after a `DragInteraction.Stop` a scroll-end still counts as the
-     * end of THAT drag (including its fling). Same window the return-to-bottom
-     * re-arm already uses for "recent user interaction".
-     */
-    const val RECENT_DRAG_MS = 1500L
-
-    /**
      * @param scrollInProgress current `listState.isScrollInProgress`
-     * @param userScrolledAway the user has parked the viewport away from the bottom
      * @param nearBottom       viewport is within the near-bottom threshold
      * @param streaming        a reply is currently streaming
-     * @param msSinceDrag      now - lastInterruptMs (last DragInteraction.Stop);
-     *                         `Long.MAX_VALUE`-ish when no drag has ever happened
-     * @return true when the settle re-pin should run
+     * @param pinned           the scroll policy still believes it is following
+     * @param dragEndPending   a `DragInteraction.Stop` has not had its scroll end yet
+     * @return true when this scroll-end belongs to the user's drag
      */
-    fun shouldSettle(
+    fun mayRearmFromScrollEnd(
         scrollInProgress: Boolean,
-        userScrolledAway: Boolean,
         nearBottom: Boolean,
         streaming: Boolean,
-        msSinceDrag: Long,
+        pinned: Boolean,
+        dragEndPending: Boolean,
     ): Boolean {
         if (scrollInProgress) return false
-        if (userScrolledAway) return false
-        if (!nearBottom) return false
-        if (!streaming) return false
-        // The discriminator: a scroll that just ended is only "the user's drag
-        // ending" if a finger actually lifted recently. The auto-follow glide,
-        // pin-to-bottom and the settle itself all end scrolls without one.
-        return isUserInteractionEnd(msSinceDrag)
+        if (!dragEndPending) return false
+        if (!pinned) return false
+        if (streaming) return false
+        return !nearBottom
     }
-
-    /**
-     * Whether a scroll-end that just happened belongs to a real finger lift.
-     *
-     * [com.openminis.app.ui.chat.ChatScreen]'s drag-end checkpoint (the rearm
-     * into Reading mode) collects EVERY `isScrollInProgress` falling edge —
-     * including the auto-follow glide, the pin-to-bottom jump and a queued
-     * settle, all of which a programmatic `scrollToItem` produces without a
-     * finger. Only a `DragInteraction.Stop` writes [msSinceDrag]'s timestamp,
-     * so this window is what distinguishes "the user let go" from "our own
-     * scroll finished".
-     */
-    fun isUserInteractionEnd(msSinceDrag: Long): Boolean = msSinceDrag in 0..RECENT_DRAG_MS
 }

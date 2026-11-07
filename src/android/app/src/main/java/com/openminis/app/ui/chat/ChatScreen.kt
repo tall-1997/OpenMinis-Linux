@@ -1288,6 +1288,8 @@ fun ChatScreen(
     // Finger-down only: programmatic scrolls also set isScrollInProgress but
     // emit no DragInteraction, and focus handling must not confuse the two.
     var isUserDragging by remember { mutableStateOf(false) }
+    // A drag whose scroll has not ended yet (a fling outlives the finger lift).
+    var dragEndPending by remember { mutableStateOf(false) }
     LaunchedEffect(listState) {
         listState.interactionSource.interactions.collect { interaction ->
             // T-android-jank-profile: drag interactions fire on every drag
@@ -1297,6 +1299,7 @@ fun ChatScreen(
                 is androidx.compose.foundation.interaction.DragInteraction.Start -> {
                     scrollController.beginUserGesture()
                     isUserDragging = true
+                    dragEndPending = false
                     // [T-android-scrollbtn-turn-walk] A manual drag breaks the
                     // up-button's turn-walk chain: the next tap should re-anchor
                     // to wherever the user landed, not continue the old sequence.
@@ -1306,6 +1309,7 @@ fun ChatScreen(
                     scrollController.endUserGesture()
                     isUserDragging = false
                     lastInterruptMs = System.currentTimeMillis()
+                    dragEndPending = true
                     // [T-android-scroll-policy] Finger lift decides ownership:
                     // still at the bottom → keep following; anywhere else →
                     // Reading anchored where the user stopped.
@@ -1315,6 +1319,7 @@ fun ChatScreen(
                 is androidx.compose.foundation.interaction.DragInteraction.Cancel -> {
                     scrollController.endUserGesture()
                     isUserDragging = false
+                    dragEndPending = false
                 }
                 else -> Unit
             }
@@ -1480,38 +1485,31 @@ fun ChatScreen(
     // VM flow directly (turn-level signal) rather than reading per-token
     // assistant content, so this state doesn't tick during a stream.
     //
-    // [T-android-scroll-policy] Rewritten: Pinned-only single re-pin. The
-    // Reading branch is a HARD NO-OP — versions v6..v17 of cross-key restore
-    // all made the symptom worse (commits cd08a334, 9873a3ed), and with
-    // stable keys (FlatKeys) LazyColumn holds the reader's position
-    // natively. The old LATE-REPIN second stage is gone: it existed to work
-    // around the arm-net fights that no longer exist.
+    // [T-android-scroll-policy] Pinned-only single re-pin; the Reading branch is
+    // a hard no-op (stable FlatKeys let LazyColumn hold the reader's position).
     val streamingNowFlag = isStreaming
     LaunchedEffect(streamingNowFlag) {
         if (streamingNowFlag) return@LaunchedEffect  // edge fires only on streaming→idle
         kotlinx.coroutines.delay(220)
-        if (listState.isScrollInProgress) return@LaunchedEffect
+        // Wait out a finishing fling instead of giving up: the error banner and
+        // its retry row land on this edge and must not stay cut off below the fold.
+        withTimeoutOrNull(1200) { snapshotFlow { listState.isScrollInProgress }.first { !it } }
         if (!scrollPolicy.isPinned) return@LaunchedEffect
         tracedScrollToItem("stream-end/AT-BOTTOM-RE-PIN", 0, 0)
     }
-    // T170: when a user-initiated drag or fling settles away from the bottom
-    // while still Pinned, flip into Reading. DragInteraction.Stop fires at
-    // finger lift — before the fling carries the viewport off-bottom — so
-    // the isScrollInProgress falling edge is the authoritative checkpoint.
-    //
-    // [T-android-scroll-policy] The old settle-after-interaction re-pin and
-    // the position-driven arm-net are gone: every programmatic jump now
-    // lands Reading/Pinned explicitly at its click site, so "jumped off-
-    // bottom and nothing knows" cannot happen; and content growth during a
-    // stream is not a gesture, so streaming is excluded here (the glide owns
-    // the pinned viewport mid-stream).
+    // T170: a fling keeps scrolling after the finger lifts, so when the drag
+    // carried the viewport off-bottom the authoritative checkpoint is the
+    // isScrollInProgress falling edge. SettleAfterInteractionGate tells a drag's
+    // own scroll end from a programmatic one (auto-follow glide, pin-to-bottom,
+    // queued settle) — the latter must not rearm anything.
     LaunchedEffect(listState) {
         snapshotFlow { listState.isScrollInProgress }
             .distinctUntilChanged()
             .collect { inProgress ->
-                // [T-android-settle-programmatic-scroll] Only a real finger lift may rearm Reading.
-                if (!inProgress && !isNearBottom.value && !viewModel.isStreaming.value && scrollPolicy.isPinned &&
-                    SettleAfterInteractionGate.isUserInteractionEnd(System.currentTimeMillis() - lastInterruptMs)) {
+                if (SettleAfterInteractionGate.mayRearmFromScrollEnd(
+                        inProgress, isNearBottom.value, viewModel.isStreaming.value,
+                        scrollPolicy.isPinned, dragEndPending)) {
+                    dragEndPending = false
                     val anchor = visibleTopAnchor()
                     scrollPolicy.rearmIfDraggedAway(anchor?.first, anchor?.second ?: 0)
                 }
@@ -2050,6 +2048,9 @@ fun ChatScreen(
         // [T-android-scroll-fab-content-inset] The chat pane's own width, used
         // below to inset the scroll buttons to the capped content column.
         var chatPaneWidthPx by remember { mutableStateOf(0) }
+        // [T-android-chrome-resize-repin] Laid-out height of the composer
+        // cluster (input box + plan/goal board + attachment preview).
+        var composerChromeHeightPx by remember { mutableStateOf(0) }
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -2241,41 +2242,35 @@ fun ChatScreen(
                 // Breathing room above the input bar in both states. The
                 // pill's 34dp height + 6dp mount padding is what the reserve
                 // has to clear.
-                // Breathing room above the bottom chrome. 14dp is the same gap the
-                // old floating bar used between the last row and the overlay
-                // (T245); the no-tools branch stays 20dp (T-bottom-occluded:
-                // 14dp left the trailing line clipped against the composer).
-                // [P0-4] visualOverlayHeight dropped from the old thumbnail's
-                // 65dp to the pill's 34dp, so a streaming turn now reserves
-                // 48dp instead of 79dp.
+                // Breathing room above the bottom chrome; 48dp clears the pill,
+                // 20dp is the plain gap.
                 val bottomReserve =
                     if (hasFloatingTools) visualOverlayHeight + 14.dp else 20.dp
-                // T174: when bottomReserve changes (toolbar appearing /
-                // disappearing or thumbnail height shift), re-pin to bottom
-                // if we are currently following. Without this, the new
-                // contentPadding is honoured for layout but reverseLayout
-                // won't actively scroll the list — items can wind up below
-                // the viewport's new bottom edge until the next streaming
-                // delta triggers a follow. iOS does the same in V3:54-68
-                // when contentInset.bottom changes.
+                // T174: reserve changes need an explicit re-pin (reverseLayout
+                // does not scroll itself); iOS does the same when its inset moves.
                 LaunchedEffect(bottomReserve) {
-                    // [T-android-send-no-autoscroll-behind-preview] Send-grace
-                    // bypass: within SEND_FOLLOW_GRACE_MS of a user message
-                    // append the isNearBottom gate is waived — the user JUST
-                    // sent (the send path pins explicitly), but the
-                    // freshly-inserted user/thinking rows leave the live
-                    // anchor transiently "not at bottom", which used to skip
-                    // this pin and strand the new rows behind the floating
-                    // tool bar when the reserve grew. All gates stay in force
-                    // outside the grace window, so the C2 stream-end
-                    // protections are untouched (a stream end is never
-                    // within 2s of the user's send).
+                    // Send-grace: a just-sent turn leaves the anchor transiently
+                    // off-bottom; the pin must still run.
                     val sinceSendMs = System.currentTimeMillis() - lastUserAppendMs
                     val sendGrace = lastUserAppendMs > 0L && sinceSendMs in 0..SEND_FOLLOW_GRACE_MS
                     if (scrollPolicy.isPinned && (isNearBottom.value || sendGrace)) {
                         val reason = if (!isNearBottom.value) "send-grace" else "near-bottom"
                         tracedScrollToItem("reserve-change/$reason", 0, 0)
                     }
+                }
+                // [T-android-chrome-resize-repin] The composer grows (plan
+                // board, goal row, attachment preview) and the viewport shrinks
+                // under an offset-0 anchor: the tail is laid out BELOW the new
+                // bottom edge, and the streaming follow refuses to re-pin
+                // because its anchor check wants offset == 0. Re-pin per change.
+                LaunchedEffect(composerChromeHeightPx) {
+                    if (composerChromeHeightPx <= 0) return@LaunchedEffect
+                    if (!scrollPolicy.isPinned) return@LaunchedEffect
+                    val sinceSendMs = System.currentTimeMillis() - lastUserAppendMs
+                    val sendGrace = lastUserAppendMs > 0L && sinceSendMs in 0..SEND_FOLLOW_GRACE_MS
+                    if (!isNearBottom.value && !sendGrace) return@LaunchedEffect
+                    kotlinx.coroutines.delay(50)
+                    tracedScrollToItem("composer-resize/re-pin", 0, 0)
                 }
                 // T120: removed three streaming-time LaunchedEffects that
                 // each called scrollToItem(0) on every chunk:
@@ -3842,7 +3837,10 @@ fun ChatScreen(
                     // window, not this anchor). MUST come AFTER widthIn/
                     // wrapContentWidth — modifiers measure against constraints
                     // imposed by the modifiers before them.
-                    .onGloballyPositioned { composerWidthPx = it.size.width }
+                    .onGloballyPositioned {
+                        composerWidthPx = it.size.width
+                        composerChromeHeightPx = it.size.height
+                    }
                     .navigationBarsPadding()
                     .padding(horizontal = 12.dp)
                     .padding(top = 2.dp, bottom = 8.dp),
