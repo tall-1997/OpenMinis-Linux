@@ -14,39 +14,20 @@ import java.io.File
  * [T-android-vscreen] Agent-owned virtual screens (VirtualDisplay).
  *
  * WHY: the accessibility stack (ui_read / ui_action) drives the USER's
- * physical screen — every gesture steals the phone from whoever is holding
- * it, and the whole chain dies when the Accessibility permission is not
- * granted. A virtual display inverts both: the target app is started ON an
- * agent-owned display, so reads/taps/typing happen off the user's screen,
- * and the driving commands go through the Shizuku shell — no Accessibility
- * permission involved at any point.
+ * physical screen — every gesture steals the phone, and it dies without the
+ * Accessibility permission. A virtual display inverts both: the app runs on an
+ * agent-owned display and the driving commands go through Shizuku/root.
  *
- * Ops and their dependencies:
- *   create/destroy/list  — app-level DisplayManager API only (no Shizuku).
- *   launch               — Shizuku `am start -W --display <id> -n pkg/cls`.
- *   screenshot           — layered, see below.
- *   tap/swipe/text/key   — Shizuku `input` with display targeting, probed.
- *
- * Screenshot layers (probed, never assumed): (1) our own ImageReader, app-uid,
- * no permission; (2) Shizuku `screencap -d` + `cp` into the offloads dir;
- * (3) chunked base64 through Shizuku stdout (BoundedOutputBuffer caps one
- * call, so chunks stay under the head cap and are concatenated here).
+ * Ops and their dependencies: create/destroy/list need no shell; launch,
+ * input and the screenshot fallbacks ride Shizuku or host su.
  *
  * Surface contract (T-android-vscreen3): the display is created WITH an
- * ImageReader surface for its WHOLE lifetime — a surface-less virtual display
- * is put to sleep by the platform and drops every injected input event.
- * OWN_CONTENT_ONLY keeps frames private to our reader; screenshots read the
- * reader directly, with no attach/detach churn.
+ * ImageReader surface for its whole lifetime — a surface-less display is put
+ * to sleep by the platform and drops every injected input event.
  *
- * Caps and seams:
- *   - At most [MAX_SCREENS] displays; the least-recently-used one is released
- *     (LRU) when a create overflows. lastUsedAtMs is touched on every action.
- *   - [DisplayHandle] / [DisplayHandleFactory] / [ShellRunner] are seams so
- *     the LRU, probe and degradation logic run on the JVM in tests without
- *     DisplayManager, Shizuku or a device (ShizukuBackendStateTest style).
- *
- * V2 ([T-android-vscreen2]): silent ledger, hand-to-user, task moves,
- * spillover recovery and idle release live in [VirtualScreenUpkeep],
+ * Caps and seams: at most [MAX_SCREENS] (LRU eviction); [DisplayHandle] /
+ * [DisplayHandleFactory] / [ShellRunner] keep the policies JVM-testable.
+ * V2 ([T-android-vscreen2]) lives in [VirtualScreenUpkeep],
  * [HandoffController] and [TaskMover].
  */
 object VirtualScreenManager {
@@ -80,6 +61,9 @@ object VirtualScreenManager {
          * (frames arrive over its socket, not through an ImageReader here).
          */
         val captureJpeg: ByteArray? get() = null
+
+        /** False once a privileged host backing this display has exited. */
+        val hostAlive: Boolean get() = true
 
         /**
          * Latest frame rendered on the display, or null when none is
@@ -437,9 +421,21 @@ object VirtualScreenManager {
         offloadsDir.mkdirs()
 
         // Layer 0 [T-android-vscreen-host]: a privileged host owns the frames.
-        s.handle?.captureJpeg?.let { bytes ->
+        val host = s.handle
+        host?.captureJpeg?.let { bytes ->
             return VirtualScreenCapture.writeScreenshot(
                 offloadsDir, displayId, bytes, "Host", VirtualScreenCapture.JPEG_SUFFIX,
+            )
+        }
+        // [T-android-vscreen-host] A dead host cannot ever produce a frame:
+        // drop the screen instead of leaving a zombie in the list, and let the
+        // model recreate (the next create falls back to the next layer).
+        if (host != null && !host.hostAlive) {
+            destroyDetailed(displayId)
+            return CommandOutcome.Failed(
+                "the privileged display host exited (SU/Shizuku process gone) — the display " +
+                    "is dead and was removed; call action=create again and the next layer is " +
+                    "picked automatically",
             )
         }
 

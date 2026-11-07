@@ -46,6 +46,12 @@ internal class HostDisplayClient private constructor(
         readLine() == "OK"
     }.getOrDefault(false)
 
+    /** False once the host socket or its process is gone ([T-android-vscreen-host]). */
+    val isAlive: Boolean
+        get() = !socket.isClosed && process?.isAlive != false
+
+    override val hostAlive: Boolean get() = isAlive
+
     override fun acquireLatestFrame(): android.media.Image? = null
 
     override fun release() {
