@@ -98,6 +98,15 @@ object VirtualScreenManager {
         val displayId: Int
 
         /**
+         * Platform-reported lifecycle of the display surface. Defaults to
+         * [VdLifecycle.RUNNING] so fakes and privileged-host handles (which
+         * have no app-side [VirtualDisplay.Callback]) stay valid — only the
+         * real app-uid factory overrides it, which is what lets the
+         * screenshot lane detect and clean up a platform-stopped display.
+         */
+        val lifecycle: VdLifecycle get() = VdLifecycle.RUNNING
+
+        /**
          * Latest frame rendered on the display, or null when none is
          * available yet. The caller owns the returned [Image] and must
          * close it. The display surface stays attached — [release] is the
@@ -454,64 +463,9 @@ object VirtualScreenManager {
     fun screenshot(displayId: Int, offloadsDir: File?): CommandOutcome {
         val s = screen(displayId) ?: return CommandOutcome.NotFound(notFoundMessage(displayId))
         touch(s)
-        if (offloadsDir == null) {
-            return CommandOutcome.Failed(
-                "no app context available — cannot write the screenshot file",
-            )
-        }
-        offloadsDir.mkdirs()
-
-        // Layer 1: our own display, our own uid.
-        VirtualScreenCapture.captureViaImageReader(s.handle)?.let { bytes ->
-            return VirtualScreenCapture.writeScreenshot(offloadsDir, displayId, bytes, "ImageReader", VirtualScreenCapture.JPEG_SUFFIX)
-        }
-
-        // Layers 2 and 3 ride the Shizuku shell.
-        shizukuUnavailableMessage()?.let {
-            return CommandOutcome.ShizukuUnavailable(
-                "$it (the ImageReader capture returned no frame, so the " +
-                    "screencap fallback needs Shizuku too)",
-            )
-        }
-        if (screencapSupportsDisplayFlag() == false) {
-            return CommandOutcome.NotSupported(
-                "this ROM's screencap has no -d option (probed via its usage output) and the " +
-                    "ImageReader capture returned no frame — no read path remains for this display",
-            )
-        }
-        val tmp = "$TMP_PREFIX${System.currentTimeMillis()}${VirtualScreenCapture.PNG_SUFFIX}"
-        val cap = runShell(arrayOf("sh", "-c", "screencap -d $displayId -p $tmp"), 20_000L)
-        if (cap.exitCode != 0) {
-            return CommandOutcome.Failed(
-                "screencap -d $displayId failed: ${cap.combined.ifBlank { "exitCode=${cap.exitCode}" }} " +
-                    "— some ROMs expect a physical display id here rather than the logical id",
-            )
-        }
-
-        // Layer 2: cp into the app-readable dir (root-mode Shizuku works here;
-        // adb-mode shell usually cannot write app data dirs — probed).
-        val direct = File(offloadsDir,
-            "${VirtualScreenCapture.PNG_PREFIX}${displayId}_${System.currentTimeMillis()}${VirtualScreenCapture.PNG_SUFFIX}")
-        val cp = runShell(arrayOf("sh", "-c", "cp $tmp '${direct.absolutePath.replace("'", "'\\''")}'"), 10_000L)
-        if (cp.exitCode == 0 && direct.isFile && direct.length() > 0) {
-            runShell(arrayOf("sh", "-c", "rm -f $tmp"), 5_000L)
-            return CommandOutcome.Ok(
-                displayId,
-                "screenshot ${direct.length()} bytes via screencap+cp",
-                guestPathFor(direct.name),
-            )
-        }
-
-        // Layer 3: chunked base64 through Shizuku stdout.
-        val bytes = VirtualScreenCapture.readChunked(tmp, displayId) { argv, t -> runShell(argv, t) }
-        runShell(arrayOf("sh", "-c", "rm -f $tmp"), 5_000L)
-        if (bytes == null) {
-            return CommandOutcome.Failed(
-                "screencap wrote the capture to $tmp but no app-readable retrieval path worked " +
-                    "(cp into the offloads dir refused by the ROM, and the chunked base64 read failed)",
-            )
-        }
-        return VirtualScreenCapture.writeScreenshot(offloadsDir, displayId, bytes, "chunked base64")
+        return VirtualScreenShots.capture(
+            displayId, s, offloadsDir, ::runShell, ::destroy, ::shizukuUnavailableMessage, ::guestPathFor, TMP_PREFIX,
+        )
     }
 
     /** Probe delegate: see [VscreenDisplayProbes] (extracted for the line ceiling). */
@@ -621,19 +575,24 @@ object VirtualScreenManager {
         DisplayHandleFactory { label, w, h, dpi ->
             val dm = app.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager
             val reader = ImageReader.newInstance(w, h, PixelFormat.RGBA_8888, 2)
-            val vd = runCatching {
-                dm?.createVirtualDisplay(
-                    label, w, h, dpi, reader.surface,
-                    DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY,
-                    null, null,
-                )
-            }.getOrNull()
+            val state = VirtualDisplayState()
+            val vd = dm?.let {
+                runCatching {
+                    VirtualDisplayRuntime.create(
+                        it, label, w, h, dpi, reader.surface,
+                        DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY,
+                        state,
+                    )
+                }.getOrNull()
+            }
             if (vd == null) {
                 runCatching { reader.close() }
                 null
             } else {
                 object : DisplayHandle {
                     override val displayId: Int = vd.display.displayId
+                    override val lifecycle: VdLifecycle
+                        get() = state.lifecycle
                     override fun acquireLatestFrame(): Image? =
                         runCatching { reader.acquireLatestImage() }.getOrNull()
                     override fun release() {
