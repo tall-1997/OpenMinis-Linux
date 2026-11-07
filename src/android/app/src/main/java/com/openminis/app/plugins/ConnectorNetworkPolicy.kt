@@ -12,13 +12,43 @@ object ConnectorNetworkPolicy {
     private const val PREFS = "plugin_network_policy"
     private const val PRIVATE_PREFIX = "allow_private_"
 
-    fun allowsPrivate(context: Context, plugin: PluginRegistry.RemotePlugin): Boolean =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getBoolean(PRIVATE_PREFIX + plugin.configurationKey(), true)
+    // [T-plugin-grant-stable-identity] #283: the private-network grant is keyed
+    // by the connector scope (derived from the stable catalog id), not by the
+    // full configurationKey() fingerprint — a catalog rewording used to reset
+    // the grant on every update. The stable key is the single authoritative
+    // slot; legacy fingerprint entries are migrated on first read and swept on
+    // write, so clearPluginConfigurations keeps covering them via the prefix.
+    private fun allowPrivateStorageKey(pluginId: String): String =
+        PRIVATE_PREFIX + connectorScopePrefix(pluginId) + "private"
+
+    /** Pure migration pick: first legacy fingerprint flag under the scope. */
+    internal fun legacyAllowsPrivate(legacy: Map<String, *>, pluginId: String): Boolean? {
+        val prefix = PRIVATE_PREFIX + connectorScopePrefix(pluginId)
+        val stableKey = allowPrivateStorageKey(pluginId)
+        return legacy.keys.asSequence()
+            .filter { it.startsWith(prefix) && it != stableKey }
+            .mapNotNull { legacy[it] as? Boolean }
+            .firstOrNull()
+    }
+
+    fun allowsPrivate(context: Context, plugin: PluginRegistry.RemotePlugin): Boolean {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val stableKey = allowPrivateStorageKey(plugin.id)
+        if (prefs.contains(stableKey)) return prefs.getBoolean(stableKey, true)
+        val recovered = legacyAllowsPrivate(prefs.all, plugin.id) ?: return true
+        prefs.edit().putBoolean(stableKey, recovered).apply()
+        return recovered
+    }
 
     fun setAllowsPrivate(context: Context, plugin: PluginRegistry.RemotePlugin, enabled: Boolean) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit().putBoolean(PRIVATE_PREFIX + plugin.configurationKey(), enabled).apply()
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val stableKey = allowPrivateStorageKey(plugin.id)
+        prefs.edit().apply {
+            putBoolean(stableKey, enabled)
+            prefs.all.keys
+                .filter { it.startsWith(PRIVATE_PREFIX + connectorScopePrefix(plugin.id)) && it != stableKey }
+                .forEach(::remove)
+        }.apply()
     }
 
     internal fun clearPluginConfigurations(context: Context, pluginId: String) {
