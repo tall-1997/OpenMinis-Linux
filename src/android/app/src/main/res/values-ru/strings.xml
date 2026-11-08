@@ -2042,4 +2042,17 @@
     <string name="model_group_detail_quota_period_placeholder">Длина окна (часы)</string>
     <string name="model_group_detail_quota_window_reset_snackbar">Окно квоты сброшено — основной участник снова отвечает</string>
     <string name="model_group_detail_quota_window_remaining">Осталось в этом окне: %1$d</string>
+    <string name="git_panel_staged">Индексировано</string>
+    <string name="git_panel_changes_section">Изменения</string>
+    <string name="git_panel_stats_files">Изменено файлов: %1$d</string>
+    <string name="git_panel_untracked_badge">новый</string>
+    <string name="git_panel_search_history">Поиск коммитов</string>
+    <string name="git_panel_search_no_match">Нет подходящих коммитов</string>
+    <string name="git_panel_no_identity">Идентификация Git не настроена; коммиты будут использовать системные значения по умолчанию</string>
+    <string name="git_panel_commit_files">Изменённые файлы (%1$d)</string>
+    <string name="git_panel_copy_hash">Скопировать хеш</string>
+    <string name="git_panel_author_label">Автор</string>
+    <string name="git_panel_committer">Коммиттер</string>
+    <string name="git_panel_committed_at">Закоммичено</string>
+    <string name="git_panel_hash_label">Хеш</string>
 </resources>

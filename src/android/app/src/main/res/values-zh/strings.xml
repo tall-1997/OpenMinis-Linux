@@ -2613,4 +2613,17 @@
     <string name="model_group_detail_quota_period_placeholder">窗口时长（小时）</string>
     <string name="model_group_detail_quota_window_reset_snackbar">配额窗口已重置，主成员重新开始服务</string>
     <string name="model_group_detail_quota_window_remaining">本窗口剩余：%1$d 次</string>
+    <string name="git_panel_staged">已暂存</string>
+    <string name="git_panel_changes_section">更改</string>
+    <string name="git_panel_stats_files">已更改 %1$d 个文件</string>
+    <string name="git_panel_untracked_badge">新增</string>
+    <string name="git_panel_search_history">搜索提交</string>
+    <string name="git_panel_search_no_match">没有匹配的提交</string>
+    <string name="git_panel_no_identity">未配置 Git 身份信息；提交将使用系统默认值</string>
+    <string name="git_panel_commit_files">已更改文件 (%1$d)</string>
+    <string name="git_panel_copy_hash">复制哈希</string>
+    <string name="git_panel_author_label">作者</string>
+    <string name="git_panel_committer">提交者</string>
+    <string name="git_panel_committed_at">提交时间</string>
+    <string name="git_panel_hash_label">哈希</string>
 </resources>

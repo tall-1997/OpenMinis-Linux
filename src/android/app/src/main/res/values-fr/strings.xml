@@ -2034,4 +2034,17 @@
     <string name="model_group_detail_quota_period_placeholder">Durée de la fenêtre (heures)</string>
     <string name="model_group_detail_quota_window_reset_snackbar">Fenêtre de quota réinitialisée — le membre principal répond à nouveau</string>
     <string name="model_group_detail_quota_window_remaining">Restants dans cette fenêtre : %1$d envois</string>
+    <string name="git_panel_staged">Indexé</string>
+    <string name="git_panel_changes_section">Modifications</string>
+    <string name="git_panel_stats_files">%1$d fichiers modifiés</string>
+    <string name="git_panel_untracked_badge">nouveau</string>
+    <string name="git_panel_search_history">Rechercher des commits</string>
+    <string name="git_panel_search_no_match">Aucun commit correspondant</string>
+    <string name="git_panel_no_identity">Identité Git non configurée ; les commits utiliseront les valeurs par défaut du système</string>
+    <string name="git_panel_commit_files">Fichiers modifiés (%1$d)</string>
+    <string name="git_panel_copy_hash">Copier le hash</string>
+    <string name="git_panel_author_label">Auteur</string>
+    <string name="git_panel_committer">Committer</string>
+    <string name="git_panel_committed_at">Commité</string>
+    <string name="git_panel_hash_label">Hash</string>
 </resources>

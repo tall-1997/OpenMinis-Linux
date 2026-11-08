@@ -2034,4 +2034,17 @@
     <string name="model_group_detail_quota_period_placeholder">Tempoh tetingkap (jam)</string>
     <string name="model_group_detail_quota_window_reset_snackbar">Tetingkap kuota ditetapkan semula — ahli utama berkhidmat semula</string>
     <string name="model_group_detail_quota_window_remaining">Baki dalam tetingkap ini: %1$d hantaran</string>
+    <string name="git_panel_staged">Dipentas</string>
+    <string name="git_panel_changes_section">Perubahan</string>
+    <string name="git_panel_stats_files">%1$d fail diubah</string>
+    <string name="git_panel_untracked_badge">baharu</string>
+    <string name="git_panel_search_history">Cari commit</string>
+    <string name="git_panel_search_no_match">Tiada commit sepadan</string>
+    <string name="git_panel_no_identity">Identiti Git tidak dikonfigurasi; commit akan menggunakan tetapan lalai sistem</string>
+    <string name="git_panel_commit_files">Fail diubah (%1$d)</string>
+    <string name="git_panel_copy_hash">Salin hash</string>
+    <string name="git_panel_author_label">Pengarang</string>
+    <string name="git_panel_committer">Committer</string>
+    <string name="git_panel_committed_at">Dikomit</string>
+    <string name="git_panel_hash_label">Hash</string>
 </resources>
