@@ -83,11 +83,14 @@ internal class ProviderCredentialPool(private val context: Context) {
         // The stored list changed — reset the cursor so rotation restarts
         // from position 0 with the fresh set.
         cursors.remove(instanceId)
-        // Prune cooldown entries whose index no longer exists.
-        val valid = keys.indices.toSet()
+        // [T-credential-cooldown-by-content] Prune cooldown entries whose key
+        // fingerprint no longer exists in the stored list.
+        val validFingerprints = keys.mapTo(HashSet()) {
+            com.openminis.app.provider.ProviderKeyGate.fingerprint(it)
+        }
         cooldownUntil.keys.removeIf { key ->
-            val (id, idx) = parseCooldownKey(key) ?: return@removeIf true
-            id == instanceId && idx !in valid
+            val (id, fp) = parseCooldownKey(key) ?: return@removeIf true
+            id == instanceId && fp !in validFingerprints
         }
     }
 
@@ -127,7 +130,7 @@ internal class ProviderCredentialPool(private val context: Context) {
         val (key, idx) = poolPickKey(
             keys = current,
             cursor = cursors.getOrPut(instanceId) { AtomicInteger(0) },
-            cooldownUntilMs = { cooldownUntil[cooldownKey(instanceId, it)] ?: 0L },
+            cooldownForKey = { cooldownUntil[cooldownKey(instanceId, it)] ?: 0L },
         ) ?: run {
             // All keys cooled — serve whichever the cursor points at.
             val fallbackIndex = (cursors[instanceId] ?: AtomicInteger(0)).get()
@@ -142,12 +145,23 @@ internal class ProviderCredentialPool(private val context: Context) {
     fun lastPick(instanceId: String): Int? = lastPickInfo[instanceId]
 
     /**
-     * Park key [index] (0-based into the stored list) until [untilMs].
-     * Any earlier cooldown for the same spot is extended.
+     * Park [key] (by CONTENT, see [T-credential-cooldown-by-content]) until
+     * [untilMs]. Any earlier cooldown for the same key is extended.
      */
-    fun markCooled(instanceId: String, index: Int, untilMs: Long) {
-        val key = cooldownKey(instanceId, index)
-        cooldownUntil[key] = maxOf(cooldownUntil[key] ?: 0L, untilMs)
+    fun markCooled(instanceId: String, key: String, untilMs: Long) {
+        val ck = cooldownKey(instanceId, key)
+        cooldownUntil[ck] = maxOf(cooldownUntil[ck] ?: 0L, untilMs)
+    }
+
+    /**
+     * Positional form for SIBLING-pool cooldown only: the sibling's stored
+     * list is a different set, so the index is an explicit approximation
+     * (documented at [ProviderConfigStore.markCredentialCooled]). Never use
+     * this for the instance that actually served the failing request.
+     */
+    fun markCooledByIndex(instanceId: String, index: Int, untilMs: Long) {
+        val key = keys(instanceId).getOrNull(index) ?: return
+        markCooled(instanceId, key, untilMs)
     }
 
     // ── test support ────────────────────────────────────────────────────
@@ -158,12 +172,21 @@ internal class ProviderCredentialPool(private val context: Context) {
     }
 
     // ── internals ───────────────────────────────────────────────────────
-    private fun cooldownKey(instanceId: String, index: Int) = "$instanceId#$index"
 
-    private fun parseCooldownKey(raw: String): Pair<String, Int>? {
+    /**
+     * [T-credential-cooldown-by-content] Cooldown keys are
+     * `"instanceId#<key fingerprint>"` — NOT the positional index. A
+     * positional key changes meaning the moment the user deletes or reorders
+     * a slot: after deleting the head of `[A,B,C]`, index 1 used to hand B's
+     * 30-minute cooldown to the perfectly healthy C.
+     */
+    private fun cooldownKey(instanceId: String, key: String) =
+        "$instanceId#${com.openminis.app.provider.ProviderKeyGate.fingerprint(key)}"
+
+    private fun parseCooldownKey(raw: String): Pair<String, String>? {
         val split = raw.split("#", limit = 2)
-        val idx = split.getOrNull(1)?.toIntOrNull() ?: return null
-        return split[0] to idx
+        if (split.size < 2) return null
+        return split[0] to split[1]
     }
 
     private fun pruneFor(instanceId: String) {
@@ -219,20 +242,26 @@ internal fun poolAfterRemove(current: List<String>, index: Int): PoolRemoval {
 internal fun poolPickKey(
     keys: List<String>,
     cursor: AtomicInteger,
-    cooldownUntilMs: (Int) -> Long,
+    cooldownForKey: (String) -> Long,
     nowMs: Long = System.currentTimeMillis(),
 ): Pair<String, Int>? {
     if (keys.isEmpty()) return null
-    val start = cursor.get() % keys.size
-    // First pass: strictly skip cooled keys; on success the cursor lands on
-    // the slot AFTER the served key so the next pick keeps rotating forward
-    // even when cooled slots were skipped in between.
+    // [T-credential-pick-cas] getAndIncrement is ATOMIC: two concurrent picks
+    // get different tickets, so the rotation actually spreads the load (the
+    // old get-then-set let both callers land on the same key — exactly the
+    // 429-storm scenario the pool exists to absorb).
+    //
+    // Every COOLED slot consumes a ticket too: the rotation keeps its old
+    // "cursor lands after the served key" behaviour (a skipped cooldown must
+    // not cause the next pick to re-serve the same live key), and concurrent
+    // callers never share a ticket.
+    var ticket = cursor.getAndIncrement()
     for (i in keys.indices) {
-        val idx = (start + i) % keys.size
-        if (cooldownUntilMs(idx) <= nowMs) {
-            cursor.set((idx + 1) % keys.size)
+        val idx = ((ticket % keys.size) + keys.size) % keys.size
+        if (cooldownForKey(keys[idx]) <= nowMs) {
             return keys[idx] to idx
         }
+        ticket = cursor.getAndIncrement()
     }
     return null
 }

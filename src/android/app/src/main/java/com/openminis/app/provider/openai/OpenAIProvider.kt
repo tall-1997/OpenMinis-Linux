@@ -822,7 +822,7 @@ class OpenAIProvider private constructor(
             if (statusCode !in 200..299) {
                 com.openminis.app.logging.AppLogger.warning(
                     "OpenAIProvider",
-                    "[ModelUseRoute] images/generations HTTP $statusCode body=${responseBody.take(300)}",
+                    "[ModelUseRoute] images/generations HTTP $statusCode body=${maskSecrets(responseBody.take(300))}",
                 )
                 throw mapHttpError(statusCode, responseBody)
             }
@@ -946,7 +946,7 @@ class OpenAIProvider private constructor(
             if (statusCode !in 200..299) {
                 com.openminis.app.logging.AppLogger.warning(
                     "OpenAIProvider",
-                    "[ModelUseRoute] images/edits HTTP $statusCode body=${responseBody.take(300)}",
+                    "[ModelUseRoute] images/edits HTTP $statusCode body=${maskSecrets(responseBody.take(300))}",
                 )
                 throw mapHttpError(statusCode, responseBody)
             }

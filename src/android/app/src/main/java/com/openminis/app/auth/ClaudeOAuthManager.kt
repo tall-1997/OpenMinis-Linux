@@ -6,7 +6,9 @@ import android.util.Log
 import androidx.browser.customtabs.CustomTabsIntent
 import com.openminis.app.BuildConfig
 import com.openminis.app.data.repository.ProviderRepository
+import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -25,7 +27,7 @@ import kotlin.coroutines.resume
  * 3. Open claude.ai/oauth/authorize in Chrome Custom Tab (in-app browser)
  * 4. User authorizes → Anthropic redirects to localhost:54545/callback
  * 5. Callback server captures code + state
- * 6. Exchange code for tokens via POST JSON to console.anthropic.com/v1/oauth/token
+ * 6. Exchange code for tokens via POST JSON to claude.ai/v1/oauth/token
  * 7. Store access_token as API key via ProviderRepository
  *
  * Key differences from OpenRouter:
@@ -115,7 +117,11 @@ class ClaudeOAuthManager(context: Context, instanceId: String) : OAuthManager(co
     }
 
     override val authURL = "https://claude.ai/oauth/authorize"
-    override val tokenURL = "https://console.anthropic.com/v1/oauth/token"
+    // [T-oauth-claude-endpoint] [OpenMinis#360]: console.anthropic.com sits
+    // behind a Cloudflare interstitial that rejects non-CLI clients; the
+    // working endpoint is claude.ai/v1/oauth/token, paired with the CLI
+    // mimicry headers on BOTH auth requests (see the two builders below).
+    override val tokenURL = "https://claude.ai/v1/oauth/token"
     override val clientId = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
     override val clientSecret: String? = null
     override val callbackPort = 54545
@@ -136,32 +142,45 @@ class ClaudeOAuthManager(context: Context, instanceId: String) : OAuthManager(co
         val authUrl = buildAuthorizationUrl()
 
         val accessToken = withContext(Dispatchers.IO) {
-            // Step 1: Wait for callback code
-            val (code, state) = suspendCancellableCoroutine<Pair<String, String?>> { cont ->
-                val server = OAuthCallbackServer(callbackPort, expectedPath = redirectPath, onCode = { receivedCode, receivedState ->
-                    if (cont.isActive) {
-                        cont.resume(receivedCode to receivedState)
+            // Step 1: Wait for callback code.
+            // [T-oauth-login-timeout] Hard ceiling: a hung Custom Tab or an
+            // occupied callback port must fail fast instead of parking the
+            // Sign-In button forever. [T-oauth-bind-failed] fires immediately
+            // when every port failed to bind.
+            val (code, state) = withTimeoutOrNull(OAuthManager.LOGIN_TIMEOUT_MS) {
+                suspendCancellableCoroutine<Pair<String, String?>> { cont ->
+                    val server = OAuthCallbackServer(callbackPort, expectedPath = redirectPath, onCode = { receivedCode, receivedState ->
+                        if (cont.isActive) {
+                            cont.resume(receivedCode to receivedState)
+                        }
+                    })
+                    callbackServer = server
+                    server.onBindFailed = {
+                        if (cont.isActive) {
+                            cont.resumeWithException(IllegalStateException("Anthropic OAuth callback ports unavailable"))
+                        }
                     }
-                })
-                callbackServer = server
-                server.start()
-                Log.i(TAG, "Callback server started on port $callbackPort")
+                    server.start()
+                    Log.i(TAG, "Callback server started on port $callbackPort")
 
-                cont.invokeOnCancellation {
-                    server.stop()
-                    callbackServer = null
+                    cont.invokeOnCancellation {
+                        server.stop()
+                        callbackServer = null
+                    }
+
+                    // Open auth URL in Chrome Custom Tab (in-app browser). Do NOT set
+                    // FLAG_ACTIVITY_NEW_TASK: MainActivity is singleTask, and launching Custom
+                    // Tab in a new task causes the IME to be dismissed whenever the authorization
+                    // page focuses an input.
+                    val customTabsIntent = CustomTabsIntent.Builder()
+                        .setShowTitle(true)
+                        .build()
+                    customTabsIntent.launchUrl(context, Uri.parse(authUrl))
+                    Log.i(TAG, "Opened Custom Tab for Anthropic authorization")
                 }
-
-                // Open auth URL in Chrome Custom Tab (in-app browser). Do NOT set
-                // FLAG_ACTIVITY_NEW_TASK: MainActivity is singleTask, and launching Custom
-                // Tab in a new task causes the IME to be dismissed whenever the authorization
-                // page focuses an input.
-                val customTabsIntent = CustomTabsIntent.Builder()
-                    .setShowTitle(true)
-                    .build()
-                customTabsIntent.launchUrl(context, Uri.parse(authUrl))
-                Log.i(TAG, "Opened Custom Tab for Anthropic authorization")
-            }
+            } ?: throw IllegalStateException(
+                "Anthropic OAuth login timed out — no callback within ${OAuthManager.LOGIN_TIMEOUT_MS / 60_000} min",
+            )
 
             callbackServer?.stop()
             callbackServer = null
@@ -200,6 +219,7 @@ class ClaudeOAuthManager(context: Context, instanceId: String) : OAuthManager(co
         val request = okhttp3.Request.Builder()
             .url(tokenURL)
             .post(body.toString().toRequestBody("application/json".toMediaType()))
+            .applyClaudeCliMimicryHeaders()
             .build()
         val response = httpClient.newCall(request).execute()
         val responseCode = response.code
@@ -208,7 +228,9 @@ class ClaudeOAuthManager(context: Context, instanceId: String) : OAuthManager(co
 
         if (responseCode !in 200..299) {
             Log.e(TAG, "Token exchange failed: $responseCode ${OAuthManager.sanitizeBody(responseBody)}")
-            throw Exception("Token exchange failed ($responseCode): $responseBody")
+            // [T-oauth-error-redact] The exception message rides into AppLogger
+            // and the exported bug report — sanitize like the OpenAI manager.
+            throw Exception("Token exchange failed ($responseCode): ${OAuthManager.sanitizeBody(responseBody)}")
         }
 
         val json = JSONObject(responseBody)
@@ -220,7 +242,7 @@ class ClaudeOAuthManager(context: Context, instanceId: String) : OAuthManager(co
         // Save full token data (for refresh later)
         val expiresIn = json.optLong("expires_in", 0)
         if (expiresIn > 0) {
-            json.put("expire_at", System.currentTimeMillis() + expiresIn * 1000)
+            json.put("expire_at", System.currentTimeMillis() + expiresIn * 1000 - OAuthManager.CLOCK_SKEW_MS)
         }
         saveOAuthString("tokens", json.toString())
 
@@ -290,6 +312,7 @@ class ClaudeOAuthManager(context: Context, instanceId: String) : OAuthManager(co
                 val request = okhttp3.Request.Builder()
                     .url(tokenURL)
                     .post(body.toString().toRequestBody("application/json".toMediaType()))
+                    .applyClaudeCliMimicryHeaders()
                     .build()
                 val response = httpClient.newCall(request).execute()
                 val responseCode = response.code
@@ -303,7 +326,7 @@ class ClaudeOAuthManager(context: Context, instanceId: String) : OAuthManager(co
                     }
                     val expiresIn = json.optLong("expires_in", 0)
                     if (expiresIn > 0) {
-                        json.put("expire_at", System.currentTimeMillis() + expiresIn * 1000)
+                        json.put("expire_at", System.currentTimeMillis() + expiresIn * 1000 - OAuthManager.CLOCK_SKEW_MS)
                     }
                     saveOAuthString("tokens", json.toString())
                     Log.i(TAG, "Token refresh successful. Expires in ${expiresIn}s")
@@ -344,6 +367,10 @@ class ClaudeOAuthManager(context: Context, instanceId: String) : OAuthManager(co
      * caring about the refresh outcome details.
      */
     override suspend fun validAccessToken(): String? = withContext(Dispatchers.IO) {
+        // [T-oauth-manual-bearer] Manual bearer takes precedence (base-class
+        // contract); the override used to skip it, so a manually pasted token
+        // on a Claude instance was silently ignored.
+        loadManualBearerToken()?.takeIf { it.isNotEmpty() }?.let { return@withContext it }
         val stored = loadStoredTokens() ?: return@withContext null
         val token = stored.optString("access_token", "").ifEmpty { return@withContext null }
         val expireAt = stored.optLong("expire_at", 0)

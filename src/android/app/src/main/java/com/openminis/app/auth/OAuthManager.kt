@@ -30,6 +30,16 @@ abstract class OAuthManager(
             ?: error("OAuthManager requires MinisApp application context")
     companion object {
         private const val TAG = "OAuthManager"
+
+        /** [T-oauth-login-timeout] Hard ceiling for a browser login flow: a
+         *  hung Custom Tab / occupied callback port must fail fast instead of
+         *  parking the Sign-In button forever. */
+        const val LOGIN_TIMEOUT_MS = 5L * 60_000
+
+        /** [T-oauth-clock-skew] Slow-device buffer: the stored expire_at is
+         *  one minute earlier than the IdP's actual expiry, so a skewed
+         *  clock refreshes slightly early instead of sending a stale token. */
+        const val CLOCK_SKEW_MS = 60_000L
         private const val KEY_MANUAL_BEARER = "manual_bearer_token"
 
         /**
@@ -556,7 +566,7 @@ abstract class OAuthManager(
     private fun saveTokens(json: JSONObject) {
         val expiresIn = json.optLong("expires_in", 0)
         if (expiresIn > 0) {
-            json.put("expire_at", System.currentTimeMillis() + expiresIn * 1000)
+            json.put("expire_at", System.currentTimeMillis() + expiresIn * 1000 - OAuthManager.CLOCK_SKEW_MS)
         }
         getEncryptedPrefs().edit()
             .putString("oauth_tokens_$instanceId", json.toString())

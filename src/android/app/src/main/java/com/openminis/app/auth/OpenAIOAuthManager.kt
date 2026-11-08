@@ -6,6 +6,8 @@ import androidx.browser.customtabs.CustomTabsIntent
 import com.openminis.app.logging.AppLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resumeWithException
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -58,31 +60,42 @@ class OpenAIOAuthManager(context: Context, instanceId: String) : OAuthManager(co
         AppLogger.info(TAG, "authorization flow prepared (callbackPort=$callbackPort)")
 
         val accessToken = withContext(Dispatchers.IO) {
-            // Step 1: Wait for callback code
-            val (code, state) = suspendCancellableCoroutine<Pair<String, String?>> { cont ->
-                val server = OAuthCallbackServer(callbackPort, expectedPath = redirectPath, onCode = { receivedCode, receivedState ->
-                    if (cont.isActive) {
-                        cont.resume(receivedCode to receivedState)
+            // Step 1: Wait for callback code. [T-oauth-login-timeout] +
+            // [T-oauth-bind-failed]: see ClaudeOAuthManager — a hung Custom Tab
+            // or an occupied port must fail fast, not park the Sign-In button.
+            val (code, state) = withTimeoutOrNull(OAuthManager.LOGIN_TIMEOUT_MS) {
+                suspendCancellableCoroutine<Pair<String, String?>> { cont ->
+                    val server = OAuthCallbackServer(callbackPort, expectedPath = redirectPath, onCode = { receivedCode, receivedState ->
+                        if (cont.isActive) {
+                            cont.resume(receivedCode to receivedState)
+                        }
+                    })
+                    loginCallbackServer = server
+                    server.onBindFailed = {
+                        if (cont.isActive) {
+                            cont.resumeWithException(IllegalStateException("OpenAI OAuth callback ports unavailable"))
+                        }
                     }
-                })
-                loginCallbackServer = server
-                server.start()
-                AppLogger.info(TAG, "callback server listening on port $callbackPort path=$redirectPath")
+                    server.start()
+                    AppLogger.info(TAG, "callback server listening on port $callbackPort path=$redirectPath")
 
-                cont.invokeOnCancellation {
-                    server.stop()
-                    loginCallbackServer = null
+                    cont.invokeOnCancellation {
+                        server.stop()
+                        loginCallbackServer = null
+                    }
+
+                    // Open auth URL in Chrome Custom Tab. Do NOT set FLAG_ACTIVITY_NEW_TASK:
+                    // MainActivity is singleTask, and launching Custom Tab in a new task causes
+                    // the IME to be dismissed whenever the authorization page focuses an input.
+                    val customTabsIntent = CustomTabsIntent.Builder()
+                        .setShowTitle(true)
+                        .build()
+                    customTabsIntent.launchUrl(context, Uri.parse(authUrl))
+                    AppLogger.info(TAG, "Custom Tab launched")
                 }
-
-                // Open auth URL in Chrome Custom Tab. Do NOT set FLAG_ACTIVITY_NEW_TASK:
-                // MainActivity is singleTask, and launching Custom Tab in a new task causes
-                // the IME to be dismissed whenever the authorization page focuses an input.
-                val customTabsIntent = CustomTabsIntent.Builder()
-                    .setShowTitle(true)
-                    .build()
-                customTabsIntent.launchUrl(context, Uri.parse(authUrl))
-                AppLogger.info(TAG, "Custom Tab launched")
-            }
+            } ?: throw IllegalStateException(
+                "OpenAI OAuth login timed out — no callback within ${OAuthManager.LOGIN_TIMEOUT_MS / 60_000} min",
+            )
 
             loginCallbackServer?.stop()
             loginCallbackServer = null
@@ -224,7 +237,7 @@ class OpenAIOAuthManager(context: Context, instanceId: String) : OAuthManager(co
         // Save full token data (for refresh later)
         val expiresIn = json.optLong("expires_in", 0)
         if (expiresIn > 0) {
-            json.put("expire_at", System.currentTimeMillis() + expiresIn * 1000)
+            json.put("expire_at", System.currentTimeMillis() + expiresIn * 1000 - OAuthManager.CLOCK_SKEW_MS)
         }
         saveOAuthString("tokens", json.toString())
 

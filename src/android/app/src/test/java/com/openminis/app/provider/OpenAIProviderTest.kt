@@ -81,7 +81,9 @@ class OpenAIProviderTest {
         server.enqueue(MockResponse().setBody(responseBody))
         val response = provider.sendMessage(listOf(LLMMessage(LLMMessage.Role.USER, "Hi")), null, 1024)
 
-        assertEquals(100, response.usage?.inputTokens)
+        // [T-usage-cache-dedupe] inputTokens is FRESH-only (100 - 50 cached),
+        // matching the Responses/Gemini/Anthropic convention.
+        assertEquals(50, response.usage?.inputTokens)
         assertEquals(10, response.usage?.outputTokens)
         assertEquals(50, response.usage?.cacheReadInputTokens)
         assertNull(response.usage?.cacheCreationInputTokens)

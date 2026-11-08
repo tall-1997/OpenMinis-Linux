@@ -47,7 +47,25 @@ class GeminiOAuthManager(context: Context, instanceId: String) : OAuthManager(co
     // Placeholder. Google OAuth requires a client secret alongside the
     // client id; supply your own from Google Cloud Console to use this
     // sign-in. API-key providers are unaffected.
-    override val clientSecret = "GOCSPX-xxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    // Placeholder. Google OAuth requires a client secret alongside the
+    // client id; supply your own from Google Cloud Console to use this
+    // sign-in. API-key providers are unaffected.
+    private val PLACEHOLDER_SECRET = "GOCSPX-xxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    override val clientSecret = PLACEHOLDER_SECRET
+
+    /**
+     * [T-gemini-oauth-placeholder] The placeholder secret must never reach the
+     * network: guard the two endpoints that would send it, so a future wiring
+     * fails with an actionable message instead of a doomed token exchange.
+     */
+    private fun effectiveClientSecret(): String =
+        if (clientSecret.isEmpty() || clientSecret == PLACEHOLDER_SECRET) {
+            throw IllegalStateException(
+                "Gemini OAuth client secret is not configured — set a real secret from Google Cloud Console",
+            )
+        } else {
+            clientSecret
+        }
     override val callbackPort = 8085
     override val redirectPath = "/oauth2callback"
     override val scopes = "https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile"
@@ -55,6 +73,12 @@ class GeminiOAuthManager(context: Context, instanceId: String) : OAuthManager(co
     override fun buildAuthorizationUrl(): String {
         val (_, challenge) = generateHexPKCE()
         val state = generateState()
+        // [T-gemini-oauth-state] Persist BOTH the state and the PKCE verifier —
+        // the base-class callback validation compares against currentState, and
+        // the old override threw both away, so any base-class-path login was
+        // guaranteed a "State mismatch".
+        saveOAuthString("state", state)
+        saveOAuthString("verifier", challenge)
         return "$authURL?" + listOf(
             "client_id=$clientId",
             "redirect_uri=${Uri.encode(redirectUri)}",
@@ -84,6 +108,9 @@ class GeminiOAuthManager(context: Context, instanceId: String) : OAuthManager(co
         val token = validAccessToken() ?: return
         try {
             val conn = URL("https://www.googleapis.com/oauth2/v1/userinfo").openConnection() as HttpURLConnection
+            // [T-oauth-conn-timeout] Never wait forever on a hung endpoint.
+            conn.connectTimeout = 15_000
+            conn.readTimeout = 30_000
             conn.setRequestProperty("Authorization", "Bearer $token")
             if (conn.responseCode == 200) {
                 val body = conn.inputStream.bufferedReader().readText()
@@ -111,6 +138,9 @@ class GeminiOAuthManager(context: Context, instanceId: String) : OAuthManager(co
     private fun loadCodeAssist(token: String): String? {
         return try {
             val conn = URL("https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist").openConnection() as HttpURLConnection
+            // [T-oauth-conn-timeout] Never wait forever on a hung endpoint.
+            conn.connectTimeout = 15_000
+            conn.readTimeout = 30_000
             conn.requestMethod = "POST"
             conn.setRequestProperty("Authorization", "Bearer $token")
             conn.setRequestProperty("User-Agent", USER_AGENT)
@@ -129,6 +159,9 @@ class GeminiOAuthManager(context: Context, instanceId: String) : OAuthManager(co
     private suspend fun onboardUser(token: String): String? {
         return try {
             val conn = URL("https://cloudcode-pa.googleapis.com/v1internal:onboardUser").openConnection() as HttpURLConnection
+            // [T-oauth-conn-timeout] Never wait forever on a hung endpoint.
+            conn.connectTimeout = 15_000
+            conn.readTimeout = 30_000
             conn.requestMethod = "POST"
             conn.setRequestProperty("Authorization", "Bearer $token")
             conn.setRequestProperty("User-Agent", USER_AGENT)
@@ -159,6 +192,9 @@ class GeminiOAuthManager(context: Context, instanceId: String) : OAuthManager(co
             delay(5000)
             try {
                 val conn = URL("https://cloudcode-pa.googleapis.com/v1internal/$operationName").openConnection() as HttpURLConnection
+            // [T-oauth-conn-timeout] Never wait forever on a hung endpoint.
+            conn.connectTimeout = 15_000
+            conn.readTimeout = 30_000
                 conn.setRequestProperty("Authorization", "Bearer $token")
                 conn.setRequestProperty("User-Agent", USER_AGENT)
                 val body = if (conn.responseCode == 200) conn.inputStream.bufferedReader().readText() else null
@@ -219,7 +255,8 @@ class GeminiOAuthManager(context: Context, instanceId: String) : OAuthManager(co
                     "grant_type" to "refresh_token",
                     "refresh_token" to refreshTokenValue,
                     "client_id" to clientId,
-                    "client_secret" to (clientSecret ?: ""),
+                    // [T-gemini-oauth-placeholder] Guard the placeholder before it hits the wire.
+                    "client_secret" to effectiveClientSecret(),
                 )
                 val formBody = params.entries.joinToString("&") { "${it.key}=${Uri.encode(it.value)}" }
                 val request = okhttp3.Request.Builder()
@@ -239,7 +276,7 @@ class GeminiOAuthManager(context: Context, instanceId: String) : OAuthManager(co
                     }
                     val expiresIn = json.optLong("expires_in", 0)
                     if (expiresIn > 0) {
-                        json.put("expire_at", System.currentTimeMillis() + expiresIn * 1000)
+                        json.put("expire_at", System.currentTimeMillis() + expiresIn * 1000 - OAuthManager.CLOCK_SKEW_MS)
                     }
                     saveOAuthString("tokens", json.toString())
                     Log.i(TAG, "Gemini token refresh successful. Expires in ${expiresIn}s")

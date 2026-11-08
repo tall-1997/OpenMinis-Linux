@@ -25,10 +25,19 @@ internal class SseEventParser {
     private val data = StringBuilder()
     private var event: String? = null
     private var id: String? = null
+    // [T-sse-bom] Some gateways prepend a UTF-8 BOM to the body; on the first
+    // line it turns the field name into "\uFEFFdata" and the event is silently
+    // dropped as an unknown field. Stripped once, at the stream head.
+    private var bomStripped = false
 
     /** Feed one physical line. Returns a completed event at a blank line. */
     fun feed(rawLine: String): Event? {
-        val line = rawLine.removeSuffix("\r")
+        var incoming = rawLine
+        if (!bomStripped) {
+            bomStripped = true
+            incoming = incoming.removePrefix("\uFEFF")
+        }
+        val line = incoming.removeSuffix("\r")
         if (line.isEmpty()) return flush()
         if (line.startsWith(":")) return null
         val colon = line.indexOf(':')

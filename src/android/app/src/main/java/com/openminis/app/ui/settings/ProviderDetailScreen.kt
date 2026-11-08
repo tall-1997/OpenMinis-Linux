@@ -211,6 +211,14 @@ fun ProviderDetailScreen(
                                 // re-reading the async-written prefs on recomposition.
                                 storedKey = editKeyValue
                                 AppLogger.info(TAG, "Saved API key for ${instance.id}")
+                                // [T-models-credential-swap] A different key may see
+                                // a different model set — re-fetch now (non-force:
+                                // the new key's disk cache misses and goes to the
+                                // network; a failure keeps the current list).
+                                scope.launch {
+                                    val inst = providerRepository.instance(instanceId) ?: return@launch
+                                    providerRepository.refreshModels(inst)
+                                }
                             }
                             isEditingKey = false
                             editKeyValue = ""
@@ -1049,31 +1057,6 @@ private fun ApiKeyCredentialBlock(
 private fun maskedKey(key: String): String {
     if (key.length <= 10) return key.replace(Regex("."), "•")
     return key.take(6) + "..." + key.takeLast(4)
-}
-
-/**
- * Export the provider instance as JSON and hand it to the system share sheet
- * via FileProvider. Mirrors iOS `ProviderShareSheet` — writes a <label>.json
- * file to app-scoped cache and emits ACTION_SEND with a content:// URI.
- */
-private fun exportProviderInstance(
-    context: android.content.Context,
-    providerRepository: ProviderRepository,
-    instance: com.openminis.app.data.model.ProviderInstance,
-) {
-    val json = providerRepository.exportInstanceJSON(instance.id) ?: return
-    val safeLabel = instance.label.ifBlank { "provider" }
-        .replace(Regex("[^A-Za-z0-9._-]"), "_")
-    val dir = java.io.File(context.cacheDir, "shared").apply { mkdirs() }
-    val file = java.io.File(dir, "$safeLabel.json")
-    runCatching { file.writeText(json) }.onFailure { return }
-
-    // [T-share-fileprovider-unify] Shared FileProvider helper (clip + double
-    // grant hardening, previously missing on this variant).
-    shareViaFileProvider(
-        context, file, "application/json",
-        context.getString(R.string.provider_share_chooser_title),
-    )
 }
 
 /**

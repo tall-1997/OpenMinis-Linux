@@ -74,4 +74,8 @@
     <string name="perm_vscreen_tier_ready">Ready</string>
     <string name="perm_vscreen_tier_degraded">Temporarily unavailable</string>
     <string name="perm_vscreen_tier_unknown">Not probed yet — create a virtual screen to probe</string>
+    <!-- [T-export-credential-option] Shown when a shared provider export
+         contained nothing because credentials were stripped and no config
+         remained. -->
+    <string name="provider_share_no_credentials">Nothing to share: credentials are excluded from shared exports. Use the encrypted backup to move keys.</string>
 </resources>

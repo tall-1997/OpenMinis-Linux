@@ -123,6 +123,13 @@ class OAuthCallbackServer(
      */
     @Volatile var onExternalCancel: (() -> Unit)? = null
 
+    /**
+     * [T-oauth-bind-failed] Called when EVERY port (primary + fallbacks) failed
+     * to bind. Without it the login coroutine waits on the callback forever
+     * while the browser redirect lands on a dead port — resume with a failure.
+     */
+    @Volatile var onBindFailed: (() -> Unit)? = null
+
     fun start() {
         running = true
         Thread {
@@ -148,6 +155,7 @@ class OAuthCallbackServer(
                 }
                 if (!bound) {
                     Log.e(TAG, "All ports unavailable: $portsToTry")
+                    onBindFailed?.invoke()
                     return@Thread
                 }
                 Log.d(TAG, "Listening on port $boundPort")

@@ -19,6 +19,7 @@ import java.io.File
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
@@ -94,6 +95,28 @@ internal class ProviderConfigStore(
     }
 
     private val _credentialRevision = MutableStateFlow(0L); val credentialRevision: StateFlow<Long> = _credentialRevision.asStateFlow()
+
+    /**
+     * [T-credential-presence-cache] Whether an API-key credential MIGHT exist
+     * for the instance: `false` is authoritative (nothing stored), `true`
+     * means "possibly" — the caller then falls through to the real
+     * encrypted-prefs read. This turns the routing hot path
+     * ([ProviderRepository.availableMemberEntries] → hasAnyCredential, once
+     * per member per pass) from a Tink AES-GCM decrypt into a map hit, while
+     * every write point below keeps it exact.
+     */
+    private val apiKeyPresence = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
+
+    private fun apiKeyPresenceOf(instanceId: String): Boolean {
+        if (apiKeyPresence.containsKey(instanceId)) return apiKeyPresence[instanceId] == true
+        val present = loadApiKeyRaw(instanceId) != null
+        apiKeyPresence[instanceId] = present
+        return present
+    }
+
+    /** Un-cached single read (the cache seeds itself from this). */
+    private fun loadApiKeyRaw(instanceId: String): String? =
+        encryptedPrefs.getString("apikey_$instanceId", null)
 
     // [T-credential-pool-x] Multi-account credential pool: N ≥ 2 API keys per
     // instance, round-robin pick + per-index cooldown. Storage lives in the
@@ -523,6 +546,11 @@ internal class ProviderConfigStore(
     fun hasAnyCredential(instance: ProviderInstance): Boolean {
         // API-key path, including the keyless-by-design compat endpoints that
         // [usableApiKey] already models via allowsEmptyAPIKey.
+        // [T-credential-presence-cache] Cheap pre-filter: `false` (nothing
+        // stored) short-circuits without a Tink decrypt; `true` falls through
+        // to the exact read below. instance.allowsEmptyAPIKey must consult the
+        // instance type, so only the "no key stored at all" case is cached.
+        if (!apiKeyPresenceOf(instance.id) && !instance.allowsEmptyAPIKey) return false
         if (usableApiKey(instance) != null) return true
         // OAuth path — token storage is keyed by instance id in the shared
         // oauth prefs, so this needs no OAuthManager instance. Reading the
@@ -538,16 +566,20 @@ internal class ProviderConfigStore(
     }
 
     // API Key management
-    fun saveApiKey(instanceId: String, key: String) {
+    fun saveApiKey(instanceId: String, key: String) = synchronized(repo.configLock) {
         encryptedPrefs.edit().putString("apikey_$instanceId", key).apply()
+        apiKeyPresence[instanceId] = key.isNotEmpty()
         // [T-credential-pool-x] Slot 0 of the pool IS the primary key — an
         // edit of the main key must propagate so the pool keeps rotating
         // over what the user actually configured.
+        // [T-key-mutations-lock] The keys() → mutate → setKeys sequence is a
+        // read-modify-write: WITHOUT configLock it interleaves with the
+        // backup-restore writer and can lose whole pool updates.
         val currentPool = credentialPool.keys(instanceId)
         if (currentPool.isNotEmpty() && currentPool[0] != key) {
             credentialPool.setKeys(instanceId, listOf(key) + currentPool.drop(1))
         }
-        _credentialRevision.value = _credentialRevision.value + 1
+        _credentialRevision.update { it + 1 }
         // [T-android-provider-memo] The memo keys on the credential fingerprint;
         // a rotated token already yields a new entry. Drop this instance's
         // entries so stale-keyed providers can't linger past the cap —
@@ -580,12 +612,13 @@ internal class ProviderConfigStore(
         loadApiKey(instance.id)
             ?: if (instance.allowsEmptyAPIKey) "" else null
 
-    fun deleteApiKey(instanceId: String) {
+    fun deleteApiKey(instanceId: String) = synchronized(repo.configLock) {
         encryptedPrefs.edit().remove("apikey_$instanceId").apply()
+        apiKeyPresence[instanceId] = false
         // [T-credential-pool-x] Deleting the credential wipes the whole
         // pool — a "clear" is a clear, not a partial removal.
         credentialPool.setKeys(instanceId, emptyList())
-        _credentialRevision.value = _credentialRevision.value + 1
+        _credentialRevision.update { it + 1 }
         // [T-key-cache-invalidate] 删 key 同样要让 ProviderFactory 的
         // memo 缓存失效 —— 否则已构造的 provider 继续用旧 key 存活，
         // 删 key 后重加同实例仍是旧 key 生效。
@@ -598,6 +631,13 @@ internal class ProviderConfigStore(
     /** The pooled keys for [instanceId] in order (empty when pool off). */
     fun poolKeys(instanceId: String): List<String> = credentialPool.keys(instanceId)
 
+    /** [T-backup-pool-singleton] Full-replacement write routed through the
+     *  repo-owned singleton so cursors/cooldowns stay consistent. */
+    fun setPoolKeys(instanceId: String, keys: List<String>) {
+        credentialPool.setKeys(instanceId, keys)
+        _credentialRevision.update { it + 1 }
+    }
+
     /**
      * Add [key] as an extra account.  The first add seeds slot 0 from the
      * legacy single key.  Duplicates and pools that would stay below the
@@ -605,13 +645,13 @@ internal class ProviderConfigStore(
      * credential revision and invalidate the instance memo so the next
      * request builds a provider from a fresh rotation.
      */
-    fun addPoolKey(instanceId: String, key: String): Boolean {
-        if (key.isBlank()) return false
+    fun addPoolKey(instanceId: String, key: String): Boolean = synchronized(repo.configLock) {
+        if (key.isBlank()) return@synchronized false
         val current = credentialPool.keys(instanceId)
         val next = poolAfterAdd(current, loadApiKey(instanceId), key)
-        if (next.size < 2) return false
+        if (next.size < 2) return@synchronized false
         credentialPool.setKeys(instanceId, next)
-        _credentialRevision.value = _credentialRevision.value + 1
+        _credentialRevision.update { it + 1 }
         com.openminis.app.provider.ProviderFactory.invalidateInstance(instanceId)
         ProviderCredentialEdits.changed(instanceId)
         return true
@@ -621,15 +661,15 @@ internal class ProviderConfigStore(
      * Remove pooled key [index].  Collapsing below 2 keys clears the pool
      * and the survivor (when any) is promoted into the primary slot.
      */
-    fun removePoolKey(instanceId: String, index: Int): Boolean {
+    fun removePoolKey(instanceId: String, index: Int): Boolean = synchronized(repo.configLock) {
         val current = credentialPool.keys(instanceId)
-        if (index !in current.indices) return false
+        if (index !in current.indices) return@synchronized false
         val removal = poolAfterRemove(current, index)
         credentialPool.setKeys(instanceId, removal.keys)
         removal.primaryOverride?.let {
             encryptedPrefs.edit().putString("apikey_$instanceId", it).apply()
         }
-        _credentialRevision.value = _credentialRevision.value + 1
+        _credentialRevision.update { it + 1 }
         com.openminis.app.provider.ProviderFactory.invalidateInstance(instanceId)
         ProviderCredentialEdits.changed(instanceId)
         return true
@@ -660,13 +700,21 @@ internal class ProviderConfigStore(
     fun markCredentialCooled(instanceId: String, error: com.openminis.app.data.model.LLMError) {
         val coolFor = credentialCooldownFor(error) ?: return
         val lastIndex = credentialPool.lastPick(instanceId) ?: return
-        credentialPool.markCooled(instanceId, lastIndex, System.currentTimeMillis() + coolFor)
+        // [T-credential-cooldown-by-content] The instance that served the
+        // failing request is cooled by KEY CONTENT — a delete/reorder between
+        // the pick and the error can no longer hand the cooldown to a healthy
+        // neighbour.
+        val pickedKey = credentialPool.keys(instanceId).getOrNull(lastIndex)
+            ?: return
+        credentialPool.markCooled(instanceId, pickedKey, System.currentTimeMillis() + coolFor)
         val instance = repo.instance(instanceId) ?: return
         val quotaGroup = instance.quotaGroupId?.takeIf { it.isNotBlank() } ?: return
         for (other in repo.config.value.instances) {
             if (other.id == instanceId) continue
             if (other.quotaGroupId != quotaGroup) continue
-            credentialPool.markCooled(other.id, lastIndex, System.currentTimeMillis() + coolFor)
+            // Sibling pools hold a DIFFERENT key set — the positional slot is
+            // the documented approximation here (markCooledByIndex).
+            credentialPool.markCooledByIndex(other.id, lastIndex, System.currentTimeMillis() + coolFor)
         }
     }
 }

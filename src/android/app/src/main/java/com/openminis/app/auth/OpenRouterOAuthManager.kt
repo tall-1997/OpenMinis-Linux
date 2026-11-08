@@ -8,6 +8,8 @@ import com.openminis.app.data.repository.ProviderRepository
 import com.openminis.app.network.withDohDns
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resumeWithException
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -59,40 +61,50 @@ object OpenRouterOAuthManager {
         Log.i(TAG, "PKCE and state generated")
 
         val apiKey = withContext(Dispatchers.IO) {
-            val (code, callbackState) = suspendCancellableCoroutine<Pair<String, String?>> { cont ->
-                val server = OAuthCallbackServer(CALLBACK_PORT, FALLBACK_PORTS, expectedPath = "/callback", onCode = { receivedCode, receivedState ->
-                    if (cont.isActive) {
-                        cont.resume(receivedCode to receivedState)
+            // [T-oauth-login-timeout] + [T-oauth-bind-failed]: see ClaudeOAuthManager.
+            val (code, callbackState) = withTimeoutOrNull(OAuthManager.LOGIN_TIMEOUT_MS) {
+                suspendCancellableCoroutine<Pair<String, String?>> { cont ->
+                    val server = OAuthCallbackServer(CALLBACK_PORT, FALLBACK_PORTS, expectedPath = "/callback", onCode = { receivedCode, receivedState ->
+                        if (cont.isActive) {
+                            cont.resume(receivedCode to receivedState)
+                        }
+                    })
+                    callbackServer = server
+                    server.onBindFailed = {
+                        if (cont.isActive) {
+                            cont.resumeWithException(IllegalStateException("OpenRouter OAuth callback ports unavailable"))
+                        }
                     }
-                })
-                callbackServer = server
-                server.start()
-                val boundPort = server.boundPort
-                Log.i(TAG, "Callback server started on port $boundPort")
+                    server.start()
+                    val boundPort = server.boundPort
+                    Log.i(TAG, "Callback server started on port $boundPort")
 
-                cont.invokeOnCancellation {
-                    server.stop()
-                    callbackServer = null
+                    cont.invokeOnCancellation {
+                        server.stop()
+                        callbackServer = null
+                    }
+
+                    val callbackUrl = "http://localhost:$boundPort/callback"
+                    val authUrl = Uri.parse(AUTH_BASE_URL).buildUpon()
+                        .appendQueryParameter("callback_url", callbackUrl)
+                        .appendQueryParameter("code_challenge", challenge)
+                        .appendQueryParameter("code_challenge_method", "S256")
+                        .appendQueryParameter("state", state)
+                        .appendQueryParameter("_nc", System.currentTimeMillis().toString()) // cache-bust
+                        .build()
+                    Log.d(TAG, "OpenRouter authorization URL prepared")
+
+                    // Open in Chrome Custom Tab (in-app browser, like iOS SFSafariViewController)
+                    val customTabsIntent = CustomTabsIntent.Builder()
+                        .setShowTitle(true)
+                        .build()
+                    customTabsIntent.intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    customTabsIntent.launchUrl(context, authUrl)
+                    Log.i(TAG, "Opened Custom Tab for OpenRouter authorization")
                 }
-
-                val callbackUrl = "http://localhost:$boundPort/callback"
-                val authUrl = Uri.parse(AUTH_BASE_URL).buildUpon()
-                    .appendQueryParameter("callback_url", callbackUrl)
-                    .appendQueryParameter("code_challenge", challenge)
-                    .appendQueryParameter("code_challenge_method", "S256")
-                    .appendQueryParameter("state", state)
-                    .appendQueryParameter("_nc", System.currentTimeMillis().toString()) // cache-bust
-                    .build()
-                Log.d(TAG, "OpenRouter authorization URL prepared")
-
-                // Open in Chrome Custom Tab (in-app browser, like iOS SFSafariViewController)
-                val customTabsIntent = CustomTabsIntent.Builder()
-                    .setShowTitle(true)
-                    .build()
-                customTabsIntent.intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                customTabsIntent.launchUrl(context, authUrl)
-                Log.i(TAG, "Opened Custom Tab for OpenRouter authorization")
-            }
+            } ?: throw IllegalStateException(
+                "OpenRouter OAuth login timed out — no callback within ${OAuthManager.LOGIN_TIMEOUT_MS / 60_000} min",
+            )
 
             callbackServer?.stop()
             callbackServer = null

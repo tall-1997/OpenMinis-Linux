@@ -21,7 +21,7 @@ class ProviderCredentialPoolTest {
         val cursor = AtomicInteger(0)
         val seen = mutableListOf<String>()
         repeat(keys.size) {
-            val (key, _) = poolPickKey(keys, cursor, { 0L }, 0L)!!
+            val (key, _) = poolPickKey(keys, cursor, { _ -> 0L }, 0L)!!
             seen += key
         }
         assertEquals(listOf("k1", "k2", "k3"), seen)
@@ -31,12 +31,14 @@ class ProviderCredentialPoolTest {
     fun `pick advances the cursor to the next slot`() {
         val keys = listOf("k1", "k2", "k3")
         val cursor = AtomicInteger(0)
-        poolPickKey(keys, cursor, { 0L }, 0L)
+        // [T-credential-pick-cas] The cursor is the raw ticket counter now —
+        // it grows forever; the pick maps it onto the pool with a modulo.
+        poolPickKey(keys, cursor, { _ -> 0L }, 0L)
         assertEquals(1, cursor.get())
-        poolPickKey(keys, cursor, { 0L }, 0L)
+        poolPickKey(keys, cursor, { _ -> 0L }, 0L)
         assertEquals(2, cursor.get())
-        poolPickKey(keys, cursor, { 0L }, 0L)
-        assertEquals(0, cursor.get())
+        poolPickKey(keys, cursor, { _ -> 0L }, 0L)
+        assertEquals(3, cursor.get())
     }
 
     @Test
@@ -44,8 +46,8 @@ class ProviderCredentialPoolTest {
         val keys = listOf("k1", "k2", "k3")
         val cursor = AtomicInteger(0)
         val until = 10_000L
-        // k1 (index 0) cooled until 10s in the future; now = 0.
-        val cooldown = mapOf(0 to until)
+        // k1 cooled until 10s in the future; now = 0.
+        val cooldown = mapOf("k1" to until)
         val (key, idx) = poolPickKey(keys, cursor, { cooldown[it] ?: 0L }, 0L)!!
         assertEquals("k2", key)
         assertEquals(1, idx)
@@ -59,7 +61,7 @@ class ProviderCredentialPoolTest {
     fun `two cooled keys leave only the last slot`() {
         val keys = listOf("k1", "k2", "k3")
         val cursor = AtomicInteger(0)
-        val cooldown = mapOf(0 to 10_000L, 1 to 10_000L)
+        val cooldown = mapOf("k1" to 10_000L, "k2" to 10_000L)
         val (key, idx) = poolPickKey(keys, cursor, { cooldown[it] ?: 0L }, 0L)!!
         assertEquals("k3", key)
         assertEquals(2, idx)
@@ -69,8 +71,8 @@ class ProviderCredentialPoolTest {
     fun `expired cooldown is served again`() {
         val keys = listOf("k1", "k2")
         val cursor = AtomicInteger(0)
-        // Index 0 cooled until 5000; now = 6000 → already expired.
-        val (key, idx) = poolPickKey(keys, cursor, { if (it == 0) 5_000L else 0L }, 6_000L)!!
+        // k1 cooled until 5000; now = 6000 → already expired.
+        val (key, idx) = poolPickKey(keys, cursor, { if (it == "k1") 5_000L else 0L }, 6_000L)!!
         assertEquals("k1", key)
         assertEquals(0, idx)
     }
@@ -79,21 +81,21 @@ class ProviderCredentialPoolTest {
     fun `all cooled keys return null so the caller falls back`() {
         val keys = listOf("k1", "k2")
         val cursor = AtomicInteger(0)
-        val cooldown = mapOf(0 to 10_000L, 1 to 10_000L)
+        val cooldown = mapOf("k1" to 10_000L, "k2" to 10_000L)
         assertNull(poolPickKey(keys, cursor, { cooldown[it] ?: 0L }, 0L))
     }
 
     @Test
     fun `empty pool returns null`() {
         val cursor = AtomicInteger(0)
-        assertNull(poolPickKey(emptyList(), cursor, { 0L }, 0L))
+        assertNull(poolPickKey(emptyList(), cursor, { _ -> 0L }, 0L))
     }
 
     @Test
     fun `single key pool always returns that key with index 0`() {
         val keys = listOf("only")
         val cursor = AtomicInteger(0)
-        val (key, idx) = poolPickKey(keys, cursor, { 0L }, 0L)!!
+        val (key, idx) = poolPickKey(keys, cursor, { _ -> 0L }, 0L)!!
         assertEquals("only", key)
         assertEquals(0, idx)
     }

@@ -5,6 +5,7 @@ import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.model.LLMError
 import com.openminis.app.provider.FullBodyJson
+import com.openminis.app.provider.executeCancellable
 import com.openminis.app.provider.NonFiniteJson
 import com.openminis.app.provider.ProviderKeyGate
 import com.openminis.app.provider.ImageBudget
@@ -81,7 +82,8 @@ class GeminiProvider(
             .applyUserAgentOverride(null)
             .build()
 
-        val response = client.newCall(request).execute()
+        // [T-android-stop-cancels-socket] Non-stream execute is blocking IO.
+        val response = client.newCall(request).executeCancellable()
         val responseBody = response.body?.string() ?: ""
 
         if (!response.isSuccessful) {
@@ -150,6 +152,17 @@ class GeminiProvider(
             for (payload in ssePayloads(reader)) {
                 val json = try { JSONObject(payload) } catch (_: Exception) { continue }
 
+                // [T-gemini-block-reason] A safety/region-blocked request has NO
+                // `candidates` — only `promptFeedback.blockReason`. Without this
+                // branch the stream ended as Finished("end_turn") with no text,
+                // which failOnSilentEmptyCompletion accepts (a stop reason was
+                // seen) and the user got a silent empty reply with no hint.
+                json.optJSONObject("promptFeedback")?.safeOptString("blockReason", "")?.takeIf { it.isNotEmpty() }?.let { reason ->
+                    throw LLMError.DecodingError(
+                        IllegalStateException("Gemini blocked the request: $reason"),
+                    )
+                }
+
                 if (!started) {
                     send(LLMStreamChunk.Started)
                     started = true
@@ -185,6 +198,8 @@ class GeminiProvider(
             }
             send(LLMStreamChunk.Finished(lastFinishReason ?: "end_turn"))
         } catch (e: Exception) {
+            // [T-android-stop-cancels-socket] User Stop is a normal exit.
+            if (e is kotlinx.coroutines.CancellationException) throw e
             cancel("Stream error", mapError(e))
         } finally {
             reader.close()
