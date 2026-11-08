@@ -5,12 +5,14 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.openminis.app.data.repository.ProviderRepository
 import com.openminis.app.git.GitCli.CommitOutcome
+import com.openminis.app.git.GitBranchRef
 import com.openminis.app.git.GitCli
 import com.openminis.app.git.GitCli.GitCommit
 import com.openminis.app.git.GitCommitMessageGenerator
 import com.openminis.app.git.GitCli.GitFileEntry
 import com.openminis.app.git.GitCli.GitRepoInfo
 import com.openminis.app.git.GitCli.GitStatus
+import com.openminis.app.git.GitStashEntry
 import com.openminis.app.sandbox.FileChangeHub
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,7 +27,10 @@ data class GitPanelState(
     val repo: GitRepoInfo? = null,
     val status: GitStatus? = null,
     val log: List<GitCommit> = emptyList(),
-    /** A mutating git call (stage/commit) is in flight — buttons dim. */
+    /** Local + remote branches for the switcher (current first). */
+    val branches: List<GitBranchRef> = emptyList(),
+    val stashes: List<GitStashEntry> = emptyList(),
+    /** A mutating git call (stage/commit/sync/checkout) is in flight — buttons dim. */
     val busy: Boolean = false,
     /** The AI commit-message call is in flight. */
     val generating: Boolean = false,
@@ -105,12 +110,16 @@ class GitPanelViewModel(
             val root = repo.root
             val status = runCatching { GitCli.status(sessionId, root) }.getOrNull()
             val log = runCatching { GitCli.log(sessionId, root = root) }.getOrDefault(emptyList())
+            val branches = runCatching { GitCli.branches(sessionId, root) }.getOrDefault(emptyList())
+            val stashes = runCatching { GitCli.stashes(sessionId, root) }.getOrDefault(emptyList())
             _state.update {
                 it.copy(
                     loading = false,
                     repo = repo,
                     status = status,
                     log = log,
+                    branches = branches,
+                    stashes = stashes,
                     // A failed status probe (e.g. shell died mid-refresh) is
                     // worth surfacing — a silently empty Changes tab reads as
                     // "clean tree", which would be a lie.
@@ -203,6 +212,29 @@ class GitPanelViewModel(
                 .getOrDefault("(diff unavailable)")
             _state.update {
                 it.copy(diff = GitDiffView(entry.path, loading = false, content = content))
+            }
+        }
+    }
+
+    /** Push to upstream; on success the reload clears the ahead count. */
+    fun push() {
+        mutate { GitCli.push(sessionId, _state.value.repo?.root) ?: "pushed" }
+    }
+
+    /** Pull (ff-only) — a diverged upstream reports git's refusal verbatim. */
+    fun pull() {
+        mutate { GitCli.pull(sessionId, _state.value.repo?.root) ?: "pulled" }
+    }
+
+    /** Check out [name] (local) or create a local tracking branch for it. */
+    fun switchBranch(name: String) {
+        val root = _state.value.repo?.root
+        mutate {
+            if (_state.value.branches.any { !it.name.contains('/') && it.name == name }) {
+                GitCli.execSimple(sessionId, "checkout", name, root = root) ?: "checked out $name"
+            } else {
+                GitCli.execSimple(sessionId, "checkout", "-b", name, "--track", name, root = root)
+                    ?: "created $name"
             }
         }
     }

@@ -2039,4 +2039,15 @@
     <string name="model_group_detail_quota_period_placeholder">Durasi jendela (jam)</string>
     <string name="model_group_detail_quota_window_reset_snackbar">Jendela kuota direset — anggota utama melayani lagi</string>
     <string name="model_group_detail_quota_window_remaining">Sisa di jendela ini: %1$d kiriman</string>
-</resources>
+
+    <string name="git_panel_section_staged">Di-staging</string>
+    <string name="git_panel_section_unstaged">Belum di-staging</string>
+    <string name="git_panel_section_untracked">Tidak dilacak</string>
+    <string name="git_panel_section_stashes">Stash</string>
+    <string name="git_panel_no_upstream">Tanpa upstream — push akan menanyakan</string>
+    <string name="git_panel_search_hint">Cari subjek / hash / penulis</string>
+    <string name="git_panel_no_search_hits">Tidak ada yang cocok "%1$s"</string>
+    <string name="git_panel_no_branches">Tidak ada cabang</string>
+    <string name="git_panel_push">Push</string>
+    <string name="git_panel_pull">Tarik</string>
+ </resources>

@@ -2116,4 +2116,14 @@
     <string name="model_group_detail_quota_period_placeholder">視窗時長（小時）</string>
     <string name="model_group_detail_quota_window_reset_snackbar">配額視窗已重設，主要成員重新開始服務</string>
     <string name="model_group_detail_quota_window_remaining">本視窗剩餘：%1$d 次</string>
+    <string name="git_panel_section_staged">已暫存</string>
+    <string name="git_panel_section_unstaged">未暫存</string>
+    <string name="git_panel_section_untracked">未追蹤</string>
+    <string name="git_panel_section_stashes">收藏暫存</string>
+    <string name="git_panel_no_upstream">沒有上游 — push 會詢問</string>
+    <string name="git_panel_search_hint">搜尋主旨 / 雜湊 / 作者</string>
+    <string name="git_panel_no_search_hits">沒有符合「%1$s」</string>
+    <string name="git_panel_no_branches">沒有分支</string>
+    <string name="git_panel_push">推送</string>
+    <string name="git_panel_pull">擷取</string>
 </resources>

@@ -59,6 +59,19 @@ object GitCli {
         "${gitPrefix(root)} -c core.quotepath=false log -n $limit --date=unix " +
             "--pretty=format:%H%x1f%h%x1f%an%x1f%ad%x1f%s"
 
+    /** Local + remote branches, current first: `hash<x1f>name<x1f>subject`. */
+    fun branchesCmd(root: String? = null) =
+        "${gitPrefix(root)} for-each-ref --sort=-committerdate refs/heads refs/remotes " +
+            "--format=%(objectname:short)%x1f%(refname:short)%x1f%(contents:subject) | head -40"
+
+    /** Stash list: `index<x1f>subject`. */
+    fun stashCmd(root: String? = null) =
+        "${gitPrefix(root)} stash list --format=%gd%x1f%s"
+
+    /** Push/pull both refresh status; upstream must exist for push. */
+    fun pushCmd(root: String? = null) = "${gitPrefix(root)} push"
+    fun pullCmd(root: String? = null) = "${gitPrefix(root)} pull --ff-only"
+
     /** Diff cap keeps a huge `git show` from blowing the Compose text node. */
     private const val DIFF_MAX_CHARS = 200_000
 
@@ -233,8 +246,12 @@ object GitCli {
 
     // -------------------------------------------------------------- commands
 
-    private suspend fun run(sessionId: String, cmd: String): ExecutionCoordinator.CommandResult =
-        ExecutionCoordinator.execute(sessionId, cmd)
+    private suspend fun run(
+        sessionId: String,
+        cmd: String,
+        timeoutMs: Long = 15_000L,
+    ): ExecutionCoordinator.CommandResult =
+        ExecutionCoordinator.execute(sessionId, cmd, timeout = timeoutMs)
 
     suspend fun probe(sessionId: String): GitRepoInfo {
         val r = runCatching { run(sessionId, probeCmd()) }.getOrElse {
@@ -264,6 +281,53 @@ object GitCli {
         val r = runCatching { run(sessionId, logCmd(limit, root)) }.getOrElse { return emptyList() }
         // exit 128 = no commits yet; that is an empty history, not an error.
         return if (r.exitCode == 0) parseLog(r.output) else emptyList()
+    }
+
+    /** Branches for the switcher; empty (with no error) outside a repo. */
+    suspend fun branches(sessionId: String, root: String?): List<GitBranchRef> {
+        val r = runCatching { run(sessionId, branchesCmd(root)) }.getOrElse { return emptyList() }
+        if (r.exitCode != 0) return emptyList()
+        val current = currentBranch(sessionId, root)
+        return r.output.lines().mapNotNull { raw ->
+            val parts = raw.trim().split('\t')
+            val name = parts.getOrNull(1)?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            GitBranchRef(
+                name = name,
+                isCurrent = name == current || name.endsWith("/$current"),
+                lastSubject = parts.getOrNull(2).orEmpty(),
+            )
+        }.distinctBy { it.name }
+    }
+
+    private suspend fun currentBranch(sessionId: String, root: String?): String =
+        runCatching {
+            run(sessionId, "${gitPrefix(root)} branch --show-current").output.trim()
+        }.getOrDefault("")
+
+    suspend fun stashes(sessionId: String, root: String?): List<GitStashEntry> {
+        val r = runCatching { run(sessionId, stashCmd(root)) }.getOrElse { return emptyList() }
+        if (r.exitCode != 0) return emptyList()
+        return r.output.lines().mapNotNull { raw ->
+            val parts = raw.trim().split('\t')
+            val ref = parts.getOrNull(0) ?: return@mapNotNull null
+            val index = Regex("""stash@\{(\d+)\}""").find(ref)?.groupValues?.get(1)?.toIntOrNull()
+                ?: return@mapNotNull null
+            GitStashEntry(index, parts.getOrNull(1).orEmpty())
+        }
+    }
+
+    /** Push with upstream; returns git's output or the error text. */
+    suspend fun push(sessionId: String, root: String?): String? {
+        val r = runCatching { run(sessionId, pushCmd(root), timeoutMs = 60_000L) }
+            .getOrElse { return it.message ?: "shell unavailable" }
+        return if (r.exitCode == 0) null else r.output.take(500).ifBlank { "exit=${r.exitCode}" }
+    }
+
+    /** Pull (ff-only so the panel can never create a merge commit). */
+    suspend fun pull(sessionId: String, root: String?): String? {
+        val r = runCatching { run(sessionId, pullCmd(root), timeoutMs = 60_000L) }
+            .getOrElse { return it.message ?: "shell unavailable" }
+        return if (r.exitCode == 0) null else r.output.take(500).ifBlank { "exit=${r.exitCode}" }
     }
 
     /** Working-tree diff for one entry; untracked files diff against /dev/null. */
@@ -327,9 +391,19 @@ object GitCli {
         return if (r.exitCode == 0) null else r.output.take(500).ifBlank { "exit=${r.exitCode}" }
     }
 
+    /** @return error text, or null on success — for whitelisted read-only-ish verbs. */
+    suspend fun execSimple(sessionId: String, vararg argv: String, root: String? = null): String? {
+        val allowed = setOf("checkout")
+        val verb = argv.getOrNull(0) ?: return "no command"
+        if (verb !in allowed) return "command not allowed: $verb"
+        val r = runCatching {
+            run(sessionId, gitPrefix(root) + " " + argv.joinToString(" ") { shellQuote(it) }, 30_000L)
+        }.getOrElse { return it.message ?: "shell unavailable" }
+        return if (r.exitCode == 0) null else r.output.take(500).ifBlank { "exit=${r.exitCode}" }
+    }
+
     /** @return [CommitOutcome]; failure text comes straight from git. */
-    suspend fun commit(sessionId: String, message: String, root: String? = null): CommitOutcome {
-        val trimmed = message.trim()
+    suspend fun commit(sessionId: String, message: String, root: String? = null): CommitOutcome {        val trimmed = message.trim()
         if (trimmed.isEmpty()) return CommitOutcome(false, "empty commit message")
         val b64 = android.util.Base64.encodeToString(
             trimmed.toByteArray(Charsets.UTF_8),

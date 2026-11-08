@@ -2042,4 +2042,15 @@
     <string name="model_group_detail_quota_period_placeholder">Длина окна (часы)</string>
     <string name="model_group_detail_quota_window_reset_snackbar">Окно квоты сброшено — основной участник снова отвечает</string>
     <string name="model_group_detail_quota_window_remaining">Осталось в этом окне: %1$d</string>
-</resources>
+
+    <string name="git_panel_section_staged">Индексировано</string>
+    <string name="git_panel_section_unstaged">Не индексировано</string>
+    <string name="git_panel_section_untracked">Не отслеживается</string>
+    <string name="git_panel_section_stashes">Стэши</string>
+    <string name="git_panel_no_upstream">Нет upstream — push спросит</string>
+    <string name="git_panel_search_hint">Поиск: тема / хеш / автор</string>
+    <string name="git_panel_no_search_hits">Нет совпадений «%1$s»</string>
+    <string name="git_panel_no_branches">Нет веток</string>
+    <string name="git_panel_push">Отправить</string>
+    <string name="git_panel_pull">Забрать</string>
+ </resources>

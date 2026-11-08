@@ -2038,4 +2038,15 @@
     <string name="model_group_detail_quota_period_placeholder">Durata ferestrei (ore)</string>
     <string name="model_group_detail_quota_window_reset_snackbar">Fereastra de cotă a fost resetată — membrul principal deservește din nou</string>
     <string name="model_group_detail_quota_window_remaining">Rămase în această fereastră: %1$d trimiteri</string>
-</resources>
+
+    <string name="git_panel_section_staged">Pregătite</string>
+    <string name="git_panel_section_unstaged">Nepregătite</string>
+    <string name="git_panel_section_untracked">Neurmărite</string>
+    <string name="git_panel_section_stashes">Stash-uri</string>
+    <string name="git_panel_no_upstream">Fără upstream — push va întreba</string>
+    <string name="git_panel_search_hint">Caută subiect / hash / autor</string>
+    <string name="git_panel_no_search_hits">Nimic nu se potrivește „%1$s”</string>
+    <string name="git_panel_no_branches">Fără branch-uri</string>
+    <string name="git_panel_push">Împinge</string>
+    <string name="git_panel_pull">Trage</string>
+ </resources>

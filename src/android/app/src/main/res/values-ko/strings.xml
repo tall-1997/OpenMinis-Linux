@@ -2031,4 +2031,14 @@
     <string name="model_group_detail_quota_period_placeholder">창 길이(시간)</string>
     <string name="model_group_detail_quota_window_reset_snackbar">할당량 창이 재설정되어 기본 멤버가 다시 응답합니다</string>
     <string name="model_group_detail_quota_window_remaining">이번 창 남은 횟수: %1$d회</string>
+<string name="git_panel_section_staged">스테이지됨</string>
+    <string name="git_panel_section_unstaged">스테이지 안 됨</string>
+    <string name="git_panel_section_untracked">추적 안 됨</string>
+    <string name="git_panel_section_stashes">스태시</string>
+    <string name="git_panel_no_upstream">업스트림 없음 — push에서 지정</string>
+    <string name="git_panel_search_hint">제목 / 해시 / 작성자 검색</string>
+    <string name="git_panel_no_search_hits">"%1$s" 일치 없음</string>
+    <string name="git_panel_no_branches">브랜치 없음</string>
+    <string name="git_panel_push">Push</string>
+    <string name="git_panel_pull">Pull</string>
 </resources>

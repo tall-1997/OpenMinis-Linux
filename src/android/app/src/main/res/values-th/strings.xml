@@ -2034,4 +2034,14 @@
     <string name="model_group_detail_quota_period_placeholder">ความยาวหน้าต่าง (ชั่วโมง)</string>
     <string name="model_group_detail_quota_window_reset_snackbar">รีเซ็ตหน้าต่างโควตาแล้ว — สมาชิกหลักกลับมาให้บริการ</string>
     <string name="model_group_detail_quota_window_remaining">เหลือในหน้าต่างนี้: %1$d ครั้ง</string>
+    <string name="git_panel_section_staged">จัดเตรียมแล้ว</string>
+    <string name="git_panel_section_unstaged">ยังไม่จัดเตรียม</string>
+    <string name="git_panel_section_untracked">ไม่ได้ติดตาม</string>
+    <string name="git_panel_section_stashes">คลังสแตช</string>
+    <string name="git_panel_no_upstream">ไม่มี upstream — push จะถาม</string>
+    <string name="git_panel_search_hint">ค้นหา หัวเรื่อง / แฮช / ผู้เขียน</string>
+    <string name="git_panel_no_search_hits">ไม่มีรายการตรง "%1$s"</string>
+    <string name="git_panel_no_branches">ไม่มีบรานช์</string>
+    <string name="git_panel_push">พุช</string>
+    <string name="git_panel_pull">ดึง</string>
 </resources>

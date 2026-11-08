@@ -2034,4 +2034,15 @@
     <string name="model_group_detail_quota_period_placeholder">Durée de la fenêtre (heures)</string>
     <string name="model_group_detail_quota_window_reset_snackbar">Fenêtre de quota réinitialisée — le membre principal répond à nouveau</string>
     <string name="model_group_detail_quota_window_remaining">Restants dans cette fenêtre : %1$d envois</string>
-</resources>
+
+    <string name="git_panel_section_staged">Indexés</string>
+    <string name="git_panel_section_unstaged">Non indexés</string>
+    <string name="git_panel_section_untracked">Non suivis</string>
+    <string name="git_panel_section_stashes">Stashes</string>
+    <string name="git_panel_no_upstream">Pas d\'upstream — le push le demandera</string>
+    <string name="git_panel_search_hint">Rechercher sujet / hash / auteur</string>
+    <string name="git_panel_no_search_hits">Aucun résultat pour « %1$s »</string>
+    <string name="git_panel_no_branches">Aucune branche</string>
+    <string name="git_panel_push">Pousser</string>
+    <string name="git_panel_pull">Tirer</string>
+ </resources>

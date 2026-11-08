@@ -2034,4 +2034,15 @@
     <string name="model_group_detail_quota_period_placeholder">Tempoh tetingkap (jam)</string>
     <string name="model_group_detail_quota_window_reset_snackbar">Tetingkap kuota ditetapkan semula — ahli utama berkhidmat semula</string>
     <string name="model_group_detail_quota_window_remaining">Baki dalam tetingkap ini: %1$d hantaran</string>
-</resources>
+
+    <string name="git_panel_section_staged">Di-staged</string>
+    <string name="git_panel_section_unstaged">Belum di-staged</string>
+    <string name="git_panel_section_untracked">Tidak dijejak</string>
+    <string name="git_panel_section_stashes">Stash</string>
+    <string name="git_panel_no_upstream">Tiada upstream — push akan bertanya</string>
+    <string name="git_panel_search_hint">Cari subjek / hash / pengarang</string>
+    <string name="git_panel_no_search_hits">Tiada padanan "%1$s"</string>
+    <string name="git_panel_no_branches">Tiada cawangan</string>
+    <string name="git_panel_push">Push</string>
+    <string name="git_panel_pull">Tarik</string>
+ </resources>

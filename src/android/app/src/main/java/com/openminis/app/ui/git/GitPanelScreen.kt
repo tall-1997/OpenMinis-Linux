@@ -1,19 +1,13 @@
 package com.openminis.app.ui.git
 
-import android.text.format.DateUtils
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -21,10 +15,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -36,7 +28,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -46,33 +37,22 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openminis.app.R
-import com.openminis.app.git.GitCli.GitCommit
-import com.openminis.app.git.GitCli.GitFileEntry
-
-// iOS system palette, matching the colours ChatToolDetailUI already uses for
-// tool status — the diff view should read like the rest of the app.
-private val DiffAddColor = Color(0xFF34C759)
-private val DiffDelColor = Color(0xFFFF453A)
-private val DiffHunkColor = Color(0xFF007AFF)
-private val DiffMetaColor = Color(0xFF8E8E93)
 
 /**
- * Native Git panel for a chat session's workspace — the mobile counterpart
- * of a desktop code client's Source Control view: status with per-file
- * staging, AI-generated commit messages, history, and coloured diffs.
- *
- * Read/commit only — no destructive operations (discard/reset/rebase) are
- * exposed here on purpose; the terminal remains the escape hatch for those.
+ * [T-git-panel-v2] The screen shell: top bar with branch switcher, sync row
+ * (upstream + ahead/behind + push/pull), tabbed Changes/History with search,
+ * and the full-screen diff overlay. Rendering lives in GitPanelChanges /
+ * GitPanelHistory / GitPanelRows; state lives in [GitPanelViewModel].
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -82,7 +62,7 @@ fun GitPanelScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var tab by remember { mutableIntStateOf(0) }
-
+    var showBranchMenu by remember { androidx.compose.runtime.mutableStateOf(false) }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -136,6 +116,47 @@ fun GitPanelScreen(
                     Column(Modifier.fillMaxSize()) {
                         val status = state.status
                         val changedCount = status?.entries?.size ?: 0
+                        // Branch switcher row: tap opens the picker; a scrim
+                        // behind the list closes it on outside taps.
+                        Box {
+                            if (showBranchMenu) {
+                                Box(
+                                    Modifier
+                                        .matchParentSize()
+                                        .background(androidx.compose.ui.graphics.Color.Transparent)
+                                        .clickable { showBranchMenu = false },
+                                )
+                            }
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clickable { showBranchMenu = true }
+                                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    state.repo?.branch?.ifBlank { "HEAD" } ?: "HEAD",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                Text(
+                                    "  ▾  ${state.branches.size}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            if (showBranchMenu) {
+                                BranchMenu(
+                                    branches = state.branches,
+                                    onPick = {
+                                        showBranchMenu = false
+                                        viewModel.switchBranch(it)
+                                    },
+                                    onDismiss = { showBranchMenu = false },
+                                )
+                            }
+                        }
+                        SyncRow(status)
                         TabRow(selectedTabIndex = tab) {
                             Tab(
                                 selected = tab == 0,
@@ -173,7 +194,8 @@ fun GitPanelScreen(
                         if (tab == 0) {
                             ChangesTab(state, viewModel)
                         } else {
-                            HistoryTab(state, viewModel)
+                            HistorySearchRow()
+                            HistoryTab(state, viewModel, historyQueryValue.text)
                         }
                     }
                 }
@@ -186,11 +208,71 @@ fun GitPanelScreen(
     }
 }
 
+/** Shared history search text, hoisted so the row and the tab agree. */
+private val historyQuery = androidx.compose.runtime.mutableStateOf(TextFieldValue(""))
+private var historyQueryValue by historyQuery
+
 @Composable
-private fun NotRepoView(error: String?) {
+private fun HistorySearchRow() {
+    OutlinedTextField(
+        value = historyQueryValue,
+        onValueChange = { historyQueryValue = it },
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        placeholder = { Text(stringResource(R.string.git_panel_search_hint)) },
+        singleLine = true,
+        textStyle = MaterialTheme.typography.bodyMedium,
+    )
+}
+
+/** Bounded branch dropdown; remote branches are marked and create trackers. */
+@Composable
+private fun BranchMenu(
+    branches: List<com.openminis.app.git.GitBranchRef>,
+    onPick: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    androidx.compose.material3.Surface(
+        shape = RoundedCornerShape(12.dp),
+        tonalElevation = 4.dp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+    ) {
+        LazyColumn(Modifier.padding(vertical = 4.dp)) {
+            items(branches, key = { it.name }) { branch ->
+                Text(
+                    text = (if (branch.isCurrent) "● " else "") +
+                        (if (branch.name.contains('/')) "⇄ " else "") +
+                        branch.name,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onPick(branch.name) }
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                )
+            }
+            if (branches.isEmpty()) {
+                item {
+                    Text(
+                        stringResource(R.string.git_panel_no_branches),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(12.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun NotRepoView(error: String?) {
     Column(
         Modifier.fillMaxSize().padding(32.dp),
-        verticalArrangement = Arrangement.Center,
+        verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
@@ -199,7 +281,7 @@ private fun NotRepoView(error: String?) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         if (!error.isNullOrBlank()) {
-            Spacer(Modifier.height(12.dp))
+            androidx.compose.foundation.layout.Spacer(Modifier.padding(12.dp))
             Text(
                 error.take(300),
                 style = MaterialTheme.typography.bodySmall,
@@ -210,214 +292,9 @@ private fun NotRepoView(error: String?) {
     }
 }
 
-@Composable
-private fun ChangesTab(state: GitPanelState, viewModel: GitPanelViewModel) {
-    val entries = state.status?.entries.orEmpty()
-    Column(Modifier.fillMaxSize()) {
-        LazyColumn(Modifier.weight(1f)) {
-            if (entries.isEmpty()) {
-                item {
-                    Text(
-                        stringResource(R.string.git_panel_clean),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(24.dp),
-                    )
-                }
-            }
-            items(entries, key = { "${if (it.staged) "s" else "w"}:${it.path}:${it.code}" }) { entry ->
-                FileEntryRow(
-                    entry = entry,
-                    enabled = !state.busy,
-                    onToggleStage = { viewModel.toggleStage(entry) },
-                    onOpenDiff = { viewModel.openFileDiff(entry) },
-                )
-                HorizontalDivider()
-            }
-        }
-        HorizontalDivider()
-        CommitBar(state, viewModel)
-    }
-}
-
-@Composable
-private fun FileEntryRow(
-    entry: GitFileEntry,
-    enabled: Boolean,
-    onToggleStage: () -> Unit,
-    onOpenDiff: () -> Unit,
-) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clickable(enabled = enabled, onClick = onOpenDiff)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            Modifier
-                .size(22.dp)
-                .background(statusColor(entry.code), RoundedCornerShape(4.dp)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                entry.code.toString(),
-                color = Color.White,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-            )
-        }
-        Spacer(Modifier.width(10.dp))
-        Column(Modifier.weight(1f)) {
-            Text(
-                entry.path.substringAfterLast('/'),
-                style = MaterialTheme.typography.bodyMedium,
-                maxLines = 1,
-            )
-            val sub = buildString {
-                val dir = entry.path.substringBeforeLast('/', "")
-                if (dir.isNotEmpty()) append(dir)
-                if (entry.origPath != null) {
-                    if (isNotEmpty()) append(" · ")
-                    append(entry.origPath)
-                }
-            }
-            if (sub.isNotEmpty()) {
-                Text(
-                    sub,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                )
-            }
-        }
-        // Staged toggle. Untracked files show an "add" affordance instead:
-        // checking the box stages (git add), unchecking is a no-op path
-        // through the same setStaged(false) → restore --staged, which git
-        // accepts for intent-to-add-free untracked entries only after add.
-        androidx.compose.material3.Checkbox(
-            checked = entry.staged,
-            onCheckedChange = if (enabled) { _ -> onToggleStage() } else null,
-        )
-    }
-}
-
-private fun statusColor(code: Char): Color = when (code.uppercaseChar()) {
-    'M', 'T' -> Color(0xFFFF9500) // modified — orange
-    'A' -> DiffAddColor // added — green
-    'D' -> DiffDelColor // deleted — red
-    'R', 'C' -> DiffHunkColor // renamed/copied — blue
-    '?' -> DiffMetaColor // untracked — gray
-    else -> Color(0xFFFF2D55) // conflicts & friends — pink
-}
-
-@Composable
-private fun CommitBar(state: GitPanelState, viewModel: GitPanelViewModel) {
-    val stagedCount = state.status?.entries?.count { it.staged } ?: 0
-    Column(Modifier.fillMaxWidth().padding(12.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(
-                value = state.draftMessage,
-                onValueChange = viewModel::setDraftMessage,
-                modifier = Modifier.weight(1f),
-                placeholder = { Text(stringResource(R.string.git_panel_commit_hint)) },
-                minLines = 1,
-                maxLines = 3,
-                textStyle = MaterialTheme.typography.bodyMedium,
-            )
-            Spacer(Modifier.width(8.dp))
-            IconButton(
-                onClick = viewModel::generateCommitMessage,
-                enabled = !state.generating && !state.busy && stagedCount > 0,
-            ) {
-                if (state.generating) {
-                    CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                } else {
-                    Icon(
-                        Icons.Filled.AutoAwesome,
-                        contentDescription = stringResource(R.string.git_panel_generate),
-                        tint = DiffHunkColor,
-                    )
-                }
-            }
-        }
-        Spacer(Modifier.height(8.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            TextButton(
-                onClick = viewModel::stageAll,
-                enabled = !state.busy && (state.status?.entries?.any { !it.staged } == true),
-            ) {
-                Text(stringResource(R.string.git_panel_stage_all))
-            }
-            Spacer(Modifier.weight(1f))
-            Button(
-                onClick = viewModel::commit,
-                enabled = !state.busy && stagedCount > 0 && state.draftMessage.isNotBlank(),
-            ) {
-                Text(stringResource(R.string.git_panel_commit) + " ($stagedCount)")
-            }
-        }
-    }
-}
-
-@Composable
-private fun HistoryTab(state: GitPanelState, viewModel: GitPanelViewModel) {
-    if (state.log.isEmpty()) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(
-                stringResource(R.string.git_panel_no_commits),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        return
-    }
-    LazyColumn(Modifier.fillMaxSize()) {
-        items(state.log, key = { it.hash }) { commit ->
-            CommitRow(commit, onClick = { viewModel.openCommitDiff(commit) })
-            HorizontalDivider()
-        }
-    }
-}
-
-@Composable
-private fun CommitRow(commit: GitCommit, onClick: () -> Unit) {
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-    ) {
-        Text(commit.subject, style = MaterialTheme.typography.bodyMedium, maxLines = 2)
-        Spacer(Modifier.height(2.dp))
-        Text(
-            buildString {
-                append(commit.shortHash)
-                append(" · ")
-                append(commit.author)
-                append(" · ")
-                append(relativeTime(commit.epochSeconds))
-            },
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-        )
-    }
-}
-
-@Composable
-private fun relativeTime(epochSeconds: Long): String {
-    val text = DateUtils.getRelativeTimeSpanString(
-        epochSeconds * 1000L,
-        System.currentTimeMillis(),
-        DateUtils.MINUTE_IN_MILLIS,
-    )
-    return text?.toString() ?: ""
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DiffOverlay(diff: GitDiffView, onClose: () -> Unit) {
+internal fun DiffOverlay(diff: GitDiffView, onClose: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
@@ -450,10 +327,8 @@ private fun DiffOverlay(diff: GitDiffView, onClose: () -> Unit) {
                             .padding(horizontal = 8.dp, vertical = 4.dp),
                     ) {
                         // (#13) colorizeDiff walks the whole diff line-by-line
-                        // building spans — it used to re-run on EVERY
-                        // recomposition of this panel (it took no remember at
-                        // all), so an unrelated state change re-colored an
-                        // arbitrarily large diff. Memoize per content.
+                        // building spans — memoized per content so an unrelated
+                        // state change never re-colors an arbitrary diff.
                         val colored = remember(diff.content) { colorizeDiff(diff.content) }
                         Text(
                             colored,

@@ -2613,4 +2613,14 @@
     <string name="model_group_detail_quota_period_placeholder">窗口时长（小时）</string>
     <string name="model_group_detail_quota_window_reset_snackbar">配额窗口已重置，主成员重新开始服务</string>
     <string name="model_group_detail_quota_window_remaining">本窗口剩余：%1$d 次</string>
+    <string name="git_panel_section_staged">已暂存</string>
+    <string name="git_panel_section_unstaged">未暂存</string>
+    <string name="git_panel_section_untracked">未跟踪</string>
+    <string name="git_panel_section_stashes">暂存区（stash）</string>
+    <string name="git_panel_no_upstream">没有上游 — push 时会询问</string>
+    <string name="git_panel_search_hint">搜索主题 / 哈希 / 作者</string>
+    <string name="git_panel_no_search_hits">没有匹配“%1$s”的结果</string>
+    <string name="git_panel_no_branches">没有分支</string>
+    <string name="git_panel_push">推送</string>
+    <string name="git_panel_pull">拉取</string>
 </resources>

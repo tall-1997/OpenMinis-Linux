@@ -2031,4 +2031,14 @@
     <string name="model_group_detail_quota_period_placeholder">ウィンドウの長さ（時間）</string>
     <string name="model_group_detail_quota_window_reset_snackbar">クォータウィンドウをリセットしました。プライマリメンバーが再び応答します</string>
     <string name="model_group_detail_quota_window_remaining">このウィンドウの残り：%1$d回</string>
+<string name="git_panel_section_staged">ステージ済み</string>
+    <string name="git_panel_section_unstaged">未ステージ</string>
+    <string name="git_panel_section_untracked">未追跡</string>
+    <string name="git_panel_section_stashes">スタッシュ</string>
+    <string name="git_panel_no_upstream">上流なし — push で指定します</string>
+    <string name="git_panel_search_hint">件名 / ハッシュ / 作者を検索</string>
+    <string name="git_panel_no_search_hits">「%1$s」に一致なし</string>
+    <string name="git_panel_no_branches">ブランチなし</string>
+    <string name="git_panel_push">Push</string>
+    <string name="git_panel_pull">Pull</string>
 </resources>

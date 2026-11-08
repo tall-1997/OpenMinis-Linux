@@ -1629,6 +1629,16 @@
     <string name="git_panel_refresh">Refresh</string>
     <string name="git_panel_close_diff">Close diff</string>
     <string name="git_panel_empty_diff">No diff output</string>
+    <string name="git_panel_section_staged">Staged</string>
+    <string name="git_panel_section_unstaged">Unstaged</string>
+    <string name="git_panel_section_untracked">Untracked</string>
+    <string name="git_panel_section_stashes">Stashes</string>
+    <string name="git_panel_no_upstream">No upstream — push will ask for one</string>
+    <string name="git_panel_search_hint">Search subject / hash / author</string>
+    <string name="git_panel_no_search_hits">Nothing matches \"%1$s\"</string>
+    <string name="git_panel_no_branches">No branches found</string>
+    <string name="git_panel_push">Push</string>
+    <string name="git_panel_pull">Pull</string>
     <string name="chat_menu_open_browser">Open Browser</string>
     <string name="chat_menu_browse_chat_files">Browse Chat Files</string>
     <string name="chat_menu_enhanced_cache">Enhanced Cache</string>

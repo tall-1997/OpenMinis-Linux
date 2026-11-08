@@ -2041,4 +2041,15 @@
     <string name="model_group_detail_quota_period_placeholder">Długość okna (godziny)</string>
     <string name="model_group_detail_quota_window_reset_snackbar">Zresetowano okno limitu — członek główny znowu obsługuje</string>
     <string name="model_group_detail_quota_window_remaining">Pozostało w tym oknie: %1$d wysyłek</string>
-</resources>
+
+    <string name="git_panel_section_staged">Zaindeksowane</string>
+    <string name="git_panel_section_unstaged">Nie zaindeksowane</string>
+    <string name="git_panel_section_untracked">Nieliczone</string>
+    <string name="git_panel_section_stashes">Skrytki</string>
+    <string name="git_panel_no_upstream">Brak upstream — push zapyta</string>
+    <string name="git_panel_search_hint">Szukaj: temat / hash / autor</string>
+    <string name="git_panel_no_search_hits">Brak wyników dla „%1$s”</string>
+    <string name="git_panel_no_branches">Brak gałęzi</string>
+    <string name="git_panel_push">Wypchnij</string>
+    <string name="git_panel_pull">Pobierz</string>
+ </resources>

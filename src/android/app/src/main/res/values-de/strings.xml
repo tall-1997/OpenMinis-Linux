@@ -2034,4 +2034,14 @@
     <string name="model_group_detail_quota_period_placeholder">Fensterlänge (Stunden)</string>
     <string name="model_group_detail_quota_window_reset_snackbar">Kontingentfenster zurückgesetzt – primäres Mitglied bedient wieder</string>
     <string name="model_group_detail_quota_window_remaining">Verbleibend in diesem Fenster: %1$d Sendungen</string>
+<string name="git_panel_section_staged">Staged</string>
+    <string name="git_panel_section_unstaged">Nicht stagiert</string>
+    <string name="git_panel_section_untracked">Untracked</string>
+    <string name="git_panel_section_stashes">Stashes</string>
+    <string name="git_panel_no_upstream">Kein Upstream — Push fragt danach</string>
+    <string name="git_panel_search_hint">Suche Betreff / Hash / Autor</string>
+    <string name="git_panel_no_search_hits">Nichts passt zu "%1$s"</string>
+    <string name="git_panel_no_branches">Keine Branches gefunden</string>
+    <string name="git_panel_push">Push</string>
+    <string name="git_panel_pull">Pull</string>
 </resources>
