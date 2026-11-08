@@ -311,4 +311,200 @@ class GitCliParseTest {
         val mixed = GitCli.parseProbe("fatal: not a git repository\n/bin/bash: line 1: 9 Killed\n", 128)
         assertEquals("fatal: not a git repository", mixed.error)
     }
+
+    // -------------------------------------------------------------- numstat
+
+    @Test
+    fun `numstat maps paths to added and deleted counts`() {
+        val out = "12\t3\tsrc/a.kt\n0\t9\tREADME.md\n"
+        val m = GitCli.parseNumstat(out)
+        assertEquals(2, m.size)
+        assertEquals(GitCli.NumStat(12, 3), m["src/a.kt"])
+        assertEquals(GitCli.NumStat(0, 9), m["README.md"])
+        assertFalse(m["README.md"]!!.binary)
+    }
+
+    @Test
+    fun `numstat marks pure rename with new path key`() {
+        val m = GitCli.parseNumstat("-\t-\tsrc/{old.kt => new.kt}\n")
+        assertEquals(1, m.size)
+        assertTrue(m["src/new.kt"]!!.binary) // 0/0 rename: no counts to show
+        assertNull(m["src/{old.kt => new.kt}"])
+    }
+
+    @Test
+    fun `numstat marks binary rows and skips garbage`() {
+        val m = GitCli.parseNumstat("-\t-\timg.png\nx\ty\n12\t4\tsrc/c.kt\n")
+        assertEquals(2, m.size)
+        assertTrue(m["img.png"]!!.binary)
+        assertEquals(GitCli.NumStat(12, 4), m["src/c.kt"])
+    }
+
+    // ------------------------------------------------------------- logPage
+
+    @Test
+    fun `graph log carries parents and tolerates short lines`() {
+        val out = listOf(
+            "h1\u001f\u001f7f1\u001fAlice\u001f1700000000\u001froot",
+            "h2\u001fh1\u001f7f2\u001fBob\u001f1699999900\u001fsecond",
+            "short-line",
+            "",
+        ).joinToString("\n")
+        val l = GitCli.parseGraphLog(out)
+        assertEquals(2, l.size)
+        assertEquals(emptyList<String>(), l[0].parents)
+        assertEquals(listOf("h1"), l[1].parents)
+        assertEquals("7f1", l[0].shortHash)
+    }
+
+    @Test
+    fun `graph log command pins hash delimiters and skip paging`() {
+        val cmd = GitCli.graphLogCmd(offset = 50, limit = 50)
+        assertTrue(cmd.contains("log"))
+        assertTrue(cmd.contains("-n 50 --skip 50"))
+        assertTrue(cmd.contains("%x1f%P%x1f%h"))
+        assertTrue(cmd.contains("--date=unix"))
+    }
+
+    // --------------------------------------------------------------- remote
+
+    @Test
+    fun `remote prefers push url and strips the fetch or push marker`() {
+        val same = "origin\thttps://github.com/a/b.git (fetch)\n" +
+            "origin\thttps://github.com/a/b.git (push)\n"
+        assertEquals("https://github.com/a/b.git", GitCli.parseRemote(same))
+
+        // fetch and push differ: the push entry must win, marker stripped.
+        val split = "origin\thttps://github.com/a/b-fetch.git (fetch)\n" +
+            "origin\tssh://git@github.com/a/b.git (push)\n"
+        assertEquals("ssh://git@github.com/a/b.git", GitCli.parseRemote(split))
+    }
+
+    @Test
+    fun `remote returns null for blank output`() {
+        assertNull(GitCli.parseRemote(""))
+        assertNull(GitCli.parseRemote("\n"))
+        assertNull(GitCli.parseRemote("garbage-without-tab"))
+    }
+
+    // --------------------------------------------------------- commitDetail
+
+    @Test
+    fun `commit detail parses record and reassembles multiline body`() {
+        val hash = "aabbccddeeff00112233445566778899aabbccdd"
+        val rec = hash + "\u001fAlice\u001fa@x.io\u001f1700000000\u001fBob\u001fb@x.io\u001f1699999999" +
+            "\u001fsubject line\u001f"
+        val out = rec + "\nfirst body line\nsecond body line\n\n"
+        val d = GitCli.parseCommitDetail(out)
+        assertNotNull(d)
+        assertEquals(hash, d!!.hash)
+        assertEquals("Alice", d.author)
+        assertEquals("Bob", d.committer)
+        assertEquals(1699999999L, d.committerEpoch)
+        assertEquals("subject line", d.subject)
+        assertEquals("first body line\nsecond body line", d.body)
+    }
+
+    @Test
+    fun `commit detail skips watchdog noise before record and inside body`() {
+        val hash = "112233445566778899aabbccddeeff0011223344"
+        val rec = hash + "\u001fA\u001fa@x\u001f1\u001fB\u001fb@x\u001f2\u001fsubj\u001f"
+        val noise = "/bin/bash: line 1: 9 Killed"
+        val d = GitCli.parseCommitDetail(noise + "\n" + rec + "\nbody\n" + noise + "\n")
+        assertNotNull(d)
+        assertEquals("subj", d!!.subject)
+        assertEquals("body", d.body)
+    }
+
+    @Test
+    fun `commit detail returns null when no 40 char record exists`() {
+        assertNull(GitCli.parseCommitDetail("fatal: bad revision\n"))
+        assertNull(GitCli.parseCommitDetail(""))
+    }
+
+    // -------------------------------------------------------- commitNumstat
+
+    @Test
+    fun `commit numstat parses counts and binary marker`() {
+        val out = "12\t3\tsrc/a.kt\n-\t-\timg.png\n-\t-\tsrc/{x.kt => y.kt}\n"
+        val l = GitCli.parseCommitNumstat(out)
+        assertEquals(3, l.size)
+        assertEquals("src/a.kt", l[0].path)
+        assertEquals(12, l[0].added)
+        assertEquals(3, l[0].deleted)
+        assertFalse(l[0].binary)
+        assertTrue(l[1].binary)
+        assertNull(l[1].renameFrom)
+        assertEquals("src/y.kt", l[2].path)
+        assertEquals("src/x.kt", l[2].renameFrom)
+    }
+
+    @Test
+    fun `commit numstat returns empty on failure output`() {
+        assertTrue(GitCli.parseCommitNumstat("").isEmpty())
+        assertTrue(GitCli.parseCommitNumstat("fatal: ambiguous argument").isEmpty())
+    }
+
+    // ------------------------------------------------------------ branches
+
+    @Test
+    fun `branches parse hash name subject and mark only the exact current`() {
+        val out = "abc1234\u001fmain\u001fFix parser bug\n" +
+            "def5678\u001forigin/main\u001fFix parser bug\n" +
+            "987fedc\u001ffeature/x\u001fWork in progress\n"
+        val list = GitCli.parseBranches(out, current = "main")
+        assertEquals(3, list.size)
+        assertEquals("main", list[0].name)
+        assertTrue(list[0].isCurrent)
+        assertEquals("Fix parser bug", list[0].lastSubject)
+        // origin/main must NOT count as current — only the exact name does.
+        assertEquals("origin/main", list[1].name)
+        assertFalse(list[1].isCurrent)
+        assertEquals("feature/x", list[2].name)
+        assertEquals("Work in progress", list[2].lastSubject)
+    }
+
+    @Test
+    fun `branches drop malformed rows and dedupe by name`() {
+        val out = "abc1234\u001fmain\u001fone\ngarbage-no-separator\n" +
+            "def5678\u001fmain\u001fduplicate\n\t\n\n"
+        val list = GitCli.parseBranches(out, current = "other")
+        assertEquals(1, list.size)
+        assertEquals("main", list[0].name)
+        assertFalse(list[0].isCurrent)
+    }
+
+    @Test
+    fun `branches empty output and blank current yield empty list`() {
+        assertTrue(GitCli.parseBranches("", "").isEmpty())
+        assertTrue(GitCli.parseBranches("fatal: not a repo\n", "main").isEmpty())
+    }
+
+    // -------------------------------------------------------------- stashes
+
+    @Test
+    fun `stashes parse index and subject in order`() {
+        val out = "stash@{0}\u001fWIP widget\nstash@{1}\u001fon branch: older\n"
+        val list = GitCli.parseStashes(out)
+        assertEquals(2, list.size)
+        assertEquals(0, list[0].index)
+        assertEquals("WIP widget", list[0].subject)
+        assertEquals(1, list[1].index)
+        assertEquals("on branch: older", list[1].subject)
+    }
+
+    @Test
+    fun `stashes drop malformed rows`() {
+        val out = "not-a-ref\u001fnope\ngarbage\nstash@{x}\u001fno-index\n"
+        assertTrue(GitCli.parseStashes(out).isEmpty())
+        assertTrue(GitCli.parseStashes("").isEmpty())
+    }
+
+    @Test
+    fun `stashes split on first separator only so subject keeps x1f`() {
+        val out = "stash@{0}\u001fWIP\u001fsplit\n"
+        val list = GitCli.parseStashes(out)
+        assertEquals(1, list.size)
+        assertEquals("WIP\u001fsplit", list[0].subject)
+    }
 }

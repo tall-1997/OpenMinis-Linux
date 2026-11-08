@@ -2034,4 +2034,24 @@
     <string name="model_group_detail_quota_period_placeholder">Duración de la ventana (horas)</string>
     <string name="model_group_detail_quota_window_reset_snackbar">Ventana de cuota reiniciada: el miembro principal vuelve a atender</string>
     <string name="model_group_detail_quota_window_remaining">Restantes en esta ventana: %1$d envíos</string>
+    <string name="git_panel_staged">En staging</string>
+    <string name="git_panel_changes_section">Cambios</string>
+    <string name="git_panel_stats_files">%1$d archivos modificados</string>
+    <string name="git_panel_untracked_badge">nuevo</string>
+    <string name="git_panel_search_history">Buscar commits</string>
+    <string name="git_panel_search_no_match">No hay commits coincidentes</string>
+    <string name="git_panel_no_identity">Identidad de Git no configurada; los commits usarán los valores predeterminados del sistema</string>
+    <string name="git_panel_commit_files">Archivos modificados (%1$d)</string>
+    <string name="git_panel_copy_hash">Copiar hash</string>
+    <string name="git_panel_author_label">Autor</string>
+    <string name="git_panel_committer">Committer</string>
+    <string name="git_panel_committed_at">Confirmado</string>
+    <string name="git_panel_hash_label">Hash</string>
+    <string name="git_panel_section_stashes">Stashes</string>
+    <string name="git_panel_push">Push</string>
+    <string name="git_panel_pull">Pull</string>
+    <string name="git_panel_no_upstream">Sin upstream — el push pedirá uno</string>
+    <string name="git_panel_no_branches">Sin ramas</string>
+    <string name="git_panel_no_stashes">Sin stashes</string>
+    <string name="git_panel_switch_branch">Cambiar rama</string>
 </resources>

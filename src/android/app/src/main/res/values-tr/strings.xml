@@ -2044,4 +2044,24 @@
     <string name="cot_translate_settings_language">Hedef dil</string>
     <string name="cot_translate_privacy_notice">Genişletilmiş akıl yürütme, seçilen çeviri hizmetine gönderilir. Özel kod veya konuşma ayrıntıları içerebilir.</string>
     <string name="cot_translate_anonymous_notice">Bing ve Google çeviri için oturum açma veya API anahtarı gerektirmez. Anonim uç noktaları istekleri reddedebilir veya sınırlayabilir.</string>
+    <string name="git_panel_staged">Hazırlandı</string>
+    <string name="git_panel_changes_section">Değişiklikler</string>
+    <string name="git_panel_stats_files">%1$d dosya değiştirildi</string>
+    <string name="git_panel_untracked_badge">yeni</string>
+    <string name="git_panel_search_history">Commit\'lerde ara</string>
+    <string name="git_panel_search_no_match">Eşleşen commit yok</string>
+    <string name="git_panel_no_identity">Git kimliği yapılandırılmadı; commit\'ler sistem varsayılanlarını kullanacak</string>
+    <string name="git_panel_commit_files">Değiştirilen dosyalar (%1$d)</string>
+    <string name="git_panel_copy_hash">Hash\'i kopyala</string>
+    <string name="git_panel_author_label">Yazar</string>
+    <string name="git_panel_committer">Committer</string>
+    <string name="git_panel_committed_at">Commit\'lendi</string>
+    <string name="git_panel_hash_label">Hash</string>
+    <string name="git_panel_section_stashes">Stash kayıtları</string>
+    <string name="git_panel_push">Gönder</string>
+    <string name="git_panel_pull">Çek</string>
+    <string name="git_panel_no_upstream">Upstream yok — push soracak</string>
+    <string name="git_panel_no_branches">Dal yok</string>
+    <string name="git_panel_no_stashes">Stash yok</string>
+    <string name="git_panel_switch_branch">Dal değiştir</string>
 </resources>

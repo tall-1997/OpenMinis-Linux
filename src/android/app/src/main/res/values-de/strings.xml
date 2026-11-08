@@ -2034,4 +2034,24 @@
     <string name="model_group_detail_quota_period_placeholder">Fensterlänge (Stunden)</string>
     <string name="model_group_detail_quota_window_reset_snackbar">Kontingentfenster zurückgesetzt – primäres Mitglied bedient wieder</string>
     <string name="model_group_detail_quota_window_remaining">Verbleibend in diesem Fenster: %1$d Sendungen</string>
+    <string name="git_panel_staged">Bereitgestellt</string>
+    <string name="git_panel_changes_section">Änderungen</string>
+    <string name="git_panel_stats_files">%1$d Dateien geändert</string>
+    <string name="git_panel_untracked_badge">neu</string>
+    <string name="git_panel_search_history">Commits durchsuchen</string>
+    <string name="git_panel_search_no_match">Keine passenden Commits</string>
+    <string name="git_panel_no_identity">Git-Identität nicht konfiguriert; Commits fallen auf Systemstandards zurück</string>
+    <string name="git_panel_commit_files">Geänderte Dateien (%1$d)</string>
+    <string name="git_panel_copy_hash">Hash kopieren</string>
+    <string name="git_panel_author_label">Autor</string>
+    <string name="git_panel_committer">Committer</string>
+    <string name="git_panel_committed_at">Committet</string>
+    <string name="git_panel_hash_label">Hash</string>
+    <string name="git_panel_section_stashes">Stashes</string>
+    <string name="git_panel_push">Push</string>
+    <string name="git_panel_pull">Pull</string>
+    <string name="git_panel_no_upstream">Kein Upstream — Push fragt danach</string>
+    <string name="git_panel_no_branches">Keine Branches gefunden</string>
+    <string name="git_panel_no_stashes">Keine Stashes</string>
+    <string name="git_panel_switch_branch">Branch wechseln</string>
 </resources>

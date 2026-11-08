@@ -2623,4 +2623,24 @@
     <string name="cot_translate_settings_language">目标语言</string>
     <string name="cot_translate_privacy_notice">展开的思考内容将发送至所选翻译服务，其中可能包含私有代码或对话细节。</string>
     <string name="cot_translate_anonymous_notice">Bing 与 Google 匿名接口无需登录或 API Key，但可能拒绝或限制请求。</string>
+    <string name="git_panel_staged">已暂存</string>
+    <string name="git_panel_changes_section">更改</string>
+    <string name="git_panel_stats_files">已更改 %1$d 个文件</string>
+    <string name="git_panel_untracked_badge">新增</string>
+    <string name="git_panel_search_history">搜索提交</string>
+    <string name="git_panel_search_no_match">没有匹配的提交</string>
+    <string name="git_panel_no_identity">未配置 Git 身份信息；提交将使用系统默认值</string>
+    <string name="git_panel_commit_files">已更改文件 (%1$d)</string>
+    <string name="git_panel_copy_hash">复制哈希</string>
+    <string name="git_panel_author_label">作者</string>
+    <string name="git_panel_committer">提交者</string>
+    <string name="git_panel_committed_at">提交时间</string>
+    <string name="git_panel_hash_label">哈希</string>
+    <string name="git_panel_section_stashes">暂存区（stash）</string>
+    <string name="git_panel_push">推送</string>
+    <string name="git_panel_pull">拉取</string>
+    <string name="git_panel_no_upstream">没有上游 — push 时会询问</string>
+    <string name="git_panel_no_branches">没有分支</string>
+    <string name="git_panel_no_stashes">没有暂存记录</string>
+    <string name="git_panel_switch_branch">切换分支</string>
 </resources>

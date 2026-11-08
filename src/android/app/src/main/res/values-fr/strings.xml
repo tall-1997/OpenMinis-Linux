@@ -2044,4 +2044,24 @@
     <string name="cot_translate_settings_language">Langue cible</string>
     <string name="cot_translate_privacy_notice">Le raisonnement développé est envoyé au service de traduction sélectionné. Il peut contenir du code privé ou des détails de conversation.</string>
     <string name="cot_translate_anonymous_notice">Bing et Google ne nécessitent ni connexion ni clé API. Leurs points de terminaison anonymes peuvent rejeter ou limiter les requêtes.</string>
+    <string name="git_panel_staged">Indexé</string>
+    <string name="git_panel_changes_section">Modifications</string>
+    <string name="git_panel_stats_files">%1$d fichiers modifiés</string>
+    <string name="git_panel_untracked_badge">nouveau</string>
+    <string name="git_panel_search_history">Rechercher des commits</string>
+    <string name="git_panel_search_no_match">Aucun commit correspondant</string>
+    <string name="git_panel_no_identity">Identité Git non configurée ; les commits utiliseront les valeurs par défaut du système</string>
+    <string name="git_panel_commit_files">Fichiers modifiés (%1$d)</string>
+    <string name="git_panel_copy_hash">Copier le hash</string>
+    <string name="git_panel_author_label">Auteur</string>
+    <string name="git_panel_committer">Committer</string>
+    <string name="git_panel_committed_at">Commité</string>
+    <string name="git_panel_hash_label">Hash</string>
+    <string name="git_panel_section_stashes">Stashes</string>
+    <string name="git_panel_push">Pousser</string>
+    <string name="git_panel_pull">Tirer</string>
+    <string name="git_panel_no_upstream">Pas d\'upstream — le push le demandera</string>
+    <string name="git_panel_no_branches">Aucune branche</string>
+    <string name="git_panel_no_stashes">Aucun stash</string>
+    <string name="git_panel_switch_branch">Changer de branche</string>
 </resources>

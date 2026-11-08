@@ -2048,4 +2048,24 @@
     <string name="cot_translate_settings_language">Limbă țintă</string>
     <string name="cot_translate_privacy_notice">Raționamentul extins este trimis serviciului de traducere selectat. Poate conține cod privat sau detalii ale conversației.</string>
     <string name="cot_translate_anonymous_notice">Bing și Google nu necesită autentificare sau cheie API. Punctele lor finale anonime pot respinge sau limita cererile.</string>
+    <string name="git_panel_staged">În staging</string>
+    <string name="git_panel_changes_section">Modificări</string>
+    <string name="git_panel_stats_files">%1$d fișiere modificate</string>
+    <string name="git_panel_untracked_badge">nou</string>
+    <string name="git_panel_search_history">Caută commituri</string>
+    <string name="git_panel_search_no_match">Niciun commit corespunzător</string>
+    <string name="git_panel_no_identity">Identitatea Git nu este configurată; commiturile vor folosi valorile implicite de sistem</string>
+    <string name="git_panel_commit_files">Fișiere modificate (%1$d)</string>
+    <string name="git_panel_copy_hash">Copiază hash</string>
+    <string name="git_panel_author_label">Autor</string>
+    <string name="git_panel_committer">Committer</string>
+    <string name="git_panel_committed_at">Comitat</string>
+    <string name="git_panel_hash_label">Hash</string>
+    <string name="git_panel_section_stashes">Stash-uri</string>
+    <string name="git_panel_push">Împinge</string>
+    <string name="git_panel_pull">Trage</string>
+    <string name="git_panel_no_upstream">Fără upstream — push va întreba</string>
+    <string name="git_panel_no_branches">Fără branch-uri</string>
+    <string name="git_panel_no_stashes">Fără stash-uri</string>
+    <string name="git_panel_switch_branch">Schimbă branch-ul</string>
 </resources>

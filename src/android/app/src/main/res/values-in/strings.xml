@@ -2049,4 +2049,24 @@
     <string name="cot_translate_settings_language">Bahasa target</string>
     <string name="cot_translate_privacy_notice">Penalaran yang diperluas dikirim ke layanan terjemahan yang dipilih. Ini dapat berisi kode pribadi atau detail percakapan.</string>
     <string name="cot_translate_anonymous_notice">Bing dan Google tidak memerlukan login atau kunci API. Endpoint anonim mereka dapat menolak atau membatasi permintaan.</string>
+    <string name="git_panel_staged">Ter-staging</string>
+    <string name="git_panel_changes_section">Perubahan</string>
+    <string name="git_panel_stats_files">%1$d file diubah</string>
+    <string name="git_panel_untracked_badge">baru</string>
+    <string name="git_panel_search_history">Cari commit</string>
+    <string name="git_panel_search_no_match">Tidak ada commit yang cocok</string>
+    <string name="git_panel_no_identity">Identitas Git belum dikonfigurasi; commit akan memakai bawaan sistem</string>
+    <string name="git_panel_commit_files">File diubah (%1$d)</string>
+    <string name="git_panel_copy_hash">Salin hash</string>
+    <string name="git_panel_author_label">Penulis</string>
+    <string name="git_panel_committer">Committer</string>
+    <string name="git_panel_committed_at">Dikomit</string>
+    <string name="git_panel_hash_label">Hash</string>
+    <string name="git_panel_section_stashes">Stash</string>
+    <string name="git_panel_push">Push</string>
+    <string name="git_panel_pull">Tarik</string>
+    <string name="git_panel_no_upstream">Tanpa upstream — push akan menanyakan</string>
+    <string name="git_panel_no_branches">Tidak ada cabang</string>
+    <string name="git_panel_no_stashes">Tidak ada stash</string>
+    <string name="git_panel_switch_branch">Ganti cabang</string>
 </resources>

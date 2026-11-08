@@ -2052,4 +2052,24 @@
     <string name="cot_translate_settings_language">Целевой язык</string>
     <string name="cot_translate_privacy_notice">Развёрнутые рассуждения отправляются в выбранный сервис перевода. Они могут содержать частный код или детали разговора.</string>
     <string name="cot_translate_anonymous_notice">Bing и Google не требуют входа или ключа API. Их анонимные endpoints могут отклонять или ограничивать запросы.</string>
+    <string name="git_panel_staged">Индексировано</string>
+    <string name="git_panel_changes_section">Изменения</string>
+    <string name="git_panel_stats_files">Изменено файлов: %1$d</string>
+    <string name="git_panel_untracked_badge">новый</string>
+    <string name="git_panel_search_history">Поиск коммитов</string>
+    <string name="git_panel_search_no_match">Нет подходящих коммитов</string>
+    <string name="git_panel_no_identity">Идентификация Git не настроена; коммиты будут использовать системные значения по умолчанию</string>
+    <string name="git_panel_commit_files">Изменённые файлы (%1$d)</string>
+    <string name="git_panel_copy_hash">Скопировать хеш</string>
+    <string name="git_panel_author_label">Автор</string>
+    <string name="git_panel_committer">Коммиттер</string>
+    <string name="git_panel_committed_at">Закоммичено</string>
+    <string name="git_panel_hash_label">Хеш</string>
+    <string name="git_panel_section_stashes">Стэши</string>
+    <string name="git_panel_push">Отправить</string>
+    <string name="git_panel_pull">Забрать</string>
+    <string name="git_panel_no_upstream">Нет upstream — push спросит</string>
+    <string name="git_panel_no_branches">Нет веток</string>
+    <string name="git_panel_no_stashes">Нет стэшей</string>
+    <string name="git_panel_switch_branch">Переключить ветку</string>
 </resources>

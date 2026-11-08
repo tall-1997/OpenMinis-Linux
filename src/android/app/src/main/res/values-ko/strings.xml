@@ -2041,4 +2041,24 @@
     <string name="cot_translate_settings_language">대상 언어</string>
     <string name="cot_translate_privacy_notice">펼쳐진 추론 내용은 선택한 번역 서비스로 전송됩니다. 비공개 코드나 대화 세부 정보가 포함될 수 있습니다.</string>
     <string name="cot_translate_anonymous_notice">Bing과 Google의 익명 엔드포인트는 로그인이나 API 키가 필요 없지만 요청을 거부하거나 제한할 수 있습니다.</string>
+    <string name="git_panel_staged">스테이징됨</string>
+    <string name="git_panel_changes_section">변경 사항</string>
+    <string name="git_panel_stats_files">파일 %1$d개 변경됨</string>
+    <string name="git_panel_untracked_badge">새 파일</string>
+    <string name="git_panel_search_history">커밋 검색</string>
+    <string name="git_panel_search_no_match">일치하는 커밋 없음</string>
+    <string name="git_panel_no_identity">Git 사용자 정보가 설정되지 않았습니다. 커밋은 시스템 기본값을 사용합니다</string>
+    <string name="git_panel_commit_files">변경된 파일 (%1$d)</string>
+    <string name="git_panel_copy_hash">해시 복사</string>
+    <string name="git_panel_author_label">작성자</string>
+    <string name="git_panel_committer">커미터</string>
+    <string name="git_panel_committed_at">커밋됨</string>
+    <string name="git_panel_hash_label">해시</string>
+    <string name="git_panel_section_stashes">스태시</string>
+    <string name="git_panel_push">Push</string>
+    <string name="git_panel_pull">Pull</string>
+    <string name="git_panel_no_upstream">업스트림 없음 — push에서 지정</string>
+    <string name="git_panel_no_branches">브랜치 없음</string>
+    <string name="git_panel_no_stashes">스태시 없음</string>
+    <string name="git_panel_switch_branch">브랜치 전환</string>
 </resources>

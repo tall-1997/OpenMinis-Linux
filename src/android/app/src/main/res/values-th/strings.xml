@@ -2044,4 +2044,24 @@
     <string name="cot_translate_settings_language">ภาษาเป้าหมาย</string>
     <string name="cot_translate_privacy_notice">กระบวนการคิดแบบขยายจะถูกส่งไปยังบริการแปลที่เลือก ซึ่งอาจมีโค้ดส่วนตัวหรือรายละเอียดบทสนทนา</string>
     <string name="cot_translate_anonymous_notice">Bing และ Google ไม่ต้องเข้าสู่ระบบหรือคีย์ API ปลายทางแบบไม่ระบุตัวตนอาจปฏิเสธหรือจำกัดคำขอ</string>
+    <string name="git_panel_staged">สเตจแล้ว</string>
+    <string name="git_panel_changes_section">การเปลี่ยนแปลง</string>
+    <string name="git_panel_stats_files">ไฟล์ที่เปลี่ยนแปลง %1$d รายการ</string>
+    <string name="git_panel_untracked_badge">ใหม่</string>
+    <string name="git_panel_search_history">ค้นหาคอมมิต</string>
+    <string name="git_panel_search_no_match">ไม่มีคอมมิตที่ตรงกัน</string>
+    <string name="git_panel_no_identity">ยังไม่ได้ตั้งค่าข้อมูลประจำตัว Git คอมมิตจะใช้ค่าเริ่มต้นของระบบ</string>
+    <string name="git_panel_commit_files">ไฟล์ที่เปลี่ยนแปลง (%1$d)</string>
+    <string name="git_panel_copy_hash">คัดลอกแฮช</string>
+    <string name="git_panel_author_label">ผู้เขียน</string>
+    <string name="git_panel_committer">ผู้คอมมิต</string>
+    <string name="git_panel_committed_at">คอมมิตแล้ว</string>
+    <string name="git_panel_hash_label">แฮช</string>
+    <string name="git_panel_section_stashes">คลังสแตช</string>
+    <string name="git_panel_push">พุช</string>
+    <string name="git_panel_pull">ดึง</string>
+    <string name="git_panel_no_upstream">ไม่มี upstream — push จะถาม</string>
+    <string name="git_panel_no_branches">ไม่มีบรานช์</string>
+    <string name="git_panel_no_stashes">ไม่มีสแตช</string>
+    <string name="git_panel_switch_branch">สลับบรานช์</string>
 </resources>
