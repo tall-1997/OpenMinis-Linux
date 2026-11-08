@@ -2047,4 +2047,11 @@
     <string name="git_panel_committer">Committer</string>
     <string name="git_panel_committed_at">Confirmado</string>
     <string name="git_panel_hash_label">Hash</string>
+    <string name="git_panel_section_stashes">Stashes</string>
+    <string name="git_panel_push">Push</string>
+    <string name="git_panel_pull">Pull</string>
+    <string name="git_panel_no_upstream">Sin upstream — el push pedirá uno</string>
+    <string name="git_panel_no_branches">Sin ramas</string>
+    <string name="git_panel_no_stashes">Sin stashes</string>
+    <string name="git_panel_switch_branch">Cambiar rama</string>
 </resources>

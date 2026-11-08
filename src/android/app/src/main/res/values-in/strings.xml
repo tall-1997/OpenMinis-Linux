@@ -2052,4 +2052,11 @@
     <string name="git_panel_committer">Committer</string>
     <string name="git_panel_committed_at">Dikomit</string>
     <string name="git_panel_hash_label">Hash</string>
+    <string name="git_panel_section_stashes">Stash</string>
+    <string name="git_panel_push">Push</string>
+    <string name="git_panel_pull">Tarik</string>
+    <string name="git_panel_no_upstream">Tanpa upstream — push akan menanyakan</string>
+    <string name="git_panel_no_branches">Tidak ada cabang</string>
+    <string name="git_panel_no_stashes">Tidak ada stash</string>
+    <string name="git_panel_switch_branch">Ganti cabang</string>
 </resources>

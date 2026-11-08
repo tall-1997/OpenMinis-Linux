@@ -2044,4 +2044,11 @@
     <string name="git_panel_committer">커미터</string>
     <string name="git_panel_committed_at">커밋됨</string>
     <string name="git_panel_hash_label">해시</string>
+    <string name="git_panel_section_stashes">스태시</string>
+    <string name="git_panel_push">Push</string>
+    <string name="git_panel_pull">Pull</string>
+    <string name="git_panel_no_upstream">업스트림 없음 — push에서 지정</string>
+    <string name="git_panel_no_branches">브랜치 없음</string>
+    <string name="git_panel_no_stashes">스태시 없음</string>
+    <string name="git_panel_switch_branch">브랜치 전환</string>
 </resources>

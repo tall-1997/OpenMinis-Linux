@@ -21,6 +21,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -53,6 +56,7 @@ fun GitPanelScreen(
     onBack: () -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    var showBranchMenu by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -91,7 +95,20 @@ fun GitPanelScreen(
 
                 else -> {
                     Column(Modifier.fillMaxSize()) {
-                        GitPanelHeader(state)
+                        GitPanelHeader(
+                            state = state,
+                            viewModel = viewModel,
+                            onBranchClick = { showBranchMenu = !showBranchMenu },
+                        )
+                        if (showBranchMenu) {
+                            BranchMenu(
+                                branches = state.branches,
+                                onPick = { name ->
+                                    viewModel.switchBranch(name)
+                                    showBranchMenu = false
+                                },
+                            )
+                        }
                         val changedCount = state.status?.entries?.size ?: 0
                         TabRow(selectedTabIndex = state.tab.ordinal) {
                             Tab(

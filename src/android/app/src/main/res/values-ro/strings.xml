@@ -2051,4 +2051,11 @@
     <string name="git_panel_committer">Committer</string>
     <string name="git_panel_committed_at">Comitat</string>
     <string name="git_panel_hash_label">Hash</string>
+    <string name="git_panel_section_stashes">Stash-uri</string>
+    <string name="git_panel_push">Împinge</string>
+    <string name="git_panel_pull">Trage</string>
+    <string name="git_panel_no_upstream">Fără upstream — push va întreba</string>
+    <string name="git_panel_no_branches">Fără branch-uri</string>
+    <string name="git_panel_no_stashes">Fără stash-uri</string>
+    <string name="git_panel_switch_branch">Schimbă branch-ul</string>
 </resources>

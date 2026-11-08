@@ -15,8 +15,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -31,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openminis.app.R
 import com.openminis.app.git.GitCli.GitFileEntry
+import com.openminis.app.git.GitCli.GitStashEntry
 import com.openminis.app.git.GitCli.NumStat
 
 /**
@@ -43,51 +47,75 @@ import com.openminis.app.git.GitCli.NumStat
 internal fun GitPanelChanges(state: GitPanelState, viewModel: GitPanelViewModel) {
     val entries = state.status?.entries.orEmpty()
     Column(Modifier.fillMaxSize()) {
-        if (entries.isEmpty()) {
-            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+        if (entries.isEmpty() && state.stashes.isEmpty()) {
+            // Clean tree, nothing stashed: keep the calm empty state but
+            // still answer the question "is there a stash?" — the section
+            // label stays visible so the area doesn't vanish entirely.
+            Column(Modifier.weight(1f).fillMaxWidth()) {
+                Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    Text(
+                        stringResource(R.string.git_panel_clean),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 Text(
-                    stringResource(R.string.git_panel_clean),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    stringResource(R.string.git_panel_no_stashes),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .padding(bottom = 14.dp),
                 )
             }
         } else {
             val stagedRows = entries.filter { it.staged }
             val changeRows = entries.filter { !it.staged }
             LazyColumn(Modifier.weight(1f)) {
-                item(key = "stats") {
-                    StatsBar(changesTotals(state.status, state.stagedNumstat, state.unstagedNumstat))
+                if (entries.isNotEmpty()) {
+                    item(key = "stats") {
+                        StatsBar(changesTotals(state.status, state.stagedNumstat, state.unstagedNumstat))
+                    }
+                    if (stagedRows.isNotEmpty()) {
+                        item(key = "staged-header") {
+                            SectionHeader(stringResource(R.string.git_panel_staged), stagedRows.size)
+                        }
+                        items(stagedRows, key = { "s:${it.path}:${it.code}" }) { entry ->
+                            FileEntryRow(
+                                entry = entry,
+                                stat = state.stagedNumstat[entry.path],
+                                enabled = !state.busy,
+                                onToggleStage = { viewModel.toggleStage(entry) },
+                                onOpenDiff = { viewModel.openFileDiff(entry) },
+                            )
+                            HorizontalDivider(color = GitHairline)
+                        }
+                    }
+                    if (changeRows.isNotEmpty()) {
+                        item(key = "changes-header") {
+                            SectionHeader(
+                                stringResource(R.string.git_panel_changes_section),
+                                changeRows.size,
+                            )
+                        }
+                        items(changeRows, key = { "w:${it.path}:${it.code}" }) { entry ->
+                            FileEntryRow(
+                                entry = entry,
+                                stat = state.unstagedNumstat[entry.path],
+                                enabled = !state.busy,
+                                onToggleStage = { viewModel.toggleStage(entry) },
+                                onOpenDiff = { viewModel.openFileDiff(entry) },
+                            )
+                            HorizontalDivider(color = GitHairline)
+                        }
+                    }
                 }
-                if (stagedRows.isNotEmpty()) {
-                    item(key = "staged-header") {
-                        SectionHeader(stringResource(R.string.git_panel_staged), stagedRows.size)
+                if (state.stashes.isNotEmpty()) {
+                    item(key = "stashes-header") {
+                        SectionHeader(stringResource(R.string.git_panel_section_stashes), state.stashes.size)
                     }
-                    items(stagedRows, key = { "s:${it.path}:${it.code}" }) { entry ->
-                        FileEntryRow(
-                            entry = entry,
-                            stat = state.stagedNumstat[entry.path],
-                            enabled = !state.busy,
-                            onToggleStage = { viewModel.toggleStage(entry) },
-                            onOpenDiff = { viewModel.openFileDiff(entry) },
-                        )
-                        HorizontalDivider(color = GitHairline)
-                    }
-                }
-                if (changeRows.isNotEmpty()) {
-                    item(key = "changes-header") {
-                        SectionHeader(
-                            stringResource(R.string.git_panel_changes_section),
-                            changeRows.size,
-                        )
-                    }
-                    items(changeRows, key = { "w:${it.path}:${it.code}" }) { entry ->
-                        FileEntryRow(
-                            entry = entry,
-                            stat = state.unstagedNumstat[entry.path],
-                            enabled = !state.busy,
-                            onToggleStage = { viewModel.toggleStage(entry) },
-                            onOpenDiff = { viewModel.openFileDiff(entry) },
-                        )
+                    items(state.stashes, key = { "stash:${it.index}" }) { stash ->
+                        StashRowView(stash)
                         HorizontalDivider(color = GitHairline)
                     }
                 }
@@ -95,6 +123,39 @@ internal fun GitPanelChanges(state: GitPanelState, viewModel: GitPanelViewModel)
         }
         HorizontalDivider(color = GitHairline)
         GitPanelCommitBar(state, viewModel)
+    }
+}
+
+@Composable
+private fun StashRowView(stash: GitStashEntry) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            Icons.Filled.Bookmark,
+            contentDescription = null,
+            tint = GitHunkBlue,
+            modifier = Modifier.size(14.dp),
+        )
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                "stash@{${stash.index}}",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+            )
+            Text(
+                stash.subject,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 

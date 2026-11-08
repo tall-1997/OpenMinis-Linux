@@ -2626,4 +2626,11 @@
     <string name="git_panel_committer">提交者</string>
     <string name="git_panel_committed_at">提交时间</string>
     <string name="git_panel_hash_label">哈希</string>
+    <string name="git_panel_section_stashes">暂存区（stash）</string>
+    <string name="git_panel_push">推送</string>
+    <string name="git_panel_pull">拉取</string>
+    <string name="git_panel_no_upstream">没有上游 — push 时会询问</string>
+    <string name="git_panel_no_branches">没有分支</string>
+    <string name="git_panel_no_stashes">没有暂存记录</string>
+    <string name="git_panel_switch_branch">切换分支</string>
 </resources>

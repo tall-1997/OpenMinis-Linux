@@ -444,4 +444,67 @@ class GitCliParseTest {
         assertTrue(GitCli.parseCommitNumstat("").isEmpty())
         assertTrue(GitCli.parseCommitNumstat("fatal: ambiguous argument").isEmpty())
     }
+
+    // ------------------------------------------------------------ branches
+
+    @Test
+    fun `branches parse hash name subject and mark only the exact current`() {
+        val out = "abc1234\u001fmain\u001fFix parser bug\n" +
+            "def5678\u001forigin/main\u001fFix parser bug\n" +
+            "987fedc\u001ffeature/x\u001fWork in progress\n"
+        val list = GitCli.parseBranches(out, current = "main")
+        assertEquals(3, list.size)
+        assertEquals("main", list[0].name)
+        assertTrue(list[0].isCurrent)
+        assertEquals("Fix parser bug", list[0].lastSubject)
+        // origin/main must NOT count as current — only the exact name does.
+        assertEquals("origin/main", list[1].name)
+        assertFalse(list[1].isCurrent)
+        assertEquals("feature/x", list[2].name)
+        assertEquals("Work in progress", list[2].lastSubject)
+    }
+
+    @Test
+    fun `branches drop malformed rows and dedupe by name`() {
+        val out = "abc1234\u001fmain\u001fone\ngarbage-no-separator\n" +
+            "def5678\u001fmain\u001fduplicate\n\t\n\n"
+        val list = GitCli.parseBranches(out, current = "other")
+        assertEquals(1, list.size)
+        assertEquals("main", list[0].name)
+        assertFalse(list[0].isCurrent)
+    }
+
+    @Test
+    fun `branches empty output and blank current yield empty list`() {
+        assertTrue(GitCli.parseBranches("", "").isEmpty())
+        assertTrue(GitCli.parseBranches("fatal: not a repo\n", "main").isEmpty())
+    }
+
+    // -------------------------------------------------------------- stashes
+
+    @Test
+    fun `stashes parse index and subject in order`() {
+        val out = "stash@{0}\u001fWIP widget\nstash@{1}\u001fon branch: older\n"
+        val list = GitCli.parseStashes(out)
+        assertEquals(2, list.size)
+        assertEquals(0, list[0].index)
+        assertEquals("WIP widget", list[0].subject)
+        assertEquals(1, list[1].index)
+        assertEquals("on branch: older", list[1].subject)
+    }
+
+    @Test
+    fun `stashes drop malformed rows`() {
+        val out = "not-a-ref\u001fnope\ngarbage\nstash@{x}\u001fno-index\n"
+        assertTrue(GitCli.parseStashes(out).isEmpty())
+        assertTrue(GitCli.parseStashes("").isEmpty())
+    }
+
+    @Test
+    fun `stashes split on first separator only so subject keeps x1f`() {
+        val out = "stash@{0}\u001fWIP\u001fsplit\n"
+        val list = GitCli.parseStashes(out)
+        assertEquals(1, list.size)
+        assertEquals("WIP\u001fsplit", list[0].subject)
+    }
 }
