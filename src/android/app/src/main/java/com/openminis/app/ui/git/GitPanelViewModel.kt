@@ -4,11 +4,11 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.openminis.app.data.repository.ProviderRepository
-import com.openminis.app.git.GitCli.CommitOutcome
 import com.openminis.app.git.GitCli
+import com.openminis.app.git.GitCli.CommitOutcome
 import com.openminis.app.git.GitCli.GitCommit
-import com.openminis.app.git.GitCommitMessageGenerator
 import com.openminis.app.git.GitCli.GitFileEntry
+import com.openminis.app.git.GitCommitMessageGenerator
 import com.openminis.app.git.GitCli.GitRepoInfo
 import com.openminis.app.git.GitCli.GitStatus
 import com.openminis.app.sandbox.FileChangeHub
@@ -19,44 +19,16 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/** Everything the panel renders, in one immutable snapshot. */
-data class GitPanelState(
-    val loading: Boolean = true,
-    val repo: GitRepoInfo? = null,
-    val status: GitStatus? = null,
-    val log: List<GitCommit> = emptyList(),
-    /** A mutating git call (stage/commit) is in flight — buttons dim. */
-    val busy: Boolean = false,
-    /** The AI commit-message call is in flight. */
-    val generating: Boolean = false,
-    val draftMessage: String = "",
-    /** Transient one-line result (commit ok, error text…). Cleared on refresh. */
-    val notice: String? = null,
-    val diff: GitDiffView? = null,
-)
-
-data class GitDiffView(
-    val title: String,
-    val loading: Boolean,
-    val content: String,
-)
-
-/**
- * Drives the Git panel for one chat session's workspace.
- *
- * Every git call goes through [com.openminis.app.sandbox.ExecutionCoordinator]
- * — the session's persistent PRoot shell — so the panel sees exactly the tree
- * the agent sees, and the per-session mutex serialises panel commands with
- * the agent's own `git` invocations.
- */
 class GitPanelViewModel(
-    app: Application,
+    application: Application,
     private val sessionId: String,
     providerRepository: ProviderRepository,
-) : AndroidViewModel(app) {
+) : AndroidViewModel(application) {
 
     private val _state = MutableStateFlow(GitPanelState())
     val state: StateFlow<GitPanelState> = _state.asStateFlow()
+
+    private val app = application
 
     private val messageGenerator = GitCommitMessageGenerator(app, providerRepository)
 
@@ -92,25 +64,50 @@ class GitPanelViewModel(
         }
     }
 
+    /**
+     * Full re-probe: repo, status, both numstat maps, remote and the first
+     * history page. The extra probes are independent and best-effort — a
+     * failed remote probe only blanks the header card's remote line.
+     */
     fun refresh() {
         viewModelScope.launch {
             _state.update { it.copy(loading = true, notice = null, diff = null) }
             val repo = GitCli.probe(sessionId)
             if (!repo.isRepo) {
                 _state.update {
-                    it.copy(loading = false, repo = repo, status = null, log = emptyList())
+                    it.copy(
+                        loading = false,
+                        repo = repo,
+                        status = null,
+                        log = emptyList(),
+                        stagedNumstat = emptyMap(),
+                        unstagedNumstat = emptyMap(),
+                        remote = null,
+                    )
                 }
                 return@launch
             }
             val root = repo.root
             val status = runCatching { GitCli.status(sessionId, root) }.getOrNull()
-            val log = runCatching { GitCli.log(sessionId, root = root) }.getOrDefault(emptyList())
+            val staged = runCatching { GitCli.numstat(sessionId, staged = true, root = root) }
+                .getOrDefault(emptyMap())
+            val unstaged = runCatching { GitCli.numstat(sessionId, staged = false, root = root) }
+                .getOrDefault(emptyMap())
+            val remote = runCatching { GitCli.remote(sessionId, root) }.getOrNull()
+            val log = runCatching { GitCli.logPage(sessionId, offset = 0, root = root) }
+                .getOrDefault(emptyList())
             _state.update {
                 it.copy(
                     loading = false,
                     repo = repo,
                     status = status,
+                    stagedNumstat = staged,
+                    unstagedNumstat = unstaged,
+                    remote = displayRemote(remote),
                     log = log,
+                    logHasMore = log.size == HISTORY_PAGE_SIZE,
+                    logLoadingMore = false,
+                    lastCommit = log.firstOrNull(),
                     // A failed status probe (e.g. shell died mid-refresh) is
                     // worth surfacing — a silently empty Changes tab reads as
                     // "clean tree", which would be a lie.
@@ -143,13 +140,99 @@ class GitPanelViewModel(
         }
     }
 
-    /** Re-read status (and log after commits) and fold in the error, if any. */
+    /** Re-read status + numstats + history window and fold in the error. */
     private suspend fun reloadAfterMutation(error: String?) {
         val root = _state.value.repo?.root
         val status = runCatching { GitCli.status(sessionId, root) }.getOrNull()
-        val log = runCatching { GitCli.log(sessionId, root = root) }.getOrDefault(emptyList())
+        val staged = runCatching { GitCli.numstat(sessionId, staged = true, root = root) }
+            .getOrDefault(emptyMap())
+        val unstaged = runCatching { GitCli.numstat(sessionId, staged = false, root = root) }
+            .getOrDefault(emptyMap())
+        val log = runCatching { GitCli.logPage(sessionId, offset = 0, root = root) }
+            .getOrDefault(emptyList())
         _state.update {
-            it.copy(busy = false, status = status, log = log, notice = error)
+            it.copy(
+                busy = false,
+                status = status,
+                stagedNumstat = staged,
+                unstagedNumstat = unstaged,
+                log = log,
+                logHasMore = log.size == HISTORY_PAGE_SIZE,
+                lastCommit = log.firstOrNull(),
+                notice = error,
+            )
+        }
+    }
+
+    /** Append the next history page when one exists and none is in flight. */
+    fun loadMoreLogs() {
+        val s = _state.value
+        if (s.logLoadingMore || !s.logHasMore || s.repo == null) return
+        viewModelScope.launch {
+            _state.update { it.copy(logLoadingMore = true) }
+            val page = runCatching {
+                GitCli.logPage(sessionId, offset = s.log.size, root = s.repo.root)
+            }.getOrDefault(emptyList())
+            val known = s.log.mapTo(HashSet()) { it.hash }
+            _state.update {
+                it.copy(
+                    log = it.log + page.filter { c -> known.add(c.hash) },
+                    logHasMore = page.size == HISTORY_PAGE_SIZE,
+                    logLoadingMore = false,
+                )
+            }
+        }
+    }
+
+    fun selectTab(tab: GitPanelTab) {
+        _state.update { it.copy(tab = tab) }
+    }
+
+    fun setSearchQuery(query: String) {
+        _state.update { it.copy(searchQuery = query) }
+    }
+
+    /** Open the commit-detail sheet and fill it from `git show`. */
+    fun openCommitSheet(hash: String) {
+        if (_state.value.busy) return
+        viewModelScope.launch {
+            _state.update { it.copy(commitSheet = GitCommitSheet(hash)) }
+            val root = _state.value.repo?.root
+            val detail = runCatching { GitCli.commitDetail(sessionId, hash, root) }.getOrNull()
+            val files = runCatching { GitCli.commitNumstat(sessionId, hash, root) }
+                .getOrDefault(emptyList())
+            _state.update {
+                it.copy(
+                    commitSheet = GitCommitSheet(
+                        hash = hash,
+                        detail = detail,
+                        files = files,
+                        error = if (detail == null) "commit detail unavailable" else null,
+                    ),
+                )
+            }
+        }
+    }
+
+    fun closeCommitSheet() {
+        _state.update { it.copy(commitSheet = null) }
+    }
+
+    /** Diff of one file inside a commit — replaces the sheet (overlay z-order). */
+    fun openCommitFileDiff(hash: String, path: String) {
+        viewModelScope.launch {
+            _state.update {
+                it.copy(
+                    commitSheet = null,
+                    diff = GitDiffView(path, loading = true, content = ""),
+                )
+            }
+            val content = runCatching {
+                GitCli.commitFileDiff(sessionId, hash, path, _state.value.repo?.root)
+            }.getOrDefault("(diff unavailable)")
+            _state.update {
+                it.copy(diff = GitDiffView(path, loading = false, content = content))
+            }
         }
     }
 
@@ -210,7 +293,9 @@ class GitPanelViewModel(
     fun openCommitDiff(commit: GitCommit) {
         viewModelScope.launch {
             _state.update {
-                it.copy(diff = GitDiffView("${commit.shortHash} ${commit.subject}", loading = true, content = ""))
+                it.copy(
+                    diff = GitDiffView("${commit.shortHash} ${commit.subject}", loading = true, content = ""),
+                )
             }
             val content = runCatching {
                 GitCli.commitDiff(sessionId, commit.hash, _state.value.repo?.root)
@@ -240,5 +325,6 @@ class GitPanelViewModel(
 
     companion object {
         private const val AUTO_REFRESH_FLOOR_MS = 2_000L
+        const val HISTORY_PAGE_SIZE = 50
     }
 }

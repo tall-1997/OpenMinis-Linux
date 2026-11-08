@@ -2031,4 +2031,17 @@
     <string name="model_group_detail_quota_period_placeholder">창 길이(시간)</string>
     <string name="model_group_detail_quota_window_reset_snackbar">할당량 창이 재설정되어 기본 멤버가 다시 응답합니다</string>
     <string name="model_group_detail_quota_window_remaining">이번 창 남은 횟수: %1$d회</string>
+    <string name="git_panel_staged">스테이징됨</string>
+    <string name="git_panel_changes_section">변경 사항</string>
+    <string name="git_panel_stats_files">파일 %1$d개 변경됨</string>
+    <string name="git_panel_untracked_badge">새 파일</string>
+    <string name="git_panel_search_history">커밋 검색</string>
+    <string name="git_panel_search_no_match">일치하는 커밋 없음</string>
+    <string name="git_panel_no_identity">Git 사용자 정보가 설정되지 않았습니다. 커밋은 시스템 기본값을 사용합니다</string>
+    <string name="git_panel_commit_files">변경된 파일 (%1$d)</string>
+    <string name="git_panel_copy_hash">해시 복사</string>
+    <string name="git_panel_author_label">작성자</string>
+    <string name="git_panel_committer">커미터</string>
+    <string name="git_panel_committed_at">커밋됨</string>
+    <string name="git_panel_hash_label">해시</string>
 </resources>

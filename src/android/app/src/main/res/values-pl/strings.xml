@@ -2041,4 +2041,17 @@
     <string name="model_group_detail_quota_period_placeholder">Długość okna (godziny)</string>
     <string name="model_group_detail_quota_window_reset_snackbar">Zresetowano okno limitu — członek główny znowu obsługuje</string>
     <string name="model_group_detail_quota_window_remaining">Pozostało w tym oknie: %1$d wysyłek</string>
+    <string name="git_panel_staged">Zaindeksowane</string>
+    <string name="git_panel_changes_section">Zmiany</string>
+    <string name="git_panel_stats_files">Zmieniono plików: %1$d</string>
+    <string name="git_panel_untracked_badge">nowy</string>
+    <string name="git_panel_search_history">Szukaj commitów</string>
+    <string name="git_panel_search_no_match">Brak pasujących commitów</string>
+    <string name="git_panel_no_identity">Tożsamość Git nie jest skonfigurowana; commity użyją domyślnych ustawień systemowych</string>
+    <string name="git_panel_commit_files">Zmienione pliki (%1$d)</string>
+    <string name="git_panel_copy_hash">Kopiuj hash</string>
+    <string name="git_panel_author_label">Autor</string>
+    <string name="git_panel_committer">Committer</string>
+    <string name="git_panel_committed_at">Zatwierdzono</string>
+    <string name="git_panel_hash_label">Hash</string>
 </resources>

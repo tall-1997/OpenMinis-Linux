@@ -2034,4 +2034,17 @@
     <string name="model_group_detail_quota_period_placeholder">Duração da janela (horas)</string>
     <string name="model_group_detail_quota_window_reset_snackbar">Janela de cota redefinida — o membro principal volta a atender</string>
     <string name="model_group_detail_quota_window_remaining">Restantes nesta janela: %1$d envios</string>
+    <string name="git_panel_staged">Em staging</string>
+    <string name="git_panel_changes_section">Alterações</string>
+    <string name="git_panel_stats_files">%1$d arquivos alterados</string>
+    <string name="git_panel_untracked_badge">novo</string>
+    <string name="git_panel_search_history">Pesquisar commits</string>
+    <string name="git_panel_search_no_match">Nenhum commit correspondente</string>
+    <string name="git_panel_no_identity">Identidade Git não configurada; commits usarão os padrões do sistema</string>
+    <string name="git_panel_commit_files">Arquivos alterados (%1$d)</string>
+    <string name="git_panel_copy_hash">Copiar hash</string>
+    <string name="git_panel_author_label">Autor</string>
+    <string name="git_panel_committer">Committer</string>
+    <string name="git_panel_committed_at">Comitado</string>
+    <string name="git_panel_hash_label">Hash</string>
 </resources>

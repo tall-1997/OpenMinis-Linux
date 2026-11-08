@@ -2034,4 +2034,17 @@
     <string name="model_group_detail_quota_period_placeholder">ความยาวหน้าต่าง (ชั่วโมง)</string>
     <string name="model_group_detail_quota_window_reset_snackbar">รีเซ็ตหน้าต่างโควตาแล้ว — สมาชิกหลักกลับมาให้บริการ</string>
     <string name="model_group_detail_quota_window_remaining">เหลือในหน้าต่างนี้: %1$d ครั้ง</string>
+    <string name="git_panel_staged">สเตจแล้ว</string>
+    <string name="git_panel_changes_section">การเปลี่ยนแปลง</string>
+    <string name="git_panel_stats_files">ไฟล์ที่เปลี่ยนแปลง %1$d รายการ</string>
+    <string name="git_panel_untracked_badge">ใหม่</string>
+    <string name="git_panel_search_history">ค้นหาคอมมิต</string>
+    <string name="git_panel_search_no_match">ไม่มีคอมมิตที่ตรงกัน</string>
+    <string name="git_panel_no_identity">ยังไม่ได้ตั้งค่าข้อมูลประจำตัว Git คอมมิตจะใช้ค่าเริ่มต้นของระบบ</string>
+    <string name="git_panel_commit_files">ไฟล์ที่เปลี่ยนแปลง (%1$d)</string>
+    <string name="git_panel_copy_hash">คัดลอกแฮช</string>
+    <string name="git_panel_author_label">ผู้เขียน</string>
+    <string name="git_panel_committer">ผู้คอมมิต</string>
+    <string name="git_panel_committed_at">คอมมิตแล้ว</string>
+    <string name="git_panel_hash_label">แฮช</string>
 </resources>

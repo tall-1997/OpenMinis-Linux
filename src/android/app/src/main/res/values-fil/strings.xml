@@ -2034,4 +2034,17 @@
     <string name="model_group_detail_quota_period_placeholder">Haba ng window (oras)</string>
     <string name="model_group_detail_quota_window_reset_snackbar">Na-reset ang window ng quota — muling nagsisilbi ang pangunahing miyembro</string>
     <string name="model_group_detail_quota_window_remaining">Natitira sa window na ito: %1$d pagpapadala</string>
+    <string name="git_panel_staged">Naka-stage</string>
+    <string name="git_panel_changes_section">Mga pagbabago</string>
+    <string name="git_panel_stats_files">%1$d na file ang nabago</string>
+    <string name="git_panel_untracked_badge">bago</string>
+    <string name="git_panel_search_history">Maghanap ng mga commit</string>
+    <string name="git_panel_search_no_match">Walang tumutugmang commit</string>
+    <string name="git_panel_no_identity">Hindi naka-configure ang Git identity; gagamitin ng mga commit ang default ng system</string>
+    <string name="git_panel_commit_files">Mga nabagong file (%1$d)</string>
+    <string name="git_panel_copy_hash">Kopyahin ang hash</string>
+    <string name="git_panel_author_label">May-akda</string>
+    <string name="git_panel_committer">Committer</string>
+    <string name="git_panel_committed_at">Nakapag-commit</string>
+    <string name="git_panel_hash_label">Hash</string>
 </resources>

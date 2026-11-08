@@ -2038,4 +2038,17 @@
     <string name="model_group_detail_quota_period_placeholder">Durata ferestrei (ore)</string>
     <string name="model_group_detail_quota_window_reset_snackbar">Fereastra de cotă a fost resetată — membrul principal deservește din nou</string>
     <string name="model_group_detail_quota_window_remaining">Rămase în această fereastră: %1$d trimiteri</string>
+    <string name="git_panel_staged">În staging</string>
+    <string name="git_panel_changes_section">Modificări</string>
+    <string name="git_panel_stats_files">%1$d fișiere modificate</string>
+    <string name="git_panel_untracked_badge">nou</string>
+    <string name="git_panel_search_history">Caută commituri</string>
+    <string name="git_panel_search_no_match">Niciun commit corespunzător</string>
+    <string name="git_panel_no_identity">Identitatea Git nu este configurată; commiturile vor folosi valorile implicite de sistem</string>
+    <string name="git_panel_commit_files">Fișiere modificate (%1$d)</string>
+    <string name="git_panel_copy_hash">Copiază hash</string>
+    <string name="git_panel_author_label">Autor</string>
+    <string name="git_panel_committer">Committer</string>
+    <string name="git_panel_committed_at">Comitat</string>
+    <string name="git_panel_hash_label">Hash</string>
 </resources>

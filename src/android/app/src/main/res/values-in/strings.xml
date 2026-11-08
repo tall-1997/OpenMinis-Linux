@@ -2039,4 +2039,17 @@
     <string name="model_group_detail_quota_period_placeholder">Durasi jendela (jam)</string>
     <string name="model_group_detail_quota_window_reset_snackbar">Jendela kuota direset — anggota utama melayani lagi</string>
     <string name="model_group_detail_quota_window_remaining">Sisa di jendela ini: %1$d kiriman</string>
+    <string name="git_panel_staged">Ter-staging</string>
+    <string name="git_panel_changes_section">Perubahan</string>
+    <string name="git_panel_stats_files">%1$d file diubah</string>
+    <string name="git_panel_untracked_badge">baru</string>
+    <string name="git_panel_search_history">Cari commit</string>
+    <string name="git_panel_search_no_match">Tidak ada commit yang cocok</string>
+    <string name="git_panel_no_identity">Identitas Git belum dikonfigurasi; commit akan memakai bawaan sistem</string>
+    <string name="git_panel_commit_files">File diubah (%1$d)</string>
+    <string name="git_panel_copy_hash">Salin hash</string>
+    <string name="git_panel_author_label">Penulis</string>
+    <string name="git_panel_committer">Committer</string>
+    <string name="git_panel_committed_at">Dikomit</string>
+    <string name="git_panel_hash_label">Hash</string>
 </resources>

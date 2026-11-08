@@ -2031,4 +2031,17 @@
     <string name="model_group_detail_quota_period_placeholder">ウィンドウの長さ（時間）</string>
     <string name="model_group_detail_quota_window_reset_snackbar">クォータウィンドウをリセットしました。プライマリメンバーが再び応答します</string>
     <string name="model_group_detail_quota_window_remaining">このウィンドウの残り：%1$d回</string>
+    <string name="git_panel_staged">ステージ済み</string>
+    <string name="git_panel_changes_section">変更</string>
+    <string name="git_panel_stats_files">%1$d 件のファイルを変更</string>
+    <string name="git_panel_untracked_badge">新規</string>
+    <string name="git_panel_search_history">コミットを検索</string>
+    <string name="git_panel_search_no_match">一致するコミットがありません</string>
+    <string name="git_panel_no_identity">Git のユーザー情報が未設定です。コミットはシステム既定値を使用します</string>
+    <string name="git_panel_commit_files">変更されたファイル (%1$d)</string>
+    <string name="git_panel_copy_hash">ハッシュをコピー</string>
+    <string name="git_panel_author_label">作成者</string>
+    <string name="git_panel_committer">コミッター</string>
+    <string name="git_panel_committed_at">コミット日時</string>
+    <string name="git_panel_hash_label">ハッシュ</string>
 </resources>
