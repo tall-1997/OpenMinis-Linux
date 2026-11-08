@@ -607,10 +607,14 @@ private fun ExpandableModelRow(model: ModelStats, shareOfTotal: Float, showDivid
             // numbers remain honest even though the label is gone.
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    // [T-usage-name-wraps] Two lines, not one: the io summary
+                    // on the right owns its natural width, so a long model id
+                    // squeezed into a single line truncated to "DeepS…". Short
+                    // names stay one line (fill = false); long ones wrap.
                     Text(
                         model.displayName,
                         style = MaterialTheme.typography.bodyLarge,
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false),
                     )
