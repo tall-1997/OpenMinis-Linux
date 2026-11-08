@@ -2138,12 +2138,12 @@ class ChatViewModel(
     val browserTabPool: BrowserTabPool by lazy {
         BrowserTabPool(context).also {
             it.setSession(activeSessionId)
-            // Surface download start/finish/failure as system-info notices in
-            // this chat. May fire from the pool's IO scope — hop to Main since
-            // appendSystemInfo does a read-modify-write on _messages.
+            // Surface download start/finish/failure as browser_download tool
+            // cards in this chat. May fire from the pool's IO scope — hop to
+            // Main since the card executor does a read-modify-write on _messages.
             it.onDownloadEvent = { text ->
                 viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
-                    appendSystemInfo(text, "info")
+                    onBrowserDownloadEventCard(text)
                 }
             }
             _browserTabPoolRef = it

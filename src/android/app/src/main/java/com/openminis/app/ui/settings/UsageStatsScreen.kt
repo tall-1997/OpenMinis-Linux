@@ -607,10 +607,17 @@ private fun ExpandableModelRow(model: ModelStats, shareOfTotal: Float, showDivid
             // numbers remain honest even though the label is gone.
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    // [T-usage-name-wraps] The name owns the WHOLE row: the io
+                    // summary used to sit right of the name and claimed its
+                    // natural width first, leaving long ids ~8 chars per line
+                    // ("DeepSee|k-V4.1…" even after maxLines 1 -> 2). The
+                    // summary now shares the subtitle line below, so the name
+                    // gets the full width between avatar and chevron and a
+                    // long id never truncates in practice.
                     Text(
                         model.displayName,
                         style = MaterialTheme.typography.bodyLarge,
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false),
                     )
@@ -624,23 +631,28 @@ private fun ExpandableModelRow(model: ModelStats, shareOfTotal: Float, showDivid
                 // identity line here and it is deliberately never optional:
                 // two rows can display the same model name (official vs relay),
                 // and the subtitle is what tells them apart once the section
-                // headers are gone. It therefore gets its own line rather than
-                // competing with the name for space.
-                Text(
-                    model.subtitle,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                // headers are gone. The io summary shares this line at the end:
+                // the summary is bounded ("输入：X｜输出：Y") and never
+                // truncates; the subtitle takes the rest with ellipsis fallback.
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        model.subtitle,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        summary,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontFamily = FontFamily.Default,
+                    )
+                }
             }
             Spacer(Modifier.width(8.dp))
-            Text(
-                summary,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontFamily = FontFamily.Default,
-            )
             Icon(
                 if (expanded) m3Icon(Icons.Default.ExpandMore) else m3Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight),
                 contentDescription = null,

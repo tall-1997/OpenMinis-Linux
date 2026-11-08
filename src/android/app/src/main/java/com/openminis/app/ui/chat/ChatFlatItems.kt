@@ -1059,7 +1059,7 @@ internal fun isSubAgentTranscriptCard(block: AssistantBlock): Boolean =
 
 internal fun isAlwaysVisibleProcessTool(block: AssistantBlock): Boolean =
     block.kind == "tool_use" && (
-        block.toolName == "ask_user_question" || block.toolName == PresentTool.NAME
+        block.toolName == "ask_user_question" || block.toolName == PresentTool.NAME || block.toolName == DOWNLOAD_TOOL_NAME
         )
 
 /**
