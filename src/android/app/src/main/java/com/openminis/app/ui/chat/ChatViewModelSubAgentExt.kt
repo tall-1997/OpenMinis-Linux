@@ -258,7 +258,7 @@ internal suspend fun ChatViewModel.executeRunSubAgent(
         // board here instead of relying on the model to remember. A failed
         // add() must not abort the dispatch: runCatching, board stays
         // best-effort, the wave is the deliverable.
-        val ownerSession = realSessionId.ifBlank { sessionId }.ifBlank { activeSessionId }
+        val ownerSession = subAgentOwnerSid("", realSessionId, sessionId, activeSessionId)
         val autoPlan = spawns.size > 1 || detached
         val planIds: List<String?> = if (autoPlan) {
             spawns.mapIndexed { i, s ->
@@ -487,9 +487,7 @@ private suspend fun ChatViewModel.runOneSubAgent(
         batchId: String? = null,
         batchSession: String = "",
     ): ToolExecutionResult {
-        val ownerSession = batchSession.ifBlank {
-            realSessionId.ifBlank { sessionId }.ifBlank { activeSessionId }
-        }
+        val ownerSession = subAgentOwnerSid(batchSession, realSessionId, sessionId, activeSessionId)
         val outcome = try {
             runOneSubAgentInner(
                 spawn = spawn,
@@ -658,9 +656,7 @@ private suspend fun ChatViewModel.runOneSubAgentInner(
         // "sub-agents cannot spawn further sub-agents" until the app was killed.
         subAgentDepth.incrementAndGet()
         return try {
-        val parentSession = batchSession.ifBlank {
-            realSessionId.ifBlank { sessionId }.ifBlank { activeSessionId }
-        }
+        val parentSession = subAgentOwnerSid(batchSession, realSessionId, sessionId, activeSessionId)
         val laneId = kotlin.coroutines.coroutineContext[SubAgentLane]?.id
             ?: SubAgentLane.idFor(parentSession, System.nanoTime())
         val trackerId = com.openminis.app.service.SubAgentActivityTracker.start(
@@ -860,7 +856,10 @@ private suspend fun ChatViewModel.runOneSubAgentInner(
                             ToolExecutionResult("Error: type $role cannot use $name.", false)
                         } else {
                             grepSourceToolResult(name, json)
-                                ?: executeTool(name, json, "")
+                                // [T-subagent-owner-sid] The lane must carry the parent's
+                                // session id into the gate: a blank caller degrades to ASK
+                                // and prompts on every write/execute even in YOLO sessions.
+                                ?: executeTool(name, json, parentSession)
                         }
                     },
                     onStep = { turn, toolName -> onStep(turn, toolName) },
