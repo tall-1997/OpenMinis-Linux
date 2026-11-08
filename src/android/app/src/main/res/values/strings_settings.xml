@@ -78,4 +78,14 @@
          contained nothing because credentials were stripped and no config
          remained. -->
     <string name="provider_share_no_credentials">Nothing to share: credentials are excluded from shared exports. Use the encrypted backup to move keys.</string>
+    <!-- [T-cot-translate] Reasoning-translation UI strings. -->
+    <string name="cot_translate_show_translation">译</string>
+    <string name="cot_translate_show_original">原文</string>
+    <string name="cot_translate_failed">翻译暂不可用，点此重试</string>
+    <string name="cot_translate_settings_header">思考过程翻译</string>
+    <string name="cot_translate_settings_enabled">Enable reasoning translation</string>
+    <string name="cot_translate_settings_provider">Provider</string>
+    <string name="cot_translate_settings_language">Target language</string>
+    <string name="cot_translate_privacy_notice">Expanded reasoning is sent to the selected translation service. It may contain private code or conversation details.</string>
+    <string name="cot_translate_anonymous_notice">Bing and Google need no translation login or API key. Their anonymous endpoints may reject or limit requests.</string>
 </resources>
