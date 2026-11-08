@@ -103,10 +103,27 @@ class TextToSpeechManager : TextToSpeech.OnInitListener {
         }
 
     /**
-     * Initializes the TTS engine. Must be called before speaking.
+     * Initializes the TTS engine.
+     *
+     * [T-android-entry-tts-lazy] Callers that only conditionally speak
+     * (session entry wiring) must go through [ensureInitialized] instead of
+     * calling this directly: [TextToSpeech] construction performs a
+     * cross-process bind that can stall for seconds on a cold engine, and
+     * running it eagerly on every session open was holding up the first
+     * frame.
      */
     fun init(context: Context) {
         tts = TextToSpeech(context.applicationContext, this)
+    }
+
+    /**
+     * [T-android-entry-tts-lazy] Binds the engine on first actual use and
+     * never again for this manager's lifetime. Utterances spoken before the
+     * bind settles are buffered in [preInitQueue] and replayed from
+     * [onInit], so lazily binding here cannot lose the first utterance.
+     */
+    fun ensureInitialized(context: Context) {
+        if (tts == null) init(context)
     }
 
     override fun onInit(status: Int) {

@@ -316,22 +316,12 @@ fun ChatScreen(
     // behind a second control.
     // [T-android-tts-scene-announcements] Bind the announcement sink for as
     // long as this screen is composed. The engine binding lives in
-    // ReadAloudPlayer/TextToSpeechManager (UI layer); the ViewModel only sees
-    // the (String) -> Unit sink and never the engine itself. Cleared on
-    // dispose so a popped screen stops announcing.
-    val announcementTts = remember {
-        com.openminis.app.speech.TextToSpeechManager()
-    }
-    DisposableEffect(viewModel, announcementTts) {
-        // Engine binding is lazy; speak() before init settles is buffered in
-        // the manager's preInitQueue and replayed once the engine is up.
-        announcementTts.init(context)
-        viewModel.announcementSink = announcementTts::speak
-        onDispose {
-            viewModel.announcementSink = null
-            announcementTts.shutdown()
-        }
-    }
+    // TextToSpeechManager (speech layer); the ViewModel only sees the
+    // (String) -> Unit sink and never the engine itself. Cleared on dispose
+    // so a popped screen stops announcing. The wire itself lives in
+    // ChatScreenTtsWire.kt (kept out of this file for the architecture
+    // ceiling), and it binds lazily — see [T-android-entry-tts-lazy].
+    rememberAnnouncementTtsWire(viewModel, context)
     val messages by viewModel.uiMessages.collectAsStateWithLifecycle()
     // [T-android-entry-pin-before-compose] How many flattened tail rows are
     // actually composed right now. The flatten runs off the main thread and
@@ -2733,28 +2723,32 @@ fun ChatScreen(
                                 if (wasEmptyPre && stream.isEmpty()) {
                                     com.openminis.app.diagnostics.PerfLongCtx.step(sessionId, "buildFlatChatItems.start", "msgCount=${msgs.size}")
                                 }
-                                val rows = withContext(Dispatchers.Default) {
-                                    // [T-android-flatitems-sublist-cme] Pass a
-                                    // SNAPSHOT COPY, not msgs.subList(...). A
-                                    // subList is a live VIEW backed by msgs and
-                                    // shares its modCount; building off-main
-                                    // (Dispatchers.Default) while msgs is
-                                    // concurrently replaced — and the nested
-                                    // messages.subList(idx+1, …).all{} inside
-                                    // buildFlatChatItems iterating that view —
-                                    // threw ConcurrentModificationException from
-                                    // a later frame's SubList.equals. Copying
-                                    // severs the view so it can't comodify.
-                                    buildFlatChatItems(
-                                        msgs.take(splitIdx),
-                                        sessionId,
-                                        showCompletedToolCards = showCompletedToolCards,
-                                        foldAiProcess = foldAiProcess,
-                                        expandedProcessIds = expandedIds,
-                                        activeSubAgentToolIds = activeIds,
-                                        processCardBoundary = cardBoundary,
-                                    )
-                                }
+                                // [T-android-entry-sync-flatten] Cold entry on a
+                                // small transcript: build on the composition
+                                // thread so the very first frame already carries
+                                // the rows instead of publishing an empty list
+                                // and paying a blank-frame round-trip through
+                                // Dispatchers.Default. The bound inside
+                                // shouldSyncFlattenFirstFrame keeps large
+                                // transcripts on the T94 off-main path, and
+                                // streaming ticks never qualify. The build
+                                // itself (sync vs off-main branch, snapshot
+                                // copy) lives in ChatFlatItemsEntrySync.kt.
+                                val rows = buildEntryRows(
+                                    sync = shouldSyncFlattenFirstFrame(
+                                        wasEmpty = wasEmptyPre,
+                                        streamEmpty = stream.isEmpty(),
+                                        msgCount = msgs.size,
+                                    ),
+                                    msgs = msgs,
+                                    splitIdx = splitIdx,
+                                    sessionId = sessionId,
+                                    showCompletedToolCards = showCompletedToolCards,
+                                    foldAiProcess = foldAiProcess,
+                                    expandedProcessIds = expandedIds,
+                                    activeSubAgentToolIds = activeIds,
+                                    processCardBoundary = cardBoundary,
+                                )
                                 val buildMs = (System.nanoTime() - tBuildStart) / 1_000_000
                                 frozenRows = rows
                                 frozenKeys = rows.mapTo(HashSet()) { it.key }
