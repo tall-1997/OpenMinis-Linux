@@ -42,10 +42,17 @@ object GeminiModelsApi {
         context: Context? = null,
         forceRefresh: Boolean = false,
         cacheScope: String = "",
+        // [T-gemini-cachekey-baseurl] A custom endpoint's catalogue differs
+        // from the official one — the cache key must carry the connection,
+        // not only the credential (matches OpenAI/Anthropic keying).
+        baseURL: String? = null,
     ): List<LLMModel> = withContext(Dispatchers.IO) {
         if (cloudCodeFallback) return@withContext LLMModel.allGemini
 
-        val cacheKey = ModelListFetchIsolation.cacheKey((if (isOAuth) "oauth|" else "key|") + apiKey, cacheScope)
+        val cacheKey = ModelListFetchIsolation.cacheKey(
+            (if (isOAuth) "oauth|" else "key|") + apiKey + "|" + (baseURL ?: ""),
+            cacheScope,
+        )
         if (context != null && !forceRefresh) {
             cache.load(context, cacheKey)?.let { return@withContext it }
         }

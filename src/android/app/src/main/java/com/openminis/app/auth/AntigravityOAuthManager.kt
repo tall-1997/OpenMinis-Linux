@@ -106,6 +106,9 @@ class AntigravityOAuthManager(context: Context, instanceId: String) : OAuthManag
         val token = validAccessToken() ?: return@withContext
         try {
             val conn = URL("https://www.googleapis.com/oauth2/v1/userinfo").openConnection() as HttpURLConnection
+            // [T-oauth-conn-timeout] Never wait forever on a hung endpoint.
+            conn.connectTimeout = 15_000
+            conn.readTimeout = 30_000
             conn.setRequestProperty("Authorization", "Bearer $token")
             if (conn.responseCode == 200) {
                 val body = conn.inputStream.bufferedReader().readText()

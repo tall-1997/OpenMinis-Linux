@@ -7,6 +7,8 @@ import androidx.browser.customtabs.CustomTabsIntent
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -254,7 +256,9 @@ class XAIOAuthManager(context: Context, instanceId: String) : OAuthManager(conte
         resp.close()
         if (code0 !in 200..299) {
             Log.e(TAG, "xAI token exchange failed: $code0 ${OAuthManager.sanitizeBody(body)}")
-            throw Exception("xAI token exchange failed ($code0): $body")
+            // [T-oauth-error-redact] The exception message rides into AppLogger
+            // and the exported bug report — sanitize like the OpenAI manager.
+            throw Exception("xAI token exchange failed ($code0): ${OAuthManager.sanitizeBody(body)}")
         }
         val json = JSONObject(body)
         val accessToken = json.optString("access_token", "")
@@ -265,7 +269,7 @@ class XAIOAuthManager(context: Context, instanceId: String) : OAuthManager(conte
         // refreshToken in the base class.
         val expiresIn = json.optLong("expires_in", 0)
         if (expiresIn > 0) {
-            json.put("expire_at", System.currentTimeMillis() + expiresIn * 1000)
+            json.put("expire_at", System.currentTimeMillis() + expiresIn * 1000 - OAuthManager.CLOCK_SKEW_MS)
         }
         saveTokensJson(json)
         onTokensReceived(json)
@@ -349,10 +353,15 @@ class XAIOAuthManager(context: Context, instanceId: String) : OAuthManager(conte
      * expiry and called `logout()`, wiping the bundle the winner had just stored.
      */
     override suspend fun performRefreshToken(): Boolean = withContext(Dispatchers.IO) {
-        val stored = JSONObject(
-            loadOAuthString("tokens").takeUnless { it.isNullOrEmpty() }
-                ?: return@withContext false,
-        )
+        // [T-xai-oauth-safe-parse] A corrupted stored blob must not throw out of
+        // the refresh path (it used to escape coalesceRefresh and crash the send
+        // coroutine) — false → caller treats as rejected and keeps credentials.
+        val stored = runCatching {
+            JSONObject(
+                loadOAuthString("tokens").takeUnless { it.isNullOrEmpty() }
+                    ?: return@withContext false,
+            )
+        }.getOrElse { return@withContext false }
         val refresh = stored.optString("refresh_token", "").ifEmpty { return@withContext false }
         try {
             val tokenEndpoint = resolveTokenEndpoint()
@@ -387,7 +396,7 @@ class XAIOAuthManager(context: Context, instanceId: String) : OAuthManager(conte
             if (!json.has("refresh_token")) json.put("refresh_token", refresh)
             val expiresIn = json.optLong("expires_in", 0)
             if (expiresIn > 0) {
-                json.put("expire_at", System.currentTimeMillis() + expiresIn * 1000)
+                json.put("expire_at", System.currentTimeMillis() + expiresIn * 1000 - OAuthManager.CLOCK_SKEW_MS)
             }
             saveTokensJson(json)
             true
@@ -440,7 +449,11 @@ class XAIOAuthManager(context: Context, instanceId: String) : OAuthManager(conte
             val expectedState = loadOAuthString("state") ?: ""
 
             val accessToken = withContext(Dispatchers.IO) {
-                val (code, state) = suspendCancellableCoroutine<Pair<String, String?>> { cont ->
+                // [T-oauth-login-timeout] Hard ceiling shared with the other
+                // managers — the dismissal detector below is advisory; a truly
+                // hung flow (no dismissal, no callback) must still fail fast.
+                val (code, state) = withTimeoutOrNull(OAuthManager.LOGIN_TIMEOUT_MS) {
+                suspendCancellableCoroutine<Pair<String, String?>> { cont ->
                     val server = OAuthCallbackServer(callbackPort, expectedPath = CALLBACK_PATH, onCode = { receivedCode, receivedState ->
                         if (cont.isActive) {
                             // Successful redirect — clear the
@@ -453,6 +466,11 @@ class XAIOAuthManager(context: Context, instanceId: String) : OAuthManager(conte
                             cont.resume(receivedCode to receivedState)
                         }
                     })
+                    server.onBindFailed = {
+                        if (cont.isActive) {
+                            cont.resumeWithException(IllegalStateException("xAI OAuth callback ports unavailable"))
+                        }
+                    }
                     // [T-xai-oauth-stop-resume, port iOS d1dbdd5d]
                     // If the user dismisses the Custom Tab before xAI
                     // redirects, externalCancel() resumes us with a
@@ -503,6 +521,9 @@ class XAIOAuthManager(context: Context, instanceId: String) : OAuthManager(conte
                     // clears isAuthenticating so the next tap works.
                     armDismissalDetector()
                 }
+                } ?: throw IllegalStateException(
+                    "xAI OAuth login timed out — no callback within ${OAuthManager.LOGIN_TIMEOUT_MS / 60_000} min",
+                )
 
                 loginCallbackServer?.stop()
                 loginCallbackServer = null

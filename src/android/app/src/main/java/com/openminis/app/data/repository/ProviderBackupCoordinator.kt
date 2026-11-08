@@ -46,6 +46,10 @@ internal class ProviderBackupCoordinator(
         val providerDao: ProviderConfigDao
         fun loadApiKey(instanceId: String): String?
         fun saveApiKey(instanceId: String, key: String)
+        /** [T-backup-pool-singleton] Read the instance's pool via the repo-owned
+         *  singleton — ad-hoc instances share prefs but not rotation runtime. */
+        fun poolKeys(instanceId: String): List<String>
+        fun setPoolKeys(instanceId: String, keys: List<String>)
         fun loadAllThinkingRulesIntoCache()
     }
 
@@ -70,7 +74,13 @@ internal class ProviderBackupCoordinator(
     }
 
     /** Export an instance as shareable JSON (includes base64-encoded API key). */
-    fun exportInstanceJSON(instanceId: String): String? {
+    /**
+     * [T-export-credential-option] [includeCredentials] = false produces a
+     * share-safe export: no apiKey, no pooled keys, no manual bearer, no
+     * OAuth bundle. The default keeps the historical full behaviour for the
+     * backup path, which is encrypted at rest.
+     */
+    fun exportInstanceJSON(instanceId: String, includeCredentials: Boolean = true): String? {
         // [Wave3-fix-1] Refused in the main-thread cold-start window → no config
         // to export yet; surface as "instance not found" rather than block Main.
         if (!host.ensureConfigLoaded()) return null
@@ -155,13 +165,15 @@ internal class ProviderBackupCoordinator(
                 })
             }
             put("models", modelsArr)
-            host.loadApiKey(instanceId)?.let { key ->
+            // [T-export-credential-option] Gated on includeCredentials — the
+            // share flow exports WITHOUT credentials (encrypted backup moves keys).
+            if (includeCredentials) host.loadApiKey(instanceId)?.let { key ->
                 put("apiKey", Base64.encodeToString(key.toByteArray(), Base64.NO_WRAP))
             }
             // Export manual OAuth bearer token (mirrors iOS `manualOAuthToken` key).
             // Stored per-instance via OAuthManager; only present for OAuth providers
             // where the user pasted a static token via the Manual Bearer Token UI.
-            run {
+            if (includeCredentials) run {
                 val mgr = com.openminis.app.auth.OAuthManager.forInstance(context, instance)
                 val manual = mgr?.loadManualBearerToken()
                 if (!manual.isNullOrEmpty()) {
@@ -178,7 +190,7 @@ internal class ProviderBackupCoordinator(
             // base64 it under "oauthToken", matching iOS 703ff4bc's field name and
             // the existing apiKey / manualOAuthToken base64 encoding. Covers every
             // OAuth provider type via oauthManagerFor (not just the forInstance set).
-            run {
+            if (includeCredentials) run {
                 val mgr = oauthManagerFor(instance)
                 mgr?.exportStoredTokensJson()?.let { tokenJson ->
                     put("oauthToken", Base64.encodeToString(tokenJson.toByteArray(), Base64.NO_WRAP))
@@ -228,7 +240,7 @@ internal class ProviderBackupCoordinator(
         // instance (pool off) exports an empty list — old importers that
         // ignore the field still get the primary and keep working.
         val pooledKeys = if (apiKey != null) {
-            ProviderCredentialPool(context).keys(instance.id)
+            host.poolKeys(instance.id)
                 .drop(1)
                 .filter { it.isNotBlank() }
                 .map(::b64)
@@ -238,6 +250,8 @@ internal class ProviderBackupCoordinator(
             ?.takeIf { it.isNotEmpty() }?.let(::b64)
 
         var oauthToken: String? = null
+        // The OAuth bundle is the most sensitive field in the backup secrets
+        // file — it travels only inside the encrypted secrets.json container.
         var oauthEmail: String? = null
         var oauthGcpProject: String? = null
         val mgr = oauthManagerFor(instance)
@@ -329,10 +343,9 @@ internal class ProviderBackupCoordinator(
                 .mapNotNull(::deb64)
                 .filter { it.isNotBlank() && it != primary }
             if (extras.isNotEmpty()) {
-                val pool = ProviderCredentialPool(context)
                 val next = (listOf(primary) + extras).distinct()
-                if (next != pool.keys(instance.id)) {
-                    pool.setKeys(instance.id, next)
+                if (next != host.poolKeys(instance.id)) {
+                    host.setPoolKeys(instance.id, next)
                     wrote = true
                 }
             }
@@ -496,7 +509,30 @@ internal class ProviderBackupCoordinator(
             resolvedLabel = "$label ($suffix)"
         }
 
-        val customBaseURL = dict.optString("customBaseURL", "").ifEmpty { null }
+        // [T-import-url-validation] A shared provider JSON is an untrusted
+        // file: its customBaseURL must be https (or an explicit local-network
+        // endpoint for LAN gateways), or the victim's chats — and possibly
+        // their key — would be sent to an attacker-chosen host.
+        val customBaseURL = dict.optString("customBaseURL", "").ifEmpty { null }?.let { raw ->
+            val uri = runCatching { java.net.URI(raw.trim()) }.getOrNull()
+            val host = uri?.host?.lowercase()
+            val scheme = uri?.scheme?.lowercase()
+            val isLanHost = host != null && (
+                host == "localhost" || host == "::1" || host.startsWith("127.") ||
+                    host.startsWith("192.168.") || host.startsWith("10.") ||
+                    (host.startsWith("172.") && host.substringAfter("172.").substringBefore(".").toIntOrNull() in 16..31)
+                )
+            when {
+                scheme == "https" -> raw.trim()
+                scheme == "http" && isLanHost -> raw.trim()
+                scheme == "http" -> throw IllegalArgumentException(
+                    "Refusing imported provider: custom base URL is plain http on a public host ($host)",
+                )
+                else -> throw IllegalArgumentException(
+                    "Refusing imported provider: custom base URL has no valid http(s) scheme",
+                )
+            }
+        }
         val appendV1 = dict.optBoolean("appendV1Suffix", true)
         val useResponsesAPI = dict.optBoolean("useResponsesAPI", false)
         // [T-provider-custom-user-agent] Additive: old exports lack the key →

@@ -150,17 +150,27 @@ class KimiOAuthManager(
         withContext(Dispatchers.IO) {
             val deadline = System.currentTimeMillis() + auth.expiresInSeconds * 1000
             var interval = auth.intervalSeconds
+            var consecutiveNetworkFailures = 0
             while (System.currentTimeMillis() < deadline) {
                 // Sleep first, then poll (RFC 8628 §3.4 + iOS parity).
                 delay(interval * 1000)
-                val (status, json) = postForm(
-                    tokenURL,
-                    mapOf(
-                        "grant_type" to "urn:ietf:params:oauth:grant-type:device_code",
-                        "device_code" to auth.deviceCode,
-                        "client_id" to clientId,
-                    ),
-                )
+                // [T-kimi-poll-tolerance] A network blip or a relay 5xx must not
+                // kill the 15-minute device-code window — the user already has
+                // the code on screen. Retry with the same interval; a long
+                // outage eventually hits the deadline and fails normally.
+                val (status, json) = try {
+                    postForm(
+                        tokenURL,
+                        mapOf(
+                            "grant_type" to "urn:ietf:params:oauth:grant-type:device_code",
+                            "device_code" to auth.deviceCode,
+                            "client_id" to clientId,
+                        ),
+                    ).also { consecutiveNetworkFailures = 0 }
+                } catch (e: java.io.IOException) {
+                    if (++consecutiveNetworkFailures >= 10) throw e
+                    continue
+                }
                 when (val result = KimiDeviceFlow.classifyPoll(json, status in 200..299)) {
                     is KimiDeviceFlow.PollResult.Success -> {
                         persistLoginSuccess(result)
@@ -188,7 +198,8 @@ class KimiOAuthManager(
         onDeviceCode: (KimiDeviceFlow.DeviceAuthorization) -> Unit,
     ): String {
         val auth = requestDeviceAuthorization()
-        Log.i(TAG, "Device code issued — user_code=${auth.userCode} interval=${auth.intervalSeconds}s expires=${auth.expiresInSeconds}s")
+        // [T-oauth-log-redact] user_code is a secret per OAuthLogRedaction.
+        Log.i(TAG, "Device code issued — user_code=${OAuthLogRedaction.secret(auth.userCode)} interval=${auth.intervalSeconds}s expires=${auth.expiresInSeconds}s")
         withContext(Dispatchers.Main) { onDeviceCode(auth) }
         return pollForToken(auth)
     }
@@ -198,7 +209,7 @@ class KimiOAuthManager(
             put("access_token", result.accessToken)
             result.refreshToken?.let { put("refresh_token", it) }
             result.expiresInSeconds?.let {
-                put("expire_at", System.currentTimeMillis() + it * 1000)
+                put("expire_at", System.currentTimeMillis() + it * 1000 - OAuthManager.CLOCK_SKEW_MS)
             }
             // Client-generated device identity, carried across refreshes but
             // never sent in request bodies (iOS parity).
@@ -246,7 +257,7 @@ class KimiOAuthManager(
                     }
                     val expiresIn = json.optLong("expires_in", 0)
                     if (expiresIn > 0) {
-                        json.put("expire_at", System.currentTimeMillis() + expiresIn * 1000)
+                        json.put("expire_at", System.currentTimeMillis() + expiresIn * 1000 - OAuthManager.CLOCK_SKEW_MS)
                     }
                     // Carry the device identity + stamp last_refresh.
                     json.put("device_id", stored.optString("device_id", UUID.randomUUID().toString()))

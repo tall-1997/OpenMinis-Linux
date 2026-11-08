@@ -217,6 +217,7 @@ internal class ModelCatalogCache(
                         context = context,
                         forceRefresh = liveForce,
                         cacheScope = instance.id,
+                        baseURL = instance.effectiveBaseURL,
                     )
                     // [T-provider-custom-user-agent] models-list UA override.
                     // [T-android-provider-type-parity] openAIResponses lists

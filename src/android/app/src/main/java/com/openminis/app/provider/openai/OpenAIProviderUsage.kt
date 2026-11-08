@@ -21,7 +21,11 @@ internal fun OpenAIProvider.parseChatCompletionsUsage(usage: JSONObject): LLMUsa
     // latestContextTokens stays the full prompt (that IS the context size).
     val freshInput = cacheRead?.let { (promptTokens - it).takeIf { d -> d >= 0 } } ?: promptTokens
     return LLMUsage(
-        inputTokens = promptTokens,
+        // [T-usage-cache-dedupe] fresh-only input, matching the Responses path
+        // (:48) and Gemini/Anthropic conventions — the cached portion belongs
+        // to cacheReadInputTokens alone, or `input + cacheRead` double-counts
+        // it and deflates the cache-hit rate.
+        inputTokens = freshInput,
         outputTokens = usage.optInt("completion_tokens", 0),
         cacheReadInputTokens = cacheRead,
         latestContextTokens = promptTokens,

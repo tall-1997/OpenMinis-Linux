@@ -24,7 +24,8 @@ import java.util.zip.ZipInputStream
  */
 internal object ProviderImportZip {
 
-    private const val TAG = "ProviderImportZip"
+    private const val MAX_TOTAL_UNCOMPRESSED = 20L * 1024 * 1024
+private const val TAG = "ProviderImportZip"
     private val SUPPORTED_EXTS = setOf("json", "txt")
 
     /**
@@ -72,6 +73,8 @@ internal object ProviderImportZip {
         }
         val rootCanonical = stagingDir.canonicalPath
         val rootPrefix = rootCanonical + File.separator
+        // [T-zip-bomb-cap] Total uncompressed budget for one import.
+        var extractedBytes = 0L
 
         try {
             val input = context.contentResolver.openInputStream(uri)
@@ -92,10 +95,18 @@ internal object ProviderImportZip {
                             val canonical = target.canonicalPath
                             // ── zip-slip guard ───────────────────────────────
                             if (canonical != rootCanonical && !canonical.startsWith(rootPrefix)) {
-                                Log.w(TAG, "rejected zip-slip entry: $rawName")
+                                Log.w(TAG, "rejected zip-slip entry: ${rawName.replace("\n", " ")}")
                                 continue
                             }
                             target.parentFile?.mkdirs()
+                            // [T-zip-bomb-cap] A hostile archive can claim a
+                            // multi-GB entry; cap the total extraction per zip.
+                            val entrySize = entry.size.takeIf { it > 0 } ?: 1L
+                            if (extractedBytes + entrySize > MAX_TOTAL_UNCOMPRESSED) {
+                                Log.w(TAG, "extraction cap exceeded — aborting zip import")
+                                throw IllegalStateException("zip too large")
+                            }
+                            extractedBytes += entrySize
                             target.outputStream().use { out -> zin.copyTo(out) }
                         } finally {
                             zin.closeEntry()

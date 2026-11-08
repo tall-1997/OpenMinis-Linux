@@ -36,6 +36,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -130,6 +131,13 @@ fun ProviderListScreen(
         value = withContext(Dispatchers.Default) {
             providerRepository.shadowVoiceSnapshot()
         }
+    }
+
+    // [T-swr-provider-page] Entering the page is the designed SWR trigger:
+    // instances stale for >24h refresh silently in the background; fresh ones
+    // are left untouched. (The helper existed but was never called.)
+    LaunchedEffect(Unit) {
+        providerRepository.triggerBackgroundRefreshIfStale(this)
     }
 
     var showMenu by remember { mutableStateOf(false) }

@@ -49,7 +49,17 @@ object RelayQuotaAdapter : ProviderQuotaAdapter {
         if (raw.isNullOrEmpty()) return null
         val uri = runCatching { URI(raw) }.getOrNull() ?: return null
         val scheme = uri.scheme?.lowercase()
-        if ((scheme != "https" && scheme != "http") || uri.host.isNullOrEmpty()) return null
+        // [T-quota-relay-https] The probe sends the credential on every endpoint —
+            // a plain-http relay leaks it to anything on the path. Chat may still
+            // use the user's chosen http URL (their call), but the PROBE opt in
+            // to https only.
+            if (scheme != "https" || uri.host.isNullOrEmpty()) {
+                com.openminis.app.logging.AppLogger.warning(
+                    "QuotaAdapterRelay",
+                    "quota probe skipped: relay base URL is not https",
+                )
+                return null
+            }
         var path = uri.rawPath.orEmpty().trimEnd('/')
         if (path.lowercase().endsWith("/v1")) path = path.dropLast(3)
         path = path.trimEnd('/')

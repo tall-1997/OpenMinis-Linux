@@ -306,8 +306,7 @@ class ProviderRepository(
             )
         }
         saveConfig(config)
-        // Stale from the start so the next background sweep (or an explicit
-        // triggerBackgroundRefreshIfStale call) will fetch it.
+        // Stale from the start so the next sweep/SWR fetches it.
         invalidateModelCache(instance.id)
     }
     /** Voice-template seed reconciliation; implementation in [ProviderConfigStore]. */
@@ -1461,10 +1460,9 @@ class ProviderRepository(
     // API Key management — implementations in [ProviderConfigStore].
     fun saveApiKey(instanceId: String, key: String) {
         configStore.saveApiKey(instanceId, key)
-        // [port-upstream-1.16][T-provider-quota] A new key is a new quota
-        // subject: forget any "no credential" note so the provider page's
-        // quota section can reappear without a restart.
-        com.openminis.app.quota.QuotaStore.credentialsChanged()
+        // [T-models-credential-swap] Clear the watermark: re-fetch on next sweep.
+        invalidateModelCache(instanceId)
+            com.openminis.app.quota.QuotaStore.credentialsChanged() // [T-provider-quota]
     }
 
     fun loadApiKey(instanceId: String): String? =
@@ -1482,8 +1480,8 @@ class ProviderRepository(
 
     fun deleteApiKey(instanceId: String) {
         configStore.deleteApiKey(instanceId)
-        // [port-upstream-1.16][T-provider-quota] The key's quota subject is gone.
-        com.openminis.app.quota.QuotaStore.credentialsChanged()
+        invalidateModelCache(instanceId) // [T-models-credential-swap]
+        com.openminis.app.quota.QuotaStore.credentialsChanged() // [T-provider-quota]
     }
 
     private val backupCoordinator by lazy {
@@ -1501,13 +1499,15 @@ class ProviderRepository(
         override val configLock get() = this@ProviderRepository.configLock
         override val providerDao get() = this@ProviderRepository.providerDao
         override fun loadApiKey(instanceId: String): String? = this@ProviderRepository.loadApiKey(instanceId)
+        override fun poolKeys(instanceId: String): List<String> = configStore.poolKeys(instanceId)
+        override fun setPoolKeys(instanceId: String, keys: List<String>) = configStore.setPoolKeys(instanceId, keys)
         override fun saveApiKey(instanceId: String, key: String) =
             this@ProviderRepository.saveApiKey(instanceId, key)
         override fun loadAllThinkingRulesIntoCache() =
             this@ProviderRepository.loadAllThinkingRulesIntoCache()
     }
-    fun exportInstanceJSON(instanceId: String): String? =
-        backupCoordinator.exportInstanceJSON(instanceId)
+    fun exportInstanceJSON(instanceId: String, includeCredentials: Boolean = true): String? =
+        backupCoordinator.exportInstanceJSON(instanceId, includeCredentials)
     fun collectBackupProviderSecret(instance: ProviderInstance): BackupSecrets.ProviderSecret? =
         backupCoordinator.collectBackupProviderSecret(instance)
     fun restoreBackupProviderSecret(secret: BackupSecrets.ProviderSecret): Boolean =

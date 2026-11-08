@@ -6,6 +6,7 @@ import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.model.sanitizeToolId
 import com.openminis.app.data.model.LLMError
 import com.openminis.app.provider.FullBodyJson
+import com.openminis.app.provider.executeCancellable
 import com.openminis.app.provider.NonFiniteJson
 import com.openminis.app.provider.ProviderKeyGate
 import com.openminis.app.data.model.LLMMessage
@@ -63,7 +64,7 @@ class AnthropicProvider(
     override val defaultMaxOutputTokens: Int get() = 64_000
 
     /**
-     * [port-upstream-1.16][T-quota-claude-subscription] Instance tag set by
+     * [T-quota-claude-subscription] Instance tag set by
      * ProviderFactory for OAuth instances, so replies' usage headers reach the
      * quota store. Null = not quota-tracked.
      */
@@ -113,7 +114,8 @@ class AnthropicProvider(
     ): LLMResponse = withContext(Dispatchers.IO) {
         val body = buildRequestBody(messages, systemPrompt, maxTokens, stream = false, temperature = temperature, imageParts = imageParts, tools = tools, thinkingLevel = thinkingLevel)
         val request = buildRequest(body.toString(), body)
-        val response = client.newCall(request).execute()
+        // [T-android-stop-cancels-socket] Cancel must close the blocking IO.
+        val response = client.newCall(request).executeCancellable()
         if (isOAuth) com.openminis.app.quota.QuotaObservationSink.recordAnthropicResponse(quotaInstanceId, response.headers)
         val responseBody = response.body?.string() ?: ""
 
@@ -167,8 +169,7 @@ class AnthropicProvider(
         }
 
         val call = client.newCall(request)
-        // Install before execute: cancelling while waiting for headers must
-        // unblock the socket too, not only a parked readLine.
+        // Install before execute: cancel must unblock the header wait too.
         val cancelOnExit = kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]
             ?.invokeOnCompletion { call.cancel() }
         val response = com.openminis.app.provider.StreamTtfb.execute(call, "Anthropic")
@@ -179,10 +180,8 @@ class AnthropicProvider(
         if (!response.isSuccessful) {
             val errorBody = response.body?.string() ?: ""
             response.close()
-            // T302: skip the LLMRequestLog write entirely on release builds —
-            // see OpenAIProvider for the full rationale (release users never
-            // reach debug.llmRequests, so retaining multi-MB request bodies
-            // there is pure OOM risk for zero benefit).
+            // T302: skip LLMRequestLog on release builds (see OpenAIProvider —
+            // multi-MB bodies retained there are pure OOM risk for zero benefit).
             if (com.openminis.app.BuildConfig.DEBUG) {
                 com.openminis.app.debug.LLMRequestLog.add(
                     com.openminis.app.debug.LLMRequestLog.Entry(
@@ -196,7 +195,7 @@ class AnthropicProvider(
                     )
                 )
             }
-            // [T-llm-error-secret-mask] Logcat feeds filesDir/logs/*.log (the
+            // [T-llm-error-secret-mask] Logcat feeds filesDir/logs/*.log (
             // files CONTRIBUTING.md asks users to attach), and the upstream body
             // is not ours to trust — mask it like the LLMError message is.
             android.util.Log.e(
@@ -253,7 +252,7 @@ class AnthropicProvider(
                     "message_start" -> {
                         send(LLMStreamChunk.Started)
                         event.optJSONObject("message")?.optJSONObject("usage")?.let { usage ->
-                            send(LLMStreamChunk.Usage(parseUsage(usage)))
+                            send(LLMStreamChunk.Usage(parseAnthropicUsage(usage)))
                         }
                     }
                     "content_block_start" -> {
@@ -307,12 +306,11 @@ class AnthropicProvider(
                     }
                     "message_delta" -> {
                         event.optJSONObject("usage")?.let { usage ->
-                            send(LLMStreamChunk.Usage(parseUsage(usage)))
+                            send(LLMStreamChunk.Usage(parseAnthropicUsage(usage)))
                         }
                         val delta = event.optJSONObject("delta")
                         val stopReason = delta?.safeOptString("stop_reason", "")?.ifEmpty { null }
-                        // [FIX-261018-12] A refusal's stop_details says why
-                        // (category "cyber", the policy explanation).
+                        // [FIX-261018-12] stop_details says why (refusal category).
                         val details = if (stopReason == "refusal") delta?.optJSONObject("stop_details") else null
                         send(LLMStreamChunk.Finished(
                             stopReason,
@@ -322,7 +320,19 @@ class AnthropicProvider(
                     }
                 }
             }
+
+            // [T-anthropic-tool-drain] Relay drops mid-tool_use never send
+            // content_block_stop — flush so the agent loop doesn't hang.
+            if (currentToolId != null && currentToolName != null) {
+                val drainedArgs = NonFiniteJson.parseOrNull(toolInputBuffer.toString()) ?: JSONObject()
+                send(LLMStreamChunk.ToolCallComplete(currentToolId!!, currentToolName!!, drainedArgs))
+                currentToolId = null
+                currentToolName = null
+                toolInputBuffer.clear()
+            }
         } catch (e: Exception) {
+            // [T-android-stop-cancels-socket] Stop is a normal exit — rethrow.
+            if (e is kotlinx.coroutines.CancellationException) throw e
             cancel("Stream error", mapError(e))
         } finally {
             reader.close()
@@ -1137,20 +1147,10 @@ class AnthropicProvider(
             }
         }
         val stopReason = json.safeOptString("stop_reason", "").ifEmpty { null }
-        val usage = json.optJSONObject("usage")?.let { parseUsage(it) }
+        val usage = json.optJSONObject("usage")?.let { parseAnthropicUsage(it) }
         return LLMResponse(text, stopReason, usage)
     }
 
-    private fun parseUsage(json: JSONObject): LLMUsage {
-        val inputTokens = json.optInt("input_tokens", 0)
-        return LLMUsage(
-            inputTokens = inputTokens,
-            outputTokens = json.optInt("output_tokens", 0),
-            cacheCreationInputTokens = json.optInt("cache_creation_input_tokens").takeIf { it > 0 },
-            cacheReadInputTokens = json.optInt("cache_read_input_tokens").takeIf { it > 0 },
-            latestContextTokens = inputTokens,
-        )
-    }
 
     /**
      * [T-anthropic-sse-error-event] Turn an SSE `error` event into the same

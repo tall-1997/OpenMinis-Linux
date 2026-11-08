@@ -220,6 +220,10 @@ internal fun OpenAIProvider.rawStreamMessage(
         // (b) evict THIS ONE connection on timeout.
         val watchState = CallWatchState()
         val call = client.newCall(request.newBuilder().tag(CallWatchState::class.java, watchState).build())
+        // [T-android-stop-cancels-socket] invokeOnCompletion fires on cancel
+        // too; call.cancel() unblocks the parked execute()/readLine at once.
+        val stopHook = kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]
+            ?.invokeOnCompletion { runCatching { call.cancel() } }
         // [T-android-stale-conn-retry-hang] Time-to-first-byte watchdog: a
         // request written into a dead pooled h2 tunnel produces NO further
         // events until the 600s read timeout — the UI showed "thinking" forever.
@@ -252,7 +256,7 @@ internal fun OpenAIProvider.rawStreamMessage(
                 }
                 delay(pollMs)
             }
-            if (timedOutPhase != null && !headersArrived.get()) {
+            if (timedOutPhase != null && !headersArrived.get()) { // [T-android-ttfb-race] re-checked here
                 ttfbTimedOut.set(true)
                 val budgetS = if (timedOutPhase == "ttfb") STREAM_TTFB_TIMEOUT_MS / 1000 else STREAM_UPLOAD_CAP_MS / 1000
                 com.openminis.app.logging.AppLogger.warning(
@@ -382,12 +386,12 @@ internal fun OpenAIProvider.rawStreamMessage(
                 send(LLMStreamChunk.Started)
                 val choice = json.optJSONArray("choices")?.optJSONObject(0)
                 val message = choice?.optJSONObject("message")
-                val text = message?.optString("content", "").orEmpty()
+                val text = message?.let { m -> m.safeOptString("content") }.orEmpty() // [T-json-null-string]
                 if (text.isNotEmpty()) send(LLMStreamChunk.Text(text))
                 json.optJSONObject("usage")?.let {
                     send(LLMStreamChunk.Usage(parseChatCompletionsUsage(it)))
                 }
-                send(LLMStreamChunk.Finished(choice?.optString("finish_reason", null)))
+                send(LLMStreamChunk.Finished(choice?.let { c -> c.safeOptString("finish_reason") }))
             } finally {
                 response.close()
             }
@@ -400,6 +404,8 @@ internal fun OpenAIProvider.rawStreamMessage(
         }
 
         if (pushback == null) {
+            // [T-android-stream-resource] Close the opened response or it leaks.
+            runCatching { response.close() }
             throw LLMError.DecodingError(
                 IllegalStateException("streaming response had no body"),
             )
@@ -511,7 +517,7 @@ internal fun OpenAIProvider.rawStreamMessage(
                 val event = try { JSONObject(payload) } catch (e: Exception) {
                     com.openminis.app.logging.AppLogger.warning(
                         "OpenAIProvider",
-                        "[T321] SSE JSON parse failed: ${e.message} payload=${payload.take(300)}"
+                        "[T321] SSE JSON parse failed: ${e.message} payload=${maskSecrets(payload.take(300))}"
                     )
                     continue
                 }
@@ -613,7 +619,7 @@ internal fun OpenAIProvider.rawStreamMessage(
                                 if (itemId.isNotEmpty() && callId.isNotEmpty() && name.isNotEmpty()) {
                                     responsesToolCalls[itemId] = ResponsesToolCallAccumulator(callId = callId, name = name)
                                     val combined = combineResponsesAPIIds(callId, itemId)
-                                    android.util.Log.d("ToolChain[Provider]", "→ ToolUseStart (Responses) id=$combined name=$name")
+                                    if (android.util.Log.isLoggable("ToolChain[Provider]", android.util.Log.VERBOSE)) android.util.Log.d("ToolChain[Provider]", "→ ToolUseStart (Responses) id=$combined name=$name")
                                     send(LLMStreamChunk.ToolUseStart(combined, name))
                                     responsesToolCalls[itemId]?.started = true
                                 }
@@ -656,9 +662,9 @@ internal fun OpenAIProvider.rawStreamMessage(
                                 val argsStr = item.optString("arguments", acc.args.toString())
                                 val args = NonFiniteJson.parseOrNull(argsStr) ?: JSONObject()
                                 val combined = combineResponsesAPIIds(acc.callId, itemId)
-                                android.util.Log.d("ToolChain[Provider]", "→ ToolCallComplete (Responses) id=$combined name=${acc.name} args=${args.toString().take(300)}")
+                                if (android.util.Log.isLoggable("ToolChain[Provider]", android.util.Log.VERBOSE)) android.util.Log.d("ToolChain[Provider]", "→ ToolCallComplete (Responses) id=$combined name=${acc.name} args=${args.toString().take(300)}")
                                 send(LLMStreamChunk.ToolCallComplete(combined, acc.name, args))
-                            } else android.util.Log.d("ToolChain[Provider]", "output_item.done type=$itemType id=${item.optString("id", "")} — acknowledged") // [T-responses-unknown-item] Acknowledge only, NEVER re-send item.content: for message/reasoning items `content` is a JSON ARRAY, so optString would dump raw JSON into the visible stream, and the text already streamed via response.output_text.delta.
+                            } else if (android.util.Log.isLoggable("ToolChain[Provider]", android.util.Log.VERBOSE)) android.util.Log.d("ToolChain[Provider]", "output_item.done type=$itemType id=${item.optString("id", "")} — acknowledged") // [T-responses-unknown-item] Acknowledge only, NEVER re-send item.content: for message/reasoning items `content` is a JSON ARRAY, so optString would dump raw JSON into the visible stream, and the text already streamed via response.output_text.delta.
                         }
                         type == "response.failed" -> {
                             // [T-responses-terminal-events] Explicit terminal
@@ -878,7 +884,11 @@ internal fun OpenAIProvider.rawStreamMessage(
                                 val idx = tc.optInt("index", 0)
                                 val acc = toolCallAccumulators.getOrPut(idx) { ToolCallAccumulator() }
 
-                                tc.safeOptString("id", "").let { if (it.isNotEmpty()) acc.id = it }
+                                // [T-toolcall-missing-id] Relays without `id`
+                                // would vanish at the tail drain — derive one.
+                                tc.safeOptString("id", "").let {
+                                    acc.id = if (it.isNotEmpty()) it else "tool-call-$idx"
+                                }
                                 tc.optJSONObject("function")?.let { fn ->
                                     fn.safeOptString("name", "").let { if (it.isNotEmpty()) acc.name = it }
                                     fn.safeOptString("arguments", "").let { if (it.isNotEmpty()) acc.args.append(it) }
@@ -887,7 +897,7 @@ internal fun OpenAIProvider.rawStreamMessage(
                                 // Emit start exactly once per tool call
                                 if (!acc.started && acc.id.isNotEmpty() && acc.name.isNotEmpty()) {
                                     acc.started = true
-                                    android.util.Log.d("ToolChain[Provider]", "→ ToolUseStart id=${acc.id} name=${acc.name}")
+                                    if (android.util.Log.isLoggable("ToolChain[Provider]", android.util.Log.VERBOSE)) android.util.Log.d("ToolChain[Provider]", "→ ToolUseStart id=${acc.id} name=${acc.name}")
                                     send(LLMStreamChunk.ToolUseStart(acc.id, acc.name))
                                 }
                                 // Emit input delta
@@ -896,7 +906,7 @@ internal fun OpenAIProvider.rawStreamMessage(
                                     if (com.openminis.app.text.BoundedText.shouldCommitLengthStride(n, acc.lastSentArgsLen)) {
                                         acc.lastSentArgsLen = n
                                         if (com.openminis.app.text.BoundedText.shouldLogLengthStride(n)) {
-                                            android.util.Log.d("ToolChain[Provider]", "→ ToolInputDelta id=${acc.id} accumulated=${n}chars")
+                                            if (android.util.Log.isLoggable("ToolChain[Provider]", android.util.Log.VERBOSE)) android.util.Log.d("ToolChain[Provider]", "→ ToolInputDelta id=${acc.id} accumulated=${n}chars")
                                         }
                                         send(LLMStreamChunk.ToolInputDelta(acc.id, acc.args.toString()))
                                     }
@@ -945,7 +955,7 @@ internal fun OpenAIProvider.rawStreamMessage(
             for ((_, acc) in toolCallAccumulators) {
                 if (acc.id.isNotEmpty() && acc.name.isNotEmpty()) {
                     val args = NonFiniteJson.parseOrNull(acc.args.toString()) ?: JSONObject()
-                    android.util.Log.d("ToolChain[Provider]", "→ ToolCallComplete id=${acc.id} name=${acc.name} args=${args.toString().take(300)}")
+                    if (android.util.Log.isLoggable("ToolChain[Provider]", android.util.Log.VERBOSE)) android.util.Log.d("ToolChain[Provider]", "→ ToolCallComplete id=${acc.id} name=${acc.name} args=${args.toString().take(300)}")
                     send(LLMStreamChunk.ToolCallComplete(acc.id, acc.name, args))
                 }
             }
@@ -969,27 +979,11 @@ internal fun OpenAIProvider.rawStreamMessage(
             responsesToolCalls.clear()
 
             // T321: stream ended — final tally + warning if we never saw a
-            // finish_reason. The latter is the strongest signal of a server-
-            // side truncation / connection-dropped scenario.
-            // [T-android-responses-missing-finished] Emit the terminal chunk for
-            // streams that end without a `data: [DONE]` sentinel.
-            //
-            // Finished was only ever sent from the [DONE] branch. Chat
-            // Completions always sends that sentinel, but the Responses API
-            // terminates with `response.completed` and many relays simply close
-            // the socket afterwards — no [DONE] ever arrives. The read loop then
-            // exits normally, the channel closes, and no Finished is emitted.
-            //
-            // Downstream, ChatViewModel.runAgentLoop only ever assigns
-            // turnFinishReason from a Finished chunk, so it stayed null and the
-            // turn was reported as "stream closed without a finish reason" —
-            // the red "连接中断，此回复可能不完整" banner on a reply that was in
-            // fact complete. It looked intermittent because it depends on the
-            // relay: those that do append [DONE] worked, the rest did not, which
-            // is why the same model on the same account failed only sometimes,
-            // and why Chat Completions models (deepseek) never showed it.
-            //
-            // Gated on sawFinishReason: reaching here WITHOUT one is a genuine
+            // finish_reason. [T-android-responses-missing-finished] Chat
+            // Completions sends [DONE]; the Responses API and many relays just
+            // close the socket, so Finished is emitted from this tail (gated on
+            // sawFinishReason: reaching here WITHOUT one is a genuine
+            // truncation and must fall through to the warning below).
             // truncation, and must keep falling through to the warning below so
             // the interrupted-reply UI still fires for real drops.
             if (sawFinishReason && !sentFinished) {
@@ -1031,6 +1025,9 @@ internal fun OpenAIProvider.rawStreamMessage(
                 )
             }
         } catch (e: Exception) {
+            // [T-android-stop-cancels-socket] Stop is a normal exit — rethrow,
+            // don't log it as "[T321] stream parse exception" noise.
+            if (e is kotlinx.coroutines.CancellationException) throw e
             // T321: never silently swallow — log message + top-3 stack frames.
             val frames = e.stackTrace.take(3).joinToString(" | ") { "${it.className}.${it.methodName}:${it.lineNumber}" }
             com.openminis.app.logging.AppLogger.error(
@@ -1040,6 +1037,7 @@ internal fun OpenAIProvider.rawStreamMessage(
             )
             cancel("Stream error", mapError(e))
         } finally {
+            stopHook?.dispose()
             reader.close()
             response.close()
         }

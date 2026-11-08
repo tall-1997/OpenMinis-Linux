@@ -169,7 +169,8 @@ internal object ProviderDebugMethods {
      * portable JSON document. Mirrors the UI Share button. The API key is
      * base64-wrapped (same as ProviderRepository.exportInstanceJSON) — that's
      * to survive JSON-string escaping of arbitrary key bytes, not for
-     * security; callers of the 5322 RPC are trusted by definition.
+     * security; callers of the 5322 RPC are trusted by definition. Credentials
+     * are EXCLUDED unless the caller passes includeCredentials=true.
      */
     fun export(context: Context, params: JSONObject): JSONObject {
         val instanceId = params.optString("instanceId", "").ifEmpty {
@@ -178,7 +179,12 @@ internal object ProviderDebugMethods {
         val repo = repo(context)
         val instance = repo.instance(instanceId)
             ?: throw RPCException(-32602, "Instance not found: $instanceId")
-        val raw = repo.exportInstanceJSON(instanceId)
+                // [T-export-credential-option] The RPC surface now defaults to a
+        // CREDENTIAL-FREE export; pass {"includeCredentials": true} explicitly
+        // to opt in (kept for trusted-by-definition callers, but no longer
+        // accidental). The UI share path already strips credentials.
+        val includeCredentials = params.optBoolean("includeCredentials", false)
+        val raw = repo.exportInstanceJSON(instanceId, includeCredentials)
             ?: throw RPCException(-32000, "Export failed for instance $instanceId")
         // Wrap the underlying JSON document under a versioned envelope so
         // forward-compatible importers can detect the schema explicitly.
