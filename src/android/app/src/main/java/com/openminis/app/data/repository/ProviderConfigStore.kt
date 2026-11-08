@@ -546,11 +546,14 @@ internal class ProviderConfigStore(
     fun hasAnyCredential(instance: ProviderInstance): Boolean {
         // API-key path, including the keyless-by-design compat endpoints that
         // [usableApiKey] already models via allowsEmptyAPIKey.
-        // [T-credential-presence-cache] Cheap pre-filter: `false` (nothing
-        // stored) short-circuits without a Tink decrypt; `true` falls through
-        // to the exact read below. instance.allowsEmptyAPIKey must consult the
-        // instance type, so only the "no key stored at all" case is cached.
-        if (!apiKeyPresenceOf(instance.id) && !instance.allowsEmptyAPIKey) return false
+        // [T-credential-presence-cache] Cheap pre-filter for API-KEY-mode
+        // instances only: their credential lives solely in the apikey_ pref,
+        // so `false` (nothing stored) is authoritative and short-circuits
+        // without a Tink decrypt. OAuth/manual-bearer instances keep their
+        // credential in oauth_prefs — they always take the live read below.
+        if (instance.credentialType == com.openminis.app.data.model.ProviderCredential.apiKey &&
+            !apiKeyPresenceOf(instance.id) && !instance.allowsEmptyAPIKey
+        ) return false
         if (usableApiKey(instance) != null) return true
         // OAuth path — token storage is keyed by instance id in the shared
         // oauth prefs, so this needs no OAuthManager instance. Reading the
@@ -669,7 +672,9 @@ internal class ProviderConfigStore(
         removal.primaryOverride?.let {
             encryptedPrefs.edit().putString("apikey_$instanceId", it).apply()
         }
-        _credentialRevision.update { it + 1 }
+        // [T-credential-presence-cache] The promotion wrote the pref directly —
+        // drop the cached verdict so hasAnyCredential re-reads it.
+        apiKeyPresence.remove(instanceId)
         com.openminis.app.provider.ProviderFactory.invalidateInstance(instanceId)
         ProviderCredentialEdits.changed(instanceId)
         return true
