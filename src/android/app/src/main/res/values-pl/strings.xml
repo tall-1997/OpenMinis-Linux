@@ -2052,4 +2052,5 @@
     <string name="git_panel_no_branches">Brak gałęzi</string>
     <string name="git_panel_push">Wypchnij</string>
     <string name="git_panel_pull">Pobierz</string>
+    <string name="git_panel_no_stashes">Brak skrytek</string>
  </resources>

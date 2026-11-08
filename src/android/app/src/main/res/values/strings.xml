@@ -1639,6 +1639,7 @@
     <string name="git_panel_no_branches">No branches found</string>
     <string name="git_panel_push">Push</string>
     <string name="git_panel_pull">Pull</string>
+    <string name="git_panel_no_stashes">No stashes</string>
     <string name="chat_menu_open_browser">Open Browser</string>
     <string name="chat_menu_browse_chat_files">Browse Chat Files</string>
     <string name="chat_menu_enhanced_cache">Enhanced Cache</string>

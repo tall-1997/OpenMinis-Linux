@@ -2050,4 +2050,5 @@
     <string name="git_panel_no_branches">Tidak ada cabang</string>
     <string name="git_panel_push">Push</string>
     <string name="git_panel_pull">Tarik</string>
+    <string name="git_panel_no_stashes">Tidak ada stash</string>
  </resources>

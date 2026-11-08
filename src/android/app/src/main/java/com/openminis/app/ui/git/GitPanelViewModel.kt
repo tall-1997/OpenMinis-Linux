@@ -99,6 +99,10 @@ class GitPanelViewModel(
 
     fun refresh() {
         viewModelScope.launch {
+            // [T-git-panel-v2] An open diff overlay must survive auto-refresh:
+            // FileChangeHub fires on every agent edit, and closing what the user
+            // is reading because the tree changed makes the overlay unusable.
+            val keepDiff = _state.value.diff
             _state.update { it.copy(loading = true, notice = null, diff = null) }
             val repo = GitCli.probe(sessionId)
             if (!repo.isRepo) {
@@ -120,6 +124,7 @@ class GitPanelViewModel(
                     log = log,
                     branches = branches,
                     stashes = stashes,
+                    diff = keepDiff,
                     // A failed status probe (e.g. shell died mid-refresh) is
                     // worth surfacing — a silently empty Changes tab reads as
                     // "clean tree", which would be a lie.
@@ -157,8 +162,16 @@ class GitPanelViewModel(
         val root = _state.value.repo?.root
         val status = runCatching { GitCli.status(sessionId, root) }.getOrNull()
         val log = runCatching { GitCli.log(sessionId, root = root) }.getOrDefault(emptyList())
+        val branches = runCatching { GitCli.branches(sessionId, root) }.getOrDefault(emptyList())
         _state.update {
-            it.copy(busy = false, status = status, log = log, notice = error)
+            it.copy(
+                busy = false,
+                status = status,
+                log = log,
+                // A checkout changed the branch: keep the switcher honest.
+                branches = branches,
+                notice = error,
+            )
         }
     }
 

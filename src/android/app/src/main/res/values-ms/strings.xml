@@ -2045,4 +2045,5 @@
     <string name="git_panel_no_branches">Tiada cawangan</string>
     <string name="git_panel_push">Push</string>
     <string name="git_panel_pull">Tarik</string>
+    <string name="git_panel_no_stashes">Tiada stash</string>
  </resources>

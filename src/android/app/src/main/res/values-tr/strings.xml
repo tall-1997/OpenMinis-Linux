@@ -2044,4 +2044,5 @@
     <string name="git_panel_no_branches">Dal yok</string>
     <string name="git_panel_push">Gönder</string>
     <string name="git_panel_pull">Çek</string>
+    <string name="git_panel_no_stashes">Stash yok</string>
 </resources>

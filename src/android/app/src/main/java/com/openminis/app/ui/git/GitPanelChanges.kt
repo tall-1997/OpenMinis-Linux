@@ -95,6 +95,9 @@ internal fun ChangesTab(state: GitPanelState, viewModel: GitPanelViewModel) {
                 items(state.stashes, key = { "stash:${it.index}" }) { stash ->
                     StashRowView(stash, enabled = !state.busy)
                 }
+            } else if (entries.isEmpty()) {
+                item { SectionHeader(stringResource(R.string.git_panel_section_stashes)) }
+                item { EmptyRows(stringResource(R.string.git_panel_no_stashes)) }
             }
         }
         HorizontalDivider()

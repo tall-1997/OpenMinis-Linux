@@ -33,8 +33,9 @@ TRANSLATABLE_FALSE_RE = re.compile(r'translatable="false"')
 
 
 def git_show(ref: str, path: str) -> str:
+    # Windows: Path joins with '\' but git paths inside a rev must be '/'.
     return subprocess.run(
-        ["git", "show", f"{ref}:{path}"],
+        ["git", "show", f"{ref}:{path.replace(chr(92), '/')}"],
         check=True, capture_output=True, text=True,
     ).stdout
 

@@ -2045,4 +2045,5 @@
     <string name="git_panel_no_branches">Sem branches</string>
     <string name="git_panel_push">Enviar</string>
     <string name="git_panel_pull">Baixar</string>
+    <string name="git_panel_no_stashes">Sem stashes</string>
  </resources>
