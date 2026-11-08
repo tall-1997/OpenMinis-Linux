@@ -55,6 +55,19 @@ object GitCli {
     fun statusCmd(root: String? = null) =
         "${gitPrefix(root)} -c core.quotepath=false status --porcelain -b"
 
+    /** Local + remote refs for the branch switcher, newest commits first. */
+    fun branchesCmd(root: String? = null) =
+        "${gitPrefix(root)} for-each-ref --sort=-committerdate refs/heads refs/remotes " +
+            "--format=%(objectname:short)%x1f%(refname:short)%x1f%(contents:subject) | head -40"
+
+    /** Stash list: `stash@{n}<x1f>subject`, newest first. */
+    fun stashCmd(root: String? = null) =
+        "${gitPrefix(root)} stash list --format=%gd%x1f%s"
+
+    /** Push/pull both refresh status afterwards; upstream must exist for push. */
+    fun pushCmd(root: String? = null) = "${gitPrefix(root)} push"
+    fun pullCmd(root: String? = null) = "${gitPrefix(root)} pull --ff-only"
+
     fun logCmd(limit: Int, root: String? = null, skip: Int = 0) =
         "${gitPrefix(root)} -c core.quotepath=false log -n $limit" +
             (if (skip > 0) " --skip $skip" else "") +
@@ -141,6 +154,21 @@ object GitCli {
         /** Parent hashes in order (`%P`); empty when the caller didn't ask for them. */
         val parents: List<String> = emptyList(),
     )
+
+    /**
+     * One branch line for the panel's branch switcher, parsed from
+     * `git for-each-ref` output (`hash<x1f>name<x1f>subject`). Remote
+     * refs (`origin/…`) carry a slash in [name]; [isCurrent] is only
+     * ever true for the local branch actually checked out.
+     */
+    data class GitBranchRef(
+        val name: String,
+        val isCurrent: Boolean,
+        val lastSubject: String,
+    )
+
+    /** One stash entry: `stash@{n}` + subject. */
+    data class GitStashEntry(val index: Int, val subject: String)
 
     /** One `git diff --numstat` row: per-file line counts, or a typed marker. */
     data class NumStat(
@@ -263,6 +291,30 @@ object GitCli {
         }
         return GitStatus(ahead, behind, upstream, entries)
     }
+
+    /** `hash<x1f>name<x1f>subject` rows → switcher entries; garbage rows drop. */
+    fun parseBranches(output: String, current: String): List<GitBranchRef> =
+        output.lines().mapNotNull { raw ->
+            val parts = raw.trim().split('\u001f')
+            if (parts.size < 2) return@mapNotNull null
+            val name = parts[1].takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            GitBranchRef(
+                name = name,
+                isCurrent = name == current,
+                lastSubject = parts.getOrNull(2).orEmpty(),
+            )
+        }.distinctBy { it.name }
+
+    /** `stash@{n}<x1f>subject` rows → stash entries; garbage rows drop. */
+    fun parseStashes(output: String): List<GitStashEntry> =
+        output.lines().mapNotNull { raw ->
+            val parts = raw.trim().split('\u001f', limit = 2)
+            if (parts.size < 2) return@mapNotNull null
+            val index = Regex("""stash@\{(\d+)\}""")
+                .find(parts[0])?.groupValues?.get(1)?.toIntOrNull()
+                ?: return@mapNotNull null
+            GitStashEntry(index, parts[1])
+        }
 
     fun parseLog(output: String): List<GitCommit> = output.lines().mapNotNull { raw ->
         val line = raw.trimEnd('\r')
@@ -460,8 +512,16 @@ object GitCli {
 
     // -------------------------------------------------------------- commands
 
-    private suspend fun run(sessionId: String, cmd: String): ExecutionCoordinator.CommandResult =
-        ExecutionCoordinator.execute(sessionId, cmd)
+    /**
+     * [timeoutMs] > 0 shortens the execution class wall (network ops get a
+     * caller bound: push/pull 60s, checkout 30s); 0 rides the class default.
+     */
+    private suspend fun run(
+        sessionId: String,
+        cmd: String,
+        timeoutMs: Long = 0L,
+    ): ExecutionCoordinator.CommandResult =
+        ExecutionCoordinator.execute(sessionId, cmd, timeout = timeoutMs)
 
     suspend fun probe(sessionId: String): GitRepoInfo {
         val r = runCatching { run(sessionId, probeCmd()) }.getOrElse {
@@ -513,6 +573,56 @@ object GitCli {
         val r = runCatching { run(sessionId, numstatCmd(staged, root)) }
             .getOrElse { return emptyMap() }
         return if (r.exitCode == 0) parseNumstat(r.output) else emptyMap()
+    }
+
+    /** Branches for the switcher; empty (with no error) outside a repo. */
+    suspend fun branches(sessionId: String, root: String?): List<GitBranchRef> {
+        val r = runCatching { run(sessionId, branchesCmd(root)) }.getOrElse { return emptyList() }
+        if (r.exitCode != 0) return emptyList()
+        val current = currentBranch(sessionId, root)
+        return parseBranches(r.output, current)
+    }
+
+    private suspend fun currentBranch(sessionId: String, root: String?): String =
+        runCatching {
+            run(sessionId, "${gitPrefix(root)} branch --show-current").output.trim()
+        }.getOrDefault("")
+
+    /** Stash list for the Changes tab; empty (with no error) outside a repo. */
+    suspend fun stashes(sessionId: String, root: String?): List<GitStashEntry> {
+        val r = runCatching { run(sessionId, stashCmd(root)) }.getOrElse { return emptyList() }
+        if (r.exitCode != 0) return emptyList()
+        return parseStashes(r.output)
+    }
+
+    /** @return error text, or null when the push succeeded. */
+    suspend fun push(sessionId: String, root: String?): String? {
+        val r = runCatching { run(sessionId, pushCmd(root), timeoutMs = 60_000L) }
+            .getOrElse { return it.message ?: "shell unavailable" }
+        return if (r.exitCode == 0) null else r.output.take(500).ifBlank { "exit=${r.exitCode}" }
+    }
+
+    /** @return error text, or null when the ff-only pull succeeded. */
+    suspend fun pull(sessionId: String, root: String?): String? {
+        val r = runCatching { run(sessionId, pullCmd(root), timeoutMs = 60_000L) }
+            .getOrElse { return it.message ?: "shell unavailable" }
+        return if (r.exitCode == 0) null else r.output.take(500).ifBlank { "exit=${r.exitCode}" }
+    }
+
+    /**
+     * Whitelisted one-verb executor for the branch switcher. Only `checkout`
+     * is allowed today; anything else is refused without touching the shell.
+     *
+     * @return error text, or null on success.
+     */
+    suspend fun execSimple(sessionId: String, vararg argv: String, root: String? = null): String? {
+        val allowed = setOf("checkout")
+        val verb = argv.getOrNull(0) ?: return "no command"
+        if (verb !in allowed) return "command not allowed: $verb"
+        val r = runCatching {
+            run(sessionId, gitPrefix(root) + " " + argv.joinToString(" ") { shellQuote(it) }, 30_000L)
+        }.getOrElse { return it.message ?: "shell unavailable" }
+        return if (r.exitCode == 0) null else r.output.take(500).ifBlank { "exit=${r.exitCode}" }
     }
 
     /** Push URL of the first remote, or null when the repo has none. */

@@ -3,6 +3,7 @@
 changesTotals / filterHistory algorithms against the same cases, so the
 JVM tests and this mirror must agree. Run: python3 scripts/gitpanel_verify.py
 """
+import re
 import sys
 from typing import Dict, List, Optional, Tuple
 
@@ -241,6 +242,54 @@ check("numstat braces rename", numstat_parse("-\t-\tsrc/{old.kt => new.kt}"),
       {"src/new.kt": "B"})
 check("numstat binary", numstat_parse("-\t-\timg.png\n12\t4\tsrc/c.kt"),
       {"img.png": "B", "src/c.kt": (12, 4)})
+
+# ------------------------------------------------------------- branches
+
+def parse_branches(output, current):
+    """Mirror of GitCli.parseBranches."""
+    out = []
+    seen = set()
+    for raw in output.splitlines():
+        parts = raw.strip().split("\x1f")
+        if len(parts) < 2:
+            continue
+        name = parts[1]
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        out.append((name, name == current, parts[2] if len(parts) > 2 else ""))
+    return out
+
+check("branches parse", parse_branches(
+    "abc1234\x1fmain\x1fFix parser bug\n"
+    "def5678\x1forigin/main\x1fFix parser bug\n"
+    "987fedc\x1ffeature/x\x1fWork in progress\n", "main"),
+    [("main", True, "Fix parser bug"),
+     ("origin/main", False, "Fix parser bug"),
+     ("feature/x", False, "Work in progress")])
+check("branches dedupe", parse_branches(
+    "abc1234\x1fmain\x1fone\ngarbage-no-separator\n"
+    "def5678\x1fmain\x1fduplicate\n\t\n\n", "other"),
+    [("main", False, "one")])
+check("branches blank", parse_branches("", ""), [])
+
+def parse_stashes(output):
+    """Mirror of GitCli.parseStashes."""
+    out = []
+    for raw in output.splitlines():
+        parts = raw.strip().split("\x1f", 1)
+        if len(parts) < 2:
+            continue
+        m = re.match(r"stash@\{(\d+)\}", parts[0])
+        if not m:
+            continue
+        out.append((int(m.group(1)), parts[1]))
+    return out
+
+check("stashes parse", parse_stashes("stash@{0}\x1fWIP widget\nstash@{1}\x1fon branch: older\n"),
+      [(0, "WIP widget"), (1, "on branch: older")])
+check("stashes malformed", parse_stashes("not-a-ref\x1fnope\ngarbage\nstash@{x}\x1fno-index\n"), [])
+check("stashes first-sep split", parse_stashes("stash@{0}\x1fWIP\x1fsplit\n"), [(0, "WIP\x1fsplit")])
 
 print(f"\n{PASS} passed, {FAIL} failed")
 sys.exit(1 if FAIL else 0)

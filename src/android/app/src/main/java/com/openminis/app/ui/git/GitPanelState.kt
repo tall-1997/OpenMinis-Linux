@@ -1,9 +1,11 @@
 package com.openminis.app.ui.git
 
 import com.openminis.app.git.GitCli.CommitFileStat
+import com.openminis.app.git.GitCli.GitBranchRef
 import com.openminis.app.git.GitCli.GitCommit
 import com.openminis.app.git.GitCli.GitCommitDetail
 import com.openminis.app.git.GitCli.GitRepoInfo
+import com.openminis.app.git.GitCli.GitStashEntry
 import com.openminis.app.git.GitCli.GitStatus
 import com.openminis.app.git.GitCli.NumStat
 
@@ -19,6 +21,10 @@ data class GitPanelState(
     val logLoadingMore: Boolean = false,
     /** First remote's push URL, display form (null when the repo has none). */
     val remote: String? = null,
+    /** Local + remote branches for the header switcher. */
+    val branches: List<GitBranchRef> = emptyList(),
+    /** Stash entries for the Changes tab. */
+    val stashes: List<GitStashEntry> = emptyList(),
     /** Most recent commit for the header card (null before the first commit). */
     val lastCommit: GitCommit? = null,
     /** `git diff --cached --numstat`, keyed by path. */
