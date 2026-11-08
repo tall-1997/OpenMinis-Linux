@@ -2031,6 +2031,16 @@
     <string name="model_group_detail_quota_period_placeholder">ウィンドウの長さ（時間）</string>
     <string name="model_group_detail_quota_window_reset_snackbar">クォータウィンドウをリセットしました。プライマリメンバーが再び応答します</string>
     <string name="model_group_detail_quota_window_remaining">このウィンドウの残り：%1$d回</string>
+    <!-- [T-cot-translate] Reasoning translation -->
+    <string name="cot_translate_show_translation">翻訳</string>
+    <string name="cot_translate_show_original">原文</string>
+    <string name="cot_translate_failed">翻訳を利用できません。タップして再試行</string>
+    <string name="cot_translate_settings_header">思考プロセスの翻訳</string>
+    <string name="cot_translate_settings_enabled">思考プロセスの翻訳を有効にする</string>
+    <string name="cot_translate_settings_provider">プロバイダー</string>
+    <string name="cot_translate_settings_language">翻訳先の言語</string>
+    <string name="cot_translate_privacy_notice">展開された思考内容は選択した翻訳サービスに送信されます。プライベートなコードや会話の詳細が含まれる場合があります。</string>
+    <string name="cot_translate_anonymous_notice">Bing と Google の匿名エンドポイントはログインや API キー不要ですが、リクエストを拒否または制限する場合があります。</string>
     <string name="git_panel_staged">ステージ済み</string>
     <string name="git_panel_changes_section">変更</string>
     <string name="git_panel_stats_files">%1$d 件のファイルを変更</string>

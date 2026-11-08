@@ -41,11 +41,12 @@ import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.BrightnessAuto
-import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
-import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.DarkMode
+import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.FormatSize
+import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Keyboard
@@ -371,8 +372,7 @@ fun AppearanceScreen(
             }
         }
 
-        // -- Keep Screen Awake --
-        // Holds FLAG_KEEP_SCREEN_ON while a session has an active task (mirrors iOS). Default off.
+        CotTranslationSection()
         SettingsSection(
             header = stringResource(R.string.appearance_section_keep_awake),
             footer = stringResource(R.string.appearance_keep_awake_footer),

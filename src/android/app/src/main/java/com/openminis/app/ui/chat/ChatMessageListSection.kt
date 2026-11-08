@@ -349,6 +349,8 @@ internal fun ChatFlatItemRow(
                                         block = item.block,
                                         isStreaming = item.messageIsStreaming,
                                         isLast = item.isLast,
+                                        llmProvider = viewModel.currentProvider,
+                                        llmModelName = viewModel.currentModel?.displayName ?: "",
                                     )
                                 }
                             }

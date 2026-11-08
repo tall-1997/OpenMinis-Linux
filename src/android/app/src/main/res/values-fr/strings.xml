@@ -2034,6 +2034,16 @@
     <string name="model_group_detail_quota_period_placeholder">Durée de la fenêtre (heures)</string>
     <string name="model_group_detail_quota_window_reset_snackbar">Fenêtre de quota réinitialisée — le membre principal répond à nouveau</string>
     <string name="model_group_detail_quota_window_remaining">Restants dans cette fenêtre : %1$d envois</string>
+    <!-- [T-cot-translate] Reasoning translation -->
+    <string name="cot_translate_show_translation">Traduire</string>
+    <string name="cot_translate_show_original">Original</string>
+    <string name="cot_translate_failed">Traduction indisponible – touchez pour réessayer</string>
+    <string name="cot_translate_settings_header">Traduction du raisonnement</string>
+    <string name="cot_translate_settings_enabled">Activer la traduction du raisonnement</string>
+    <string name="cot_translate_settings_provider">Fournisseur</string>
+    <string name="cot_translate_settings_language">Langue cible</string>
+    <string name="cot_translate_privacy_notice">Le raisonnement développé est envoyé au service de traduction sélectionné. Il peut contenir du code privé ou des détails de conversation.</string>
+    <string name="cot_translate_anonymous_notice">Bing et Google ne nécessitent ni connexion ni clé API. Leurs points de terminaison anonymes peuvent rejeter ou limiter les requêtes.</string>
     <string name="git_panel_staged">Indexé</string>
     <string name="git_panel_changes_section">Modifications</string>
     <string name="git_panel_stats_files">%1$d fichiers modifiés</string>

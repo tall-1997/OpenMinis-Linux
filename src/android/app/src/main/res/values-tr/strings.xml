@@ -2034,6 +2034,16 @@
     <string name="model_group_detail_quota_period_placeholder">Pencere süresi (saat)</string>
     <string name="model_group_detail_quota_window_reset_snackbar">Kota penceresi sıfırlandı — birincil üye yeniden hizmet veriyor</string>
     <string name="model_group_detail_quota_window_remaining">Bu pencerede kalan: %1$d gönderim</string>
+    <!-- [T-cot-translate] Reasoning translation -->
+    <string name="cot_translate_show_translation">Çevir</string>
+    <string name="cot_translate_show_original">Orijinal</string>
+    <string name="cot_translate_failed">Çeviri kullanılamıyor — yeniden denemek için dokunun</string>
+    <string name="cot_translate_settings_header">Akıl yürütme çevirisi</string>
+    <string name="cot_translate_settings_enabled">Akıl yürütme çevirisini etkinleştir</string>
+    <string name="cot_translate_settings_provider">Sağlayıcı</string>
+    <string name="cot_translate_settings_language">Hedef dil</string>
+    <string name="cot_translate_privacy_notice">Genişletilmiş akıl yürütme, seçilen çeviri hizmetine gönderilir. Özel kod veya konuşma ayrıntıları içerebilir.</string>
+    <string name="cot_translate_anonymous_notice">Bing ve Google çeviri için oturum açma veya API anahtarı gerektirmez. Anonim uç noktaları istekleri reddedebilir veya sınırlayabilir.</string>
     <string name="git_panel_staged">Hazırlandı</string>
     <string name="git_panel_changes_section">Değişiklikler</string>
     <string name="git_panel_stats_files">%1$d dosya değiştirildi</string>

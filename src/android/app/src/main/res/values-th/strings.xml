@@ -2034,6 +2034,16 @@
     <string name="model_group_detail_quota_period_placeholder">ความยาวหน้าต่าง (ชั่วโมง)</string>
     <string name="model_group_detail_quota_window_reset_snackbar">รีเซ็ตหน้าต่างโควตาแล้ว — สมาชิกหลักกลับมาให้บริการ</string>
     <string name="model_group_detail_quota_window_remaining">เหลือในหน้าต่างนี้: %1$d ครั้ง</string>
+    <!-- [T-cot-translate] Reasoning translation -->
+    <string name="cot_translate_show_translation">แปล</string>
+    <string name="cot_translate_show_original">ต้นฉบับ</string>
+    <string name="cot_translate_failed">ไม่สามารถแปลได้ — แตะเพื่อลองอีกครั้ง</string>
+    <string name="cot_translate_settings_header">การแปลกระบวนการคิด</string>
+    <string name="cot_translate_settings_enabled">เปิดใช้งานการแปลกระบวนการคิด</string>
+    <string name="cot_translate_settings_provider">ผู้ให้บริการ</string>
+    <string name="cot_translate_settings_language">ภาษาเป้าหมาย</string>
+    <string name="cot_translate_privacy_notice">กระบวนการคิดแบบขยายจะถูกส่งไปยังบริการแปลที่เลือก ซึ่งอาจมีโค้ดส่วนตัวหรือรายละเอียดบทสนทนา</string>
+    <string name="cot_translate_anonymous_notice">Bing และ Google ไม่ต้องเข้าสู่ระบบหรือคีย์ API ปลายทางแบบไม่ระบุตัวตนอาจปฏิเสธหรือจำกัดคำขอ</string>
     <string name="git_panel_staged">สเตจแล้ว</string>
     <string name="git_panel_changes_section">การเปลี่ยนแปลง</string>
     <string name="git_panel_stats_files">ไฟล์ที่เปลี่ยนแปลง %1$d รายการ</string>

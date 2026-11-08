@@ -2031,6 +2031,16 @@
     <string name="model_group_detail_quota_period_placeholder">창 길이(시간)</string>
     <string name="model_group_detail_quota_window_reset_snackbar">할당량 창이 재설정되어 기본 멤버가 다시 응답합니다</string>
     <string name="model_group_detail_quota_window_remaining">이번 창 남은 횟수: %1$d회</string>
+    <!-- [T-cot-translate] Reasoning translation -->
+    <string name="cot_translate_show_translation">번역</string>
+    <string name="cot_translate_show_original">원문</string>
+    <string name="cot_translate_failed">번역을 사용할 수 없습니다. 눌러서 다시 시도</string>
+    <string name="cot_translate_settings_header">추론 과정 번역</string>
+    <string name="cot_translate_settings_enabled">추론 과정 번역 사용</string>
+    <string name="cot_translate_settings_provider">제공자</string>
+    <string name="cot_translate_settings_language">대상 언어</string>
+    <string name="cot_translate_privacy_notice">펼쳐진 추론 내용은 선택한 번역 서비스로 전송됩니다. 비공개 코드나 대화 세부 정보가 포함될 수 있습니다.</string>
+    <string name="cot_translate_anonymous_notice">Bing과 Google의 익명 엔드포인트는 로그인이나 API 키가 필요 없지만 요청을 거부하거나 제한할 수 있습니다.</string>
     <string name="git_panel_staged">스테이징됨</string>
     <string name="git_panel_changes_section">변경 사항</string>
     <string name="git_panel_stats_files">파일 %1$d개 변경됨</string>

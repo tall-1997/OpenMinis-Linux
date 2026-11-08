@@ -2039,6 +2039,16 @@
     <string name="model_group_detail_quota_period_placeholder">Durasi jendela (jam)</string>
     <string name="model_group_detail_quota_window_reset_snackbar">Jendela kuota direset — anggota utama melayani lagi</string>
     <string name="model_group_detail_quota_window_remaining">Sisa di jendela ini: %1$d kiriman</string>
+    <!-- [T-cot-translate] Reasoning translation -->
+    <string name="cot_translate_show_translation">Terjemahkan</string>
+    <string name="cot_translate_show_original">Asli</string>
+    <string name="cot_translate_failed">Terjemahan tidak tersedia — ketuk untuk mencoba lagi</string>
+    <string name="cot_translate_settings_header">Terjemahan penalaran</string>
+    <string name="cot_translate_settings_enabled">Aktifkan terjemahan penalaran</string>
+    <string name="cot_translate_settings_provider">Penyedia</string>
+    <string name="cot_translate_settings_language">Bahasa target</string>
+    <string name="cot_translate_privacy_notice">Penalaran yang diperluas dikirim ke layanan terjemahan yang dipilih. Ini dapat berisi kode pribadi atau detail percakapan.</string>
+    <string name="cot_translate_anonymous_notice">Bing dan Google tidak memerlukan login atau kunci API. Endpoint anonim mereka dapat menolak atau membatasi permintaan.</string>
     <string name="git_panel_staged">Ter-staging</string>
     <string name="git_panel_changes_section">Perubahan</string>
     <string name="git_panel_stats_files">%1$d file diubah</string>

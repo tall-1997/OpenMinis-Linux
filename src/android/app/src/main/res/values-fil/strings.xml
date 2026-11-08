@@ -2034,6 +2034,16 @@
     <string name="model_group_detail_quota_period_placeholder">Haba ng window (oras)</string>
     <string name="model_group_detail_quota_window_reset_snackbar">Na-reset ang window ng quota — muling nagsisilbi ang pangunahing miyembro</string>
     <string name="model_group_detail_quota_window_remaining">Natitira sa window na ito: %1$d pagpapadala</string>
+    <!-- [T-cot-translate] Reasoning translation -->
+    <string name="cot_translate_show_translation">Isalin</string>
+    <string name="cot_translate_show_original">Orihinal</string>
+    <string name="cot_translate_failed">Hindi available ang pagsasalin — i-tap upang subukan muli</string>
+    <string name="cot_translate_settings_header">Pagsasalin ng pangangatwiran</string>
+    <string name="cot_translate_settings_enabled">Paganahin ang pagsasalin ng pangangatwiran</string>
+    <string name="cot_translate_settings_provider">Provider</string>
+    <string name="cot_translate_settings_language">Target na wika</string>
+    <string name="cot_translate_privacy_notice">Ang pinalawak na pangangatwiran ay ipinapadala sa napiling serbisyo ng pagsasalin. Maaari itong maglaman ng pribadong code o mga detalye ng pag-uusap.</string>
+    <string name="cot_translate_anonymous_notice">Hindi kailangan ng Bing at Google ng pag-login o API key. Maaaring tanggihan o limitahan ng kanilang mga anonymous na endpoint ang mga kahilingan.</string>
     <string name="git_panel_staged">Naka-stage</string>
     <string name="git_panel_changes_section">Mga pagbabago</string>
     <string name="git_panel_stats_files">%1$d na file ang nabago</string>

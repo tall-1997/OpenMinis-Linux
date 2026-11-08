@@ -2034,6 +2034,16 @@
     <string name="model_group_detail_quota_period_placeholder">Tempoh tetingkap (jam)</string>
     <string name="model_group_detail_quota_window_reset_snackbar">Tetingkap kuota ditetapkan semula — ahli utama berkhidmat semula</string>
     <string name="model_group_detail_quota_window_remaining">Baki dalam tetingkap ini: %1$d hantaran</string>
+    <!-- [T-cot-translate] Reasoning translation -->
+    <string name="cot_translate_show_translation">Terjemah</string>
+    <string name="cot_translate_show_original">Asal</string>
+    <string name="cot_translate_failed">Terjemahan tidak tersedia — ketik untuk cuba lagi</string>
+    <string name="cot_translate_settings_header">Terjemahan penaakulan</string>
+    <string name="cot_translate_settings_enabled">Dayakan terjemahan penaakulan</string>
+    <string name="cot_translate_settings_provider">Pembekal</string>
+    <string name="cot_translate_settings_language">Bahasa sasaran</string>
+    <string name="cot_translate_privacy_notice">Penaakulan yang diperluas dihantar ke perkhidmatan terjemahan yang dipilih. Ia mungkin mengandungi kod peribadi atau butiran perbualan.</string>
+    <string name="cot_translate_anonymous_notice">Bing dan Google tidak memerlukan log masuk atau kunci API. Titik akhir tanpa nama mereka mungkin menolak atau mengehadkan permintaan.</string>
     <string name="git_panel_staged">Dipentas</string>
     <string name="git_panel_changes_section">Perubahan</string>
     <string name="git_panel_stats_files">%1$d fail diubah</string>
