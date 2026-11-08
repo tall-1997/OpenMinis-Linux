@@ -23,6 +23,9 @@ class ReasoningTranslationController(
     private val scope: CoroutineScope,
     private val http: TranslationHttp,
     private val publish: (CotTranslationState) -> Unit,
+    /** [T-cot-translate-llm] LLM route: set when provider==LLM. Receives the
+     *  fragment text, returns the translation (or throws → Failed). */
+    private val llmTranslate: (suspend (String) -> String)? = null,
 ) {
     /** Display state consumed by the UI: spliced text + progress flags. */
     data class CotTranslationState(val text: String, val pending: Boolean, val failed: Boolean)
@@ -32,6 +35,11 @@ class ReasoningTranslationController(
     private var failed = false
     private val cache = HashMap<String, String>()
     private var job: Job? = null
+
+    /** [T-cot-translate-llm] Post-construction override for the LLM route —
+     *  the handle binds the freshest provider instance after the store hands
+     *  the controller back. Cleared when null (anonymous route). */
+    @Volatile var llmRouteOverride: (suspend (String) -> String)? = null
 
     /**
      * Adopt the current source text. Complete fragments that miss the cache
@@ -54,9 +62,20 @@ class ReasoningTranslationController(
             var current = next
             while (true) {
                 if (disposed) return@launch
-                val result = translateOnce(
-                    TranslationRequest(current.text, targetLanguage), provider, http,
-                )
+                val route = llmRouteOverride ?: llmTranslate
+                val result = if (provider == TranslationProvider.LLM && route != null) {
+                    try {
+                        TranslationResult.Ok(route(current.text))
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        TranslationResult.Failed(e.message ?: e.javaClass.simpleName)
+                    }
+                } else {
+                    translateOnce(
+                        TranslationRequest(current.text, targetLanguage), provider, http,
+                    )
+                }
                 if (disposed) return@launch
                 when (result) {
                     is TranslationResult.Ok -> {
@@ -135,9 +154,10 @@ object TranslationStore {
         scope: CoroutineScope,
         http: TranslationHttp,
         publish: (ReasoningTranslationController.CotTranslationState) -> Unit,
+        llmTranslate: (suspend (String) -> String)? = null,
     ): ReasoningTranslationController {
         controllers[blockKey]?.dispose()
-        val c = ReasoningTranslationController(blockKey, provider, targetLanguage, scope, http, publish)
+        val c = ReasoningTranslationController(blockKey, provider, targetLanguage, scope, http, publish, llmTranslate)
         controllers[blockKey] = c
         return c
     }

@@ -94,3 +94,78 @@ class CotTranslateTest {
         assertTrue(parsePayload("""[{"translations":[]}]""", TranslationProvider.BING) == null)
     }
 }
+
+
+class CotTranslateLlmRouteTest {
+    private class FakeHandle(
+        blockKey: String,
+        provider: TranslationProvider,
+        route: (suspend (String) -> String)?,
+    ) {
+        val controller = ReasoningTranslationController(
+            blockKey = blockKey,
+            provider = provider,
+            targetLanguage = "zh",
+            scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined),
+            http = { _, _, _, _ -> null },
+            publish = {},
+            llmTranslate = route,
+        )
+    }
+
+    @Test
+    fun `llm route translates complete fragments through the scripted route`() = kotlinx.coroutines.runBlocking {
+        val calls = mutableListOf<String>()
+        val handle = FakeHandle(
+            "blk1", TranslationProvider.LLM,
+            route = { text ->
+                calls += text
+                "译文(${text.take(5)})"
+            },
+        )
+        handle.controller.update("hello world\n\nsecond para", running = false)
+        kotlinx.coroutines.delay(200)
+        // Both fragments went through the LLM route (not the anonymous HTTP).
+        assertEquals(listOf("hello world", "second para"), calls)
+        assertTrue(TranslationStore.hasCached("blk1", "hello world"))
+    }
+
+    @Test
+    fun `llm route failure falls back to original text with failed flag`() = kotlinx.coroutines.runBlocking {
+        val handle = FakeHandle(
+            "blk2", TranslationProvider.LLM,
+            route = { _ -> throw IllegalStateException("quota exceeded") },
+        )
+        var last: ReasoningTranslationController.CotTranslationState? = null
+        // Rebuild with a publish capture.
+        val c = ReasoningTranslationController(
+            blockKey = "blk2", provider = TranslationProvider.LLM, targetLanguage = "zh",
+            scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined),
+            http = { _, _, _, _ -> null }, publish = { last = it },
+            llmTranslate = { throw IllegalStateException("quota exceeded") },
+        )
+        c.update("hello world", running = false)
+        kotlinx.coroutines.delay(200)
+        assertTrue(last!!.failed)
+        assertTrue("original preserved on failure", last!!.text.contains("hello world"))
+        assertEquals("no cache entry on failure", null, TranslationStore.cached("blk2", "hello world"))
+    }
+
+    @Test
+    fun `anonymous route is untouched when provider is not LLM`() = kotlinx.coroutines.runBlocking {
+        // Provider BING + route lambda set: the lambda must NOT be called.
+        var called = false
+        val c = ReasoningTranslationController(
+            blockKey = "blk3", provider = TranslationProvider.BING, targetLanguage = "zh",
+            scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined),
+            http = { _, _, _, _ -> org.json.JSONArray().put(org.json.JSONArray().put(org.json.JSONArray().put("anon-译"))).toString() },
+            publish = {},
+            llmTranslate = { called = true; "should-not-be-used" },
+        )
+        // translateOnce parses via parsePayload which expects the Bing OBJECT
+        // shape — feed the array to make http return a malformed body → Failed.
+        c.update("hello", running = false)
+        kotlinx.coroutines.delay(200)
+        assertFalse("route lambda must not run for anonymous providers", called)
+    }
+}

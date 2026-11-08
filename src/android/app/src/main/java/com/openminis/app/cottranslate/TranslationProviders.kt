@@ -7,8 +7,9 @@ package com.openminis.app.cottranslate
  * request/response formats are public web protocols, no credentials involved.
  */
 
-/** Translation provider choices; [BING] is the default (reachable without a proxy). */
-enum class TranslationProvider { BING, GOOGLE }
+/** Translation provider choices; [BING] is the default (reachable without a proxy).
+ *  [LLM] routes through an already-configured model instance (second-phase route). */
+enum class TranslationProvider { BING, GOOGLE, LLM }
 
 /** One resolved translation job: source text + target language. */
 data class TranslationRequest(val text: String, val targetLanguage: String)
@@ -52,7 +53,11 @@ fun translateOnce(
 ): TranslationResult {
     val target = normalizedLanguage(request.targetLanguage, provider)
     if (target.isEmpty()) return TranslationResult.Failed("empty target language")
+    if (provider == TranslationProvider.LLM) {
+        return TranslationResult.Failed("LLM route requires llmTranslate — internal routing error")
+    }
     val (url, body, contentType) = when (provider) {
+        TranslationProvider.LLM -> throw IllegalStateException("LLM route requires llmTranslate")
         TranslationProvider.GOOGLE -> Triple(
             "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=$target&dt=t",
             listOf("q" to request.text).joinToString("&") { (k, v) -> "$k=${java.net.URLEncoder.encode(v, Charsets.UTF_8)}" },
@@ -78,6 +83,7 @@ fun translateOnce(
 /** Parse the provider-specific response shape; null = malformed. */
 internal fun parsePayload(raw: String, provider: TranslationProvider): String? = try {
     when (provider) {
+        TranslationProvider.LLM -> null
         TranslationProvider.BING -> {
             // Microsoft Edge translate: [{"detectedLanguage":…,"translations":
             // [{"text":"…","to":"…"}]}] — the outer ARRAY wraps per-input objects.

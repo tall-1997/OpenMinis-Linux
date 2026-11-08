@@ -45,11 +45,10 @@ internal fun CotTranslationSection() {
             title = stringResource(R.string.cot_translate_settings_provider),
             value = provider.name.lowercase().replaceFirstChar { it.uppercase() },
             onClick = {
-                val next = if (provider == com.openminis.app.cottranslate.TranslationProvider.BING) {
-                    com.openminis.app.cottranslate.TranslationProvider.GOOGLE
-                } else {
-                    com.openminis.app.cottranslate.TranslationProvider.BING
-                }
+                // BING → GOOGLE → LLM → BING. The LLM route uses the chat's
+                // currently configured provider instance (no extra setup).
+                val cycle = com.openminis.app.cottranslate.TranslationProvider.entries
+                val next = cycle[(cycle.indexOf(provider) + 1).mod(cycle.size)]
                 provider = next
                 prefs.setProvider(context, next)
             },

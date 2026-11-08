@@ -1,5 +1,7 @@
 package com.openminis.app.cottranslate
 
+import com.openminis.app.provider.LLMProvider
+
 import kotlinx.coroutines.CoroutineScope
 
 /**
@@ -17,6 +19,9 @@ class ThinkingTranslationHandle(
     val targetLanguage: String,
     val scope: CoroutineScope,
     private val http: TranslationHttp,
+    /** [T-cot-translate-llm] Provider for the LLM route; null = anonymous only. */
+    private val llmProvider: LLMProvider? = null,
+    private val llmModelName: String = "",
 ) {
     var showTranslated: Boolean = false
         private set
@@ -33,9 +38,26 @@ class ThinkingTranslationHandle(
         showTranslated = !showTranslated
         if (showTranslated) {
             CotTranslationPrefs.setPrivacyAcknowledged(context)
+            val llmRoute: (suspend (String) -> String)? =
+                if (provider == TranslationProvider.LLM && llmProvider != null) {
+                    val lp = llmProvider
+                    val mn = llmModelName
+                    // [T-cot-translate-llm] Bound per-toggle so the freshest
+                    // provider instance is used (the chat VM rebuilds on key
+                    // rotation). Throw on failure — matches the controller's
+                    // route contract (it converts to Failed).
+                    { fragment ->
+                        when (val r = LlmTranslationRoute.translate(lp, fragment, targetLanguage, mn)) {
+                            is TranslationResult.Ok -> r.text
+                            is TranslationResult.Failed -> throw IllegalStateException(r.reason)
+                        }
+                    }
+                } else null
             controller = TranslationStore.controllerFor(
                 blockKey, provider, targetLanguage, scope, http,
-            ) { state -> onState(state) }
+                publish = { state -> onState(state) },
+                llmTranslate = llmRoute,
+            )
             controller?.update(text, running)
         } else {
             TranslationStore.dispose(blockKey)

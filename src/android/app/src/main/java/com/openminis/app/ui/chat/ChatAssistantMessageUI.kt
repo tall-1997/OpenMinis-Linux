@@ -603,7 +603,15 @@ internal fun ToolCallPill(
 // ─── Thinking Block (iOS: collapsible "Deep Thinking" section, blue tint) ────
 
 @Composable
-internal fun ThinkingBlock(block: AssistantBlock, isStreaming: Boolean, isLast: Boolean = true) {
+internal fun ThinkingBlock(
+    block: AssistantBlock,
+    isStreaming: Boolean,
+    isLast: Boolean = true,
+    /** [T-cot-translate-llm] The chat's live provider for the LLM translate
+     *  route; null (sub-agent bar, unavailable VM) = anonymous routes only. */
+    llmProvider: com.openminis.app.provider.LLMProvider? = null,
+    llmModelName: String = "",
+) {
     // Per-block expand state, keyed by block.id so the user's manual toggle on
     // an earlier (finished) thinking block survives recomposition while a
     // later block is still streaming. The previous LaunchedEffect snapped
@@ -643,20 +651,17 @@ internal fun ThinkingBlock(block: AssistantBlock, isStreaming: Boolean, isLast: 
     val thinkingHardCap = 100_000
     val overHardCap = charCount > thinkingHardCap
     var showFullContent by remember(block.id) { mutableStateOf(false) }
-    // [T-cot-translate] Reasoning-translation UI state: toggle + published text.
     val transScope = rememberCoroutineScope()
     val transContext = LocalContext.current
     val transEnabled = remember { CotTranslationPrefs.enabled(transContext) }
     var showTranslated by remember(block.id) { mutableStateOf(false) }
-    var transState by remember(block.id) {
-        mutableStateOf<ReasoningTranslationController.CotTranslationState?>(null)
-    }
-    val blockKey = "${block.id}:${block.content.hashCode()}"
+    var transState by remember(block.id) { mutableStateOf<ReasoningTranslationController.CotTranslationState?>(null) }
+    val blockKey = block.id + ":" + block.content.hashCode()
     val transHandle = remember(blockKey) {
         if (!transEnabled) null else ThinkingTranslationHandle(
             blockKey, true, CotTranslationPrefs.provider(transContext),
             CotTranslationPrefs.targetLanguage(transContext), transScope,
-            OkHttpTranslationHttp,
+            OkHttpTranslationHttp, llmProvider, llmModelName,
         ).onState { s -> transState = s }
     }
     DisposableEffect(blockKey) { onDispose { transHandle?.dispose() } }
@@ -713,10 +718,7 @@ internal fun ThinkingBlock(block: AssistantBlock, isStreaming: Boolean, isLast: 
                 color = thinkingBlue,
             )
             Spacer(modifier = Modifier.weight(1f))
-            // [T-cot-translate] Explicit per-block "译" toggle — the ONLY
-            // trigger for translation (the streaming block is expanded by
-            // default; expansion itself never sends anything). No-op when
-            // the feature is disabled in Settings.
+            // [T-cot-translate] Explicit per-block trigger — expansion never sends.
             if (transEnabled && !overHardCap && block.content.isNotBlank()) {
                 Text(
                     text = stringResource(
@@ -790,9 +792,7 @@ internal fun ThinkingBlock(block: AssistantBlock, isStreaming: Boolean, isLast: 
             val effectiveWindow = if (showFullThinking) thinkingHardCap else 8000 // 8k tail window
             val isTruncated = renderedContent.length > effectiveWindow
             val displayContent = visibleThinkingTail(renderedContent, effectiveWindow)
-            // [T-cot-translate] Feed the growing source while streaming; the
-            // controller only translates COMPLETE paragraphs.
-            if (showTranslated) {
+            if (showTranslated) { // [T-cot-translate] feed the growing source
                 LaunchedEffect(block.content.length) {
                     transHandle?.update(block.content, isStreaming)
                 }
