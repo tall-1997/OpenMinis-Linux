@@ -2038,4 +2038,14 @@
     <string name="model_group_detail_quota_period_placeholder">Durata ferestrei (ore)</string>
     <string name="model_group_detail_quota_window_reset_snackbar">Fereastra de cotă a fost resetată — membrul principal deservește din nou</string>
     <string name="model_group_detail_quota_window_remaining">Rămase în această fereastră: %1$d trimiteri</string>
+    <!-- [T-cot-translate] Reasoning translation -->
+    <string name="cot_translate_show_translation">Tradu</string>
+    <string name="cot_translate_show_original">Original</string>
+    <string name="cot_translate_failed">Traducere indisponibilă — atingeți pentru a reîncerca</string>
+    <string name="cot_translate_settings_header">Traducerea raționamentului</string>
+    <string name="cot_translate_settings_enabled">Activează traducerea raționamentului</string>
+    <string name="cot_translate_settings_provider">Furnizor</string>
+    <string name="cot_translate_settings_language">Limbă țintă</string>
+    <string name="cot_translate_privacy_notice">Raționamentul extins este trimis serviciului de traducere selectat. Poate conține cod privat sau detalii ale conversației.</string>
+    <string name="cot_translate_anonymous_notice">Bing și Google nu necesită autentificare sau cheie API. Punctele lor finale anonime pot respinge sau limita cererile.</string>
 </resources>

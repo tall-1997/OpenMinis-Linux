@@ -54,4 +54,14 @@
     <string name="add_provider_oauth_desc_xai">Inicia sesión con xAI (requiere SuperGrok o X Premium+)</string>
     <string name="add_provider_oauth_desc_openrouter">Inicia sesión con OpenRouter</string>
     <string name="add_provider_oauth_desc_kimicode">Inicia sesión con tu cuenta de Kimi (Coding Plan)</string>
+    <!-- [T-cot-translate] Reasoning translation -->
+    <string name="cot_translate_show_translation">Traducir</string>
+    <string name="cot_translate_show_original">Original</string>
+    <string name="cot_translate_failed">Traducción no disponible: toca para reintentar</string>
+    <string name="cot_translate_settings_header">Traducción del razonamiento</string>
+    <string name="cot_translate_settings_enabled">Activar traducción del razonamiento</string>
+    <string name="cot_translate_settings_provider">Proveedor</string>
+    <string name="cot_translate_settings_language">Idioma de destino</string>
+    <string name="cot_translate_privacy_notice">El razonamiento expandido se envía al servicio de traducción seleccionado. Puede contener código privado o detalles de la conversación.</string>
+    <string name="cot_translate_anonymous_notice">Bing y Google no requieren inicio de sesión ni clave de API. Sus endpoints anónimos pueden rechazar o limitar solicitudes.</string>
 </resources>

@@ -1,5 +1,7 @@
 package com.openminis.app.cottranslate
 
+import java.util.Locale
+
 /**
  * [T-cot-translate] Anonymous machine-translation providers for displayed
  * reasoning. Protocol shape mirrors the public Bing Edge / Google translate
@@ -27,6 +29,14 @@ fun interface TranslationHttp {
     fun post(url: String, body: String, contentType: String, timeoutMs: Int): String?
 }
 
+/**
+ * [T-cot-translate-auto] Resolve "auto" to a concrete language tag at
+ * request time. Pure so it is unit-testable with an explicit locale; the
+ * handle passes `Locale.getDefault().language` (e.g. "zh" on a zh-CN device).
+ */
+internal fun resolveTargetLanguage(tag: String, localeLanguage: String): String =
+    if (tag.trim().lowercase() == "auto") localeLanguage else tag
+
 /** Target-language tags normalized per provider (Google/Bing spellings differ). */
 internal fun normalizedLanguage(tag: String, provider: TranslationProvider): String {
     val lower = tag.lowercase().trim()
@@ -50,8 +60,11 @@ fun translateOnce(
     provider: TranslationProvider,
     http: TranslationHttp,
     timeoutMs: Int = 10_000,
+    autoLanguage: String = Locale.getDefault().language,
 ): TranslationResult {
-    val target = normalizedLanguage(request.targetLanguage, provider)
+    val target = normalizedLanguage(
+        resolveTargetLanguage(request.targetLanguage, autoLanguage), provider,
+    )
     if (target.isEmpty()) return TranslationResult.Failed("empty target language")
     if (provider == TranslationProvider.LLM) {
         return TranslationResult.Failed("LLM route requires llmTranslate — internal routing error")
@@ -97,13 +110,17 @@ internal fun parsePayload(raw: String, provider: TranslationProvider): String? =
             }.ifEmpty { null }
         }
         TranslationProvider.GOOGLE -> {
-            // Google translate_a/single: [[["translated","source",...],...], ...]
+            // Google translate_a/single returns one top-level array PER
+            // sentence group for multi-sentence input — concatenate every
+            // group so nothing after the first batch is dropped.
             val outer = org.json.JSONArray(raw)
-            val first = outer.optJSONArray(0) ?: return null
             buildString {
-                for (i in 0 until first.length()) {
-                    val seg = first.optJSONArray(i) ?: return null
-                    append(seg.optString(0))
+                for (g in 0 until outer.length()) {
+                    val group = outer.optJSONArray(g) ?: continue
+                    for (i in 0 until group.length()) {
+                        val seg = group.optJSONArray(i) ?: continue
+                        append(seg.optString(0))
+                    }
                 }
             }.ifEmpty { null }
         }

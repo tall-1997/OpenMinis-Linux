@@ -20,11 +20,12 @@ object CotTranslationPrefs {
     }
 
     fun provider(context: android.content.Context): TranslationProvider =
-        if (prefs(context).getString(KEY_PROVIDER, null) == "GOOGLE") {
-            TranslationProvider.GOOGLE
-        } else {
-            TranslationProvider.BING
-        }
+        providerFromStored(prefs(context).getString(KEY_PROVIDER, null))
+
+    /** Pure readback — "LLM"/"GOOGLE"/"BING" → enum; unknown/missing → BING. */
+    internal fun providerFromStored(stored: String?): TranslationProvider =
+        TranslationProvider.entries.firstOrNull { it.name == stored }
+            ?: TranslationProvider.BING
 
     fun setProvider(context: android.content.Context, value: TranslationProvider) {
         prefs(context).edit().putString(KEY_PROVIDER, value.name).apply()

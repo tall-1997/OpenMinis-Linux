@@ -79,10 +79,10 @@
          remained. -->
     <string name="provider_share_no_credentials">Nothing to share: credentials are excluded from shared exports. Use the encrypted backup to move keys.</string>
     <!-- [T-cot-translate] Reasoning-translation UI strings. -->
-    <string name="cot_translate_show_translation">译</string>
-    <string name="cot_translate_show_original">原文</string>
-    <string name="cot_translate_failed">翻译暂不可用，点此重试</string>
-    <string name="cot_translate_settings_header">思考过程翻译</string>
+    <string name="cot_translate_show_translation">Translate</string>
+    <string name="cot_translate_show_original">Original</string>
+    <string name="cot_translate_failed">Translation unavailable — tap to retry</string>
+    <string name="cot_translate_settings_header">Reasoning translation</string>
     <string name="cot_translate_settings_enabled">Enable reasoning translation</string>
     <string name="cot_translate_settings_provider">Provider</string>
     <string name="cot_translate_settings_language">Target language</string>

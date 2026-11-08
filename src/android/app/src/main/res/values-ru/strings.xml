@@ -2042,4 +2042,14 @@
     <string name="model_group_detail_quota_period_placeholder">Длина окна (часы)</string>
     <string name="model_group_detail_quota_window_reset_snackbar">Окно квоты сброшено — основной участник снова отвечает</string>
     <string name="model_group_detail_quota_window_remaining">Осталось в этом окне: %1$d</string>
+    <!-- [T-cot-translate] Reasoning translation -->
+    <string name="cot_translate_show_translation">Перевести</string>
+    <string name="cot_translate_show_original">Оригинал</string>
+    <string name="cot_translate_failed">Перевод недоступен — нажмите, чтобы повторить</string>
+    <string name="cot_translate_settings_header">Перевод рассуждений</string>
+    <string name="cot_translate_settings_enabled">Включить перевод рассуждений</string>
+    <string name="cot_translate_settings_provider">Провайдер</string>
+    <string name="cot_translate_settings_language">Целевой язык</string>
+    <string name="cot_translate_privacy_notice">Развёрнутые рассуждения отправляются в выбранный сервис перевода. Они могут содержать частный код или детали разговора.</string>
+    <string name="cot_translate_anonymous_notice">Bing и Google не требуют входа или ключа API. Их анонимные endpoints могут отклонять или ограничивать запросы.</string>
 </resources>

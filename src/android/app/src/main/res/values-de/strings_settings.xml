@@ -54,4 +54,14 @@
     <string name="add_provider_oauth_desc_xai">Mit xAI anmelden (erfordert SuperGrok oder X Premium+)</string>
     <string name="add_provider_oauth_desc_openrouter">Mit OpenRouter anmelden</string>
     <string name="add_provider_oauth_desc_kimicode">Mit Ihrem Kimi-Konto anmelden (Coding Plan)</string>
+    <!-- [T-cot-translate] Reasoning translation -->
+    <string name="cot_translate_show_translation">Übersetzen</string>
+    <string name="cot_translate_show_original">Original</string>
+    <string name="cot_translate_failed">Übersetzung nicht verfügbar – zum Wiederholen tippen</string>
+    <string name="cot_translate_settings_header">Übersetzung des Denkprozesses</string>
+    <string name="cot_translate_settings_enabled">Denkprozess-Übersetzung aktivieren</string>
+    <string name="cot_translate_settings_provider">Anbieter</string>
+    <string name="cot_translate_settings_language">Zielsprache</string>
+    <string name="cot_translate_privacy_notice">Erweiterte Gedankengänge werden an den gewählten Übersetzungsdienst gesendet. Sie können privaten Code oder Gesprächsdetails enthalten.</string>
+    <string name="cot_translate_anonymous_notice">Bing und Google benötigen keinen Übersetzungs-Login oder API-Schlüssel. Ihre anonymen Endpunkte können Anfragen ablehnen oder einschränken.</string>
 </resources>

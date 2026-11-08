@@ -2613,4 +2613,14 @@
     <string name="model_group_detail_quota_period_placeholder">窗口时长（小时）</string>
     <string name="model_group_detail_quota_window_reset_snackbar">配额窗口已重置，主成员重新开始服务</string>
     <string name="model_group_detail_quota_window_remaining">本窗口剩余：%1$d 次</string>
+    <!-- [T-cot-translate] Reasoning translation -->
+    <string name="cot_translate_show_translation">译</string>
+    <string name="cot_translate_show_original">原文</string>
+    <string name="cot_translate_failed">翻译暂不可用，点此重试</string>
+    <string name="cot_translate_settings_header">思考过程翻译</string>
+    <string name="cot_translate_settings_enabled">开启思考过程翻译</string>
+    <string name="cot_translate_settings_provider">翻译服务</string>
+    <string name="cot_translate_settings_language">目标语言</string>
+    <string name="cot_translate_privacy_notice">展开的思考内容将发送至所选翻译服务，其中可能包含私有代码或对话细节。</string>
+    <string name="cot_translate_anonymous_notice">Bing 与 Google 匿名接口无需登录或 API Key，但可能拒绝或限制请求。</string>
 </resources>

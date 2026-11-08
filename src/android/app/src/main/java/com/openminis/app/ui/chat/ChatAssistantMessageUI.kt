@@ -656,15 +656,13 @@ internal fun ThinkingBlock(
     val transEnabled = remember { CotTranslationPrefs.enabled(transContext) }
     var showTranslated by remember(block.id) { mutableStateOf(false) }
     var transState by remember(block.id) { mutableStateOf<ReasoningTranslationController.CotTranslationState?>(null) }
-    val blockKey = block.id + ":" + block.content.hashCode()
-    val transHandle = remember(blockKey) {
-        if (!transEnabled) null else ThinkingTranslationHandle(
-            blockKey, true, CotTranslationPrefs.provider(transContext),
-            CotTranslationPrefs.targetLanguage(transContext), transScope,
-            OkHttpTranslationHttp, llmProvider, llmModelName,
+    // [T-cot-translate] Stable key — a content-hash suffix rebuilt the handle on every chunk and killed streaming translation.
+    val transHandle = remember(block.id) {
+        ThinkingTranslationHandle(
+            block.id, transScope, OkHttpTranslationHttp,
         ).onState { s -> transState = s }
     }
-    DisposableEffect(blockKey) { onDispose { transHandle?.dispose() } }
+    DisposableEffect(block.id) { onDispose { transHandle.dispose() } }
 
     Column(
         modifier = Modifier
@@ -729,8 +727,7 @@ internal fun ThinkingBlock(
                     fontWeight = FontWeight.Medium,
                     color = if (showTranslated) thinkingBlue else thinkingBlue.copy(alpha = 0.75f),
                     modifier = Modifier.clickable {
-                        transHandle?.toggle(transContext, block.content, isStreaming)
-                        showTranslated = !showTranslated
+                        showTranslated = transHandle.toggle(transContext, block.content, isStreaming, llmProvider, llmModelName)
                     },
                 )
                 Spacer(modifier = Modifier.width(6.dp))
@@ -793,8 +790,10 @@ internal fun ThinkingBlock(
             val isTruncated = renderedContent.length > effectiveWindow
             val displayContent = visibleThinkingTail(renderedContent, effectiveWindow)
             if (showTranslated) { // [T-cot-translate] feed the growing source
-                LaunchedEffect(block.content.length) {
-                    transHandle?.update(block.content, isStreaming)
+                // Key on the streaming flag too: the final running=false
+                // update (tail completes) must fire when the stream ends.
+                LaunchedEffect(block.content.length, isStreaming) {
+                    transHandle.update(block.content, isStreaming)
                 }
             }
             ThinkingAutoFollow(
@@ -832,7 +831,7 @@ internal fun ThinkingBlock(
                                 color = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
                                 modifier = Modifier
                                     .clickable {
-                                        transHandle?.retry(block.content, isStreaming)
+                                        transHandle.retry(block.content, isStreaming)
                                     }
                                     .padding(vertical = 2.dp),
                             )

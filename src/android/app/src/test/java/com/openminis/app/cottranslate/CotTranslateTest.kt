@@ -93,6 +93,53 @@ class CotTranslateTest {
         assertTrue(parsePayload("""{"unexpected":1}""", TranslationProvider.BING) == null)
         assertTrue(parsePayload("""[{"translations":[]}]""", TranslationProvider.BING) == null)
     }
+
+    // ── auto target resolution ───────────────────────────────────────────
+
+    @Test
+    fun `auto target resolves to the device locale language`() {
+        assertEquals("zh", resolveTargetLanguage("auto", "zh"))
+        assertEquals("en", resolveTargetLanguage("auto", "en"))
+        assertEquals("zh", resolveTargetLanguage("zh", "en"))
+        assertEquals("JA", resolveTargetLanguage("JA", "en"))
+    }
+
+    @Test
+    fun `translateOnce resolves auto instead of failing on empty target`() {
+        // Default targetLanguage IS "auto" — the anonymous routes must
+        // resolve it at request time, or every default-settings attempt
+        // fails instantly.
+        var seenUrl = ""
+        val http = TranslationHttp { url, _, _, _ ->
+            seenUrl = url
+            """[{"translations":[{"text":"TR","to":"zh-Hans"}]}]"""
+        }
+        val result = translateOnce(
+            TranslationRequest("hello", "auto"), TranslationProvider.BING, http,
+            autoLanguage = "zh",
+        )
+        assertEquals("TR", (result as TranslationResult.Ok).text)
+        assertTrue("resolved tag must reach the URL", seenUrl.contains("to=zh-Hans"))
+    }
+
+    // ── provider prefs readback ──────────────────────────────────────────
+
+    @Test
+    fun `stored provider names round-trip including llm`() {
+        assertEquals(TranslationProvider.BING, CotTranslationPrefs.providerFromStored(null))
+        assertEquals(TranslationProvider.BING, CotTranslationPrefs.providerFromStored("BING"))
+        assertEquals(TranslationProvider.GOOGLE, CotTranslationPrefs.providerFromStored("GOOGLE"))
+        assertEquals(TranslationProvider.LLM, CotTranslationPrefs.providerFromStored("LLM"))
+        assertEquals(TranslationProvider.BING, CotTranslationPrefs.providerFromStored("garbage"))
+    }
+
+    // ── google multi-group payload ───────────────────────────────────────
+
+    @Test
+    fun `google payload with multiple sentence groups concatenates`() {
+        val raw = """[[["first","a"]],null,"en",[[" second","b"]],null,"en"]"""
+        assertEquals("first second", parsePayload(raw, TranslationProvider.GOOGLE))
+    }
 }
 
 
@@ -167,5 +214,82 @@ class CotTranslateLlmRouteTest {
         c.update("hello", running = false)
         kotlinx.coroutines.delay(200)
         assertFalse("route lambda must not run for anonymous providers", called)
+    }
+
+    // ── queue / failure semantics (T-cot-translate-queue) ────────────────
+
+    @Test
+    fun `fragments arriving while pending are translated by the running job`() = kotlinx.coroutines.runBlocking {
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val calls = mutableListOf<String>()
+        val c = ReasoningTranslationController(
+            blockKey = "blk-queue", provider = TranslationProvider.LLM, targetLanguage = "zh",
+            scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined),
+            http = { _, _, _, _ -> null }, publish = {},
+            llmTranslate = { text ->
+                gate.await()
+                calls += text
+                "TR(${text.take(4)})"
+            },
+        )
+        // First update starts a job that suspends inside the route (gate).
+        c.update("first para\n\nsecond para", running = true)
+        // A new paragraph arrives while pending — it must be picked up by
+        // the SAME job from the newest split, not dropped.
+        c.update("first para\n\nsecond para\n\nthird para", running = false)
+        gate.complete(Unit)
+        kotlinx.coroutines.delay(300)
+        assertEquals(listOf("first para", "second para", "third para"), calls)
+        assertTrue(TranslationStore.hasCached("blk-queue", "third para"))
+    }
+
+    @Test
+    fun `failure publishes honest state and blocks new work until retry`() = kotlinx.coroutines.runBlocking {
+        var attempts = 0
+        var last: ReasoningTranslationController.CotTranslationState? = null
+        val c = ReasoningTranslationController(
+            blockKey = "blk-fail", provider = TranslationProvider.LLM, targetLanguage = "zh",
+            scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined),
+            http = { _, _, _, _ -> null }, publish = { last = it },
+            llmTranslate = {
+                attempts++
+                throw IllegalStateException("boom")
+            },
+        )
+        c.update("a\n\nb", running = false)
+        kotlinx.coroutines.delay(100)
+        assertTrue(last!!.failed)
+        assertFalse("pending must be honest after failure", last!!.pending)
+        assertEquals(1, attempts)
+        // More content while failed: display tracks it, no auto-retry storm.
+        c.update("a\n\nb\n\nc", running = false)
+        kotlinx.coroutines.delay(100)
+        assertEquals(1, attempts)
+        // Explicit retry resumes the pipeline.
+        c.retry("a\n\nb\n\nc", running = false)
+        kotlinx.coroutines.delay(100)
+        assertEquals(2, attempts)
+    }
+
+    @Test
+    fun `stream end completes the tail and translates it`() = kotlinx.coroutines.runBlocking {
+        val calls = mutableListOf<String>()
+        val c = ReasoningTranslationController(
+            blockKey = "blk-tail", provider = TranslationProvider.LLM, targetLanguage = "zh",
+            scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined),
+            http = { _, _, _, _ -> null }, publish = {},
+            llmTranslate = { text ->
+                calls += text
+                "TR(${text.take(4)})"
+            },
+        )
+        // While streaming, only the first paragraph is complete.
+        c.update("done para\n\ntail typing", running = true)
+        // The stream ends without a length change; running=false completes
+        // the tail, which must now go through the route.
+        c.update("done para\n\ntail typing", running = false)
+        kotlinx.coroutines.delay(200)
+        assertEquals(listOf("done para", "tail typing"), calls)
+        assertTrue(TranslationStore.hasCached("blk-tail", "tail typing"))
     }
 }

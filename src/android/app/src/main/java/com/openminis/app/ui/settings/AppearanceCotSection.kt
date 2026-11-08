@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalContext
 import com.openminis.app.R
+import com.openminis.app.cottranslate.TranslationProvider
 import com.openminis.app.ui.theme.IosGreen
 
 /**
@@ -26,10 +27,17 @@ internal fun CotTranslationSection() {
     var enabled by remember { mutableStateOf(prefs.enabled(context)) }
     var provider by remember { mutableStateOf(prefs.provider(context)) }
     var language by remember { mutableStateOf(prefs.targetLanguage(context)) }
+    // [T-cot-translate-settings] The anonymous-endpoint notice only applies
+    // to the web routes; the LLM route stays on the user's own provider.
+    val footer = stringResource(R.string.cot_translate_privacy_notice) +
+        if (provider == TranslationProvider.LLM) {
+            ""
+        } else {
+            " " + stringResource(R.string.cot_translate_anonymous_notice)
+        }
     SettingsSection(
         header = stringResource(R.string.cot_translate_settings_header),
-        footer = stringResource(R.string.cot_translate_privacy_notice) + " " +
-            stringResource(R.string.cot_translate_anonymous_notice),
+        footer = footer,
     ) {
         SettingsSwitchRow(
             icon = Icons.Outlined.Translate,
@@ -43,10 +51,11 @@ internal fun CotTranslationSection() {
         )
         SettingsValueRow(
             title = stringResource(R.string.cot_translate_settings_provider),
-            value = provider.name.lowercase().replaceFirstChar { it.uppercase() },
+            value = providerDisplayName(provider),
             onClick = {
                 // BING → GOOGLE → LLM → BING. The LLM route uses the chat's
-                // currently configured provider instance (no extra setup).
+                // currently configured provider instance (no extra setup);
+                // blocks without one degrade to the anonymous Bing route.
                 val cycle = com.openminis.app.cottranslate.TranslationProvider.entries
                 val next = cycle[(cycle.indexOf(provider) + 1).mod(cycle.size)]
                 provider = next
@@ -55,7 +64,7 @@ internal fun CotTranslationSection() {
         )
         SettingsValueRow(
             title = stringResource(R.string.cot_translate_settings_language),
-            value = language,
+            value = languageDisplayName(language),
             onClick = {
                 // Cycle common targets; "auto" follows the app locale.
                 val cycle = listOf("auto", "zh", "en", "ja")
@@ -66,4 +75,20 @@ internal fun CotTranslationSection() {
             showDivider = false,
         )
     }
+}
+
+/** Display names for the provider row (raw enum names read as "Llm"). */
+private fun providerDisplayName(provider: TranslationProvider): String = when (provider) {
+    TranslationProvider.BING -> "Bing"
+    TranslationProvider.GOOGLE -> "Google"
+    TranslationProvider.LLM -> "LLM"
+}
+
+/** Friendly target-language labels; "auto" reads raw otherwise. */
+private fun languageDisplayName(tag: String): String = when (tag) {
+    "auto" -> "Auto"
+    "zh" -> "Chinese"
+    "en" -> "English"
+    "ja" -> "Japanese"
+    else -> tag
 }

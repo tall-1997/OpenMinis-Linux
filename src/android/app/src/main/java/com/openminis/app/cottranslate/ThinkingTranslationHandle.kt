@@ -1,7 +1,9 @@
 package com.openminis.app.cottranslate
 
+import android.content.Context
+import com.openminis.app.logging.AppLogger
 import com.openminis.app.provider.LLMProvider
-
+import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
 
 /**
@@ -9,19 +11,18 @@ import kotlinx.coroutines.CoroutineScope
  *
  * Holds the [ReasoningTranslationController] for one block (process-level, via
  * [TranslationStore]) plus the local display toggle. The caller supplies the
- * block key (block.id + content hash), the source text, and a publish lambda
- * that feeds the Compose state.
+ * stable block key (block id), the source text, and a publish lambda that
+ * feeds the Compose state.
+ *
+ * [T-cot-translate-fresh] Every toggle re-reads the live preferences and
+ * accepts the freshest provider instance from the UI, so provider / language
+ * changes and chat-VM rebuilds (key rotation) apply on the next tap without
+ * waiting for the handle to be recreated.
  */
 class ThinkingTranslationHandle(
     val blockKey: String,
-    val enabled: Boolean,
-    val provider: TranslationProvider,
-    val targetLanguage: String,
     val scope: CoroutineScope,
     private val http: TranslationHttp,
-    /** [T-cot-translate-llm] Provider for the LLM route; null = anonymous only. */
-    private val llmProvider: LLMProvider? = null,
-    private val llmModelName: String = "",
 ) {
     var showTranslated: Boolean = false
         private set
@@ -31,16 +32,38 @@ class ThinkingTranslationHandle(
     /**
      * User tapped the "译" toggle. Starts (or restarts, after a provider or
      * language change) the translation pipeline for this block's CURRENT text.
-     * No-op when the feature is disabled.
+     * Returns the new display state so the UI never desyncs; false when the
+     * feature is disabled (no state change).
      */
-    fun toggle(context: android.content.Context, text: String, running: Boolean) {
-        if (!enabled) return
+    fun toggle(
+        context: Context,
+        text: String,
+        running: Boolean,
+        llmProvider: LLMProvider?,
+        llmModelName: String,
+    ): Boolean {
+        if (!CotTranslationPrefs.enabled(context)) return false
         showTranslated = !showTranslated
         if (showTranslated) {
             CotTranslationPrefs.setPrivacyAcknowledged(context)
-            val llmRoute: (suspend (String) -> String)? =
-                if (provider == TranslationProvider.LLM && llmProvider != null) {
-                    val lp = llmProvider
+            val provider = CotTranslationPrefs.provider(context)
+            // [T-cot-translate-llm-fallback] LLM without a live provider
+            // instance (sub-agent bar, free lane) degrades to the anonymous
+            // Bing route instead of failing every fragment with an internal
+            // routing error.
+            val useLlm = provider == TranslationProvider.LLM && llmProvider != null
+            val effectiveProvider = if (provider == TranslationProvider.LLM && !useLlm) {
+                AppLogger.info(TAG, "LLM translate route unavailable — falling back to BING")
+                TranslationProvider.BING
+            } else {
+                provider
+            }
+            val targetLanguage = resolveTargetLanguage(
+                CotTranslationPrefs.targetLanguage(context), Locale.getDefault().language,
+            )
+            val llmRoute: (suspend (String) -> String)? = llmProvider
+                ?.takeIf { useLlm }
+                ?.let { lp ->
                     val mn = llmModelName
                     // [T-cot-translate-llm] Bound per-toggle so the freshest
                     // provider instance is used (the chat VM rebuilds on key
@@ -52,9 +75,9 @@ class ThinkingTranslationHandle(
                             is TranslationResult.Failed -> throw IllegalStateException(r.reason)
                         }
                     }
-                } else null
+                }
             controller = TranslationStore.controllerFor(
-                blockKey, provider, targetLanguage, scope, http,
+                blockKey, effectiveProvider, targetLanguage, scope, http,
                 publish = { state -> onState(state) },
                 llmTranslate = llmRoute,
             )
@@ -63,6 +86,7 @@ class ThinkingTranslationHandle(
             TranslationStore.dispose(blockKey)
             onState(ReasoningTranslationController.CotTranslationState(text, pending = false, failed = false))
         }
+        return showTranslated
     }
 
     /** Feed the current source text while streaming (complete paragraphs only). */
@@ -91,7 +115,6 @@ class ThinkingTranslationHandle(
     }
 
     companion object {
-        /** [T-oauth-clock-skew] Anonymous endpoints allow a 10s request budget. */
-        const val HTTP_TIMEOUT_MS = 10_000
+        private const val TAG = "CotTranslateHandle"
     }
 }

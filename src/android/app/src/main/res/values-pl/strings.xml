@@ -2041,4 +2041,14 @@
     <string name="model_group_detail_quota_period_placeholder">Długość okna (godziny)</string>
     <string name="model_group_detail_quota_window_reset_snackbar">Zresetowano okno limitu — członek główny znowu obsługuje</string>
     <string name="model_group_detail_quota_window_remaining">Pozostało w tym oknie: %1$d wysyłek</string>
+    <!-- [T-cot-translate] Reasoning translation -->
+    <string name="cot_translate_show_translation">Tłumacz</string>
+    <string name="cot_translate_show_original">Oryginał</string>
+    <string name="cot_translate_failed">Tłumaczenie niedostępne — dotknij, aby ponowić</string>
+    <string name="cot_translate_settings_header">Tłumaczenie rozumowania</string>
+    <string name="cot_translate_settings_enabled">Włącz tłumaczenie rozumowania</string>
+    <string name="cot_translate_settings_provider">Dostawca</string>
+    <string name="cot_translate_settings_language">Język docelowy</string>
+    <string name="cot_translate_privacy_notice">Rozwinięte rozumowanie jest wysyłane do wybranej usługi tłumaczenia. Może zawierać prywatny kod lub szczegóły rozmowy.</string>
+    <string name="cot_translate_anonymous_notice">Bing i Google nie wymagają logowania ani klucza API. Ich anonimowe punkty końcowe mogą odrzucać lub ograniczać żądania.</string>
 </resources>

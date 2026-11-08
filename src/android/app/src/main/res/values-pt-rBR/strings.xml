@@ -2034,4 +2034,14 @@
     <string name="model_group_detail_quota_period_placeholder">Duração da janela (horas)</string>
     <string name="model_group_detail_quota_window_reset_snackbar">Janela de cota redefinida — o membro principal volta a atender</string>
     <string name="model_group_detail_quota_window_remaining">Restantes nesta janela: %1$d envios</string>
+    <!-- [T-cot-translate] Reasoning translation -->
+    <string name="cot_translate_show_translation">Traduzir</string>
+    <string name="cot_translate_show_original">Original</string>
+    <string name="cot_translate_failed">Tradução indisponível — toque para tentar novamente</string>
+    <string name="cot_translate_settings_header">Tradução do raciocínio</string>
+    <string name="cot_translate_settings_enabled">Ativar tradução do raciocínio</string>
+    <string name="cot_translate_settings_provider">Provedor</string>
+    <string name="cot_translate_settings_language">Idioma de destino</string>
+    <string name="cot_translate_privacy_notice">O raciocínio expandido é enviado ao serviço de tradução selecionado. Pode conter código privado ou detalhes da conversa.</string>
+    <string name="cot_translate_anonymous_notice">Bing e Google não exigem login nem chave de API. Seus endpoints anônimos podem rejeitar ou limitar solicitações.</string>
 </resources>

@@ -39,8 +39,9 @@ object LlmTranslationRoute {
 
     /**
      * Translate [text] into [targetLanguage] using the given provider.
-     * "auto" resolves to English source → the model's strongest language pair
-     * is handled by the model itself; the prompt asks to preserve structure.
+     * The handle already resolves "auto" to the device locale language; the
+     * branch below only remains for direct callers and resolves against the
+     * real interface language instead of hardcoding one.
      */
     suspend fun translate(
         provider: LLMProvider,
@@ -48,7 +49,9 @@ object LlmTranslationRoute {
         targetLanguage: String,
         modelDisplayName: String,
     ): TranslationResult {
-        val lang = if (targetLanguage == "auto") "the user's interface language (Chinese if the text is not already Chinese)" else targetLanguage
+        val lang = if (targetLanguage == "auto") {
+            "the user's interface language (${java.util.Locale.getDefault().displayLanguage})"
+        } else targetLanguage
         val userMessage = "Translate the following text into $lang. Return only the translation:\n\n$text"
         return try {
             val response = provider.sendMessage(

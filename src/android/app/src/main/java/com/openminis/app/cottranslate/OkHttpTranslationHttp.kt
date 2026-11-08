@@ -22,11 +22,16 @@ object OkHttpTranslationHttp : TranslationHttp {
     }
 
     override fun post(url: String, body: String, contentType: String, timeoutMs: Int): String? {
+        // Per-call total budget; the per-call client shares the base client's
+        // connection pool and dispatcher, so this stays cheap.
+        val callClient = client.newBuilder()
+            .callTimeout(timeoutMs.toLong(), TimeUnit.MILLISECONDS)
+            .build()
         val request = Request.Builder()
             .url(url)
             .post(body.toRequestBody(contentType.toMediaTypeOrNull()))
             .build()
-        client.newCall(request).execute().use { response ->
+        callClient.newCall(request).execute().use { response ->
             if (!response.isSuccessful) return null
             return response.body?.string()
         }
