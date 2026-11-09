@@ -3,6 +3,7 @@
 changesTotals / filterHistory algorithms against the same cases, so the
 JVM tests and this mirror must agree. Run: python3 scripts/gitpanel_verify.py
 """
+import os
 import re
 import sys
 from typing import Dict, List, Optional, Tuple
@@ -246,7 +247,7 @@ check("numstat binary", numstat_parse("-\t-\timg.png\n12\t4\tsrc/c.kt"),
 # ------------------------------------------------------------- branches
 
 def parse_branches(output, current):
-    """Mirror of GitCli.parseBranches."""
+    """Mirror of GitCli.parseBranches (4th column = %(symref), non-empty → drop)."""
     out = []
     seen = set()
     for raw in output.splitlines():
@@ -256,6 +257,8 @@ def parse_branches(output, current):
         name = parts[1]
         if not name or name in seen:
             continue
+        if len(parts) > 3 and parts[3].strip():
+            continue  # symbolic ref (origin/HEAD alias)
         seen.add(name)
         out.append((name, name == current, parts[2] if len(parts) > 2 else ""))
     return out
@@ -272,6 +275,12 @@ check("branches dedupe", parse_branches(
     "def5678\x1fmain\x1fduplicate\n\t\n\n", "other"),
     [("main", False, "one")])
 check("branches blank", parse_branches("", ""), [])
+check("branches symref drop", parse_branches(
+    "abc1234\x1fmain\x1fFix parser bug\x1f\n"
+    "def5678\x1forigin\x1fwhatever\x1frefs/remotes/origin/main\n"
+    "987fedc\x1forigin/main\x1fFix parser bug\x1f\n", "main"),
+    [("main", True, "Fix parser bug"),
+     ("origin/main", False, "Fix parser bug")])
 
 def parse_stashes(output):
     """Mirror of GitCli.parseStashes."""
@@ -290,6 +299,81 @@ check("stashes parse", parse_stashes("stash@{0}\x1fWIP widget\nstash@{1}\x1fon b
       [(0, "WIP widget"), (1, "on branch: older")])
 check("stashes malformed", parse_stashes("not-a-ref\x1fnope\ngarbage\nstash@{x}\x1fno-index\n"), [])
 check("stashes first-sep split", parse_stashes("stash@{0}\x1fWIP\x1fsplit\n"), [(0, "WIP\x1fsplit")])
+
+# ------------------------------------------------- live shell checks
+# Kotlin consts are shell strings; the JVM tests can only cover the Kotlin
+# side of each pipeline. These run the exact commands (escaping reverted,
+# like on the device) in a scratch repo so a shell-level regression fails
+# here instead of on-device. Skipped only when git is unavailable.
+
+import shutil
+import subprocess
+import tempfile
+
+if shutil.which("git"):
+    with tempfile.TemporaryDirectory(prefix="gitpanel-live-") as tmp:
+        env = {"HOME": tmp, "PATH": os.environ.get("PATH", "/usr/bin:/bin")}
+        env["GIT_CONFIG_NOSYSTEM"] = "1"
+
+        def sh(cmd, cwd=tmp):
+            return subprocess.run(["sh", "-c", cmd], capture_output=True,
+                                  text=True, cwd=cwd, env=env)
+
+        sh("git init -q -b main . && git config user.email t@t && git config user.name t")
+        sh("mkdir -p src && printf 'a\\n' > src/a.txt && git add -A && git commit -qm one")
+        sh("git branch feature/x && git remote add origin .")
+        sh("git update-ref refs/remotes/origin/main main")
+        sh("git symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main")
+
+        # branchesCmd — quoted format + %NN hex escapes + %(symref) column.
+        br = sh("git -C '{0}' for-each-ref --sort=-committerdate refs/heads refs/remotes "
+                "--format='%(objectname:short)%1f%(refname:short)%1f%(contents:subject)%1f%(symref)' | head -40".format(tmp))
+        check("live branchesCmd rc", br.returncode, 0)
+        parsed = parse_branches(br.stdout, "main")
+        names = [p[0] for p in parsed]
+        # -committerdate puts the youngest ref first (feature/x here); order
+        # is asserted loosely, membership exactly, origin alias excluded.
+        check("live branchesCmd names", sorted(names),
+              sorted(["main", "origin/main", "feature/x"]))
+        check("live branchesCmd no symbolic alias", "origin" in names, False)
+
+        # graphLogCmd — same record shape used by the history page.
+        log_cmd = ("git -C '{0}' -c core.quotepath=false log -n 50 --skip 0 "
+                   "--date=unix --pretty=format:%H%x1f%P%x1f%h%x1f%an%x1f%ad%x1f%s").format(tmp)
+        gl = sh(log_cmd)
+        check("live graphLogCmd rc", gl.returncode, 0)
+        gl_rows = [r for r in gl.stdout.splitlines() if r.strip()]
+        check("live graphLogCmd fields", all(len(r.split("\x1f")) >= 6 for r in gl_rows), True)
+        check("live graphLogCmd nonempty", len(gl_rows) >= 1, True)
+
+        # HEAD pointing at a missing object (deleted/never-fetched commit):
+        # `git log` fails AND `--all` fails (git still parses HEAD first),
+        # only the concrete-sha walk recovers history.
+        broken = os.path.join(tmp, "broken")
+        os.makedirs(broken)
+        sh("cp -r '{0}/.git' '{1}/.git'".format(tmp, broken))
+        with open(os.path.join(broken, ".git", "HEAD"), "w") as fh:
+            fh.write("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef\n")
+        plain = sh("git -C '{0}' -c core.quotepath=false log -n 50 --skip 0 "
+                   "--date=unix --pretty=format:%H%x1f%P%x1f%h%x1f%an%x1f%ad%x1f%s".format(broken))
+        check("live bad-HEAD git log fails", plain.returncode != 0, True)
+        all_cmd = ("git -C '{0}' -c core.quotepath=false log --all -n 50 --skip 0 "
+                   "--date=unix --pretty=format:%H%x1f%P%x1f%h%x1f%an%x1f%ad%x1f%s").format(broken)
+        al = sh(all_cmd)
+        check("live bad-HEAD log --all also fails", al.returncode != 0, True)
+        fb_cmd = ("git -C '{0}' -c core.quotepath=false log "
+                  "$(git -C '{0}' for-each-ref --format='%(objectname)' "
+                  "refs/heads refs/remotes | sort -u) "
+                  "-n 50 --skip 0 --date=unix "
+                  "--pretty=format:%H%x1f%P%x1f%h%x1f%an%x1f%ad%x1f%s").format(broken)
+        fb = sh(fb_cmd)
+        check("live bad-HEAD sha-walk rc", fb.returncode, 0)
+        fb_rows = [r for r in fb.stdout.splitlines() if r.strip()]
+        check("live bad-HEAD sha-walk fields",
+              all(len(r.split("\x1f")) >= 6 for r in fb_rows), True)
+        check("live bad-HEAD sha-walk nonempty", len(fb_rows) >= 1, True)
+else:
+    print("git unavailable — live shell checks skipped")
 
 print(f"\n{PASS} passed, {FAIL} failed")
 sys.exit(1 if FAIL else 0)

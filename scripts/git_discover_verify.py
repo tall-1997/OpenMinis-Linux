@@ -36,27 +36,35 @@ def check(name, cond, detail=""):
 
 
 # ---------------------------------------------------------------------------
-# 1. Source-drift guards: the shell pipeline in GitCli.kt must keep the
-#    tie-break, probe quoting, workspace anchor, and O(1) signals that the
-#    runs below pin.
+# 1. Source-drift guards: DISCOVER_CMD/probeCmd live in GitCliCmd.kt (PR #306
+#    extraction); probe() and its caller timeout live in GitCli.kt. Both
+#    anchors are asserted present so a future move fails loudly instead of
+#    silently skipping every guard below.
 # ---------------------------------------------------------------------------
-SRC = "src/android/app/src/main/java/com/openminis/app/git/GitCli.kt"
-with open(SRC, encoding="utf-8") as f:
-    src = f.read()
+SRC_CMD = "src/android/app/src/main/java/com/openminis/app/git/GitCliCmd.kt"
+SRC_CLI = "src/android/app/src/main/java/com/openminis/app/git/GitCli.kt"
+missing = [p for p in (SRC_CMD, SRC_CLI) if not os.path.exists(p)]
+if missing:
+    print(f"[FAIL] source-anchor-missing: {', '.join(missing)}")
+    sys.exit(1)
+with open(SRC_CMD, encoding="utf-8") as f:
+    cmd_src = f.read()
+with open(SRC_CLI, encoding="utf-8") as f:
+    cli_src = f.read()
 
-check("kotlin-tiebreak-in-source", "sort -k1,1nr -k2" in src,
+check("kotlin-tiebreak-in-source", "sort -k1,1nr -k2" in cmd_src,
       "DISCOVER_CMD lost the path tie-break")
-check("kotlin-shellquote-probe", "shellQuote" in src,
+check("kotlin-shellquote-probe", "shellQuote" in cmd_src,
       "probeCmd lost shellQuote on -C root")
-check("kotlin-absolute-anchor", "find /var/minis/workspace" in src,
+check("kotlin-absolute-anchor", "find /var/minis/workspace" in cmd_src,
       "DISCOVER_CMD no longer anchored at the workspace path")
-check("kotlin-commit-signal", 'log -1 --format=%ct' in src,
+check("kotlin-commit-signal", 'log -1 --format=%ct' in cmd_src,
       "DISCOVER_CMD lost the O(1) commit-time signal")
-check("kotlin-shallow-signal", '-maxdepth 2 -type f' in src,
+check("kotlin-shallow-signal", '-maxdepth 2 -type f' in cmd_src,
       "DISCOVER_CMD lost the shallow-mtime signal (full-tree walk is a hang)")
-check("kotlin-no-fulltree-scan", 'find "$root" -type f' not in src,
+check("kotlin-no-fulltree-scan", 'find "$root" -type f' not in cmd_src,
       "DISCOVER_CMD reverted to a full-tree mtime walk")
-check("kotlin-probe-timeout", "timeoutMs = 30_000L" in src,
+check("kotlin-probe-timeout", "timeoutMs = 30_000L" in cli_src,
       "probe() lost the 30s caller timeout bound")
 
 # ---------------------------------------------------------------------------
