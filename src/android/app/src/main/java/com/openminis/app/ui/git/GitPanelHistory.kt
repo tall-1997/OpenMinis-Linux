@@ -1,6 +1,5 @@
 package com.openminis.app.ui.git
 
-import android.text.format.DateUtils
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -253,10 +252,12 @@ internal fun relativeTime(epochSeconds: Long): String {
         diff < hour -> "${diff / minute}m"
         diff < day -> "${diff / hour}h"
         diff < 14L * day -> "${diff / day}d"
-        else -> DateUtils.formatDateTime(
-            null,
-            then,
-            DateUtils.FORMAT_SHOW_YEAR or DateUtils.FORMAT_SHOW_DATE,
-        )
+        else -> {
+            // java.text, not DateUtils.formatDateTime(null, …): the Android
+            // overload is not documented to tolerate a null context, and a
+            // crash inside a LazyColumn row painter is fatal to the panel.
+            val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+            fmt.format(java.util.Date(then))
+        }
     }
 }

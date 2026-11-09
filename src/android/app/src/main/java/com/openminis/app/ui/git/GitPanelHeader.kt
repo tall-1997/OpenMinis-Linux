@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -16,6 +17,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.CallMerge
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.WarningAmber
@@ -138,9 +141,11 @@ internal fun GitPanelHeader(
                     )
                     Spacer(Modifier.width(6.dp))
                     Text(
+                        // Same amber as the icon — the darker tone was
+                        // unreadable on dark-theme surfaces.
                         stringResource(R.string.git_panel_no_identity),
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFFB36A00),
+                        color = Color(0xFFFF9500),
                     )
                 }
             }
@@ -221,7 +226,9 @@ internal fun BranchMenu(branches: List<GitBranchRef>, onPick: (String) -> Unit) 
         tonalElevation = 2.dp,
         modifier = Modifier.fillMaxWidth(),
     ) {
-        LazyColumn {
+        // Capped: an unconstrained LazyColumn here would expand to the whole
+        // viewport and push the tab row and its content off-screen.
+        LazyColumn(Modifier.heightIn(max = 280.dp)) {
             items(branches, key = { it.name }) { branch ->
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -283,7 +290,7 @@ private fun DivergenceBadge(up: Int, kind: String) {
             .padding(horizontal = 8.dp, vertical = 2.dp),
     ) {
         Icon(
-            if (kind == "up") Icons.Filled.CallMerge else Icons.Filled.CallMerge,
+            if (kind == "up") Icons.Filled.ArrowUpward else Icons.Filled.ArrowDownward,
             contentDescription = null,
             tint = if (kind == "up") GitAddGreen else GitDelRed,
             modifier = Modifier.size(12.dp),

@@ -528,6 +528,13 @@ dependencies {
     // Coroutines
     implementation(libs.kotlinx.coroutines.android)
 
+    // [T-git-panel] Host-native git for the Git panel: JGit runs against the
+    // workspace directory on the HOST filesystem (no PRoot boot, no shell
+    // round-trip) — the panel shows history/branches instantly on entry.
+    // Read-only operations here; commit/stage/push stay on the sandbox path
+    // (credentials live in the sandbox git config).
+    implementation("org.eclipse.jgit:org.eclipse.jgit:7.8.1.202611041320-r")
+
     // T283: ACRA — local crash report capture. acra-core only (no http
     // sender, no network permission). CrashFileSender writes reports to
     // filesDir/logs/ where LogManagementScreen surfaces them.
