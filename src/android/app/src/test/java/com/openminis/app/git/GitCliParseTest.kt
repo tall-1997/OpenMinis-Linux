@@ -177,17 +177,17 @@ class GitCliParseTest {
 
     @Test
     fun `shellQuote wraps and escapes single quotes`() {
-        assertEquals("'plain.txt'", GitCli.shellQuote("plain.txt"))
-        assertEquals("'with space.txt'", GitCli.shellQuote("with space.txt"))
-        assertEquals("'it'\\''s.txt'", GitCli.shellQuote("it's.txt"))
-        assertEquals("'中文.md'", GitCli.shellQuote("中文.md"))
+        assertEquals("'plain.txt'", GitCliCmd.shellQuote("plain.txt"))
+        assertEquals("'with space.txt'", GitCliCmd.shellQuote("with space.txt"))
+        assertEquals("'it'\\''s.txt'", GitCliCmd.shellQuote("it's.txt"))
+        assertEquals("'中文.md'", GitCliCmd.shellQuote("中文.md"))
     }
 
     @Test
     fun `commit command carries base64 payload and uses -F`() {
         val msg = "feat: add git panel\n\n- multi-line body with 'quotes' and \$dollar"
         val b64 = java.util.Base64.getEncoder().encodeToString(msg.toByteArray(Charsets.UTF_8))
-        val cmd = GitCli.buildCommitCommand(b64)
+        val cmd = GitCliCmd.buildCommitCommand(b64)
         assertTrue(cmd.contains("git commit -F /tmp/.minis-git-msg"))
         // [T-git-commit-temp-collision] Unique per invocation via the shell pid,
         // so two concurrent session commits cannot clobber one message file.
@@ -298,26 +298,26 @@ class GitCliParseTest {
 
     @Test
     fun `git prefix is bare without root and quoted with one`() {
-        assertEquals("git", GitCli.gitPrefix(null))
-        assertEquals("git", GitCli.gitPrefix(""))
-        assertEquals("git -C '/var/w/r'", GitCli.gitPrefix("/var/w/r"))
-        assertEquals("git -C '/a b/'", GitCli.gitPrefix("/a b/"))
+        assertEquals("git", GitCliCmd.gitPrefix(null))
+        assertEquals("git", GitCliCmd.gitPrefix(""))
+        assertEquals("git -C '/var/w/r'", GitCliCmd.gitPrefix("/var/w/r"))
+        assertEquals("git -C '/a b/'", GitCliCmd.gitPrefix("/a b/"))
     }
 
     @Test
     fun `probe and status commands carry the resolved root`() {
-        assertFalse(GitCli.probeCmd().contains("-C"))
-        assertTrue(GitCli.probeCmd("r").contains("git -C 'r' rev-parse --is-inside-work-tree"))
+        assertFalse(GitCliCmd.probeCmd().contains("-C"))
+        assertTrue(GitCliCmd.probeCmd("r").contains("git -C 'r' rev-parse --is-inside-work-tree"))
         // cfg lookup must resolve against the same repo, not the shell cwd
-        assertTrue(GitCli.probeCmd("r").contains("\$(git -C 'r' config user.name"))
+        assertTrue(GitCliCmd.probeCmd("r").contains("\$(git -C 'r' config user.name"))
         assertEquals(
             "git -C 'r' -c core.quotepath=false status --porcelain -b",
-            GitCli.statusCmd("r"),
+            GitCliCmd.statusCmd("r"),
         )
-        assertTrue(GitCli.logCmd(5, "r").startsWith("git -C 'r' -c core.quotepath=false log -n 5"))
-        assertTrue(GitCli.buildCommitCommand("QQ==", "r").contains("git -C 'r' commit -F"))
+        assertTrue(GitCliCmd.logCmd(5, "r").startsWith("git -C 'r' -c core.quotepath=false log -n 5"))
+        assertTrue(GitCliCmd.buildCommitCommand("QQ==", "r").contains("git -C 'r' commit -F"))
         // default stays cwd-bound so existing callers and tests are unaffected
-        assertEquals(GitCli.statusCmd(), GitCli.statusCmd(null))
+        assertEquals(GitCliCmd.statusCmd(), GitCliCmd.statusCmd(null))
     }
 
     @Test
@@ -381,7 +381,7 @@ class GitCliParseTest {
 
     @Test
     fun `graph log command pins hash delimiters and skip paging`() {
-        val cmd = GitCli.graphLogCmd(offset = 50, limit = 50)
+        val cmd = GitCliCmd.graphLogCmd(offset = 50, limit = 50)
         assertTrue(cmd.contains("log"))
         assertTrue(cmd.contains("-n 50 --skip 50"))
         assertTrue(cmd.contains("%x1f%P%x1f%h"))
@@ -494,6 +494,18 @@ class GitCliParseTest {
         assertEquals(1, list.size)
         assertEquals("main", list[0].name)
         assertFalse(list[0].isCurrent)
+    }
+
+    @Test
+    fun `branches drop symbolic refs like origin HEAD aliases`() {
+        val out = "abc1234\u001fmain\u001fFix parser bug\u001f\n" +
+            "def5678\u001forigin\u001fwhatever\u001frefs/remotes/origin/main\n" +
+            "987fedc\u001forigin/main\u001fFix parser bug\u001f\n"
+        val list = GitCli.parseBranches(out, current = "main")
+        // The `origin` symbolic-ref row is skipped; plain rows survive.
+        assertEquals(2, list.size)
+        assertEquals("main", list[0].name)
+        assertEquals("origin/main", list[1].name)
     }
 
     @Test
