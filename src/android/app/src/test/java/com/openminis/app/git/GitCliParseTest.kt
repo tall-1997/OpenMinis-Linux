@@ -257,15 +257,37 @@ class GitCliParseTest {
     // ------------------------------------------------- nested repo discovery
 
     @Test
-    fun `discover parses immediate-child repo names in order`() {
-        val out = "./OpenMinis-Linux/.git\n./notes/.git\n"
-        assertEquals(listOf("OpenMinis-Linux", "notes"), GitCli.parseDiscover(out))
+    fun `discover parses absolute repo paths into path and display name in order`() {
+        val out = "/var/minis/workspace/OpenMinis-Linux\n/var/minis/workspace/notes\n"
+        assertEquals(
+            listOf(
+                GitCli.DiscoveredRepo("/var/minis/workspace/OpenMinis-Linux", "OpenMinis-Linux"),
+                GitCli.DiscoveredRepo("/var/minis/workspace/notes", "notes"),
+            ),
+            GitCli.parseDiscover(out),
+        )
     }
 
     @Test
-    fun `discover ignores blank lines cwd itself and stray text`() {
-        val out = "\n./a/.git\n./.git\nnot-a-path\n./b with space/.git\n"
-        assertEquals(listOf("a", "b with space"), GitCli.parseDiscover(out))
+    fun `discover ignores blank lines relative paths and stray text`() {
+        val out = "\n/var/minis/workspace/a\n./a/.git\nnot-a-path\n/var/minis/workspace/b with space\n"
+        assertEquals(
+            listOf(
+                GitCli.DiscoveredRepo("/var/minis/workspace/a", "a"),
+                GitCli.DiscoveredRepo("/var/minis/workspace/b with space", "b with space"),
+            ),
+            GitCli.parseDiscover(out),
+        )
+    }
+
+    @Test
+    fun `discover keeps activity order and skips trailing slash lines`() {
+        val out = "/w/recent\n/w/older\n/w/stale\n"
+        assertEquals(
+            listOf("recent", "older", "stale"),
+            GitCli.parseDiscover(out).map { it.name },
+        )
+        assertTrue(GitCli.parseDiscover("/w/x/\n").isEmpty())
     }
 
     @Test
