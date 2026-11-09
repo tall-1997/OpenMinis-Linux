@@ -325,8 +325,7 @@ class SessionListViewModel(
     // happens while the UI isn't collecting (mid-navigation) is still
     // delivered on the next collect.
     val newTopSessionEvent = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(
-        replay = 0,
-        extraBufferCapacity = 1,
+        replay = 0, extraBufferCapacity = 1,
         onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST,
     )
 
@@ -366,6 +365,7 @@ class SessionListViewModel(
                 started.await()
                 runCatching { unsub() }
             }
+            runCatching { chatRepository.repairStubSessionPreviews() } // [T-session-list-stub-preview] one-shot cleanup
             chatRepository.observeSessions().collect {
                 _allSessions.value = it
                 dbEmissionLanded = true
