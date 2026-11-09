@@ -298,7 +298,7 @@ private fun DivergenceBadge(up: Int, kind: String) {
     }
 }
 
-/** Header title: relative repo path preferred, absolute root as fallback. */
+/** Header title: discovery basename preferred, root basename as fallback. */
 internal fun repoName(repo: com.openminis.app.git.GitCli.GitRepoInfo): String {
     if (repo.relativeRoot.isNotBlank()) return repo.relativeRoot
     val name = repo.root.trimEnd('/').substringAfterLast('/')

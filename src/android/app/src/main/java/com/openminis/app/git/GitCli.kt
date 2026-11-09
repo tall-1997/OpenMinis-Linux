@@ -38,19 +38,50 @@ object GitCli {
     }
 
     /**
-     * Immediate-child repo discovery for when cwd itself is not a repo:
-     * prints `./<name>/.git` lines, sorted, capped. mindepth 2 skips cwd's
-     * own (absent) `.git`; maxdepth 2 covers exactly one clone level.
+     * Workspace-anchored repo discovery for when cwd itself is not a repo.
+     *
+     * The persistent shell boots at `/root` and its cwd drifts with every
+     * agent `cd`, so `find .` from the live cwd can silently miss the
+     * session's repos (cwd = /root) or pick the wrong winner (cwd =
+     * workspace root with several clones). Discovery therefore anchors at
+     * the session workspace's fixed guest path and emits ABSOLUTE repo-root
+     * lines — they resolve identically from any cwd.
+     *
+     * Output: `<abs repo root>` per line, most recently active first.
+     * Activity = newest working-tree file mtime (agent edits, not panel
+     * reads, so the panel's own status refreshes cannot create a
+     * self-reinforcing pick), 0 for an empty tree; ties break by path so a
+     * same-second clone batch resolves deterministically. mindepth 2 skips the
+     * workspace's own (absent) `.git`; maxdepth 4 covers both
+     * `<workspace>/<repo>` and `<workspace>/<group>/<repo>` layouts.
      */
     const val DISCOVER_CMD =
-        "find . -maxdepth 2 -mindepth 2 -type d -name .git -print 2>/dev/null | sort | head -8"
+        "find /var/minis/workspace -maxdepth 4 -mindepth 2 -type d -name .git 2>/dev/null | " +
+            "while IFS= read -r d; do " +
+            "root=\${d%/.git}; " +
+            "newest=\$(find \"\$root\" -type f -not -path '*/.git/*' -printf '%T@\\n' 2>/dev/null " +
+            "| sort -rn | head -1); " +
+            "printf '%s %s\\n' \"\${newest:-0}\" \"\$root\"; " +
+            "done | sort -k1,1nr -k2 | sed 's/^[^ ]* //' | head -8"
 
-    /** `./a/.git` lines → repo names relative to cwd (`a`), sorted as given. */
-    fun parseDiscover(output: String): List<String> = output.lines()
-        .map { it.trim().removePrefix("./") }
-        .filter { it.endsWith("/.git") }
-        .map { it.removeSuffix("/.git") }
-        .filter { it.isNotBlank() }
+    /** A repo found by [DISCOVER_CMD]: absolute root path + display name. */
+    data class DiscoveredRepo(
+        /** Absolute guest path of the repo root (the directory containing `.git`). */
+        val path: String,
+        /** Display name: basename of [path] (shown in the panel header). */
+        val name: String,
+    )
+
+    /**
+     * Discovery lines are absolute repo-root paths, most recently active
+     * first (see [DISCOVER_CMD]). Blank lines and stray text are dropped;
+     * order is preserved because it is the activity ranking.
+     */
+    fun parseDiscover(output: String): List<DiscoveredRepo> = output.lines()
+        .map { it.trim() }
+        .filter { it.startsWith("/") }
+        .map { DiscoveredRepo(path = it, name = it.substringAfterLast('/')) }
+        .filter { it.name.isNotBlank() }
 
     fun statusCmd(root: String? = null) =
         "${gitPrefix(root)} -c core.quotepath=false status --porcelain -b"
@@ -120,7 +151,10 @@ object GitCli {
         val userName: String? = null,
         val userEmail: String? = null,
         val error: String? = null,
-        /** Repo name relative to the session cwd when adopted via discovery. */
+        /**
+         * Repo display name (basename) when adopted via workspace
+         * discovery; empty when cwd itself was the repo.
+         */
         val relativeRoot: String = "",
     )
 
@@ -529,14 +563,16 @@ object GitCli {
         }
         val direct = parseProbe(r.output, r.exitCode)
         if (direct.isRepo) return direct
-        // cwd itself is not a repo. The common layout is a clone *inside* the
-        // session workspace (workspace/<name>/.git) — git only searches up, so
-        // adopt the first immediate-child repo instead of declaring defeat.
+        // cwd itself is not a repo. Fresh shells boot at /root and the agent
+        // cd-s around freely, so the drifting cwd is not a stable anchor:
+        // discover from the session workspace with ABSOLUTE paths (most
+        // recently active first) and probe the winner by absolute path, so
+        // a cd landing between the two commands cannot skew the adoption.
         val d = runCatching { run(sessionId, DISCOVER_CMD) }.getOrNull() ?: return direct
-        val rel = parseDiscover(d.output).firstOrNull() ?: return direct
-        val r2 = runCatching { run(sessionId, probeCmd(rel)) }.getOrElse { return direct }
+        val repo = parseDiscover(d.output).firstOrNull() ?: return direct
+        val r2 = runCatching { run(sessionId, probeCmd(repo.path)) }.getOrElse { return direct }
         val nested = parseProbe(r2.output, r2.exitCode)
-        return if (nested.isRepo) nested.copy(relativeRoot = rel) else direct
+        return if (nested.isRepo) nested.copy(relativeRoot = repo.name) else direct
     }
 
     suspend fun status(sessionId: String, root: String? = null): GitStatus {
