@@ -884,11 +884,11 @@ internal fun OpenAIProvider.rawStreamMessage(
                                 val idx = tc.optInt("index", 0)
                                 val acc = toolCallAccumulators.getOrPut(idx) { ToolCallAccumulator() }
 
-                                // [T-toolcall-missing-id] Relays without `id`
-                                // would vanish at the tail drain — derive one.
-                                tc.safeOptString("id", "").let {
-                                    acc.id = if (it.isNotEmpty()) it else "tool-call-$idx"
-                                }
+                                // [T-toolcall-missing-id] Derive only while no id was
+                                // captured and start has not fired — later deltas of
+                                // the same call carry no `id`; re-deriving clobbered
+                                // the real first-delta id (tool-card input loss).
+                                acc.id = resolveToolCallId(acc.id, tc.safeOptString("id", ""), idx, acc.started)
                                 tc.optJSONObject("function")?.let { fn ->
                                     fn.safeOptString("name", "").let { if (it.isNotEmpty()) acc.name = it }
                                     fn.safeOptString("arguments", "").let { if (it.isNotEmpty()) acc.args.append(it) }
