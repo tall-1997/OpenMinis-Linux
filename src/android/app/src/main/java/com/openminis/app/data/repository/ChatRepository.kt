@@ -883,7 +883,10 @@ class ChatRepository(
         //
         // The row's own timestamp is still worth recording: it is what keeps
         // the session sorted as recently-active while a long tool chain runs.
-        val preview = extractTextPreview(stored.inline)
+        // [T-session-list-stub-preview] stored.inline is the offload stub for an
+        // oversized body — sessionListPreview rebuilds stub rows from
+        // stored.preview, where messagePreviewCell captured the real text BEFORE offload.
+        val preview = PreviewText.sessionListPreview(stored.inline, stored.preview)
         if (preview != null) {
             dao.updateLastMessage(sessionId, preview, now)
         } else {
@@ -893,24 +896,12 @@ class ChatRepository(
         }
     }
 
-    /**
-     * [T-android-session-last-message-live-tool-call] Update ONLY the session's
-     * `last_message` preview (and `updated_at`) from an in-progress assistant
-     * turn's parts_json — WITHOUT inserting a message row. The agent loop
-     * persists the authoritative assistant row only at turn end (after tools
-     * execute); during a long tool call the session list would otherwise show a
-     * stale preview (or "No messages yet" for a turn with no prior text). This
-     * pushes the live tool-call summary / partial text into the list the moment
-     * the model emits it, mirroring how iOS overlays the live VM's last message.
-     *
-     * Uses the same [extractTextPreview] as [appendMessage], so a text-only turn
-     * shows its text and a tool-only turn shows the tool summary. No-op when the
-     * payload yields no preview (avoids overwriting a good preview with null).
-     */
-    suspend fun updateSessionPreview(sessionId: String, partsJson: String) {
-        val preview = extractTextPreview(partsJson) ?: return
-        dao.updateLastMessage(sessionId, preview, System.currentTimeMillis())
-    }
+    /** Live preview push — see [updateSessionPreviewIn]. */
+    suspend fun updateSessionPreview(sessionId: String, partsJson: String) =
+        updateSessionPreviewIn(dao, sessionId, partsJson)
+
+    /** [T-session-list-stub-preview] Placeholder cleanup — see [repairStubSessionPreviewsIn]. */
+    suspend fun repairStubSessionPreviews(): Int = repairStubSessionPreviewsIn(dao)
 
     //
     // Three high-level queries surfaced to SessionsOffloadHandler. The DAO

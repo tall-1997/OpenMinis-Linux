@@ -122,6 +122,18 @@ data class SessionTailRow(
     @ColumnInfo(name = "parts_json") val partsJson: String,
 )
 
+/**
+ * Row projection for [ChatDao.stubPreviewTails]
+ * (T-session-list-stub-preview). One row = the last message of a session
+ * whose `sessions.last_message` still holds the offload placeholder; carries
+ * just the fields the rebuild needs.
+ */
+data class StubPreviewTailRow(
+    @ColumnInfo(name = "session_id") val sessionId: String,
+    @ColumnInfo(name = "parts_json") val partsJson: String,
+    @ColumnInfo(name = "preview") val preview: String?,
+)
+
 @Dao
 interface ChatDao : MessageHeadDao, ChatTruncationDao, SessionBindingDao, UsageStatsDao {
     // Sessions
@@ -467,6 +479,30 @@ interface ChatDao : MessageHeadDao, ChatTruncationDao, SessionBindingDao, UsageS
         )
     """)
     suspend fun lastMessageTailPerSession(): List<SessionTailRow>
+
+    // [T-session-list-stub-preview] Sessions whose last_message still holds
+    // the offload placeholder, paired with the fields needed to rebuild the
+    // real preview from the last message row. Same correlated-subquery shape
+    // as [lastMessageTailPerSession]; the LIKE scan only matches sessions
+    // that still carry a stub, so a repaired session stops matching.
+    @Query("""
+        SELECT m.session_id AS session_id, m.parts_json AS parts_json, m.preview AS preview
+        FROM messages m
+        WHERE m.sort_order = (
+            SELECT MAX(m2.sort_order) FROM messages m2 WHERE m2.session_id = m.session_id
+        )
+        AND m.session_id IN (
+            SELECT id FROM sessions
+            WHERE last_message LIKE '%body stored (%' OR last_message LIKE '%body omitted%'
+        )
+    """)
+    suspend fun stubPreviewTails(): List<StubPreviewTailRow>
+
+    // [T-session-list-stub-preview] Rewrite ONLY last_message — updated_at
+    // must not move, or every repaired session would jump to the top of the
+    // list the moment the repair lands.
+    @Query("UPDATE sessions SET last_message = :preview WHERE id = :id")
+    suspend fun repairLastMessage(id: String, preview: String?)
 
     // Session: memory_enabled
     @Query("UPDATE sessions SET memory_enabled = :enabled, updated_at = :updatedAt WHERE id = :id")

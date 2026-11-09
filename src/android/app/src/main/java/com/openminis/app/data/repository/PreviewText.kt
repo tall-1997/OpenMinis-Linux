@@ -1,5 +1,7 @@
 package com.openminis.app.data.repository
 
+import com.openminis.app.data.display.DisplayParts
+
 /**
  * Text-preview pipeline for the session list, the re-run message picker and
  * the restore path — everything that turns a stored `parts_json` blob into a
@@ -181,4 +183,30 @@ internal object PreviewText {
 
     fun stripSystemReminders(raw: String): String =
         SYSTEM_REMINDER_RE.replace(raw, "").trim()
+
+    /**
+     * [T-session-list-stub-preview] The preview text for the session list's
+     * `last_message` column.
+     *
+     * Offloaded rows carry the placeholder in [inlinePartsJson] — parsing
+     * that as content is exactly the bug that painted "body stored (N bytes)"
+     * into the session list: the stub is VALID JSON shaped like a normal
+     * text message, so [extractTextPreview] happily summarised it. The
+     * real-text summary already lives after [PREVIEW_SENTINEL] in
+     * [previewCell] (messagePreviewCell computed it from the FULL body
+     * BEFORE offload), so stub rows rebuild from there and never touch the
+     * placeholder. Rows that predate the sentinel (a tool-result last row
+     * keeps the raw head) recompute from that head. Null when nothing human
+     * survives, so the caller keeps its existing behaviour (touchSession /
+     * column clear) instead of painting the placeholder.
+     */
+    fun sessionListPreview(inlinePartsJson: String?, previewCell: String?): String? {
+        if (inlinePartsJson.isNullOrBlank()) return null
+        if (!DisplayParts.isStub(inlinePartsJson)) return extractTextPreview(inlinePartsJson)
+        if (previewCell.isNullOrBlank()) return null
+        val head = previewCell.substringBefore(PREVIEW_SENTINEL)
+        val tail = previewCell.substringAfter(PREVIEW_SENTINEL, "").trim()
+        val human = if (tail.isNotEmpty()) tail else extractTextPreview(head)
+        return human?.takeIf { it.isNotBlank() }
+    }
 }
