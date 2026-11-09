@@ -48,20 +48,26 @@ object GitCli {
      * lines — they resolve identically from any cwd.
      *
      * Output: `<abs repo root>` per line, most recently active first.
-     * Activity = newest working-tree file mtime (agent edits, not panel
-     * reads, so the panel's own status refreshes cannot create a
-     * self-reinforcing pick), 0 for an empty tree; ties break by path so a
-     * same-second clone batch resolves deterministically. mindepth 2 skips the
-     * workspace's own (absent) `.git`; maxdepth 4 covers both
-     * `<workspace>/<repo>` and `<workspace>/<group>/<repo>` layouts.
+     * Activity = max(newest HEAD commit time, newest shallow working-tree
+     * mtime). The commit signal comes from `git log -1` (O(1) object read,
+     * immune to PRoot I/O amplification) and covers repos the agent commits
+     * into; the shallow mtime covers uncommitted top-level edits without a
+     * full-tree walk (a per-repo full-tree `find` made the panel hang on
+     * real devices, where every stat crosses PRoot at 10-50x cost). Ties
+     * break by path so a same-second clone batch resolves deterministically.
+     * mindepth 2 skips the workspace's own (absent) `.git`; maxdepth 4
+     * covers both `<workspace>/<repo>` and `<workspace>/<group>/<repo>`.
      */
     const val DISCOVER_CMD =
         "find /var/minis/workspace -maxdepth 4 -mindepth 2 -type d -name .git 2>/dev/null | " +
             "while IFS= read -r d; do " +
             "root=\${d%/.git}; " +
-            "newest=\$(find \"\$root\" -type f -not -path '*/.git/*' -printf '%T@\\n' 2>/dev/null " +
+            "committed=\$(git -C \"\$root\" log -1 --format=%ct 2>/dev/null); " +
+            "touched=\$(find \"\$root\" -maxdepth 2 -type f -not -path '*/.git/*' " +
+            "-printf '%T@\\n' 2>/dev/null | sort -rn | head -1); " +
+            "score=\$(printf '%s\\n%s\\n' \"\${committed:-0}\" \"\${touched:-0}\" " +
             "| sort -rn | head -1); " +
-            "printf '%s %s\\n' \"\${newest:-0}\" \"\$root\"; " +
+            "printf '%s %s\\n' \"\${score:-0}\" \"\$root\"; " +
             "done | sort -k1,1nr -k2 | sed 's/^[^ ]* //' | head -8"
 
     /** A repo found by [DISCOVER_CMD]: absolute root path + display name. */
@@ -558,7 +564,7 @@ object GitCli {
         ExecutionCoordinator.execute(sessionId, cmd, timeout = timeoutMs)
 
     suspend fun probe(sessionId: String): GitRepoInfo {
-        val r = runCatching { run(sessionId, probeCmd()) }.getOrElse {
+        val r = runCatching { run(sessionId, probeCmd(), timeoutMs = 30_000L) }.getOrElse {
             return GitRepoInfo(isRepo = false, error = it.message ?: "shell unavailable")
         }
         val direct = parseProbe(r.output, r.exitCode)
@@ -568,9 +574,9 @@ object GitCli {
         // discover from the session workspace with ABSOLUTE paths (most
         // recently active first) and probe the winner by absolute path, so
         // a cd landing between the two commands cannot skew the adoption.
-        val d = runCatching { run(sessionId, DISCOVER_CMD) }.getOrNull() ?: return direct
+        val d = runCatching { run(sessionId, DISCOVER_CMD, timeoutMs = 30_000L) }.getOrNull() ?: return direct
         val repo = parseDiscover(d.output).firstOrNull() ?: return direct
-        val r2 = runCatching { run(sessionId, probeCmd(repo.path)) }.getOrElse { return direct }
+        val r2 = runCatching { run(sessionId, probeCmd(repo.path), timeoutMs = 30_000L) }.getOrElse { return direct }
         val nested = parseProbe(r2.output, r2.exitCode)
         return if (nested.isRepo) nested.copy(relativeRoot = repo.name) else direct
     }
