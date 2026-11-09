@@ -50,7 +50,8 @@ object GitCli {
      * Output: `<abs repo root>` per line, most recently active first.
      * Activity = newest working-tree file mtime (agent edits, not panel
      * reads, so the panel's own status refreshes cannot create a
-     * self-reinforcing pick), 0 for an empty tree. mindepth 2 skips the
+     * self-reinforcing pick), 0 for an empty tree; ties break by path so a
+     * same-second clone batch resolves deterministically. mindepth 2 skips the
      * workspace's own (absent) `.git`; maxdepth 4 covers both
      * `<workspace>/<repo>` and `<workspace>/<group>/<repo>` layouts.
      */
@@ -61,7 +62,7 @@ object GitCli {
             "newest=\$(find \"\$root\" -type f -not -path '*/.git/*' -printf '%T@\\n' 2>/dev/null " +
             "| sort -rn | head -1); " +
             "printf '%s %s\\n' \"\${newest:-0}\" \"\$root\"; " +
-            "done | sort -k1,1nr | sed 's/^[^ ]* //' | head -8"
+            "done | sort -k1,1nr -k2 | sed 's/^[^ ]* //' | head -8"
 
     /** A repo found by [DISCOVER_CMD]: absolute root path + display name. */
     data class DiscoveredRepo(
