@@ -29,6 +29,9 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Flag
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -126,6 +129,18 @@ internal fun PlanBoardBody(
      * The objective takes over the summary line's title slot instead.
      */
     goalObjective: String? = null,
+    /**
+     * [T-goal-panel-reachability] Opens the session Goal sheet.
+     *
+     * Before this, the goal row in [PlanGoalCard] was the ONLY tap target that
+     * opened the sheet, and it is rendered only when there is NO board
+     * (`headerVisible && !boardVisible`). Any session with a task board — i.e.
+     * every long task — therefore had no way to reach the goal panel at all:
+     * the objective was visible as this row's title but nothing could be
+     * tapped to pause, retune, or clear it. A trailing flag on the summary row
+     * restores that entry without adding a second row.
+     */
+    onOpenGoal: (() -> Unit)? = null,
 ) {
     val accent = if (allDone) ToolCheckColor else MaterialTheme.colorScheme.primary
     val title: String? = goalObjective?.takeIf { it.isNotBlank() } ?: if (allDone) {
@@ -247,6 +262,25 @@ internal fun PlanBoardBody(
                 modifier = Modifier.weight(1f),
             )
             Spacer(Modifier.width(8.dp))
+            // [T-goal-panel-reachability] Goal-sheet entry; only present while
+            // a Goal exists, so a plain board keeps exactly its old shape.
+            if (onOpenGoal != null) {
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .clickable(role = Role.Button) { onOpenGoal() },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Flag,
+                        contentDescription = stringResource(R.string.cd_goal_header),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                        modifier = Modifier.size(15.dp),
+                    )
+                }
+                Spacer(Modifier.width(2.dp))
+            }
             Icon(
                 imageVector = PlanBoardGlyphs.ChevronDown,
                 contentDescription = null,

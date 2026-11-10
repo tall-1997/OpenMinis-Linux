@@ -270,6 +270,17 @@ internal fun PlanGoalCard(viewModel: ChatViewModel, modifier: Modifier = Modifie
                             allDone = allDone,
                             expanded = expanded,
                             goalObjective = goalDisplay?.objective,
+                            // [T-goal-panel-reachability] The goal row that
+                            // normally opens the sheet is hidden whenever a
+                            // board owns the card; keep the panel reachable by
+                            // keying the flag on the DB row, not on the
+                            // (possibly suppressed) display snapshot.
+                            onOpenGoal = goal?.let {
+                                {
+                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    GoalSheetSignal.open()
+                                }
+                            },
                             onToggle = {
                                 expanded = !expanded
                                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
