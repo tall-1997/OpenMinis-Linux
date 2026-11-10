@@ -178,12 +178,11 @@ class GitHostRepoTest {
     @Test
     fun `commitIdentity prefers repo-local config over the sandbox identity`() {
         val (dir, git) = initRepo()
+        val cfg = git.repository.config
+        cfg.setString("user", null, "name", "Local")
+        cfg.setString("user", null, "email", "local@x")
+        cfg.save()
         git.close()
-        Git.open(dir).use { repo ->
-            repo.config.setString("user", null, "name", "Local")
-            repo.config.setString("user", null, "email", "local@x")
-            repo.config.save()
-        }
         assertEquals("Local", GitHostRepo.commitIdentity(dir, "T", "t@x").name)
         assertTrue(GitHostRepo.commitIdentity(dir, null, null).name.isNotBlank())
     }
