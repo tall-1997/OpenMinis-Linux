@@ -68,9 +68,8 @@ import com.openminis.app.ui.theme.ChatColors
  * The newest output used to be the last field of the shared status row, where
  * the ellipsis ate it first — exactly the line the chip exists to show.
  *
- * The stop affordance is a plain [Box] with a 24dp hit area, NOT an
- * `IconButton`: Material3's IconButton enforces a 48dp minimum touch target
- * (`minimumInteractiveComponentSize`), which alone made the chip ~77dp tall.
+ * The stop affordance keeps a 48dp touch target independently of its small
+ * glyph, so compact visuals do not make the destructive action hard to hit.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -81,13 +80,13 @@ fun SubAgentLiveBar(
 ) {
     val members by SubAgentActivityTracker.members.collectAsStateWithLifecycle()
     val mine = members.filter { it.parentSessionId == sessionId }
-    var detailMemberId by remember { mutableStateOf<String?>(null) }
+    var detailMemberId by remember(sessionId) { mutableStateOf<String?>(null) }
     // [T-subagent-sheet-survives-finish] The tracker REMOVES a member the
     // moment it finishes (SubAgentActivityTracker.finish), so looking it up
     // live closed the open sheet exactly when the user wanted to read the
     // final output. Keep the last snapshot for the selected id and render it
     // until the user dismisses.
-    var detailSnapshot by remember { mutableStateOf<SubAgentActivityTracker.Member?>(null) }
+    var detailSnapshot by remember(sessionId) { mutableStateOf<SubAgentActivityTracker.Member?>(null) }
     LaunchedEffect(detailMemberId, mine) {
         if (detailMemberId == null) {
             detailSnapshot = null
@@ -109,7 +108,10 @@ fun SubAgentLiveBar(
                 key(m.id) {
                     SubAgentChip(
                         member = m,
-                        onClick = { detailMemberId = m.id },
+                        onClick = {
+                            detailSnapshot = m
+                            detailMemberId = m.id
+                        },
                         onStop = { onStop(m.id) },
                     )
                 }
@@ -122,6 +124,7 @@ fun SubAgentLiveBar(
     if (detailMember != null) {
         SubAgentDetailSheet(
             member = detailMember,
+            isActive = mine.any { it.id == detailMember.id },
             onDismiss = { detailMemberId = null },
             onStop = onStop,
         )
@@ -171,10 +174,10 @@ private fun SubAgentChip(
                 )
             }
             Spacer(modifier = Modifier.width(2.dp))
-            // Deliberately a Box, not IconButton: see the file KDoc.
+            // Keep the small glyph inside an accessible touch target.
             Box(
                 modifier = Modifier
-                    .size(24.dp)
+                    .size(48.dp)
                     .clip(CircleShape)
                     .clickable(role = Role.Button, onClick = onStop),
                 contentAlignment = Alignment.Center,
@@ -231,10 +234,12 @@ private fun SubAgentChip(
 @Composable
 private fun SubAgentDetailSheet(
     member: SubAgentActivityTracker.Member,
+    isActive: Boolean,
     onDismiss: () -> Unit,
     onStop: (String) -> Unit = {},
 ) {
-    val phase = member.phase.ifBlank { "思考中" }
+    val phase = if (isActive) member.phase.ifBlank { "思考中" }
+        else stringResource(R.string.scheduled_task_state_ended)
     var expandedToolId by remember(member.id) { mutableStateOf<String?>(null) }
     val listState = rememberLazyListState()
     val tail = member.steps.lastOrNull()
@@ -296,7 +301,7 @@ private fun SubAgentDetailSheet(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                IconButton(onClick = { onStop(member.id) }) {
+                IconButton(enabled = isActive, onClick = { onStop(member.id) }) {
                     Icon(
                         Icons.Filled.Stop,
                         contentDescription = stringResource(R.string.subagent_stop_desc, member.title),
@@ -306,7 +311,7 @@ private fun SubAgentDetailSheet(
             }
             Column(modifier = Modifier.padding(horizontal = 16.dp)) {
                 Spacer(modifier = Modifier.height(6.dp))
-                PhaseBanner(phase = phase, tool = member.currentTool)
+                PhaseBanner(phase = phase, tool = if (isActive) member.currentTool else "")
             }
             LazyColumn(
                 state = listState,
@@ -319,7 +324,7 @@ private fun SubAgentDetailSheet(
                 item(key = "task") {
                     UserTaskBubble(member.title)
                 }
-                if (member.steps.isEmpty()) {
+                if (member.steps.isEmpty() && isActive) {
                     item(key = "waiting") {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             TypingIndicator()
@@ -366,7 +371,7 @@ private fun SubAgentDetailSheet(
             // RUNNING child at its next turn boundary (SubAgentRunner drains
             // the channel). Refused with an inline message when the lane
             // already ended. Stop lives in the header now.
-            SubAgentSteerRow(memberId = member.id)
+            if (isActive) SubAgentSteerRow(memberId = member.id)
         }
     }
 }
