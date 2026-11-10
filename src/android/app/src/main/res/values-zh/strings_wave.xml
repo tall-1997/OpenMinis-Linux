@@ -47,6 +47,5 @@
     <string name="subagent_steer_send">发送</string>
     <string name="subagent_steer_queued">引导已排队。</string>
     <string name="subagent_steer_refused">子代理已结束，引导未发送。</string>
-    <string name="subagent_stop_in_sheet">停止子代理</string>
     <string name="subagent_tool_calls_fmt">%1$d 次工具调用</string>
 </resources>

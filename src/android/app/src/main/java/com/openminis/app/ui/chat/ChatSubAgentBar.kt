@@ -163,6 +163,13 @@ private fun SubAgentChip(
             }
             val toolCalls = member.steps.count { it.kind == "tool" }
             if (toolCalls > 0) append(" · ").append(stringResource(R.string.subagent_tool_calls_fmt, toolCalls))
+            // First line of the latest output, kept from the one-line chip:
+            // the cheapest way to see what a lane is actually doing right
+            // now. maxLines=1 + ellipsis on the Text keeps a long line from
+            // crowding the identity row above.
+            val latestLine = member.steps.lastOrNull { it.body.isNotBlank() }?.body
+                ?.lineSequence()?.firstOrNull { it.isNotBlank() }?.take(60).orEmpty()
+            if (latestLine.isNotEmpty()) append(" · ").append(latestLine)
         }
         Spacer(modifier = Modifier.height(1.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {

@@ -48,6 +48,5 @@
     <string name="subagent_steer_send">Send</string>
     <string name="subagent_steer_queued">Guidance queued.</string>
     <string name="subagent_steer_refused">The sub-agent has finished; guidance was not sent.</string>
-    <string name="subagent_stop_in_sheet">Stop sub-agent</string>
     <string name="subagent_tool_calls_fmt">%1$d tool calls</string>
 </resources>
