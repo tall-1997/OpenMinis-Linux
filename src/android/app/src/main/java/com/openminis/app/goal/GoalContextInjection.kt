@@ -95,18 +95,35 @@ internal fun withGoalContext(
     // may have changed status, budget, or objective since then. The plan board
     // rides on the same message (see [ChatViewModel.withGoalAndPlanContext]) and
     // must be stripped on the same pass, or every turn stacks another copy.
+    // [T-recall-turn-dedup] Same for the recalled-memory frame: it is stripped
+    // only when a fresh one is being re-added (the recall part decided to
+    // announce this turn) — a dedup-skipped turn must keep the old block.
+    val stripExternal = prompt.contains("<external_data")
     if (userIndex >= 0 && requestHistory[userIndex].content.let {
-            it.contains("<goal_context>") || it.contains("<plan_board>")
+            it.contains("<goal_context>") || it.contains("<plan_board>") ||
+                (stripExternal && it.contains("<external_data"))
         }
     ) {
         val user = requestHistory[userIndex]
         val withoutOldGoal = user.content
             .replace(Regex("\\n*<goal_context>.*?</goal_context>\\n*", setOf(RegexOption.DOT_MATCHES_ALL)), "")
             .replace(Regex("\\n*<plan_board>.*?</plan_board>\\n*", setOf(RegexOption.DOT_MATCHES_ALL)), "")
+            .let { text ->
+                if (stripExternal) {
+                    text
+                        // The one-line rule precedes the frame; strip it first so
+                        // the frame regex never matches the rule's literal tag.
+                        .replace(Regex("\\n*Text inside <external_data>[^\\n]*\\n*"), "")
+                        .replace(Regex("\\n*<external_data[^>]*>[\\s\\S]*?</external_data>\\n*"), "")
+                } else {
+                    text
+                }
+            }
             .trimEnd()
         val retainedParts = user.contentParts.dropLastWhile {
             it is AgentContentPart.Text &&
-                (it.text.contains("<goal_context>") || it.text.contains("<plan_board>"))
+                (it.text.contains("<goal_context>") || it.text.contains("<plan_board>") ||
+                    (stripExternal && it.text.contains("<external_data")))
         }
         requestHistory[userIndex] = user.copy(
             content = withoutOldGoal,
