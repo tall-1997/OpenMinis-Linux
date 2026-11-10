@@ -61,15 +61,13 @@ import com.openminis.app.ui.theme.ChatColors
 /**
  * [T-wave-e-subagent-card] Live roster bar for concurrent spawn_agent
  * members, modelled on the task chips of mature agent clients: each member
- * is a compact chip with up to three single-line rows —
- *   1. identity: phase dot, task title, i/N, stop;
- *   2. live status: phase, in-flight tool, turn, tool-call count;
- *   3. newest output line, on its OWN row.
- * The newest output used to be the last field of the shared status row, where
- * the ellipsis ate it first — exactly the line the chip exists to show.
+ * is ONE compact single-line chip — phase dot, short task title, one live
+ * status token (the in-flight tool beats the phase word), i/N, stop. The
+ * dot colour already carries the phase, so the text stays short; output,
+ * turns and tool-call counts live in the detail sheet.
  *
- * The stop affordance keeps a 48dp touch target independently of its small
- * glyph, so compact visuals do not make the destructive action hard to hit.
+ * The stop affordance keeps a 48dp-wide trailing touch target, so compact
+ * visuals do not make the destructive action hard to hit.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -140,71 +138,69 @@ private fun SubAgentChip(
     val phase = member.phase.ifBlank { "思考中" }
     val bg = phaseColor(phase)
     val title = member.title.ifBlank { stringResource(R.string.subagent_fallback_label) }
-    Column(
+    Row(
         modifier = Modifier
             .widthIn(max = 240.dp)
+            .height(36.dp)
             .background(bg, RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
-            .padding(start = 10.dp, end = 6.dp, top = 4.dp, bottom = 5.dp),
+            .padding(start = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Row 1 — identity: phase dot, task title, i/N, compact stop.
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(6.dp)
-                    .background(Color.White, CircleShape),
-            )
-            Spacer(modifier = Modifier.width(5.dp))
-            Text(
-                text = title,
-                color = Color.White,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false),
-            )
-            if (member.index > 0 && member.total > 0) {
-                Spacer(modifier = Modifier.width(5.dp))
-                Text(
-                    text = stringResource(R.string.subagent_index_of_total, member.index, member.total),
-                    color = Color.White.copy(alpha = 0.85f),
-                    fontSize = 11.sp,
-                    maxLines = 1,
-                )
-            }
-            Spacer(modifier = Modifier.width(2.dp))
-            // Keep the small glyph inside an accessible touch target.
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .clickable(role = Role.Button, onClick = onStop),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    Icons.Filled.Stop,
-                    contentDescription = stringResource(R.string.subagent_stop_desc, title),
-                    tint = Color.White.copy(alpha = 0.9f),
-                    modifier = Modifier.size(13.dp),
-                )
-            }
-        }
-        // Keep the live card to identity + activity; full output and counts live in the sheet.
-        val status = buildString {
-            append(phase)
-            member.currentTool.takeIf { it.isNotBlank() }?.let {
-                append(" · ").append(subAgentToolTitle(it, ""))
-            }
-        }
+        Box(
+            modifier = Modifier
+                .size(6.dp)
+                .background(Color.White, CircleShape),
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = title,
+            color = Color.White,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
+        )
+        // One short status token: the in-flight tool label wins over the
+        // phase word; full output and counts live in the sheet.
+        val status = member.currentTool.takeIf { it.isNotBlank() }
+            ?.let { subAgentToolTitle(it, "") } ?: phase
+        Spacer(modifier = Modifier.width(4.dp))
         Text(
             text = status,
             color = Color.White.copy(alpha = 0.82f),
-            fontSize = 10.5.sp,
+            fontSize = 11.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(start = 11.dp),
+            modifier = Modifier.widthIn(max = 120.dp),
         )
+        if (member.index > 0 && member.total > 0) {
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = stringResource(R.string.subagent_index_of_total, member.index, member.total),
+                color = Color.White.copy(alpha = 0.85f),
+                fontSize = 11.sp,
+                maxLines = 1,
+            )
+        }
+        // 48dp-wide trailing touch target keeps the destructive stop easy
+        // to hit without doubling the single-line chip height.
+        Box(
+            modifier = Modifier
+                .width(48.dp)
+                .fillMaxHeight()
+                .clip(CircleShape)
+                .clickable(role = Role.Button, onClick = onStop),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Filled.Stop,
+                contentDescription = stringResource(R.string.subagent_stop_desc, title),
+                tint = Color.White.copy(alpha = 0.9f),
+                modifier = Modifier.size(13.dp),
+            )
+        }
     }
 }
 
