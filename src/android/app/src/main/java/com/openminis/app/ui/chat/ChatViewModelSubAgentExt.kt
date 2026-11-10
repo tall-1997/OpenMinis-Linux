@@ -577,7 +577,7 @@ private suspend fun ChatViewModel.runOneSubAgentInner(
         val kind = spawn.kind
         val writePaths = spawn.writePaths
         val maxTurns = spawn.maxTurns
-        val title = spawn.title.ifEmpty { "子代理 $index/$total" }
+        val title = spawn.title.ifBlank { context.getString(com.openminis.app.R.string.subagent_fallback_label) } // i/N lives in the chip badge, never here
         // A present-but-all-invalid `write_paths` parses to the poison marker,
         // which WritePathGuard resolves to "deny every write" — correct, but
         // useless to the model, which would see a worker that cannot write

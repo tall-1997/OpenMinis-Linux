@@ -29,6 +29,9 @@
     <string name="subagent_waiting_first_output">Thinking, no output yet</string>
     <string name="subagent_turn_of">Turn %1$d of %2$d</string>
     <string name="subagent_index_of_total">Sub-agent %1$d/%2$d</string>
+    <!-- Pure "1/N" badge on the single-line chip; the agent word lives in the
+         title / sheet header, so the number itself is locale-neutral. -->
+    <string name="subagent_badge_count" translatable="false">%1$d/%2$d</string>
     <string name="subagent_fallback_label">Sub-agent</string>
     <string name="subagent_task_fallback">Sub-agent task</string>
     <string name="subagent_stop_desc">Stop %1$s</string>

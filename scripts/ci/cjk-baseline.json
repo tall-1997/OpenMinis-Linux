@@ -100,7 +100,7 @@
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatViewModelResumeQueueExt.kt": 1,
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatViewModelRetryExt.kt": 1,
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatViewModelSendExt.kt": 1,
-    "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatViewModelSubAgentExt.kt": 7,
+    "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatViewModelSubAgentExt.kt": 6,
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatViewModelToolTurnExec.kt": 1,
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatViewModelVideoExt.kt": 4,
     "src/android/app/src/main/java/com/openminis/app/ui/chat/CodeBlockRunRouter.kt": 4,
