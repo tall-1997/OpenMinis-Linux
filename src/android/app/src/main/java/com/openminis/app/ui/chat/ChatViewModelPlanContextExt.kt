@@ -79,6 +79,10 @@ internal fun ChatViewModel.liveRecallPrompt(): String? {
     // Every request of one turn must carry the block (each request is a fresh
     // context), but a NEW turn re-announces only when the recalled lines
     // changed — otherwise the fragment would repeat verbatim every round.
+    // The engine's hit-keyed cap (recallForPrompt) composes on top of this:
+    // when the recalled set drifts every round, each memory still stops being
+    // re-injected after RECALL_REPEAT_CAP consecutive rounds and re-arms when
+    // it drops out of the hits (task pivot).
     val turnKey = lastUser?.id ?: ""
     val keys = hits.map { "${it.day}:${it.line}" }.toSet()
     // If the message that carried the previous block fell out of the window,
@@ -88,12 +92,11 @@ internal fun ChatViewModel.liveRecallPrompt(): String? {
     if (!shouldAnnounceRecall(turnKey, lastRecallTurnKey, keys, lastRecallTurnKeys, carrierAlive)) return null
     lastRecallTurnKey = turnKey
     lastRecallTurnKeys = keys
-    val fragment = engine.formatAsPromptFragment(hits).takeIf { it.isNotBlank() } ?: return null
-    // [T-memory-recall-count] Count entries that actually reached the prompt:
-    // display metadata only (ranking no longer feeds on it), kept for future
-    // strength-style signals.
-    engine.acceptRecallBatch(hits.map { it.source to it.line })
-    return fragment
+    // [T-memory-recall-count] formatAsPromptFragment already accepts the
+    // entries it actually rendered (post fragment budget); accepting the FULL
+    // hit list on top used to count every injection twice, with the extra
+    // keys never shown anywhere.
+    return engine.formatAsPromptFragment(hits).takeIf { it.isNotBlank() }
 }
 
 /**
