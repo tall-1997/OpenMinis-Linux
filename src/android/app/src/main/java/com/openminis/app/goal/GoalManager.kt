@@ -175,6 +175,29 @@ class GoalManager internal constructor(private val persistence: GoalPersistence)
         true
     }
 
+    /**
+     * [T-goal-tool-clear] Model-side removal — the delete op the `update_goal`
+     * tool was missing. Before it existed the agent could only mark a Goal
+     * complete, so the row stayed behind and every later task in the session
+     * inherited (mounted) an objective nobody wanted any more; the model had
+     * no way to say "this task is over, drop it".
+     *
+     * Policy: the model may clear a Goal it is replacing, including one the
+     * human wrote, but NOT a PAUSED one — a pause is the human explicitly
+     * saying "leave this alone", and deleting it would discard an objective
+     * they can no longer see. A paused Goal is refused so the model reports
+     * the conflict instead of silently winning.
+     *
+     * Returns false without bumping when nothing existed or the Goal is paused.
+     */
+    suspend fun clearByModel(sessionId: String): Boolean = locked(sessionId) {
+        val current = persistence.load(sessionId) ?: return@locked false
+        if (current.status == GoalStatus.PAUSED) return@locked false
+        persistence.delete(sessionId)
+        bump()
+        true
+    }
+
     suspend fun mayContinue(sessionId: String, usefulActivity: Boolean): Boolean =
         persistence.load(sessionId)?.let { GoalStateMachine.canContinue(it, usefulActivity) } ?: false
 
