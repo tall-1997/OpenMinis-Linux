@@ -1,5 +1,7 @@
 package com.openminis.app.goal
 
+import com.openminis.app.data.db.GoalOrigin
+import com.openminis.app.data.db.GoalStatus
 import com.openminis.app.data.db.SessionGoalEntity
 import com.openminis.app.data.repository.ChatRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -52,7 +54,13 @@ class GoalManager internal constructor(private val persistence: GoalPersistence)
     suspend fun createByUser(sessionId: String, objective: String, tokenBudget: Long? = null): SessionGoalEntity =
         locked(sessionId) {
             check(persistence.load(sessionId) == null) { "A Goal already exists for this session" }
-            GoalStateMachine.create(sessionId, objective, tokenBudget, System.currentTimeMillis()).also {
+            GoalStateMachine.create(
+                sessionId,
+                objective,
+                tokenBudget,
+                System.currentTimeMillis(),
+                GoalOrigin.USER,
+            ).also {
                 persistence.insert(it)
                 bump()
             }
@@ -64,18 +72,53 @@ class GoalManager internal constructor(private val persistence: GoalPersistence)
      * long-running objective, the objective is recorded as the session Goal in
      * the same step instead of being lost with the tool arguments.
      *
-     * Idempotent by design — unlike [createByUser]. A model may re-emit the
-     * board (op=replace is a full-list rewrite) or retry a tool call; creating
-     * a Goal twice must not fail the turn, and must never overwrite an
-     * objective the human set. An existing Goal is returned untouched.
+     * Idempotent for the SAME objective — a model may re-emit the board
+     * (op=replace is a full-list rewrite) or retry a tool call; creating a Goal
+     * twice must not fail the turn. A DIFFERENT objective, however, is a new
+     * task and must not inherit the old one: before
+     * [T-goal-model-origin] this branch silently returned the existing row, so
+     * a finished task's Goal stayed ACTIVE and every later request mounted its
+     * `<goal_context>` — the model kept reading a previous task's objective and
+     * the new task never got a Goal of its own.
+     *
+     * A [GoalOrigin.MODEL] Goal is therefore superseded by the new objective
+     * unless the human paused it (a pause is an instruction to stop touching
+     * it). A [GoalOrigin.USER] Goal is never overwritten: the human's objective
+     * outranks whatever the model inferred.
      */
     suspend fun createByModel(sessionId: String, objective: String, tokenBudget: Long? = null): SessionGoalEntity = locked(sessionId) {
-        persistence.load(sessionId)?.let { return@locked it }
-        GoalStateMachine.create(sessionId, objective, tokenBudget, System.currentTimeMillis()).also {
+        val normalized = objective.trim()
+        val existing = persistence.load(sessionId)
+        if (existing != null) {
+            val sameObjective = existing.objective == normalized
+            if (sameObjective || !supersedableByModel(existing)) return@locked existing
+            // One row per session: drop the stale model Goal, then write the
+            // new task's. (A single UPDATE would need saveState to carry
+            // created_at; the delete+insert keeps the fresh start time and is
+            // no worse than the pre-existing write path.)
+            persistence.delete(sessionId)
+        }
+        GoalStateMachine.create(
+            sessionId,
+            normalized,
+            tokenBudget,
+            System.currentTimeMillis(),
+            GoalOrigin.MODEL,
+        ).also {
             persistence.insert(it)
             bump()
         }
     }
+
+    /**
+     * A model-written Goal describes the task in progress, so a new objective
+     * replaces it — except when the human paused it, which is an explicit
+     * "leave this alone". Any other status (active, complete, blocked,
+     * budget-limited) belongs to finished or failed work and must not block the
+     * next task from recording its own objective.
+     */
+    private fun supersedableByModel(goal: SessionGoalEntity): Boolean =
+        goal.createdBy == GoalOrigin.MODEL && goal.status != GoalStatus.PAUSED
 
     suspend fun setPausedByUser(sessionId: String, paused: Boolean): SessionGoalEntity? = locked(sessionId) {
         val current = persistence.load(sessionId) ?: return@locked null
@@ -129,6 +172,29 @@ class GoalManager internal constructor(private val persistence: GoalPersistence)
      */
     suspend fun clearByUser(sessionId: String): Boolean = locked(sessionId) {
         if (persistence.load(sessionId) == null) return@locked false
+        persistence.delete(sessionId)
+        bump()
+        true
+    }
+
+    /**
+     * [T-goal-tool-clear] Model-side removal — the delete op the `update_goal`
+     * tool was missing. Before it existed the agent could only mark a Goal
+     * complete, so the row stayed behind and every later task in the session
+     * inherited (mounted) an objective nobody wanted any more; the model had
+     * no way to say "this task is over, drop it".
+     *
+     * Policy: the model may clear a Goal it is replacing, including one the
+     * human wrote, but NOT a PAUSED one — a pause is the human explicitly
+     * saying "leave this alone", and deleting it would discard an objective
+     * they can no longer see. A paused Goal is refused so the model reports
+     * the conflict instead of silently winning.
+     *
+     * Returns false without bumping when nothing existed or the Goal is paused.
+     */
+    suspend fun clearByModel(sessionId: String): Boolean = locked(sessionId) {
+        val current = persistence.load(sessionId) ?: return@locked false
+        if (current.status == GoalStatus.PAUSED) return@locked false
         persistence.delete(sessionId)
         bump()
         true

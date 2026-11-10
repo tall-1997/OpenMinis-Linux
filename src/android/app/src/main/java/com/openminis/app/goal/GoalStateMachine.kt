@@ -1,5 +1,6 @@
 package com.openminis.app.goal
 
+import com.openminis.app.data.db.GoalOrigin
 import com.openminis.app.data.db.GoalStatus
 import com.openminis.app.data.db.SessionGoalEntity
 
@@ -14,6 +15,9 @@ object GoalStateMachine {
         objective: String,
         tokenBudget: Long?,
         now: Long,
+        // [T-goal-model-origin] Defaults to the human so a caller that forgets
+        // the argument writes the sovereign kind, never the replaceable one.
+        createdBy: String = GoalOrigin.USER,
     ): SessionGoalEntity {
         val normalized = objective.trim()
         require(normalized.isNotEmpty()) { "Goal objective must not be empty" }
@@ -25,6 +29,7 @@ object GoalStateMachine {
             tokenBudget = tokenBudget,
             createdAt = now,
             updatedAt = now,
+            createdBy = createdBy,
         )
     }
 

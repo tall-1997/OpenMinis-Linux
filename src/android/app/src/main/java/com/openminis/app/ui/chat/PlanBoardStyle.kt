@@ -29,6 +29,9 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Flag
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -126,6 +129,18 @@ internal fun PlanBoardBody(
      * The objective takes over the summary line's title slot instead.
      */
     goalObjective: String? = null,
+    /**
+     * [T-goal-panel-reachability] Opens the session Goal sheet.
+     *
+     * Before this, the goal row in [PlanGoalCard] was the ONLY tap target that
+     * opened the sheet, and it is rendered only when there is NO board
+     * (`headerVisible && !boardVisible`). Any session with a task board — i.e.
+     * every long task — therefore had no way to reach the goal panel at all:
+     * the objective was visible as this row's title but nothing could be
+     * tapped to pause, retune, or clear it. A trailing flag on the summary row
+     * restores that entry without adding a second row.
+     */
+    onOpenGoal: (() -> Unit)? = null,
 ) {
     val accent = if (allDone) ToolCheckColor else MaterialTheme.colorScheme.primary
     val title: String? = goalObjective?.takeIf { it.isNotBlank() } ?: if (allDone) {
@@ -163,16 +178,17 @@ internal fun PlanBoardBody(
             Column {
                 Column(
                     Modifier
-                        // Shorter than the old 360dp: the list now pushes the
-                        // card up into the transcript, so it is capped lower to
-                        // keep the last messages in view.
-                        .heightIn(max = 300.dp)
+                        // [T-plan-card-dense] 200dp cap (was 300): the card sits
+                        // above the composer, and a long board used to push the
+                        // transcript — the thing the user is reading — off the
+                        // top of the screen. The list still scrolls inside.
+                        .heightIn(max = 200.dp)
                         .verticalScroll(rememberScrollState()),
                 ) {
                     board.forEach { PlanBoardRow(it) }
                 }
                 HorizontalDivider(
-                    modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
+                    modifier = Modifier.padding(top = 2.dp),
                     thickness = 1.dp,
                     color = planCardHairline,
                 )
@@ -181,9 +197,10 @@ internal fun PlanBoardBody(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                // iOS minimum row height: the summary line is both the label
-                // and the toggle, so it has to be finger-sized.
-                .heightIn(min = 44.dp)
+                // [T-plan-card-dense] 36dp (was 44): compact single line, same
+                // as the sub-agent chips. The row is full-width, so the
+                // finger target is horizontal, not vertical.
+                .heightIn(min = 36.dp)
                 .clip(RoundedCornerShape(10.dp))
                 .pointerInput(expanded) {
                     // Directional swipe, one fire per gesture past 24dp.
@@ -247,6 +264,27 @@ internal fun PlanBoardBody(
                 modifier = Modifier.weight(1f),
             )
             Spacer(Modifier.width(8.dp))
+            // [T-goal-panel-reachability] Goal-sheet entry; only present while
+            // a Goal exists, so a plain board keeps exactly its old shape.
+            // 36dp stays inside the summary row's 44dp minimum while keeping
+            // the target finger-sized (a 28dp hit area undershot it).
+            if (onOpenGoal != null) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .clickable(role = Role.Button) { onOpenGoal() },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Flag,
+                        contentDescription = stringResource(R.string.cd_goal_header),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+                Spacer(Modifier.width(2.dp))
+            }
             Icon(
                 imageVector = PlanBoardGlyphs.ChevronDown,
                 contentDescription = null,
@@ -283,7 +321,9 @@ private fun PlanBoardProgress(fraction: Float, color: Color) {
     Box(
         Modifier
             .fillMaxWidth()
-            .padding(start = 26.dp, end = 26.dp, bottom = 6.dp)
+            // [T-plan-card-dense] 2dp of breathing room under the bar (was 6):
+            // the bar already reads as the row's underline.
+            .padding(start = 26.dp, end = 26.dp, bottom = 2.dp)
             .height(2.dp)
             .clip(RoundedCornerShape(1.dp))
             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)),
