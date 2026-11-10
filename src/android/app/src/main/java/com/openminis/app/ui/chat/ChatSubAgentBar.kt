@@ -42,8 +42,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -59,12 +61,16 @@ import com.openminis.app.ui.theme.ChatColors
 /**
  * [T-wave-e-subagent-card] Live roster bar for concurrent spawn_agent
  * members, modelled on the task chips of mature agent clients: each member
- * is a TWO-LINE chip — the top row carries the identity (phase dot, task
- * title, i/N), the bottom row the live progress (phase, in-flight tool,
- * turn, latest output) — so a long output line can never crowd the title
- * out of a single 220dp run of text. The stop affordance is a full-size
- * trailing icon on its own padding, not a cramped 17dp overlay inside the
- * label's touch area.
+ * is a compact chip with up to three single-line rows —
+ *   1. identity: phase dot, task title, i/N, stop;
+ *   2. live status: phase, in-flight tool, turn, tool-call count;
+ *   3. newest output line, on its OWN row.
+ * The newest output used to be the last field of the shared status row, where
+ * the ellipsis ate it first — exactly the line the chip exists to show.
+ *
+ * The stop affordance is a plain [Box] with a 24dp hit area, NOT an
+ * `IconButton`: Material3's IconButton enforces a 48dp minimum touch target
+ * (`minimumInteractiveComponentSize`), which alone made the chip ~77dp tall.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -76,6 +82,19 @@ fun SubAgentLiveBar(
     val members by SubAgentActivityTracker.members.collectAsStateWithLifecycle()
     val mine = members.filter { it.parentSessionId == sessionId }
     var detailMemberId by remember { mutableStateOf<String?>(null) }
+    // [T-subagent-sheet-survives-finish] The tracker REMOVES a member the
+    // moment it finishes (SubAgentActivityTracker.finish), so looking it up
+    // live closed the open sheet exactly when the user wanted to read the
+    // final output. Keep the last snapshot for the selected id and render it
+    // until the user dismisses.
+    var detailSnapshot by remember { mutableStateOf<SubAgentActivityTracker.Member?>(null) }
+    LaunchedEffect(detailMemberId, mine) {
+        if (detailMemberId == null) {
+            detailSnapshot = null
+        } else {
+            mine.firstOrNull { it.id == detailMemberId }?.let { detailSnapshot = it }
+        }
+    }
 
     if (mine.isNotEmpty()) {
         Row(
@@ -97,7 +116,9 @@ fun SubAgentLiveBar(
             }
         }
     }
-    val detailMember = mine.firstOrNull { it.id == detailMemberId }
+    val detailMember = detailMemberId?.let { id ->
+        mine.firstOrNull { it.id == id } ?: detailSnapshot?.takeIf { it.id == id }
+    }
     if (detailMember != null) {
         SubAgentDetailSheet(
             member = detailMember,
@@ -115,14 +136,15 @@ private fun SubAgentChip(
 ) {
     val phase = member.phase.ifBlank { "思考中" }
     val bg = phaseColor(phase)
+    val title = member.title.ifBlank { stringResource(R.string.subagent_fallback_label) }
     Column(
         modifier = Modifier
             .widthIn(max = 240.dp)
             .background(bg, RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
-            .padding(start = 10.dp, end = 2.dp, top = 5.dp, bottom = 5.dp),
+            .padding(start = 10.dp, end = 6.dp, top = 4.dp, bottom = 5.dp),
     ) {
-        // Row 1 — identity: phase dot, task title, i/N.
+        // Row 1 — identity: phase dot, task title, i/N, compact stop.
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 modifier = Modifier
@@ -131,9 +153,7 @@ private fun SubAgentChip(
             )
             Spacer(modifier = Modifier.width(5.dp))
             Text(
-                text = member.title.ifBlank {
-                    stringResource(R.string.subagent_fallback_label)
-                },
+                text = title,
                 color = Color.White,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -150,12 +170,29 @@ private fun SubAgentChip(
                     maxLines = 1,
                 )
             }
+            Spacer(modifier = Modifier.width(2.dp))
+            // Deliberately a Box, not IconButton: see the file KDoc.
+            Box(
+                modifier = Modifier
+                    .size(24.dp)
+                    .clip(CircleShape)
+                    .clickable(role = Role.Button, onClick = onStop),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Filled.Stop,
+                    contentDescription = stringResource(R.string.subagent_stop_desc, title),
+                    tint = Color.White.copy(alpha = 0.9f),
+                    modifier = Modifier.size(13.dp),
+                )
+            }
         }
-        // Row 2 — live progress: phase, in-flight tool, turn, latest output.
-        val progress = buildString {
+        // Row 2 — live status only; the newest output moved to row 3 so the
+        // ellipsis cannot eat it first.
+        val status = buildString {
             append(phase)
             member.currentTool.takeIf { it.isNotBlank() }?.let {
-                append(" · ").append(subAgentToolTitle(it, "").substringBefore(" · "))
+                append(" · ").append(subAgentToolTitle(it, ""))
             }
             if (member.turnCap > 0) {
                 append(" · ")
@@ -163,35 +200,29 @@ private fun SubAgentChip(
             }
             val toolCalls = member.steps.count { it.kind == "tool" }
             if (toolCalls > 0) append(" · ").append(stringResource(R.string.subagent_tool_calls_fmt, toolCalls))
-            // First line of the latest output, kept from the one-line chip:
-            // the cheapest way to see what a lane is actually doing right
-            // now. maxLines=1 + ellipsis on the Text keeps a long line from
-            // crowding the identity row above.
-            val latestLine = member.steps.lastOrNull { it.body.isNotBlank() }?.body
-                ?.lineSequence()?.firstOrNull { it.isNotBlank() }?.take(60).orEmpty()
-            if (latestLine.isNotEmpty()) append(" · ").append(latestLine)
         }
-        Spacer(modifier = Modifier.height(1.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = status,
+            color = Color.White.copy(alpha = 0.82f),
+            fontSize = 10.5.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = 11.dp),
+        )
+        // Row 3 — newest output line, with the full chip width to itself.
+        val latestLine = member.steps.lastOrNull { it.body.isNotBlank() }?.body
+            ?.lineSequence()?.firstOrNull { it.isNotBlank() }?.take(60).orEmpty()
+        if (latestLine.isNotEmpty()) {
             Text(
-                text = progress,
-                color = Color.White.copy(alpha = 0.82f),
-                fontSize = 11.sp,
+                text = latestLine,
+                color = Color.White.copy(alpha = 0.66f),
+                fontSize = 10.5.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .padding(start = 11.dp, top = 1.dp)
+                    .fillMaxWidth(),
             )
-            IconButton(
-                onClick = onStop,
-                modifier = Modifier.size(26.dp),
-            ) {
-                Icon(
-                    Icons.Filled.Stop,
-                    contentDescription = stringResource(R.string.subagent_stop_desc, member.title),
-                    tint = Color.White,
-                    modifier = Modifier.size(14.dp),
-                )
-            }
         }
     }
 }
