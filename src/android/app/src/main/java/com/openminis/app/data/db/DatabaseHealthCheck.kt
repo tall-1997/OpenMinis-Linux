@@ -224,8 +224,9 @@ object DatabaseHealthCheck {
 
         // [T-db-gate-freshness] quick_check is O(database size); inside the
         // freshness window a previous healthy verdict stands in for the
-        // re-scan. path+size must still match, so a quarantined or replaced
-        // database can never hit this branch.
+        // re-scan. path must match and the file must not have shrunk, so a
+        // quarantined or replaced (smaller) database can never hit this
+        // branch — growth is tolerated, see [T-db-gate-freshness-growth].
         if (DatabaseGateFreshness.isFresh(DatabaseGateFreshness.readStamp(filesDir), dbFile, nowMs)) {
             return Outcome.Healthy
         }
