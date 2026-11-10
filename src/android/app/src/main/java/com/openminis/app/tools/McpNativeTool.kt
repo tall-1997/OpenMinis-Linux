@@ -28,19 +28,23 @@ object McpNativeTool {
         name = NAME,
         description = "Call MCP (Model Context Protocol) servers natively — faster than minis-mcp-cli via shell. " +
             "Actions: 'servers' lists configured servers; 'tools' lists one server's tools; " +
-            "'call' invokes a tool with a JSON arguments object.",
+            "'call' invokes a tool with a JSON arguments object; 'resources'/'read_resource' list and read " +
+            "server resources; 'prompts'/'get_prompt' list and fetch prompt templates. " +
+            "resources/prompts need a server that implements them — an unsupported server answers with a clean not-supported message.",
         parameters = mapOf(
             "action" to AgentToolParam(
                 "string",
-                "One of: servers, tools, call.",
-                enumValues = listOf("servers", "tools", "call"),
+                "One of: servers, tools, call, resources, read_resource, prompts, get_prompt.",
+                enumValues = listOf("servers", "tools", "call", "resources", "read_resource", "prompts", "get_prompt"),
             ),
-            "server" to AgentToolParam("string", "Server id (required for tools/call; see action=servers)."),
+            "server" to AgentToolParam("string", "Server id (required for all actions except servers)."),
             "tool" to AgentToolParam("string", "Tool name on that server (required for call)."),
-            "arguments" to AgentToolParam("object", "Arguments object for the tool (call only). Omit for tools with no parameters."),
+            "arguments" to AgentToolParam("object", "Arguments object for the tool (call) or prompt variables (get_prompt). Omit when the tool/prompt takes none."),
+            "uri" to AgentToolParam("string", "Resource uri (required for read_resource; see action=resources for the list)."),
+            "name" to AgentToolParam("string", "Prompt name (required for get_prompt; see action=prompts for the list)."),
         ),
         required = listOf("action"),
-        propertyOrdering = listOf("action", "server", "tool", "arguments"),
+        propertyOrdering = listOf("action", "server", "tool", "arguments", "uri", "name"),
     )
 
     suspend fun execute(
@@ -108,9 +112,63 @@ object McpNativeTool {
                     failure(e, "mcp call:$server/$tool")
                 }
             }
-            else -> invalid("'action' must be one of: servers, tools, call (got '${action}')")
+            "resources" -> {
+                if (server.isEmpty()) return@withContext invalid("'server' is required for action=resources")
+                wrapServerSupport(server) {
+                    McpNativeBridge.listResources(context, repo, sessionId, server)
+                }
+            }
+            "read_resource" -> {
+                val uri = args.optString("uri").trim()
+                if (server.isEmpty()) return@withContext invalid("'server' is required for action=read_resource")
+                if (uri.isEmpty()) return@withContext invalid("'uri' is required for action=read_resource")
+                wrapServerSupport(server) {
+                    McpNativeBridge.readResource(context, repo, sessionId, server, uri)
+                }
+            }
+            "prompts" -> {
+                if (server.isEmpty()) return@withContext invalid("'server' is required for action=prompts")
+                wrapServerSupport(server) {
+                    McpNativeBridge.listPrompts(context, repo, sessionId, server)
+                }
+            }
+            "get_prompt" -> {
+                val name = args.optString("name").trim()
+                if (server.isEmpty()) return@withContext invalid("'server' is required for action=get_prompt")
+                if (name.isEmpty()) return@withContext invalid("'name' is required for action=get_prompt")
+                val pargs = when (val raw = args.opt("arguments")) {
+                    is JSONObject -> raw
+                    is String -> runCatching { JSONObject(raw) }.getOrDefault(JSONObject())
+                    else -> JSONObject()
+                }
+                wrapServerSupport(server) {
+                    McpNativeBridge.getPrompt(context, repo, sessionId, server, name, pargs)
+                }
+            }
+            else -> invalid("'action' must be one of: servers, tools, call, resources, read_resource, prompts, get_prompt (got '${action}')")
         }
     }
+
+    /**
+     * Runs a resources/prompts passthrough and converts the interface's
+     * UnsupportedOperationException into a clean result — a server that only
+     * speaks the tools subset is a normal state, not an error to retry.
+     */
+    private inline fun wrapServerSupport(server: String, block: () -> String): ToolExecutionResult =
+        runCatching { ToolExecutionResult(block(), true, toolTitle = "mcp:$server") }
+            .getOrElse { e ->
+                when (e) {
+                    is UnsupportedOperationException -> ToolExecutionResult(
+                        "$server does not support " + e.message.orEmpty()
+                            .removePrefix("resources/").removePrefix("prompts/")
+                            .substringBefore(" not supported") + " — pick a server that implements it.",
+                        false,
+                        errorCode = ToolErrorCode.UNSUPPORTED,
+                        toolTitle = NAME,
+                    )
+                    else -> throw e
+                }
+            }
 
     private fun invalid(msg: String): ToolExecutionResult = ToolExecutionResult(
         msg,

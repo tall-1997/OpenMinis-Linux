@@ -66,6 +66,14 @@ object SubAgentBatchRegistry {
         val attempts: Int = 0,
         val error: String? = null,
         val digest: String = "",
+        /**
+         * Guest path of the FULL report written on finish — the JSON
+         * persistence keeps only the digest, so a process death between
+         * wave completion and check_agent collection used to leave nothing
+         * but the 2 000-char summary. Null on older batches and failures
+         * with no output.
+         */
+        val reportPath: String? = null,
         val startedAt: Long = 0L,
         val finishedAt: Long = 0L,
     ) {
@@ -332,7 +340,22 @@ object SubAgentBatchRegistry {
         error: String?,
         attempts: Int,
         stopped: Boolean = false,
+        filesDir: java.io.File? = null,
     ) = mutateLane(sessionId, context, batchId, index) { lane ->
+        // [T-subagent-report-spill] The full report spills to the session
+        // workspace (ToolOutputSpill pattern): JSON keeps the 2 000-char
+        // digest, the file keeps everything — a process death between wave
+        // completion and check_agent collection still leaves the whole
+        // report readable via file_read at the recorded guest path.
+        val reportPath = if (output.isNotBlank() && filesDir != null) {
+            runCatching {
+                val dir = File(SessionWorkspace.base(filesDir, sessionId), "subagent-reports")
+                    .apply { mkdirs() }
+                val f = File(dir, "batch-$batchId-lane-$index.md")
+                f.writeText(output)
+                "/var/minis/subagent-reports/" + f.name
+            }.getOrNull()
+        } else lane.reportPath
         lane.copy(
             state = when {
                 stopped -> STATE_STOPPED
@@ -341,6 +364,7 @@ object SubAgentBatchRegistry {
             },
             digest = output.trim().take(MAX_DIGEST_CHARS),
             error = error?.take(400),
+            reportPath = reportPath,
             attempts = maxOf(attempts, lane.attempts),
             finishedAt = System.currentTimeMillis(),
         )
@@ -499,6 +523,10 @@ object SubAgentBatchRegistry {
             if (lane.error != null) append("    error: ").append(lane.error).append('\n')
             if (verbose && lane.digest.isNotBlank()) {
                 append("    ").append(lane.digest.replace("\n", "\n    ")).append('\n')
+            }
+            if (verbose && lane.reportPath != null) {
+                append("    full report: ").append(lane.reportPath)
+                append(" (file_read it for the complete text)\n")
             }
         }
     }

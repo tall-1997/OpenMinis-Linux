@@ -55,6 +55,36 @@ class SessionForkManager(
      *   - `lastMessage` (createSession seeds it; refreshed by appendMessage)
      *   - `id` / `createdAt` / `updatedAt` (new identity, current timestamps)
      */
+    /**
+     * [T-android-session-branch-tree] Branch a session AT a message: the fork
+     * copies history UP TO AND INCLUDING [messageId] (the long-pressed message
+     * stays as the last one; everything after it stays only in the source),
+     * stamps the copy with branch metadata, and returns the new session id.
+     * The source is untouched — reruns/edits live on the branch, the original
+     * thread keeps flowing. Shares the duplicateSession copy pipeline (markers
+     * remapped, body-spill re-linked) with the truncation boundary at the fork
+     * point.
+     */
+    suspend fun forkAtMessage(sessionId: String, messageId: String): String? {
+        val source = chatRepository.getSession(sessionId) ?: return null
+        val point = chatRepository.dao.getMessage(sessionId, messageId)
+            ?: run {
+                AppLogger.warning(TAG, "forkAtMessage: message $messageId not found in $sessionId")
+                return null
+            }
+        val newId = duplicateSession(sessionId) ?: return null
+        // Truncate the duplicate to the fork point: everything AFTER the
+        // boundary message is dropped from the copy (plain delete — the
+        // source still holds every row, no version re-archive).
+        val removed = chatRepository.dao.deleteMessagesAfterSort(newId, point.sortOrder)
+        AppLogger.info(TAG, "forkAtMessage: $sessionId@$messageId -> $newId removed=$removed")
+        // Stamp branch metadata; title becomes a branch label.
+        val label = (source.title ?: "Chat").let { "$it · branch" }
+        chatRepository.updateSessionTitle(newId, label)
+        chatRepository.dao.updateBranch(newId, sessionId, messageId)
+        return newId
+    }
+
     suspend fun duplicateSession(sessionId: String): String? {
         val source = chatRepository.getSession(sessionId) ?: run {
             AppLogger.warning(TAG, "duplicateSession: $sessionId not found")

@@ -142,7 +142,7 @@ class JobRegistryTest {
     // ------------------------------------------------------ registry cases
 
     @Test
-    fun start_withoutSpawner_isRejectedWithStructuredSupport() {
+    fun start_withoutSpawner_isRejectedWithStructuredSupport() = kotlinx.coroutines.runBlocking {
         val outcome = JobRegistry.start("s1", "make all", null)
         assertTrue(outcome is JobRegistry.StartOutcome.SpawnerMissing)
         // Tool mapping: structured UNSUPPORTED error, success=false.
@@ -344,7 +344,7 @@ class JobRegistryTest {
     // ------------------------------------------------- JobTools JSON cases
 
     @Test
-    fun toolStart_returnsStructuredJobIdJson() {
+    fun toolStart_returnsStructuredJobIdJson() = kotlinx.coroutines.runBlocking {
         install(FakeSpawner(tmp))
         val result = JobTools.execute(
             """{"action":"start","command":"make all","workdir":"/var/minis/workspace"}""",
@@ -361,14 +361,14 @@ class JobRegistryTest {
     }
 
     @Test
-    fun toolList_emptySessionGetsFriendlyHint() {
+    fun toolList_emptySessionGetsFriendlyHint() = kotlinx.coroutines.runBlocking {
         val result = JobTools.execute("""{"action":"list"}""", "s1", context = null)
         assertTrue(result.success)
         assertTrue(result.output.contains("No background jobs"))
     }
 
     @Test
-    fun toolUnknownAction_isInvalidArguments() {
+    fun toolUnknownAction_isInvalidArguments() = kotlinx.coroutines.runBlocking {
         val result = JobTools.execute("""{"action":"bogus"}""", "s1", context = null)
         assertFalse(result.success)
         assertEquals(ToolErrorCode.INVALID_ARGUMENTS, result.errorCode)

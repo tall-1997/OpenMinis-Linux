@@ -34,8 +34,12 @@ import java.util.concurrent.TimeUnit
  *    Settings → MCP re-authorization.
  *
  * Blocking OkHttp calls — the tool dispatcher invokes this on a worker
- * dispatcher. Thread-safety: [lock] serializes requests (a single in-flight
- * JSON-RPC exchange per client), matching the CLI daemon's per-server lock.
+ * dispatcher. Thread-safety: [lock] guards ONLY the initialize handshake and
+ * session teardown; listTools/callTool/resources/prompts run concurrently
+ * (each is an independent POST, and the replayed [sessionId] is a volatile
+ * read set once during initialize). The stdio transport stays serialized by
+ * protocol necessity (one stdin/stdout pipe); this HTTP transport does not
+ * need that and never did.
  */
 class McpHttpClient(
     override val serverName: String,
@@ -112,6 +116,38 @@ class McpHttpClient(
         }
         return post(McpJsonRpc.request(id, "tools/call", params), id)
             ?: throw McpError(McpError.PROTOCOL_ERROR, "tools/call returned no result")
+    }
+
+    override fun listResources(): JSONArray {
+        ensureInitialized()
+        val id = McpJsonRpc.nextId()
+        val result = post(McpJsonRpc.request(id, "resources/list", JSONObject()), id)
+            ?: throw McpError(McpError.PROTOCOL_ERROR, "resources/list returned no result")
+        return result.optJSONArray("resources") ?: JSONArray()
+    }
+
+    override fun readResource(uri: String): JSONObject {
+        ensureInitialized()
+        val id = McpJsonRpc.nextId()
+        val params = JSONObject().put("uri", uri)
+        return post(McpJsonRpc.request(id, "resources/read", params), id)
+            ?: throw McpError(McpError.PROTOCOL_ERROR, "resources/read returned no result")
+    }
+
+    override fun listPrompts(): JSONArray {
+        ensureInitialized()
+        val id = McpJsonRpc.nextId()
+        val result = post(McpJsonRpc.request(id, "prompts/list", JSONObject()), id)
+            ?: throw McpError(McpError.PROTOCOL_ERROR, "prompts/list returned no result")
+        return result.optJSONArray("prompts") ?: JSONArray()
+    }
+
+    override fun getPrompt(name: String, arguments: JSONObject): JSONObject {
+        ensureInitialized()
+        val id = McpJsonRpc.nextId()
+        val params = JSONObject().put("name", name).put("arguments", arguments)
+        return post(McpJsonRpc.request(id, "prompts/get", params), id)
+            ?: throw McpError(McpError.PROTOCOL_ERROR, "prompts/get returned no result")
     }
 
     override fun close() {

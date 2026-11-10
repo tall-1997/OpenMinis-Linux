@@ -517,6 +517,26 @@ interface ChatDao : MessageHeadDao, ChatTruncationDao, SessionBindingDao, UsageS
     @Query("UPDATE sessions SET permission_mode = :value, updated_at = :updatedAt WHERE id = :id")
     suspend fun updatePermissionMode(id: String, value: String, updatedAt: Long = System.currentTimeMillis())
 
+    // Session: branch tree ([T-android-session-branch-tree])
+    @Query(
+        "UPDATE sessions SET branch_of = :source, branch_point = :point, updated_at = :updatedAt " +
+            "WHERE id = :id",
+    )
+    suspend fun updateBranch(id: String, source: String, point: String?, updatedAt: Long = System.currentTimeMillis())
+
+    /** Direct children of a session (branch tree panel), newest first. */
+    @Query("SELECT * FROM sessions WHERE branch_of = :source ORDER BY updated_at DESC")
+    suspend fun branchChildren(source: String): List<ChatSessionEntity>
+
+    /**
+     * Branch-fork truncation: drop the copy's rows AFTER the fork point.
+     * Unlike [deleteMessagesAfter] (keep-count + version archive) this is a
+     * plain delete — the SOURCE session still holds every dropped row, so
+     * archiving them again would only duplicate versions.
+     */
+    @Query("DELETE FROM messages WHERE session_id = :sessionId AND sort_order > :maxSortOrder")
+    suspend fun deleteMessagesAfterSort(sessionId: String, maxSortOrder: Int)
+
     @Query(
         """
         UPDATE sessions SET permission_mode = 'ASK'

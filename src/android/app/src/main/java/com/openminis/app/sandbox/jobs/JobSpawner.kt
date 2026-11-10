@@ -69,8 +69,15 @@ object JobSpawner {
             append("echo $? > '").append(GUEST_JOBS_DIR).append('/').append(token).append(".exit'\n")
         }
         val b64 = Base64.getEncoder().encodeToString(script.toByteArray(Charsets.UTF_8))
-        val spawnCmd = "mkdir -p '$GUEST_JOBS_DIR' && echo $b64 | base64 -d > '$GUEST_JOBS_DIR/$token.sh' && " +
-            "setsid sh '$GUEST_JOBS_DIR/$token.sh' >> '$GUEST_JOBS_DIR/$token.log' 2>&1 & echo $PID_MARKER\$!"
+        // [T-android-jobs-interactive] A named pipe per job keeps stdin alive:
+        // the script reads it as its stdin, a background `sleep infinity >`
+        // holds the write end open so the reader blocks instead of seeing EOF,
+        // and action=input appends base64-decoded bytes into it. The pid is
+        // persisted to a sidecar so action=signal can reach the process group.
+        val spawnCmd = "mkdir -p '$GUEST_JOBS_DIR' && rm -f '$GUEST_JOBS_DIR/$token.in' && mkfifo '$GUEST_JOBS_DIR/$token.in' && " +
+            "echo $b64 | base64 -d > '$GUEST_JOBS_DIR/$token.sh' && " +
+            "(sleep infinity > '$GUEST_JOBS_DIR/$token.in' &) && " +
+            "setsid sh '$GUEST_JOBS_DIR/$token.sh' < '$GUEST_JOBS_DIR/$token.in' >> '$GUEST_JOBS_DIR/$token.log' 2>&1 & echo $PID_MARKER\$!"
         val result = ExecutionCoordinator.execute(sessionId, spawnCmd, SPAWN_TIMEOUT_MS)
         if (result.exitCode != 0) {
             throw IllegalStateException("job spawn failed (exit ${result.exitCode})")
@@ -80,9 +87,17 @@ object JobSpawner {
         val logHost = hostJobsDir.resolve("$token.log")
         val exitHost = hostJobsDir.resolve("$token.exit")
         val guestLog = "$GUEST_JOBS_DIR/$token.log"
+        val guestStdin = "$GUEST_JOBS_DIR/$token.in"
+        // Persist the pid for action=signal (best effort; the group leader
+        // id doubles as the signal target since setsid made it a leader).
+        runCatching {
+            ExecutionCoordinator.execute(sessionId, "echo '$pid' > '$GUEST_JOBS_DIR/$token.pid'", SPAWN_TIMEOUT_MS)
+        }
         return object : JobRegistry.SpawnedProcess {
             override val stdoutFile: File = logHost
             override val outputGuestPath: String = guestLog
+            override val stdinGuestPath: String = guestStdin
+            override val pid: Int = pid.toIntOrNull() ?: -1
 
             override fun await(): Int {
                 // [T-android-jobs-await-backoff] Same checks as before (exit

@@ -33,9 +33,9 @@ import org.json.JSONObject
 
 @OptIn(FlowPreview::class)
 class SessionListViewModel(
-    private val chatRepository: ChatRepository,
+    internal val chatRepository: ChatRepository,
     private val providerRepository: ProviderRepository,
-    private val context: Context,
+    internal val context: Context,
 ) : ViewModel() {
 
     companion object {

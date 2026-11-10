@@ -150,6 +150,38 @@ object McpNativeBridge {
      * `tools/call`. Enforces the per-tool policy BEFORE touching the network.
      * Returns the flattened outcome; `isError` reflects the server verdict.
      */
+    /** [T-mcp-protocol-surface] resources/list passthrough. */
+    fun listResources(context: Context, repo: MCPRepository, sessionId: String, server: String): String {
+        val (client, _) = clientFor(context, repo, sessionId, server)
+        val arr = client.listResources()
+        return arr.toString(2)
+    }
+
+    /** resources/read passthrough for one uri. */
+    fun readResource(context: Context, repo: MCPRepository, sessionId: String, server: String, uri: String): String {
+        val (client, _) = clientFor(context, repo, sessionId, server)
+        return client.readResource(uri).toString(2)
+    }
+
+    /** prompts/list passthrough. */
+    fun listPrompts(context: Context, repo: MCPRepository, sessionId: String, server: String): String {
+        val (client, _) = clientFor(context, repo, sessionId, server)
+        return client.listPrompts().toString(2)
+    }
+
+    /** prompts/get passthrough for one named prompt. */
+    fun getPrompt(
+        context: Context,
+        repo: MCPRepository,
+        sessionId: String,
+        server: String,
+        name: String,
+        arguments: JSONObject,
+    ): String {
+        val (client, _) = clientFor(context, repo, sessionId, server)
+        return client.getPrompt(name, arguments).toString(2)
+    }
+
     fun callTool(
         context: Context,
         repo: MCPRepository,
