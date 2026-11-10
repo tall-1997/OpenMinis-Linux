@@ -11,14 +11,14 @@ import com.openminis.app.data.model.AgentToolParam
  */
 object AgentTools {
 
-    // [T-ui-skill-prompt-fragment-dead] `UI_SKILL_PROMPT_FRAGMENT` (the
-    // `- ui_skill: …` system-prompt guidance) was deleted here: it had ZERO
-    // readers. ChatViewModelPromptExt never assembled it into the "Available
-    // tools" section its KDoc promised, so the ui_skill workflow text the model
-    // was supposed to see was simply never sent — a constant that looks like it
-    // is doing something. ui/** owns whether that guidance gets re-added to the
-    // prompt (it has to be, to be of any use); until then keeping the dead
-    // string here only invites someone to assume it is wired up.
+    // [T-ui-skill-prompt-fragment-dead → wired] `UI_SKILL_PROMPT_FRAGMENT`
+    // (the `- ui_skill: …` guidance) used to live here with ZERO readers —
+    // the workflow text never reached the prompt while the tool was always
+    // registered and dispatchable. It is now WIRED: the prose lives in
+    // ui/chat/ToolPromptFragments (the per-tool guidance registry, pinned by
+    // ToolPromptFragmentsTest) and ChatViewModelPromptExt interpolates
+    // ToolPromptFragments.render() into the "Available tools" section. A new
+    // tool with workflow guidance registers there, not here.
 
     fun makeAgentTools(
         supportsImageInput: Boolean = true,

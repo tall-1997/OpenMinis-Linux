@@ -52,41 +52,56 @@ object GitHostRepo {
         SessionWorkspace.hostDir(filesDir, sessionId, "workspace")
 
     /**
-     * Open the repo at [dir]; null when the directory is not a git work tree
-     * or HEAD is unresolvable. The handle is closed on the failure paths so a
-     * failed open cannot leak a Repository (the panel opens one per refresh).
+     * Open the repo at [dir]; null when the directory is not a git work tree.
+     * HEAD is deliberately NOT checked here: a repo whose HEAD points at a
+     * missing object is still readable (status/branches/diff all work), and
+     * the sandbox path serves it via the per-ref fallback — the host path
+     * must too ([logPage] walks refs when HEAD is unresolvable). The handle
+     * is closed on the failure path so a failed open cannot leak a
+     * Repository (the panel opens one per refresh).
      */
     private fun open(dir: File): Git? = try {
         val g = Git.open(dir)
-        try {
-            g.repository.resolve(Constants.HEAD)
-            g
-        } catch (_: Exception) {
-            runCatching { g.close() }
-            null
-        }
+        runCatching { g.repository.repositoryState }.fold(
+            onSuccess = { g },
+            onFailure = { runCatching { g.close() }; null },
+        )
     } catch (_: Exception) {
         null
+    }
+
+    /** First resolvable ref sha walking HEAD → every ref, or null. */
+    private fun resolveHeadOrAnyRef(repo: Repository): ObjectId? {
+        // HEAD's sha can resolve while its OBJECT is missing (resolve only
+        // reads the ref file) — validate by parsing, then fall to other refs.
+        runCatching {
+            repo.resolve(Constants.HEAD)?.let { head ->
+                RevWalk(repo).use { it.parseCommit(head) }
+                return head
+            }
+        }
+        for (ref in repo.refDatabase.getRefs()) {
+            val id = ref.objectId ?: continue
+            if (id == ObjectId.zeroId()) continue
+            if (runCatching { RevWalk(repo).use { it.parseCommit(id) } }.isSuccess) return id
+        }
+        return null
     }
 
     // ── probe ───────────────────────────────────────────────────────────────
 
     /**
      * Repo identity for the header card, or isRepo=false outside a work tree.
-     * A repo whose HEAD points at a missing object also reports false: every
-     * host read would throw on it, and the sandbox path has the graceful
-     * per-ref fallback for that case.
+     * A broken HEAD object does not demote the repo: any resolvable ref keeps
+     * it servable ([logPage] walks refs, sandbox-fallback parity).
      */
     fun probe(dir: File): GitCli.GitRepoInfo {
         val git = open(dir) ?: return GitCli.GitRepoInfo(isRepo = false)
         git.use { g ->
             val repo = g.repository
-            val head = repo.resolve(Constants.HEAD)
-            if (head != null && !runCatching {
-                    RevWalk(repo).use { it.parseCommit(head) }
-                }.isSuccess
-            ) return GitCli.GitRepoInfo(isRepo = false)
-            val branch = repo.branch ?: ""
+            val hasAnchor = resolveHeadOrAnyRef(repo) != null
+            if (!hasAnchor) return GitCli.GitRepoInfo(isRepo = false)
+            val branch = runCatching { repo.branch }.getOrDefault("")
             val cfg = repo.config
             return GitCli.GitRepoInfo(
                 isRepo = true,
@@ -115,8 +130,10 @@ object GitHostRepo {
             // offset/limit stable across refreshes.
             walk.sort(RevSort.COMMIT_TIME_DESC)
             try {
-                val headId = g.repository.resolve(Constants.HEAD) ?: return emptyList()
-                walk.markStart(walk.parseCommit(headId))
+                // HEAD first; a repo with a broken HEAD object still serves
+                // history from its refs (sandbox path's per-ref fallback).
+                val anchor = resolveHeadOrAnyRef(g.repository) ?: return emptyList()
+                walk.markStart(walk.parseCommit(anchor))
                 val commits = ArrayList<GitCli.GitCommit>(limit)
                 var skipped = 0
                 for (rev in walk) {

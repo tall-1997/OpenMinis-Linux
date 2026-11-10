@@ -43,6 +43,10 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
@@ -207,8 +211,39 @@ internal fun RenderBlock(block: MdBlock) {
                             .horizontalScroll(hScroll)
                             .padding(horizontal = 12.dp, vertical = 4.dp),
                     ) {
+                        // [T-chat-code-highlight] Same highlighter the legacy
+                        // renderer feeds (#16), now on the streaming path too.
+                        // Only CLOSED blocks are highlighted: the live tail
+                        // re-renders on every delta, and re-running the token
+                        // regex over a growing 200-line fence on each frame is
+                        // jank for zero visual benefit — plain text until the
+                        // fence freezes. diff/patch fences get the git-panel
+                        // semantics instead (added green / removed red / hunk
+                        // blue), tuned to the chat surface.
+                        val isDiff = block.language.equals("diff", true) ||
+                            block.language.equals("patch", true)
+                        val codeText = when {
+                            isDiff -> remember(block.code) { colorizeChatDiff(block.code) }
+                            block.closed -> {
+                                val palette = remember(colors.codeBg) {
+                                    if (colors.codeBg.luminance() < 0.5f) {
+                                        com.openminis.app.ui.markdown.HighlightPalette.Dark
+                                    } else {
+                                        com.openminis.app.ui.markdown.HighlightPalette.Light
+                                    }
+                                }
+                                remember(block.code, block.language, palette) {
+                                    com.openminis.app.ui.markdown.SyntaxHighlighter.highlight(
+                                        block.code,
+                                        block.language,
+                                        palette,
+                                    )
+                                }
+                            }
+                            else -> buildAnnotatedString { append(block.code) }
+                        }
                         Text(
-                            text = block.code,
+                            text = codeText,
                             fontSize = BaseFontSize * 0.85f,
                             fontFamily = FontFamily.Monospace,
                             color = colors.codeText,
@@ -447,6 +482,33 @@ internal fun RenderBlock(block: MdBlock) {
             RenderMathDisplay(block.latex)
             ReportTranslateInkBlocked()
         }
+    }
+}
+
+/**
+ * Unified-diff colouring for ```diff fences on the chat surface — the same
+ * semantics as the git panel's colorizeDiff (added green / removed red /
+ * hunk blue / metadata grey) but scoped to this file so the chat theme, not
+ * the git overlay, owns the palette choice.
+ */
+internal fun colorizeChatDiff(diff: String) = buildAnnotatedString {
+    diff.lineSequence().forEachIndexed { index, line ->
+        if (index > 0) append("\n")
+        val style = when {
+            line.startsWith("+++") || line.startsWith("---") ->
+                SpanStyle(
+                    color = com.openminis.app.ui.git.GitMetaGrey,
+                    fontWeight = FontWeight.Bold,
+                )
+            line.startsWith("+") -> SpanStyle(color = com.openminis.app.ui.git.GitAddGreen)
+            line.startsWith("-") -> SpanStyle(color = com.openminis.app.ui.git.GitDelRed)
+            line.startsWith("@@") -> SpanStyle(color = com.openminis.app.ui.git.GitHunkBlue)
+            line.startsWith("diff ") || line.startsWith("index ") ||
+                line.startsWith("new file") || line.startsWith("deleted file") ||
+                line.startsWith("rename") -> SpanStyle(color = com.openminis.app.ui.git.GitMetaGrey)
+            else -> SpanStyle()
+        }
+        withStyle(style) { append(line) }
     }
 }
 

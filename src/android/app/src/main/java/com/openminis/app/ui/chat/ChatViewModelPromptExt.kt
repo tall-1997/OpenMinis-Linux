@@ -141,6 +141,7 @@ Available tools:
 - read_session: Load a past session transcript by session_id (paginated, 600 chars/message).
 - ask_user_question: Pose 1–4 structured multiple-choice questions when a choice is genuinely ambiguous. Do not use it to ask permission for routine tool calls.
 - cronjob: Create/list/remove AlarmManager tasks. Schedules: any duration (90s, 7m, 45m, 3h, 1h30m) or every N (every 15m). Prefer this over crontab/at.
+${ToolPromptFragments.render()}
 - browser_use: Web browsing (navigate, screenshot, click, type, get_text, scroll, scroll_and_collect, get_readable, get_backbone, fetch, etc.). Starts with a desktop Chrome user agent. Use screenshot to see the page.
   当 browser_use 触达 Google 登录 / OAuth 页（accounts.google.com、signin.google.com、myaccount.google.com、oauth2.googleapis.com 等）或网页返回 "disallowed_useragent" / 403 包含 "browser is not secure" 字样时，**不要重试或尝试登录** — Google 永久禁止 in-app WebView 完成登录，重试只会浪费 turn。改为告诉用户："此页面需要在系统 Chrome 完成登录" 并给出可点击的 Markdown link [在 Chrome 中打开](https://accounts.google.com/...)。点该 link 时 app 会跳出 Custom Tab；用户在 Chrome 完成操作后，请他**把所需结果（邮件正文 / 文档摘要 / 表格数据）粘贴回 chat**，你再继续帮他处理。这是 Android 平台限制，不是 bug。${toolListMemoryBullets}${toolListSubAgentBullet}
 

@@ -305,11 +305,18 @@ class GitHostRepoTest {
     }
 
     @Test
-    fun `probe rejects a repo whose HEAD object is missing`() {
+    fun `probe survives a repo whose HEAD object is missing`() {
         val (dir, git) = initRepo()
         git.close()
         File(dir, ".git/HEAD").writeText("0123456789abcdef0123456789abcdef01234567\n")
-        assertFalse(GitHostRepo.probe(dir).isRepo)
+        // [T-git-panel-dual-source parity] A broken HEAD object no longer
+        // demotes the repo: any resolvable ref keeps it servable, mirroring
+        // the sandbox path's per-ref fallback. probe stays true AND history
+        // still flows from the surviving refs.
+        assertTrue(GitHostRepo.probe(dir).isRepo)
+        val page = GitHostRepo.logPage(dir, offset = 0, limit = 10)
+        assertEquals(1, page.size)
+        assertEquals("initial commit", page[0].subject)
     }
 
     // ── commit detail / numstat / diff ─────────────────────────────────────
