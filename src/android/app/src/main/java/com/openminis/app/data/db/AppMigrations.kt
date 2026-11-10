@@ -660,6 +660,9 @@ internal object AppMigrations {
         override fun migrate(db: SupportSQLiteDatabase) {
             // Rebuild without the column: ALTER TABLE DROP COLUMN needs SQLite
             // 3.35+, which older supported Android releases do not ship.
+            // A previous partial attempt could have left the scratch table
+            // behind (its INSERT would then hit the primary key), so clear it.
+            db.execSQL("DROP TABLE IF EXISTS `session_goals_old`")
             db.execSQL(
                 """CREATE TABLE IF NOT EXISTS `session_goals_old` (
                     `session_id` TEXT NOT NULL,

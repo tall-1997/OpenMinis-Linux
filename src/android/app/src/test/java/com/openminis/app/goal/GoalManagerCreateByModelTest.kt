@@ -74,6 +74,7 @@ class GoalManagerCreateByModelTest {
         assertEquals(GoalStatus.ACTIVE, next.status)
         assertEquals(next, fake.rows.getValue("s1"))
         assertEquals(2, fake.inserts)
+        assertEquals(1, fake.deletes)
     }
 
     /**

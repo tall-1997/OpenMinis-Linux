@@ -264,10 +264,12 @@ internal fun PlanBoardBody(
             Spacer(Modifier.width(8.dp))
             // [T-goal-panel-reachability] Goal-sheet entry; only present while
             // a Goal exists, so a plain board keeps exactly its old shape.
+            // 36dp stays inside the summary row's 44dp minimum while keeping
+            // the target finger-sized (a 28dp hit area undershot it).
             if (onOpenGoal != null) {
                 Box(
                     modifier = Modifier
-                        .size(28.dp)
+                        .size(36.dp)
                         .clip(CircleShape)
                         .clickable(role = Role.Button) { onOpenGoal() },
                     contentAlignment = Alignment.Center,
@@ -276,7 +278,7 @@ internal fun PlanBoardBody(
                         imageVector = Icons.Filled.Flag,
                         contentDescription = stringResource(R.string.cd_goal_header),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                        modifier = Modifier.size(15.dp),
+                        modifier = Modifier.size(16.dp),
                     )
                 }
                 Spacer(Modifier.width(2.dp))

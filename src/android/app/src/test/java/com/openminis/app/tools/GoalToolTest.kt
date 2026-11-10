@@ -65,6 +65,31 @@ class GoalToolTest {
         assertEquals(GoalStatus.PAUSED, fake.rows.getValue("s1").status)
     }
 
+    /**
+     * Deliberate policy: the only Goal the model may NOT clear is a paused one.
+     * A human-written objective is protected from silent replacement by
+     * op=create, but the human can always delete it — and so can the model when
+     * the user is replacing the task (that is the whole point of the op). The
+     * alternative (model may only clear its own goals) would leave a legacy,
+     * user-created stale goal unclearable from the tool, which is exactly the
+     * situation this op exists for.
+     */
+    @Test
+    fun `op=clear also clears a goal the human wrote`() = runTest {
+        val fake = FakePersistence()
+        fake.rows["s1"] = SessionGoalEntity(
+            sessionId = "s1",
+            objective = "what the user actually asked for",
+            status = GoalStatus.ACTIVE,
+            createdAt = 1L,
+            updatedAt = 1L,
+            createdBy = com.openminis.app.data.db.GoalOrigin.USER,
+        )
+        val result = GoalTool.execute("""{"op":"clear"}""", "s1", GoalManager(fake))
+        assertTrue(result.success)
+        assertNull(fake.rows["s1"])
+    }
+
     @Test
     fun `op=clear without a goal reports nothing to clear`() = runTest {
         val fake = FakePersistence()

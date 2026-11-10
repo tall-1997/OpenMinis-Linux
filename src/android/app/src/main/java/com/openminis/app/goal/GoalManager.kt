@@ -92,8 +92,10 @@ class GoalManager internal constructor(private val persistence: GoalPersistence)
         if (existing != null) {
             val sameObjective = existing.objective == normalized
             if (sameObjective || !supersedableByModel(existing)) return@locked existing
-            // Replace the stale model Goal outright: the row is keyed by
-            // session, and a fresh row keeps createdAt honest for the new task.
+            // One row per session: drop the stale model Goal, then write the
+            // new task's. (A single UPDATE would need saveState to carry
+            // created_at; the delete+insert keeps the fresh start time and is
+            // no worse than the pre-existing write path.)
             persistence.delete(sessionId)
         }
         GoalStateMachine.create(
