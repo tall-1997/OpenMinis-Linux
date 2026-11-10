@@ -68,7 +68,12 @@ internal fun ChatViewModel.liveRecallPrompt(): String? {
         // lesson recorded in another chat is reachable from this one.
         sharedDir = com.openminis.app.data.repository.MemoryIndex.sharedDir(context.filesDir),
     ) ?: return null
-    val hits = engine.recall(query)
+    // [T-memory-recall-anti-nag] recallForPrompt, not recall: the query-keyed
+    // memo cannot dedupe across turns (the query changes every turn with the
+    // assistant tail), so the same few memories were re-announced every turn.
+    // The hit-keyed streak inside the engine stops a memory after three
+    // consecutive announcements and re-arms it when it drops out of the hits.
+    val hits = engine.recallForPrompt(query)
     if (hits.isEmpty()) return null
     // [T-recall-turn-dedup] The same memories are announced once per topic.
     // Every request of one turn must carry the block (each request is a fresh

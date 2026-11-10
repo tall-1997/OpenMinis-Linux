@@ -98,6 +98,10 @@ class MemoryRecallEngine(
 
         /** [T-memory-recall-caps] The whole recall fragment may not exceed this (~600 tokens). */
         internal const val MAX_FRAGMENT_CHARS = 2400
+
+        /** [T-memory-recall-anti-nag] A memory announced this many consecutive turns is considered "seen". */
+        internal const val RECALL_REPEAT_CAP = 3
+
         /** [T-memory-recall-hygiene] English function words that only add noise. */
         internal val EN_STOPWORDS: Set<String> = setOf(
             "the", "and", "for", "that", "this", "with", "you", "your", "are", "was",
@@ -478,5 +482,53 @@ class MemoryRecallEngine(
             MemoryOrigin.AUTOMATIC_RECALL,
             use = InstructionUse.REFERENCE_DATA,
         )
+    }
+
+    // ── [T-memory-recall-anti-nag] cross-turn injection dedupe ─────────────
+
+    /**
+     * Per-hit consecutive-injection counter, keyed exactly like the
+     * recall-count boost (`day:line`). The engine instance is per session
+     * ([MemoryRecallEngineCache] keeps it alive across turns), so this state
+     * is session-scoped by construction; LRU eviction only resets the
+     * counters, which costs at most one repeated announcement.
+     */
+    private val injectionStreaks = ConcurrentHashMap<String, AtomicInteger>()
+
+    /**
+     * Recall for the prompt path: [recall] plus the cross-turn dedupe the
+     * query-keyed memo cannot provide.
+     *
+     * The memo keys on the query string, but the prompt query folds in the
+     * assistant tail, which changes every turn — so the same few memories
+     * matched every turn and were re-announced every turn (the noise the
+     * live-recall block was drowning in). The dedupe here keys on the HIT
+     * instead: a memory injected [RECALL_REPEAT_CAP] consecutive turns stops
+     * being injected (the model has read it), while dropping out of the hit
+     * set — a task pivot — resets its counter, so it is announced once again
+     * when it becomes relevant anew.
+     *
+     * The streak update covers EVERY hit, including the ones filtered out:
+     * a capped memory is still matching, and resetting its counter would
+     * re-inject it next turn, defeating the cap.
+     */
+    fun recallForPrompt(query: String): List<RecallHit> {
+        val hits = recall(query)
+        // The streak update runs on EVERY outcome, including the empty one:
+        // an empty hit round IS the task-pivot signal, and returning early
+        // would keep the capped counters pinned — a memory that left the hits
+        // could then never re-arm (announced again), defeating the whole
+        // drop-out semantics.
+        val keyOf = { hit: RecallHit -> "${dayKeyOf(hit.source)}:${hit.line.trim()}" }
+        val keys = hits.associate { it to keyOf(it) }
+        val seenKeys = keys.values.toHashSet()
+        val fresh = hits.filter { (injectionStreaks[keys[it]]?.get() ?: 0) < RECALL_REPEAT_CAP }
+        for (key in seenKeys) {
+            injectionStreaks.getOrPut(key) { AtomicInteger(0) }.incrementAndGet()
+        }
+        // Drop keys that fell out of the hit set: their next reappearance is
+        // a fresh signal (task pivot) and must be announced again.
+        injectionStreaks.keys.retainAll(seenKeys)
+        return fresh
     }
 }
