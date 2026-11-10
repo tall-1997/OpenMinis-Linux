@@ -68,8 +68,27 @@ class DatabaseGateFreshnessTest {
     }
 
     @Test
-    fun `size mismatch forces a rescan`() {
+    fun `shrink forces a rescan`() {
+        // Stamp larger than the file: the database was replaced, vacuumed,
+        // restored or truncated — the safe direction is to re-scan.
         assertFalse(DatabaseGateFreshness.isFresh(stampFor(size = 4096), dbFile(), now))
+    }
+
+    @Test
+    fun `growth inside the window stays fresh`() {
+        // [T-db-gate-freshness-growth] The regression: WAL checkpointing and
+        // ordinary writes append pages between launches, so the file is
+        // bigger on the next cold start. The cache must still hit —
+        // byte-exact equality re-ran the O(size) scan on every launch after
+        // any usage and blocked the first session load behind it.
+        val db = dbFile()
+        DatabaseGateFreshness.recordHealthy(db, tmp.root, now)
+        db.appendBytes(ByteArray(4096))
+        assertTrue(
+            DatabaseGateFreshness.isFresh(
+                DatabaseGateFreshness.readStamp(tmp.root), db, now + 60_000,
+            ),
+        )
     }
 
     // -- stamp IO --------------------------------------------------------------
@@ -120,6 +139,21 @@ class DatabaseGateFreshnessTest {
         DatabaseGateFreshness.recordHealthy(db, tmp.root, now)
         val checker = CountingChecker(null)
         val outcome = DatabaseHealthCheck.ensureHealthyOrQuarantined(db, tmp.root, checker, now)
+        assertEquals(DatabaseHealthCheck.Outcome.Healthy, outcome)
+        assertEquals(0, checker.calls)
+    }
+
+    @Test
+    fun `grown database skips the real scan`() {
+        // [T-db-gate-freshness-growth] Gate-level regression: the exact
+        // cold-start scenario — database scanned healthy on launch N, grown
+        // by a day of writes, opened on launch N+1 — must not pay the
+        // O(size) quick_check again before the first session load.
+        val db = dbFile()
+        DatabaseGateFreshness.recordHealthy(db, tmp.root, now)
+        db.appendBytes(ByteArray(4096))
+        val checker = CountingChecker(null)
+        val outcome = DatabaseHealthCheck.ensureHealthyOrQuarantined(db, tmp.root, checker, now + 60_000)
         assertEquals(DatabaseHealthCheck.Outcome.Healthy, outcome)
         assertEquals(0, checker.calls)
     }
