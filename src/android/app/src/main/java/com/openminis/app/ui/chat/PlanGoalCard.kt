@@ -231,7 +231,7 @@ internal fun PlanGoalCard(viewModel: ChatViewModel, modifier: Modifier = Modifie
         exit = fadeOut(tween(EXIT_ANIM_MS)) + shrinkVertically(tween(EXIT_ANIM_MS)),
     ) {
         Surface(
-            modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
+            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
             shape = RoundedCornerShape(16.dp),
             color = MaterialTheme.colorScheme.surfaceContainer,
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
@@ -293,13 +293,17 @@ internal fun PlanGoalCard(viewModel: ChatViewModel, modifier: Modifier = Modifie
     }
 }
 
-/** The goal segment: status glyph + objective + token badge, opens the sheet. */
+/** The goal segment: status glyph + objective, opens the sheet. */
 @Composable
 private fun GoalHeaderRow(goal: SessionGoalEntity, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 44.dp)
+            // [T-plan-card-dense] 36dp, matching the board summary row: this
+            // card sits directly above the composer and must not take a
+            // second full-height line. The token badge moved into the goal
+            // sheet — the objective is the only thing worth a permanent row.
+            .heightIn(min = 36.dp)
             .clip(RoundedCornerShape(10.dp))
             .clickable(
                 role = Role.Button,
@@ -354,19 +358,9 @@ private fun GoalHeaderRow(goal: SessionGoalEntity, onClick: () -> Unit) {
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-        Spacer(Modifier.width(8.dp))
-        val badge = goal.tokenBudget?.let { "${formatGoalTokens(goal.tokensUsed)}/${formatGoalTokens(it)}" }
-            ?: formatGoalTokens(goal.tokensUsed)
-        Text(
-            text = badge,
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.SemiBold,
-            color = when (goal.status) {
-                GoalStatus.COMPLETE -> ToolCheckColor
-                GoalStatus.BLOCKED, GoalStatus.BUDGET_LIMITED -> MaterialTheme.colorScheme.error
-                else -> MaterialTheme.colorScheme.primary
-            },
-        )
+        // [T-plan-card-dense] The token badge is gone from this row: it is a
+        // number nobody reads at a glance, and it was costing width that the
+        // objective needs. The sheet still shows it (GoalSheet balance line).
     }
 }
 

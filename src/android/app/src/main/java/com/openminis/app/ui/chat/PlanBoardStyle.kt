@@ -178,16 +178,17 @@ internal fun PlanBoardBody(
             Column {
                 Column(
                     Modifier
-                        // Shorter than the old 360dp: the list now pushes the
-                        // card up into the transcript, so it is capped lower to
-                        // keep the last messages in view.
-                        .heightIn(max = 300.dp)
+                        // [T-plan-card-dense] 200dp cap (was 300): the card sits
+                        // above the composer, and a long board used to push the
+                        // transcript — the thing the user is reading — off the
+                        // top of the screen. The list still scrolls inside.
+                        .heightIn(max = 200.dp)
                         .verticalScroll(rememberScrollState()),
                 ) {
                     board.forEach { PlanBoardRow(it) }
                 }
                 HorizontalDivider(
-                    modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
+                    modifier = Modifier.padding(top = 2.dp),
                     thickness = 1.dp,
                     color = planCardHairline,
                 )
@@ -196,9 +197,10 @@ internal fun PlanBoardBody(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                // iOS minimum row height: the summary line is both the label
-                // and the toggle, so it has to be finger-sized.
-                .heightIn(min = 44.dp)
+                // [T-plan-card-dense] 36dp (was 44): compact single line, same
+                // as the sub-agent chips. The row is full-width, so the
+                // finger target is horizontal, not vertical.
+                .heightIn(min = 36.dp)
                 .clip(RoundedCornerShape(10.dp))
                 .pointerInput(expanded) {
                     // Directional swipe, one fire per gesture past 24dp.
@@ -319,7 +321,9 @@ private fun PlanBoardProgress(fraction: Float, color: Color) {
     Box(
         Modifier
             .fillMaxWidth()
-            .padding(start = 26.dp, end = 26.dp, bottom = 6.dp)
+            // [T-plan-card-dense] 2dp of breathing room under the bar (was 6):
+            // the bar already reads as the row's underline.
+            .padding(start = 26.dp, end = 26.dp, bottom = 2.dp)
             .height(2.dp)
             .clip(RoundedCornerShape(1.dp))
             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)),
