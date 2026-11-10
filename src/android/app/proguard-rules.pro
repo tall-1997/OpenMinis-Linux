@@ -70,3 +70,16 @@
 -dontwarn com.jcraft.jsch.**
 -dontwarn org.bouncycastle.**
 -dontwarn com.jcraft.jzlib.**
+
+# JGit (org.eclipse.jgit) references JMX from org.eclipse.jgit.util.Monitoring:
+# java.lang.management.ManagementFactory plus javax.management.* — neither exists
+# on Android. Monitoring guards with a Class.forName probe (ENABLED=false when
+# absent), so the JMX path never executes at runtime; R8 still fails
+# minifyRelease with "Missing class" on those references. Same failure class as
+# the Rhino / JSch entries above: optional desktop-JDK integrations absent by
+# design on Android.
+#
+# NOTE FOR VERIFICATION: debug builds don't minify. Check against
+# assembleRelease.
+-dontwarn java.lang.management.**
+-dontwarn javax.management.**
