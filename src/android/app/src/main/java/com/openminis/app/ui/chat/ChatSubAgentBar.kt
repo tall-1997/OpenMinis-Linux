@@ -178,7 +178,7 @@ private fun SubAgentChip(
         if (member.index > 0 && member.total > 0) {
             Spacer(modifier = Modifier.width(4.dp))
             Text(
-                text = stringResource(R.string.subagent_index_of_total, member.index, member.total),
+                text = stringResource(R.string.subagent_badge_count, member.index, member.total),
                 color = Color.White.copy(alpha = 0.85f),
                 fontSize = 11.sp,
                 maxLines = 1,
