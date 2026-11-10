@@ -82,10 +82,19 @@ internal class SseEventParser {
  * Assemble [BufferedReader] lines into `data` payloads. Provider loops only
  * care about the payload; `[DONE]` is preserved verbatim.
  */
-internal fun ssePayloads(reader: java.io.BufferedReader): Sequence<String> = sequence {
+internal fun ssePayloads(
+    reader: java.io.BufferedReader,
+    drain: StreamTailDrain? = null,
+): Sequence<String> = sequence {
     val parser = SseEventParser()
     while (true) {
-        val line = reader.readLine() ?: break
+        val line = try {
+            reader.readLine()
+        } catch (e: java.io.IOException) {
+            // Only the deliberate post-terminal deadline is a clean EOF.
+            if (drain?.isExpired == true) break
+            throw e
+        } ?: break
         val event = parser.feed(line) ?: continue
         if (event.data.isNotEmpty()) yield(event.data)
     }

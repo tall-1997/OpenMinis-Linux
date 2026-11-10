@@ -190,19 +190,12 @@ private fun SubAgentChip(
                 )
             }
         }
-        // Row 2 — live status only; the newest output moved to row 3 so the
-        // ellipsis cannot eat it first.
+        // Keep the live card to identity + activity; full output and counts live in the sheet.
         val status = buildString {
             append(phase)
             member.currentTool.takeIf { it.isNotBlank() }?.let {
                 append(" · ").append(subAgentToolTitle(it, ""))
             }
-            if (member.turnCap > 0) {
-                append(" · ")
-                append(stringResource(R.string.subagent_turn_of, member.turnIndex.coerceAtLeast(1), member.turnCap))
-            }
-            val toolCalls = member.steps.count { it.kind == "tool" }
-            if (toolCalls > 0) append(" · ").append(stringResource(R.string.subagent_tool_calls_fmt, toolCalls))
         }
         Text(
             text = status,
@@ -212,21 +205,6 @@ private fun SubAgentChip(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(start = 11.dp),
         )
-        // Row 3 — newest output line, with the full chip width to itself.
-        val latestLine = member.steps.lastOrNull { it.body.isNotBlank() }?.body
-            ?.lineSequence()?.firstOrNull { it.isNotBlank() }?.take(60).orEmpty()
-        if (latestLine.isNotEmpty()) {
-            Text(
-                text = latestLine,
-                color = Color.White.copy(alpha = 0.66f),
-                fontSize = 10.5.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .padding(start = 11.dp, top = 1.dp)
-                    .fillMaxWidth(),
-            )
-        }
     }
 }
 

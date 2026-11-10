@@ -23,6 +23,8 @@ import com.openminis.app.provider.SamplingIdentity
 import com.openminis.app.provider.SamplingPolicy
 import com.openminis.app.provider.safeOptString
 import com.openminis.app.provider.ssePayloads
+import com.openminis.app.provider.cancelOnCancellation
+import com.openminis.app.provider.StreamTailDrain
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.awaitClose
@@ -134,8 +136,10 @@ class GeminiProvider(
             .build()
 
         val call = client.newCall(request)
-        val cancelOnExit = kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]
-            ?.invokeOnCompletion { call.cancel() }
+        val cancelOnExit = call.cancelOnCancellation(
+            kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job],
+        )
+        try {
         val response = com.openminis.app.provider.StreamTtfb.execute(call, "Gemini")
         if (!response.isSuccessful) {
             val errorBody = response.body?.string() ?: ""
@@ -144,12 +148,14 @@ class GeminiProvider(
         }
 
         val reader = BufferedReader(InputStreamReader(response.body!!.byteStream()))
+        val drain = StreamTailDrain(this, { call.cancel() })
         try {
             var started = false
             var lastFinishReason: String? = null
             // Shared SSE assembler: joins multi-line `data:` and tolerates
             // `data:{...}` with no space (Gemini-compatible relays).
-            for (payload in ssePayloads(reader)) {
+            for (payload in ssePayloads(reader, drain)) {
+                if (payload == "[DONE]") break
                 val json = try { JSONObject(payload) } catch (_: Exception) { continue }
 
                 // [T-gemini-block-reason] A safety/region-blocked request has NO
@@ -194,6 +200,7 @@ class GeminiProvider(
 
                 extractFinishReason(json)?.let { reason ->
                     lastFinishReason = reason
+                    drain.terminal()
                 }
             }
             send(LLMStreamChunk.Finished(lastFinishReason ?: "end_turn"))
@@ -202,14 +209,18 @@ class GeminiProvider(
             if (e is kotlinx.coroutines.CancellationException) throw e
             cancel("Stream error", mapError(e))
         } finally {
-            reader.close()
-            response.close()
+            drain.close()
+            runCatching { reader.close() }
+            runCatching { response.close() }
         }
         channel.close()
         awaitClose {
-            cancelOnExit?.dispose()
             call.cancel()
             runCatching { response.close() }
+        }
+        } finally {
+            cancelOnExit?.dispose()
+            call.cancel()
         }
     }
 

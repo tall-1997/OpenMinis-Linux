@@ -9,6 +9,8 @@ import com.openminis.app.data.model.LLMStreamChunk
 import com.openminis.app.data.model.ThinkingLevel
 import com.openminis.app.provider.safeOptString
 import com.openminis.app.provider.ssePayloads
+import com.openminis.app.provider.cancelOnCancellation
+import com.openminis.app.provider.StreamTailDrain
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
@@ -53,60 +55,6 @@ private const val STREAM_TTFB_TIMEOUT_MS = 120_000L
  * [STREAM_TTFB_TIMEOUT_MS] takes over.
  */
 private const val STREAM_UPLOAD_CAP_MS = 120_000L
-
-/**
- * [T-stream-content-type-sniff] How many leading bytes are peeked (and pushed
- * back) to decide whether a body is SSE or a single JSON object.
- */
-private const val SNIFF_BYTES = 256
-
-/**
- * Read enough of [stream] to classify it, then push every byte back so the
- * caller can still consume the body normally — including incrementally.
- *
- * Two traps this avoids:
- * - **Byte-at-a-time reads.** Looping over `read()` for a single byte would
- *   issue one socket read per byte, so this does bulk reads instead.
- * - **Partial reads.** TCP may hand over `dat` of `data: {…}`; classifying on
- *   that would wrongly conclude "not SSE". So keep reading until the trimmed
- *   prefix is long enough to contain a full SSE field name, or a line break,
- *   or the stream ends.
- */
-internal fun peekPrefix(stream: java.io.PushbackInputStream): String {
-    val buf = ByteArray(SNIFF_BYTES)
-    var n = 0
-    while (n < buf.size) {
-        val read = stream.read(buf, n, buf.size - n)
-        if (read == -1) break
-        n += read
-        val trimmed = String(buf, 0, n, Charsets.UTF_8).trimStart()
-        if (trimmed.length >= 6 || '\n' in trimmed) break
-    }
-    if (n > 0) stream.unread(buf, 0, n)
-    return String(buf, 0, n, Charsets.UTF_8)
-}
-
-/**
- * Pure: does this body prefix carry SSE framing?
- *
- * The Content-Type header is not a substitute. Relays behind a proxy that hides
- * or rewrites the header answer `application/json` while streaming perfectly
- * valid `data: {…}` events, and feeding that body to `JSONObject()` produces
- * "Value data of type java.lang.String cannot be converted to JSONObject" —
- * the tokenizer's first value is the bare word `data`. The converse is just as
- * real: a gateway that ignores `stream=true` returns one JSON object with an
- * `text/event-stream`-less content type, which is why the JSON branch exists at
- * all. Both directions are decided by the bytes, not the header.
- */
-internal fun looksLikeSse(prefix: String): Boolean {
-    val head = prefix.trimStart()
-    return head.startsWith("data:") ||
-        head.startsWith("event:") ||
-        head.startsWith("id:") ||
-        head.startsWith("retry:") ||
-        // An SSE comment / keep-alive line, e.g. ": ping".
-        head.startsWith(":")
-}
 
 internal fun OpenAIProvider.rawStreamMessage(
         messages: List<LLMMessage>,
@@ -220,10 +168,11 @@ internal fun OpenAIProvider.rawStreamMessage(
         // (b) evict THIS ONE connection on timeout.
         val watchState = CallWatchState()
         val call = client.newCall(request.newBuilder().tag(CallWatchState::class.java, watchState).build())
-        // [T-android-stop-cancels-socket] invokeOnCompletion fires on cancel
-        // too; call.cancel() unblocks the parked execute()/readLine at once.
-        val stopHook = kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]
-            ?.invokeOnCompletion { runCatching { call.cancel() } }
+        // Cancel at cancellation onset: completion waits for blocking reads.
+        val stopHook = call.cancelOnCancellation(
+            kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job],
+        )
+        try {
         // [T-android-stale-conn-retry-hang] Time-to-first-byte watchdog: a
         // request written into a dead pooled h2 tunnel produces NO further
         // events until the 600s read timeout — the UI showed "thinking" forever.
@@ -478,6 +427,7 @@ internal fun OpenAIProvider.rawStreamMessage(
         var finishReason: String? = null
         // True once the [DONE] branch has emitted Finished.
         var sentFinished = false
+        val drain = StreamTailDrain(this, { call.cancel() })
 
         try {
             send(LLMStreamChunk.Started)
@@ -488,7 +438,7 @@ internal fun OpenAIProvider.rawStreamMessage(
             // Shared SSE assembler: an event ends at a blank line and may
             // carry multiple `data:` lines. It also tolerates `data:{...}`
             // with no space and preserves `[DONE]` verbatim.
-            for (payload in ssePayloads(reader)) {
+            for (payload in ssePayloads(reader, drain)) {
                 if (payload == "[DONE]") {
                     // [T-android-think-prefix-stream] Flush whatever the parser
                     // still holds (a cross-chunk tag tail, or an unterminated
@@ -744,6 +694,7 @@ internal fun OpenAIProvider.rawStreamMessage(
                                 // budget-truncated answer, so downstream code needs
                                 // no new branch: the loop stops, the text persists,
                                 // and the UI can mark it truncated.
+                                drain.terminal()
                                 finishReason = "length"
                                 sawFinishReason = true
                                 break
@@ -770,6 +721,7 @@ internal fun OpenAIProvider.rawStreamMessage(
                             )
                         }
                         type == "response.completed" -> {
+                            drain.terminal()
                             val resp = event.optJSONObject("response")
                             val status = resp?.optString("status", "")
                             // When the model emitted tool calls the API returns status=completed
@@ -917,6 +869,7 @@ internal fun OpenAIProvider.rawStreamMessage(
                         // Finish reason
                         choice.safeOptString("finish_reason", "").let {
                             if (it.isNotEmpty()) {
+                                drain.terminal()
                                 finishReason = it
                                 if (!sawFinishReason) {
                                     sawFinishReason = true
@@ -1037,9 +990,9 @@ internal fun OpenAIProvider.rawStreamMessage(
             )
             cancel("Stream error", mapError(e))
         } finally {
-            stopHook?.dispose()
-            reader.close()
-            response.close()
+            drain.close()
+            runCatching { reader.close() }
+            runCatching { response.close() }
         }
         channel.close()
         // T171: when the coroutine is cancelled (user tapped stop), the
@@ -1050,5 +1003,9 @@ internal fun OpenAIProvider.rawStreamMessage(
         awaitClose {
             try { call.cancel() } catch (_: Exception) {}
             try { response.close() } catch (_: Exception) {}
+        }
+        } finally {
+            stopHook?.dispose()
+            call.cancel()
         }
     }

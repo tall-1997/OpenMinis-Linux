@@ -15,14 +15,12 @@ import kotlin.coroutines.resumeWithException
  * cancellation handler — [Call.cancel] closes the underlying socket, which
  * unblocks the parked read with an IOException immediately.
  *
- * [invokeOnCompletion][kotlinx.coroutines.Job.invokeOnCompletion] fires on
- * cancellation as well, so the streaming producers that already hook it
- * (Anthropic/Gemini) get the same effect; use this helper where a plain
- * `execute()` sits inside suspend code (non-stream paths, image/video).
+ * Use this helper where a plain `execute()` sits inside suspend code.
+ * Streaming readers retain [cancelOnCancellation] until their body is closed.
  */
 internal suspend fun Call.executeCancellable(): Response {
     val job = coroutineContext[kotlinx.coroutines.Job]
-    val handle = job?.invokeOnCompletion { runCatching { cancel() } }
+    val handle = cancelOnCancellation(job)
     return try {
         suspendCancellableCoroutine { cont ->
             cont.invokeOnCancellation { runCatching { cancel() } }

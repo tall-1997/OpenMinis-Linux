@@ -23,6 +23,8 @@ import com.openminis.app.provider.applyUserAgentOverride
 import com.openminis.app.provider.mapHttpErrorShared
 import com.openminis.app.provider.safeOptString
 import com.openminis.app.provider.ssePayloads
+import com.openminis.app.provider.cancelOnCancellation
+import com.openminis.app.provider.StreamTailDrain
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.awaitClose
@@ -170,8 +172,10 @@ class AnthropicProvider(
 
         val call = client.newCall(request)
         // Install before execute: cancel must unblock the header wait too.
-        val cancelOnExit = kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]
-            ?.invokeOnCompletion { call.cancel() }
+        val cancelOnExit = call.cancelOnCancellation(
+            kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job],
+        )
+        try {
         val response = com.openminis.app.provider.StreamTtfb.execute(call, "Anthropic")
         val durationMs = System.currentTimeMillis() - startTime
         // [T-quota-claude-subscription] Errors included: a 429 still reports usage.
@@ -225,11 +229,12 @@ class AnthropicProvider(
         var currentToolName: String? = null
         val toolInputBuffer = StringBuilder()
         var lastSentToolInputLen = 0
+        val drain = StreamTailDrain(this, { call.cancel() })
 
         try {
             // Shared SSE assembler: multi-line `data:` is joined, `data:{...}`
             // with no space is tolerated, and `[DONE]` is preserved.
-            for (payload in ssePayloads(reader)) {
+            for (payload in ssePayloads(reader, drain)) {
                 if (payload == "[DONE]") break
 
                 val event = try { JSONObject(payload) } catch (_: Exception) { continue }
@@ -242,6 +247,7 @@ class AnthropicProvider(
                 val eventType = event.safeOptString("type", "")
 
                 when (eventType) {
+                    "message_stop" -> break
                     // [T-anthropic-sse-error-event] `data: {"type":"error", …}` is
                     // how Anthropic (and every compatible relay) reports a mid-stream
                     // failure. Unhandled, the stream "completed" with no content and
@@ -310,6 +316,7 @@ class AnthropicProvider(
                         }
                         val delta = event.optJSONObject("delta")
                         val stopReason = delta?.safeOptString("stop_reason", "")?.ifEmpty { null }
+                        if (stopReason != null) drain.terminal()
                         // [FIX-261018-12] stop_details says why (refusal category).
                         val details = if (stopReason == "refusal") delta?.optJSONObject("stop_details") else null
                         send(LLMStreamChunk.Finished(
@@ -335,14 +342,18 @@ class AnthropicProvider(
             if (e is kotlinx.coroutines.CancellationException) throw e
             cancel("Stream error", mapError(e))
         } finally {
-            reader.close()
-            response.close()
+            drain.close()
+            runCatching { reader.close() }
+            runCatching { response.close() }
         }
         channel.close()
         awaitClose {
-            cancelOnExit?.dispose()
             call.cancel()
             runCatching { response.close() }
+        }
+        } finally {
+            cancelOnExit?.dispose()
+            call.cancel()
         }
     }
 
@@ -1209,18 +1220,3 @@ class AnthropicProvider(
         return LLMError.Unknown(error)
     }
 }
-
-// [T-llm-error-classification] 细分 provider 错误，不再笼统地归 ProviderError。
-// "max_tokens too large" 是输出参数超限（max_tokens 请求过大），
-// 不是上下文超长，保持 ProviderError。
-private fun anthropicContextLimit(statusCode: Int, lower: String): Boolean =
-    !lower.contains("max_tokens too large") && (
-        lower.contains("context_length_exceeded") || lower.contains("maximum context length") ||
-            lower.contains("too many tokens") || lower.contains("reduce the length") ||
-            (statusCode == 400 && (lower.contains("token") && (lower.contains("max") || lower.contains("limit") || lower.contains("exceed"))))
-    )
-
-private fun anthropicContentFiltered(statusCode: Int, lower: String): Boolean =
-    lower.contains("content_filter") || lower.contains("content_policy") ||
-        lower.contains("safety") || lower.contains("inappropriate") ||
-        statusCode == 422 && lower.contains("content")
