@@ -8,12 +8,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -35,32 +31,15 @@ internal fun GitPanelCommitBar(state: GitPanelState, viewModel: GitPanelViewMode
     val stagedCount = state.status?.entries?.count { it.staged } ?: 0
     val hasUnstaged = state.status?.entries?.any { !it.staged } == true
     Column(Modifier.fillMaxWidth().padding(12.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(
-                value = state.draftMessage,
-                onValueChange = viewModel::setDraftMessage,
-                modifier = Modifier.weight(1f),
-                placeholder = { Text(stringResource(R.string.git_panel_commit_hint)) },
-                minLines = 1,
-                maxLines = 3,
-                textStyle = MaterialTheme.typography.bodyMedium,
-            )
-            Spacer(Modifier.width(8.dp))
-            IconButton(
-                onClick = viewModel::generateCommitMessage,
-                enabled = !state.generating && !state.busy && stagedCount > 0,
-            ) {
-                if (state.generating) {
-                    CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                } else {
-                    Icon(
-                        Icons.Filled.AutoAwesome,
-                        contentDescription = stringResource(R.string.git_panel_generate),
-                        tint = GitHunkBlue,
-                    )
-                }
-            }
-        }
+        OutlinedTextField(
+            value = state.draftMessage,
+            onValueChange = viewModel::setDraftMessage,
+            modifier = Modifier.fillMaxWidth(),
+            placeholder = { Text(stringResource(R.string.git_panel_commit_hint)) },
+            minLines = 1,
+            maxLines = 3,
+            textStyle = MaterialTheme.typography.bodyMedium,
+        )
         Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             TextButton(
@@ -74,6 +53,10 @@ internal fun GitPanelCommitBar(state: GitPanelState, viewModel: GitPanelViewMode
                 onClick = viewModel::generateCommitMessage,
                 enabled = !state.generating && !state.busy && stagedCount > 0,
             ) {
+                if (state.generating) {
+                    CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(6.dp))
+                }
                 Text(stringResource(R.string.git_panel_generate))
             }
             Button(

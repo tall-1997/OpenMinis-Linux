@@ -622,7 +622,9 @@ object GitCli {
     suspend fun commitDiff(sessionId: String, hash: String, root: String? = null): String {
         val quoted = GitCliCmd.shellQuote(hash)
         val r = runCatching {
-            run(sessionId, "${GitCliCmd.gitPrefix(root)} -c core.quotepath=false show --date=iso $quoted")
+            // `-m --first-parent` matches the host JGit diff, which always
+            // formats against the first parent of a merge commit.
+            run(sessionId, "${GitCliCmd.gitPrefix(root)} -c core.quotepath=false show -m --first-parent --date=iso $quoted")
         }.getOrElse { return "[diff unavailable: ${it.message}]" }
         if (r.exitCode != 0) return "[git show exit=${r.exitCode}]\n${r.output.take(2000)}"
         return truncateDiff(r.output)

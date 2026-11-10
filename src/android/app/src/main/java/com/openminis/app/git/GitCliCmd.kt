@@ -63,8 +63,10 @@ object GitCliCmd {
             "printf '%s %s\\n' \"\${score:-0}\" \"\$root\"; " +
             "done | sort -k1,1nr -k2 | sed 's/^[^ ]* //' | head -8"
 
+    // `-uall` lists untracked files individually so the Changes tab granularity
+    // matches the host JGit status (porcelain v1 collapses untracked dirs by default).
     fun statusCmd(root: String? = null) =
-        "${gitPrefix(root)} -c core.quotepath=false status --porcelain -b"
+        "${gitPrefix(root)} -c core.quotepath=false status --porcelain -b -uall"
 
     /**
      * Local + remote refs for the branch switcher, newest commits first.
@@ -133,14 +135,19 @@ object GitCliCmd {
             "--pretty=format:%H%x1f%an%x1f%ae%x1f%at%x1f%cn%x1f%ce%x1f%ct%x1f%s%x1f%b " +
             shellQuote(hash)
 
-    /** Per-file stats of one commit; `--format=` leaves numstat rows only. */
+    /**
+     * Per-file stats of one commit; `--format=` leaves numstat rows only.
+     * `-m --first-parent` pins merge commits to the first-parent diff — the
+     * host JGit path has no combined-diff mode, and plain `git show` on a
+     * merge would print the (usually empty) combined diff instead.
+     */
     fun commitNumstatCmd(hash: String, root: String? = null) =
-        "${gitPrefix(root)} -c core.quotepath=false show --numstat --format= " +
+        "${gitPrefix(root)} -c core.quotepath=false show -m --first-parent --numstat --format= " +
             shellQuote(hash)
 
     /** Diff of a single file inside one commit (details sheet → diff view). */
     fun commitFileDiffCmd(hash: String, path: String, root: String? = null) =
-        "${gitPrefix(root)} -c core.quotepath=false show --date=iso " +
+        "${gitPrefix(root)} -c core.quotepath=false show -m --first-parent --date=iso " +
             shellQuote(hash) + " -- " + shellQuote(path)
 
     /**
