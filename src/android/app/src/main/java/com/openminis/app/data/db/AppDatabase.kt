@@ -24,7 +24,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         com.openminis.app.data.instruction.InstructionStateEntity::class,
         com.openminis.app.data.instruction.InstructionUpdateEntity::class,
     ],
-    version = 28, // keep DatabaseVersionGuard.CODE_DB_VERSION in lockstep
+    version = 29, // keep DatabaseVersionGuard.CODE_DB_VERSION in lockstep
     // [T-android-downgrade-compat] Kept ON so MigrationTestHelper and CI can
     // validate migrations against the committed schema json. Note the honest
     // scope: src/android/app/schemas/…AppDatabase/ currently holds 12, 14, 15,

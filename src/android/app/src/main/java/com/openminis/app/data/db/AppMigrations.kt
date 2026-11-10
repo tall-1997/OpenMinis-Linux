@@ -646,6 +646,49 @@ internal object AppMigrations {
         }
     }
 
+    val MIGRATION_28_29 = object : Migration(28, 29) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // [T-goal-model-origin] Provenance decides whether a later task may
+            // replace the session Goal. Rows written before this column existed
+            // default to 'user': the conservative side — the model never
+            // overwrites an objective a human may have set.
+            db.addColumnIfMissing("session_goals", "created_by", "TEXT NOT NULL DEFAULT 'user'")
+        }
+    }
+
+    val MIGRATION_29_28 = object : Migration(29, 28) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // Rebuild without the column: ALTER TABLE DROP COLUMN needs SQLite
+            // 3.35+, which older supported Android releases do not ship.
+            db.execSQL(
+                """CREATE TABLE IF NOT EXISTS `session_goals_old` (
+                    `session_id` TEXT NOT NULL,
+                    `objective` TEXT NOT NULL,
+                    `status` TEXT NOT NULL,
+                    `token_budget` INTEGER,
+                    `tokens_used` INTEGER NOT NULL,
+                    `elapsed_ms` INTEGER NOT NULL,
+                    `blocked_condition` TEXT,
+                    `blocked_count` INTEGER NOT NULL,
+                    `paused_at` INTEGER,
+                    `created_at` INTEGER NOT NULL,
+                    `updated_at` INTEGER NOT NULL,
+                    PRIMARY KEY(`session_id`)
+                )""".trimIndent()
+            )
+            db.execSQL(
+                "INSERT INTO `session_goals_old` (`session_id`, `objective`, `status`, " +
+                    "`token_budget`, `tokens_used`, `elapsed_ms`, `blocked_condition`, " +
+                    "`blocked_count`, `paused_at`, `created_at`, `updated_at`) " +
+                    "SELECT `session_id`, `objective`, `status`, `token_budget`, " +
+                    "`tokens_used`, `elapsed_ms`, `blocked_condition`, `blocked_count`, " +
+                    "`paused_at`, `created_at`, `updated_at` FROM `session_goals`"
+            )
+            db.execSQL("DROP TABLE IF EXISTS `session_goals`")
+            db.execSQL("ALTER TABLE `session_goals_old` RENAME TO `session_goals`")
+        }
+    }
+
     val MIGRATION_16_17 = object : Migration(16, 17) {
         override fun migrate(db: SupportSQLiteDatabase) {
             db.addColumnIfMissing("sessions", "permission_mode", "TEXT")
@@ -714,5 +757,7 @@ internal object AppMigrations {
     MIGRATION_27_26,
     MIGRATION_27_28,
     MIGRATION_28_27,
+    MIGRATION_28_29,
+    MIGRATION_29_28,
     )
 }

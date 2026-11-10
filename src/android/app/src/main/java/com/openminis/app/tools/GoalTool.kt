@@ -15,10 +15,15 @@ object GoalTool {
         // objective must be recorded, not remembered. Pause/resume/clear stay
         // user-only — they control whether the session keeps working, and that
         // is the human's decision.
+        // [T-goal-model-origin] A different objective supersedes the model's
+        // OWN previous Goal (a finished task must not keep steering new ones);
+        // an objective the human wrote is never replaced.
         description = "Read, create or report on the current session Goal. op=get reads it; " +
-            "op=create records a new Goal when none exists yet (idempotent: an existing Goal is returned " +
-            "unchanged, so the human's objective is never overwritten); op=complete and op=blocked report " +
-            "outcome, which the harness treats as the model's call. " +
+            "op=create records THIS task's Goal. Repeating the same objective is idempotent; a different " +
+            "objective replaces a Goal the model itself wrote earlier (unless the human paused it), so a " +
+            "finished task never keeps steering the next one. A Goal written by the human is never " +
+            "overwritten — only the human may clear or edit it. " +
+            "op=complete and op=blocked report outcome, which the harness treats as the model's call. " +
             "Creating the task board with agent_plan already records the Goal from its objective — call " +
             "op=create explicitly only for a long-running objective that has no board. " +
             "You may never pause, resume, or clear the Goal: that is the user's decision.",
