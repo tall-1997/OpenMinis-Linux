@@ -176,13 +176,141 @@ class GitHostRepoTest {
     }
 
     @Test
-    fun `commitIdentity prefers the sandbox identity and never returns blank`() {
+    fun `commitIdentity prefers repo-local config over the sandbox identity`() {
         val (dir, git) = initRepo()
         git.close()
-        assertEquals("T", GitHostRepo.commitIdentity(dir, "T", "t@x").name)
-        // The fallback chain walks repo config -> global config -> default,
-        // so the resolved name depends on the machine; assert it is non-blank.
+        Git.open(dir).use { repo ->
+            repo.config.setString("user", null, "name", "Local")
+            repo.config.setString("user", null, "email", "local@x")
+            repo.config.save()
+        }
+        assertEquals("Local", GitHostRepo.commitIdentity(dir, "T", "t@x").name)
         assertTrue(GitHostRepo.commitIdentity(dir, null, null).name.isNotBlank())
+    }
+
+    @Test
+    fun `unstage keeps the file content and marks it unstaged-modified`() {
+        val (dir, git) = initRepo()
+        git.close()
+        File(dir, "a.txt").writeText("line1\nline2 changed\n")
+        GitHostRepo.setStaged(dir, "a.txt", staged = true)
+        GitHostRepo.setStaged(dir, "a.txt", staged = false)
+        val entries = GitHostRepo.status(dir).entries.filter { it.path == "a.txt" }
+        assertEquals(1, entries.size)
+        assertFalse(entries[0].staged)
+        assertEquals('M', entries[0].code)
+        assertEquals("line1\nline2 changed\n", File(dir, "a.txt").readText())
+    }
+
+    @Test
+    fun `status lists an unstaged deletion as a single D row`() {
+        val (dir, git) = initRepo()
+        git.close()
+        File(dir, "a.txt").delete()
+        val entries = GitHostRepo.status(dir).entries.filter { it.path == "a.txt" }
+        assertEquals(1, entries.size)
+        assertEquals('D', entries[0].code)
+        assertFalse(entries[0].staged)
+    }
+
+    @Test
+    fun `status lists both rows for a staged-then-edited file`() {
+        val (dir, git) = initRepo()
+        git.close()
+        File(dir, "a.txt").writeText("line1\nline2 staged\n")
+        GitHostRepo.setStaged(dir, "a.txt", staged = true)
+        File(dir, "a.txt").writeText("line1\nline2 staged then edited\n")
+        val entries = GitHostRepo.status(dir).entries.filter { it.path == "a.txt" }
+        assertEquals(2, entries.size)
+        assertTrue(entries.any { it.staged })
+        assertTrue(entries.any { !it.staged })
+    }
+
+    @Test
+    fun `numstatStaged does not write loose objects into the repository`() {
+        val (dir, git) = initRepo()
+        File(dir, "a.txt").writeText("line1\nline2 changed\n")
+        git.add().addFilepattern("a.txt").call()
+        git.close()
+        fun looseCount() = File(dir, ".git/objects").walkBottomUp().count { it.isFile }
+        val before = looseCount()
+        GitHostRepo.numstatStaged(dir)
+        assertEquals(before, looseCount())
+    }
+
+    @Test
+    fun `numstatUnstaged excludes untracked files`() {
+        val (dir, git) = initRepo()
+        git.close()
+        File(dir, "a.txt").writeText("line1\nline2 changed\nline3\n")
+        File(dir, "u.txt").writeText("untracked\n")
+        val stats = GitHostRepo.numstatUnstaged(dir)
+        assertNotNull(stats["a.txt"])
+        assertNull("untracked files must not appear in the unstaged numstat", stats["u.txt"])
+    }
+
+    @Test
+    fun `stagedDiff on an unborn HEAD lists the staged file`() {
+        val dir = tmp.newFolder("unborn")
+        val git = Git.init().setDirectory(dir).call()
+        File(dir, "a.txt").writeText("line1\n")
+        git.add().addFilepattern("a.txt").call()
+        git.close()
+        val diff = GitHostRepo.stagedDiff(dir)
+        assertTrue(diff.contains("a.txt"))
+        assertTrue(diff.contains("+line1"))
+    }
+
+    @Test
+    fun `commitFileDiff returns only the target file section in a multi-file commit`() {
+        val (dir, git) = initRepo()
+        git.close()
+        File(dir, "a.txt").writeText("line1\nline2\nline3\n")
+        File(dir, "b.txt").writeText("b1\n")
+        val git2 = Git.open(dir)
+        git2.add().addFilepattern(".").call()
+        git2.commit().setMessage("two files").setAuthor("T", "t@x").call()
+        git2.close()
+        val hash = GitHostRepo.logPage(dir, offset = 0, limit = 1)[0].hash
+        val diff = GitHostRepo.commitFileDiff(dir, hash, "a.txt")
+        assertTrue(diff.contains("+line3"))
+        assertFalse("b.txt must not leak into a.txt's section", diff.contains("b.txt"))
+    }
+
+    @Test
+    fun `parseNumstatText flags binary files and counts hunks by markers`() {
+        val text = "diff --git a/a b/c.txt b/a b/c.txt\n" +
+            "index 0000000..d60b25d\n" +
+            "--- a/a b/c.txt\n" +
+            "+++ b/a b/c.txt\n" +
+            "Binary files differ\n"
+        val stats = GitHostRepo.parseNumstatText(text)
+        val stat = stats["a b/c.txt"]
+        assertNotNull(stat)
+        assertTrue(stat!!.binary)
+        assertEquals(0, stat.added)
+    }
+
+    @Test
+    fun `fileDiff staged compares HEAD against the index not the worktree`() {
+        val (dir, git) = initRepo()
+        git.close()
+        File(dir, "a.txt").writeText("line1\nline2 staged\n")
+        GitHostRepo.setStaged(dir, "a.txt", staged = true)
+        File(dir, "a.txt").writeText("line1\nline2 staged then edited\n")
+        val staged = GitHostRepo.fileDiff(dir, "a.txt", staged = true, untracked = false)
+        assertTrue(staged.contains("+line2 staged"))
+        assertFalse("worktree-only edit must not leak into the staged diff", staged.contains("edited"))
+        val unstaged = GitHostRepo.fileDiff(dir, "a.txt", staged = false, untracked = false)
+        assertTrue(unstaged.contains("+line2 staged then edited"))
+    }
+
+    @Test
+    fun `probe rejects a repo whose HEAD object is missing`() {
+        val (dir, git) = initRepo()
+        git.close()
+        File(dir, ".git/HEAD").writeText("0123456789abcdef0123456789abcdef01234567\n")
+        assertFalse(GitHostRepo.probe(dir).isRepo)
     }
 
     // ── commit detail / numstat / diff ─────────────────────────────────────

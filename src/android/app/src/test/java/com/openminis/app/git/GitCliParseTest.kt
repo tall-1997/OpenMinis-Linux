@@ -311,7 +311,7 @@ class GitCliParseTest {
         // cfg lookup must resolve against the same repo, not the shell cwd
         assertTrue(GitCliCmd.probeCmd("r").contains("\$(git -C 'r' config user.name"))
         assertEquals(
-            "git -C 'r' -c core.quotepath=false status --porcelain -b",
+            "git -C 'r' -c core.quotepath=false status --porcelain -b -uall",
             GitCliCmd.statusCmd("r"),
         )
         assertTrue(GitCliCmd.logCmd(5, "r").startsWith("git -C 'r' -c core.quotepath=false log -n 5"))

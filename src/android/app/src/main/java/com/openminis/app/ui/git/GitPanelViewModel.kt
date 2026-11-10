@@ -115,6 +115,19 @@ class GitPanelViewModel(
                 val (dir, info) = native
                 hostDir = dir
                 guestRoot = info.root
+                var resolved = info
+                if (resolved.userName.isNullOrBlank() || resolved.userEmail.isNullOrBlank()) {
+                    // The host probe reads repo-local config only; the
+                    // documented chain is repo config -> sandbox config ->
+                    // default, so fill the gap with the sandbox-resolved
+                    // identity instead of showing a false "missing identity"
+                    // warning the sandbox path would never show.
+                    val sandbox = runCatching { GitCli.probe(sessionId) }.getOrNull()
+                    resolved = resolved.copy(
+                        userName = resolved.userName ?: sandbox?.userName,
+                        userEmail = resolved.userEmail ?: sandbox?.userEmail,
+                    )
+                }
                 val status = runCatching { GitHostRepo.status(dir) }.getOrNull()
                 val staged = runCatching { GitHostRepo.numstatStaged(dir) }
                     .getOrDefault(emptyMap())
@@ -128,7 +141,7 @@ class GitPanelViewModel(
                 _state.update {
                     it.copy(
                         loading = false,
-                        repo = info,
+                        repo = resolved,
                         status = status,
                         stagedNumstat = staged,
                         unstagedNumstat = unstaged,
@@ -216,8 +229,10 @@ class GitPanelViewModel(
                         GitHostRepo.setStaged(dir, entry.path, staged = !entry.staged)
                         null
                     } catch (e: Exception) {
+                        // Report the FALLBACK's outcome: surfacing the host
+                        // exception while the sandbox call landed would claim
+                        // failure for a successful operation.
                         GitCli.setStaged(sessionId, entry, staged = !entry.staged, root = guestRoot)
-                        e.message
                     }
                 }
             } else {
@@ -237,7 +252,6 @@ class GitPanelViewModel(
                         null
                     } catch (e: Exception) {
                         GitCli.stageAll(sessionId, guestRoot)
-                        e.message
                     }
                 }
             } else {
@@ -497,7 +511,7 @@ class GitPanelViewModel(
             }
             val content = withContext(Dispatchers.IO) {
                 runCatching {
-                    if (dir != null) GitHostRepo.fileDiff(dir, entry.path)
+                    if (dir != null) GitHostRepo.fileDiff(dir, entry.path, entry.staged, entry.untracked)
                     else GitCli.fileDiff(sessionId, entry, guestRoot)
                 }.getOrDefault("(diff unavailable)")
             }
