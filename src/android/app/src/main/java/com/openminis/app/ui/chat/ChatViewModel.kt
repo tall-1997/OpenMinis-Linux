@@ -1735,22 +1735,6 @@ class ChatViewModel(
     override val activeEntryId: StateFlow<String?> = _activeEntryId.asStateFlow()
 
     /**
-     * Provider instance the current turn bills against. Persona resolution is
-     * per-instance ([com.openminis.app.agent.PersonaPromptLibrary.resolve]), so
-     * anything that wants to show or verify "the persona this session actually
-     * uses" must go through the same id the injector uses.
-     */
-    internal fun activeProviderInstanceId(): String? =
-        _activeEntryId.value?.let { id ->
-            providerRepository.config.value.modelEntries.find { it.id == id }?.providerInstanceId
-        }
-
-    internal fun activeProviderInstanceLabel(): String? =
-        activeProviderInstanceId()?.let { iid ->
-            providerRepository.config.value.instances.find { it.id == iid }?.label
-        }
-
-    /**
      * Prompts enqueued while the agent loop is running. Drained after the loop finishes.
      *
      * [T-android-queue-atomic-mutation] This list is written from TWO threads:
@@ -1858,6 +1842,12 @@ class ChatViewModel(
      * the whole system prompt as before".
      */
     @Volatile internal var systemPromptStablePrefixLen: Int = -1
+
+    // [T-recall-turn-dedup] Cross-turn dedup state for live recall: the turn
+    // identity (last non-queued user message id) and the recalled line keys
+    // announced for it. Compaction resets both so memories can return.
+    @Volatile internal var lastRecallTurnKey: String? = null
+    @Volatile internal var lastRecallTurnKeys: Set<String>? = null
 
     /** True when a compact-summary LLM call is in flight (UI disables further sends). */
     internal val _isCompacting = MutableStateFlow(false)

@@ -48,7 +48,8 @@ internal fun ChatViewModel.planBoardPrompt(): String? = runCatching {
  */
 internal fun ChatViewModel.liveRecallPrompt(): String? {
     if (!_memoryEnabled.value) return null
-    val recentUser = _messages.value.lastOrNull { it.role == "user" && !it.isQueued }?.content.orEmpty()
+    val lastUser = _messages.value.lastOrNull { it.role == "user" && !it.isQueued }
+    val recentUser = lastUser?.content.orEmpty()
     val recentAssistant = _messages.value
         .lastOrNull { it.role == "assistant" }
         ?.content
@@ -69,12 +70,43 @@ internal fun ChatViewModel.liveRecallPrompt(): String? {
     ) ?: return null
     val hits = engine.recall(query)
     if (hits.isEmpty()) return null
+    // [T-recall-turn-dedup] The same memories are announced once per topic.
+    // Every request of one turn must carry the block (each request is a fresh
+    // context), but a NEW turn re-announces only when the recalled lines
+    // changed — otherwise the fragment would repeat verbatim every round.
+    val turnKey = lastUser?.id ?: ""
+    val keys = hits.map { "${it.day}:${it.line}" }.toSet()
+    // If the message that carried the previous block fell out of the window,
+    // the memories are gone from context — announce again regardless.
+    val carrierAlive = lastRecallTurnKey == null ||
+        _messages.value.any { it.id == lastRecallTurnKey }
+    if (!shouldAnnounceRecall(turnKey, lastRecallTurnKey, keys, lastRecallTurnKeys, carrierAlive)) return null
+    lastRecallTurnKey = turnKey
+    lastRecallTurnKeys = keys
     val fragment = engine.formatAsPromptFragment(hits).takeIf { it.isNotBlank() } ?: return null
     // [T-memory-recall-count] Count entries that actually reached the prompt:
     // display metadata only (ranking no longer feeds on it), kept for future
     // strength-style signals.
     engine.acceptRecallBatch(hits.map { it.source to it.line })
     return fragment
+}
+
+/**
+ * [T-recall-turn-dedup] Pure decision: true = announce the fragment now.
+ * Same-turn requests always announce (each request is a fresh context);
+ * a new turn re-announces only when the recalled lines differ from the
+ * previous turn's. Compaction resets the state so memories can return.
+ */
+internal fun shouldAnnounceRecall(
+    turnKey: String,
+    lastTurnKey: String?,
+    keys: Set<String>,
+    lastKeys: Set<String>?,
+    lastCarrierAlive: Boolean,
+): Boolean {
+    if (turnKey == lastTurnKey) return true
+    if (lastKeys == null) return true
+    return keys != lastKeys || !lastCarrierAlive
 }
 
 private const val ASSISTANT_TAIL_CHARS = 400
