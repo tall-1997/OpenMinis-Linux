@@ -9,23 +9,25 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material.icons.Icons
@@ -54,6 +56,16 @@ import com.openminis.app.tools.SubAgentRunner
 import com.openminis.app.ui.markdown.MarkdownText
 import com.openminis.app.ui.theme.ChatColors
 
+/**
+ * [T-wave-e-subagent-card] Live roster bar for concurrent spawn_agent
+ * members, modelled on the task chips of mature agent clients: each member
+ * is a TWO-LINE chip — the top row carries the identity (phase dot, task
+ * title, i/N), the bottom row the live progress (phase, in-flight tool,
+ * turn, latest output) — so a long output line can never crowd the title
+ * out of a single 220dp run of text. The stop affordance is a full-size
+ * trailing icon on its own padding, not a cramped 17dp overlay inside the
+ * label's touch area.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SubAgentLiveBar(
@@ -66,72 +78,24 @@ fun SubAgentLiveBar(
     var detailMemberId by remember { mutableStateOf<String?>(null) }
 
     if (mine.isNotEmpty()) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(ChatColors.background.copy(alpha = 0.94f))
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        mine.forEach { m ->
-            key(m.id) {
-            val bg = phaseColor(m.phase.ifBlank { "思考中" })
-            // [T-android-chat-strings-resource] "子代理 N/M" is pure display —
-            // the phase literals below it stay data sentinels (the tracker
-            // service emits them and both sides compare on them).
-            val indexLabel = stringResource(R.string.subagent_index_of_total, m.index, m.total)
-            // [T-wave-e-subagent-card] The chip now carries the task
-            // description (the spawn prompt's title) alongside the N/M label,
-            // the tool-call count and the latest output line, so the user can
-            // tell lanes apart and see progress without opening the sheet.
-            val toolCalls = m.steps.count { it.kind == "tool" }
-            val toolCountLabel = if (toolCalls > 0) stringResource(R.string.subagent_tool_calls_fmt, toolCalls) else ""
-            val latestLine = m.steps.lastOrNull { it.body.isNotBlank() }?.body
-                ?.lineSequence()?.firstOrNull { it.isNotBlank() }?.take(60).orEmpty()
-            val label = buildString {
-                if (m.index > 0 && m.total > 0) append(indexLabel)
-                if (m.title.isNotBlank()) {
-                    if (isNotEmpty()) append(" · ")
-                    append(m.title.take(12))
+        Row(
+            modifier = modifier
+                .fillMaxWidth()
+                .background(ChatColors.background.copy(alpha = 0.94f))
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            mine.forEach { m ->
+                key(m.id) {
+                    SubAgentChip(
+                        member = m,
+                        onClick = { detailMemberId = m.id },
+                        onStop = { onStop(m.id) },
+                    )
                 }
-                append(" · ").append(m.phase.ifBlank { "思考中" })
-                m.currentTool.takeIf { it.isNotBlank() }?.let { append(" · ").append(subAgentToolTitle(it, "")) }
-                if (m.turnCap > 0) append(" · ${m.turnIndex.coerceAtLeast(1)}/${m.turnCap}")
-                if (toolCountLabel.isNotEmpty()) append(" · ").append(toolCountLabel)
-                if (latestLine.isNotEmpty()) append(" · ").append(latestLine)
-            }
-            Row(
-                modifier = Modifier
-                    .background(bg, RoundedCornerShape(999.dp))
-                    .padding(start = 10.dp, end = 1.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = label,
-                    color = Color.White,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .widthIn(max = 220.dp)
-                        .clickable { detailMemberId = m.id }
-                        .padding(vertical = 4.dp),
-                )
-                Icon(
-                    Icons.Filled.Stop,
-                    contentDescription = stringResource(R.string.subagent_stop_desc, m.title),
-                    tint = Color.White,
-                    modifier = Modifier
-                        .size(20.dp)
-                        .clickable { onStop(m.id) }
-                        .padding(3.dp),
-                )
-            }
             }
         }
-    }
     }
     val detailMember = mine.firstOrNull { it.id == detailMemberId }
     if (detailMember != null) {
@@ -140,6 +104,88 @@ fun SubAgentLiveBar(
             onDismiss = { detailMemberId = null },
             onStop = onStop,
         )
+    }
+}
+
+@Composable
+private fun SubAgentChip(
+    member: SubAgentActivityTracker.Member,
+    onClick: () -> Unit,
+    onStop: () -> Unit,
+) {
+    val phase = member.phase.ifBlank { "思考中" }
+    val bg = phaseColor(phase)
+    Column(
+        modifier = Modifier
+            .widthIn(max = 240.dp)
+            .background(bg, RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(start = 10.dp, end = 2.dp, top = 5.dp, bottom = 5.dp),
+    ) {
+        // Row 1 — identity: phase dot, task title, i/N.
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(6.dp)
+                    .background(Color.White, CircleShape),
+            )
+            Spacer(modifier = Modifier.width(5.dp))
+            Text(
+                text = member.title.ifBlank {
+                    stringResource(R.string.subagent_fallback_label)
+                },
+                color = Color.White,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            if (member.index > 0 && member.total > 0) {
+                Spacer(modifier = Modifier.width(5.dp))
+                Text(
+                    text = stringResource(R.string.subagent_index_of_total, member.index, member.total),
+                    color = Color.White.copy(alpha = 0.85f),
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                )
+            }
+        }
+        // Row 2 — live progress: phase, in-flight tool, turn, latest output.
+        val progress = buildString {
+            append(phase)
+            member.currentTool.takeIf { it.isNotBlank() }?.let {
+                append(" · ").append(subAgentToolTitle(it, "").substringBefore(" · "))
+            }
+            if (member.turnCap > 0) {
+                append(" · ")
+                append(stringResource(R.string.subagent_turn_of, member.turnIndex.coerceAtLeast(1), member.turnCap))
+            }
+            val toolCalls = member.steps.count { it.kind == "tool" }
+            if (toolCalls > 0) append(" · ").append(stringResource(R.string.subagent_tool_calls_fmt, toolCalls))
+        }
+        Spacer(modifier = Modifier.height(1.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = progress,
+                color = Color.White.copy(alpha = 0.82f),
+                fontSize = 11.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            IconButton(
+                onClick = onStop,
+                modifier = Modifier.size(26.dp),
+            ) {
+                Icon(
+                    Icons.Filled.Stop,
+                    contentDescription = stringResource(R.string.subagent_stop_desc, member.title),
+                    tint = Color.White,
+                    modifier = Modifier.size(14.dp),
+                )
+            }
+        }
     }
 }
 
@@ -175,34 +221,53 @@ private fun SubAgentDetailSheet(
                 .fillMaxWidth()
                 .fillMaxHeight(0.92f),
         ) {
+            // Header: identity + phase banner, with the destructive stop on
+            // the trailing edge — a red text button wedged under the steer
+            // input read as a second submit action and invited mis-taps.
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = memberLabel(member),
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = ChatColors.primaryText,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = listOfNotNull(
+                            member.role?.takeIf { it.isNotBlank() },
+                            member.model?.takeIf { it.isNotBlank() },
+                            if (member.turnCap > 0) {
+                                stringResource(
+                                    R.string.subagent_turn_of,
+                                    member.turnIndex.coerceAtLeast(1),
+                                    member.turnCap,
+                                )
+                            } else null,
+                        ).joinToString(" · "),
+                        fontSize = 12.sp,
+                        color = ChatColors.primaryText.copy(alpha = 0.55f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                IconButton(onClick = { onStop(member.id) }) {
+                    Icon(
+                        Icons.Filled.Stop,
+                        contentDescription = stringResource(R.string.subagent_stop_desc, member.title),
+                        tint = Color(0xFFFF3B30),
+                    )
+                }
+            }
             Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                Text(
-                    text = memberLabel(member),
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = ChatColors.primaryText,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = listOfNotNull(
-                        member.role?.takeIf { it.isNotBlank() },
-                        member.model?.takeIf { it.isNotBlank() },
-                        if (member.turnCap > 0) {
-                            stringResource(
-                                R.string.subagent_turn_of,
-                                member.turnIndex.coerceAtLeast(1),
-                                member.turnCap,
-                            )
-                        } else null,
-                    ).joinToString(" · "),
-                    fontSize = 12.sp,
-                    color = ChatColors.primaryText.copy(alpha = 0.55f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(6.dp))
                 PhaseBanner(phase = phase, tool = member.currentTool)
             }
             LazyColumn(
@@ -259,28 +324,28 @@ private fun SubAgentDetailSheet(
                     }
                 }
             }
-            // [T-wave-e-subagent-card] Steering row: a supplementary
-            // instruction delivered to the RUNNING child at its next turn
-            // boundary (SubAgentRunner drains the channel). Refused with a
-            // toast-ish inline message when the lane already ended.
-            SubAgentSteerRow(
-                memberId = member.id,
-                memberTitle = member.title,
-                onStop = onStop,
-            )
+            // Steering row: a supplementary instruction delivered to the
+            // RUNNING child at its next turn boundary (SubAgentRunner drains
+            // the channel). Refused with an inline message when the lane
+            // already ended. Stop lives in the header now.
+            SubAgentSteerRow(memberId = member.id)
         }
     }
 }
 
 @Composable
-private fun SubAgentSteerRow(
-    memberId: String,
-    memberTitle: String,
-    onStop: (String) -> Unit,
-) {
+private fun SubAgentSteerRow(memberId: String) {
     var text by remember { mutableStateOf("") }
     var feedback by remember { mutableStateOf<String?>(null) }
     val context = androidx.compose.ui.platform.LocalContext.current
+    // The queued/refused note self-clears — a stale "refused" pinned under
+    // the input read as if every later send failed too.
+    LaunchedEffect(feedback) {
+        if (feedback != null) {
+            kotlinx.coroutines.delay(4000)
+            feedback = null
+        }
+    }
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             androidx.compose.material3.OutlinedTextField(
@@ -308,17 +373,6 @@ private fun SubAgentSteerRow(
         feedback?.let {
             Spacer(modifier = Modifier.height(4.dp))
             Text(text = it, fontSize = 11.sp, color = ChatColors.primaryText.copy(alpha = 0.55f))
-        }
-        Spacer(modifier = Modifier.height(4.dp))
-        androidx.compose.material3.TextButton(
-            onClick = { onStop(memberId) },
-            modifier = Modifier.padding(start = 0.dp),
-        ) {
-            Text(
-                text = stringResource(R.string.subagent_stop_in_sheet),
-                color = Color(0xFFFF3B30),
-                fontSize = 13.sp,
-            )
         }
     }
 }
@@ -382,11 +436,11 @@ private fun ToolStepBody(step: SubAgentActivityTracker.Step) {
             text = status,
             fontSize = 11.sp,
             fontWeight = FontWeight.SemiBold,
-            color = phaseColor(
+            // Failed reads as error-red, matching the main timeline's tool
+            // failure colour — orange was reserved for the in-flight phase.
+            color = if (step.status == "failed") ToolErrorColor else phaseColor(
                 when (step.status) {
-                    "running" -> "执行中"
-                    "success" -> "执行中"
-                    "failed" -> "调用工具"
+                    "running", "success" -> "执行中"
                     else -> "调用工具"
                 },
             ),
