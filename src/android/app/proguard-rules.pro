@@ -83,3 +83,18 @@
 # assembleRelease.
 -dontwarn java.lang.management.**
 -dontwarn javax.management.**
+
+# Verified against JGit 7.8.1 bytecode: GC$PidLock.getPID() returns 0 when
+# SystemReader.isAndroid() is true, before calling ProcessHandle.current().pid().
+# HTTP scanResponse() can prefer Negotiate over Basic/Digest; Negotiate's static
+# initializer requires JGSS, with no Android guard. GitHostRepoTransfer maps only
+# missing JGSS/Negotiate initialization linkage failures to Result.Fallback so
+# GitPanelViewModel retries through GitCli. JGit's IOException retry does not
+# catch these linkage errors. Keep exclusions scoped to the missing APIs.
+-dontwarn java.lang.ProcessHandle
+-dontwarn org.ietf.jgss.GSSContext
+-dontwarn org.ietf.jgss.GSSCredential
+-dontwarn org.ietf.jgss.GSSException
+-dontwarn org.ietf.jgss.GSSManager
+-dontwarn org.ietf.jgss.GSSName
+-dontwarn org.ietf.jgss.Oid

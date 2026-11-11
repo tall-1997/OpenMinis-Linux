@@ -115,6 +115,8 @@ object GitHostRepoTransfer {
                         g.push().setRemote("origin").setCredentialsProvider(access.provider).call(),
                     )
             }
+        } catch (e: LinkageError) {
+            if (isUnavailableNegotiate(e)) Result.Fallback else throw e
         } catch (e: TransportException) {
             Result.Error(e.message ?: "push failed: network error")
         } catch (e: Exception) {
@@ -159,6 +161,8 @@ object GitHostRepoTransfer {
                 is Access.Native ->
                     pullFfOnly(g, fetch = { it.setCredentialsProvider(access.provider).call() })
             }
+        } catch (e: LinkageError) {
+            if (isUnavailableNegotiate(e)) Result.Fallback else throw e
         } catch (e: TransportException) {
             Result.Error(e.message ?: "pull failed: network error")
         } catch (e: Exception) {
@@ -191,6 +195,29 @@ object GitHostRepoTransfer {
         }
         g.merge().include(remote).setFastForward(MergeCommand.FastForwardMode.FF_ONLY).call()
         return Result.Done(null)
+    }
+
+    // Android has no JGSS implementation. A Negotiate challenge can initialize
+    // JGit's desktop auth classes before its normal IOException fallback runs.
+    internal fun isUnavailableNegotiate(error: LinkageError): Boolean {
+        val seen = java.util.Collections.newSetFromMap(java.util.IdentityHashMap<Throwable, Boolean>())
+        var cause: Throwable? = error
+        while (cause != null && seen.add(cause)) {
+            if (cause is NoClassDefFoundError || cause is ClassNotFoundException) {
+                val message = cause.message.orEmpty().replace('/', '.')
+                val names = Regex("[A-Za-z0-9_.$]+").findAll(message).map { it.value.removePrefix("L") }
+                if (
+                    names.any {
+                        it.startsWith("org.ietf.jgss.") ||
+                        it == "org.eclipse.jgit.transport.HttpAuthMethod\$Negotiate" ||
+                        it == "org.eclipse.jgit.util.GSSManagerFactory" ||
+                        it.startsWith("org.eclipse.jgit.util.GSSManagerFactory\$")
+                    }
+                ) return true
+            }
+            cause = cause.cause
+        }
+        return false
     }
 
     // ── shared plumbing ─────────────────────────────────────────────────────
