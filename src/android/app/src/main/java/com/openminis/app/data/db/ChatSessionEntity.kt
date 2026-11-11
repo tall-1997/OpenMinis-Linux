@@ -65,4 +65,13 @@ data class ChatSessionEntity(
      * Other enum names are accepted on read but the UI only writes these two.
      */
     @ColumnInfo(name = "permission_mode") val permissionMode: String? = "ASK",
+    /**
+     * [T-android-session-branch-tree] Source session when this chat is a
+     * BRANCH (a rerun/edit-point fork), not a plain duplicate. NULL = a
+     * root session. The branch tree panel groups by this id; deleting the
+     * source is allowed and orphans the branch (same rule as folderId).
+     */
+    @ColumnInfo(name = "branch_of") val branchOf: String? = null,
+    /** Message id of the fork point in the SOURCE session (last kept message). */
+    @ColumnInfo(name = "branch_point") val branchPoint: String? = null,
 )

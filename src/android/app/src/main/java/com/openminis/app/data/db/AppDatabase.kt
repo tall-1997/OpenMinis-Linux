@@ -24,7 +24,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         com.openminis.app.data.instruction.InstructionStateEntity::class,
         com.openminis.app.data.instruction.InstructionUpdateEntity::class,
     ],
-    version = 29, // keep DatabaseVersionGuard.CODE_DB_VERSION in lockstep
+    version = 30, // keep DatabaseVersionGuard.CODE_DB_VERSION in lockstep
     // [T-android-downgrade-compat] Kept ON so MigrationTestHelper and CI can
     // validate migrations against the committed schema json. The chain now
     // runs 12-29 complete. 13.json and 17.json were never exported by a

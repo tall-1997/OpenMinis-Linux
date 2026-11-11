@@ -22,7 +22,7 @@ class McpNativeToolMappingTest {
         assertEquals(listOf("action"), def.required)
         assertTrue(def.parameters.keys.containsAll(listOf("action", "server", "tool", "arguments")))
         assertEquals(
-            listOf("servers", "tools", "call"),
+            listOf("servers", "tools", "call", "resources", "read_resource", "prompts", "get_prompt"),
             def.parameters["action"]?.enumValues,
         )
         assertTrue(def.description.contains("minis-mcp-cli"))

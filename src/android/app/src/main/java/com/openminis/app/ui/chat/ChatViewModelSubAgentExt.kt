@@ -530,15 +530,10 @@ private fun ChatViewModel.recordLaneOutcome(
         val success = outcome?.success == true
         runCatching {
             registry.markFinished(
-                sessionId = sessionId,
-                context = context,
-                batchId = batchId,
-                index = index,
-                success = success,
-                output = outcome?.output.orEmpty(),
+                sessionId = sessionId, context = context, batchId = batchId, index = index,
+                success = success, output = outcome?.output.orEmpty(),
                 error = error ?: if (!success && !stopped) outcome?.output?.trim()?.take(300) else null,
-                attempts = lane.attempts,
-                stopped = stopped,
+                attempts = lane.attempts, stopped = stopped, filesDir = context.filesDir,
             )
         }
         val planId = lane.planId ?: return

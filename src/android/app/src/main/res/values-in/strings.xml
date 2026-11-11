@@ -446,6 +446,11 @@
     <string name="sessionlist_regenerate_title">Buat Ulang Judul</string>
     <string name="sessionlist_regenerating_title">Membuat ulang judul…</string>
     <string name="sessionlist_duplicate">Duplikat</string>
+    <string name="sessionlist_branch_tree">Pohon cabang</string>
+    <string name="sessionlist_branch_from_here">Buat cabang dari pesan terakhir</string>
+    <string name="sessionlist_branch_empty">Sesi ini belum memiliki cabang. Buat cabang dari pesan terakhir agar percobaan ulang tidak mengubah percakapan asli.</string>
+    <string name="sessionlist_branch_source">Sumber</string>
+    <string name="sessionlist_branch_children">Cabang</string>
     <string name="sessionlist_search_action">Cari</string>
     <string name="sessionlist_dismiss">Tutup</string>
     <string name="sessionlist_delete_one_title">Hapus percakapan?</string>

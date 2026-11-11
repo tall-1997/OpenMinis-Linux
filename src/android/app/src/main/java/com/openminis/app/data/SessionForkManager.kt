@@ -55,7 +55,43 @@ class SessionForkManager(
      *   - `lastMessage` (createSession seeds it; refreshed by appendMessage)
      *   - `id` / `createdAt` / `updatedAt` (new identity, current timestamps)
      */
-    suspend fun duplicateSession(sessionId: String): String? {
+    /**
+     * [T-android-session-branch-tree] Branch a session AT a message: the fork
+     * copies history UP TO AND INCLUDING [messageId] (the long-pressed message
+     * stays as the last one; everything after it stays only in the source),
+     * stamps the copy with branch metadata, and returns the new session id.
+     * The source is untouched — reruns/edits live on the branch, the original
+     * thread keeps flowing. Shares the duplicateSession copy pipeline (markers
+     * remapped, body-spill re-linked); the copy loop stops right after the
+     * boundary message, so the branch is born truncated — no post-hoc delete
+     * that would have to translate the source's sort_order into the copy's
+     * renumbered space (appendMessage renumbers from 0 while a compacted
+     * source starts at 950+, which is exactly how the old delete-after
+     * silently shipped the whole history into the branch).
+     */
+    suspend fun forkAtMessage(sessionId: String, messageId: String): String? {
+        val source = chatRepository.getSession(sessionId) ?: return null
+        chatRepository.dao.getMessage(sessionId, messageId)
+            ?: run {
+                AppLogger.warning(TAG, "forkAtMessage: message $messageId not found in $sessionId")
+                return null
+            }
+        val newId = duplicateSession(sessionId, upToMessageId = messageId) ?: return null
+        AppLogger.info(TAG, "forkAtMessage: $sessionId@$messageId -> $newId (copy ends at the fork point)")
+        // Stamp branch metadata; title becomes a branch label.
+        val label = (source.title ?: "Chat").let { "$it · branch" }
+        chatRepository.updateSessionTitle(newId, label)
+        chatRepository.dao.updateBranch(newId, sessionId, messageId)
+        return newId
+    }
+
+    /**
+     * Duplicate a session. With [upToMessageId] set (the fork path), the copy
+     * stops right after that message — everything after it stays only in the
+     * source, and compact markers referencing the dropped tail are skipped by
+     * the dangling-marker check below.
+     */
+    suspend fun duplicateSession(sessionId: String, upToMessageId: String? = null): String? {
         val source = chatRepository.getSession(sessionId) ?: run {
             AppLogger.warning(TAG, "duplicateSession: $sessionId not found")
             return null
@@ -102,6 +138,7 @@ class SessionForkManager(
         val oldToNewId = HashMap<String, String>()
         val oldToNewSort = HashMap<String, Int>()
         var offset = 0
+        var hitBoundary = false
         while (offset < messageTotal) {
             val page = chatRepository.dao.loadMessagesPage(sessionId, offset, 50)
             if (page.isEmpty()) break
@@ -125,7 +162,17 @@ class SessionForkManager(
                 )
                 oldToNewId[msg.id] = newMsg.id
                 oldToNewSort[msg.id] = newMsg.sortOrder
+                // [T-android-session-branch-tree] Fork boundary: the copy
+                // stops right after the boundary message — the branch is
+                // born truncated instead of copy-everything-then-delete
+                // (a delete threshold taken from the source would live in
+                // the wrong sort_order space).
+                if (msg.id == upToMessageId) {
+                    hitBoundary = true
+                    break
+                }
             }
+            if (hitBoundary) break
             offset += page.size
             } finally {
                 com.openminis.app.data.body.Admission.release(pageBytes)
@@ -149,9 +196,11 @@ class SessionForkManager(
                 messageId?.let { oldToNewSort[it] } ?: original
             var copied = 0
             for (marker in markers) {
-                // All source messages are copied, so every non-null id field
-                // MUST resolve. If one doesn't, the source marker is already
-                // dangling — skip it rather than write a dangling copy.
+                // Every copied message is in the map, so each non-null id
+                // field of a kept marker MUST resolve. A miss means the
+                // marker references history the copy does not carry — either
+                // a genuinely dangling source marker or (fork) the dropped
+                // tail after [upToMessageId] — skip it either way.
                 val firstKeptNew = remapId(marker.firstKeptMessageId)
                 val lastCompactedNew = remapId(marker.lastCompactedMessageId)
                 val boundaryNew = remapId(marker.boundaryMessageId)
@@ -191,7 +240,7 @@ class SessionForkManager(
 
         AppLogger.info(
             TAG,
-            "duplicated session $sessionId → ${new.id} (${messageTotal} msgs, " +
+            "duplicated session $sessionId → ${new.id} (${oldToNewId.size}/$messageTotal msgs, " +
                 "category=${source.category}, modelBinding=${source.modelBinding}, " +
                 "memoryEnabled=${source.memoryEnabled})",
         )

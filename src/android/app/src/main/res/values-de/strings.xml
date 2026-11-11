@@ -441,6 +441,11 @@
     <string name="sessionlist_regenerate_title">Titel neu erzeugen</string>
     <string name="sessionlist_regenerating_title">Titel wird neu erzeugt…</string>
     <string name="sessionlist_duplicate">Duplizieren</string>
+    <string name="sessionlist_branch_tree">Verzweigungsbaum</string>
+    <string name="sessionlist_branch_from_here">Von der neuesten Nachricht abzweigen</string>
+    <string name="sessionlist_branch_empty">Diese Sitzung hat noch keine Verzweigungen. Verzweige von der neuesten Nachricht, damit erneute Läufe die ursprüngliche Unterhaltung unberührt lassen.</string>
+    <string name="sessionlist_branch_source">Quelle</string>
+    <string name="sessionlist_branch_children">Verzweigungen</string>
     <string name="sessionlist_search_action">Suchen</string>
     <string name="sessionlist_dismiss">Schließen</string>
     <string name="sessionlist_delete_one_title">Konversation löschen?</string>

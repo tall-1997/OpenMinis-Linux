@@ -646,6 +646,22 @@ internal object AppMigrations {
         }
     }
 
+    val MIGRATION_29_30 = object : Migration(29, 30) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // [T-android-session-branch-tree] Session-level branch metadata.
+            // Additive columns, both nullable: pre-30 rows are root sessions.
+            db.addColumnIfMissing("sessions", "branch_of", "TEXT")
+            db.addColumnIfMissing("sessions", "branch_point", "TEXT")
+        }
+    }
+
+    val MIGRATION_30_29 = object : Migration(30, 29) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // Keep the columns (same policy as 17->16): older builds ignore
+            // extra fields, and dropping them would lose branch provenance.
+        }
+    }
+
     val MIGRATION_28_29 = object : Migration(28, 29) {
         override fun migrate(db: SupportSQLiteDatabase) {
             // [T-goal-model-origin] Provenance decides whether a later task may
@@ -761,6 +777,8 @@ internal object AppMigrations {
     MIGRATION_27_28,
     MIGRATION_28_27,
     MIGRATION_28_29,
+    MIGRATION_29_30,
+    MIGRATION_30_29,
     MIGRATION_29_28,
     )
 }

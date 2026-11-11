@@ -443,6 +443,11 @@
     <string name="sessionlist_regenerate_title">Создать название заново</string>
     <string name="sessionlist_regenerating_title">Создание названия…</string>
     <string name="sessionlist_duplicate">Дублировать</string>
+    <string name="sessionlist_branch_tree">Дерево ветвей</string>
+    <string name="sessionlist_branch_from_here">Ответвить от последнего сообщения</string>
+    <string name="sessionlist_branch_empty">В этой сессии ещё нет ветвей. Ответвитесь от последнего сообщения, чтобы повторные запуски не затрагивали исходный диалог.</string>
+    <string name="sessionlist_branch_source">Источник</string>
+    <string name="sessionlist_branch_children">Ветви</string>
     <string name="sessionlist_search_action">Поиск</string>
     <string name="sessionlist_dismiss">Закрыть</string>
     <string name="sessionlist_delete_one_title">Удалить разговор?</string>

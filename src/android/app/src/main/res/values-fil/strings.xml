@@ -441,6 +441,11 @@
     <string name="sessionlist_regenerate_title">Gumawa Muli ng Pamagat</string>
     <string name="sessionlist_regenerating_title">Gumagawa muli ng pamagat…</string>
     <string name="sessionlist_duplicate">I-duplicate</string>
+    <string name="sessionlist_branch_tree">Puno ng mga sangay</string>
+    <string name="sessionlist_branch_from_here">Gumawa ng sangay mula sa pinakabagong mensahe</string>
+    <string name="sessionlist_branch_empty">Wala pang sangay ang sesyon na ito. Gumawa ng sangay mula sa pinakabagong mensahe para hindi mapektuhan ng mga pag-ulit ang orihinal na usapan.</string>
+    <string name="sessionlist_branch_source">Pinagmulan</string>
+    <string name="sessionlist_branch_children">Mga sangay</string>
     <string name="sessionlist_search_action">Maghanap</string>
     <string name="sessionlist_dismiss">Isara</string>
     <string name="sessionlist_delete_one_title">Burahin ang usapan?</string>

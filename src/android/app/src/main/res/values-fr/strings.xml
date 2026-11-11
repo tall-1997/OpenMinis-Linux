@@ -441,6 +441,11 @@
     <string name="sessionlist_regenerate_title">Régénérer le titre</string>
     <string name="sessionlist_regenerating_title">Régénération du titre…</string>
     <string name="sessionlist_duplicate">Dupliquer</string>
+    <string name="sessionlist_branch_tree">Arborescence des branches</string>
+    <string name="sessionlist_branch_from_here">Créer une branche depuis le dernier message</string>
+    <string name="sessionlist_branch_empty">Cette session n\'a pas encore de branches. Créez une branche depuis le dernier message pour que les relances ne touchent pas la conversation d\'origine.</string>
+    <string name="sessionlist_branch_source">Source</string>
+    <string name="sessionlist_branch_children">Branches</string>
     <string name="sessionlist_search_action">Rechercher</string>
     <string name="sessionlist_dismiss">Fermer</string>
     <string name="sessionlist_delete_one_title">Supprimer la conversation ?</string>

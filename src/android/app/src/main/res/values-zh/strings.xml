@@ -667,6 +667,11 @@
     <string name="sessionlist_regenerate_title">重新生成标题</string>
     <string name="sessionlist_regenerating_title">正在重新生成标题…</string>
     <string name="sessionlist_duplicate">复制</string>
+    <string name="sessionlist_branch_tree">分支树</string>
+    <string name="sessionlist_branch_from_here">从最新消息开分支</string>
+    <string name="sessionlist_branch_empty">这个会话还没有分支。从最新消息开分支，重跑和实验都不会动原对话。</string>
+    <string name="sessionlist_branch_source">来源</string>
+    <string name="sessionlist_branch_children">分支</string>
     <string name="sessionlist_search_action">搜索</string>
     <string name="sessionlist_dismiss">关闭</string>
     <string name="sessionlist_delete_one_title">删除该对话？</string>

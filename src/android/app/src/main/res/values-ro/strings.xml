@@ -442,6 +442,11 @@
     <string name="sessionlist_regenerate_title">Generează titlul din nou</string>
     <string name="sessionlist_regenerating_title">Se generează titlul…</string>
     <string name="sessionlist_duplicate">Duplică</string>
+    <string name="sessionlist_branch_tree">Arbore de ramuri</string>
+    <string name="sessionlist_branch_from_here">Ramifică de la ultimul mesaj</string>
+    <string name="sessionlist_branch_empty">Această sesiune nu are încă ramuri. Ramifică de la ultimul mesaj ca rerulările să nu atingă conversația originală.</string>
+    <string name="sessionlist_branch_source">Sursă</string>
+    <string name="sessionlist_branch_children">Ramuri</string>
     <string name="sessionlist_search_action">Caută</string>
     <string name="sessionlist_dismiss">Închide</string>
     <string name="sessionlist_delete_one_title">Ștergi conversația?</string>

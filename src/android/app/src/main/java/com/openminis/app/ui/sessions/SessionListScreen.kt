@@ -46,6 +46,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DriveFileMove
@@ -100,6 +101,7 @@ import com.openminis.app.ui.components.SectionDesign
 import com.openminis.app.ui.components.SectionTextField
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Badge
@@ -573,6 +575,8 @@ fun SessionListScreen(
     // confirmation can restate the consequence.
     var folderToDelete by remember { mutableStateOf<Pair<FolderEntity, Int>?>(null) }
     var editSession by remember { mutableStateOf<ChatSessionEntity?>(null) }
+    // [T-android-session-branch-tree] Session whose branch tree sheet is open.
+    var branchTreeSession by remember { mutableStateOf<String?>(null) }
     var showBrowserSheet by remember { mutableStateOf(false) }
     var showBrowserSettings by remember { mutableStateOf(false) }
     val browserTabPool = remember { com.openminis.app.browser.BrowserTabPool(context) }
@@ -942,6 +946,7 @@ fun SessionListScreen(
                                     },
                                     onRegenerateTitle = { viewModel.regenerateTitle(it) },
                                     onDuplicate = { viewModel.duplicateSession(it) },
+                                    onBranchTree = { branchTreeSession = it },
                                     onDeleteRequest = { id ->
                                         deleteTargetId = id
                                         showDeleteDialog = true
@@ -1190,6 +1195,16 @@ fun SessionListScreen(
         }
     }
 
+    // [T-android-session-branch-tree] Branch tree sheet: source/children plus
+    // the one-tap branch creation from the latest message.
+    branchTreeSession?.let { sid ->
+        BranchTreeSheet(
+            sessionId = sid,
+            viewModel = viewModel,
+            onOpenSession = { branchTreeSession = null; onSessionClick(it) },
+            onDismiss = { branchTreeSession = null },
+        )
+    }
     // Single delete confirmation
     if (showDeleteDialog && deleteTargetId != null) {
         MinisAlertDialog(
@@ -1671,6 +1686,7 @@ private fun SessionItemContent(
     onExportRequest: (ChatSessionEntity, String) -> Unit,
     onRegenerateTitle: (String) -> Unit,
     onDuplicate: (String) -> Unit,
+    onBranchTree: (String) -> Unit,
     onDeleteRequest: (String) -> Unit,
     /** [T-android-session-grouping] Opens the group picker for this session. */
     onMoveToGroup: (String) -> Unit,
@@ -1857,6 +1873,17 @@ private fun SessionItemContent(
                 },
                 leadingIcon = {
                     Icon(m3Icon(Icons.Default.ContentCopy), contentDescription = null)
+                },
+            )
+            // Branch tree ([T-android-session-branch-tree])
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.sessionlist_branch_tree)) },
+                onClick = {
+                    showContextMenu = false
+                    onBranchTree(session.id)
+                },
+                leadingIcon = {
+                    Icon(m3Icon(Icons.Default.AccountTree), contentDescription = null)
                 },
             )
             // Move to / Change Group
@@ -3196,50 +3223,3 @@ private fun shareZip(context: Context, uri: android.net.Uri, subject: String) {
  * directory, so the name is the only thing the user gets to choose here and
  * the dialog keeps it to exactly that.
  */
-@Composable
-private fun NewFolderDialog(
-    isDark: Boolean,
-    onDismiss: () -> Unit,
-    onCreate: (String, String?) -> Unit,
-) {
-    var name by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf("") }
-    val trimmed = name.trim()
-    val canCreate = trimmed.isNotEmpty() &&
-        trimmed.length <= com.openminis.app.data.db.FolderEntity.DESC_MAX_CHARS * 4
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.sessionlist_new_folder_title)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text(stringResource(R.string.sessionlist_new_folder_hint)) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = description,
-                    onValueChange = { description = it },
-                    label = { Text(stringResource(R.string.sessionlist_new_folder_desc_hint)) },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        },
-        confirmButton = {
-            MinisButton(
-                onClick = { onCreate(trimmed, description.trim().ifEmpty { null }) },
-                enabled = canCreate,
-            ) {
-                Text(stringResource(R.string.sessionlist_new_folder_create))
-            }
-        },
-        dismissButton = {
-            MinisTextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.cancel))
-            }
-        },
-    )
-}

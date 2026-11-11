@@ -737,6 +737,11 @@
     <string name="sessionlist_regenerate_title">Regenerate Title</string>
     <string name="sessionlist_regenerating_title">Regenerating title…</string>
     <string name="sessionlist_duplicate">Duplicate</string>
+    <string name="sessionlist_branch_tree">Branch tree</string>
+    <string name="sessionlist_branch_from_here">Branch from latest message</string>
+    <string name="sessionlist_branch_empty">This session has no branches yet. Branch from the latest message to keep reruns off the original thread.</string>
+    <string name="sessionlist_branch_source">Source</string>
+    <string name="sessionlist_branch_children">Branches</string>
     <string name="sessionlist_search_action">Search</string>
     <string name="sessionlist_dismiss">Dismiss</string>
     <string name="sessionlist_delete_one_title">Delete conversation?</string>

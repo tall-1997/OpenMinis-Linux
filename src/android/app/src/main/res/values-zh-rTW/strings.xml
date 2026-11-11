@@ -490,6 +490,11 @@
     <string name="sessionlist_regenerate_title">重新生成標題</string>
     <string name="sessionlist_regenerating_title">正在重新生成標題…</string>
     <string name="sessionlist_duplicate">複製</string>
+    <string name="sessionlist_branch_tree">分支樹</string>
+    <string name="sessionlist_branch_from_here">從最新訊息開分支</string>
+    <string name="sessionlist_branch_empty">這個會話還沒有分支。從最新訊息開分支，重跑和實驗都不會動原對話。</string>
+    <string name="sessionlist_branch_source">來源</string>
+    <string name="sessionlist_branch_children">分支</string>
     <string name="sessionlist_search_action">搜尋</string>
     <string name="sessionlist_dismiss">關閉</string>
     <string name="sessionlist_delete_one_title">刪除此對話？</string>

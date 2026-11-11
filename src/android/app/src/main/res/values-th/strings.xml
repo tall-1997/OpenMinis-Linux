@@ -441,6 +441,11 @@
     <string name="sessionlist_regenerate_title">สร้างชื่อใหม่</string>
     <string name="sessionlist_regenerating_title">กำลังสร้างชื่อใหม่…</string>
     <string name="sessionlist_duplicate">ทำสำเนา</string>
+    <string name="sessionlist_branch_tree">แผนผังกิ่งก้าน</string>
+    <string name="sessionlist_branch_from_here">แตกกิ่งจากข้อความล่าสุด</string>
+    <string name="sessionlist_branch_empty">เซสชันนี้ยังไม่มีกิ่งก้าน แตกกิ่งจากข้อความล่าสุดเพื่อไม่ให้การรันซ้ำกระทบบทสนทนาต้นฉบับ</string>
+    <string name="sessionlist_branch_source">ต้นทาง</string>
+    <string name="sessionlist_branch_children">กิ่งก้าน</string>
     <string name="sessionlist_search_action">ค้นหา</string>
     <string name="sessionlist_dismiss">ปิด</string>
     <string name="sessionlist_delete_one_title">ลบบทสนทนาหรือไม่</string>

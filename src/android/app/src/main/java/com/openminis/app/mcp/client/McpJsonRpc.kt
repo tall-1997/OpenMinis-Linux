@@ -252,6 +252,28 @@ interface McpClient {
     /** `tools/call` — raw result object (content array + isError). */
     fun callTool(tool: String, arguments: JSONObject): JSONObject
 
+    /**
+     * [T-mcp-protocol-surface] `resources/list` — raw resource objects.
+     * Servers that predate resources return a JSON-RPC error; the transport
+     * surfaces it as [McpError] and the tool layer converts it to a clean
+     * "not supported" result. Default throw: stdio clients without the
+     * capability never call these.
+     */
+    fun listResources(): JSONArray =
+        throw UnsupportedOperationException("resources/list not supported by ${'$'}this")
+
+    /** `resources/read` for [uri] — raw result (contents array). */
+    fun readResource(uri: String): JSONObject =
+        throw UnsupportedOperationException("resources/read not supported by ${'$'}this")
+
+    /** `prompts/list` — raw prompt objects. */
+    fun listPrompts(): JSONArray =
+        throw UnsupportedOperationException("prompts/list not supported by ${'$'}this")
+
+    /** `prompts/get` for [name] with [arguments] — raw result (messages). */
+    fun getPrompt(name: String, arguments: JSONObject): JSONObject =
+        throw UnsupportedOperationException("prompts/get not supported by ${'$'}this")
+
     /** Release the underlying connection/process. Safe to call twice. */
     fun close()
 }

@@ -49,6 +49,7 @@ import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Construction
+import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.DarkMode
@@ -183,6 +184,7 @@ import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.CloudUpload
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Construction
+import androidx.compose.material.icons.outlined.AccountTree
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.CreateNewFolder
 import androidx.compose.material.icons.outlined.DarkMode
@@ -347,6 +349,7 @@ private val iconPairs: List<Pair<ImageVector, ImageVector>> = listOf(
     Icons.Filled.CloudUpload to Icons.Outlined.CloudUpload,
     Icons.Filled.Code to Icons.Outlined.Code,
     Icons.Filled.Construction to Icons.Outlined.Construction,
+    Icons.Filled.AccountTree to Icons.Outlined.AccountTree,
     Icons.Filled.ContentCopy to Icons.Outlined.ContentCopy,
     Icons.Filled.CreateNewFolder to Icons.Outlined.CreateNewFolder,
     Icons.Filled.DarkMode to Icons.Outlined.DarkMode,
