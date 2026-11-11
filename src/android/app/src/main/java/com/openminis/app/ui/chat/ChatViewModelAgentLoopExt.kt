@@ -570,6 +570,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 // [T-stream-stall-watchdog] Phase 2: silence past twice the first-event
                 // budget means the stream stalled, not started slow.
                 val streamIdleTimeoutMs = firstEventTimeoutMs * 2
+                val opencodeHeaders = opencodeSessionHeaders()
                 currentProvider.streamMessage(
                     applyRequestImageBudget(requestHistory),
                     systemPrompt, dynamicMaxTokens(currentProvider, lastContextTokens),
@@ -577,6 +578,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     tools = agentTools,
                     thinkingLevel = if (currentModelSupportsReasoning) _thinkingLevel.value else ThinkingLevel.OFF,
                     systemStablePrefixLen = systemPromptStablePrefixLen,
+                    extraHeaders = opencodeHeaders,
                 ).streamStallWatchdog(firstEventTimeoutMs, streamIdleTimeoutMs).collect { chunk ->
             // [T-stream-trace-live] 运行时轨迹录制（日志页开关控制，默认关）。
             com.openminis.app.provider.StreamTraceRecorder.record(chunk)
@@ -954,14 +956,12 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     turnRefusalExplanation = chunk.refusalExplanation
                 }
                 is LLMStreamChunk.Started -> { /* no-op */ }
-                is LLMStreamChunk.MediaAttachment -> {
-                    // [T-codex-gpt-image2-oauth-android] Model-generated
-                    // media (gpt-image-2 image). Inline chat display is out
-                    // of scope for this change — the image is delivered via
-                    // sendMessage→LLMResponse.mediaAttachments for the
-                    // minis-model-use CLI path. No-op here so the chat agent
-                    // loop compiles with the new chunk variant.
-                }
+                is LLMStreamChunk.MediaAttachment ->
+                    generatedImageMarkdown(chunk.attachment)?.let { md ->
+                        if (turnTextSb.isNotEmpty()) turnTextSb.append("\n\n")
+                        turnTextSb.append(md)
+                        uiBatcher.enqueue(assistantId, messageTextSnapshot(), true, allToolBlocks.toList())
+                    }
             }
                 }  // end collect
                 // [T-stall-echo-strip] Stream finished: resolve any seed-

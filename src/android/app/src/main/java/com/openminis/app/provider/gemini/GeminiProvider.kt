@@ -65,13 +65,10 @@ class GeminiProvider(
         .build()
 
     override suspend fun sendMessageClamped(
-        messages: List<LLMMessage>,
-        systemPrompt: String?,
-        maxTokens: Int,
-        temperature: Double?,
-        imageParts: List<LLMMessage.ImagePart>,
-        tools: List<AgentToolDefinition>,
-        thinkingLevel: ThinkingLevel,
+        messages: List<LLMMessage>, systemPrompt: String?, maxTokens: Int,
+        temperature: Double?, imageParts: List<LLMMessage.ImagePart>,
+        tools: List<AgentToolDefinition>, thinkingLevel: ThinkingLevel,
+        extraHeaders: Map<String, String>,
     ): LLMResponse = withContext(Dispatchers.IO) {
         val body = buildRequestBody(messages, systemPrompt, maxTokens, temperature, imageParts, tools, thinkingLevel)
         val url = "$basePath/models/${model.id}:generateContent?key=$apiKey"
@@ -104,14 +101,12 @@ class GeminiProvider(
     }
 
     override fun streamMessageClamped(
-        messages: List<LLMMessage>,
-        systemPrompt: String?,
-        maxTokens: Int,
-        temperature: Double?,
-        imageParts: List<LLMMessage.ImagePart>,
-        tools: List<AgentToolDefinition>,
-        thinkingLevel: ThinkingLevel,
+        messages: List<LLMMessage>, systemPrompt: String?, maxTokens: Int,
+        temperature: Double?, imageParts: List<LLMMessage.ImagePart>,
+        tools: List<AgentToolDefinition>, thinkingLevel: ThinkingLevel,
         systemStablePrefixLen: Int,
+        // Interface parity; unused on Gemini (see AnthropicProvider note).
+        extraHeaders: Map<String, String>,
     ): Flow<LLMStreamChunk> = rawStreamMessage(
         messages, systemPrompt, maxTokens, temperature, imageParts, tools, thinkingLevel,
     ).failOnSilentEmptyCompletion(name)

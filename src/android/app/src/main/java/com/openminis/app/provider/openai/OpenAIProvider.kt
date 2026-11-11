@@ -545,6 +545,7 @@ class OpenAIProvider private constructor(
         imageParts: List<LLMMessage.ImagePart>,
         tools: List<AgentToolDefinition>,
         thinkingLevel: ThinkingLevel,
+        extraHeaders: Map<String, String>,
     ): LLMResponse = withContext(Dispatchers.IO) {
         val textBuf = StringBuilder()
         var stopReason: String? = null
@@ -555,14 +556,8 @@ class OpenAIProvider private constructor(
         // LLMResponse.mediaAttachments and can write the image to --output.
         val media = mutableListOf<LLMMediaAttachment>()
         rawStreamMessage(
-            messages = messages,
-            systemPrompt = systemPrompt,
-            maxTokens = maxTokens,
-            temperature = temperature,
-            imageParts = imageParts,
-            tools = tools,
-            thinkingLevel = thinkingLevel,
-            stream = false,
+            messages, systemPrompt, maxTokens, temperature, imageParts, tools,
+            thinkingLevel, stream = false, extraHeaders = extraHeaders,
         ).collect { chunk ->
             when (chunk) {
                 is LLMStreamChunk.Text -> textBuf.append(chunk.text)
@@ -584,9 +579,11 @@ class OpenAIProvider private constructor(
         tools: List<AgentToolDefinition>,
         thinkingLevel: ThinkingLevel,
         systemStablePrefixLen: Int,
+        extraHeaders: Map<String, String>,
     ): Flow<LLMStreamChunk> = rawStreamMessage(
         messages, systemPrompt, maxTokens, temperature, imageParts, tools, thinkingLevel,
         stream = true,
+        extraHeaders = extraHeaders,
     ).failOnSilentEmptyCompletion(name)
 
 

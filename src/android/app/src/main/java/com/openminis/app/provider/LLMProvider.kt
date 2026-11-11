@@ -135,16 +135,17 @@ interface LLMProvider : ModelProvider {
         imageParts: List<LLMMessage.ImagePart> = emptyList(),
         tools: List<AgentToolDefinition> = emptyList(),
         thinkingLevel: ThinkingLevel = ThinkingLevel.OFF,
+        extraHeaders: Map<String, String> = emptyMap(),
     ): LLMResponse {
         val level = clampThinkingLevel(thinkingLevel)
         val instanceId = SamplingIdentity.of(this)
         val wire = SamplingPolicy.wire(instanceId, model.id, temperature, level.isEnabled)
         return try {
-            sendMessageOnce(messages, systemPrompt, maxTokens, wire, imageParts, tools, level)
+            sendMessageOnce(messages, systemPrompt, maxTokens, wire, imageParts, tools, level, extraHeaders)
         } catch (e: Throwable) {
             if (wire != null && SamplingPolicy.isTemperatureRejection(e)) {
                 SamplingPolicy.deny(instanceId, model.id)
-                sendMessageOnce(messages, systemPrompt, maxTokens, null, imageParts, tools, level)
+                sendMessageOnce(messages, systemPrompt, maxTokens, null, imageParts, tools, level, extraHeaders)
             } else {
                 throw e
             }
@@ -159,12 +160,14 @@ interface LLMProvider : ModelProvider {
         imageParts: List<LLMMessage.ImagePart>,
         tools: List<AgentToolDefinition>,
         level: ThinkingLevel,
+        extraHeaders: Map<String, String>,
     ): LLMResponse {
         try {
             return withTimeout(nonStreamDeadlineMs) {
                 ProviderKeyGate.withPermit(callGateKey) {
                     sendMessageClamped(
                         messages, systemPrompt, maxTokens, temperature, imageParts, tools, level,
+                        extraHeaders = extraHeaders,
                     )
                 }
             }
@@ -185,6 +188,7 @@ interface LLMProvider : ModelProvider {
         tools: List<AgentToolDefinition> = emptyList(),
         thinkingLevel: ThinkingLevel = ThinkingLevel.OFF,
         systemStablePrefixLen: Int = -1,
+        extraHeaders: Map<String, String> = emptyMap(),
     ): Flow<LLMStreamChunk> {
         val level = clampThinkingLevel(thinkingLevel)
         val instanceId = SamplingIdentity.of(this)
@@ -200,7 +204,7 @@ interface LLMProvider : ModelProvider {
                 try {
                     val inner = streamMessageClamped(
                         messages, systemPrompt, maxTokens, temp, imageParts, tools, level,
-                        systemStablePrefixLen,
+                        systemStablePrefixLen, extraHeaders,
                     )
                     val key = callGateKey
                     if (key.isBlank()) {
@@ -270,6 +274,7 @@ interface LLMProvider : ModelProvider {
         imageParts: List<LLMMessage.ImagePart>,
         tools: List<AgentToolDefinition>,
         thinkingLevel: ThinkingLevel,
+        extraHeaders: Map<String, String> = emptyMap(),
     ): LLMResponse
 
     /** See [sendMessageClamped]. */
@@ -282,6 +287,7 @@ interface LLMProvider : ModelProvider {
         tools: List<AgentToolDefinition>,
         thinkingLevel: ThinkingLevel,
         systemStablePrefixLen: Int = -1,
+        extraHeaders: Map<String, String> = emptyMap(),
     ): Flow<LLMStreamChunk>
 
     /**

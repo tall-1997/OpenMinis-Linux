@@ -57,29 +57,26 @@ private const val STREAM_TTFB_TIMEOUT_MS = 120_000L
 private const val STREAM_UPLOAD_CAP_MS = 120_000L
 
 internal fun OpenAIProvider.rawStreamMessage(
-        messages: List<LLMMessage>,
-        systemPrompt: String?,
-        maxTokens: Int,
-        temperature: Double?,
-        imageParts: List<LLMMessage.ImagePart>,
-        tools: List<AgentToolDefinition>,
-        thinkingLevel: ThinkingLevel,
+        messages: List<LLMMessage>, systemPrompt: String?, maxTokens: Int,
+        temperature: Double?, imageParts: List<LLMMessage.ImagePart>,
+        tools: List<AgentToolDefinition>, thinkingLevel: ThinkingLevel,
         stream: Boolean,
+        // Per-call headers (e.g. x-opencode-session) merged LAST over the
+        // instance defaults, so a conversation id rides the shared cached
+        // provider without leaking between sessions.
+        extraHeaders: Map<String, String> = emptyMap(),
     ): Flow<LLMStreamChunk> = callbackFlow {
         val body = if (isCodexImageModel) {
             // [T-gpt-image2-codex-backend-route-android] gpt-image-2 on an
-            // OpenAI OAuth (Codex) instance is driven through the Codex backend
+            // OpenAI OAuth (Codex) instance goes through the Codex backend
             // image_generation tool (chatgpt.com/backend-api/codex/responses),
-            // NOT the public /v1/images/generations Images API — a Codex OAuth
-            // token lacks the api.model.images.request scope and the Images API
-            // 401s with "Missing scopes: api.model.images.request" (see
-            // codex_oauth_image_generation_summary.md §11.1). Aligns with iOS
-            // commit 2dd35a14. The Codex-backend route is selected purely by
-            // `isCodexImageModel` (isOAuth + model id) — it does NOT require a
-            // codexAccountId (the Chatgpt-Account-Id header is optional and its
-            // absence doesn't 401), which is exactly the iOS fall-through bug
-            // this avoids. Android has no Images-API path at all, so an OAuth
-            // gpt-image-2 request can never reach /v1/images/generations.
+            // NOT the public Images API — that token lacks
+            // api.model.images.request and the API 401s with "Missing scopes"
+            // (codex_oauth_image_generation_summary.md §11.1; iOS 2dd35a14).
+            // Route selected purely by isCodexImageModel — codexAccountId is
+            // optional (its absence doesn't 401; the absence check was the iOS
+            // fall-through bug). Android has no Images-API path at all, so an
+            // OAuth gpt-image-2 request can never reach /v1/images/generations.
             //
             // Special image-generation body — not Chat Completions, not the
             // normal Responses tool shape.
@@ -128,7 +125,10 @@ internal fun OpenAIProvider.rawStreamMessage(
                 memBefore, serStartNs, failure = null,
             )
         }
-        val request = buildRequest(bodyStr)
+        // Per-call headers (x-opencode-session) merge LAST, per call.
+        val request = extraHeaders.entries.fold(buildRequest(bodyStr)) { acc, (n, v) ->
+            acc.newBuilder().header(n, v).build()
+        }
         val headerMap = mutableMapOf<String, String>()
         for (name in request.headers.names()) {
             headerMap[name] = request.headers[name] ?: ""
