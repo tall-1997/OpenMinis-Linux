@@ -2082,4 +2082,34 @@
     <string name="sessionlist_archive">Arsipkan</string>
     <string name="sessionlist_unarchive">Batal Arsipkan</string>
     <string name="sessionlist_section_archived">Diarsipkan (%1$d)</string>
+    <!-- Add-provider vendor presets ([T-android-vendor-presets]) -->
+    <string name="add_provider_vendor_presets">Preset vendor</string>
+    <string name="add_provider_vendor_presets_pick_hint">Ketuk vendor untuk mengisi otomatis endpoint dan namanya.</string>
+    <string name="add_provider_vendor_preset_deepseek">DeepSeek</string>
+    <string name="add_provider_vendor_preset_zhipu">Zhipu GLM</string>
+    <string name="add_provider_vendor_preset_kimi">Kimi (Moonshot)</string>
+    <string name="add_provider_vendor_preset_qwen">Qwen (DashScope)</string>
+    <string name="add_provider_vendor_preset_ark">Volcano Ark</string>
+    <string name="add_provider_vendor_preset_minimax">MiniMax</string>
+    <string name="add_provider_vendor_preset_siliconflow">SiliconFlow</string>
+    <string name="add_provider_vendor_preset_groq">Groq</string>
+    <string name="add_provider_vendor_preset_together">Together</string>
+    <string name="add_provider_vendor_preset_mistral">Mistral</string>
+    <string name="add_provider_vendor_preset_ollama">Ollama</string>
+    <string name="add_provider_vendor_preset_lmstudio">LM Studio</string>
+    <string name="add_provider_vendor_hint_deepseek">Buat API key di platform.deepseek.com</string>
+    <string name="add_provider_vendor_hint_zhipu">Ambil API key dari konsol platform terbuka Zhipu di open.bigmodel.cn</string>
+    <string name="add_provider_vendor_hint_kimi">Buat API key di platform.moonshot.cn</string>
+    <string name="add_provider_vendor_hint_qwen">Buat API key di konsol Alibaba Cloud Model Studio (Bailian)</string>
+    <string name="add_provider_vendor_hint_ark">Buat API key di konsol Volcano Ark; nama model berupa endpoint ID atau model ID</string>
+    <string name="add_provider_vendor_hint_minimax">Ambil API key dari platform terbuka MiniMax</string>
+    <string name="add_provider_vendor_hint_siliconflow">Buat API key di cloud.siliconflow.cn</string>
+    <string name="add_provider_vendor_hint_groq">Buat API key di console.groq.com</string>
+    <string name="add_provider_vendor_hint_together">Ambil API key dari konsol Together di api.together.ai</string>
+    <string name="add_provider_vendor_hint_mistral">Buat API key di console.mistral.ai</string>
+    <string name="add_provider_vendor_hint_ollama">Server lokal — tanpa API key</string>
+    <string name="add_provider_vendor_hint_lmstudio">Server lokal — tanpa API key. Mulai dulu server Developer di LM Studio</string>
+    <!-- Queued-message edit sheet + git diff truncation notice -->
+    <string name="chat_queued_edit_title">Edit pesan dalam antrean</string>
+    <string name="git_panel_diff_truncated">Diff dipotong pada 200.000 karakter — teks lengkap ada di file repo itu sendiri.</string>
 </resources>

@@ -2084,4 +2084,34 @@
     <string name="sessionlist_archive">Archiwizuj</string>
     <string name="sessionlist_unarchive">Cofnij archiwizację</string>
     <string name="sessionlist_section_archived">Zarchiwizowane (%1$d)</string>
+    <!-- Add-provider vendor presets ([T-android-vendor-presets]) -->
+    <string name="add_provider_vendor_presets">Presety dostawców</string>
+    <string name="add_provider_vendor_presets_pick_hint">Dotknij dostawcy, aby automatycznie wypełnić endpoint i nazwę.</string>
+    <string name="add_provider_vendor_preset_deepseek">DeepSeek</string>
+    <string name="add_provider_vendor_preset_zhipu">Zhipu GLM</string>
+    <string name="add_provider_vendor_preset_kimi">Kimi (Moonshot)</string>
+    <string name="add_provider_vendor_preset_qwen">Qwen (DashScope)</string>
+    <string name="add_provider_vendor_preset_ark">Volcano Ark</string>
+    <string name="add_provider_vendor_preset_minimax">MiniMax</string>
+    <string name="add_provider_vendor_preset_siliconflow">SiliconFlow</string>
+    <string name="add_provider_vendor_preset_groq">Groq</string>
+    <string name="add_provider_vendor_preset_together">Together</string>
+    <string name="add_provider_vendor_preset_mistral">Mistral</string>
+    <string name="add_provider_vendor_preset_ollama">Ollama</string>
+    <string name="add_provider_vendor_preset_lmstudio">LM Studio</string>
+    <string name="add_provider_vendor_hint_deepseek">Utwórz klucz API na platform.deepseek.com</string>
+    <string name="add_provider_vendor_hint_zhipu">Pobierz klucz API z konsoli otwartej platformy Zhipu na open.bigmodel.cn</string>
+    <string name="add_provider_vendor_hint_kimi">Utwórz klucz API na platform.moonshot.cn</string>
+    <string name="add_provider_vendor_hint_qwen">Utwórz klucz API w konsoli Alibaba Cloud Model Studio (Bailian)</string>
+    <string name="add_provider_vendor_hint_ark">Utwórz klucz API w konsoli Volcano Ark; nazwa modelu to identyfikator endpointu lub modelu</string>
+    <string name="add_provider_vendor_hint_minimax">Pobierz klucz API z otwartej platformy MiniMax</string>
+    <string name="add_provider_vendor_hint_siliconflow">Utwórz klucz API na cloud.siliconflow.cn</string>
+    <string name="add_provider_vendor_hint_groq">Utwórz klucz API na console.groq.com</string>
+    <string name="add_provider_vendor_hint_together">Pobierz klucz API z konsoli Together na api.together.ai</string>
+    <string name="add_provider_vendor_hint_mistral">Utwórz klucz API na console.mistral.ai</string>
+    <string name="add_provider_vendor_hint_ollama">Serwer lokalny — klucz API nie jest potrzebny</string>
+    <string name="add_provider_vendor_hint_lmstudio">Serwer lokalny — klucz API nie jest potrzebny. Najpierw uruchom serwer Developer w LM Studio</string>
+    <!-- Queued-message edit sheet + git diff truncation notice -->
+    <string name="chat_queued_edit_title">Edytuj wiadomość w kolejce</string>
+    <string name="git_panel_diff_truncated">Diff przycięty do 200 000 znaków — pełny tekst znajduje się w samym pliku repozytorium.</string>
 </resources>

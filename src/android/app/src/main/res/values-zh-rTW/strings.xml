@@ -2159,4 +2159,34 @@
     <string name="sessionlist_archive">封存</string>
     <string name="sessionlist_unarchive">取消封存</string>
     <string name="sessionlist_section_archived">已封存（%1$d）</string>
+    <!-- Add-provider vendor presets ([T-android-vendor-presets]) -->
+    <string name="add_provider_vendor_presets">廠商預設</string>
+    <string name="add_provider_vendor_presets_pick_hint">點按廠商可自動填入介面位址與名稱。</string>
+    <string name="add_provider_vendor_preset_deepseek">DeepSeek</string>
+    <string name="add_provider_vendor_preset_zhipu">智譜 GLM</string>
+    <string name="add_provider_vendor_preset_kimi">Kimi (Moonshot)</string>
+    <string name="add_provider_vendor_preset_qwen">通義千問</string>
+    <string name="add_provider_vendor_preset_ark">火山方舟</string>
+    <string name="add_provider_vendor_preset_minimax">MiniMax</string>
+    <string name="add_provider_vendor_preset_siliconflow">矽基流動</string>
+    <string name="add_provider_vendor_preset_groq">Groq</string>
+    <string name="add_provider_vendor_preset_together">Together</string>
+    <string name="add_provider_vendor_preset_mistral">Mistral</string>
+    <string name="add_provider_vendor_preset_ollama">Ollama</string>
+    <string name="add_provider_vendor_preset_lmstudio">LM Studio</string>
+    <string name="add_provider_vendor_hint_deepseek">在 platform.deepseek.com 建立 API 金鑰</string>
+    <string name="add_provider_vendor_hint_zhipu">在智譜開放平台 open.bigmodel.cn 控制台取得 API 金鑰</string>
+    <string name="add_provider_vendor_hint_kimi">在 platform.moonshot.cn 建立 API 金鑰</string>
+    <string name="add_provider_vendor_hint_qwen">在阿里雲百鍊控制台建立 API 金鑰</string>
+    <string name="add_provider_vendor_hint_ark">在火山方舟控制台建立 API 金鑰，模型名稱填接入點 ID 或模型 ID</string>
+    <string name="add_provider_vendor_hint_minimax">在 MiniMax 開放平台取得 API 金鑰</string>
+    <string name="add_provider_vendor_hint_siliconflow">在 cloud.siliconflow.cn 建立 API 金鑰</string>
+    <string name="add_provider_vendor_hint_groq">在 console.groq.com 建立 API 金鑰</string>
+    <string name="add_provider_vendor_hint_together">在 Together 控制台 api.together.ai 取得 API 金鑰</string>
+    <string name="add_provider_vendor_hint_mistral">在 console.mistral.ai 建立 API 金鑰</string>
+    <string name="add_provider_vendor_hint_ollama">本機伺服器，無需 API 金鑰</string>
+    <string name="add_provider_vendor_hint_lmstudio">本機伺服器，無需 API 金鑰；請先在 LM Studio 啟動 Developer 伺服器</string>
+    <!-- Queued-message edit sheet + git diff truncation notice -->
+    <string name="chat_queued_edit_title">編輯排隊訊息</string>
+    <string name="git_panel_diff_truncated">Diff 已在 200,000 字元處截斷——完整內容以儲存庫檔案為準。</string>
 </resources>

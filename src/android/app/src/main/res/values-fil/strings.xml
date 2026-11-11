@@ -2077,4 +2077,34 @@
     <string name="sessionlist_archive">I-archive</string>
     <string name="sessionlist_unarchive">I-unarchive</string>
     <string name="sessionlist_section_archived">Na-archive (%1$d)</string>
+    <!-- Add-provider vendor presets ([T-android-vendor-presets]) -->
+    <string name="add_provider_vendor_presets">Preset ng vendor</string>
+    <string name="add_provider_vendor_presets_pick_hint">I-tap ang vendor para kusang punan ang endpoint at pangalan nito.</string>
+    <string name="add_provider_vendor_preset_deepseek">DeepSeek</string>
+    <string name="add_provider_vendor_preset_zhipu">Zhipu GLM</string>
+    <string name="add_provider_vendor_preset_kimi">Kimi (Moonshot)</string>
+    <string name="add_provider_vendor_preset_qwen">Qwen (DashScope)</string>
+    <string name="add_provider_vendor_preset_ark">Volcano Ark</string>
+    <string name="add_provider_vendor_preset_minimax">MiniMax</string>
+    <string name="add_provider_vendor_preset_siliconflow">SiliconFlow</string>
+    <string name="add_provider_vendor_preset_groq">Groq</string>
+    <string name="add_provider_vendor_preset_together">Together</string>
+    <string name="add_provider_vendor_preset_mistral">Mistral</string>
+    <string name="add_provider_vendor_preset_ollama">Ollama</string>
+    <string name="add_provider_vendor_preset_lmstudio">LM Studio</string>
+    <string name="add_provider_vendor_hint_deepseek">Gumawa ng API key sa platform.deepseek.com</string>
+    <string name="add_provider_vendor_hint_zhipu">Kumuha ng API key mula sa console ng Zhipu open platform sa open.bigmodel.cn</string>
+    <string name="add_provider_vendor_hint_kimi">Gumawa ng API key sa platform.moonshot.cn</string>
+    <string name="add_provider_vendor_hint_qwen">Gumawa ng API key sa console ng Alibaba Cloud Model Studio (Bailian)</string>
+    <string name="add_provider_vendor_hint_ark">Gumawa ng API key sa console ng Volcano Ark; ang model name ay endpoint ID o model ID</string>
+    <string name="add_provider_vendor_hint_minimax">Kumuha ng API key mula sa open platform ng MiniMax</string>
+    <string name="add_provider_vendor_hint_siliconflow">Gumawa ng API key sa cloud.siliconflow.cn</string>
+    <string name="add_provider_vendor_hint_groq">Gumawa ng API key sa console.groq.com</string>
+    <string name="add_provider_vendor_hint_together">Kumuha ng API key mula sa Together console sa api.together.ai</string>
+    <string name="add_provider_vendor_hint_mistral">Gumawa ng API key sa console.mistral.ai</string>
+    <string name="add_provider_vendor_hint_ollama">Local server — walang kailangang API key</string>
+    <string name="add_provider_vendor_hint_lmstudio">Local server — walang kailangang API key. I-start muna ang Developer server sa LM Studio</string>
+    <!-- Queued-message edit sheet + git diff truncation notice -->
+    <string name="chat_queued_edit_title">I-edit ang naka-queue na mensahe</string>
+    <string name="git_panel_diff_truncated">Naputol ang diff sa 200,000 karakter — ang buong teksto ay nasa mismong file sa repo.</string>
 </resources>
