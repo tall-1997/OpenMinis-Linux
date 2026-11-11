@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.outlined.GraphicEq
 import androidx.compose.material.icons.outlined.VpnKey
 import androidx.compose.material.icons.outlined.Warning
@@ -62,6 +63,7 @@ import com.openminis.app.data.repository.cachedRowSnapshots
 import com.openminis.app.data.repository.computeRowSnapshots
 import com.openminis.app.data.repository.ProviderRefreshMarks
 import com.openminis.app.data.repository.ProviderRepository
+import com.openminis.app.data.repository.ProviderTransferStore
 import com.openminis.app.data.repository.missingBuiltInFreeLanes
 import com.openminis.app.data.repository.restoreBuiltInFreeLaneAndRefresh
 import com.openminis.app.data.repository.ModelRefreshResult
@@ -88,6 +90,8 @@ private sealed class ProviderImportOutcome {
     data object ReadFailed : ProviderImportOutcome()
     data class Imported(val label: String) : ProviderImportOutcome()
     data class ZipSummary(val ok: Int, val total: Int) : ProviderImportOutcome()
+    // [#24] A batch transfer document was imported.
+    data class BatchImported(val imported: Int, val failed: Int) : ProviderImportOutcome()
 }
 
 
@@ -145,6 +149,36 @@ fun ProviderListScreen(
     var syncMarks by remember { mutableStateOf(ProviderRefreshMarks.load(context)) }
     val syncScope = rememberCoroutineScope()
 
+    // [#24 provider-transfer] Batch export/import: stateless facade over the
+    // repository; JSON shaping lives in ProviderTransferCodec, SAF streams here.
+    val transferStore = remember(providerRepository) { ProviderTransferStore(providerRepository) }
+    var showExportDialog by remember { mutableStateOf(false) }
+    var pendingExportJson by remember { mutableStateOf<String?>(null) }
+    var pendingExportCount by remember { mutableStateOf(0) }
+
+    val exportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json"),
+    ) { uri: Uri? ->
+        val json = pendingExportJson
+        pendingExportJson = null
+        if (uri == null || json == null) return@rememberLauncherForActivityResult
+        syncScope.launch {
+            val ok = withContext(Dispatchers.IO) {
+                runCatching {
+                    context.contentResolver.openOutputStream(uri, "wt")?.use { out ->
+                        out.write(json.toByteArray(Charsets.UTF_8))
+                    } != null
+                }.getOrDefault(false)
+            }
+            val msg = if (ok) {
+                context.getString(R.string.provider_transfer_export_success, pendingExportCount)
+            } else {
+                context.getString(R.string.provider_transfer_export_failed)
+            }
+            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+        }
+    }
+
     fun syncSummary(ok: Int, noKey: Int, failed: Int): String =
         if (ok > 0 && noKey == 0 && failed == 0) {
             context.getString(R.string.provider_list_sync_all_success, ok)
@@ -188,7 +222,15 @@ fun ProviderListScreen(
                             context = context,
                             uri = uri,
                             onImportSingle = { jsonStr ->
-                                providerRepository.importInstanceJSON(jsonStr)
+                                // [#24] Zip entries may carry batch documents too.
+                                if (transferStore.isBatchDocument(jsonStr)) {
+                                    transferStore.importProvidersJSON(jsonStr)
+                                        .importedLabels
+                                        .joinToString(", ")
+                                        .ifEmpty { null }
+                                } else {
+                                    providerRepository.importInstanceJSON(jsonStr)
+                                }
                             },
                             onExtractFailed = { extractFailed = true },
                             onNoSupported = { noSupported = true },
@@ -204,6 +246,13 @@ fun ProviderListScreen(
                             ?.bufferedReader()?.readText()
                         if (jsonStr == null) {
                             ProviderImportOutcome.ReadFailed
+                        } else if (transferStore.isBatchDocument(jsonStr)) {
+                            // [#24] {"version":1,"providers":[…]} batch document.
+                            val summary = transferStore.importProvidersJSON(jsonStr)
+                            ProviderImportOutcome.BatchImported(
+                                summary.importedLabels.size,
+                                summary.failed,
+                            )
                         } else {
                             val label = providerRepository.importInstanceJSON(jsonStr)
                             if (label != null) ProviderImportOutcome.Imported(label)
@@ -231,6 +280,15 @@ fun ProviderListScreen(
                     context.getString(R.string.provider_import_read_failed)
                 is ProviderImportOutcome.Imported ->
                     context.getString(R.string.provider_imported, outcome.label)
+                is ProviderImportOutcome.BatchImported -> when {
+                    outcome.imported == 0 && outcome.failed == 0 ->
+                        context.getString(R.string.provider_import_invalid)
+                    outcome.failed == 0 ->
+                        context.getString(R.string.provider_transfer_import_ok, outcome.imported)
+                    else -> context.getString(
+                        R.string.provider_transfer_import_partial, outcome.imported, outcome.failed,
+                    )
+                }
             }
             Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
         }
@@ -566,8 +624,47 @@ fun ProviderListScreen(
                     Spacer(Modifier.width(16.dp))
                     Text(stringResource(R.string.provider_list_import_provider), style = MaterialTheme.typography.bodyLarge)
                 }
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp))
+                // [#24] Batch export of ALL providers via SAF (see exportLauncher).
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            showMenu = false
+                            showExportDialog = true
+                        }
+                        .padding(horizontal = 20.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(m3Icon(Icons.Filled.FileUpload), contentDescription = null, modifier = Modifier.size(22.dp))
+                    Spacer(Modifier.width(16.dp))
+                    Text(stringResource(R.string.provider_list_export_providers), style = MaterialTheme.typography.bodyLarge)
+                }
             }
         }
+    }
+
+    // [#24] Export confirmation: keys default OFF, plaintext risk shown on flip.
+    if (showExportDialog) {
+        ProviderExportDialog(
+            providerCount = instances.size,
+            onDismiss = { showExportDialog = false },
+            onConfirm = { includeApiKeys ->
+                showExportDialog = false
+                syncScope.launch {
+                    val json = withContext(Dispatchers.IO) {
+                        transferStore.exportProvidersJSON(includeApiKeys)
+                    }
+                    if (json == null) {
+                        Toast.makeText(context, context.getString(R.string.provider_transfer_export_failed), Toast.LENGTH_SHORT).show()
+                    } else {
+                        pendingExportCount = instances.size
+                        pendingExportJson = json
+                        exportLauncher.launch(transferStore.suggestedFileName())
+                    }
+                }
+            },
+        )
     }
 
     // [T-android-swipe-row-actions] Same dialog copy and same repository call as
