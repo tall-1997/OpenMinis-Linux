@@ -10,6 +10,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 /**
  * [GH#221] / [OpenMinis#221] The first `headersFor` must not open the
@@ -22,6 +23,7 @@ import org.robolectric.RobolectricTestRunner
  * `headersFor` answers with an empty map instead of triggering the load.
  */
 @RunWith(RobolectricTestRunner::class)
+@Config(application = android.app.Application::class) // [T-robolectric-bare-app]
 class ProviderHeaderStorePreloadTest {
 
     private lateinit var context: Context

@@ -10,13 +10,19 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 /**
  * [GH#298] The backend registry must be a live extension point, not dead code:
  * the shipped DuckDuckGo backend is registered at startup, and the tool-level
  * master switch still refuses an explicit call after it is turned off.
+ *
+ * [T-robolectric-bare-app] MinisApp.onCreate pulls RootfsManager (NPE under
+ * Robolectric) and installs AppGraph slots; these unit tests only need a
+ * Context + SharedPreferences, so use the bare Application.
  */
 @RunWith(RobolectricTestRunner::class)
+@Config(application = android.app.Application::class)
 class WebSearchBackendRegistryTest {
 
     private lateinit var context: Context

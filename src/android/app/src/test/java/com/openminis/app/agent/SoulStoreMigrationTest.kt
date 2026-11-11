@@ -16,6 +16,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 /**
  * [GH#299] SOUL.md 内联图标迁移 + body 保真 + 备份闭环。
@@ -34,6 +35,7 @@ import org.robolectric.RobolectricTestRunner
  * Robolectric（不是纯 JVM 测试）因为迁移会真实 decode / re-encode Bitmap。
  */
 @RunWith(RobolectricTestRunner::class)
+@Config(application = android.app.Application::class) // [T-robolectric-bare-app] MinisApp.onCreate pulls RootfsManager; these tests only need a Context.
 class SoulStoreMigrationTest {
 
     private lateinit var context: Context

@@ -10,6 +10,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 /**
  * [GH#511] The boot hook's privilege gate.
@@ -22,6 +23,7 @@ import org.robolectric.RobolectricTestRunner
  *  - ON still refuses when the script does not exist.
  */
 @RunWith(RobolectricTestRunner::class)
+@Config(application = android.app.Application::class) // [T-robolectric-bare-app]
 class BootHookSettingsTest {
 
     private lateinit var context: Context

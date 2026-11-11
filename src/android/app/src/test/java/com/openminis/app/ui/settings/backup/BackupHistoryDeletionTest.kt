@@ -14,6 +14,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 /**
  * [GH#367] Deletion-path contract, with the rclone / SAF sides injected.
@@ -28,6 +29,7 @@ import org.robolectric.RobolectricTestRunner
  *    new history-screen entry.
  */
 @RunWith(RobolectricTestRunner::class)
+@Config(application = android.app.Application::class) // [T-robolectric-bare-app]
 class BackupHistoryDeletionTest {
 
     private lateinit var context: Context
