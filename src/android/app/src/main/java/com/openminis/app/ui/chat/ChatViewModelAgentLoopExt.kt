@@ -32,8 +32,11 @@ import org.json.JSONObject
  * 输出预算耗尽，流尾的工具调用参数极可能被截断成半截 JSON。这类调用必须
  * 拒执行并回写结构化错误，而不是拿半截参数去写文件/跑 shell。
  * 镜像 Eta AGENT_RUNTIME.md 的截断即拒执行。
+ *
+ * [GH#119] 判定与拒绝逻辑已收敛进共享
+ * [com.openminis.app.tools.ToolCallPreflight]：主循环、子代理、群聊三条流
+ * 都按同一个 reason 集合拒绝，不再只有主循环受保护。
  */
-private val TRUNCATED_FINISH_REASONS = setOf("length", "max_tokens")
 
 internal suspend fun ChatViewModel.runAgentLoopBody(
     provider: LLMProvider,
@@ -1927,26 +1930,15 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
         }
 
         // [T-truncated-tool-call-reject] finish_reason=length/max_tokens 且
-        // 带工具调用 → 参数极可能被截断。不执行半截参数（写文件是半截内容、
-        // shell 是半个命令），改写成结构化失败结果让模型下一轮自愈。
-        // 镜像 Eta AGENT_RUNTIME.md 的截断即拒执行。
-        val truncatedToolTurn = toolCalls.isNotEmpty() &&
-            turnFinishReason != null && turnFinishReason in TRUNCATED_FINISH_REASONS
-
-        // Execute all tool calls.
-        // [T-parallel-tool-calls] The turn executes in three phases —
-        // preflight / lane-execute / assemble. See ChatViewModelToolTurnExec.kt
-        // for the executor and the ordering contract: the model's emission
-        // order is its dependency declaration (barriers chain in emission
-        // order, concurrent reads overlap them), and the transcript is
-        // assembled in emission order regardless of completion order.
+        // 带工具调用 → 参数极可能被截断。拒绝判定已收敛到共享
+        // ToolCallPreflight（按 turnFinishReason 在每个执行入口生效），这里
+        // 只负责把 finish reason 传进本轮上下文。
         val turnCtx = ToolTurnContext(
             activeSessionId = activeSessionId,
             assistantId = assistantId,
             accumulatedText = accumulatedText,
             turn = turn,
             turnFinishReason = turnFinishReason,
-            truncatedToolTurn = truncatedToolTurn,
             agentTools = agentTools,
             replayRenamedIds = replayRenamedIds,
             allToolBlocks = allToolBlocks,

@@ -16,9 +16,11 @@ import java.util.concurrent.CopyOnWriteArrayList
  *  - 返回空列表 / 抛异常都只是“这个后端没结果”，会继续走既有引擎链。
  *
  * 刻意保持“先注册者先试”的简单语义：多后端聚合 / 排序属于上层策略，不在
- * 这一版里引入。默认实现见 [DuckDuckGoBackend]（无 key、走 HTML 端点），
- * 它不在启动时自动注册 —— 自动注册会把用户配置的 Tavily/SearXNG 顺序打乱，
- * 需要显式启用时调用 `register(WebSearchBackendRegistry.DEFAULT)`。
+ * 这一版里引入。默认实现见 [DuckDuckGoBackend]（无 key、走 HTML 端点）。
+ * [GH#298] 它在应用启动时通过 [WebSearchBackendRegistry.ensureDefaultRegistered]
+ * 真正注册进运行期注册表 —— 只定义不注册等于把扩展点做成死代码。工具在用户
+ * 明确选择 Tavily / SearXNG 等其它引擎时会跳过这个默认 DDG 后端，避免内置
+ * 兜底抢在用户配置之前。
  */
 interface WebSearchBackend {
     /** 结果首行展示的后端标识，如 "duckduckgo" / "my-searxng"。 */
@@ -53,10 +55,37 @@ internal class DuckDuckGoBackend : WebSearchBackend {
  */
 object WebSearchBackendRegistry {
 
-    /** 内置默认实现；调用方显式注册后才会进入搜索链。 */
+    /** 内置默认实现；启动时由 [ensureDefaultRegistered] 放进运行期注册表。 */
     val DEFAULT: WebSearchBackend = DuckDuckGoBackend()
 
     private val registered = CopyOnWriteArrayList<WebSearchBackend>()
+
+    /**
+     * [GH#298] 默认后端的一次性注册标记。进程级：重复调用不会把同一个
+     * backend 反复插入（否则每次启动/每次初始化都会改变顺序或产生重复）。
+     */
+    @Volatile
+    private var defaultRegistered = false
+
+    /**
+     * [GH#298] 把 [DEFAULT] 注册进运行期注册表（幂等）。由 `MinisApp.onCreate`
+     * 调用——这是“可插拔后端”扩展点的生产注册点，没有它 [DuckDuckGoBackend]
+     * 永远不会被任何真实调用走到。
+     *
+     * @return true 表示本次调用完成了首次注册。
+     */
+    fun ensureDefaultRegistered(): Boolean {
+        if (defaultRegistered) return false
+        synchronized(this) {
+            if (defaultRegistered) return false
+            // 走公开的 register()，这样启动路径就是扩展点的正式生产注册点
+            // （而不是绕过 registry 直接改内部列表）。启动时表为空，因此默认
+            // 后端自然排在最前；用户显式选择其它引擎时工具层会跳过它。
+            register(DEFAULT)
+            defaultRegistered = true
+            return true
+        }
+    }
 
     /** 注册一个后端；同 id 已存在时替换，返回是否发生了替换。 */
     fun register(backend: WebSearchBackend): Boolean {
@@ -72,5 +101,8 @@ object WebSearchBackendRegistry {
     fun backends(): List<WebSearchBackend> = registered.toList()
 
     /** 测试清理入口。 */
-    internal fun clearForTest() = registered.clear()
+    internal fun clearForTest() {
+        registered.clear()
+        defaultRegistered = false
+    }
 }

@@ -104,21 +104,31 @@ object OpenCodeSessionHeader {
      * header, but for a user-configured **custom OpenAI-compatible endpoint**
      * rather than only the OpenCode Go host.
      *
-     * The host gate in [headersFor] is a privacy control for *official*
-     * endpoints, where a custom host has not asked for the id. A custom base
-     * URL is categorically different: the user pointed the app at a specific
-     * gateway, and several OpenCode-compatible relays forward to a backend
-     * that enforces the same `400 missing x-opencode-session` routing rule the
-     * built-in Zen lane already satisfies ([ZenFreeLaneGate.headersFor] sends
-     * both spellings, so relays that key on either work). No custom base URL
-     * means the official endpoint — header omitted, exactly as before.
+     * ## [GH#347] Opt-in, not automatic (privacy root fix)
+     *
+     * An earlier version of this helper sent the header for ANY non-blank
+     * custom base URL. That handed a stable per-conversation identifier to
+     * every third-party relay the user configured — a tracking vector the app
+     * would be introducing on their behalf, and one they never asked for.
+     * Custom endpoints are now opt-in per provider
+     * ([com.openminis.app.provider.ProviderHeaderStore.openCodeSessionEnabled],
+     * surfaced as a switch in the provider detail screen): [enabled] defaults to
+     * false, so the identifier leaves the device only when the user explicitly
+     * trusts that gateway. The official Zen/OpenCode lane is unaffected — it is
+     * gated by HOST in [headersFor] and keeps sending automatically because the
+     * service requires it.
      *
      * Requirement (2) from the class contract still applies: [sessionId] must
      * be the persisted conversation id so the id is stable across turns,
      * retries and resumes. Draft (`__new__…`) ids are refused for the same
      * reason [headersFor] refuses them.
      */
-    fun customEndpointHeadersFor(baseUrl: String?, sessionId: String?): Map<String, String> {
+    fun customEndpointHeadersFor(
+        baseUrl: String?,
+        sessionId: String?,
+        enabled: Boolean = false,
+    ): Map<String, String> {
+        if (!enabled) return emptyMap()
         val raw = baseUrl?.trim().orEmpty()
         // Official endpoint (no custom base URL): nothing changes.
         if (raw.isEmpty()) return emptyMap()

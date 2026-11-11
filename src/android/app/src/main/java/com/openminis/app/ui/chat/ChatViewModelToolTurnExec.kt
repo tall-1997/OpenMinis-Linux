@@ -14,9 +14,9 @@ import com.openminis.app.service.ToolOutcome
 import com.openminis.app.tools.SubAgentKind
 import com.openminis.app.tools.ToolCallLane
 import com.openminis.app.tools.ToolCallLanes
+import com.openminis.app.tools.ToolCallPreflight
 import com.openminis.app.tools.ToolExecutionResult
 import com.openminis.app.tools.ToolOutputSpill
-import com.openminis.app.provider.ToolJsonRepair
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -67,7 +67,6 @@ internal class ToolTurnContext(
     val accumulatedText: String,
     val turn: Int,
     val turnFinishReason: String?,
-    val truncatedToolTurn: Boolean,
     val agentTools: List<AgentToolDefinition>,
     val replayRenamedIds: Set<String>,
     val allToolBlocks: MutableList<AssistantBlock>,
@@ -128,63 +127,44 @@ internal suspend fun ChatViewModel.preflightToolTurn(
         currentCoroutineContext().ensureActive()
         activeRun?.associateSession(ctx.activeSessionId)
         activeRun?.setCurrentTool(id, name, args.toString())
-        // JSON repair (T-tool-json-repair b2c4f8a6): salvage truncated /
-        // type-mismatched / typo'd args BEFORE preflight rejects them.
-        // Mutates `args` in place; downstream argsStr and preflight see
-        // the repaired payload. Mirrors iOS repairToolArgs in
-        // AIChatViewModel.swift.
-        // [GH#61/#83/#146] Prefer the provider's exact unparsed tail over the
-        // ring's last stride-gated delta: a final fragment may never have been
-        // emitted as ToolInputDelta, and repairing a stale prefix can produce
-        // a syntactically valid but semantically older argument set.
+        // [GH#61/#83/#146][GH#119] ONE shared preflight layer for every
+        // model tool-call execution entry point: JSON repair, invalid
+        // argument-stream refusal, truncated-write refusal and truncated-turn
+        // refusal are implemented once in [ToolCallPreflight] and called here,
+        // in SubAgentRunner and in the group-chat loop. Keeping any of that
+        // logic at a call site is what let sub-agents/group chat execute the
+        // `{}` payload the provider substituted for an unparseable stream.
+        // 中文：参数流修复/拒绝只在共享层实现，三个执行入口不再各写一份。
+        // Prefer the provider's exact unparsed tail over the ring's last
+        // stride-gated delta: a final fragment may never have been emitted as
+        // ToolInputDelta, and repairing a stale prefix can produce a
+        // syntactically valid but semantically older argument set.
         val rawArgumentTail = ctx.toolCallRawArgs[id]?.takeIf { it.isNotBlank() }
             ?: ctx.toolInputChunkRings[id]?.lastOrNull()
-        val repairs = ToolJsonRepair.repair(
-            name, args, rawArgumentTail, ctx.agentTools,
+        val preflight = ToolCallPreflight.finalize(
+            toolName = name,
+            args = args,
+            rawArgumentTail = rawArgumentTail,
+            advertisedTools = ctx.agentTools,
+            turnFinishReason = ctx.turnFinishReason,
         )
-        if (repairs.isNotEmpty()) {
-            AppLogger.warning(
-                "ToolPreflight",
-                "[ToolRepair] REPAIRED tool=$name id=$id strategies=[${repairs.joinToString(", ")}] " +
-                    "argsKeys=[${args.keys().asSequence().toList().sorted().joinToString(",")}] " +
-                    "rawTail=<<<${rawArgumentTail?.take(500) ?: ""}>>>"
-            )
-        }
-        // [GH#61/#83/#146] The provider sent a non-blank argument tail that is
-        // not JSON and no closure suffix fixed it. Executing `{}` would be the
-        // silent corruption #61 reported (all tools "empty arguments") and,
-        // for tools with no required fields, an invisible no-op call. Refuse
-        // with the fact the model needs: the PARAMETER STREAM was incomplete.
-        // 中文：参数流非法/不完整时拒绝执行，并把“参数流未完整”的事实回写
-        // 给模型（而不是静默下发空对象）。
-        if (repairs.any { it == ToolJsonRepair.INVALID_JSON_MARKER }) {
-            val rawBytes = (rawArgumentTail ?: "").toByteArray(Charsets.UTF_8).size
-            val tailPreview = (rawArgumentTail ?: "").take(200).replace("\n", "\\n")
-            val modelMessage = "Error: The argument stream for this tool call did not arrive " +
-                "as valid JSON ($rawBytes bytes received, tail=<<<$tailPreview>>>). The call " +
-                "was NOT executed — no tool ran and nothing was written. This usually means " +
-                "the model response was cut off mid-arguments or the gateway corrupted the " +
-                "parameter stream. Re-issue the call with complete arguments; do not retry " +
-                "with an empty or partial payload."
-            AppLogger.warning(
-                "ToolPreflight",
-                "BLOCKED incomplete argument stream tool=$name id=$id bytes=$rawBytes " +
-                    "tail=<<<$tailPreview>>>"
-            )
-            val invalidIdx = ctx.allToolBlocks.indexOfFirst { it.id == id }
-            if (invalidIdx >= 0) {
-                val elapsed = System.currentTimeMillis() - ctx.allToolBlocks[invalidIdx].startTimeMs
-                ctx.allToolBlocks[invalidIdx] = ctx.allToolBlocks[invalidIdx].copy(
+        if (preflight is ToolCallPreflight.Outcome.Rejected) {
+            val refusedIdx = ctx.allToolBlocks.indexOfFirst { it.id == id }
+            if (refusedIdx >= 0) {
+                val elapsed = System.currentTimeMillis() - ctx.allToolBlocks[refusedIdx].startTimeMs
+                ctx.allToolBlocks[refusedIdx] = ctx.allToolBlocks[refusedIdx].copy(
                     toolStatus = ToolBlockStatus.FAILED,
-                    content = "Blocked: arguments stream was incomplete or invalid",
+                    content = preflight.uiMessage,
                     durationMs = elapsed,
                 )
             }
-            toolLoopDetector.record(name, parseToolParams(args.toString()),
-                result = null, errorMessage = modelMessage, toolCallId = id)
+            toolLoopDetector.record(
+                name, parseToolParams(args.toString()),
+                result = null, errorMessage = preflight.modelMessage, toolCallId = id,
+            )
             refusedParts[id] = AgentContentPart.ToolResult(
                 id = id, name = name,
-                content = modelMessage,
+                content = preflight.modelMessage,
                 isError = true,
             )
             ctx.toolInputChunkRings.remove(id)
@@ -194,60 +174,8 @@ internal suspend fun ChatViewModel.preflightToolTurn(
             }
             continue
         }
-        // [T-truncated-args-visibility #119] Non-null when THIS call's
-        // arguments arrived truncated and were auto-closed. Only the
-        // truncation strategy means the VALUE was cut short; coercion
-        // and fuzzy-name repairs fix the shape of a complete argument.
-        // Mirrors iOS truncationRepairTag.
-        val truncationRepairTag: String? = repairs.firstOrNull { it.startsWith("truncation+") }
-
-        // [T-truncated-args-visibility #119] Refuse truncated WRITES.
-        // Auto-closing an unterminated JSON string is indistinguishable
-        // from the model ending `content` there, so a half file lands on
-        // disk while UI and tool result both report success. For writes a
-        // partial artifact is silent corruption of user data and is worse
-        // than no write at all; read-only and shell tools keep the
-        // repair-and-run behaviour. Mirrors iOS ConcurrentTools.
-        if (truncationRepairTag != null && (name == "file_write" || name == "file_edit")) {
-            val path = args.optString("path", "").ifBlank { args.optString("file_path", "") }
-            AppLogger.warning(
-                "ToolPreflight",
-                "[ToolRepair] REFUSED truncated write tool=$name id=$id strategy=$truncationRepairTag path=$path"
-            )
-            val modelMessage = buildString {
-                append("Error: This call was NOT executed. Its argument stream was truncated ")
-                append("in transit (repair strategy: $truncationRepairTag), so the `content` ")
-                append("your client sent was cut short and would have written an incomplete file")
-                if (path.isNotBlank()) append(" to $path")
-                append(". Nothing was written to disk — the target file is unchanged.\n\n")
-                append("The most likely cause is the response hitting its output-token limit ")
-                append("mid-argument. Re-issue this write in smaller pieces: write the first ")
-                append("part, then append the rest with follow-up calls, rather than repeating ")
-                append("the same oversized call.")
-            }
-            val refusedIdx = ctx.allToolBlocks.indexOfFirst { it.id == id }
-            if (refusedIdx >= 0) {
-                val elapsed = System.currentTimeMillis() - ctx.allToolBlocks[refusedIdx].startTimeMs
-                ctx.allToolBlocks[refusedIdx] = ctx.allToolBlocks[refusedIdx].copy(
-                    toolStatus = ToolBlockStatus.FAILED,
-                    content = "Blocked: arguments were truncated in transit",
-                    durationMs = elapsed,
-                )
-                withContext(Dispatchers.Main) {
-                    updateAssistantMessage(ctx.assistantId, ctx.accumulatedText, true, ctx.allToolBlocks)
-                }
-            }
-            toolLoopDetector.record(name, parseToolParams(args.toString()),
-                result = null, errorMessage = modelMessage, toolCallId = id)
-            refusedParts[id] = AgentContentPart.ToolResult(
-                id = id, name = name,
-                content = modelMessage,
-                isError = true,
-            )
-            ctx.toolInputChunkRings.remove(id)
-            continue
-        }
-        val argsStr = args.toString()
+        val truncationRepairTag = (preflight as ToolCallPreflight.Outcome.Ready).truncationRepairTag
+        val argsStr = preflight.argsStr
         val paramsMap = parseToolParams(argsStr)
         // [T-android-duplicate-toolcall-replay] Refuse a replayed
         // ToolCallComplete (same raw id + name + serialized args as a call
@@ -367,32 +295,9 @@ internal suspend fun ChatViewModel.preflightToolTurn(
         }
 
         currentCoroutineContext().ensureActive()
-        // [T-truncated-tool-call-reject] 流因长度限制被切断（finish_reason=
-        // length/max_tokens），此工具调用的参数极可能是半截 JSON。拒执行，
-        // 让模型看到失败结果后下一轮重新完整调用。镜像 Eta AGENT_RUNTIME.md。
-        if (ctx.truncatedToolTurn) {
-            val truncatedMsg = "Error: This tool call was rejected because the " +
-                "model output was truncated (finish_reason=${ctx.turnFinishReason}). " +
-                "The arguments are likely incomplete. Re-read any relevant " +
-                "context and re-issue the call with complete arguments."
-            val blockIdxTr = ctx.allToolBlocks.indexOfFirst { it.id == id }
-            if (blockIdxTr >= 0) {
-                val elapsedTr = System.currentTimeMillis() - ctx.allToolBlocks[blockIdxTr].startTimeMs
-                ctx.allToolBlocks[blockIdxTr] = ctx.allToolBlocks[blockIdxTr].copy(
-                    toolStatus = ToolBlockStatus.FAILED,
-                    content = truncatedMsg,
-                    durationMs = elapsedTr,
-                )
-            }
-            toolLoopDetector.record(name, paramsMap,
-                result = null, errorMessage = truncatedMsg, toolCallId = id)
-            refusedParts[id] = AgentContentPart.ToolResult(
-                id = id, name = name,
-                content = truncatedMsg,
-                isError = true,
-            )
-            continue
-        }
+        // [T-truncated-tool-call-reject] finish_reason=length/max_tokens 的整轮
+        // 拒绝已在共享 preflight（ToolCallPreflight.finalize）里完成，三个执行
+        // 入口共用同一判定；此处不再重复检查，避免只有主循环受保护。
 
         // [T-parallel-tool-calls] Lane assignment. Local command-template
         // plugins materialize into shell commands, so they inherit the
@@ -560,17 +465,13 @@ internal suspend fun ChatViewModel.finalizePlannedCall(
     } else {
         outputForLLM
     }
-    // [T-tool-output-offload-loop GH#343] A file_read that pages through an
-    // existing spill file must not be re-spilled (the full text is still over
-    // the limit, so the naive call would hand the model another placeholder
-    // pointing at a copy). Surface the path we read so ToolOutputSpill can
-    // recognise the offload target and answer from it instead.
-    val spillSourcePath = if (name == "file_read" || call.canonicalName == "file_read") {
-        runCatching { JSONObject(call.argsStr).optString("path", "") }
-            .getOrNull()?.takeIf { it.isNotBlank() }
-    } else {
-        null
-    }
+    // [T-tool-output-offload-loop GH#343] A read of an existing spill file —
+    // `file_read` OR a shell `cat/head/tail … tool-spill/…` — must not be
+    // re-spilled (the full text is still over the limit, so the naive call
+    // would hand the model another placeholder pointing at a copy). The shared
+    // resolver covers every read-back spelling; #343 was reported because this
+    // branch only knew `file_read`.
+    val spillSourcePath = ToolOutputSpill.sourcePathForTool(call.canonicalName, call.argsStr)
     val outputSpilled = ToolOutputSpill.maybeSpill(
         context = context,
         sessionId = ctx.activeSessionId,

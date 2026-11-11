@@ -4,6 +4,7 @@ import android.util.Base64
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.openminis.app.network.AppTrustStore
 import com.openminis.app.network.withDohDns
 import com.openminis.app.network.applyAppTrustStore
 import okhttp3.MediaType.Companion.toMediaType
@@ -34,17 +35,44 @@ open class VoiceProvider(
     companion object {
         private const val TAG = "VoiceProvider"
 
-        /** TTS responses can be large and slow — generous timeouts (iOS: 120s). */
-        val httpClient: OkHttpClient = OkHttpClient.Builder()
-            // [T-doh-resolver-fallback] TTS/STT endpoints are hostnames; a
-            // poisoned resolver must not silently disable voice.
-            .withDohDns()
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(120, TimeUnit.SECONDS)
-            .writeTimeout(120, TimeUnit.SECONDS)
-            // [GH#258][GH#287] Self-hosted voice gateways may use a private CA.
-            .applyAppTrustStore()
-            .build()
+        /**
+         * TTS responses can be large and slow — generous timeouts (iOS: 120s).
+         *
+         * [GH#258][GH#287] generation-keyed rather than a one-shot `val`: this
+         * is a process-wide client whose `sslSocketFactory` is frozen at build
+         * time. A CA imported in Settings must apply to voice gateways too, so
+         * the client is rebuilt whenever [AppTrustStore.generation] changes —
+         * the same contract [OpenAILlmHttpClient] / `SharedHttpClients` follow.
+         */
+        private val httpClientLock = Any()
+
+        @Volatile
+        private var httpClientGeneration: Int = -1
+
+        @Volatile
+        private var httpClientBuilt: OkHttpClient? = null
+
+        val httpClient: OkHttpClient
+            get() {
+                val generation = AppTrustStore.generation
+                httpClientBuilt?.let { if (httpClientGeneration == generation) return it }
+                synchronized(httpClientLock) {
+                    httpClientBuilt?.let { if (httpClientGeneration == generation) return it }
+                    val client = OkHttpClient.Builder()
+                        // [T-doh-resolver-fallback] TTS/STT endpoints are hostnames; a
+                        // poisoned resolver must not silently disable voice.
+                        .withDohDns()
+                        .connectTimeout(30, TimeUnit.SECONDS)
+                        .readTimeout(120, TimeUnit.SECONDS)
+                        .writeTimeout(120, TimeUnit.SECONDS)
+                        // [GH#258][GH#287] Self-hosted voice gateways may use a private CA.
+                        .applyAppTrustStore()
+                        .build()
+                    httpClientBuilt = client
+                    httpClientGeneration = generation
+                    return client
+                }
+            }
 
         /**
          * Reduce a language tag (e.g. "zh-CN", "zh-Hans-CN", "en") to its

@@ -821,6 +821,12 @@ private suspend fun ChatViewModel.runOneSubAgentInner(
             }
             // [GH#530] agentType / effectiveKind were resolved at the top of this
             // function (before the write_paths check); reuse them here.
+            // [GH#521/#188/#199] Same first-token / idle-stream budget the main
+            // loop resolves, so a stalled sub-agent stream is bounded by the
+            // watchdog instead of waiting out the 600s transport read timeout.
+            val subAgentFirstEventMs = com.openminis.app.data.GroupRoutingState.resolveFirstEventTimeoutMs(
+                providerRepository, _selectedGroupId.value, requestedThinking.isEnabled,
+            )
             val result = com.openminis.app.tools.WritePathGuard.withPaths(writePaths) {
                 SubAgentRunner.run(
                     provider = provider,
@@ -882,6 +888,8 @@ private suspend fun ChatViewModel.runOneSubAgentInner(
                     // [GH#221] 子代理 provider 来自 entry，不是当前主模型，因此
                     // 按 entry 的实例解析 OpenCode 会话头 / 用户 KV。
                     extraHeaders = providerExtraHeaders(entry.providerInstanceId),
+                    firstEventTimeoutMs = subAgentFirstEventMs,
+                    streamIdleTimeoutMs = subAgentFirstEventMs * 2,
                 )
             }
             com.openminis.app.service.SubAgentActivityTracker.appendLog(

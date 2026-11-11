@@ -51,6 +51,38 @@ class PersistentShell(
     @Volatile
     private var pendingCallback: CommandCallback? = null
 
+    /**
+     * [GH#358] Channel generation. Bumped on every spawn / timeout reset / stop.
+     *
+     * 中文：旧 reader 线程在 reset 后仍可能活着，并把旧命令的字节投递到新命令的
+     * pendingCallback（新 framer 之前没有 BEGIN 就能收下这些字节），或者把新
+     * 回调当成自己进程的“shell died”结束掉。generation 让 reader 只能投递给
+     * 同一代创建的回调：跨代字节一律丢弃，跨代完成一律跳过。
+     */
+    private val channelGeneration = java.util.concurrent.atomic.AtomicLong(0L)
+
+    /**
+     * [GH#358] True when the LAST command was stopped by THIS shell's watchdog.
+     *
+     * 中文：`exit 124` 是 timeout 工具的通用退出码，用户命令自己 exit 124 并不是
+     * 工具超时；执行入口只认这个内部标志（或超时分支写出的首行标记）来丢弃
+     * 通道 / 标 TIMEOUT，而不是裸看 124。由 [executeCommand] 清理、
+     * [consumeTimedOut] 消费。
+     */
+    @Volatile
+    private var lastCommandTimedOut = false
+
+    /**
+     * [GH#358] Read-and-clear the internal timeout verdict of the command that
+     * just returned. Must be called by the executor immediately after
+     * [executeCommand] so the next command cannot inherit a stale verdict.
+     */
+    fun consumeTimedOut(): Boolean {
+        val value = lastCommandTimedOut
+        lastCommandTimedOut = false
+        return value
+    }
+
     val isAlive: Boolean
         get() = process?.isAlive == true
 
@@ -62,6 +94,8 @@ class PersistentShell(
 
     private class CommandCallback(
         val marker: String,
+        /** [GH#358] Generation that created this callback; see [channelGeneration]. */
+        val generation: Long,
         val output: BoundedOutputBuffer = BoundedOutputBuffer(),
         val lineCallback: ((String) -> Unit)?,
         var onComplete: ((String, Int) -> Unit)? = null,
@@ -178,6 +212,10 @@ class PersistentShell(
         }
         lastExitCode = null
         utf8 = Utf8ChunkDecoder()
+        // [GH#358] New process = new reader generation. Any reader thread still
+        // draining the previous process is now stale and cannot deliver its
+        // bytes to callbacks created for this incarnation.
+        val generation = channelGeneration.incrementAndGet()
         // [T-offload-prelude-source-once] A brand-new bash has no offload
         // functions defined; force the next command to re-source the prelude.
         sourcedOffloadSignature = null
@@ -260,7 +298,7 @@ class PersistentShell(
 
         // Start background reader thread
         Thread({
-            readLoop(p)
+            readLoop(p, generation)
         }, "PersistentShell-reader").apply {
             isDaemon = true
             start()
@@ -359,8 +397,23 @@ class PersistentShell(
     /** One decoder per process so a UTF-8 sequence split across reads survives. */
     private var utf8 = Utf8ChunkDecoder()
 
-    private fun dispatchDecoded(text: String, endOfInput: Boolean = false) {
+    private fun dispatchDecoded(text: String, generation: Long, endOfInput: Boolean = false) {
+        // [GH#358] Cross-generation byte gate. After a timeout/reset/stop the old
+        // reader thread can still be draining the dead process; those bytes must
+        // never enter the NEW command's framer (they carry the OLD marker and
+        // command output). The generation is captured by the reader when its
+        // process was started, so a mismatch means "you are reading a shell the
+        // channel has already abandoned".
+        val currentGeneration = channelGeneration.get()
+        if (generation != currentGeneration) {
+            Log.d(
+                TAG,
+                "dropping stale reader bytes generation=$generation current=$currentGeneration",
+            )
+            return
+        }
         val cb = pendingCallback ?: return
+        if (cb.generation != generation) return
         if (text.isEmpty() && !endOfInput) return
         val step = cb.framer.push(text, endOfInput)
         if (step.output.isNotEmpty()) {
@@ -373,7 +426,7 @@ class PersistentShell(
         }
     }
 
-    private fun readLoop(p: Process) {
+    private fun readLoop(p: Process, generation: Long) {
         val decoder = utf8
         try {
             val buffer = ByteArray(4096)
@@ -383,24 +436,31 @@ class PersistentShell(
                 if (n < 0) break
                 val text = decoder.decode(buffer, n)
                 if (text.isNotEmpty()) appendTail(text)
-                dispatchDecoded(text)
+                dispatchDecoded(text, generation = generation)
             }
             val tail = decoder.finish()
             if (tail.isNotEmpty()) appendTail(tail)
-            dispatchDecoded(tail, endOfInput = true)
+            dispatchDecoded(tail, generation = generation, endOfInput = true)
         } catch (e: Exception) {
             Log.d(TAG, "Reader loop ended: ${e.message}")
         }
 
-        // Process exited. Only complete the callback this loop still owns —
-        // a timeout may already have cleared it and started a new shell.
-        val cb = pendingCallback
-        if (cb != null && pendingCallback === cb) {
-            cb.onComplete?.invoke(
-                cb.output.toString() + "\n[shell died before the command finished; later clauses did not run]",
-                -1,
-            )
-            if (pendingCallback === cb) pendingCallback = null
+        // Process exited. Only complete a callback that belongs to THIS reader's
+        // generation — a reset may have installed a callback for the replacement
+        // shell, and completing it here would end the new command with the old
+        // process's death notice ("shell died before the command finished").
+        val staleReader = generation != channelGeneration.get()
+        if (staleReader) {
+            Log.d(TAG, "stale reader for generation=$generation ended; not touching pending state")
+        } else {
+            val cb = pendingCallback
+            if (cb != null && cb.generation == generation && pendingCallback === cb) {
+                cb.onComplete?.invoke(
+                    cb.output.toString() + "\n[shell died before the command finished; later clauses did not run]",
+                    -1,
+                )
+                if (pendingCallback === cb) pendingCallback = null
+            }
         }
 
         // [T-android-shell-death-diagnosability] Name the cause in the FILE
@@ -557,6 +617,9 @@ class PersistentShell(
         callerBudget: ProcessBudget? = null,
     ): Pair<String, Int> {
         ensureStarted()
+        // [GH#358] Each command starts with a clean verdict; only THIS command's
+        // watchdog branch (or resetAfterTimeout) may set it.
+        lastCommandTimedOut = false
 
         val writer = stdinWriter
         if (writer == null || !isAlive) {
@@ -618,6 +681,9 @@ class PersistentShell(
                 coroutineScope {
                 val cb = CommandCallback(
                     marker = marker,
+                    // [GH#358] Bind the callback to the current channel generation;
+                    // the reader validates it before delivering any bytes.
+                    generation = channelGeneration.get(),
                     lineCallback = lineCallback,
                 )
                 pendingCallback = cb
@@ -682,6 +748,12 @@ class PersistentShell(
                 // one exits. Leaving it alive makes the timeout a no-op and lets
                 // the old marker/output land on the next command.
                 Log.w(TAG, "command timed out after ${armed / 1000}s; killing shell tree")
+                // [GH#358] Set the internal verdict BEFORE the reset clears the
+                // callback: callers must distinguish this real watchdog timeout
+                // from a user command that merely exited 124. The marker shown to
+                // the model stays the same; the flag is what drives channel
+                // discard and the tool's TIMEOUT status.
+                lastCommandTimedOut = true
                 // [GH#358] Reset the channel, not just the process: the reader
                 // thread may still hold a pending callback, stdin may still be
                 // buffered, and a half-started replacement must not make
@@ -776,10 +848,18 @@ class PersistentShell(
      *    offload wrapper functions; force the next command to re-source them.
      *  - [lastExitCode] — recorded as 124 so a dead-channel report names the
      *    timeout instead of an unrelated earlier exit.
+     *  - [channelGeneration] — bumped FIRST, so any reader still draining the
+     *    killed process is stale and cannot feed its bytes to the next command's
+     *    callback or complete it as "shell died" ([GH#358] reader race).
      *
      * Idempotent and safe to call after [stop].
      */
     fun resetAfterTimeout() {
+        // [GH#358] Invalidate the old reader BEFORE clearing pendingCallback: a
+        // reader that already passed its generation check is still stopped from
+        // touching the next command's state because the check is re-read at
+        // dispatch time.
+        channelGeneration.incrementAndGet()
         pendingCallback = null
         runCatching { stdinWriter?.close() }
         stdinWriter = null
@@ -788,10 +868,16 @@ class PersistentShell(
         isStarting.set(false)
         sourcedOffloadSignature = null
         lastExitCode = 124
+        // [GH#358] Internal verdict for the executor; consumeTimedOut() clears it.
+        // Kept after the generation bump so a caller that reads it right after
+        // executeCommand() returns sees "true", while the next executeCommand()
+        // starts by clearing it.
+        lastCommandTimedOut = true
         com.openminis.app.logging.AppLogger.warning(
             TAG,
             "[GH#358] shell channel reset after timeout: pendingCallback=null " +
-                "stdinWriter=null process=null isStarting=false sourcedOffload=nil exit=124",
+                "stdinWriter=null process=null isStarting=false sourcedOffload=nil exit=124 " +
+                "generation=${channelGeneration.get()}",
         )
     }
 
@@ -811,6 +897,10 @@ class PersistentShell(
     fun stop() {
         val p = process
         val cb = pendingCallback
+        // [GH#358] Invalidate this incarnation's reader before completing the
+        // callback: a reader that is still draining must not race the "stopped"
+        // completion or deliver its remaining bytes to a later callback.
+        channelGeneration.incrementAndGet()
         // 1. Complete the pending command so the caller's coroutine resumes
         //    immediately — the user-visible "stopped" feedback.
         if (cb != null && pendingCallback === cb) {

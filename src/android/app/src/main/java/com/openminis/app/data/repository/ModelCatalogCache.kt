@@ -230,7 +230,10 @@ internal class ModelCatalogCache(
                     // completion endpoint differs.
                     ProviderType.openAI, ProviderType.openAIResponses ->
                         OpenAIModelsApi.fetchModels(apiKey, baseURL, context = context, forceRefresh = liveForce, customUserAgent = instance.customUserAgent, cacheScope = instance.id, extraHeaders = userHeaders)
-                    ProviderType.openRouter -> OpenRouterModelsApi.fetchModels(apiKey, context = context, forceRefresh = liveForce, cacheScope = instance.id)
+                    // [GH#221] openRouter /models used to drop userHeaders while
+                    // the other three families passed them — a relay that gates
+                    // the model list on a custom header refreshed empty here.
+                    ProviderType.openRouter -> OpenRouterModelsApi.fetchModels(apiKey, context = context, forceRefresh = liveForce, cacheScope = instance.id, extraHeaders = userHeaders)
                     // [T-provider-dynamic-catalog-reconcile] xAI: fetch the live
                     // catalog, fall back to the built-in list.
                     //

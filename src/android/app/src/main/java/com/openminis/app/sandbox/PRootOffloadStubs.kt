@@ -20,11 +20,13 @@ private const val TAG = "PRootKernel"
  * Create a stub executable inside the rootfs for every registered
  * native_offload handler.
  *
- * [OpenMinis#439 / #440] In the degraded state (server could not bind — app
- * clone / second user) NO stub may remain on PATH: the stub body is `exit 0`,
- * so without the proot interception every handler command would become a
- * silent empty success instead of "command not found". Passing an empty set
- * through the same path also deletes stale stubs by their content signature.
+ * [OpenMinis#439 / #440] In the degraded state (server could not bind for any
+ * reason — a per-process socket makes the old clone/second-user collision
+ * disappear, so this is now a defensive path) NO stub may remain on PATH: the
+ * stub body is `exit 0`, so without the proot interception every handler
+ * command would become a silent empty success instead of "command not found".
+ * Passing an empty set through the same path also deletes stale stubs by their
+ * content signature.
  */
 internal fun installOffloadHandlerStubs(rootfsDir: File) {
     val binDir = File(rootfsDir, "usr/local/bin").also { it.mkdirs() }

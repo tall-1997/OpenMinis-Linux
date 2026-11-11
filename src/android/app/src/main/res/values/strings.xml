@@ -1323,6 +1323,9 @@
     <string name="provider_detail_custom_headers_footer">One “Name: value” per line. Applied to chat, /models and Responses requests for this provider only. Host, Content-Length and Connection are managed by the HTTP client and cannot be overridden.</string>
     <string name="provider_detail_custom_headers_placeholder">X-Custom-Header: value</string>
     <string name="provider_detail_save_headers">Save Headers</string>
+    <string name="provider_detail_opencode_session_header">OpenCode session header</string>
+    <string name="provider_detail_opencode_session_toggle">Send x-opencode-session</string>
+    <string name="provider_detail_opencode_session_footer">Off by default. When on, every chat request to this custom endpoint carries a stable per-conversation ID (x-opencode-session) so OpenCode-compatible relays can route and cache it. Only enable it for a gateway you trust: the ID identifies the conversation across turns.</string>
     <string name="provider_detail_save_url_settings">Save URL Settings</string>
     <string name="provider_detail_api_format">API Format</string>
     <string name="provider_detail_api_format_footer_chat">Standard /v1/chat/completions format. Compatible with most OpenAI-compatible services.</string>
@@ -2105,6 +2108,12 @@
     <string name="lifecycle_hooks_command_hint">One command line. A script path is usually best, e.g. bash /var/minis/hooks/on-response.sh. Leave empty to remove the hook.</string>
     <string name="lifecycle_hooks_help_header">Environment &amp; caveats</string>
     <string name="lifecycle_hooks_help_body">Each script receives MINIS_HOOK_EVENT, MINIS_HOOK_SESSION_ID and MINIS_HOOK_DETAIL. Scripts are one-shot PRoot processes: /proc of other commands is not visible across invocations and flock is unreliable, so use files for cross-run state. OnResponse fires once per completed agent reply; OnSessionEnd fires when the chat is deleted.</string>
+    <!-- [GH#511] sandbox boot hook master switch (agent-writable /var/minis/boot.sh). -->
+    <string name="boot_hook_section">Boot hook</string>
+    <string name="boot_hook_enable">Run /var/minis/boot.sh at startup</string>
+    <string name="boot_hook_enable_sub">Executes in the sandbox after the Linux rootfs boots</string>
+    <string name="boot_hook_footer">Off by default. This path is inside the writable sandbox, so any shell-capable agent can replace the script — enabling this lets such a file run silently on every launch. The switch is checked again immediately before execution, and the script\'s first-seen time plus size/mtime changes are written to the app log. Takes effect at the next launch.</string>
+    <string name="boot_hook_last_status">Last run</string>
     <string name="system_permissions_a11y_oem_footer">%1$s may show \"this service has failed\" and stop the accessibility service in the background. Whitelist autostart and remove the battery restriction so it stays connected.</string>
     <string name="system_permissions_a11y_oem_autostart">Add to autostart whitelist</string>
     <string name="system_permissions_a11y_oem_autostart_sub">Open the autostart manager and enable Minis Ultra</string>

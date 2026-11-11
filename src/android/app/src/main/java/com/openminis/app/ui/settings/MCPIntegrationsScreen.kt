@@ -623,8 +623,8 @@ private fun MCPFormTab(
                 DialogTextField(
                     value = oauthClientSecret,
                     onValueChange = { oauthClientSecret = it },
-                    placeholder = stringResource(R.string.mcp_form_oauth_client_secret_placeholder),
-                    singleLine = true,
+                    placeholder = stringResource(R.string.mcp_form_oauth_client_secret_placeholder), singleLine = true,
+                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(), // [GH#285] secret masked like provider keys
                 )
                 FieldLabel(stringResource(R.string.mcp_form_oauth_auth_endpoint))
                 DialogTextField(

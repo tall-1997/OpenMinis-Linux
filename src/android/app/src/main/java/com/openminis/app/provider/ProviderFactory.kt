@@ -6,6 +6,7 @@ import com.openminis.app.data.model.LLMModel
 import com.openminis.app.data.model.ProviderCredential
 import com.openminis.app.data.model.ProviderInstance
 import com.openminis.app.data.model.ProviderType
+import com.openminis.app.network.AppTrustStore
 import com.openminis.app.network.ConnectionWarmup
 import com.openminis.app.provider.anthropic.AnthropicProvider
 import com.openminis.app.provider.gemini.GeminiProvider
@@ -22,8 +23,10 @@ object ProviderFactory {
      * was up to 14 fresh clients per turn, every turn. The memo keys on
      * everything that shapes the client: instance identity + full instance
      * state (data-class hashCode covers baseURL/UA/azure/responses flags),
-     * resolved model state, and a fingerprint of the credential so a rotated
-     * OAuth token yields a fresh provider. Config writes call [invalidateAll]
+     * resolved model state, a fingerprint of the credential so a rotated
+     * OAuth token yields a fresh provider, the user-header snapshot, and
+     * [AppTrustStore.generation] so a CA imported/removed in Settings takes
+     * effect without a restart. Config writes call [invalidateAll]
      * via ProviderRepository.
      *
      * [T-provider-factory-lru] Eviction is LRU-by-last-access, not a full
@@ -61,9 +64,14 @@ object ProviderFactory {
         // memo key 带上 header 指纹：保存后内容一变就是新 key，下一次发送
         // 重建 provider；内容相同的旧缓存继续复用。
         val userHeaders = ProviderHeaderStore.headersFor(instance.id)
+        // [GH#258][GH#287] 用户 CA 的 generation 必须进 memo key：TLS socket
+        // factory 在 provider 构造时就固化进 OkHttpClient（构造函数里 build），
+        // 只清配置缓存不重建 provider 的话，导入/删除 CA 后仍会复用旧信任链，
+        // 直到进程重启。generation 变化 → 新 key → 下一次 create 重建 client；
+        // Settings 的导入/删除入口另外调用 invalidateAll() 立即丢弃旧条目。
         val key = instance.id + "|" + model.hashCode() + "|" +
             ProviderKeyGate.fingerprint(apiKey) + "|" + instance.hashCode() +
-            "|h" + userHeaders.hashCode()
+            "|h" + userHeaders.hashCode() + "|ca" + AppTrustStore.generation
         cache[key]?.let { return it }
         val genAtEntry = generation.get()
         val built = createUncached(instance, apiKey, model, context, userHeaders)

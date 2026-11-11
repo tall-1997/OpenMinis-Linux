@@ -18,6 +18,9 @@ package com.openminis.app.data.model
  * at add-time, (2) route voice REQUESTS to the right vendor adapter in
  * VoiceProviderFactory. They never classify an instance as "voice-only" —
  * voice visibility is per-model-modality (shadow view over audio entries).
+ * [GH#520] The Alibaba template is the one exception: its match goes through
+ * [BailianEndpoint.matches] so template seeding and request routing can never
+ * disagree about `*.maas.aliyuncs.com` hosts (see [matchesBaseURL]).
  *
  * Model ids / display names / base URLs are kept byte-identical to iOS so a
  * config exported on one platform imports losslessly on the other.
@@ -37,11 +40,31 @@ data class VoiceProviderTemplate(
 ) {
     enum class Capability { TTS, ASR, BOTH }
 
+    /**
+     * [GH#520] Whether this template owns [baseURL] (already lowercased).
+     *
+     * The Alibaba/Bailian template delegates to [BailianEndpoint.matches]
+     * instead of testing its `baseURLMarkers` substring: the rest of the voice
+     * stack (`VoiceProviderFactory`, `VendorMedia`, `OpenAIProvider`) already
+     * classifies Bailian through that helper, and a substring match disagreed
+     * with it for pseudo-hosts — `https://relay.example/maas.aliyuncs.com`
+     * seeded Alibaba ASR/TTS models here while the request router treated the
+     * instance as generic OpenAI-compatible, so those voice calls 404'd.
+     * Every other vendor keeps the historical marker semantics (their markers
+     * are long host fragments and users also type scheme-less bases).
+     */
+    internal fun matchesBaseURL(baseURL: String): Boolean =
+        if (id == ALIBABA_TEMPLATE_ID) BailianEndpoint.matches(baseURL)
+        else baseURLMarkers.any { baseURL.contains(it) }
+
     companion object {
+        /** [GH#520] Template id whose match rule is shared with the request router. */
+        private const val ALIBABA_TEMPLATE_ID = "alibaba"
+
         /** The template whose base-URL markers match [baseURL], if any. */
         fun template(forBaseURL: String?): VoiceProviderTemplate? {
             val base = forBaseURL?.lowercase()?.takeIf { it.isNotEmpty() } ?: return null
-            return all.firstOrNull { tpl -> tpl.baseURLMarkers.any { base.contains(it) } }
+            return all.firstOrNull { tpl -> tpl.matchesBaseURL(base) }
         }
 
         /** Build the seed ModelEntry list for an instance matching a template. */
@@ -170,9 +193,12 @@ data class VoiceProviderTemplate(
                 baseURL = "https://dashscope.aliyuncs.com/compatible-mode",
                 appendV1 = true,
                 capability = Capability.BOTH,
-                // [GH#520] "maas.aliyuncs" is Bailian's per-workspace host
-                // family. Without it the template lookup misses, no ASR/TTS
-                // seed models are created, and the voice picker is empty.
+                // [GH#520] Kept for cross-platform parity/documentation only:
+                // [matchesBaseURL] routes THIS template through
+                // BailianEndpoint.matches, which accepts both the legacy
+                // "dashscope" substring and the newer per-workspace
+                // `*.maas.aliyuncs.com` host family while rejecting the same
+                // strings when they appear in a path (pseudo-host).
                 baseURLMarkers = listOf("dashscope", "maas.aliyuncs"),
                 mockModels = listOf(
                     asr("paraformer-realtime-v2", "Paraformer Realtime v2", "alibaba"),

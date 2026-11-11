@@ -17,7 +17,10 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 object OpenRouterModelsApi {
-    private val client = SharedHttpClients.default
+    // [GH#258][GH#287] getter, not a captured val: the shared client is now
+    // generation-keyed, so a CA imported after this object initialised must be
+    // picked up on the next fetch.
+    private val client get() = SharedHttpClients.default
     private val cache = ProviderModelsCache("openrouter")
 
     /**
@@ -36,6 +39,10 @@ object OpenRouterModelsApi {
         context: Context? = null,
         forceRefresh: Boolean = false,
         cacheScope: String = "",
+        // [GH#221] 用户自定义请求头（同实例 KV）。OpenRouter 的 relay 常把
+        // /models 也挡在自定义头后面；只给聊天请求注入会让模型列表永远刷不出来。
+        // 与 OpenAI / Anthropic / Gemini 三个 models API 保持同一契约。
+        extraHeaders: Map<String, String> = emptyMap(),
     ): List<LLMModel> = withContext(Dispatchers.IO) {
         val cacheKey = ModelListFetchIsolation.cacheKey(apiKey, cacheScope)
         if (context != null && !forceRefresh) {
@@ -49,6 +56,8 @@ object OpenRouterModelsApi {
                 .header("HTTP-Referer", "https://github.com/OpenMinis/OpenMinis")
                 .header("X-Title", "Minis App")
                 .applyUserAgentOverride(null)
+                // [GH#221] 用户自定义请求头。
+                .apply { for ((k, v) in extraHeaders) header(k, v) }
                 .noStoreIf(forceRefresh)
                 .build()
         }

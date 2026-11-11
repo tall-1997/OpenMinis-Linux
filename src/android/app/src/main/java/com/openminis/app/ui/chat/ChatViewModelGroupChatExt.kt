@@ -16,6 +16,7 @@ import com.openminis.app.tools.AgentTools
 import com.openminis.app.tools.DiscussionGraph
 import com.openminis.app.tools.GroupChat
 import com.openminis.app.tools.SubAgentKind
+import com.openminis.app.tools.ToolCallPreflight
 import com.openminis.app.tools.ToolExecutionResult
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -412,8 +413,10 @@ private suspend fun ChatViewModel.speakVisible(
 ): String {
     if (groupChatCloseRequested && allowPass) return ""
     // [T-routing-strategy-x] Group-level first-token budget, same resolver as the main agent loop.
-    val groupFirstTokenMs = GroupRoutingState.firstTokenOverrideMs(
-        providerRepository, _selectedGroupId.value,
+    // [GH#521] resolve (not the bare override) so the thinking-model default is
+    // shared with the main loop instead of being re-derived here.
+    val groupFirstTokenMs = GroupRoutingState.resolveFirstEventTimeoutMs(
+        providerRepository, _selectedGroupId.value, thinkingLevel.isEnabled,
     )
     // [group-chat-debate] 排队可视化：外部预建的“排队中”气泡可传入复用，轮到该成员时同一气泡平滑切换到思考态。
     val id = bubbleId ?: UUID.randomUUID().toString()
@@ -515,6 +518,14 @@ internal suspend fun ChatViewModel.speakModel(
         val textSb = StringBuilder()
         val thinking = StringBuilder()
         val calls = mutableListOf<Triple<String, String, JSONObject>>()
+        // [GH#61/#83/#146] Keep the unparsed argument tail per call so the shared
+        // preflight can repair it (the provider substitutes `{}` when parsing
+        // failed; executing that is the silent-corruption bug #61 reported).
+        val callRawArgs = mutableMapOf<String, String>()
+        val callDeltaTails = mutableMapOf<String, String>()
+        // [T-truncated-tool-call-reject][GH#119] Finish reason for THIS round;
+        // shared preflight refuses every call of a length-truncated turn.
+        var roundFinishReason: String? = null
         var lastStatusAt = 0L
         // [T-stream-stall-watchdog] Same two-phase bound as the main agent loop: a speaker
         // whose stream goes quiet mid-sentence must not wedge the round for a read timeout.
@@ -531,6 +542,12 @@ internal suspend fun ChatViewModel.speakModel(
         ).streamStallWatchdog(
             firstEventTimeoutMs,
             idleTimeoutMs = firstEventTimeoutMs * 2,
+            // [GH#521][#188/#199] Headers can arrive and then the speaker goes
+            // silent before its first token; without this phase the only bound
+            // was the 2× idle window and a stalled relay looked healthy.
+            firstContentTimeoutMs = firstEventTimeoutMs,
+            firstContentReason = "group-chat stream connected but no first token " +
+                "within ${firstEventTimeoutMs / 1000}s",
         ).collect { chunk ->
             when (chunk) {
                 is LLMStreamChunk.Started -> onStatus(
@@ -550,10 +567,13 @@ internal suspend fun ChatViewModel.speakModel(
                 }
                 is LLMStreamChunk.Text -> textSb.append(chunk.text)
                 is LLMStreamChunk.ToolUseStart -> onStatus(toolStatus(chunk.id, chunk.name, ToolBlockStatus.RUNNING, ""))
+                is LLMStreamChunk.ToolInputDelta -> callDeltaTails[chunk.id] = chunk.accumulated
                 is LLMStreamChunk.ToolCallComplete -> {
                     calls += Triple(chunk.id, chunk.name, chunk.args)
+                    chunk.rawArgs?.let { callRawArgs[chunk.id] = it }
                     onStatus(toolStatus(chunk.id, chunk.name, ToolBlockStatus.RUNNING, chunk.args.toString()))
                 }
+                is LLMStreamChunk.Finished -> roundFinishReason = chunk.stopReason
                 else -> Unit
             }
         }
@@ -578,13 +598,36 @@ internal suspend fun ChatViewModel.speakModel(
         val results = mutableListOf<AgentContentPart>()
         for ((callId, name, args) in calls) {
             onStatus(toolStatus(callId, name, ToolBlockStatus.RUNNING, args.toString()))
-            val denied = DiscussionGraph.denyExecution(name, args.toString())
+            // [GH#61/#83/#146][GH#119] Same shared preflight as the main loop and
+            // sub-agents. Group chat used to `executeTool(args.toString())`
+            // unconditionally, so an unparseable/truncated argument stream became
+            // an invisible `{}` call here while the main loop refused it.
+            // 中文：群聊/主管通道与主循环共用参数流 preflight，不再直接执行原始 args。
+            val preflight = ToolCallPreflight.finalize(
+                toolName = name,
+                args = args,
+                rawArgumentTail = callRawArgs[callId] ?: callDeltaTails[callId],
+                advertisedTools = tools,
+                turnFinishReason = roundFinishReason,
+            )
+            if (preflight is ToolCallPreflight.Outcome.Rejected) {
+                // [GH#61/#83/#146] Mark the call FAILED on the speaker bubble and
+                // return the model-visible refusal; nothing executes.
+                onStatus(toolStatus(callId, name, ToolBlockStatus.FAILED, preflight.uiMessage))
+                results += AgentContentPart.ToolResult(
+                    callId, name, preflight.modelMessage, isError = true,
+                )
+                continue
+            }
+            val argsJson = (preflight as ToolCallPreflight.Outcome.Ready).argsStr
+            onStatus(toolStatus(callId, name, ToolBlockStatus.RUNNING, argsJson))
+            val denied = DiscussionGraph.denyExecution(name, argsJson)
             val result = if (denied != null) {
                 ToolExecutionResult(denied, false)
             } else if (toolGate != null) {
-                toolGate.withLock { executeTool(name, args.toString(), "") }
+                toolGate.withLock { executeTool(name, argsJson, "") }
             } else {
-                executeTool(name, args.toString(), "")
+                executeTool(name, argsJson, "")
             }
             results += AgentContentPart.ToolResult(callId, name, result.output, isError = !result.success)
         }

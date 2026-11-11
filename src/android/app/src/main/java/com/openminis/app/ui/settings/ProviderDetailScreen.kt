@@ -123,13 +123,6 @@ fun ProviderDetailScreen(
     // [T-provider-custom-user-agent] Per-provider UA override input. Only the
     // OpenAI-/Anthropic-compat custom-base section surfaces it (see gate below).
     var customUserAgent by remember { mutableStateOf(instance.customUserAgent ?: "") }
-    // [GH#221] Per-provider custom request headers, one "Name: value" per line.
-    // Stored OUTSIDE ProviderInstance (Room migration is owned elsewhere); see
-    // ProviderHeaderStore.
-    var headersText by remember(instanceId) {
-        mutableStateOf(com.openminis.app.provider.ProviderHeaderStore.rawTextFor(instanceId))
-    }
-    var headersError by remember { mutableStateOf<String?>(null) }
 
     val entries = providerRepository.entriesFor(instanceId)
     var isRefreshing by remember { mutableStateOf(false) }
@@ -364,52 +357,12 @@ fun ProviderDetailScreen(
         // ─── Custom Request Headers [GH#221] ────────────────────────
         // 独立于 Room 的 per-instance KV：保存后 ProviderFactory 的 memo key
         // 变化，下一次请求即生效（聊天 + /models + Responses / OAuth 路径）。
-        SettingsSection(
-            header = stringResource(R.string.provider_detail_custom_headers),
-            footer = stringResource(R.string.provider_detail_custom_headers_footer),
-        ) {
-            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                SectionTextField(
-                    value = headersText,
-                    onValueChange = {
-                        headersText = it
-                        headersError = null
-                    },
-                    singleLine = false,
-                    maxLines = 8,
-                    placeholder = stringResource(R.string.provider_detail_custom_headers_placeholder),
-                    isError = headersError != null,
-                    fieldModifier = Modifier.bringIntoViewOnFocus(),
-                )
-                headersError?.let { message ->
-                    Text(
-                        text = message,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(top = 4.dp),
-                    )
-                }
-                MinisSmallTextButton(
-                    onClick = {
-                        val error = com.openminis.app.provider.ProviderHeaderStore
-                            .save(instance.id, headersText)
-                        headersError = error
-                        if (error == null) {
-                            headersText = com.openminis.app.provider.ProviderHeaderStore
-                                .rawTextFor(instance.id)
-                            AppLogger.info(
-                                TAG,
-                                "Saved custom headers for ${instance.id}: " +
-                                    "${com.openminis.app.provider.ProviderHeaderStore.headersFor(instance.id).size} header(s)",
-                            )
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(stringResource(R.string.provider_detail_save_headers))
-                }
-            }
-        }
+        ProviderHeaderSection(instance.id)
+
+        // ─── OpenCode session header [GH#347] ───────────────────────
+        // 只有自定义 base 才有意义：官方端点按 host 自动带，无需开关；
+        // 默认关闭，用户显式信任该网关后才发稳定会话 ID。
+        OpenCodeSessionSection(instance.id, instance.customBaseURL)
 
         // ─── API Format (OpenAI API-key only) ───────────────────────
         if (instance.providerType == ProviderType.openAI &&

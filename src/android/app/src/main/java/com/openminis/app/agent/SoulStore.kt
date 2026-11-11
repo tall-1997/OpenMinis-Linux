@@ -58,6 +58,12 @@ data class SoulMetadata(
      * never serializes frontmatter wholesale, so even a ~20 KB data URI costs
      * zero tokens; and SOUL.md is already synced as text and copied by the
      * memory backup, so a sibling PNG would silently not be backed up.
+     *
+     * [GH#299] The inline form is now only a LEGACY input. On first read /
+     * save, [SoulIconMigration] rewrites it to a `file:soul-icons/soul.png`
+     * reference and moves the bytes into `filesDir`, so a hand-edited 85 KB
+     * data URI stops riding along in every SOUL.md read, sync and backup.
+     * `file:` values are accepted anywhere a data URI is.
      */
     val icon: String,
     val style: String,
@@ -469,12 +475,17 @@ lang: "auto"
      * Read + parse the current SOUL.md. Returns null when the file is
      * missing or unreadable; an empty body parses to default-meta with
      * empty body and callers may treat that as "fall back to default".
+     *
+     * [GH#299] A legacy inline image icon is migrated to a `file:` reference
+     * and SOUL.md is rewritten once, so every reader (prompt builder, Settings,
+     * minis-config, session memory) sees the small form from then on.
      */
     fun load(context: Context): SoulFile? {
         val file = fileLocation(context)
         if (!file.exists()) return null
         return try {
-            SoulMDParser.parse(file.readText())
+            val parsed = SoulMDParser.parse(file.readText())
+            SoulIconMigration.migrateOnRead(context, parsed)
         } catch (t: Throwable) {
             AppLogger.warning(TAG, "SOUL.md load failed: ${t.message}")
             null
@@ -484,7 +495,13 @@ lang: "auto"
     /** Atomic write through a `.tmp` sibling, then rename. */
     fun save(context: Context, file: SoulFile) {
         val target = fileLocation(context)
-        val text = SoulMDParser.serialize(file)
+        // [GH#299] Write-side interception: a personality body carrying an
+        // inline base64 image would otherwise be persisted and re-injected on
+        // every turn. Strip it here (all save callers — Settings, minis-config,
+        // persona library — go through this method) and migrate a legacy
+        // data-URI icon at the same time, so one file write settles both.
+        val prepared = SoulIconMigration.sanitizeForSave(context, file)
+        val text = SoulMDParser.serialize(prepared)
         // Unified atomic write: AtomicFileWrite adds the per-path lock,
         // short-write detection and post-write verify on top of the same
         // tmp+rename dance. Its copy-over fallback covers the old
@@ -494,7 +511,7 @@ lang: "auto"
         if (AtomicFileWrite.write(target, text, temp = File(target.parentFile, "${target.name}.tmp")) == null) {
             throw IOException("SOUL.md save failed for ${target.name}")
         }
-        _cachedMetadata.value = file.metadata
+        _cachedMetadata.value = prepared.metadata
     }
 
     /**
@@ -644,7 +661,9 @@ object SystemPromptBuilder {
             .trim()
             .ifEmpty { "Minis Ultra" }
 
-        val style = (file?.metadata?.style ?: "").trim()
+        val style = SoulIconMigration.stripInlineImageDataUris(
+            (file?.metadata?.style ?: "").trim(),
+        )
         val resolved = PersonaPromptLibrary.resolve(context, providerInstanceId, sessionId)
 
         val identity = IDENTITY_TEMPLATE.replace("{name}", name)
@@ -685,7 +704,13 @@ object SystemPromptBuilder {
 
         // [persona-unlimited] No length cap, no truncation — inject the body
         // verbatim. isOverLimit() is a pass-through Ok now.
-        val personalityRaw = trimmed
+        //
+        // [GH#299] …except inline image payloads: an 85 KB base64 screenshot
+        // pasted into the personality body is injected into EVERY turn's system
+        // prompt. Replace it with a short placeholder before scrubbing; the
+        // write path applies the same rule, so this is also just defence in
+        // depth for files written by an older build.
+        val personalityRaw = SoulIconMigration.stripInlineImageDataUris(trimmed)
 
         val personality = scrubInjections(personalityRaw)
         val sourceLabel = resolved.fileName.ifBlank { PersonaPromptLogic.BUILTIN_FILE_NAME }

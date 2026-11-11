@@ -166,8 +166,8 @@
     "src/android/app/src/main/java/com/openminis/app/ui/settings/ModelGroupsScreen.kt": 975,
     "src/android/app/src/main/java/com/openminis/app/ui/settings/ProviderDetailScreen.kt": 1170,
     "src/android/app/src/main/java/com/openminis/app/ui/settings/SkillsManagementScreen.kt": 1121,
-    "src/android/app/src/main/java/com/openminis/app/ui/settings/SoulSettingsScreen.kt": 926,
+    "src/android/app/src/main/java/com/openminis/app/ui/settings/SoulSettingsScreen.kt": 866,
     "src/android/app/src/main/java/com/openminis/app/ui/settings/backup/BackupAndRestoreScreen.kt": 1791,
-    "src/android/app/src/main/java/com/openminis/app/ui/settings/backup/BackupViewModel.kt": 1061
+    "src/android/app/src/main/java/com/openminis/app/ui/settings/backup/BackupViewModel.kt": 1045
   }
 }

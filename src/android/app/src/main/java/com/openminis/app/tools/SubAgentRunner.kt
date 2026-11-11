@@ -7,6 +7,7 @@ import com.openminis.app.data.model.LLMMessage
 import com.openminis.app.data.model.LLMStreamChunk
 import com.openminis.app.data.model.ThinkingLevel
 import com.openminis.app.provider.LLMProvider
+import com.openminis.app.provider.streamStallWatchdog
 import kotlinx.coroutines.CancellationException
 import org.json.JSONObject
 
@@ -92,11 +93,25 @@ object SubAgentRunner {
         // pointed at OpenCode Go 400s on every request without the session
         // header, so the parent's header channel must reach the child too.
         extraHeaders: Map<String, String> = emptyMap(),
+        // [GH#521/#188/#199] Same two-phase stream watchdog as the main agent
+        // loop. 0 = derive from thinkingLevel; callers pass the resolved
+        // routing budget (GroupRoutingState.resolveFirstEventTimeoutMs) so the
+        // sub-agent lane and the main loop agree on the first-token/headers
+        // windows. Without this the only bound was the transport's 600s read
+        // timeout — a stalled relay pinned a spawn card for ten minutes.
+        firstEventTimeoutMs: Long = 0L,
+        streamIdleTimeoutMs: Long = 0L,
     ): ToolExecutionResult {
         val briefed = SubAgentBrief.wrap(userPrompt, kind = kind, role = role, writePaths = writePaths)
         // Defensive: duplicate tool names reach providers as duplicate schemas
         // and some of them reject the payload outright. Keep first-seen order.
         val dedupedTools = SubAgentKind.dedupeByName(tools)
+        // [GH#521] Default: 90s for reasoning models, 45s otherwise (the
+        // historical FirstEventWatchdog values). idle = 2× first token, same
+        // ratio as the main loop.
+        val firstTimeoutMs = firstEventTimeoutMs.takeIf { it > 0L }
+            ?: if (thinkingLevel.isEnabled) 90_000L else 45_000L
+        val idleTimeoutMs = streamIdleTimeoutMs.takeIf { it > 0L } ?: firstTimeoutMs * 2
         val history = mutableListOf(
             LLMMessage(role = LLMMessage.Role.USER, content = briefed),
         )
@@ -153,6 +168,16 @@ object SubAgentRunner {
                 val sendHistory = SubAgentHistoryCompactor.compact(history)
                 val textSb = StringBuilder()
                 val toolCalls = mutableListOf<Triple<String, String, JSONObject>>()
+                // [GH#61/#83/#146] The parsed `args` is `{}` when the provider
+                // could not parse the arguments; keep the exact raw tail and the
+                // last accumulated delta so the shared preflight can repair or
+                // refuse instead of executing the substituted empty object.
+                val toolRawArgs = mutableMapOf<String, String>()
+                val toolDeltaTails = mutableMapOf<String, String>()
+                // [T-truncated-tool-call-reject] Stream-level finish reason for
+                // THIS turn; shared preflight refuses every call of a turn cut
+                // by the output-token budget (same policy as the main loop).
+                var turnFinishReason: String? = null
                 provider.streamMessage(
                     messages = sendHistory,
                     systemPrompt = system,
@@ -164,6 +189,18 @@ object SubAgentRunner {
                     tools = dedupedTools,
                     thinkingLevel = thinkingLevel,
                     extraHeaders = extraHeaders,
+                ).streamStallWatchdog(
+                    // [T-stream-stall-watchdog][GH#521] Phase 1 (nothing yet),
+                    // phase 2 (mid-stream silence), plus the headers→first-token
+                    // phase the main loop uses. A sub-agent that goes quiet now
+                    // terminates at the watchdog budget instead of pinning the
+                    // lane on the transport's 600s read timeout; the failure is
+                    // reported through the normal lane-failure path.
+                    firstTimeoutMs = firstTimeoutMs,
+                    idleTimeoutMs = idleTimeoutMs,
+                    firstContentTimeoutMs = firstTimeoutMs,
+                    firstContentReason = "sub-agent stream connected but no first token " +
+                        "within ${firstTimeoutMs / 1000}s",
                 ).collect { chunk ->
                     when (chunk) {
                         is LLMStreamChunk.Text -> {
@@ -185,12 +222,18 @@ object SubAgentRunner {
                             runCatching { onUi(UiEvent.Phase("调用工具", chunk.name)) }
                             runCatching { onUi(UiEvent.ToolStart(chunk.id, chunk.name)) }
                         }
-                        is LLMStreamChunk.ToolInputDelta ->
+                        is LLMStreamChunk.ToolInputDelta -> {
+                            toolDeltaTails[chunk.id] = chunk.accumulated
                             runCatching { onUi(UiEvent.ToolArgs(chunk.id, "", chunk.accumulated)) }
+                        }
                         is LLMStreamChunk.ToolCallComplete -> {
                             toolCalls.add(Triple(chunk.id, chunk.name, chunk.args))
+                            // [GH#61/#83/#146] Non-null only when the provider
+                            // failed to parse the argument stream; keep the bytes.
+                            chunk.rawArgs?.let { toolRawArgs[chunk.id] = it }
                             runCatching { onUi(UiEvent.ToolArgs(chunk.id, chunk.name, chunk.args.toString())) }
                         }
+                        is LLMStreamChunk.Finished -> turnFinishReason = chunk.stopReason
                         is LLMStreamChunk.Usage -> {
                             // Shared token budget (Codex rollout_budget semantics,
                             // rewritten): usage is recorded even when it busts the
@@ -259,6 +302,37 @@ object SubAgentRunner {
                         )
                         continue
                     }
+                    // [GH#61/#83/#146][GH#119] The SAME preflight layer as the
+                    // main agent loop and group chat: repair the argument stream
+                    // with ToolJsonRepair, refuse an irreparable one (the
+                    // provider's `{}` substitute must NOT execute), refuse a
+                    // truncated write (all write tools, not just file_write) and
+                    // refuse every call of a length-truncated turn. Before this,
+                    // a sub-agent executed `chunk.args` verbatim — the exact
+                    // bypass #61 reported.
+                    // 中文：子代理不再绕过参数流 preflight；与主循环共用同一实现。
+                    val preflight = ToolCallPreflight.finalize(
+                        toolName = name,
+                        args = args,
+                        rawArgumentTail = toolRawArgs[id] ?: toolDeltaTails[id],
+                        advertisedTools = dedupedTools,
+                        turnFinishReason = turnFinishReason,
+                    )
+                    if (preflight is ToolCallPreflight.Outcome.Rejected) {
+                        runCatching { onStep(turn, "$name · blocked") }
+                        runCatching { onUi(UiEvent.ToolDone(id, name, false, preflight.modelMessage)) }
+                        timeline.append("- turn $turn: $name (blocked: invalid or truncated arguments)\n")
+                        resultParts.add(
+                            AgentContentPart.ToolResult(
+                                id = id,
+                                name = name,
+                                content = preflight.modelMessage,
+                                isError = true,
+                            ),
+                        )
+                        continue
+                    }
+                    val argsJson = (preflight as ToolCallPreflight.Outcome.Ready).argsStr
                     // [T-subagent-browser-readonly-actions] browser_use is
                     // allow-listed for read-only kinds, but its mutating
                     // actions are not read-only. Same shape as the shell gate.
@@ -280,7 +354,6 @@ object SubAgentRunner {
                             continue
                         }
                     }
-                    val argsJson = args.toString()
                     if (SubAgentKind.isReadOnly(kind) && name in setOf("shell_execute", "shell_exec", "env_exec")) {
                         val denied = SubAgentKind.readOnlyShellDenial(
                             runCatching { org.json.JSONObject(argsJson).optString("command") }.getOrDefault(""),

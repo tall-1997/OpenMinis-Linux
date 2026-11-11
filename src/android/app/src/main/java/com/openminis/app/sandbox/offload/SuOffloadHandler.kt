@@ -34,12 +34,41 @@ class SuOffloadHandler : NativeOffloadHandler {
             SuCommand.Kind.STATUS -> status()
             SuCommand.Kind.INVALID -> NativeOffloadResult(2, "android-su: missing command. Try `su -c id` or `android-su --help`.\n")
             SuCommand.Kind.EXEC -> {
-                if (!OffloadGate.allow("su_cli", "android-su", request)) {
+                // [GH#539] 与 a11y / shizuku handler 对齐：
+                //  1) 先查权限注册表 —— checkPermission() 对未知工具默认 BYPASS，
+                //     不先查会让“本 build 没注册 su_cli”静默放行；
+                //  2) 拒绝文案走 OffloadDenial.permissionDenied 的三态文案，
+                //     明确指出是系统层（宿主 su / Shizuku）还是 Agent 权限层拒绝。
+                val registered =
+                    com.openminis.app.offload.OffloadPermissionManager.isRegistered("su_cli")
+                if (!registered || !OffloadGate.allow("su_cli", "android-su", request)) {
+                    val suFound = SuCommand.findSuBinary() != null
+                    val shizukuState = ShizukuManager.snapshot.value.state
+                    val layer = when {
+                        suFound || shizukuState == ShizukuManager.State.READY ->
+                            OffloadDenial.SystemLayer.RUNNING
+                        shizukuState == ShizukuManager.State.NEED_PERMISSION ->
+                            OffloadDenial.SystemLayer.NOT_AUTHORIZED
+                        shizukuState == ShizukuManager.State.NOT_INSTALLED ->
+                            OffloadDenial.SystemLayer.NOT_INSTALLED
+                        else -> OffloadDenial.SystemLayer.NOT_RUNNING
+                    }
+                    val message = OffloadDenial.permissionDenied(
+                        toolName = "su_cli",
+                        displayName = "android-su",
+                        systemName = "The host superuser backend (Magisk/KernelSU su, Shizuku fallback)",
+                        systemState = layer,
+                        systemFix = "Install Magisk/KernelSU, or start and authorize Shizuku via adb or root.",
+                        settingsPath = "Settings → Permissions → Host su",
+                    )
+                    AppLogger.warning(TAG, "PERMISSION_DENIED: $message")
                     val body = JSONObject()
-                        .put("error", "permission_denied")
+                        .put("ok", false)
                         .put(
-                            "message",
-                            "Agent is not allowed to use android-su. Open Settings → Permissions → Host su to change.",
+                            "error",
+                            JSONObject()
+                                .put("code", "PERMISSION_DENIED")
+                                .put("message", message),
                         )
                         .toString()
                     return NativeOffloadResult(126, body + "\n")

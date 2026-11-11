@@ -22,7 +22,10 @@ import org.json.JSONObject
 
 object OpenAIModelsApi {
     private const val TAG = "OpenAIModelsApi"
-    private val client = SharedHttpClients.default
+    // [GH#258][GH#287] getter, not a captured val: the shared client is now
+    // generation-keyed, so a CA imported after this object initialised must be
+    // picked up on the next fetch.
+    private val client get() = SharedHttpClients.default
     private val cache = ProviderModelsCache("openai")
 
     /**

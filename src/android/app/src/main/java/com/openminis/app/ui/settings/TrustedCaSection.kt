@@ -17,6 +17,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import com.openminis.app.R
 import com.openminis.app.network.AppTrustStore
+import com.openminis.app.provider.ProviderFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -51,7 +52,14 @@ fun TrustedCaSection() {
                         stream.readBytes().toString(Charsets.UTF_8)
                     } ?: return@runCatching null
                     AppTrustStore.init(context)
-                    AppTrustStore.importPem(pem)
+                    AppTrustStore.importPem(pem).also { result ->
+                        // [GH#258][GH#287] provider 的 memo key 已带
+                        // AppTrustStore.generation（新 key 不会命中旧 client），
+                        // 这里再主动清一次，让旧 provider/OkHttpClient 立刻被丢弃，
+                        // 而不是等 LRU 逐出或进程重启。导入前已发出的请求会自然失败，
+                        // 重试即走新信任链。
+                        if (result.imported > 0) ProviderFactory.invalidateAll()
+                    }
                 }.getOrNull()
             }
             certCount = AppTrustStore.list().size
@@ -106,7 +114,10 @@ fun TrustedCaSection() {
                 iconColor = MaterialTheme.colorScheme.error,
                 titleColor = MaterialTheme.colorScheme.error,
                 onClick = {
-                    AppTrustStore.clear()
+                    // [GH#258][GH#287] 删除 CA 同样要换掉旧 TLS 材料：清掉已缓存的
+                    // provider，否则删掉的信任锚仍会随旧 client 继续生效。
+                    val removed = AppTrustStore.clear()
+                    if (removed > 0) ProviderFactory.invalidateAll()
                     certCount = 0
                     status = context.getString(R.string.network_trusted_ca_removed)
                 },

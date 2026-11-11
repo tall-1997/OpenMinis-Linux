@@ -558,14 +558,20 @@ internal fun assembleDynamicTail(
  * [ChatViewModel.systemPromptStablePrefixLen], in the uncached dynamic tail.
  *
  * Pure and deliberately narrow: no marker (a provider-specific prompt) or a
- * blank/None prompt is returned unchanged, and only the first runtime-context
- * date is rewritten.
+ * blank/None prompt is returned unchanged, and only the runtime-context date
+ * is rewritten.
+ *
+ * [GH#563] The marker is searched with `lastIndexOf`, not `indexOf`. The
+ * runtime context is appended LAST (memory recall / task anchor come before
+ * it), so the last occurrence is the real one; an earlier occurrence can come
+ * from recalled memory, a task anchor or the SOUL body — the first-match
+ * version rewrote THAT date and left the actual runtime line stale.
  */
 internal fun refreshRuntimeContextDate(prompt: String?, dateStr: String): String? {
     val base = prompt ?: return null
     if (base.isEmpty() || dateStr.isBlank()) return prompt
     val marker = "- Current date: "
-    val markerAt = base.indexOf(marker)
+    val markerAt = base.lastIndexOf(marker)
     if (markerAt < 0) return prompt
     val valueStart = markerAt + marker.length
     val valueEnd = base.indexOf(' ', valueStart)

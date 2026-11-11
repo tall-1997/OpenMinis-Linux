@@ -59,4 +59,30 @@ class SystemPromptDateRefreshTest {
             refreshed,
         )
     }
+
+    /**
+     * [GH#563] Memory / task-anchor text is appended BEFORE the runtime
+     * context, so it can legitimately contain the same marker. The refresh
+     * must edit the LAST occurrence (the real runtime line) and leave the
+     * quoted memory untouched.
+     */
+    @Test
+    fun `a marker inside recalled memory is not the one refreshed`() {
+        val promptWithMemory = "STABLE-HEAD\n\n" +
+            "Recalled memory (quoted):\n" +
+            "- Current date: 2020-01-01 (UTC)\n" +
+            "Runtime context:\n" +
+            "- Current date: 2026-11-09 (Asia/Shanghai)\n" +
+            "- Device language: zh-CN"
+        val refreshed = refreshRuntimeContextDate(promptWithMemory, "2026-11-12")!!
+        assertEquals(
+            "STABLE-HEAD\n\n" +
+                "Recalled memory (quoted):\n" +
+                "- Current date: 2020-01-01 (UTC)\n" +
+                "Runtime context:\n" +
+                "- Current date: 2026-11-12 (Asia/Shanghai)\n" +
+                "- Device language: zh-CN",
+            refreshed,
+        )
+    }
 }

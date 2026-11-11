@@ -1935,7 +1935,25 @@ class ChatViewModel(
     @Volatile
     internal var stoppedRun: com.openminis.app.service.ActiveRun? = null
 
+    /**
+     * [GH#258][GH#287] [com.openminis.app.network.AppTrustStore.generation] at
+     * the moment [currentProvider] was last assigned.
+     *
+     * An OkHttpClient freezes its TLS socket factory at build time, and this
+     * field keeps ONE provider alive across turns, so invalidating
+     * ProviderFactory's memo alone is not enough for an open chat: the field
+     * would keep the old client until the model/session changed. The setter
+     * records the generation, and `rebuildProviderIfEdited()` rebuilds when it
+     * no longer matches (a CA was imported/removed in Settings).
+     */
+    @Volatile
+    internal var providerTrustGeneration: Int = -1
+
     internal var currentProvider: LLMProvider? = null
+        set(value) {
+            field = value
+            providerTrustGeneration = com.openminis.app.network.AppTrustStore.generation
+        }
     internal var currentModel: LLMModel? = null
 
     // [port-upstream-1.16][T-android-provider-edit-mid-session] Watch state

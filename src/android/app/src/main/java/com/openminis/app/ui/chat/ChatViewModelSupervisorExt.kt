@@ -385,6 +385,12 @@ private suspend fun ChatViewModel.runSupervisorSession(
         SupervisorUiHost.update(sessionId, SupervisorUiHost.Phase.EXECUTING, objective, workerRound)
         val bubbleId = "supervisor-worker-$sessionId-$workerRound"
         upsertGroupBubble(bubbleId, workerSpeaker, "", analyzing = true)
+        // [GH#521/#188/#199] Worker seat = nested SubAgentRunner; give it the same
+        // first-token/idle budget the main loop resolves so a stalled worker
+        // stream cannot hang the supervisor round on the 600s read timeout.
+        val workerFirstEventMs = com.openminis.app.data.GroupRoutingState.resolveFirstEventTimeoutMs(
+            providerRepository, _selectedGroupId.value, workerEntry.effectiveMaxThinkingLevel.isEnabled,
+        )
         val result = WritePathGuard.withPaths(writePaths) {
             SubAgentRunner.run(
                 provider = workerProvider,
@@ -414,6 +420,8 @@ private suspend fun ChatViewModel.runSupervisorSession(
                 thinkingLevel = workerEntry.effectiveMaxThinkingLevel,
                 // [GH#221] Worker seat speaks through its own provider instance.
                 extraHeaders = providerExtraHeaders(workerEntry.providerInstanceId),
+                firstEventTimeoutMs = workerFirstEventMs,
+                streamIdleTimeoutMs = workerFirstEventMs * 2,
             )
         }
         upsertGroupBubble(bubbleId, workerSpeaker, result.output, analyzing = false)

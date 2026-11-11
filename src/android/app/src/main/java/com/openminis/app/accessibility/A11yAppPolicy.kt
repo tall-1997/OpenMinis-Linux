@@ -44,6 +44,21 @@ object A11yAppPolicy {
     private const val KEY = "policy_json"
     private const val MAX_APPS = 500
 
+    /**
+     * [GH#114] android-a11y-cli subcommands that READ the screen or INJECT
+     * input, and therefore must pass the per-app policy gate before dispatch.
+     *
+     * `wait appear` and `notify watch/once` are gated too: the first literally
+     * waits for on-screen content and reports it, and the second observes
+     * window/notification events from the foreground app — both expose the
+     * same data the policy exists to protect. Diagnostics (`service`,
+     * `--version`) stay ungated.
+     */
+    val POLICY_GATED_SUBS: Set<String> = setOf(
+        "ui", "tap", "input", "scroll", "gesture", "dialog", "extract", "event",
+        "wait", "notify",
+    )
+
     /** 包名允许的字符集；同时挡住空格、路径分隔符与注入用的特殊字符。 */
     private val PACKAGE_RE = Regex("^[A-Za-z0-9_]+(\\.[A-Za-z0-9_]+)+$")
 
@@ -159,21 +174,48 @@ object A11yAppPolicy {
     /**
      * 判定当前前台应用。O(1) 权限检查 + 一次现有的 a11y 前台查询
      * （走 [AccessibilityQueryGuard]，失败返回 null → 限制模式下拦截）。
+     *
+     * [GH#114] 服务完全没连接时也 FAIL-CLOSED：旧代码为了“让更具体的
+     * SERVICE_NOT_RUNNING 文案负责”而直接放行，但限制模式下这等于让
+     * “服务挂掉 / 被 force-stop”成为绕过 allowlist 的后门。现在返回
+     * [Verdict.Blocked]，reason 明确说明是 AccessibilityService 未连接。
      */
     fun verdictForForeground(): Verdict {
         if (mode == Mode.OFF) return Verdict.Allowed
-        // No service at all: every a11y operation will fail with its own
-        // SERVICE_NOT_RUNNING message anyway, and that message is more
-        // actionable than "cannot determine the foreground app". Let it through
-        // so the existing recovery/permission path owns this state.
         val service = runCatching { MinisAccessibilityService.getInstance() }.getOrNull()
-            ?: return Verdict.Allowed
+            ?: return decideForForeground(
+                packageName = null,
+                serviceAvailable = false,
+            )
         val pkg = runCatching { service.foregroundPackage().first }.getOrNull()
+        return decideForForeground(packageName = pkg, serviceAvailable = true)
+    }
+
+    /**
+     * [GH#114] Foreground decision with an explicit "service connected?" input,
+     * split out so the fail-closed branch is unit-testable on the JVM. Pure
+     * apart from reading [mode] / [apps] / [ownPackage] defaults.
+     */
+    internal fun decideForForeground(
+        packageName: String?,
+        serviceAvailable: Boolean,
+        mode: Mode = this.mode,
+        apps: Set<String> = this.apps,
+    ): Verdict {
+        if (mode == Mode.OFF) return Verdict.Allowed
+        if (!serviceAvailable) {
+            return Verdict.Blocked(
+                packageName = null,
+                reason = "无法确认当前前台应用：AccessibilityService 未连接（服务未启用或已被系统停止）。" +
+                    "按应用清单已阻止本次操作；请先在 Settings → Accessibility 启用并连接服务。",
+            )
+        }
+        val pkg = packageName?.trim()?.lowercase().orEmpty()
         // 自己的界面永远放行（见 KDoc）。
-        if (!pkg.isNullOrBlank() && ownPackage.isNotEmpty() && pkg == ownPackage) {
+        if (pkg.isNotEmpty() && ownPackage.isNotEmpty() && pkg == ownPackage) {
             return Verdict.Allowed
         }
-        return decide(pkg)
+        return decide(pkg, mode, apps)
     }
 
     /** 给工具层用的错误文案：把判定结果转换成模型可读的拒绝原因。 */

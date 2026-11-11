@@ -382,6 +382,11 @@ internal suspend fun ChatViewModel.executeTool(
         com.openminis.app.tools.AskReasoningTool.NAME ->
             com.openminis.app.tools.AskReasoningTool.execute(argsJson) { sys, user -> oneShotAsk(sys, user) }
         com.openminis.app.tools.ExecuteCodeTool.NAME ->
+            // [GH#61/#83/#146] This nested dispatch is NOT a model tool-call
+            // stream: ExecuteCodeTool invokes it from inside the executed code
+            // with a programmatically built JSON string, so there is no raw
+            // argument tail to repair. Malformed JSON still fails closed inside
+            // executeTool's own parse sites — it can never silently become `{}`.
             com.openminis.app.tools.ExecuteCodeTool.execute(argsJson) { n, a ->
                 executeTool(n, a, toolId, toolBlocks, assistantId, currentText)
             }
@@ -517,9 +522,28 @@ internal suspend fun ChatViewModel.executeTool(
             activeSessionId, canonical, argsJson, result.output,
         )
     }
-    // [T-tool-output-policy] 统一出口：环境变量脱敏 + 超长输出降级为可检索文件。
+    // [T-tool-output-policy][GH#343] 统一出口：环境变量脱敏 + 超长输出降级为可检索文件。
+    // [GH#343] Pass context + session to the FULL apply() overload: the 2-arg
+    // form capped the body at ~10k WITHOUT a session, so the downstream spill in
+    // finalizePlannedCall always saw < LIMIT and the chat path never wrote a
+    // spill file. The decision now runs on the original output and the file is
+    // written into THIS session's workspace for every execution entry (main
+    // loop, sub-agent, group chat/supervisor).
+    // 中文：执行入口直接用会话感知的 apply；否则先被压到 10k，最终 spill 永远不触发。
     if (result.imageData == null) {
-        return result.copy(output = ToolOutputPolicy.apply(result.output, toolId))
+        return result.copy(
+            output = ToolOutputPolicy.apply(
+                output = result.output,
+                toolId = toolId,
+                context = context,
+                sessionId = activeSessionId,
+                toolName = canonical,
+                // [GH#343] A read-back of an existing spill file (file_read or
+                // shell cat/head/tail) answers from that file instead of
+                // re-spilling it.
+                sourcePath = com.openminis.app.tools.ToolOutputSpill.sourcePathForTool(canonical, argsJson),
+            ),
+        )
     }
     return result
 }

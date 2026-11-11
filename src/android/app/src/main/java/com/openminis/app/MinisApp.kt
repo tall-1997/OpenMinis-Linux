@@ -195,6 +195,10 @@ class MinisApp : Application(), ImageLoaderFactory {
         // [GH#114] Per-app accessibility allow/block list, read from the ui
         // tools which have no Activity context.
         com.openminis.app.accessibility.A11yAppPolicy.prime(this)
+        // [GH#298] Register the shipped DuckDuckGo backend once so the
+        // pluggable-backend extension point has a production registrant; the
+        // tool still prefers a user-selected keyed engine over this default.
+        com.openminis.app.tools.WebSearchBackendRegistry.ensureDefaultRegistered()
         // [GH#131] Lifecycle hook config (event → sandbox script), read from
         // ChatRepository without a Context.
         com.openminis.app.agent.lifecycle.LifecycleHooks.prime(this)

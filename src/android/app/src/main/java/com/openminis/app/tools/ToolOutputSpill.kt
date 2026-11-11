@@ -1,6 +1,8 @@
 package com.openminis.app.tools
 
 import android.content.Context
+import com.openminis.app.security.ToolAliases
+import org.json.JSONObject
 import java.io.File
 
 /**
@@ -65,42 +67,50 @@ object ToolOutputSpill {
         output: String,
         /**
          * [T-tool-output-offload-loop GH#343] For `file_read`, the guest path it
-         * read. When that path is already a spill file, the read-back must not
-         * spawn another spill (see [alreadySpilledPreview]).
+         * read; for a shell `cat/head/tail … tool-spill/…`, that spill path.
+         * When the source is already a spill file, the read-back must not spawn
+         * another spill (see [alreadySpilledPreview]).
          */
         sourcePath: String? = null,
     ): String {
-        if (output.length <= LIMIT) return output
-        // [T-tool-output-offload-loop GH#343] Never wrap a placeholder in
-        // another placeholder. This is the idempotency guard: any pass that
-        // sees an already-offloaded body (spill preview, trim stub) returns it
-        // verbatim, so repeated processing converges instead of growing a
-        // chain of files and headers.
-        if (isOffloadPlaceholder(output)) return output
-        // [T-tool-output-offload-loop GH#343] Reading a spill file back is the
-        // other half of the loop: the full text is still over LIMIT, so the
-        // naive path would write `<toolId>.txt` next to the file just read and
-        // hand the model yet another placeholder. Page through the existing
-        // file instead — the preview keeps the head/tail and says where the
-        // content already lives.
-        if (isSpillGuestPath(sourcePath)) {
-            return alreadySpilledPreview(toolName, sourcePath!!, output)
+        // [T-tool-output-offload-loop GH#343] The decision is a pure function so
+        // it is pinned by a JVM test, and it is applied to the ORIGINAL tool
+        // output — never to an already-capped preview (the old execution-entry
+        // pre-cap made every chat-path output < LIMIT here, so no spill file was
+        // ever written; see ChatViewModelExecuteToolExt).
+        return when (planFor(output, sessionId.isNotBlank(), sourcePath)) {
+            SpillPlan.PASSTHROUGH -> output
+            SpillPlan.ALREADY_SPILLED -> alreadySpilledPreview(toolName, sourcePath!!, output)
+            SpillPlan.CAPPED -> cappedPreview(toolName, output)
+            SpillPlan.WRITE -> {
+                val dir = spillDir(context, sessionId)
+                if (dir == null) {
+                    // [T-tool-output-single-mechanism] CAPPED even when the spill
+                    // cannot happen. Returning the raw text here is what let a
+                    // megabyte tool result reach the model intact.
+                    cappedPreview(toolName, output)
+                } else {
+                    writeSpill(dir, toolName, toolId, output)
+                }
+            }
         }
-        // Oversized and no session to hang the spill file on: still capped, the
-        // model just gets no path to page through.
-        if (sessionId.isBlank()) return cappedPreview(toolName, output)
-        val safeId = SAFE_ID_RE.replace(toolId, "_").ifBlank { "tool" }
+    }
+
+    private fun spillDir(context: Context, sessionId: String): File? {
         val dir = File(
             com.openminis.app.sandbox.SessionWorkspace.hostDir(context.filesDir, sessionId, "workspace"),
             "tool-spill",
         )
-        if (!dir.mkdirs() && !dir.isDirectory) {
-            // [T-tool-output-single-mechanism] CAPPED even when the spill cannot
-            // happen. Returning the raw text here (the old behaviour of the
-            // duplicated mechanism) is what let a megabyte tool result reach
-            // the model intact.
-            return cappedPreview(toolName, output)
-        }
+        return if (dir.mkdirs() || dir.isDirectory) dir else null
+    }
+
+    /**
+     * [GH#343] Write one spill file into [dir] and return the bounded preview.
+     * Internal so a plain-JVM test can exercise raw → spill → readback without
+     * a Context (the production dir comes from [spillDir]).
+     */
+    internal fun writeSpill(dir: File, toolName: String, toolId: String, output: String): String {
+        val safeId = SAFE_ID_RE.replace(toolId, "_").ifBlank { "tool" }
         val file = File(dir, "$safeId.txt")
         return try {
             file.writeText(output)
@@ -113,6 +123,77 @@ object ToolOutputSpill {
             cappedPreview(toolName, output)
         }
     }
+
+    /**
+     * [T-tool-output-offload-loop GH#343] Pure decision for one result body.
+     *
+     * 中文：raw → spill → readback 不能成环 —— 已落盘的占位符和从 spill 目录
+     * 读回的内容都必须原样/受限返回，不能再次落盘。
+     */
+    internal fun planFor(output: String, hasSession: Boolean, sourcePath: String?): SpillPlan {
+        if (output.length <= LIMIT) return SpillPlan.PASSTHROUGH
+        // Never wrap a placeholder in another placeholder (idempotency).
+        if (isOffloadPlaceholder(output)) return SpillPlan.PASSTHROUGH
+        // Reading a spill file back must answer from the existing file.
+        if (isSpillGuestPath(sourcePath)) return SpillPlan.ALREADY_SPILLED
+        // Nowhere to hang the file — still cap, the model just gets no path.
+        if (!hasSession) return SpillPlan.CAPPED
+        return SpillPlan.WRITE
+    }
+
+    /**
+     * [T-tool-output-offload-loop GH#343] Resolve the read-back source for a
+     * tool call. Covers every spelling that can read a spill file:
+     *  - `file_read` with the guest spill path (absolute or workspace-relative);
+     *  - `shell_execute`/`env_exec`/`su_exec` running a read program
+     *    (`cat`, `head`, `tail`, `sed`, `grep`, …) against `tool-spill/…`.
+     *
+     * 中文：#343 的去环不能只修 file_read —— 模型拿到 guest 路径后经常直接
+     * `cat /var/minis/workspace/tool-spill/x.txt`，shell 路径同样必须命中。
+     */
+    fun sourcePathForTool(rawToolName: String, argsJson: String): String? {
+        val canonical = ToolAliases.canonical(rawToolName)
+        // Cheap gate first: only these tools can read a spill file, so the
+        // args parse below is skipped for every other tool result.
+        if (canonical != "file_read" && canonical != "shell_execute" &&
+            canonical != "env_exec" && canonical != "su_exec"
+        ) {
+            return null
+        }
+        val args = runCatching { JSONObject(argsJson) }.getOrNull() ?: return null
+        return when (canonical) {
+            "file_read" -> {
+                val raw = args.optString("path", "").trim()
+                val guest = if (raw.startsWith("tool-spill/")) "/var/minis/workspace/$raw" else raw
+                guest.takeIf { isSpillGuestPath(it) }
+            }
+            "shell_execute", "env_exec", "su_exec" ->
+                commandSpillReadPath(args.optString("command", ""))
+            else -> null
+        }
+    }
+
+    /** [GH#343] A read program against a tool-spill path, or null. */
+    internal fun commandSpillReadPath(command: String): String? {
+        val trimmed = command.trim()
+        if (trimmed.isEmpty() || !trimmed.contains("tool-spill/")) return null
+        var verb = trimmed.substringBefore(' ').substringAfterLast('/')
+        if (verb == "busybox") {
+            verb = trimmed.substringAfter(' ', "").substringBefore(' ').substringAfterLast('/')
+        }
+        if (verb !in SPILL_READ_VERBS) return null
+        val match = SPILL_REF_IN_COMMAND.find(trimmed) ?: return null
+        return "/var/minis/workspace/tool-spill/${match.groupValues[1]}"
+    }
+
+    /** [GH#343] Command verbs that READ their file operand. */
+    private val SPILL_READ_VERBS = setOf(
+        "cat", "head", "tail", "sed", "awk", "grep", "less", "more",
+        "nl", "wc", "od", "xxd", "strings",
+    )
+
+    /** Matches absolute and workspace-relative spill references in a command. */
+    private val SPILL_REF_IN_COMMAND = Regex("(?:/var/minis/workspace/)?tool-spill/([A-Za-z0-9._-]+)")
 
     /**
      * Bounded preview with NO spill file: the model is told the truth (the full
@@ -226,3 +307,10 @@ object ToolOutputSpill {
         }
     }
 }
+
+/**
+ * [T-tool-output-offload-loop GH#343] The pure outcome of inspecting one tool
+ * result body: pass it through untouched, answer from an existing spill file,
+ * cap it without a file (no session), or write a new spill file.
+ */
+internal enum class SpillPlan { PASSTHROUGH, ALREADY_SPILLED, CAPPED, WRITE }

@@ -82,6 +82,18 @@ class PhoneBackupFolderStore(private val context: Context) {
             .sortedByDescending { it.lastModified() }
     }
 
+    /**
+     * [GH#367] Delete one package from a phone folder. Returns false only when
+     * the folder is unreachable or the SAF provider refuses the delete; a file
+     * that is already gone counts as success (idempotent cleanup).
+     */
+    fun deletePackage(folder: Folder, displayName: String): Boolean {
+        val tree = DocumentFile.fromTreeUri(context, Uri.parse(folder.treeUri)) ?: return false
+        val matches = tree.listFiles().filter { it.isFile && it.name == displayName }
+        if (matches.isEmpty()) return true
+        return matches.all { it.delete() }
+    }
+
     private fun save(list: List<Folder>) {
         prefs.edit()
             .putString(KEY, json.encodeToString(ListSerializer(Folder.serializer()), list))

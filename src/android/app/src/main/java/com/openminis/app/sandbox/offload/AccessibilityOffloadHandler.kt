@@ -50,14 +50,10 @@ class AccessibilityOffloadHandler(private val context: Context) : NativeOffloadH
         private const val TAG = "A11yOffload"
         private const val TOOL = "android-a11y-cli"
 
-        /**
-         * [GH#114] Subcommands that read the screen or inject input. These are
-         * checked against the per-app allow/block list; diagnostics (`service`,
-         * `--version`) and non-screen actions (`notify`, `wait`) are not.
-         */
-        private val POLICY_GATED_SUBS = setOf(
-            "ui", "tap", "input", "scroll", "gesture", "dialog", "extract", "event",
-        )
+        // [GH#114] The gated subcommand set now lives on A11yAppPolicy so the
+        // policy's own tests can assert it (wait/notify included). Diagnostics
+        // (`service`, `--version`) and non-screen actions stay out.
+        private val POLICY_GATED_SUBS = com.openminis.app.accessibility.A11yAppPolicy.POLICY_GATED_SUBS
 
         private const val TOP_HELP = """android-a11y-cli — UI-layer automation via Android AccessibilityService.
 

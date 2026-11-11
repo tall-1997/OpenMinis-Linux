@@ -1083,7 +1083,7 @@ internal object ConfigBuiltins {
                     "\n" +
                     "PROCESSING — identical to picking an image in Settings → Soul: centre-cropped to a " +
                     "square, downscaled to ${com.openminis.app.agent.SoulIcon.STORED_PIXELS}×" +
-                    "${com.openminis.app.agent.SoulIcon.STORED_PIXELS}, re-encoded as PNG and stored inline.\n" +
+                    "${com.openminis.app.agent.SoulIcon.STORED_PIXELS}, re-encoded as PNG and stored as a file under filesDir; SOUL.md keeps a `file:` reference. [GH#299]\n" +
                     "\n" +
                     "READING — `get soul.icon` returns \"<image>\" for an image, never the base64.\n" +
                     "\n" +
@@ -1098,9 +1098,9 @@ internal object ConfigBuiltins {
                 risk = ConfigRisk.SENSITIVE,
                 revertable = false,
                 reader = {
-                    val raw = loadCurrent().metadata.icon
+                    val raw = loadCurrent().metadata.icon // [GH#299] data URI and file: both read as "<image>"
                     ConfigValue.Str(
-                        if (com.openminis.app.agent.SoulIcon.isDataUri(raw)) "<image>" else raw,
+                        if (com.openminis.app.agent.SoulIcon.isInlineImageDataUri(raw) || com.openminis.app.agent.SoulIcon.isFileRef(raw)) "<image>" else raw,
                     )
                 },
                 writer = { v ->

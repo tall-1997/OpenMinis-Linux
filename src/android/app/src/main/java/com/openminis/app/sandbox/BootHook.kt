@@ -22,6 +22,11 @@ import java.io.File
  *   日志与 [lastStatus]，不影响聊天 / shell 的可用性。
  * - **失败可见**：结果写入 AppLogger（设置 → 日志可见）与 [lastStatus]；
  *   boot 失败本身由 boot 日志负责，hook 失败不会再往 UI 抛异常。
+ * - **[GH#511] 显式开启**：master switch 默认关闭（[BootHookSettings]）。关闭
+ *   时 hook 完全不执行，只记一行“disabled by user”日志。脚本本身会被保留；
+ *   用户可在 Settings → Agent Runtime → Lifecycle Hooks 打开。
+ * - **[GH#511] 来源审计**：首次观察时间与内容指纹记入 AppLogger，脚本被
+ *   agent/用户改写时下次启动留下 warning。
  * - **路径**：脚本必须位于 rootfs 内的 `/var/minis/boot.sh`。`/var/minis` 下
  *   的 `skills` / `shared` / `mcp-servers` 是 host bind mount，但 `/var/minis`
  *   根目录本身不是 —— 所以 boot.sh 是 rootfs 里的真实文件，随 rootfs 持久化。
@@ -62,6 +67,13 @@ object BootHook {
     /**
      * 由 [PRootKernel.boot] 在 `isBooted = true` 之后调用。非 suspend：立刻返回，
      * 脚本在独立 IO 协程里执行。
+     *
+     * [GH#511] 提权面收口：
+     *  - `/var/minis/boot.sh` 在 agent 可写的 rootfs 内，执行它等于把“写文件”
+     *    升级成“跨启动静默执行”。因此必须有 [BootHookSettings] 的显式 master
+     *    switch（默认关）；关闭时只记日志，不碰脚本。
+     *  - 执行前重新检查文件存在 / 开关仍开着，避免 probe 与 exec 之间被替换。
+     *  - 首次观察时间 + 内容指纹写入 AppLogger，脚本被改写时留下 warning。
      */
     fun launch(context: Context, rootfsDir: File) {
         if (!started.compareAndSet(false, true)) {
@@ -69,16 +81,44 @@ object BootHook {
             return
         }
         val appContext = context.applicationContext
+        if (!BootHookSettings.isEnabled(appContext)) {
+            lastStatus = "skipped: disabled in Settings"
+            AppLogger.info(
+                TAG,
+                "boot hook skipped: disabled by user (Settings → Agent Runtime → Lifecycle Hooks); " +
+                    "$GUEST_PATH was not executed",
+            )
+            return
+        }
         val script = File(rootfsDir, "var/minis/boot.sh")
         if (!script.isFile) {
             lastStatus = "skipped: $GUEST_PATH not present"
             Log.d(TAG, lastStatus!!)
             return
         }
+        auditScript(script, appContext)
         val app = appContext as? MinisApp
         val scope: CoroutineScope = app?.appCoroutineScopes?.io
             ?: CoroutineScope(SupervisorJob() + Dispatchers.IO)
         scope.launch {
+            // [GH#511] Re-check the switch and the file immediately before the
+            // exec: the state can change between launch() and this coroutine,
+            // and "user just disabled it" must win over a queued run.
+            if (!BootHookSettings.isEnabled(appContext)) {
+                lastStatus = "skipped: disabled before execution"
+                AppLogger.info(TAG, "boot hook cancelled: disabled before execution")
+                return@launch
+            }
+            if (!script.isFile) {
+                lastStatus = "skipped: $GUEST_PATH disappeared before execution"
+                AppLogger.warning(TAG, "boot hook cancelled: $GUEST_PATH no longer exists")
+                return@launch
+            }
+            AppLogger.info(
+                TAG,
+                "boot hook starting: $GUEST_PATH size=${script.length()} " +
+                    "modified=${script.lastModified()} (enabled by user)",
+            )
             // Guard against a hook that deletes/replaces the script between the
             // isFile probe and execution: the guest command is the contract.
             val result = try {
@@ -114,6 +154,31 @@ object BootHook {
                 Log.d(TAG, "boot hook output:\n$tail")
             }
         }
+    }
+
+    /**
+     * [GH#511] Record first-seen time / fingerprint changes for the boot script.
+     * Not a security boundary (same app uid can rewrite the prefs), but it puts
+     * "this script appeared / changed at boot N" into the visible log instead
+     * of leaving silent cross-launch execution.
+     */
+    private fun auditScript(script: File, context: Context) {
+        val fingerprint = "${script.length()}|${script.lastModified()}"
+        val now = System.currentTimeMillis()
+        val firstSeen = BootHookSettings.firstSeenAt(context)
+        if (firstSeen == null) {
+            BootHookSettings.setFirstSeenAt(context, now)
+            AppLogger.info(TAG, "boot hook script first observed at $now (fingerprint=$fingerprint)")
+        }
+        val previous = BootHookSettings.lastScriptFingerprint(context)
+        if (previous != null && previous != fingerprint) {
+            AppLogger.warning(
+                TAG,
+                "boot hook script changed since the last run: $previous -> $fingerprint; " +
+                    "it will still run because the user enabled the hook",
+            )
+        }
+        BootHookSettings.setLastScriptFingerprint(context, fingerprint)
     }
 
     /** 测试入口：允许同一个 JVM 里重复验证。 */

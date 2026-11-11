@@ -1,5 +1,6 @@
 package com.openminis.app.provider
 
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -64,6 +65,7 @@ class ProviderHeaderStoreTest {
     @Test
     fun `a blank instance id is rejected`() {
         // Deterministic regardless of whether another test primed the store.
-        assertTrue(ProviderHeaderStore.save("", "X-A: 1") != null)
+        // [GH#221] save() is suspend (Keystore + commit moved off Main).
+        assertTrue(runBlocking { ProviderHeaderStore.save("", "X-A: 1") } != null)
     }
 }

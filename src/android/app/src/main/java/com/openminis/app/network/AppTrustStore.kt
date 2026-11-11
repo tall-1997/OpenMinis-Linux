@@ -35,9 +35,17 @@ import javax.net.ssl.X509TrustManager
  *
  * WIRING. [init] runs from `MinisApp`; [applyAppTrustStore] is applied to every
  * provider-facing OkHttp builder (OpenAI / Anthropic / Gemini / voice / quota /
- * shared catalog client). Clients built before an import keep their old socket
- * factory — provider instances are constructed per request, so the next turn
- * picks the new trust material up; the UI surfaces that a retry is needed.
+ * shared catalog client). An OkHttpClient freezes its `sslSocketFactory` at
+ * build time, so a client built before an import would keep the old trust
+ * anchor forever. [generation] is therefore part of every cache key that can
+ * hold such a client (ProviderFactory's memo key, SharedHttpClients, the
+ * VoiceProvider client, ConnectionWarmup, QuotaOkHttpTransport), and the open
+ * chat's `currentProvider` records the generation it was built under so
+ * `rebuildProviderIfEdited()` replaces it before the next turn. [invalidate]
+ * also evicts pooled TLS connections established under the previous material.
+ * Settings' `TrustedCaSection` calls `ProviderFactory.invalidateAll()` after a
+ * successful import/delete so the old providers are dropped immediately rather
+ * than lingering until the next LRU pressure.
  *
  * This is the storage + runtime-injection half of the fix. The settings entry
  * point is `TrustedCaSection` (Settings → Network → Proxies → Trusted
@@ -239,6 +247,13 @@ object AppTrustStore {
     private fun invalidate() {
         cached = null
         generation++
+        // [GH#258][GH#287] Trust material changed. Rebuilding the clients is not
+        // enough on its own: the shared LLM ConnectionPool keys pooled sockets by
+        // host/port, not by client identity, so a connection authenticated under
+        // the OLD material would keep being handed to the new clients. Drop them
+        // too — import/delete is a rare, user-initiated event and a reconnect is
+        // the correct behaviour. Best-effort: eviction must never break import.
+        runCatching { NetworkMonitor.sharedLLMConnectionPool.evictAll() }
     }
 
     private fun fingerprint(cert: X509Certificate): String =

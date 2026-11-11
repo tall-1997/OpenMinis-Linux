@@ -92,7 +92,17 @@ object WebSearchTool {
                 )
             }
             // [GH#298] 插件式后端优先于内置引擎链；空结果/异常都静默落到链上。
+            val preferred = context?.let { WebSearchSettings.engine(it) } ?: WebSearchSettings.Engine.DDG
             for (backend in WebSearchBackendRegistry.backends()) {
+                // [GH#298] 默认 DDG 后端现在会在启动时注册，但 DDG 同时是
+                // 内置链的兜底引擎。用户明确选了 Tavily/SearXNG 等其它引擎时
+                // 跳过它，否则 DDG 通常先成功，用户的引擎配置永远轮不到。
+                // 第三方注册的后端不受影响，仍然是先注册先试。
+                if (backend === WebSearchBackendRegistry.DEFAULT &&
+                    preferred != WebSearchSettings.Engine.DDG
+                ) {
+                    continue
+                }
                 val hits = try {
                     backend.search(query, max, context)
                 } catch (_: Exception) {
@@ -106,7 +116,6 @@ object WebSearchTool {
                     )
                 }
             }
-            val preferred = context?.let { WebSearchSettings.engine(it) } ?: WebSearchSettings.Engine.DDG
             val allowFallback = context?.let { WebSearchSettings.fallbackEnabled(it) } ?: true
             val engines = mutableListOf(preferred)
             // A user who picked DuckDuckGo must not silently spend keyed quotas

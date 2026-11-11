@@ -63,7 +63,7 @@ object NativeOffloadServer {
     private const val TAG = "NativeOffloadServer"
     // Distinct from official OpenMinis ("native-offload") so both apps can
     // bind an abstract LocalServerSocket on the same device.
-    private const val SOCKET_NAME = "native-offload-linux"
+    private const val SOCKET_PREFIX = "native-offload-linux"
     private const val MAGIC_REQ = 0x46464F4E  // 'N' 'O' 'F' 'F' little-endian
     private const val MAGIC_RSP = 0x52464F4E  // 'N' 'O' 'F' 'R'
     private const val VERSION = 1
@@ -118,7 +118,28 @@ object NativeOffloadServer {
     private const val WORKER_POOL_SIZE = 4
     private const val HANDLER_POOL_SIZE = 4
 
-    const val socketName: String = SOCKET_NAME
+    /**
+     * [OpenMinis#439] Abstract-socket name for THIS process.
+     *
+     * WHY IT IS PER-PROCESS. The name used to be the constant
+     * `"native-offload-linux"`. Linux abstract sockets are scoped to the
+     * network namespace, not to the app sandbox, so an app clone (MIUI 分身)
+     * or a second user profile — a DIFFERENT process in the same namespace —
+     * held the name indefinitely and the second instance's bind failed with
+     * EADDRINUSE on every boot. The old fallback was to degrade: offload
+     * disabled for that instance, every guest `android-*` tool answering
+     * "command not found". Appending [Process.myPid] gives each instance its
+     * own name, so both bind; the retry/degrade below stays only as a
+     * defensive backstop.
+     *
+     * HOW THE GUEST STAYS IN SYNC. The name never needs to reach a guest
+     * script: proot receives it as `--native-offload=<socket>:<handlers>`
+     * ([com.openminis.app.sandbox.commonArgv] reads this getter at argv-build
+     * time) and only the handler NAMES are resolved inside the guest. Server
+     * bind and argv construction happen in the same process, so the getter
+     * returns the same value for both.
+     */
+    val socketName: String get() = "$SOCKET_PREFIX-${Process.myPid()}"
 
     /**
      * [T-android-offload-lazy-handlers] Handler FACTORIES by name. Names are
@@ -215,22 +236,19 @@ object NativeOffloadServer {
         // overwhelming majority of cases the socket frees within the first
         // 100-300ms window.
         //
-        // [OpenMinis#439 / #440] On some ROMs the retry window is not enough:
-        // an app CLONE / a second user profile keeps a DIFFERENT process alive
-        // against the SAME abstract-socket namespace, so the name is held
-        // indefinitely (MIUI 分身, multi-user instance 2). The old code turned
-        // that into `throw IOException`, which aborted MinisApp.onCreate and
-        // PRootKernel.boot: the second instance could not start AT ALL — no
-        // shell, no sandbox, no chat — for a feature (native offload) whose
-        // absence only disables tool acceleration. Degrade instead: log loudly,
-        // record the visible reason and return; every other subsystem boots,
-        // and guest calls simply do not find an offload server (the proot
-        // extension falls back to the real binary / reports "no handler").
+        // [OpenMinis#439] The per-process [socketName] is what lets an app
+        // clone / second user bind its own socket instead of colliding with
+        // the first instance. The retry + degrade path is kept for the
+        // remaining ways a bind can fail (ROM restrictions, a same-pid
+        // leftover we cannot explain), because a failed bind must not abort
+        // MinisApp.onCreate / PRootKernel.boot: degrade, log loudly, record the
+        // visible reason, and let every other subsystem boot.
         val s = bindWithRetry()
         if (s == null) {
-            degradedReason = "abstract socket '$SOCKET_NAME' is held by another process " +
-                "(app clone / second user?); native offload disabled, the rest of the app runs normally"
-            Log.e(TAG, "[OpenMinis#439/#440] $degradedReason")
+            degradedReason = "abstract socket '$socketName' could not be bound " +
+                "(another process holding it?); native offload disabled, " +
+                "the rest of the app runs normally"
+            Log.e(TAG, "[OpenMinis#439] $degradedReason")
             rootfsTmpDir?.let {
                 // Nothing to serve, but a previous process may still have left
                 // reply files behind; sweep them so this degraded instance does
@@ -246,7 +264,7 @@ object NativeOffloadServer {
         acceptThread = thread(name = "native-offload-accept", isDaemon = true) {
             runAcceptLoop(s)
         }
-        Log.i(TAG, "listening on abstract socket '$SOCKET_NAME' " +
+        Log.i(TAG, "listening on abstract socket '$socketName' " +
             "handlers=${handlerFactories.keys.sorted()} tmpDir=${rootfsTmpDir?.absolutePath}")
 
         // [T-android-offload-tmp-leak] Sweep reply files orphaned by earlier
@@ -319,7 +337,7 @@ object NativeOffloadServer {
         for ((attempt, delay) in delays.withIndex()) {
             if (delay > 0) Thread.sleep(delay)
             try {
-                return LocalServerSocket(SOCKET_NAME)
+                return LocalServerSocket(socketName)
             } catch (e: java.io.IOException) {
                 Log.w(TAG, "bind attempt ${attempt + 1}/${delays.size} failed: ${e.message}")
             }

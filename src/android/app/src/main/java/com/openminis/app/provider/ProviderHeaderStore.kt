@@ -1,6 +1,8 @@
 package com.openminis.app.provider
 
 import android.content.Context
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
 /**
@@ -38,11 +40,26 @@ import org.json.JSONObject
  * 请求头里经常放 relay 的鉴权头（Authorization / X-Api-Key），所以落盘走
  * [com.openminis.app.util.EncryptedPrefsFactory]（Keystore-backed
  * EncryptedSharedPreferences），与 API key / env var 同一等级；不用普通 prefs。
+ *
+ * ## [GH#347] 为什么这里还存了一个开关
+ *
+ * `x-opencode-session` 默认只能发给 OpenCode 官方端点；自定义 relay 必须由用户
+ * 在 Provider detail 显式 opt-in（[openCodeSessionEnabled] /
+ * [setOpenCodeSessionEnabled]）。该布尔值存在同一 prefs 文件的独立 key 里，
+ * 而不是 ProviderInstance 字段：ProviderDatabase 的迁移窗口不在本批，且这是
+ * “请求头通道”的一部分（见 [OpenCodeSessionHeader.customEndpointHeadersFor]）。
  */
 object ProviderHeaderStore {
 
     private const val PREFS = "provider_extra_headers"
     private const val KEY = "headers_json"
+
+    /**
+     * [GH#347] 同一 prefs 文件里的第二个 key：per-instance 的 opt-in 标记
+     * （`{"<instanceId>": true}`）。与 headers 分开，避免用户头编辑/清空时
+     * 误删开关；仍然不碰 ProviderDatabase schema。
+     */
+    private const val OPENCODE_SESSION_KEY = "opencode_session_json"
     private const val MAX_HEADERS = 32
     private const val MAX_NAME_LEN = 128
     private const val MAX_VALUE_LEN = 4096
@@ -61,6 +78,10 @@ object ProviderHeaderStore {
 
     @Volatile
     private var cache: Map<String, Map<String, String>> = emptyMap()
+
+    /** [GH#347] instanceId → 是否允许发送 OpenCode 会话头。默认空 = 全部关闭。 */
+    @Volatile
+    private var openCodeSession: Map<String, Boolean> = emptyMap()
 
     @Volatile
     private var loaded: Boolean = false
@@ -90,6 +111,7 @@ object ProviderHeaderStore {
             // taking down provider construction; the factory would otherwise
             // throw on the first chat after a restore.
             cache = runCatching { load(ctx) }.getOrDefault(emptyMap())
+            openCodeSession = runCatching { loadOpenCodeSession(ctx) }.getOrDefault(emptyMap())
             loaded = true
         }
     }
@@ -110,12 +132,18 @@ object ProviderHeaderStore {
         return cache.keys.toSet()
     }
 
-    /** 保存结果的错误信息；null = 成功。 */
-    fun save(instanceId: String, rawText: String): String? {
-        if (instanceId.isBlank()) return "Unknown provider instance"
-        val ctx = app ?: return "Provider header store is not initialized"
+    /**
+     * 保存结果的错误信息；null = 成功。
+     *
+     * [GH#221] suspend + IO：save 首次调用会打开 EncryptedSharedPreferences
+     * （Keystore 初始化）并 `commit()` 落盘，原先在设置页的 onClick 里同步
+     * 执行，直接卡主线程。所有调用点都必须从协程调用。
+     */
+    suspend fun save(instanceId: String, rawText: String): String? = withContext(Dispatchers.IO) {
+        if (instanceId.isBlank()) return@withContext "Unknown provider instance"
+        val ctx = app ?: return@withContext "Provider header store is not initialized"
         ensureLoaded()
-        val parsed = parse(rawText) ?: return parseError ?: "Invalid headers"
+        val parsed = parse(rawText) ?: return@withContext parseError ?: "Invalid headers"
         val next = cache.toMutableMap()
         if (parsed.isEmpty()) next.remove(instanceId) else next[instanceId] = parsed
         val ok = runCatching {
@@ -124,14 +152,14 @@ object ProviderHeaderStore {
                 .putString(KEY, encode(next))
                 .commit()
         }.getOrDefault(false)
-        if (!ok) return "Failed to persist headers"
+        if (!ok) return@withContext "Failed to persist headers"
         cache = next
         revisionValue++
-        return null
+        null
     }
 
     /** 删除该实例的全部自定义请求头。 */
-    fun clear(instanceId: String): Boolean =
+    suspend fun clear(instanceId: String): Boolean =
         if (instanceId.isBlank()) false else save(instanceId, "") == null
 
     /**
@@ -141,6 +169,46 @@ object ProviderHeaderStore {
      */
     fun rawTextFor(instanceId: String): String =
         headersFor(instanceId).entries.joinToString("\n") { "${it.key}: ${it.value}" }
+
+    /**
+     * [GH#347] 是否允许向该实例的自定义端点发送 `x-opencode-session`。
+     *
+     * 默认 **false**，这是隐私默认值：会话 ID 虽然不含账号信息，但它是稳定的
+     * 每对话标识符，第三方 relay 不应该在用户没有显式打开开关时收到它。
+     * OpenCode 官方端点（`*.opencode.ai`）不受此开关影响，仍由
+     * [OpenCodeSessionHeader.headersFor] 自动发送 —— 那条路径是服务端的硬性
+     * 路由要求。
+     */
+    fun openCodeSessionEnabled(instanceId: String): Boolean {
+        if (instanceId.isBlank()) return false
+        ensureLoaded()
+        return openCodeSession[instanceId] == true
+    }
+
+    /**
+     * [GH#347] 设置 per-instance 会话头 opt-in。返回是否持久化成功
+     * （失败时内存态不变，UI 可据此提示）。
+     *
+     * suspend + IO，与 [save] 同理：`commit()` 会打开 Keystore-backed prefs，
+     * 不能在 Compose 点击回调的主线程上同步执行。
+     */
+    suspend fun setOpenCodeSessionEnabled(instanceId: String, enabled: Boolean): Boolean =
+        withContext(Dispatchers.IO) {
+            if (instanceId.isBlank()) return@withContext false
+            val ctx = app ?: return@withContext false
+            ensureLoaded()
+            val next = openCodeSession.toMutableMap()
+            if (enabled) next[instanceId] = true else next.remove(instanceId)
+            val ok = runCatching {
+                prefs(ctx).edit()
+                    .putString(OPENCODE_SESSION_KEY, encodeFlags(next))
+                    .commit()
+            }.getOrDefault(false)
+            if (!ok) return@withContext false
+            openCodeSession = next
+            revisionValue++
+            true
+        }
 
     /** 上次 [save] / [parse] 的具体错误，UI 直接展示。 */
     @Volatile
@@ -232,6 +300,28 @@ object ProviderHeaderStore {
             for ((name, value) in headers) obj.put(name, value)
             root.put(id, obj)
         }
+        return root.toString()
+    }
+
+    /** [GH#347] 读取 opt-in 标记；损坏/空文件都退化成“全部关闭”。 */
+    private fun loadOpenCodeSession(context: Context): Map<String, Boolean> {
+        val raw = prefs(context).getString(OPENCODE_SESSION_KEY, "") ?: ""
+        if (raw.isBlank()) return emptyMap()
+        return try {
+            val root = JSONObject(raw)
+            buildMap {
+                for (id in root.keys()) {
+                    if (root.optBoolean(id, false)) put(id, true)
+                }
+            }
+        } catch (_: Exception) {
+            emptyMap()
+        }
+    }
+
+    private fun encodeFlags(map: Map<String, Boolean>): String {
+        val root = JSONObject()
+        for ((id, enabled) in map) if (enabled) root.put(id, true)
         return root.toString()
     }
 }

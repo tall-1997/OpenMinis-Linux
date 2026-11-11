@@ -23,11 +23,12 @@ import com.openminis.app.provider.ProviderHeaderStore
  *  - 同一通道（per-call `extraHeaders`）便于其它调用点统一取头，不必各自
  *    知道 store 的存在。
  *
- * [GH#347] 自定义 OpenAI 兼容端点也要拿到同一会话头：把 base URL 指向
- * OpenCode 兼容中转（或自建网关）的用户会命中 `400 missing x-opencode-session`
- * 路由规则，而只按 `opencode.ai` 主机门控会让这些端点永远发不出去。
- * `customEndpointHeadersFor` 仅在实例确实带自定义 base URL 时生效，官方端点
- * 不受影响。
+ * [GH#347] 自定义 OpenAI 兼容端点要显式 opt-in 才会收到同一会话头：把 base
+ * URL 指向 OpenCode 兼容中转（或自建网关）的用户会命中
+ * `400 missing x-opencode-session` 路由规则，但“任意第三方 relay”默认不该收到
+ * 稳定的每对话标识符。开关存在 ProviderHeaderStore（见 Provider detail 的
+ * OpenCode session header 一项），默认关闭；OpenCode 官方端点（`*.opencode.ai`）
+ * 仍由 [OpenCodeSessionHeader.headersFor] 按 host 自动发送，不受开关影响。
  *
  * 合并顺序：用户头在前，OpenCode 头在后 —— `x-opencode-session` 是上游路由
  * 的硬要求，用户即使配了同名头也不能把它顶掉。
@@ -38,7 +39,11 @@ internal fun ChatViewModel.providerExtraHeaders(instanceId: String?): Map<String
     val user = ProviderHeaderStore.headersFor(instance.id)
     val persistedSessionId = realSessionId.ifEmpty { sessionId }
     val opencode = OpenCodeSessionHeader
-        .customEndpointHeadersFor(instance.effectiveBaseURL, persistedSessionId)
+        .customEndpointHeadersFor(
+            instance.effectiveBaseURL,
+            persistedSessionId,
+            enabled = ProviderHeaderStore.openCodeSessionEnabled(instance.id),
+        )
         .ifEmpty { OpenCodeSessionHeader.headersFor(instance.effectiveBaseURL, persistedSessionId) }
     return if (user.isEmpty()) opencode else user + opencode
 }

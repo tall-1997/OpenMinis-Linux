@@ -354,12 +354,19 @@ class ModelUseOffloadHandler(
             // endpoints reached through model_use (title-gen, sub-agent lanes,
             // passthrough callers) bypass ChatViewModel's agent loop, so the
             // per-conversation `x-opencode-session` header has to be attached
-            // here too. Same stable id the chat path sends for this session, and
-            // both spellings ZenFreeLaneGate uses, so a relay keyed on either
-            // routes the request instead of answering 400. Official endpoints
-            // (no custom base URL) get an empty map and keep the old headers.
+            // here too — but ONLY when the user opted this instance in
+            // (Provider detail → OpenCode session header). The old unconditional
+            // path leaked a stable conversation id to every third-party relay.
+            // Official endpoints (no custom base URL) get an empty map; the
+            // built-in Zen/OpenCode lane attaches its own headers in
+            // ZenFreeLaneGate, so nothing changes there.
             val sessionHdrs = com.openminis.app.provider.OpenCodeSessionHeader
-                .customEndpointHeadersFor(instance.effectiveBaseURL, request.sessionId)
+                .customEndpointHeadersFor(
+                    instance.effectiveBaseURL,
+                    request.sessionId,
+                    enabled = com.openminis.app.provider.ProviderHeaderStore
+                        .openCodeSessionEnabled(instance.id),
+                )
             val mergedHdrs = chatHdrs + sessionHdrs
             if (mergedHdrs.isNotEmpty()) {
                 openAI.chatExtraHeaders = mergedHdrs

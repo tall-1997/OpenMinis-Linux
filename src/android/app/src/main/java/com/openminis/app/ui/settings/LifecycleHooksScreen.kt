@@ -17,6 +17,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.openminis.app.R
 import com.openminis.app.agent.lifecycle.LifecycleHooks
+import com.openminis.app.sandbox.BootHook
+import com.openminis.app.sandbox.BootHookSettings
 import com.openminis.app.ui.components.DialogTextField
 import com.openminis.app.ui.components.MinisTextButton
 
@@ -34,6 +36,10 @@ import com.openminis.app.ui.components.MinisTextButton
 fun LifecycleHooksScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     var enabled by remember { mutableStateOf(LifecycleHooks.isEnabled()) }
+    // [GH#511] Separate master switch for the sandbox boot hook. Default off:
+    // /var/minis/boot.sh is agent-writable, so executing it silently would be
+    // a cross-launch privilege escalation surface.
+    var bootHookEnabled by remember { mutableStateOf(BootHookSettings.isEnabled(context)) }
     var editing by remember { mutableStateOf<LifecycleHooks.LifecycleEvent?>(null) }
     var draft by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
@@ -53,6 +59,32 @@ fun LifecycleHooksScreen(onBack: () -> Unit) {
                 },
                 showDivider = false,
             )
+        }
+
+        // [GH#511] Sandbox boot hook, deliberately its own switch: it runs on
+        // EVERY process start, not on a chat lifecycle event. A shell-capable
+        // agent can write this path, so enabling it is an explicit trust grant.
+        SettingsSection(
+            header = stringResource(R.string.boot_hook_section),
+            footer = stringResource(R.string.boot_hook_footer),
+        ) {
+            SettingsSwitchRow(
+                title = stringResource(R.string.boot_hook_enable),
+                subtitle = stringResource(R.string.boot_hook_enable_sub),
+                checked = bootHookEnabled,
+                onCheckedChange = { on ->
+                    bootHookEnabled = on
+                    BootHookSettings.setEnabled(context, on)
+                },
+                showDivider = false,
+            )
+            BootHook.lastStatus?.let { status ->
+                SettingsRow(
+                    title = stringResource(R.string.boot_hook_last_status),
+                    subtitle = status,
+                    showDivider = false,
+                )
+            }
         }
 
         SettingsSection(
