@@ -81,6 +81,74 @@ class GitHostRepoTransferTest {
         assertEquals(Access.Fallback, GitHostRepoTransfer.resolveAccess(null))
     }
 
+    // ── optional desktop authentication ────────────────────────────────────
+
+    @Test
+    fun `missing JGSS classes accept JVM and Android name formats`() {
+        for (name in listOf("org/ietf/jgss/GSSManager", "org.ietf.jgss.Oid")) {
+            assertTrue(name, GitHostRepoTransfer.isUnavailableNegotiate(NoClassDefFoundError(name)))
+        }
+        assertTrue(
+            GitHostRepoTransfer.isUnavailableNegotiate(
+                NoClassDefFoundError("Failed resolution of: Lorg/ietf/jgss/GSSContext;"),
+            ),
+        )
+    }
+
+    @Test
+    fun `nested initialization cause identifies unavailable JGSS`() {
+        val missing = ClassNotFoundException("org.ietf.jgss.GSSException")
+        val wrapped = ExceptionInInitializerError(IllegalStateException("initializing auth", missing))
+        assertTrue(GitHostRepoTransfer.isUnavailableNegotiate(wrapped))
+    }
+
+    @Test
+    fun `subsequent Negotiate initialization failures fall back`() {
+        for (name in listOf(
+                "org.eclipse.jgit.transport.HttpAuthMethod\$Negotiate",
+                "org/eclipse/jgit/transport/HttpAuthMethod\$Negotiate",
+                "org.eclipse.jgit.util.GSSManagerFactory\$DefaultGSSManagerFactory",
+            )) {
+            assertTrue(
+                name,
+                GitHostRepoTransfer.isUnavailableNegotiate(
+                    NoClassDefFoundError("Could not initialize class $name"),
+                ),
+            )
+        }
+    }
+
+    @Test
+    fun `unrelated linkage and misleading names do not trigger fallback`() {
+        for (error in listOf(
+                NoClassDefFoundError("java/lang/ProcessHandle"),
+                NoClassDefFoundError("org.eclipse.jgit.transport.HttpAuthMethod\$Basic"),
+                NoClassDefFoundError("org.eclipse.jgit.transport.HttpAuthMethod\$NegotiateExtra"),
+                NoClassDefFoundError("other.org.ietf.jgss.GSSManager"),
+                NoClassDefFoundError("org.eclipse.jgit.util.GSSManagerFactoryExtra"),
+                NoClassDefFoundError(),
+                NoSuchMethodError("org.ietf.jgss.GSSManager.missingMethod"),
+                UnsatisfiedLinkError("org.ietf.jgss.nativeLibrary"),
+                ExceptionInInitializerError(IllegalStateException("org.ietf.jgss.GSSManager")),
+            )) {
+            assertFalse(error.toString(), GitHostRepoTransfer.isUnavailableNegotiate(error))
+        }
+    }
+
+    @Test(timeout = 1000)
+    fun `cyclic cause chains terminate and still inspect each cause`() {
+        val first = NoClassDefFoundError("unrelated.First")
+        val second = IllegalStateException("unrelated.Second")
+        first.initCause(second)
+        second.initCause(first)
+        assertFalse(GitHostRepoTransfer.isUnavailableNegotiate(first))
+
+        val missing = NoClassDefFoundError("org/ietf/jgss/GSSName")
+        val outer = ExceptionInInitializerError(missing)
+        missing.initCause(outer)
+        assertTrue(GitHostRepoTransfer.isUnavailableNegotiate(outer))
+    }
+
     // ── push ────────────────────────────────────────────────────────────────
 
     @Test
