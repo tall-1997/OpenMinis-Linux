@@ -7,6 +7,15 @@
     <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
             <certificates src="system" />
+            <!-- [GH#258][GH#287] Trust user-installed CAs as well. `src="system"`
+                 alone excludes the user store on Android 7+, which is exactly
+                 where a self-signed/private CA imported through Settings →
+                 Security → Encryption & credentials lands. A custom provider
+                 endpoint then failed the TLS handshake with "Trust anchor not
+                 found" even though the user had installed the CA. This is not
+                 a blanket bypass: the anchor must still be present in the
+                 device's user store, and hostname verification is unchanged. -->
+            <certificates src="user" />
         </trust-anchors>
     </base-config>
     <!-- Pre-T354 entry kept for explicitness; the base-config above already

@@ -49,6 +49,9 @@ object SharedHttpClients {
             .writeTimeout(READ_TIMEOUT_SEC, TimeUnit.SECONDS)
             .callTimeout(CALL_TIMEOUT_SEC, TimeUnit.SECONDS)
             .retryOnConnectionFailure(true)
+            // [GH#258][GH#287] Provider catalogs can live behind the user's
+            // private CA; add the app trust store when one is imported.
+            .applyAppTrustStore()
             .build()
     }
 }

@@ -117,11 +117,34 @@ First-run: enable "Minis Ultra" under Settings → Accessibility, then `service 
         // a curious developer) can still verify the service runs even when
         // the agent surface is blocked.
         if (sub != "service" && sub != "--version") {
-            if (!OffloadGate.allow("a11y_cli", "android-a11y-cli", request)) {
+            // [GH#539] Fail closed when this CLI is missing from the permission
+            // registry: checkPermission() treats unknown tools as BYPASS, which
+            // would silently allow a gated automation surface. Registration is
+            // also one of the three refusal states OffloadDenial reports.
+            val registered = com.openminis.app.offload.OffloadPermissionManager.isRegistered("a11y_cli")
+            if (!registered || !OffloadGate.allow("a11y_cli", "android-a11y-cli", request)) {
+                val restricted = RestrictedSettingsManager.isRestricted(context)
                 return err(
                     args,
                     "PERMISSION_DENIED",
-                    "Agent is not allowed to use android-a11y-cli. Open Settings → Permissions → Integrations to change.",
+                    OffloadDenial.permissionDenied(
+                        toolName = "a11y_cli",
+                        displayName = "android-a11y-cli",
+                        systemName = "The Android accessibility service",
+                        systemState = if (MinisAccessibilityService.getInstance() != null) {
+                            OffloadDenial.SystemLayer.RUNNING
+                        } else {
+                            OffloadDenial.SystemLayer.NOT_RUNNING
+                        },
+                        systemFix = if (restricted) {
+                            "Android is blocking the Accessibility toggle for this install " +
+                                "(\"Restricted setting\"): allow it via App info → ⋮ → Allow " +
+                                "restricted settings, then enable Minis under Settings → Accessibility."
+                        } else {
+                            "Enable Minis under Settings → Accessibility."
+                        },
+                        settingsPath = "Settings → Permissions → Integrations",
+                    ),
                 )
             }
         }

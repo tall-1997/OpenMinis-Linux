@@ -150,6 +150,20 @@ class MinisApp : Application(), ImageLoaderFactory {
 
         // Application subclasses run in EVERY process: sub-processes get minimal boot (rest is main-only).
         if (ProcessChecks.shouldSkipMainInit(this)) return
+
+        // [GH#258][GH#287] App-level trust store for user-imported CAs. Init
+        // only creates the directory; the provider clients pick the material
+        // up when they are built (Settings → Network → Proxies can import one).
+        com.openminis.app.network.AppTrustStore.init(this)
+
+        // [GH#423][GH#301] Claude CLI fingerprint version: load the cached npm
+        // dist-tag now, refresh it in the background at most once per 24h. A
+        // network failure leaves the pinned fallback in place.
+        com.openminis.app.auth.ClaudeCliVersion.init(this)
+        appCoroutineScopes.io.launch {
+            com.openminis.app.auth.ClaudeCliVersion.refreshIfStale(this@MinisApp)
+        }
+
         com.openminis.app.crash.LaunchPhaseProbes.startLaunchScan(this, appCoroutineScopes.io)
         com.openminis.app.crash.LaunchPhaseProbes.startDbVersionProbe(this, appCoroutineScopes.io)
 

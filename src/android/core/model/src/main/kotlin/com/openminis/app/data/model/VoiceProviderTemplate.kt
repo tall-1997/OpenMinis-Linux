@@ -170,7 +170,10 @@ data class VoiceProviderTemplate(
                 baseURL = "https://dashscope.aliyuncs.com/compatible-mode",
                 appendV1 = true,
                 capability = Capability.BOTH,
-                baseURLMarkers = listOf("dashscope"),
+                // [GH#520] "maas.aliyuncs" is Bailian's per-workspace host
+                // family. Without it the template lookup misses, no ASR/TTS
+                // seed models are created, and the voice picker is empty.
+                baseURLMarkers = listOf("dashscope", "maas.aliyuncs"),
                 mockModels = listOf(
                     asr("paraformer-realtime-v2", "Paraformer Realtime v2", "alibaba"),
                     tts("cosyvoice-v2", "CosyVoice v2", "alibaba"),

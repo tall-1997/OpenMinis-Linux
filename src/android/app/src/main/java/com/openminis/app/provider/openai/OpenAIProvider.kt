@@ -435,7 +435,9 @@ class OpenAIProvider private constructor(
         get() = isOpenRouter && model.id.lowercase().startsWith("anthropic/")
 
     /** Detect DashScope (Alibaba Qwen) base URL. */
-    private val isDashScope: Boolean = basePath.contains("dashscope")
+    // [GH#520] Same Bailian predicate as the voice factory / media router so a
+    // *.maas.aliyuncs.com instance is classified identically everywhere.
+    private val isDashScope: Boolean = com.openminis.app.data.model.BailianEndpoint.matches(basePath)
 
     /**
      * [T-android-mistral-reasoning-422] (GH OpenMinis#87, iOS 29065ca0)

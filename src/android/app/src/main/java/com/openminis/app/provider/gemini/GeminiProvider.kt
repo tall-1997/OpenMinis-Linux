@@ -42,6 +42,7 @@ import java.io.InputStreamReader
 import java.util.concurrent.TimeUnit
 import com.openminis.app.provider.failOnSilentEmptyCompletion
 import com.openminis.app.provider.thinking.ThinkingRuleResolver
+import com.openminis.app.network.applyAppTrustStore
 
 class GeminiProvider(
     private val apiKey: String,
@@ -79,6 +80,8 @@ class GeminiProvider(
         // [T-android-stale-conn-retry-hang] Shared pool — see NetworkMonitor.
         // Network-transition eviction must reach provider connections.
         .connectionPool(com.openminis.app.network.NetworkMonitor.sharedLLMConnectionPool)
+        // [GH#258][GH#287] Custom-base endpoints may present a private CA.
+        .applyAppTrustStore()
         .build()
 
     override suspend fun sendMessageClamped(

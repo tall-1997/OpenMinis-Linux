@@ -1298,7 +1298,8 @@ class ProviderRepository(
             isOpenRouter = base.contains("openrouter.ai"),
             usesUnifiedReasoningEffort = base.contains("volces") || base.contains("ark.") || base.contains("venice.ai"),
             isMistral = base.contains("mistral.ai"),
-            isDashScope = base.contains("dashscope"),
+            // [GH#520] Shared predicate: dashscope + per-workspace maas hosts.
+            isDashScope = com.openminis.app.data.model.BailianEndpoint.matches(base),
             offEffort = null,
         )
         val modelIds = config.modelEntries.filter { it.providerInstanceId == instanceId }.map { it.model.id }

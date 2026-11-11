@@ -1,5 +1,6 @@
 package com.openminis.app.provider
 
+import com.openminis.app.data.model.BailianEndpoint
 import org.json.JSONObject
 
 /**
@@ -51,7 +52,7 @@ object VendorMedia {
         ) {
             return VendorMediaKind.ZHIPU
         }
-        if (host.contains("dashscope")) return VendorMediaKind.DASHSCOPE
+        if (BailianEndpoint.matches(basePath)) return VendorMediaKind.DASHSCOPE
         if (host.contains("minimax.chat") || host.contains("minimax.io") ||
             host.contains("minimaxi.com")
         ) {

@@ -39,6 +39,16 @@
     <string name="network_proxies">代理</string>
     <string name="network_proxies_footer">HTTP、HTTPS 或 SOCKS5 代理。密码用 Android Keystore 加密保存。</string>
     <string name="network_add_proxy">添加代理</string>
+    <!-- [GH#258][GH#287] 私有提供商 CA 的应用级信任库 -->
+    <string name="network_trusted_ca_title">受信证书</string>
+    <string name="network_trusted_ca_import">导入 PEM 证书</string>
+    <string name="network_trusted_ca_none">尚未导入证书</string>
+    <string name="network_trusted_ca_count">已导入 %1$d 张证书</string>
+    <string name="network_trusted_ca_imported">已导入 %1$d 张证书，请重试请求。</string>
+    <string name="network_trusted_ca_duplicate">该证书已经导入过了。</string>
+    <string name="network_trusted_ca_removed">已移除导入的证书。</string>
+    <string name="network_trusted_ca_failed">无法将该文件读取为 PEM/X.509 证书。</string>
+    <string name="network_trusted_ca_footer">用于 HTTPS 端点使用自签名或私有 CA 的提供商。证书只保存在 Minis 内部，并加入本应用的 Android 信任锚；正常的证书链与主机名校验仍然开启。下一次提供商请求生效——若仍报“找不到信任锚”，请重启 Minis 后重试。</string>
     <string name="network_edit_proxy">编辑代理</string>
     <string name="network_used_by">应用范围</string>
     <string name="network_scope_shell">终端</string>

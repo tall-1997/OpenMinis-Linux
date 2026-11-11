@@ -5,6 +5,7 @@ import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.openminis.app.network.withDohDns
+import com.openminis.app.network.applyAppTrustStore
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
@@ -41,6 +42,8 @@ open class VoiceProvider(
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(120, TimeUnit.SECONDS)
             .writeTimeout(120, TimeUnit.SECONDS)
+            // [GH#258][GH#287] Self-hosted voice gateways may use a private CA.
+            .applyAppTrustStore()
             .build()
 
         /**

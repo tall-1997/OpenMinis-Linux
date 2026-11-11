@@ -1,5 +1,6 @@
 package com.openminis.app.quota
 
+import com.openminis.app.network.applyAppTrustStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -150,14 +151,38 @@ class QuotaOkHttpTransport(private val netTag: String? = null) : QuotaHttpTransp
     private val client: OkHttpClient get() = com.openminis.app.network.NetworkHttp.client(netTag, baseClient)
 
     private companion object {
-        val baseClient: OkHttpClient by lazy {
-            OkHttpClient.Builder()
-                .connectTimeout(10, TimeUnit.SECONDS)
-                .readTimeout(10, TimeUnit.SECONDS)
-                .callTimeout(20, TimeUnit.SECONDS)
-                .cache(null)
-                .build()
-        }
+        /**
+         * [GH#258] Rebuilt when [AppTrustStore.generation] changes so a CA
+         * imported from Settings takes effect on the next balance query, not
+         * only after a process restart. The quota client is the one long-lived
+         * provider client in the app.
+         */
+        @Volatile
+        private var builtGeneration: Int = -1
+
+        @Volatile
+        private var built: OkHttpClient? = null
+
+        val baseClient: OkHttpClient
+            get() {
+                val generation = com.openminis.app.network.AppTrustStore.generation
+                built?.let { if (builtGeneration == generation) return it }
+                synchronized(this) {
+                    built?.let { if (builtGeneration == generation) return it }
+                    val client = OkHttpClient.Builder()
+                        .connectTimeout(10, TimeUnit.SECONDS)
+                        .readTimeout(10, TimeUnit.SECONDS)
+                        .callTimeout(20, TimeUnit.SECONDS)
+                        .cache(null)
+                        // [GH#258][GH#287] Balance queries share the provider's
+                        // host, so they must trust the same user-imported CA.
+                        .applyAppTrustStore()
+                        .build()
+                    built = client
+                    builtGeneration = generation
+                    return client
+                }
+            }
     }
 
     override suspend fun get(url: String, bearer: String, headers: Map<String, String>): QuotaHttpResponse =
