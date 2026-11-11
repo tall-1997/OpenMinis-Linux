@@ -19,7 +19,14 @@ package com.openminis.app.ui.chat
  */
 internal object TruncatedArgsNotice {
 
-    /** Parse the byte count out of a tool result such as `Wrote to /x (1234 bytes)`. */
+    /**
+     * Parse the byte count out of a tool result such as `Wrote to /x (1234 bytes)`.
+     *
+     * [GH#119] Some results only put the count at the end without its own
+     * opening paren — `Edited /a (1 replacement(s), 12 bytes)` — so the number
+     * match must not require the leading `(`. The `N bytes` suffix is unique in
+     * the known tool outputs, so the first such match is the written size.
+     */
     fun writtenBytes(toolOutput: String): Int? =
         WRITTEN_BYTES.find(toolOutput)?.groupValues?.getOrNull(1)?.toIntOrNull()
 
@@ -51,5 +58,5 @@ internal object TruncatedArgsNotice {
             "complete arguments if anything is missing.</system-reminder>"
     }
 
-    private val WRITTEN_BYTES = Regex("""\((\d+)\s+bytes?\)""")
+    private val WRITTEN_BYTES = Regex("""(\d+)\s+bytes?\b""")
 }
