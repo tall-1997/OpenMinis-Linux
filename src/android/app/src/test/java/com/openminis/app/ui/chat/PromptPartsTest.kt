@@ -71,4 +71,30 @@ class PromptPartsTest {
         assertEquals("first", out[1])
         assertTrue(out[2].contains("last"))
     }
+
+    /**
+     * [T-work-report-staleness] Regression guard: the work-report block must
+     * stay TOOL_ENFORCED (its question/blocker gating stops the run for a
+     * person), and must NOT gain the external-evidence frame — its staleness
+     * is handled inside the block itself (age + caveat + WORKING expiry), not
+     * by demoting it to "mere evidence".
+     */
+    @Test
+    fun workReportStaysToolEnforcedAndUnframed() {
+        assertEquals(PromptLevel.TOOL_ENFORCED, PromptParts.levelFor("runtime/work_report"))
+        val out = PromptParts.render(
+            listOf(part("runtime/work_report", PromptParts.levelFor("runtime/work_report"), "stage: working")),
+        )
+        assertEquals(1, out.size)
+        assertTrue(!out[0].contains("<external_data"))
+    }
+
+    @Test
+    fun theRegistryLevelTableMatchesKeys() {
+        // Every key must resolve to a level (getValue throws on drift) and
+        // recall stays the only EXTERNAL part.
+        PromptParts.KEYS.forEach { key -> PromptParts.levelFor(key) }
+        val external = PromptParts.KEYS.filter { PromptParts.levelFor(it) == PromptLevel.EXTERNAL }
+        assertEquals(listOf("runtime/recall"), external)
+    }
 }

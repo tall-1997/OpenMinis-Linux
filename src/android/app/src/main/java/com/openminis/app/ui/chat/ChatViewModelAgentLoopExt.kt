@@ -268,6 +268,9 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
         currentCoroutineContext().ensureActive()
         // Sanitize history before each API call (mirrors iOS pre-API validation)
         sanitizeAgentHistory()
+        // [T-work-report-staleness] Per-turn count (retries re-collect the same request
+        // and must not count): STALE_REQUEST_LIMIT unrefreshed rounds degrades the snapshot.
+        com.openminis.app.tools.AgentReportStore.noteRequestServed(activeSessionId)
 
         // Context window management: offload large tool outputs in older
         // messages to disk when this model's window threshold is crossed;
@@ -518,7 +521,6 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 // Non-Anthropic providers ignore it (cast fails silently).
                 (currentProvider as? com.openminis.app.provider.anthropic.AnthropicProvider)
                     ?.enhancedCache = _enhancedCacheEnabled.value
-                try {
                 // Route through effectiveAgentHistory() so a populated
                 // [_compactSummary] is prepended as a `<context-summary>`
                 // user message. Falls through to the raw agentHistory when
@@ -1021,9 +1023,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     _autoRetryAttempt.value = 0
                     _autoRetryCountdown.value = 0
                 }
-                } finally {
-                    // [T-first-event-watchdog] The operator cancels itself; nothing to clean here.
-                }
+                // [T-first-event-watchdog] The operator cancels itself; no cleanup needed.
             } catch (e: QueuedPromptInterrupt) {
                 // [T-android-queued-message-interrupt-thinking] Deliberate cut,
                 // NOT a provider failure — must precede the generic catch.
