@@ -45,8 +45,10 @@ object JobTools {
             "(command, optional workdir) launches detached and returns a job_id immediately; 'list' " +
             "shows this session's jobs with state (RUNNING/COMPLETED/FAILED/KILLED) and exit_code; " +
             "'output' (job_id, tail_lines, default 200) returns the tail of the job's stdout+stderr " +
-            "accumulated so far; 'kill' (job_id) terminates a running job (idempotent for jobs that " +
-            "already finished). At most 8 jobs may be RUNNING per session. Prefer this over " +
+            "accumulated so far; 'input' (job_id, text) appends to a RUNNING job's stdin for interactive " +
+            "commands; 'signal' (job_id, signal) delivers a signal (TERM/USR1/INT/...) to its process " +
+            "group; 'kill' (job_id) terminates a running job (idempotent for jobs that already " +
+            "finished). At most 8 jobs may be RUNNING per session. Prefer this over " +
             "shell_execute for builds, package installs, dev servers, or long test suites you want " +
             "to keep working while you do something else. Jobs are private to this session and die " +
             "with the app process.",
@@ -83,7 +85,7 @@ object JobTools {
             ),
         ),
         required = listOf("tool_title", "action"),
-        propertyOrdering = listOf("tool_title", "action", "command", "workdir", "job_id", "tail_lines"),
+        propertyOrdering = listOf("tool_title", "action", "command", "workdir", "job_id", "tail_lines", "text", "signal"),
     )
 
     suspend fun execute(argsJson: String, sessionId: String, context: Context? = null): ToolExecutionResult {
@@ -259,6 +261,19 @@ object JobTools {
             )
         }
         if (!text.endsWith("\n")) text += "\n"
+        // Distinguish "no such job" from "job already finished": the stdin
+        // fifo is removed once a job dies, and a blind append would recreate
+        // a plain file at that path and report a fake success.
+        val job = JobRegistry.list(sessionId).find { it.id == ref || it.id.startsWith(ref) }
+            ?: return notFound(ref)
+        if (job.state != JobState.RUNNING) {
+            return ToolExecutionResult(
+                "Error: job ${job.id} is ${job.state.name} — stdin is only open while the job runs. " +
+                    "Use action=output to read what it printed.",
+                false,
+                errorCode = ToolErrorCode.INVALID_ARGUMENTS,
+            )
+        }
         val fifo = JobRegistry.writeStdin(sessionId, ref, text)
             ?: return notFound(ref)
         return ToolExecutionResult(
@@ -286,9 +301,27 @@ object JobTools {
                 errorCode = ToolErrorCode.INVALID_ARGUMENTS,
             )
         }
+        val job = JobRegistry.list(sessionId).find { it.id == ref || it.id.startsWith(ref) }
+            ?: return notFound(ref)
+        if (job.state != JobState.RUNNING) {
+            return ToolExecutionResult(
+                "Error: job ${job.id} is ${job.state.name} — there is no live process group to signal. " +
+                    "Use action=output to read the result.",
+                false,
+                errorCode = ToolErrorCode.INVALID_ARGUMENTS,
+            )
+        }
         val ok = JobRegistry.signal(sessionId, ref, sig)
-        return if (ok) ToolExecutionResult("Signal $sig delivered to job $ref's process group.", true)
-        else notFound(ref)
+        return if (ok) {
+            ToolExecutionResult("Signal $sig delivered to job $ref's process group.", true)
+        } else {
+            ToolExecutionResult(
+                "Error: signal $sig could not be delivered to job $ref — the process may have just " +
+                    "exited. Use action=list to check its state.",
+                false,
+                errorCode = ToolErrorCode.EXECUTION_FAILED,
+            )
+        }
     }
 
     // ---------------------------------------------------------------- kill

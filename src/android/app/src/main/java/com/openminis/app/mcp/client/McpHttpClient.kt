@@ -118,35 +118,52 @@ class McpHttpClient(
             ?: throw McpError(McpError.PROTOCOL_ERROR, "tools/call returned no result")
     }
 
-    override fun listResources(): JSONArray {
+    /**
+     * JSON-RPC -32601 (method not found) is the wire-level expression of
+     * "this server does not implement this capability" — normalize it to the
+     * same UnsupportedOperationException the interface default throws, so the
+     * tool layer's wrapServerSupport handles stdio and HTTP transports
+     * uniformly. Any other McpError propagates unchanged.
+     */
+    private inline fun <T> notFoundAsUnsupported(method: String, block: () -> T): T =
+        try {
+            block()
+        } catch (e: McpError) {
+            if (e.code == "RPC_-32601") {
+                throw UnsupportedOperationException("$method not supported by this server")
+            }
+            throw e
+        }
+
+    override fun listResources(): JSONArray = notFoundAsUnsupported("resources/list") {
         ensureInitialized()
         val id = McpJsonRpc.nextId()
         val result = post(McpJsonRpc.request(id, "resources/list", JSONObject()), id)
             ?: throw McpError(McpError.PROTOCOL_ERROR, "resources/list returned no result")
-        return result.optJSONArray("resources") ?: JSONArray()
+        result.optJSONArray("resources") ?: JSONArray()
     }
 
-    override fun readResource(uri: String): JSONObject {
+    override fun readResource(uri: String): JSONObject = notFoundAsUnsupported("resources/read") {
         ensureInitialized()
         val id = McpJsonRpc.nextId()
         val params = JSONObject().put("uri", uri)
-        return post(McpJsonRpc.request(id, "resources/read", params), id)
+        post(McpJsonRpc.request(id, "resources/read", params), id)
             ?: throw McpError(McpError.PROTOCOL_ERROR, "resources/read returned no result")
     }
 
-    override fun listPrompts(): JSONArray {
+    override fun listPrompts(): JSONArray = notFoundAsUnsupported("prompts/list") {
         ensureInitialized()
         val id = McpJsonRpc.nextId()
         val result = post(McpJsonRpc.request(id, "prompts/list", JSONObject()), id)
             ?: throw McpError(McpError.PROTOCOL_ERROR, "prompts/list returned no result")
-        return result.optJSONArray("prompts") ?: JSONArray()
+        result.optJSONArray("prompts") ?: JSONArray()
     }
 
-    override fun getPrompt(name: String, arguments: JSONObject): JSONObject {
+    override fun getPrompt(name: String, arguments: JSONObject): JSONObject = notFoundAsUnsupported("prompts/get") {
         ensureInitialized()
         val id = McpJsonRpc.nextId()
         val params = JSONObject().put("name", name).put("arguments", arguments)
-        return post(McpJsonRpc.request(id, "prompts/get", params), id)
+        post(McpJsonRpc.request(id, "prompts/get", params), id)
             ?: throw McpError(McpError.PROTOCOL_ERROR, "prompts/get returned no result")
     }
 

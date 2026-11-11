@@ -342,18 +342,24 @@ object SubAgentBatchRegistry {
         stopped: Boolean = false,
         filesDir: java.io.File? = null,
     ) = mutateLane(sessionId, context, batchId, index) { lane ->
-        // [T-subagent-report-spill] The full report spills to the session
-        // workspace (ToolOutputSpill pattern): JSON keeps the 2 000-char
+        // [T-subagent-report-spill] The full report spills into the session's
+        // WORKSPACE (ToolOutputSpill pattern): JSON keeps the 2 000-char
         // digest, the file keeps everything — a process death between wave
         // completion and check_agent collection still leaves the whole
-        // report readable via file_read at the recorded guest path.
+        // report readable via file_read at the recorded guest path. The
+        // write MUST land in a bound subdir (hostDir "workspace" ↔ guest
+        // /var/minis/workspace/...): an unbound path like
+        // /var/minis/subagent-reports/ exists neither in the sandbox nor in
+        // resolveGuestPath, so the recorded link would be dead on arrival.
         val reportPath = if (output.isNotBlank() && filesDir != null) {
             runCatching {
-                val dir = File(SessionWorkspace.base(filesDir, sessionId), "subagent-reports")
-                    .apply { mkdirs() }
+                val dir = File(
+                    SessionWorkspace.hostDir(filesDir, sessionId, "workspace"),
+                    "subagent-reports",
+                ).apply { mkdirs() }
                 val f = File(dir, "batch-$batchId-lane-$index.md")
                 f.writeText(output)
-                "/var/minis/subagent-reports/" + f.name
+                "/var/minis/workspace/subagent-reports/" + f.name
             }.getOrNull()
         } else lane.reportPath
         lane.copy(

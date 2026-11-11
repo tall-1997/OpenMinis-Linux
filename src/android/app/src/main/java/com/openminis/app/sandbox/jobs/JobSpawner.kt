@@ -70,14 +70,21 @@ object JobSpawner {
         }
         val b64 = Base64.getEncoder().encodeToString(script.toByteArray(Charsets.UTF_8))
         // [T-android-jobs-interactive] A named pipe per job keeps stdin alive:
-        // the script reads it as its stdin, a background `sleep infinity >`
-        // holds the write end open so the reader blocks instead of seeing EOF,
-        // and action=input appends base64-decoded bytes into it. The pid is
-        // persisted to a sidecar so action=signal can reach the process group.
+        // the script reads it as its stdin, a background holder keeps the
+        // write end open so the reader blocks instead of seeing EOF, and
+        // action=input appends base64-decoded bytes into it. The holder is a
+        // `while kill -0 $JOB` watchdog, NOT `sleep infinity`: the moment the
+        // job's process dies it exits AND removes the fifo/script/pid
+        // sidecars — a finished job leaks neither a process nor a fifo. The
+        // pid sidecar is written on the same spawn line (one coordinator
+        // round trip less) so action=signal can reach the process group.
         val spawnCmd = "mkdir -p '$GUEST_JOBS_DIR' && rm -f '$GUEST_JOBS_DIR/$token.in' && mkfifo '$GUEST_JOBS_DIR/$token.in' && " +
             "echo $b64 | base64 -d > '$GUEST_JOBS_DIR/$token.sh' && " +
-            "(sleep infinity > '$GUEST_JOBS_DIR/$token.in' &) && " +
-            "setsid sh '$GUEST_JOBS_DIR/$token.sh' < '$GUEST_JOBS_DIR/$token.in' >> '$GUEST_JOBS_DIR/$token.log' 2>&1 & echo $PID_MARKER\$!"
+            "{ setsid sh '$GUEST_JOBS_DIR/$token.sh' < '$GUEST_JOBS_DIR/$token.in' >> '$GUEST_JOBS_DIR/$token.log' 2>&1 & " +
+            "JOB=\$!; echo \$JOB > '$GUEST_JOBS_DIR/$token.pid'; " +
+            "( while kill -0 \$JOB 2>/dev/null; do sleep 1; done; " +
+            "rm -f '$GUEST_JOBS_DIR/$token.in' '$GUEST_JOBS_DIR/$token.sh' '$GUEST_JOBS_DIR/$token.pid' ) > '$GUEST_JOBS_DIR/$token.in' & }; " +
+            "echo $PID_MARKER\$JOB"
         val result = ExecutionCoordinator.execute(sessionId, spawnCmd, SPAWN_TIMEOUT_MS)
         if (result.exitCode != 0) {
             throw IllegalStateException("job spawn failed (exit ${result.exitCode})")
@@ -88,11 +95,6 @@ object JobSpawner {
         val exitHost = hostJobsDir.resolve("$token.exit")
         val guestLog = "$GUEST_JOBS_DIR/$token.log"
         val guestStdin = "$GUEST_JOBS_DIR/$token.in"
-        // Persist the pid for action=signal (best effort; the group leader
-        // id doubles as the signal target since setsid made it a leader).
-        runCatching {
-            ExecutionCoordinator.execute(sessionId, "echo '$pid' > '$GUEST_JOBS_DIR/$token.pid'", SPAWN_TIMEOUT_MS)
-        }
         return object : JobRegistry.SpawnedProcess {
             override val stdoutFile: File = logHost
             override val outputGuestPath: String = guestLog

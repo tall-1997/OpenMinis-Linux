@@ -139,6 +139,14 @@ object CheckAgentTool {
                         } else {
                             append("(no captured output)").append('\n')
                         }
+                        // [T-subagent-report-spill] Surface the spilled full
+                        // report: the digest above is capped at 2 000 chars,
+                        // and without this line the recorded guest path would
+                        // have zero readers — the spill promise only holds if
+                        // the agent is told where the file lives.
+                        lane.reportPath?.let { p ->
+                            append("full report: ").append(p).append('\n')
+                        }
                     }
                 }
                 if (target.complete) runCatching { registry.markCollected(sessionId, context, target.id) }

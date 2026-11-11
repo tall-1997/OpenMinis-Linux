@@ -441,6 +441,11 @@
     <string name="sessionlist_regenerate_title">Jana Semula Tajuk</string>
     <string name="sessionlist_regenerating_title">Menjana semula tajuk…</string>
     <string name="sessionlist_duplicate">Duplikat</string>
+    <string name="sessionlist_branch_tree">Pokok cabang</string>
+    <string name="sessionlist_branch_from_here">Cabangkan daripada mesej terkini</string>
+    <string name="sessionlist_branch_empty">Sesi ini belum mempunyai cabang. Cabangkan daripada mesej terkini supaya percubaan semula tidak mengubah perbualan asal.</string>
+    <string name="sessionlist_branch_source">Sumber</string>
+    <string name="sessionlist_branch_children">Cabang</string>
     <string name="sessionlist_search_action">Cari</string>
     <string name="sessionlist_dismiss">Tutup</string>
     <string name="sessionlist_delete_one_title">Padam perbualan?</string>

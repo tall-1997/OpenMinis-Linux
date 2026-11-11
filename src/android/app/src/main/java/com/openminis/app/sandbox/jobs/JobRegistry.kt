@@ -399,10 +399,17 @@ object JobRegistry {
      */
     suspend fun writeStdin(sessionId: String, ref: String, text: String): String? {
         val k = key(sessionId)
-        val record = lock(k).withLock {
-            memory[k].orEmpty().find { it.job.id == ref || it.job.id.startsWith(ref) }
+        val fifo = lock(k).withLock {
+            val record = memory[k].orEmpty().find { it.job.id == ref || it.job.id.startsWith(ref) }
+                ?: return@withLock null
+            reconcileLocked(record)
+            // [T-android-jobs-interactive] Only a RUNNING job has a live
+            // stdin fifo — the spawner's holder removes it once the job
+            // dies, and appending into the removed path would silently
+            // recreate a plain file and report a fake success.
+            if (record.job.state != JobState.RUNNING) return@withLock null
+            record.job.stdinGuestPath
         } ?: return null
-        val fifo = record.job.stdinGuestPath ?: return null
         val b64 = java.util.Base64.getEncoder().encodeToString(text.toByteArray(Charsets.UTF_8))
         val out = com.openminis.app.sandbox.ExecutionCoordinator.execute(
             sessionId,
@@ -419,15 +426,23 @@ object JobRegistry {
     suspend fun signal(sessionId: String, ref: String, signal: String): Boolean {
         val k = key(sessionId)
         val pid = lock(k).withLock {
-            memory[k].orEmpty().find { it.job.id == ref || it.job.id.startsWith(ref) }
-                ?.job?.pid ?: return false
-        }
+            val record = memory[k].orEmpty().find { it.job.id == ref || it.job.id.startsWith(ref) }
+                ?: return@withLock null
+            reconcileLocked(record)
+            // A finished job has no live process group to signal — reporting
+            // a delivered signal for one would be a fake success.
+            if (record.job.state != JobState.RUNNING) return@withLock null
+            record.job.pid
+        } ?: return false
         if (pid <= 0) return false
         val sig = signal.trim().removePrefix("-").uppercase()
         val safe = if (sig.matches(Regex("[A-Z0-9]+"))) sig else return false
+        // No `; true` bailout: the exit code must reflect whether the signal
+        // was actually delivered — a dead group fails the kill and the caller
+        // reports the miss instead of a fake success.
         val out = com.openminis.app.sandbox.ExecutionCoordinator.execute(
             sessionId,
-            "kill -$safe -- -$pid 2>/dev/null || kill -$safe $pid 2>/dev/null; true",
+            "kill -$safe -- -$pid 2>/dev/null || kill -$safe $pid 2>/dev/null",
         )
         return out.exitCode == 0
     }

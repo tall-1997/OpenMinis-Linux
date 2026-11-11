@@ -528,15 +528,6 @@ interface ChatDao : MessageHeadDao, ChatTruncationDao, SessionBindingDao, UsageS
     @Query("SELECT * FROM sessions WHERE branch_of = :source ORDER BY updated_at DESC")
     suspend fun branchChildren(source: String): List<ChatSessionEntity>
 
-    /**
-     * Branch-fork truncation: drop the copy's rows AFTER the fork point.
-     * Unlike [deleteMessagesAfter] (keep-count + version archive) this is a
-     * plain delete — the SOURCE session still holds every dropped row, so
-     * archiving them again would only duplicate versions.
-     */
-    @Query("DELETE FROM messages WHERE session_id = :sessionId AND sort_order > :maxSortOrder")
-    suspend fun deleteMessagesAfterSort(sessionId: String, maxSortOrder: Int)
-
     @Query(
         """
         UPDATE sessions SET permission_mode = 'ASK'

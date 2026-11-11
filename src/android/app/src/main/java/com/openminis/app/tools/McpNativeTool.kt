@@ -152,7 +152,10 @@ object McpNativeTool {
     /**
      * Runs a resources/prompts passthrough and converts the interface's
      * UnsupportedOperationException into a clean result — a server that only
-     * speaks the tools subset is a normal state, not an error to retry.
+     * speaks the tools subset is a normal state, not an error to retry. The
+     * message is "resources/list not supported by ..." on BOTH transports
+     * (the interface default and McpHttpClient's -32601 normalization), so
+     * one substringBefore extracts the method name for the hint.
      */
     private inline fun wrapServerSupport(server: String, block: () -> String): ToolExecutionResult =
         runCatching { ToolExecutionResult(block(), true, toolTitle = "mcp:$server") }
@@ -160,7 +163,6 @@ object McpNativeTool {
                 when (e) {
                     is UnsupportedOperationException -> ToolExecutionResult(
                         "$server does not support " + e.message.orEmpty()
-                            .removePrefix("resources/").removePrefix("prompts/")
                             .substringBefore(" not supported") + " — pick a server that implements it.",
                         false,
                         errorCode = ToolErrorCode.UNSUPPORTED,

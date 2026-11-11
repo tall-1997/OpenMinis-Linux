@@ -778,6 +778,7 @@ internal object AppMigrations {
     MIGRATION_28_27,
     MIGRATION_28_29,
     MIGRATION_29_30,
+    MIGRATION_30_29,
     MIGRATION_29_28,
     )
 }

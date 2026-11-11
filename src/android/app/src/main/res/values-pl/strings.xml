@@ -443,6 +443,11 @@
     <string name="sessionlist_regenerate_title">Wygeneruj tytuł ponownie</string>
     <string name="sessionlist_regenerating_title">Generowanie tytułu…</string>
     <string name="sessionlist_duplicate">Duplikuj</string>
+    <string name="sessionlist_branch_tree">Drzewo gałęzi</string>
+    <string name="sessionlist_branch_from_here">Utwórz gałąź od ostatniej wiadomości</string>
+    <string name="sessionlist_branch_empty">Ta sesja nie ma jeszcze gałęzi. Utwórz gałąź od ostatniej wiadomości, aby ponowne uruchomienia nie zmieniały pierwotnej rozmowy.</string>
+    <string name="sessionlist_branch_source">Źródło</string>
+    <string name="sessionlist_branch_children">Gałęzie</string>
     <string name="sessionlist_search_action">Szukaj</string>
     <string name="sessionlist_dismiss">Zamknij</string>
     <string name="sessionlist_delete_one_title">Usunąć rozmowę?</string>

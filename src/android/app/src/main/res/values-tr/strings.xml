@@ -441,6 +441,11 @@
     <string name="sessionlist_regenerate_title">Başlığı Yeniden Oluştur</string>
     <string name="sessionlist_regenerating_title">Başlık yeniden oluşturuluyor…</string>
     <string name="sessionlist_duplicate">Çoğalt</string>
+    <string name="sessionlist_branch_tree">Dal ağacı</string>
+    <string name="sessionlist_branch_from_here">Son mesajdan dallan</string>
+    <string name="sessionlist_branch_empty">Bu oturumun henüz dalı yok. Yeniden çalıştırmaların özgün sohbeti değiştirmemesi için son mesajdan dallan.</string>
+    <string name="sessionlist_branch_source">Kaynak</string>
+    <string name="sessionlist_branch_children">Dallar</string>
     <string name="sessionlist_search_action">Ara</string>
     <string name="sessionlist_dismiss">Kapat</string>
     <string name="sessionlist_delete_one_title">Sohbet silinsin mi?</string>

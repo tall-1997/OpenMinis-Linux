@@ -441,6 +441,11 @@
     <string name="sessionlist_regenerate_title">제목 다시 생성</string>
     <string name="sessionlist_regenerating_title">제목 재생성 중…</string>
     <string name="sessionlist_duplicate">복제</string>
+    <string name="sessionlist_branch_tree">브랜치 트리</string>
+    <string name="sessionlist_branch_from_here">최신 메시지에서 분기</string>
+    <string name="sessionlist_branch_empty">이 세션에는 아직 브랜치가 없습니다. 최신 메시지에서 분기하면 재실행해도 원본 대화가 변경되지 않습니다.</string>
+    <string name="sessionlist_branch_source">원본</string>
+    <string name="sessionlist_branch_children">브랜치</string>
     <string name="sessionlist_search_action">검색</string>
     <string name="sessionlist_dismiss">닫기</string>
     <string name="sessionlist_delete_one_title">이 대화를 삭제하시겠습니까?</string>

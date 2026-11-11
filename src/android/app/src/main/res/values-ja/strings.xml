@@ -441,6 +441,11 @@
     <string name="sessionlist_regenerate_title">タイトルを再生成</string>
     <string name="sessionlist_regenerating_title">タイトルを再生成中…</string>
     <string name="sessionlist_duplicate">複製</string>
+    <string name="sessionlist_branch_tree">ブランチツリー</string>
+    <string name="sessionlist_branch_from_here">最新メッセージから分岐</string>
+    <string name="sessionlist_branch_empty">このセッションにはまだブランチがありません。最新メッセージから分岐すれば、再実行しても元の会話は影響を受けません。</string>
+    <string name="sessionlist_branch_source">ソース</string>
+    <string name="sessionlist_branch_children">ブランチ</string>
     <string name="sessionlist_search_action">検索</string>
     <string name="sessionlist_dismiss">閉じる</string>
     <string name="sessionlist_delete_one_title">この会話を削除しますか？</string>

@@ -441,6 +441,11 @@
     <string name="sessionlist_regenerate_title">Gerar título novamente</string>
     <string name="sessionlist_regenerating_title">Gerando o título…</string>
     <string name="sessionlist_duplicate">Duplicar</string>
+    <string name="sessionlist_branch_tree">Árvore de ramificações</string>
+    <string name="sessionlist_branch_from_here">Ramificar a partir da última mensagem</string>
+    <string name="sessionlist_branch_empty">Esta sessão ainda não tem ramificações. Ramifique a partir da última mensagem para que novas execuções não alterem a conversa original.</string>
+    <string name="sessionlist_branch_source">Origem</string>
+    <string name="sessionlist_branch_children">Ramificações</string>
     <string name="sessionlist_search_action">Buscar</string>
     <string name="sessionlist_dismiss">Fechar</string>
     <string name="sessionlist_delete_one_title">Excluir a conversa?</string>
