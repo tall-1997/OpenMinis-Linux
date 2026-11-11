@@ -47,6 +47,19 @@ object AgentReportStore {
     private val locks = ConcurrentHashMap<String, ReentrantLock>()
     private val memory = ConcurrentHashMap<String, MutableList<Report>>()
 
+    /**
+     * [T-work-report-staleness] Requests served since the newest report. The
+     * `<work_report>` block is a snapshot of a past turn, re-rendered on every
+     * request; without a counter nothing distinguishes "reported a moment ago"
+     * from "reported two hours of tool rounds ago", and a stale snapshot read
+     * as an enforced fact re-anchors every turn to the old step (the model
+     * restates the old summary instead of advancing). record/clear reset it.
+     */
+    private val requestsSinceReport = ConcurrentHashMap<String, Int>()
+
+    /** WORKING-only expiry backstop; see [stagePrompt]. */
+    const val STALE_REQUEST_LIMIT = 12
+
     /** Bumped on every mutation so UI projections can reload. */
     val version = MutableStateFlow(0L)
 
@@ -184,6 +197,8 @@ object AgentReportStore {
             reports.add(report)
             saveLocked(sessionId, context, reports)
         }
+        // A fresh report invalidates the staleness count by definition.
+        requestsSinceReport[key(sessionId)] = 0
         publishAttention(sessionId, report)
         return report
     }
@@ -198,7 +213,17 @@ object AgentReportStore {
 
     fun clear(sessionId: String, context: Context?) {
         lock(sessionId).withLock { saveLocked(sessionId, context, emptyList()) }
+        requestsSinceReport[key(sessionId)] = 0
         publishAttention(sessionId, null)
+    }
+
+    /**
+     * [T-work-report-staleness] One request was assembled against the current
+     * (possibly stale) block. Called once per agent-loop turn — stream retries
+     * re-use the same assembled request and must not inflate the count.
+     */
+    fun noteRequestServed(sessionId: String) {
+        requestsSinceReport.compute(key(sessionId)) { _, v -> (v ?: 0) + 1 }
     }
 
     /** Keeps [attentionSessions] in step with the newest report. */
@@ -231,17 +256,47 @@ object AgentReportStore {
     /** Human-readable stage token, e.g. `needs-answer`. */
     fun stageToken(stage: Stage): String = stage.name.lowercase().replace('_', '-')
 
+    /** [T-work-report-staleness] Compact relative age so the model can tell a
+     * fresh snapshot from a stale one — the old block never showed its age. */
+    internal fun reportAgeLabel(atMillis: Long, nowMillis: Long): String {
+        val minutes = ((nowMillis - atMillis).coerceAtLeast(0)) / 60_000
+        return when {
+            minutes < 1 -> "just now"
+            minutes < 60 -> "$minutes min ago"
+            minutes < 24 * 60 -> "${minutes / 60} h ago"
+            else -> "${minutes / (24 * 60)} d ago"
+        }
+    }
+
     /**
      * The block that rides on every request. Rendered from the store, so history
      * trimming cannot remove it; omitted only when nothing was ever reported.
+     *
+     * [T-work-report-staleness] A snapshot that nobody refreshed stops asserting
+     * its prose after [STALE_REQUEST_LIMIT] requests: a WORKING summary read as
+     * an enforced fact re-anchored every turn to the old step (the model kept
+     * restating it instead of advancing). Only WORKING expires — a question,
+     * blocker, or ready review is an actionable request to a person and must
+     * keep riding until answered. The full block also carries its age and a
+     * snapshot caveat, so even a fresh report reads as a snapshot, not live state.
      */
-    fun stagePrompt(sessionId: String, context: Context?): String? {
+    fun stagePrompt(sessionId: String, context: Context?, nowMillis: Long = System.currentTimeMillis()): String? {
         val report = latest(sessionId, context) ?: return null
         val stage = stageOf(report)
+        val served = requestsSinceReport[key(sessionId)] ?: 0
+        if (stage == Stage.WORKING && served >= STALE_REQUEST_LIMIT) {
+            return buildString {
+                append("<work_report>\n")
+                append("stage: working (no refreshed report for $served requests — " +
+                    "call agent_report to update it before relying on it)\n")
+                append("</work_report>")
+            }
+        }
         return buildString {
             append("<work_report>\n")
             append("stage: ${stageToken(stage)}\n")
-            append("last report (${report.status}): ${report.summary}\n")
+            append("last report (${report.status}, ${reportAgeLabel(report.at, nowMillis)}): ${report.summary}\n")
+            append(SNAPSHOT_CAVEAT)
             if (report.question.isNotBlank()) {
                 append("waiting on the user: ${report.question}\n")
             }
@@ -252,11 +307,20 @@ object AgentReportStore {
         }
     }
 
-    /** One line of contract, kept short: it is paid for on every request. */
+    /** [T-work-report-staleness] The old block asserted past conclusions as
+     * present-tense enforced facts; this line makes its nature explicit. */
+    private const val SNAPSHOT_CAVEAT =
+        "This is a snapshot, not live state: later turns may have moved past it — " +
+            "check the transcript before acting on it, and never restate this summary " +
+            "as a fresh conclusion.\n"
+
+    /** Refresh-first contract: the block repeats until the model reports again. */
     private const val STAGE_RULE =
-        "Call agent_report whenever what you are doing changes: progress for a step that " +
-            "landed, blocked/failed with the concrete prerequisite, ready only with evidence, " +
-            "and question for a single concrete thing the user must decide."
+        "This block repeats on every request until you call agent_report again — when the " +
+            "conversation has moved past the summary above, report again even if the status is " +
+            "unchanged: progress for a step that landed, blocked/failed with the concrete " +
+            "prerequisite, ready only with evidence, and question for a single concrete thing " +
+            "the user must decide."
 
     /** Tool-result rendering: what the model sees after reporting. */
     fun render(report: Report): String {
@@ -291,7 +355,8 @@ object AgentReportTool {
             "Put a single concrete decision for the user in `question` - one question, not a list. " +
             "`blocked` and `failed` require `blocker`. Never report ready without evidence of checks run. " +
             "This state is shown to the user and re-injected every turn, so it is how the run stays " +
-            "accountable for the task it was given.",
+            "accountable for the task it was given. The <work_report> block re-shows your last " +
+            "summary on every request until you report again.",
         parameters = mapOf(
             "tool_title" to AgentToolParam("string", "A concise 5-10 word summary shown to the user."),
             "status" to AgentToolParam(

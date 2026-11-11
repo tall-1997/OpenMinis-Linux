@@ -34,19 +34,41 @@ internal object PromptParts {
     )
 
     /**
+     * The key -> level table, separate from [of] so JVM tests can pin it
+     * without constructing a [ChatViewModel] (the renderers need the VM; the
+     * levels are static registry facts).
+     */
+    private val LEVELS = mapOf(
+        "runtime/work_report" to PromptLevel.TOOL_ENFORCED,
+        "runtime/in_flight" to PromptLevel.TOOL_ENFORCED,
+        "runtime/jobs" to PromptLevel.TOOL_ENFORCED,
+        "runtime/plan_board" to PromptLevel.TOOL_ENFORCED,
+        "runtime/recall" to PromptLevel.EXTERNAL,
+    )
+
+    /** Registry level for [key]; a missing key is a registry drift. */
+    internal fun levelFor(key: String): PromptLevel = LEVELS.getValue(key)
+
+    /**
      * The host-rendered parts, in order.
      *
      * Order is deliberate: facts the host enforces come first (stage, lanes,
      * board), retrieved evidence last, immediately before the caller's text —
      * so the weakest level is never mistaken for the instruction it follows.
+     * Levels come from the [LEVELS] table — the single source of truth.
      */
-    internal fun of(vm: ChatViewModel): List<PromptPart> = listOf(
-        PromptPart("runtime/work_report", PromptLevel.TOOL_ENFORCED) { vm.workReportPrompt() },
-        PromptPart("runtime/in_flight", PromptLevel.TOOL_ENFORCED) { vm.inFlightLanesPrompt() },
-        PromptPart("runtime/jobs", PromptLevel.TOOL_ENFORCED) { vm.backgroundJobsPrompt() },
-        PromptPart("runtime/plan_board", PromptLevel.TOOL_ENFORCED) { vm.planBoardPrompt() },
-        PromptPart("runtime/recall", PromptLevel.EXTERNAL) { vm.liveRecallPrompt() },
-    )
+    internal fun of(vm: ChatViewModel): List<PromptPart> = KEYS.map { key ->
+        PromptPart(key, levelFor(key)) {
+            when (key) {
+                "runtime/work_report" -> vm.workReportPrompt()
+                "runtime/in_flight" -> vm.inFlightLanesPrompt()
+                "runtime/jobs" -> vm.backgroundJobsPrompt()
+                "runtime/plan_board" -> vm.planBoardPrompt()
+                "runtime/recall" -> vm.liveRecallPrompt()
+                else -> null
+            }
+        }
+    }
 
     /** Every key present exactly once, in [KEYS] order. */
     internal fun validate(parts: List<PromptPart>): List<PromptPart> {
