@@ -277,8 +277,10 @@ object ExecutionCoordinator {
             // per-session registry so getOrCreateShell() builds a fresh one
             // on the next call; the per-session mutex itself stays (queued
             // callers already reference it and withLock releases it normally).
-            // The verdict comes from the shell's internal flag/marker, NOT the
-            // bare exit code: a user command may legitimately exit 124.
+            // The verdict comes from the shell's internal flag ONLY — never the
+            // bare exit code (a user command may legitimately exit 124) and
+            // never the output text (a user command can echo the timeout
+            // marker itself; see ShellChannelRecovery).
             val timedOut = shell.consumeTimedOut()
             if (ShellChannelRecovery.shouldDiscardChannel(exitCode, rawOutput, timedOut)) {
                 discardTimedOutChannel(sessionId, shell)

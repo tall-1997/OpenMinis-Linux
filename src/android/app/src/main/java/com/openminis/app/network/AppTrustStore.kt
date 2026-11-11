@@ -39,7 +39,8 @@ import javax.net.ssl.X509TrustManager
  * build time, so a client built before an import would keep the old trust
  * anchor forever. [generation] is therefore part of every cache key that can
  * hold such a client (ProviderFactory's memo key, SharedHttpClients, the
- * VoiceProvider client, ConnectionWarmup, QuotaOkHttpTransport), and the open
+ * VoiceProvider client, ConnectionWarmup, QuotaOkHttpTransport, and
+ * FreeLaneDirectory's probe client), and the open
  * chat's `currentProvider` records the generation it was built under so
  * `rebuildProviderIfEdited()` replaces it before the next turn. [invalidate]
  * also evicts pooled TLS connections established under the previous material.

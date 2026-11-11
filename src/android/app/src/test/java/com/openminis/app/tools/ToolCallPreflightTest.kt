@@ -54,7 +54,19 @@ class ToolCallPreflightTest {
         required = emptyList(),
     )
 
-    private val tools = listOf(fileRead, multiEdit, memoryWrite, noArgsTool)
+    /** [F3 GH#61] Documents the one whitelisted empty string: delete semantics. */
+    private val fileEdit = AgentToolDefinition(
+        name = "file_edit",
+        description = "Edit a file",
+        parameters = mapOf(
+            "path" to param("File path"),
+            "old_string" to param("Text to replace"),
+            "new_string" to param("Use empty string to delete old_string"),
+        ),
+        required = listOf("path", "old_string", "new_string"),
+    )
+
+    private val tools = listOf(fileRead, multiEdit, memoryWrite, noArgsTool, fileEdit)
 
     private fun finalize(
         name: String,
@@ -137,5 +149,66 @@ class ToolCallPreflightTest {
         outcome as ToolCallPreflight.Outcome.Ready
         assertEquals(null, outcome.truncationRepairTag)
         assertTrue(outcome.argsStr.contains("/tmp/a.txt"))
+    }
+
+    // ── [F3 GH#61] required-field / empty-args preflight is shared by finalize ──
+
+    @Test
+    fun `empty parsed args with no raw tail are rejected before execution`() {
+        // This is the case the main loop refused but sub-agents / group chat
+        // executed: the provider substituted `{}` with no parseable tail, so the
+        // repair layer has nothing to recover from.
+        val outcome = finalize("file_read", "{}")
+        assertTrue("must reject, got $outcome", outcome is ToolCallPreflight.Outcome.Rejected)
+        outcome as ToolCallPreflight.Outcome.Rejected
+        assertTrue(outcome.modelMessage.contains("empty arguments"))
+        assertTrue(outcome.modelMessage.contains("path"))
+        assertTrue(outcome.modelMessage.contains("rejected before execution"))
+        assertEquals("Blocked invalid tool call", outcome.uiMessage)
+    }
+
+    @Test
+    fun `a missing required field is rejected with the field name`() {
+        val outcome = finalize("multi_edit", """{"path":"/tmp/a.txt"}""")
+        assertTrue("must reject, got $outcome", outcome is ToolCallPreflight.Outcome.Rejected)
+        outcome as ToolCallPreflight.Outcome.Rejected
+        assertTrue(outcome.modelMessage.contains("edits"))
+        assertTrue(outcome.modelMessage.contains("missing required parameter"))
+    }
+
+    @Test
+    fun `whitelisted empty string is not treated as missing`() {
+        val outcome = finalize(
+            "file_edit",
+            """{"path":"/tmp/a.txt","old_string":"gone","new_string":""}""",
+        )
+        assertTrue("must be ready, got $outcome", outcome is ToolCallPreflight.Outcome.Ready)
+    }
+
+    @Test
+    fun `alias names are validated against the canonical schema`() {
+        // shell_exec → shell_execute; the old name-only lookup silently skipped
+        // preflight for historical aliases.
+        val shell = AgentToolDefinition(
+            name = "shell_execute",
+            description = "Run a command",
+            parameters = mapOf("command" to param("Command")),
+            required = listOf("command"),
+        )
+        val outcome = ToolCallPreflight.finalize(
+            toolName = "shell_exec",
+            args = JSONObject("{}"),
+            rawArgumentTail = null,
+            advertisedTools = tools + shell,
+            turnFinishReason = null,
+        )
+        assertTrue("must reject, got $outcome", outcome is ToolCallPreflight.Outcome.Rejected)
+        assertTrue((outcome as ToolCallPreflight.Outcome.Rejected).modelMessage.contains("command"))
+    }
+
+    @Test
+    fun `a tool with no required fields still runs with empty args`() {
+        val outcome = finalize("no_args_tool", "{}")
+        assertTrue("must be ready, got $outcome", outcome is ToolCallPreflight.Outcome.Ready)
     }
 }

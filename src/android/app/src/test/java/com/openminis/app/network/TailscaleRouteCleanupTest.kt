@@ -155,6 +155,20 @@ class TailscaleRouteCleanupTest {
     }
 
     @Test
+    fun `a baseline-less cleanup retires a stale visible error`() {
+        // [OpenMinis#546] #546 residual: with no baseline there is no diff to run,
+        // so a leftover message must not keep being appended to NetworkHub's
+        // visible error row on every apply that never attempted cleanup.
+        TailscaleRouteCleanup.seedLastErrorForTest("stale: could not remove 2 entries")
+        assertEquals("stale: could not remove 2 entries", TailscaleRouteCleanup.visibleError())
+        assertFalse(TailscaleRouteCleanup.hasBaseline)
+
+        assertNull(TailscaleRouteCleanup.cleanupAfterStop("no baseline"))
+        assertNull("no baseline means no cleanup obligation", TailscaleRouteCleanup.visibleError())
+        assertTrue(deletedArgs.isEmpty())
+    }
+
+    @Test
     fun `a failed stop-time read keeps the baseline`() {
         val baseline = snapshot("1000: from all lookup 1076")
         var read: () -> TailscaleRouteCleanup.Snapshot? = { baseline }

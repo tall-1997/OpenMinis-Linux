@@ -21,6 +21,21 @@ import java.util.concurrent.CopyOnWriteArrayList
  *    含达到轮次上限的正常收尾）。
  *  - [LifecycleEvent.SESSION_END]：会话被删除时（含多选删除）。
  *
+ * ### [GH#131] RESPONSE 的边界（第三轮复审明确）
+ *
+ * **取消（用户 Stop / 协程 cancel）不触发 OnResponse。** 被取消的一轮没有
+ * 完整回复：如果为了“有始有终”而触发，用户脚本会把半截文本当成已完成结果
+ * （发通知、把内容同步到外部、触发下游自动化），代价远大于收益。触发点因此
+ * 在 `runAgentLoopBody` 的收尾处，并显式检查协程仍 active；取消路径在到达
+ * 之前就以 CancellationException 退出。
+ *
+ * **群聊一轮触发一次 OnResponse。** 群聊（`ChatViewModelGroupChatExt`）不走
+ * `runAgentLoop`，而是主管 + 成员的多次 `speakModel`。按“每个成员一条回复”
+ * 逐次触发会让同一条用户消息执行 N 次脚本、且脚本无法区分成员发言与回合
+ * 结束；按“一个用户可见回合”触发一次才与其余事件（会话开始/结束）的粒度
+ * 一致。关闭群聊的总结轮同样算一轮，照常触发。detail 是该轮最后一条
+ * assistant 文本的尾部（与主循环的 500 字符上限一致）。
+ *
  * ## 两层扩展点
  *
  * 1. **进程内事件总线**：[LifecycleListener] 可注册任意 Kotlin 处理器（未来
@@ -92,6 +107,16 @@ object LifecycleHooks {
 
     private val fallbackScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    /**
+     * [GH#131] Test seam: replaces the sandbox script runner. Signature is
+     * (script, timeoutMs) → (exitCode, combinedOutput); null = the production
+     * [ExecutionCoordinator] path (a one-shot PRoot process).
+     *
+     * 中文：脚本投递契约（环境变量前缀、20s 超时、退出码记账）不该只有真机
+     * 才能验证；注入 fake runner 后 JVM 测试可以钉住 fire() 的整条脚本分支。
+     */
+    internal var scriptRunnerForTest: (suspend (String, Long) -> Pair<Int, String>)? = null
+
     fun prime(context: Context) {
         app = context.applicationContext
         config = load(context)
@@ -160,25 +185,33 @@ object LifecycleHooks {
             return
         }
         val scope = (appContext as? com.openminis.app.MinisApp)?.appCoroutineScopes?.io ?: fallbackScope
+        val runner = scriptRunnerForTest
         scope.launch {
             val script = buildScript(event, sessionId, detail, command)
             val startedAt = System.currentTimeMillis()
             try {
-                val result = com.openminis.app.sandbox.ExecutionCoordinator.execute(
-                    sessionId = GUEST_SESSION_ID,
-                    command = script,
-                    timeout = TIMEOUT_MS,
-                )
+                // [GH#131] Production runs the script as a one-shot sandbox
+                // process; the injected runner exists only for JVM tests.
+                val (exitCode, output) = if (runner != null) {
+                    runner(script, TIMEOUT_MS)
+                } else {
+                    val result = com.openminis.app.sandbox.ExecutionCoordinator.execute(
+                        sessionId = GUEST_SESSION_ID,
+                        command = script,
+                        timeout = TIMEOUT_MS,
+                    )
+                    result.exitCode to result.output
+                }
                 val duration = System.currentTimeMillis() - startedAt
-                val tail = result.output.trim().takeLast(2000)
-                if (result.exitCode == 0) {
+                val tail = output.trim().takeLast(2000)
+                if (exitCode == 0) {
                     lastRun[event] = "ok (${duration}ms)"
                     AppLogger.info(TAG, "${event.wire} hook ok (${duration}ms) session=$sessionId")
                 } else {
-                    lastRun[event] = "exit=${result.exitCode} (${duration}ms)"
+                    lastRun[event] = "exit=$exitCode (${duration}ms)"
                     AppLogger.warning(
                         TAG,
-                        "${event.wire} hook failed: exit=${result.exitCode} session=$sessionId\n" +
+                        "${event.wire} hook failed: exit=$exitCode session=$sessionId\n" +
                             tail.ifBlank { "(no output)" },
                     )
                 }

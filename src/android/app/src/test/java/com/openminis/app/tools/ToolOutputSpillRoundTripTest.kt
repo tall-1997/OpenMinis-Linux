@@ -2,6 +2,7 @@ package com.openminis.app.tools
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -130,5 +131,102 @@ class ToolOutputSpillRoundTripTest {
         for (name in listOf("file_read", "shell_execute", "grep", "list_dir", "web_search")) {
             assertFalse("$name must not be a write tool", WriteTools.isWriteTool(name))
         }
+    }
+
+    // ── [F1 GH#343] spill filename identity: no cross-call overwrite ──
+
+    private fun guestName(preview: String): String =
+        ToolOutputSpill.parseGuestPath(preview)?.substringAfterLast('/')
+            ?: error("preview carries no spill path: $preview")
+
+    @Test
+    fun `two different call ids never overwrite each other's spill`() {
+        val dir = tmp.newFolder("tool-spill")
+        val first = raw
+        val second = "A".repeat(17_000)
+
+        val nameA = guestName(ToolOutputSpill.writeSpill(dir, "shell_execute", "call-a", first))
+        val nameB = guestName(ToolOutputSpill.writeSpill(dir, "shell_execute", "call-b", second))
+
+        assertNotEquals(nameA, nameB)
+        assertEquals(first, File(dir, nameA).readText())
+        assertEquals(second, File(dir, nameB).readText())
+    }
+
+    @Test
+    fun `blank call id produces a unique file per call`() {
+        val dir = tmp.newFolder("tool-spill")
+        val first = raw
+        val second = "B".repeat(19_000)
+
+        // "" is what group chat / supervisor passed before F1: every call wrote
+        // `tool.txt` and the last writer silently won.
+        val nameA = guestName(ToolOutputSpill.writeSpill(dir, "shell_execute", "", first))
+        val nameB = guestName(ToolOutputSpill.writeSpill(dir, "shell_execute", "", second))
+
+        assertNotEquals(nameA, nameB)
+        assertTrue("blank-id spill must be unique-suffixed, got $nameA", nameA.startsWith("tool-"))
+        assertTrue("blank-id spill must be unique-suffixed, got $nameB", nameB.startsWith("tool-"))
+        assertEquals(first, File(dir, nameA).readText())
+        assertEquals(second, File(dir, nameB).readText())
+
+        // The generated name must still be a recognisable read-back target: the
+        // model will `file_read` this exact guest path later (#343 de-loop).
+        val guestA = ToolOutputSpill.parseGuestPath(
+            ToolOutputSpill.writeSpill(dir, "shell_execute", "readback-1", first),
+        )!!
+        assertTrue(ToolOutputSpill.isSpillGuestPath(guestA))
+        assertEquals(SpillPlan.ALREADY_SPILLED, ToolOutputSpill.planFor(first, true, guestA))
+        assertEquals(
+            guestA,
+            ToolOutputSpill.sourcePathForTool("file_read", """{"path":"$guestA"}"""),
+        )
+        assertTrue(ToolOutputSpill.alreadySpilledPreview("file_read", guestA, first).contains(guestA))
+    }
+
+    @Test
+    fun `a reused call id appends a suffix instead of overwriting`() {
+        val dir = tmp.newFolder("tool-spill")
+        val first = raw
+        val second = "C".repeat(18_000)
+
+        val nameA = guestName(ToolOutputSpill.writeSpill(dir, "shell_execute", "same-call", first))
+        val nameB = guestName(ToolOutputSpill.writeSpill(dir, "shell_execute", "same-call", second))
+
+        assertEquals("same-call.txt", nameA)
+        assertNotEquals("reused id must not overwrite the first spill", nameA, nameB)
+        assertEquals("first spill content must survive", first, File(dir, nameA).readText())
+        assertEquals(second, File(dir, nameB).readText())
+    }
+
+    @Test
+    fun `concurrent spills with the same reused id are unique and uncorrupted`() {
+        val dir = tmp.newFolder("tool-spill")
+        val bodies = (1..8).map { idx -> "call-$idx\n" + idx.toString().repeat(30_000) }
+        val names = java.util.Collections.synchronizedList(mutableListOf<String>())
+
+        val threads = bodies.map { body ->
+            Thread {
+                val preview = ToolOutputSpill.writeSpill(dir, "shell_execute", "shared-call", body)
+                names.add(guestName(preview))
+            }
+        }
+        threads.forEach { it.start() }
+        threads.forEach { it.join(30_000) }
+
+        assertEquals("every writer must produce a preview", bodies.size, names.size)
+        assertEquals("each writer must own a distinct file", bodies.size, names.toSet().size)
+        assertTrue("names must stay inside the guest charset", names.all { it.matches(Regex("[A-Za-z0-9._-]+\\.txt")) })
+
+        val files = dir.listFiles()!!.filter { it.isFile && it.name.endsWith(".txt") }
+        assertEquals("one file per writer", bodies.size, files.size)
+        for (f in files) {
+            // Atomic write + verified content: no interleaving, no half body.
+            assertTrue("corrupt spill file ${f.name}", f.readText() in bodies)
+        }
+        assertTrue(
+            "atomic writes must not leave temp artifacts behind",
+            dir.listFiles()!!.none { it.name.endsWith(".minis-tmp") },
+        )
     }
 }

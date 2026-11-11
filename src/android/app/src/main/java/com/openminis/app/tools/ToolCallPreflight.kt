@@ -1,7 +1,6 @@
 package com.openminis.app.tools
 
 import com.openminis.app.data.model.AgentToolDefinition
-import com.openminis.app.data.model.LLMStreamChunk
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.provider.ToolJsonRepair
 import com.openminis.app.security.ToolAliases
@@ -26,7 +25,9 @@ import org.json.JSONObject
  *     收到字节数 + 尾部样本”回写模型，并让调用方把工具块标 FAILED；
  *  3. 修复策略是截断且工具属于 [WriteTools] → 拒绝执行（半截写入是静默的
  *     用户数据损坏）；
- *  4. 整轮 finish_reason=length/max_tokens → 拒绝执行（流尾参数不可信）。
+ *  4. 整轮 finish_reason=length/max_tokens → 拒绝执行（流尾参数不可信）；
+ *  5. 参数已解析但缺必填字段 / 空 `{}`（[requiredFieldViolation]）→ 拒绝执行
+ *     （#61 的子代理/群聊缺口：它们曾把 provider 顶替的 `{}` 当合法调用）。
  *
  * Returns a sealed [Outcome]: [Outcome.Ready] carries the repaired args (the
  * same JSONObject, mutated in place) so every caller executes exactly what the
@@ -76,18 +77,82 @@ internal object ToolCallPreflight {
         ) : Outcome()
     }
 
-    /** Convenience overload for the three stream loops: one line at the call site. */
-    fun finalize(
-        complete: LLMStreamChunk.ToolCallComplete,
-        advertisedTools: List<AgentToolDefinition>,
-        turnFinishReason: String? = null,
-    ): Outcome = finalize(
-        toolName = complete.name,
-        args = complete.args,
-        rawArgumentTail = complete.rawArgs,
-        advertisedTools = advertisedTools,
-        turnFinishReason = turnFinishReason,
+    /**
+     * [F3 GH#61] 必填字段 / 空参数预检 —— 从主循环下沉到共享层。
+     *
+     * 中文：这段逻辑原先只存在于 `ChatViewModel.preflightValidateToolCall`
+     * （主循环独有），于是同一个 provider 用 `{}` 顶替解析失败参数流时，
+     * 主循环会拒绝，子代理和群聊/主管却把空对象当合法调用执行：写工具报
+     * `path required`、无必填字段的工具直接静默空操作，模型还得多跑一轮。
+     * 现在 [finalize] 在修复之后、返回 Ready 之前调用本函数，三个执行入口
+     * （主循环 / SubAgentRunner / 群聊-主管 speakModel）自动一致。
+     */
+    private val NON_BLOCKING_REQUIRED_FIELDS = setOf("tool_title")
+
+    /**
+     * [F3 GH#61] (tool → field) 中 "" 是合法值、不能当"缺失"的字段。
+     *
+     * 与 [NON_BLOCKING_REQUIRED_FIELDS] 不同：这些字段仍必须 PRESENT，只是
+     * 允许内容为空。典型是 `file_edit.new_string == ""` 的删除语义。
+     * [T-preflight-empty-string-allowed] 与 iOS
+     * `AIChatViewModel.preflightEmptyStringAllowedFields` 对齐。
+     */
+    private val EMPTY_STRING_ALLOWED_FIELDS: Map<String, Set<String>> = mapOf(
+        "file_edit" to setOf("new_string"),
     )
+
+    /** True when "" is a legal value for this exact (tool, field) pair. */
+    internal fun emptyStringAllowed(tool: String, field: String): Boolean =
+        EMPTY_STRING_ALLOWED_FIELDS[tool]?.contains(field) == true
+
+    /**
+     * [F3 GH#61] Returns null when [args] satisfies the advertised tool schema,
+     * or a human-readable reason when the call must not execute.
+     *
+     * 匹配用 canonical 名：模型可能发 `shell_exec` 这类历史别名，而
+     * advertisedTools 里只有 `shell_execute`；只按原名字面匹配会让别名绕过
+     * 整个预检（旧主循环的隐藏缺口）。报文仍用模型发出的 [toolName]，便于
+     * 模型把错误对上自己那次调用。
+     */
+    fun requiredFieldViolation(
+        toolName: String,
+        args: JSONObject,
+        advertisedTools: List<AgentToolDefinition>,
+    ): String? {
+        // Unknown tool names stay silent: dispatch returns "Unknown tool: …".
+        val canonical = ToolAliases.canonical(toolName)
+        val toolDef = advertisedTools.firstOrNull { it.name == canonical }
+            ?: advertisedTools.firstOrNull { it.name == toolName }
+            ?: return null
+        val enforced = toolDef.required.filter { it !in NON_BLOCKING_REQUIRED_FIELDS }
+        // Empty args on a tool that requires anything → block. Gate on `enforced`
+        // so a tool whose only required field is non-blocking is not rejected.
+        if (args.length() == 0 && enforced.isNotEmpty()) {
+            return "Tool '$toolName' was called with empty arguments {} but requires: " +
+                "${enforced.joinToString(", ")}."
+        }
+        val missing = mutableListOf<String>()
+        for (field in enforced) {
+            // Absent — or present as explicit JSON null. org.json reports
+            // has()==true for {"x":null}, so both spellings are genuinely missing.
+            if (!args.has(field) || args.isNull(field)) {
+                missing.add(field)
+                continue
+            }
+            val raw = args.opt(field)
+            // Only the truly-empty literal "" is rejected — NOT whitespace.
+            // file_edit with new_string "\n" / old_string "  " are valid edits.
+            if (raw is String && raw.isEmpty() &&
+                !emptyStringAllowed(canonical, field)
+            ) {
+                missing.add(field)
+            }
+        }
+        if (missing.isNotEmpty()) {
+            return "Tool '$toolName' is missing required parameter(s): ${missing.joinToString(", ")}."
+        }
+        return null
+    }
 
     /**
      * Shared preflight core.
@@ -103,7 +168,11 @@ internal object ToolCallPreflight {
         args: JSONObject,
         rawArgumentTail: String?,
         advertisedTools: List<AgentToolDefinition>,
-        turnFinishReason: String? = null,
+        // [F4 GH#61] Required, no `= null` default: a call site that forgot the
+        // turn's finish reason would silently lose the length/max_tokens refusal
+        // — the exact "three entries drift" failure this shared layer exists to
+        // prevent. All three call sites pass it explicitly.
+        turnFinishReason: String?,
     ): Outcome {
         val rawTail = rawArgumentTail?.takeIf { it.isNotBlank() }
         // [GH#61/#83/#146] Repair against the CANONICAL tool definition: models
@@ -201,6 +270,29 @@ internal object ToolCallPreflight {
                 repairs = repairs,
                 truncationRepairTag = truncationRepairTag,
                 rawBytes = args.toString().toByteArray(Charsets.UTF_8).size,
+            )
+        }
+
+        // [F3 GH#61] 必填字段 / 空参数预检。放在修复与截断拒绝之后：修复出的参数
+        // 才是真正要执行的参数，而整轮截断的拒绝信息优先于"缺字段"。
+        // 中文：这一段以前只在主循环的 `preflightValidateToolCall` 里，子代理/
+        // 群聊对"解析成功的空 {}"仍会执行；下沉到这里后三个入口自然一致。
+        requiredFieldViolation(toolName, args, advertisedTools)?.let { violation ->
+            val rawBytes = args.toString().toByteArray(Charsets.UTF_8).size
+            AppLogger.warning(
+                "ToolPreflight",
+                "BLOCKED missing required fields tool=$toolName reason=\"$violation\" " +
+                    "argsKeys=[${args.keys().asSequence().toList().sorted().joinToString(",")}]",
+            )
+            return Outcome.Rejected(
+                modelMessage = "Error: Tool call rejected before execution. $violation " +
+                    "The arguments your client sent were empty or missing required fields — " +
+                    "re-issue the call with all required parameters filled in. Do not retry " +
+                    "with the same empty arguments.",
+                uiMessage = "Blocked invalid tool call",
+                repairs = repairs,
+                truncationRepairTag = truncationRepairTag,
+                rawBytes = rawBytes,
             )
         }
 
