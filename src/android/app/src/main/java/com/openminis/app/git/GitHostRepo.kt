@@ -52,41 +52,52 @@ object GitHostRepo {
         SessionWorkspace.hostDir(filesDir, sessionId, "workspace")
 
     /**
-     * Open the repo at [dir]; null when the directory is not a git work tree
-     * or HEAD is unresolvable. The handle is closed on the failure paths so a
-     * failed open cannot leak a Repository (the panel opens one per refresh).
+     * Open the repo at [dir]; null when the directory is not a git work tree.
+     * HEAD is NOT checked: identity is independent of history — an empty repo
+     * is a repo, and a broken-HEAD repo stays servable ([logPage] walks refs,
+     * sandbox parity). Reads needing HEAD's tree fail there; [status] reports
+     * the error. Closed on failure so open cannot leak a Repository.
      */
     private fun open(dir: File): Git? = try {
         val g = Git.open(dir)
-        try {
-            g.repository.resolve(Constants.HEAD)
-            g
-        } catch (_: Exception) {
-            runCatching { g.close() }
-            null
-        }
+        runCatching { g.repository.repositoryState }.fold(
+            onSuccess = { g },
+            onFailure = { runCatching { g.close() }; null },
+        )
     } catch (_: Exception) {
         null
+    }
+
+    /** First resolvable ref sha walking HEAD → every ref, or null. */
+    private fun resolveHeadOrAnyRef(repo: Repository): ObjectId? {
+        // HEAD's sha can resolve while its OBJECT is missing (resolve only
+        // reads the ref file) — validate by parsing, then fall to other refs.
+        runCatching {
+            repo.resolve(Constants.HEAD)?.let { head ->
+                RevWalk(repo).use { it.parseCommit(head) }
+                return head
+            }
+        }
+        for (ref in repo.refDatabase.getRefs()) {
+            val id = ref.objectId ?: continue
+            if (id == ObjectId.zeroId()) continue
+            if (runCatching { RevWalk(repo).use { it.parseCommit(id) } }.isSuccess) return id
+        }
+        return null
     }
 
     // ── probe ───────────────────────────────────────────────────────────────
 
     /**
      * Repo identity for the header card, or isRepo=false outside a work tree.
-     * A repo whose HEAD points at a missing object also reports false: every
-     * host read would throw on it, and the sandbox path has the graceful
-     * per-ref fallback for that case.
+     * Identity is decoupled from history: an empty repo (zero commits) is a
+     * repo (sandbox parity) and a broken HEAD stays servable via [logPage].
      */
     fun probe(dir: File): GitCli.GitRepoInfo {
         val git = open(dir) ?: return GitCli.GitRepoInfo(isRepo = false)
         git.use { g ->
             val repo = g.repository
-            val head = repo.resolve(Constants.HEAD)
-            if (head != null && !runCatching {
-                    RevWalk(repo).use { it.parseCommit(head) }
-                }.isSuccess
-            ) return GitCli.GitRepoInfo(isRepo = false)
-            val branch = repo.branch ?: ""
+            val branch = runCatching { repo.branch }.getOrDefault("")
             val cfg = repo.config
             return GitCli.GitRepoInfo(
                 isRepo = true,
@@ -115,8 +126,10 @@ object GitHostRepo {
             // offset/limit stable across refreshes.
             walk.sort(RevSort.COMMIT_TIME_DESC)
             try {
-                val headId = g.repository.resolve(Constants.HEAD) ?: return emptyList()
-                walk.markStart(walk.parseCommit(headId))
+                // HEAD first; a repo with a broken HEAD object still serves
+                // history from its refs (sandbox path's per-ref fallback).
+                val anchor = resolveHeadOrAnyRef(g.repository) ?: return emptyList()
+                walk.markStart(walk.parseCommit(anchor))
                 val commits = ArrayList<GitCli.GitCommit>(limit)
                 var skipped = 0
                 for (rev in walk) {
@@ -148,7 +161,11 @@ object GitHostRepo {
         val git = open(dir) ?: return GitCli.GitStatus(error = "not a git repository")
         git.use { g ->
             val repo = g.repository
-            val s = g.status().call()
+            // Broken HEAD: JGit throws where real `git status` fails the same
+            // way — carry it as GitStatus.error, the sandbox path's shape.
+            val s = runCatching { g.status().call() }.getOrElse { e ->
+                return GitCli.GitStatus(error = (e.message ?: "status failed").take(500))
+            }
             val entries = ArrayList<GitCli.GitFileEntry>()
             // Direct set mapping mirrors porcelain XY columns exactly:
             // staged = added/changed/removed, unstaged = modified/missing,

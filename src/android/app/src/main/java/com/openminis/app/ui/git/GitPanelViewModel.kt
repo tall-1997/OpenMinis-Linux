@@ -156,7 +156,7 @@ class GitPanelViewModel(
                         // A failed status probe is worth surfacing — a
                         // silently empty Changes tab reads as "clean tree",
                         // which would be a lie.
-                        notice = if (status == null) "git status failed" else null,
+                        notice = status?.error ?: if (status == null) "git status failed" else null,
                     )
                 }
                 return@launch
@@ -205,7 +205,7 @@ class GitPanelViewModel(
                     logLoadingMore = false,
                     lastCommit = log.firstOrNull(),
                     diff = keepDiff,
-                    notice = if (status == null) repo.error ?: "git status failed" else null,
+                    notice = status?.error ?: if (status == null) repo.error ?: "git status failed" else null,
                 )
             }
         }

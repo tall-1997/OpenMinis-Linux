@@ -165,10 +165,12 @@ def migration_sqls(source):
     return out
 
 
-def replay(sqls):
-    """Apply forward migrations 1→N in order; return {table: state}."""
+def replay(sqls, upto=None):
+    """Apply forward migrations 1→upto in order; return {table: state}."""
     tables = {}
     for (a, b) in sorted(k for k in sqls if k[0] < k[1]):
+        if upto is not None and b > upto:
+            continue
         tag = "MIGRATION_%d_%d" % (a, b)
         for ddl in sqls[(a, b)]:
             t = CREATE_TABLE.search(ddl)
@@ -229,38 +231,41 @@ def load_schema(path):
     return out, path
 
 
-def newest_and_oldest():
-    files = sorted(
-        (json.load(open(os.path.join(SCHEMAS_DIR, f)))["database"]["version"], f)
-        for f in os.listdir(SCHEMAS_DIR)
-        if f.endswith(".json")
-    )
-    oldest, newest = files[0], files[-1]
-    return (
-        load_schema(os.path.join(SCHEMAS_DIR, oldest[1])),
-        load_schema(os.path.join(SCHEMAS_DIR, newest[1])),
-    )
+def exported_schemas():
+    """[(version, filename, (schema, path))] for every export, sorted.
+
+    Every export is compared, not just the newest: the hand-reconstructed
+    intermediate exports (13.json / 17.json, see AppDatabase.kt) have no Room
+    build behind them, so the replay is the only thing keeping them honest.
+    """
+    out = []
+    for f in os.listdir(SCHEMAS_DIR):
+        if not f.endswith(".json"):
+            continue
+        path = os.path.join(SCHEMAS_DIR, f)
+        out.append((json.load(open(path))["database"]["version"], f, load_schema(path)))
+    return sorted(out)
 
 
-def main():
-    source = load_migration_sources()
-    sqls = migration_sqls(source)
-    replayed = replay(sqls)
-    (oldest, _), (expected, newest_path) = newest_and_oldest()
-    newest_name = os.path.basename(newest_path)
-
+def compare(replayed, expected, oldest, label):
+    """Drift problems for one exported version; [] when the replay at that
+    version agrees with the export. `oldest` is the pre-chain baseline: tables
+    it already lists predate the migration chain, and at intermediate versions
+    a pre-chain table no migration has touched yet has no replay state at all.
+    """
     problems = []
-    all_tables = sorted(set(replayed) | set(expected))
-    for table in all_tables:
+    for table in sorted(set(replayed) | set(expected)):
         r, e = replayed.get(table), expected.get(table)
         if r is None:
+            if table in oldest:
+                continue  # pre-chain table, not touched by any migration yet
             problems.append(
-                f"{table}: exported in {newest_name} but no forward migration creates it"
+                f"{table}: exported in {label} but no forward migration creates it"
             )
             continue
         if e is None:
             problems.append(
-                f"{table}: created by {r['created_by']} but absent from {newest_name}"
+                f"{table}: created by {r['created_by']} but absent from {label}"
             )
             continue
         pre_v1 = r["created_by"] is None and table in oldest
@@ -277,7 +282,7 @@ def main():
         for iname in sorted(r["indexes"].keys() - e["indexes"].keys()):
             problems.append(
                 f"{table}: index `{iname}` created by {r['indexes'][iname]['by']} "
-                f"but not declared in {newest_name} — Room will crash on upgrade"
+                f"but not declared in {label} — Room will crash on upgrade"
             )
         for iname in sorted(e["indexes"].keys() - r["indexes"].keys()):
             if pre_v1 and iname in oldest.get(table, {}).get("indexes", {}):
@@ -294,14 +299,29 @@ def main():
                     f"{table}.{iname}: columns mismatch replay={ri['columnNames']} "
                     f"exported={ei['columnNames']}"
                 )
+    return problems
+
+
+def main():
+    source = load_migration_sources()
+    sqls = migration_sqls(source)
+    exports = exported_schemas()
+    if not exports:
+        raise SystemExit("schema drift: no exported schemas found in %s" % SCHEMAS_DIR)
+    oldest = exports[0][2][0]
+
+    problems = []
+    for version, fname, (expected, _) in exports:
+        problems.extend(compare(replay(sqls, upto=version), expected, oldest, fname))
 
     if problems:
-        print(f"schema drift vs {newest_name} ({len(problems)}):")
+        print(f"schema drift ({len(problems)}):")
         for p in problems:
             print("  - " + p)
         sys.exit(1)
     print(
-        f"schema drift check passed: {len(all_tables)} tables replay cleanly against {newest_name}"
+        "schema drift check passed: %d exported versions replay cleanly "
+        "(%s → %s)" % (len(exports), exports[0][1], exports[-1][1])
     )
 
 

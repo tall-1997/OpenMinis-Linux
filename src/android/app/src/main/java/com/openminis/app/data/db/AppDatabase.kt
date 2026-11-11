@@ -26,13 +26,18 @@ import androidx.sqlite.db.SupportSQLiteDatabase
     ],
     version = 29, // keep DatabaseVersionGuard.CODE_DB_VERSION in lockstep
     // [T-android-downgrade-compat] Kept ON so MigrationTestHelper and CI can
-    // validate migrations against the committed schema json. Note the honest
-    // scope: src/android/app/schemas/…AppDatabase/ currently holds 12, 14, 15,
-    // 16, 18-23 — 13.json and 17.json were never committed, so the 12→13
-    // (code_symbols/code_edges) and 16→17 (permission_mode) steps have no
-    // baseline to validate against. Room only exports the schema of the version
-    // being compiled, so those two can't be recovered retro; the entity
-    // declarations plus the in-code comments are the spec for them.
+    // validate migrations against the committed schema json. The chain now
+    // runs 12-29 complete. 13.json and 17.json were never exported by a
+    // compiling build (Room only writes the version it compiles) and were
+    // reconstructed in place from their neighbours: 13 = 12 + the
+    // code_symbols/code_edges entities copied verbatim from 16.json, 17 =
+    // 16 + the sessions.permissionMode field copied verbatim from 18.json —
+    // exactly what MIGRATION_12_13 / MIGRATION_16_17 produce. Their
+    // identityHash values are carried over from the neighbouring export as
+    // placeholders: MigrationTestHelper validates TABLE SHAPE, not the hash
+    // (only Room's runtime open check reads it), so replay validation is
+    // sound. If a future test ever asserts on those hashes, regenerate both
+    // by compiling at version 13/17.
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {

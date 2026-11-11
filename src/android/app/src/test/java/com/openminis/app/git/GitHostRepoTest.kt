@@ -305,11 +305,50 @@ class GitHostRepoTest {
     }
 
     @Test
-    fun `probe rejects a repo whose HEAD object is missing`() {
+    fun `probe survives a repo whose HEAD object is missing`() {
         val (dir, git) = initRepo()
         git.close()
         File(dir, ".git/HEAD").writeText("0123456789abcdef0123456789abcdef01234567\n")
-        assertFalse(GitHostRepo.probe(dir).isRepo)
+        // [T-git-panel-dual-source parity] A broken HEAD object no longer
+        // demotes the repo: any resolvable ref keeps it servable, mirroring
+        // the sandbox path's per-ref fallback. probe stays true AND history
+        // still flows from the surviving refs.
+        assertTrue(GitHostRepo.probe(dir).isRepo)
+        val page = GitHostRepo.logPage(dir, offset = 0, limit = 10)
+        assertEquals(1, page.size)
+        assertEquals("initial commit", page[0].subject)
+    }
+
+    @Test
+    fun `probe keeps a fresh empty repo a repo`() {
+        // [T-git-panel-dual-source parity] git init with zero commits: real
+        // `rev-parse --is-inside-work-tree` says true, the sandbox probe
+        // agrees, and status/branches work — the anchor-gated probe demoted
+        // it to "not a repo" and diverged from its own fallback.
+        val dir = tmp.newFolder("empty-repo")
+        Git.init().setDirectory(dir).call().close()
+        val info = GitHostRepo.probe(dir)
+        assertTrue(info.isRepo)
+        assertTrue(info.branch.isNotEmpty())
+        assertTrue(GitHostRepo.logPage(dir, offset = 0, limit = 10).isEmpty())
+        assertTrue(GitHostRepo.branches(dir).isEmpty())
+        // The user-facing regression: a fresh repo's untracked files show in
+        // the changes view instead of the panel saying "not a repo".
+        File(dir, "u.txt").writeText("x\n")
+        val status = GitHostRepo.status(dir)
+        assertNull(status.error)
+        assertTrue(status.entries.any { it.path == "u.txt" })
+    }
+
+    @Test
+    fun `status on a repo whose HEAD object is missing reports the error`() {
+        val (dir, git) = initRepo()
+        git.close()
+        File(dir, ".git/HEAD").writeText("0123456789abcdef0123456789abcdef01234567\n")
+        // JGit throws MissingObject here — real `git status` fails the same
+        // way ("fatal: bad object HEAD"). Carry it as GitStatus.error, the
+        // sandbox path's shape, so the panel surfaces the cause.
+        assertNotNull(GitHostRepo.status(dir).error)
     }
 
     // ── commit detail / numstat / diff ─────────────────────────────────────

@@ -103,3 +103,21 @@ internal fun ChatViewModel.resolveImageProvider(current: LLMProvider?): LLMProvi
     }
     return null
 }
+
+/**
+ * [T-codex-gpt-image2 -> wired] The chat agent loop's MediaAttachment chunk:
+ * persist the model-generated image to the session attachments store (the
+ * same path the generate_image tool uses) and return the inline-image
+ * Markdown link for the turn text — the existing chat renderer shows it. The
+ * raw bytes still ride LLMResponse.mediaAttachments for the minis-model-use
+ * CLI path; returning the link does not strip them. Null when the attachment
+ * is not a non-empty image or persistence failed.
+ */
+internal fun ChatViewModel.generatedImageMarkdown(att: LLMMediaAttachment): String? {
+    if (att.type != LLMMediaAttachment.MediaType.IMAGE || att.data.isEmpty()) return null
+    return runCatching {
+        val sid = activeSessionId.ifEmpty { realSessionId.ifEmpty { sessionId } }
+        val saved = persistGeneratedImage(sid, att)
+        "![image](minis://attachments/" + saved.relPath + ")"
+    }.getOrNull()
+}

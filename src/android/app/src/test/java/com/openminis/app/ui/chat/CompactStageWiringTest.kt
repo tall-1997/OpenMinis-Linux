@@ -34,6 +34,7 @@ class CompactStageWiringTest {
             imageParts: List<LLMMessage.ImagePart>,
             tools: List<AgentToolDefinition>,
             thinkingLevel: ThinkingLevel,
+            extraHeaders: Map<String, String>,
         ): LLMResponse = error("unused")
 
         override fun streamMessageClamped(
@@ -45,6 +46,7 @@ class CompactStageWiringTest {
             tools: List<AgentToolDefinition>,
             thinkingLevel: ThinkingLevel,
             systemStablePrefixLen: Int,
+            extraHeaders: Map<String, String>,
         ): Flow<LLMStreamChunk> = flow { }
     }
 
