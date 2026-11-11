@@ -2070,4 +2070,7 @@
     <string name="git_panel_no_stashes">ไม่มีสแตช</string>
     <string name="git_panel_switch_branch">สลับบรานช์</string>
     <string name="sessionlist_export_markdown">Markdown</string>
+    <!-- [#38] Update dialog: release-notes expand/collapse toggle -->
+    <string name="check_update_notes_expand">แสดงทั้งหมด</string>
+    <string name="check_update_notes_collapse">ย่อ</string>
 </resources>

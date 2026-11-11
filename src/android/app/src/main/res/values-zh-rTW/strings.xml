@@ -2152,4 +2152,7 @@
     <string name="git_panel_no_stashes">沒有暫存記錄</string>
     <string name="git_panel_switch_branch">切換分支</string>
     <string name="sessionlist_export_markdown">Markdown</string>
+    <!-- [#38] 更新對話框：更新說明展開/收合 -->
+    <string name="check_update_notes_expand">展開全部</string>
+    <string name="check_update_notes_collapse">收合</string>
 </resources>

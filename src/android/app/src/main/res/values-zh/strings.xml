@@ -2678,4 +2678,8 @@
     <string name="add_provider_vendor_hint_mistral">在 console.mistral.ai 创建 API Key</string>
     <string name="add_provider_vendor_hint_ollama">本地服务，无需 API Key</string>
     <string name="add_provider_vendor_hint_lmstudio">本地服务，无需 API Key；请先在 LM Studio 启动 Developer 服务器</string>
+    <string name="chat_queued_edit_title">编辑排队消息</string>
+    <!-- [#38] 更新对话框：更新说明展开/收起 -->
+    <string name="check_update_notes_expand">展开全部</string>
+    <string name="check_update_notes_collapse">收起</string>
 </resources>

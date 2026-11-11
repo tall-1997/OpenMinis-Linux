@@ -2866,4 +2866,8 @@
     <string name="add_provider_vendor_hint_mistral">Create an API key at console.mistral.ai</string>
     <string name="add_provider_vendor_hint_ollama">Local server — no API key needed</string>
     <string name="add_provider_vendor_hint_lmstudio">Local server — no API key needed. Start the Developer server in LM Studio first</string>
+    <string name="chat_queued_edit_title">Edit queued message</string>
+    <!-- [#38] Update dialog: release-notes expand/collapse toggle -->
+    <string name="check_update_notes_expand">Show all</string>
+    <string name="check_update_notes_collapse">Show less</string>
 </resources>

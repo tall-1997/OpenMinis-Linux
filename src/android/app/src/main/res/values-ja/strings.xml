@@ -2067,4 +2067,7 @@
     <string name="git_panel_no_stashes">スタッシュなし</string>
     <string name="git_panel_switch_branch">ブランチを切り替え</string>
     <string name="sessionlist_export_markdown">Markdown</string>
+    <!-- [#38] Update dialog: release-notes expand/collapse toggle -->
+    <string name="check_update_notes_expand">すべて表示</string>
+    <string name="check_update_notes_collapse">折りたたむ</string>
 </resources>

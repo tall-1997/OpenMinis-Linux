@@ -4,6 +4,7 @@ import android.util.Log
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMMessage
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -262,3 +263,47 @@ internal fun ChatViewModel.settleInterruptedThinkingTurn(
         _autoRetryCountdown.value = 0
     }
 }
+
+    /**
+     * [T-android-queued-message-edit #37] Rewrite a queued prompt's text in
+     * place. Queue position and attachments ([QueuedPrompt.attachments]) are
+     * untouched — only [QueuedPrompt.text] changes — and the queued
+     * placeholder bubble (id="queued_msg_…", queuedPromptId=[promptId]) is
+     * refreshed in the same pass so the dashed row shows the new text
+     * immediately.
+     *
+     * Memory-only by design: [_promptQueue] never touches the DB (see
+     * [enqueuePrompt]); the edited text is persisted for real when the queue
+     * is later drained / injected as a user row (injectQueuedPromptsAsNewTurn
+     * reads [QueuedPrompt.text] at claim time, so whatever the queue holds
+     * when the boundary fires is what gets sent).
+     *
+     * Accepts the queued *prompt* id (ChatMessage.queuedPromptId), matching
+     * the withdraw flow's granularity. Returns true when a matching prompt
+     * was found and updated; false when the id is unknown — a concurrent
+     * drain (claimPromptQueue CAS-clears the queue) or withdraw raced the
+     * edit, and the caller's dialog outlived its row.
+     *
+     * A blank edit is rejected while the prompt carries no attachments
+     * (returning false): the drain path skips content-less prompts, so an
+     * empty-text edit would silently send nothing. With attachments, a blank
+     * text is legal (image-only queued prompts already exist).
+     */
+    internal fun ChatViewModel.editQueued(promptId: String, newText: String): Boolean {
+        val trimmed = newText.trim()
+        var updated = false
+        _promptQueue.update { queue ->
+            val idx = queue.indexOfFirst { it.id == promptId }
+            if (idx < 0) return@update queue
+            val prompt = queue[idx]
+            if (trimmed.isBlank() && prompt.attachments.isEmpty()) return@update queue
+            updated = true
+            queue.toMutableList().apply { this[idx] = prompt.copy(text = trimmed) }
+        }
+        if (!updated) return false
+        _messages.value = _messages.value.map { m ->
+            if (m.queuedPromptId == promptId) m.copy(content = trimmed) else m
+        }
+        Log.i("ChatViewModel", "Edited queued prompt (${trimmed.length}ch), queue=${_promptQueue.value.size}")
+        return true
+    }

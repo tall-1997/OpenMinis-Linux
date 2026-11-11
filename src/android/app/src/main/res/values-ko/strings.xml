@@ -2067,4 +2067,7 @@
     <string name="git_panel_no_stashes">스태시 없음</string>
     <string name="git_panel_switch_branch">브랜치 전환</string>
     <string name="sessionlist_export_markdown">Markdown</string>
+    <!-- [#38] Update dialog: release-notes expand/collapse toggle -->
+    <string name="check_update_notes_expand">전체 표시</string>
+    <string name="check_update_notes_collapse">접기</string>
 </resources>

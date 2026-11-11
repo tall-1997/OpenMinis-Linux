@@ -2075,4 +2075,7 @@
     <string name="git_panel_no_stashes">Tidak ada stash</string>
     <string name="git_panel_switch_branch">Ganti cabang</string>
     <string name="sessionlist_export_markdown">Markdown</string>
+    <!-- [#38] Update dialog: release-notes expand/collapse toggle -->
+    <string name="check_update_notes_expand">Tampilkan semua</string>
+    <string name="check_update_notes_collapse">Tampilkan lebih sedikit</string>
 </resources>

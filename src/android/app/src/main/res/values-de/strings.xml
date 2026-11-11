@@ -2060,4 +2060,7 @@
     <string name="git_panel_no_stashes">Keine Stashes</string>
     <string name="git_panel_switch_branch">Branch wechseln</string>
     <string name="sessionlist_export_markdown">Markdown</string>
+    <!-- [#38] Update dialog: release-notes expand/collapse toggle -->
+    <string name="check_update_notes_expand">Alles anzeigen</string>
+    <string name="check_update_notes_collapse">Weniger anzeigen</string>
 </resources>

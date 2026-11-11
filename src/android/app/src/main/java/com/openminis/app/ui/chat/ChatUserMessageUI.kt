@@ -43,13 +43,16 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenuItem
 import com.openminis.app.R
 import com.openminis.app.ui.components.MinisMenu
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -99,9 +102,18 @@ internal fun UserMessageBubble(
     // capability).
     onDeleteFromHere: (() -> Unit)? = null,
     onWithdraw: (() -> Unit)? = null,
+    // [T-android-queued-message-edit #37] Rewrite the queued prompt's text in
+    // place (queue position + attachments preserved). Non-null only for
+    // queued bubbles; invoked with the confirmed text from the edit dialog.
+    onEditQueued: ((String) -> Unit)? = null,
     onPreviewFile: (Uri, String) -> Unit = { _, _ -> },
 ) {
     var showMenu by remember { mutableStateOf(false) }
+    // Edit dialog state lives on the bubble: the prefill must track
+    // message.content at OPEN time (remember(showEditDialog) recomputes on
+    // each open, so a previously-cancelled draft never leaks into the next
+    // edit and an externally-drained row re-prefills with fresh content).
+    var showEditDialog by remember { mutableStateOf(false) }
     val isQueued = message.isQueued
     val haptics = LocalHapticFeedback.current
 
@@ -209,10 +221,11 @@ internal fun UserMessageBubble(
                         // menu anchor.
                         androidx.compose.foundation.text.selection.DisableSelection {
                             // T167: when queued, leave room for the 44dp cancel
-                            // IconButton sibling. Without weight(1f, fill=false)
-                            // a wide bubble would consume the full 80% width
-                            // cap and squeeze the cancel button off-screen.
-                            val bubbleModifier = if (isQueued && onWithdraw != null) {
+                            // IconButton sibling (and the #37 edit pencil beside
+                            // it). Without weight(1f, fill=false) a wide bubble
+                            // would consume the full 80% width cap and squeeze
+                            // the action buttons off-screen.
+                            val bubbleModifier = if (isQueued && (onWithdraw != null || onEditQueued != null)) {
                                 Modifier.weight(1f, fill = false)
                             } else Modifier
                             // T-android-gc-storm-issue17: long user messages (rare,
@@ -255,6 +268,24 @@ internal fun UserMessageBubble(
                                     imageVector = Icons.Filled.Cancel,
                                     contentDescription = "Withdraw queued message",
                                     tint = Color(0xFFFF3B30),
+                                    modifier = Modifier.size(24.dp),
+                                )
+                            }
+                        }
+                        if (isQueued && onEditQueued != null) {
+                            // [T-android-queued-message-edit #37] Discoverable
+                            // edit affordance beside the withdraw (×) button —
+                            // long-press → menu → Edit works too, but a hidden
+                            // gesture nobody finds is not a feature. Same 44dp
+                            // hit target as the cancel sibling.
+                            IconButton(
+                                onClick = { showEditDialog = true },
+                                modifier = Modifier.size(44.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Edit,
+                                    contentDescription = "Edit queued message",
+                                    tint = ChatColors.secondaryText,
                                     modifier = Modifier.size(24.dp),
                                 )
                             }
@@ -314,6 +345,19 @@ internal fun UserMessageBubble(
                         leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp)) },
                     )
                 }
+                // [T-android-queued-message-edit #37] Queued bubbles can't use
+                // the regular Edit (that pulls text into the composer and
+                // truncates history — wrong semantics for a prompt that hasn't
+                // been sent yet). Their Edit opens the in-place single-field
+                // dialog instead. Mutually exclusive with the block above by
+                // construction: onEdit is null whenever the row is queued.
+                if (isQueued && onEditQueued != null) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.chat_longpress_edit)) },
+                        onClick = { showMenu = false; showEditDialog = true },
+                        leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                    )
+                }
                 // [T-p9-revert] Roll files back to this point; the tail hides
                 // until the next send commits it. Undoable from the banner,
                 // so it sits before the destructive Delete and carries no
@@ -353,6 +397,50 @@ internal fun UserMessageBubble(
             }
         }
     }
+    }
+
+    // [T-android-queued-message-edit #37] Single-field editor for a queued
+    // prompt (long-press → Edit, or the pencil beside the withdraw ×).
+    // AlertDialog — not inline — because the queued row is structurally busy
+    // (DisableSelection scoping, dashed drawBehind, weight(1f) bubble beside
+    // 44dp action buttons) and swapping it for a TextField mid-composition
+    // fights all three; a dialog is stable and needs no layout surgery.
+    // remember(showEditDialog) re-prefills from message.content on every
+    // open, so a cancelled draft never leaks into the next edit.
+    if (showEditDialog && onEditQueued != null) {
+        var editText by remember(showEditDialog) { mutableStateOf(message.content) }
+        AlertDialog(
+            onDismissRequest = { showEditDialog = false },
+            title = { Text(stringResource(R.string.chat_queued_edit_title)) },
+            text = {
+                OutlinedTextField(
+                    value = editText,
+                    onValueChange = { editText = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 2,
+                    maxLines = 8,
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    // Blank text with no attachments would drain to an empty
+                    // turn (editQueued rejects it) — disable Save up front so
+                    // the rejection never has to surface.
+                    enabled = editText.isNotBlank() ||
+                        message.imageUris.isNotEmpty() ||
+                        message.attachmentNames.isNotEmpty(),
+                    onClick = {
+                        showEditDialog = false
+                        onEditQueued(editText)
+                    },
+                ) { Text(stringResource(R.string.save)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEditDialog = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
+        )
     }
 }
 

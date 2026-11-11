@@ -4,6 +4,7 @@ import com.openminis.app.ui.theme.IosBlue
 import com.openminis.app.ui.theme.IosIndigo
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -66,6 +67,7 @@ import androidx.core.content.ContextCompat
 import kotlinx.coroutines.launch
 import com.openminis.app.ui.components.MinisButton
 import com.openminis.app.ui.components.MinisTextButton
+import com.openminis.app.ui.markdown.MarkdownText
 import com.openminis.app.i18n.uppercaseForDisplay
 import java.io.File
 
@@ -587,210 +589,15 @@ fun CheckUpdateSection() {
     }
 }
 
-@Composable
-private fun UpdateDialog(
-    update: UpdateChecker.CheckResult.UpdateAvailable,
-    downloadProgress: Float?,
-    downloadError: String?,
-    needsInstallPerm: Boolean,
-    installReady: Boolean,
-    probing: Boolean,
-    activeNode: String?,
-    downloadActive: Boolean,
-    sources: List<UpdateSource>,
-    probeResults: List<ProbeResult>,
-    probingSources: Boolean,
-    selectedSourceId: String?,
-    onSelectSource: (String) -> Unit,
-    onDownload: () -> Unit,
-    onInstall: () -> Unit,
-    onOpenSettings: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Column {
-                Text(stringResource(R.string.check_update_available_title))
-                Text(
-                    stringResource(
-                        R.string.check_update_available_subtitle,
-                        BuildConfig.VERSION_NAME,
-                        update.versionName,
-                    ),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        },
-        text = {
-            Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    stringResource(R.string.check_update_changelog_header).uppercaseForDisplay(),
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 280.dp)
-                        .verticalScroll(rememberScrollState()),
-                ) {
-                    Text(
-                        text = update.changelog.ifBlank {
-                            stringResource(R.string.check_update_changelog_empty)
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                    )
-                }
-                Text(
-                    stringResource(R.string.check_update_install_hint),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                // [T-update-source-choice] The user picks the download source;
-                // the app no longer silently races mirrors. Each row carries a
-                // live reachability annotation so the choice is informed.
-                if (!downloadActive && downloadProgress == null) {
-                    Column {
-                        Text(
-                            stringResource(R.string.check_update_source_header).uppercaseForDisplay(),
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        sources.forEach { src ->
-                            val probe = probeResults.firstOrNull { it.sourceId == src.id }
-                            val selected = selectedSourceId == src.id
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .clickable { onSelectSource(src.id) }
-                                    .padding(vertical = 4.dp),
-                            ) {
-                                RadioButton(
-                                    selected = selected,
-                                    onClick = { onSelectSource(src.id) },
-                                )
-                                Column(modifier = Modifier.padding(start = 4.dp)) {
-                                    Text(
-                                        text = sourceLabel(src),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                    )
-                                    val status = when {
-                                        probingSources || probe == null ->
-                                            stringResource(R.string.check_update_source_probing)
-                                        probe.reachable ->
-                                            stringResource(R.string.check_update_source_latency, probe.latencyMs)
-                                        else ->
-                                            stringResource(R.string.check_update_source_unreachable)
-                                    }
-                                    Text(
-                                        text = status,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = if (probe?.reachable == false) {
-                                            MaterialTheme.colorScheme.error
-                                        } else {
-                                            MaterialTheme.colorScheme.onSurfaceVariant
-                                        },
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-                if (probing) {
-                    Text(
-                        stringResource(R.string.check_update_probing),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-                if (activeNode != null && downloadActive) {
-                    Text(
-                        stringResource(R.string.check_update_active_node, activeNode),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-                if (downloadProgress != null) {
-                    LinearProgressIndicator(
-                        progress = { downloadProgress.coerceIn(0f, 1f) },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Text(
-                        stringResource(R.string.check_update_downloading, (downloadProgress * 100).toInt()),
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-                if (downloadError != null) {
-                    Text(
-                        stringResource(R.string.check_update_download_failed, downloadError),
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-                if (needsInstallPerm) {
-                    Text(
-                        stringResource(R.string.check_update_install_perm_required),
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            when {
-                // Install permission is the blocker; nothing else can proceed.
-                needsInstallPerm -> MinisButton(onClick = onOpenSettings) {
-                    Text(stringResource(R.string.check_update_open_install_settings))
-                }
-                // Already downloaded. Offering "Download & Install" again here
-                // is what produced the dead, permanently-disabled button —
-                // `enabled` was computed from a `downloadProgress` that never
-                // returns to null once a download completes. The honest action
-                // for a staged APK is install.
-                installReady -> MinisButton(onClick = onInstall) {
-                    Text(stringResource(R.string.check_update_install_now))
-                }
-                else -> MinisButton(
-                    onClick = onDownload,
-                    enabled = !downloadActive,
-                ) {
-                    if (downloadActive) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(14.dp),
-                                strokeWidth = 1.5.dp,
-                            )
-                            Text(stringResource(R.string.check_update_downloading, ((downloadProgress ?: 0f) * 100).toInt()))
-                        }
-                    } else {
-                        Text(stringResource(R.string.check_update_download_button))
-                    }
-                }
-            }
-        },
-        dismissButton = {
-            MinisTextButton(onClick = onDismiss, enabled = !downloadActive) {
-                Text(stringResource(R.string.cancel))
-            }
-        },
-    )
-}
+// [#38] Height caps for the release-notes markdown block in [UpdateDialog].
+// Collapsed keeps the dialog compact (a peek at the top of the notes); the
+// expanded cap is much taller but still scrollable, so the dialog itself
+// never overflows the screen no matter how long the release notes are.
+internal val UpdateNotesCollapsedHeight = 180.dp
+internal val UpdateNotesExpandedHeight = 440.dp
 
-/** Display name for a download source id; falls back to the raw id. */
 @Composable
-private fun sourceLabel(source: UpdateSource): String = when (source.id) {
+internal fun sourceLabel(source: UpdateSource): String = when (source.id) {
     "github-direct" -> stringResource(R.string.check_update_source_github)
     "gh-proxy" -> stringResource(R.string.check_update_source_ghproxy)
     else -> source.id
