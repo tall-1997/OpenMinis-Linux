@@ -10,20 +10,58 @@ import org.junit.Test
  * of reusing a shell whose pending callback / stdin writer may still be wedged.
  *
  * [GH#358] 判定不能裸看 exit 124：用户命令自己退出 124（`timeout 5 sleep 10`）
- * 不是工具超时，必须保留健康通道。真正的超时只认内部标志或超时输出的首行。
+ * 不是工具超时，必须保留健康通道。
+ *
+ * 第三轮复审：[#358] 首行标记 `[Command timed out after …]` 是命令输出，用户
+ * 命令 echo 它就会伪造超时。生产路径（ExecutionCoordinator）手里始终有
+ * consumeTimedOut() 的权威标志，所以标记匹配现在只是显式开启的测试 seam，
+ * 默认关闭。
  */
 class ShellChannelRecoveryTest {
 
     @Test
-    fun timeoutVerdictDiscardsTheChannel() {
-        // The shell's own watchdog flag — the authoritative signal.
+    fun realTimeoutFlagDiscardsTheChannel() {
+        // [GH#358] The shell's own watchdog flag — the authoritative signal.
         assertTrue(ShellChannelRecovery.shouldDiscardChannel(124, "", timedOut = true))
-        // Fallback for a caller that only has the result text: the timeout
-        // branch returns exactly this prefix.
-        assertTrue(
+        // The flag wins regardless of the output text or the reported exit code.
+        assertTrue(ShellChannelRecovery.shouldDiscardChannel(0, "ok", timedOut = true))
+    }
+
+    @Test
+    fun echoingTheTimeoutMarkerKeepsTheChannel() {
+        // [GH#358] The residual hole from round two: the timeout branch's marker
+        // is ordinary command-visible text. A user command echoing it must NOT
+        // cost a healthy shell (env/cwd survive), so production never reads it.
+        assertFalse(
             ShellChannelRecovery.shouldDiscardChannel(
                 124,
                 "[Command timed out after 180s; guest process group killed]",
+            ),
+        )
+        assertFalse(
+            ShellChannelRecovery.shouldDiscardChannel(0, "[Command timed out after 5s]"),
+        )
+    }
+
+    @Test
+    fun markerFallbackOnlyExistsBehindTheExplicitTestSeam() {
+        val marker = "[Command timed out after 180s; guest process group killed]"
+        // Default is off: this is what every production call gets.
+        assertFalse(ShellChannelRecovery.shouldDiscardChannel(124, marker))
+        // The seam still parses the documented first line, so the marker's shape
+        // stays pinned; it just cannot decide a real channel's fate.
+        assertTrue(
+            ShellChannelRecovery.shouldDiscardChannel(
+                124,
+                marker,
+                allowMarkerFallback = true,
+            ),
+        )
+        assertFalse(
+            ShellChannelRecovery.shouldDiscardChannel(
+                0,
+                "the script printed: $marker",
+                allowMarkerFallback = true,
             ),
         )
     }

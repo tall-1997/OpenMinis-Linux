@@ -400,12 +400,15 @@ private suspend fun ChatViewModel.runSupervisorSession(
                 skillsHint = null,
                 tools = SupervisorSeats.workerTools(supervisorBaseTools(workerEntry)),
                 maxTokens = (workerEntry.model.maxOutputTokens ?: 4096).coerceIn(256, 8192),
-                executeTool = { name, json ->
+                executeTool = { name, json, callId ->
                     val result = if (SubAgentKind.blocks(SubAgentKind.WORKER, name)) {
                         ToolExecutionResult("Error: WORKER sub-agent cannot use $name.", false)
                     } else {
                         grepSourceToolResult(name, json)
-                            ?: executeTool(name, json, "")
+                            // [F1 GH#343] Third parameter is the tool call id; the
+                            // old blank id made every supervisor worker call spill
+                            // to the same `tool.txt`.
+                            ?: executeTool(name, json, callId)
                     }
                     // [T-m9-supervisor-experience] Fold this executed call into
                     // the session's tool profile; a failed fold never blocks the

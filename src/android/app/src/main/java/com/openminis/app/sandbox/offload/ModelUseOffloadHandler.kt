@@ -5,6 +5,7 @@ import android.util.Base64
 import android.util.Log
 import com.openminis.app.data.model.LLMMessage
 import com.openminis.app.data.model.ModelEntry
+import com.openminis.app.data.model.ProviderInstance
 import com.openminis.app.data.model.ProviderType
 import com.openminis.app.data.repository.ProviderRepository
 import com.openminis.app.provider.ProviderFactory
@@ -357,16 +358,18 @@ class ModelUseOffloadHandler(
             // here too — but ONLY when the user opted this instance in
             // (Provider detail → OpenCode session header). The old unconditional
             // path leaked a stable conversation id to every third-party relay.
-            // Official endpoints (no custom base URL) get an empty map; the
-            // built-in Zen/OpenCode lane attaches its own headers in
-            // ZenFreeLaneGate, so nothing changes there.
-            val sessionHdrs = com.openminis.app.provider.OpenCodeSessionHeader
-                .customEndpointHeadersFor(
-                    instance.effectiveBaseURL,
-                    request.sessionId,
-                    enabled = com.openminis.app.provider.ProviderHeaderStore
-                        .openCodeSessionEnabled(instance.id),
-                )
+            // [F2 GH#347] Shares `sessionHeaders` with the chat path (through
+            // [modelUseSessionHeaders]): the official `*.opencode.ai` lane now
+            // gets the same automatic fallback here that the chat path always
+            // had. Before this, a real key against opencode.ai went through
+            // model_use WITHOUT the required header and reproduced the service's
+            // 400 ("missing x-opencode-session").
+            val sessionHdrs = modelUseSessionHeaders(
+                instance,
+                request.sessionId,
+                com.openminis.app.provider.ProviderHeaderStore
+                    .openCodeSessionEnabled(instance.id),
+            )
             val mergedHdrs = chatHdrs + sessionHdrs
             if (mergedHdrs.isNotEmpty()) {
                 openAI.chatExtraHeaders = mergedHdrs
@@ -2211,3 +2214,27 @@ Examples:
 """
     }
 }
+
+/**
+ * [F2 GH#347] model_use 会话头解析的唯一入口。
+ *
+ * 中文：以前这里只调 `customEndpointHeadersFor`，官方 `*.opencode.ai` 实例
+ * （base URL 指向官方 host）在开关关闭时拿不到 `x-opencode-session`，真实 key
+ * 经 model_use 必然 400。现在与聊天主循环共用
+ * [com.openminis.app.provider.OpenCodeSessionHeader.sessionHeaders]，官方 host
+ * 的兜底不会再缺。抽成函数是为了让组合回归（官方 key + model_use 带会话头 /
+ * 自定义端点 + 开关关闭不带）能在 JVM 测试里直接钉住。
+ *
+ * @param enabled 用户在 Provider detail 打开的 per-instance opt-in；必传，
+ *   防止调用点漏传后被默认值静默关闭。
+ */
+internal fun modelUseSessionHeaders(
+    instance: ProviderInstance,
+    sessionId: String?,
+    enabled: Boolean,
+): Map<String, String> =
+    com.openminis.app.provider.OpenCodeSessionHeader.sessionHeaders(
+        instance.effectiveBaseURL,
+        sessionId,
+        enabled,
+    )

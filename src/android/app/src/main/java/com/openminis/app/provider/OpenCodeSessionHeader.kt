@@ -112,11 +112,14 @@ object OpenCodeSessionHeader {
      * would be introducing on their behalf, and one they never asked for.
      * Custom endpoints are now opt-in per provider
      * ([com.openminis.app.provider.ProviderHeaderStore.openCodeSessionEnabled],
-     * surfaced as a switch in the provider detail screen): [enabled] defaults to
-     * false, so the identifier leaves the device only when the user explicitly
+     * surfaced as a switch in the provider detail screen): [enabled] is a
+     * REQUIRED parameter (no default — F2/GH#347) so a call site that forgets it
+     * fails to compile instead of silently disabling the header, and the
+     * identifier leaves the device only when the user explicitly
      * trusts that gateway. The official Zen/OpenCode lane is unaffected — it is
      * gated by HOST in [headersFor] and keeps sending automatically because the
-     * service requires it.
+     * service requires it. Chat and `model_use` both go through
+     * [sessionHeaders] so neither path can lose this fallback.
      *
      * Requirement (2) from the class contract still applies: [sessionId] must
      * be the persisted conversation id so the id is stable across turns,
@@ -126,7 +129,7 @@ object OpenCodeSessionHeader {
     fun customEndpointHeadersFor(
         baseUrl: String?,
         sessionId: String?,
-        enabled: Boolean = false,
+        enabled: Boolean,
     ): Map<String, String> {
         if (!enabled) return emptyMap()
         val raw = baseUrl?.trim().orEmpty()
@@ -136,6 +139,30 @@ object OpenCodeSessionHeader {
         if (!isPersistedSessionId(id)) return emptyMap()
         return linkedMapOf(HEADER to id, HEADER_ID to id)
     }
+
+    /**
+     * [F2 GH#347] 唯一会话头入口：先按"自定义端点 + 用户开关"取头，取不到再
+     * 回落到官方 `*.opencode.ai` 的 host 判定。
+     *
+     * 中文：聊天主循环早就有 `.ifEmpty { headersFor(...) }` 兜底，而
+     * `model_use`（标题生成 / 子代理 / passthrough 调用方）只调了
+     * [customEndpointHeadersFor]，于是 base URL 仍是官方 `*.opencode.ai`
+     * （如 `https://opencode.ai/zen/go/v1`）的实例在 model_use 路径上拿不到
+     * `x-opencode-session`，真实 key 依旧 400。把两层合并成一个 helper 后，
+     * 两条路径不可能再漂移。base URL 为 null/blank 时不猜 host（隐私边界，
+     * 见 [matches]），这类实例本来也无从判断是否是官方端点。
+     *
+     * [enabled] 是必填参数（没有默认值）：这是刻意的——默认 false 会让一个
+     * "忘传开关"的调用点静默关掉自定义端点的会话头，正是 #347 的复现条件。
+     * 官方 host 不受开关影响，由 [headersFor] 自动发送。
+     */
+    fun sessionHeaders(
+        baseUrl: String?,
+        sessionId: String?,
+        enabled: Boolean,
+    ): Map<String, String> =
+        customEndpointHeadersFor(baseUrl, sessionId, enabled)
+            .ifEmpty { headersFor(baseUrl, sessionId) }
 
     /** Parity with [ZenFreeLaneGate]'s second spelling; some relays read this one. */
     private const val HEADER_ID = "x-opencode-session-id"

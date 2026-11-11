@@ -32,19 +32,26 @@ import com.openminis.app.provider.ProviderHeaderStore
  *
  * 合并顺序：用户头在前，OpenCode 头在后 —— `x-opencode-session` 是上游路由
  * 的硬要求，用户即使配了同名头也不能把它顶掉。
+ *
+ * [F2 GH#347] 官方 host 兜底已抽到
+ * [OpenCodeSessionHeader.sessionHeaders]，`model_use` 与本文件共用；不要再在
+ * 调用点手写 `customEndpointHeadersFor(...).ifEmpty { headersFor(...) }`，否则
+ * 两条路径会再次漂移（model_use 缺兜底就是 400 的根因）。
  */
 internal fun ChatViewModel.providerExtraHeaders(instanceId: String?): Map<String, String> {
     val id = instanceId ?: return emptyMap()
     val instance = providerRepository.instance(id) ?: return emptyMap()
     val user = ProviderHeaderStore.headersFor(instance.id)
     val persistedSessionId = realSessionId.ifEmpty { sessionId }
-    val opencode = OpenCodeSessionHeader
-        .customEndpointHeadersFor(
-            instance.effectiveBaseURL,
-            persistedSessionId,
-            enabled = ProviderHeaderStore.openCodeSessionEnabled(instance.id),
-        )
-        .ifEmpty { OpenCodeSessionHeader.headersFor(instance.effectiveBaseURL, persistedSessionId) }
+    // [F2 GH#347] One shared helper for both lanes: custom endpoint (opt-in) with
+    // the official `*.opencode.ai` host as fallback. Keeping this call and
+    // ModelUseOffloadHandler's call on the SAME function is the whole point —
+    // the chat path had the fallback and model_use did not, which reproduced 400.
+    val opencode = OpenCodeSessionHeader.sessionHeaders(
+        instance.effectiveBaseURL,
+        persistedSessionId,
+        ProviderHeaderStore.openCodeSessionEnabled(instance.id),
+    )
     return if (user.isEmpty()) opencode else user + opencode
 }
 

@@ -74,7 +74,11 @@ object SubAgentRunner {
         skillsHint: String?,
         tools: List<AgentToolDefinition>,
         maxTokens: Int,
-        executeTool: suspend (name: String, argsJson: String) -> ToolExecutionResult,
+        // [F1 GH#343] toolCallId is the model's REAL call id, threaded to
+        // executeTool so spill files (and any outcome attribution) are keyed per
+        // call. Without it every parallel lane shared one filename and silently
+        // overwrote its siblings' spilled output.
+        executeTool: suspend (name: String, argsJson: String, toolCallId: String) -> ToolExecutionResult,
         onStep: suspend (turn: Int, toolName: String) -> Unit = { _, _ -> },
         onUi: suspend (UiEvent) -> Unit = {},
         kind: String = SubAgentKind.WORKER,
@@ -94,24 +98,28 @@ object SubAgentRunner {
         // header, so the parent's header channel must reach the child too.
         extraHeaders: Map<String, String> = emptyMap(),
         // [GH#521/#188/#199] Same two-phase stream watchdog as the main agent
-        // loop. 0 = derive from thinkingLevel; callers pass the resolved
-        // routing budget (GroupRoutingState.resolveFirstEventTimeoutMs) so the
-        // sub-agent lane and the main loop agree on the first-token/headers
-        // windows. Without this the only bound was the transport's 600s read
-        // timeout — a stalled relay pinned a spawn card for ten minutes.
-        firstEventTimeoutMs: Long = 0L,
-        streamIdleTimeoutMs: Long = 0L,
+        // loop. [F4 GH#61] Both budgets are REQUIRED (the old `= 0L` defaults
+        // turned "caller forgot" into a silent fallback and made the two lanes
+        // disagree); callers pass the routing budget resolved by
+        // GroupRoutingState.resolveFirstEventTimeoutMs. Zero is rejected below
+        // instead of being reinterpreted as "use some default".
+        firstEventTimeoutMs: Long,
+        streamIdleTimeoutMs: Long,
     ): ToolExecutionResult {
         val briefed = SubAgentBrief.wrap(userPrompt, kind = kind, role = role, writePaths = writePaths)
         // Defensive: duplicate tool names reach providers as duplicate schemas
         // and some of them reject the payload outright. Keep first-seen order.
         val dedupedTools = SubAgentKind.dedupeByName(tools)
-        // [GH#521] Default: 90s for reasoning models, 45s otherwise (the
-        // historical FirstEventWatchdog values). idle = 2× first token, same
-        // ratio as the main loop.
-        val firstTimeoutMs = firstEventTimeoutMs.takeIf { it > 0L }
-            ?: if (thinkingLevel.isEnabled) 90_000L else 45_000L
-        val idleTimeoutMs = streamIdleTimeoutMs.takeIf { it > 0L } ?: firstTimeoutMs * 2
+        // [F4 GH#61] Fail fast on an unresolved budget: silently substituting a
+        // default here is exactly the "forgot to pass it" hazard. Callers resolve
+        // via GroupRoutingState.resolveFirstEventTimeoutMs (always > 0) and pass
+        // idle = first * 2.
+        require(firstEventTimeoutMs > 0L) {
+            "SubAgentRunner.run: firstEventTimeoutMs must be resolved by the caller (> 0), got $firstEventTimeoutMs"
+        }
+        require(streamIdleTimeoutMs > 0L) {
+            "SubAgentRunner.run: streamIdleTimeoutMs must be resolved by the caller (> 0), got $streamIdleTimeoutMs"
+        }
         val history = mutableListOf(
             LLMMessage(role = LLMMessage.Role.USER, content = briefed),
         )
@@ -196,11 +204,11 @@ object SubAgentRunner {
                     // terminates at the watchdog budget instead of pinning the
                     // lane on the transport's 600s read timeout; the failure is
                     // reported through the normal lane-failure path.
-                    firstTimeoutMs = firstTimeoutMs,
-                    idleTimeoutMs = idleTimeoutMs,
-                    firstContentTimeoutMs = firstTimeoutMs,
+                    firstTimeoutMs = firstEventTimeoutMs,
+                    idleTimeoutMs = streamIdleTimeoutMs,
+                    firstContentTimeoutMs = firstEventTimeoutMs,
                     firstContentReason = "sub-agent stream connected but no first token " +
-                        "within ${firstTimeoutMs / 1000}s",
+                        "within ${firstEventTimeoutMs / 1000}s",
                 ).collect { chunk ->
                     when (chunk) {
                         is LLMStreamChunk.Text -> {
@@ -376,7 +384,9 @@ object SubAgentRunner {
                     }
                     runCatching { onUi(UiEvent.ToolRunning(id, name, argsJson)) }
                     val result = try {
-                        executeTool(name, argsJson)
+                        // [F1 GH#343] Pass the call id (not a session id) — it is
+                        // the per-call identity executeTool keys its spill on.
+                        executeTool(name, argsJson, id)
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {

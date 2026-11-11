@@ -3,6 +3,7 @@ package com.openminis.app.provider
 import android.content.Context
 import com.openminis.app.data.model.LLMModel
 import com.openminis.app.logging.AppLogger
+import com.openminis.app.network.AppTrustStore
 import com.openminis.app.provider.openai.OpenAILlmHttpClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -10,6 +11,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
@@ -72,8 +74,62 @@ internal object FreeLaneDirectory {
     const val PROBE_BACKOFF_MS = 6L * 60 * 60 * 1000
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val client by lazy { OpenAILlmHttpClient.build() }
     private val JSON = "application/json".toMediaType()
+
+    /**
+     * [GH#258] The probe client, rebuilt whenever [AppTrustStore.generation]
+     * changes. A `by lazy` here froze the first `sslSocketFactory` for the
+     * process, so a CA imported after the first free-lane refresh never applied
+     * to probe traffic (the only recovery was a restart) — the same defect the
+     * shared catalog / voice / quota clients already fixed. The cache below is
+     * keyed by that generation and callers must read [client] at CALL time; a
+     * `val client = ...` field would capture one generation.
+     *
+     * 中文：free-lane 的探测请求也走用户导入的 CA；CA generation 变化后下一次
+     * 探测必须用新 client，不能靠进程重启。
+     */
+    private val clientLock = Any()
+
+    /** Generation the cached client was built for; -1 = never built. */
+    @Volatile
+    private var builtGeneration: Int = -1
+
+    @Volatile
+    private var builtClient: OkHttpClient? = null
+
+    /** [GH#258] Test seam: generation source (null = the real trust store). */
+    internal var trustGenerationForTest: (() -> Int)? = null
+
+    /** [GH#258] Test seam: client factory (null = [OpenAILlmHttpClient.build]). */
+    internal var clientFactoryForTest: (() -> OkHttpClient)? = null
+
+    /** [GH#258] The client for the CURRENT trust generation (rebuilt on CA change). */
+    private val client: OkHttpClient
+        get() {
+            val generation = trustGenerationForTest?.invoke() ?: AppTrustStore.generation
+            builtClient?.let { if (builtGeneration == generation) return it }
+            synchronized(clientLock) {
+                builtClient?.let { if (builtGeneration == generation) return it }
+                val built = clientFactoryForTest?.invoke() ?: OpenAILlmHttpClient.build()
+                builtClient = built
+                builtGeneration = generation
+                return built
+            }
+        }
+
+    /** [GH#258] Test seam only: lets the JVM test observe the generation-keyed client. */
+    internal fun clientForTest(): OkHttpClient = client
+
+    /**
+     * [GH#258] Test seam: drop the cached client so a test starts from
+     * "never built" instead of depending on which test ran first.
+     */
+    internal fun resetClientForTest() {
+        synchronized(clientLock) {
+            builtClient = null
+            builtGeneration = -1
+        }
+    }
 
     /**
      * Narrow [live] to [lane]. Returns the previous catalogue when the fetch

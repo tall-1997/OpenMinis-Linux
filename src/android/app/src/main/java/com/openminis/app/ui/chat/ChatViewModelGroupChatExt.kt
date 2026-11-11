@@ -21,7 +21,9 @@ import com.openminis.app.tools.ToolExecutionResult
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -230,6 +232,24 @@ internal suspend fun ChatViewModel.runGroupChat(provider: LLMProvider, closing: 
                 _messages.value = _messages.value.filterNot { it.isQueued }
             }
             setGroupChatEnabled(false)
+        }
+    }
+    // [GH#131] Lifecycle hook: one user-visible group-chat round = one
+    // OnResponse (see LifecycleHooks KDoc — a per-speaker event would run the
+    // user's script N times for one prompt and could not tell a member turn from
+    // a finished round). Fired once per invocation, after the closing summary
+    // when there is one; a cancelled (Stop) round never reaches this point, and
+    // the isActive check makes that contract explicit for the race where the
+    // cancellation lands between the last suspension and here.
+    if (currentCoroutineContext().isActive) {
+        val lastAssistant = _messages.value.lastOrNull { it.role == "assistant" }
+        val detail = if (lastAssistant != null) lastAssistant.content.takeLast(500) else ""
+        runCatching {
+            com.openminis.app.agent.lifecycle.LifecycleHooks.fire(
+                com.openminis.app.agent.lifecycle.LifecycleHooks.LifecycleEvent.RESPONSE,
+                realSessionId.ifEmpty { sessionId },
+                detail,
+            )
         }
     }
     groupChatCloseRequested = false
@@ -625,9 +645,11 @@ internal suspend fun ChatViewModel.speakModel(
             val result = if (denied != null) {
                 ToolExecutionResult(denied, false)
             } else if (toolGate != null) {
-                toolGate.withLock { executeTool(name, argsJson, "") }
+                // [F1 GH#343] Pass the real call id (was ""), so parallel-group
+                // speakers no longer overwrite one shared `tool.txt` spill file.
+                toolGate.withLock { executeTool(name, argsJson, callId) }
             } else {
-                executeTool(name, argsJson, "")
+                executeTool(name, argsJson, callId)
             }
             results += AgentContentPart.ToolResult(callId, name, result.output, isError = !result.success)
         }

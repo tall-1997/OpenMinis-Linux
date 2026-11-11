@@ -23,6 +23,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
 import org.json.JSONObject
@@ -2076,12 +2077,20 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
     // bounded tail of the reply (hooks get MINIS_HOOK_DETAIL), not the whole
     // transcript; fired after the UI/finalize work so a slow hook cannot delay
     // what the user sees.
-    runCatching {
-        com.openminis.app.agent.lifecycle.LifecycleHooks.fire(
-            com.openminis.app.agent.lifecycle.LifecycleHooks.LifecycleEvent.RESPONSE,
-            realSessionId.ifEmpty { sessionId },
-            accumulatedText.takeLast(500),
-        )
+    //
+    // A cancelled turn (Stop) deliberately does NOT fire: there is no complete
+    // reply, and user scripts treat OnResponse as "the answer is final" (notify,
+    // sync out, trigger downstream automation). Cancellation normally throws out
+    // of the loop before this point; the isActive guard closes the race where it
+    // lands between the last suspension and here.
+    if (currentCoroutineContext().isActive) {
+        runCatching {
+            com.openminis.app.agent.lifecycle.LifecycleHooks.fire(
+                com.openminis.app.agent.lifecycle.LifecycleHooks.LifecycleEvent.RESPONSE,
+                realSessionId.ifEmpty { sessionId },
+                accumulatedText.takeLast(500),
+            )
+        }
     }
     // [T-android-tts-scene-announcements] Loop converged — announce to the
     // user if they opted in (scene pref, default off). The sink is owned by

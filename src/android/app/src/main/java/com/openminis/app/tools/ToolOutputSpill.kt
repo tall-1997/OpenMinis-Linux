@@ -4,6 +4,7 @@ import android.content.Context
 import com.openminis.app.security.ToolAliases
 import org.json.JSONObject
 import java.io.File
+import java.util.UUID
 
 /**
  * Spill oversized tool results out of the LLM context into the session
@@ -108,21 +109,80 @@ object ToolOutputSpill {
      * [GH#343] Write one spill file into [dir] and return the bounded preview.
      * Internal so a plain-JVM test can exercise raw → spill → readback without
      * a Context (the production dir comes from [spillDir]).
+     *
+     * 中文：文件名绝不能只由 toolId 决定 —— 群聊/主管曾传 ""，子代理传
+     * parentSession，两种情况下同一会话（甚至同一文件夹内多个会话共享的
+     * workspace）里的所有调用都会写同一个 `tool.txt` / `<parentSession>.txt`，
+     * 后一次调用静默覆盖前一次，模型随后 `file_read` 读到的可能是别的调用的
+     * 内容。唯一名由 [uniqueSpillFile] 负责；落盘走 [AtomicFileWrite]，避免
+     * 并发写与崩溃留下半截文件。
      */
     internal fun writeSpill(dir: File, toolName: String, toolId: String, output: String): String {
-        val safeId = SAFE_ID_RE.replace(toolId, "_").ifBlank { "tool" }
-        val file = File(dir, "$safeId.txt")
+        val file = uniqueSpillFile(dir, toolId)
         return try {
-            file.writeText(output)
+            // [F1 GH#343] 原子写：临时文件 + rename（同目录），并做短写/回读校验。
+            // 旧实现直接 file.writeText，两个 lane 并发写同一名字时内容会交错，
+            // 进程被杀也会留下半截 spill。
+            if (AtomicFileWrite.write(file, output) == null) {
+                // 名字已原子占位（createNewFile）但内容没写成：删掉空占位，
+                // 免得模型 file_read 到一个 0 字节的"完整输出"。
+                runCatching { file.delete() }
+                return cappedPreview(toolName, output)
+            }
             formatPreview(
                 toolName = toolName,
                 guestPath = "/var/minis/workspace/tool-spill/${file.name}",
                 output = output,
             )
         } catch (_: Exception) {
+            runCatching { file.delete() }
             cappedPreview(toolName, output)
         }
     }
+
+    /**
+     * [F1 GH#343] 为一次 spill 原子地"占住"一个不会覆盖别人内容的文件名。
+     *
+     * - toolId 非空且 `createNewFile()` 成功 → 保持 `<safeId>.txt`（既有回读
+     *   路径/测试不变）。
+     * - toolId 为空（群聊/主管旧调用点、任何无 id 的调用）→ 永远走
+     *   `<base>-<短UUID>.txt`。
+     * - 同 id 已被占用（并行 lane / 文件夹内多会话共享 workspace / provider
+     *   复用 call id）→ 同样追加短 UUID，绝不覆盖已有 spill。
+     *
+     * 中文：判断"是否已存在"必须用 `createNewFile()` 的原子语义，而不是
+     * `exists()` + `writeText()` —— 后者在并发下两个线程可以同时看到"不存在"
+     * 然后写同一个文件。这里是防御层：即使调用点又把 id 传空/传重，也只多一个
+     * 文件名，不会让两个调用互相覆盖。短 UUID 是 8 位十六进制，满足
+     * [SAFE_ID_RE]/[GUEST_PATH] 的字符集，回读时 [parseGuestPath] 仍能命中。
+     */
+    internal fun uniqueSpillFile(dir: File, toolId: String): File {
+        val safeId = SAFE_ID_RE.replace(toolId, "_").trim('_').ifBlank { "tool" }
+        if (toolId.isNotBlank()) {
+            val direct = File(dir, "$safeId.txt")
+            if (claim(direct)) return direct
+        }
+        repeat(8) {
+            val candidate = File(dir, "$safeId-${shortUid()}.txt")
+            if (claim(candidate)) return candidate
+        }
+        // 8 次随机都撞上（实际不可能）也不再覆盖：用单调时间戳兜底。
+        val fallback = File(dir, "$safeId-${System.nanoTime().toString(16)}.txt")
+        claim(fallback)
+        return fallback
+    }
+
+    /** [F1 GH#343] Atomically reserve [file] iff it does not exist yet. */
+    private fun claim(file: File): Boolean =
+        try {
+            file.createNewFile()
+        } catch (_: Exception) {
+            false
+        }
+
+    /** [F1 GH#343] 8 位十六进制随机后缀；每次调用都不同。 */
+    private fun shortUid(): String =
+        UUID.randomUUID().toString().replace("-", "").take(8)
 
     /**
      * [T-tool-output-offload-loop GH#343] Pure decision for one result body.
@@ -300,7 +360,9 @@ object ToolOutputSpill {
         if (!dir.mkdirs() && !dir.isDirectory) return null
         val file = File(dir, "trim-$safeId.txt")
         return try {
-            file.writeText(content)
+            // [F1 GH#343] 与 writeSpill 一样走原子写：trim 文件也会被并发 trim /
+            // 其它会话读到，半截内容比"没有文件"更糟（模型会把它当完整正文）。
+            if (AtomicFileWrite.write(file, content) == null) return null
             "/var/minis/workspace/tool-spill/${file.name}"
         } catch (_: Exception) {
             null

@@ -242,58 +242,11 @@ internal suspend fun ChatViewModel.preflightToolTurn(
             continue
         }
 
-        // Preflight: reject empty / missing-required-field tool calls
-        // BEFORE the UI flips to RUNNING and BEFORE executeTool() does
-        // any actual work. Mirrors iOS preflightValidateToolCall in
-        // AIChatViewModel.swift. Synthesizes a tool_result error so the
-        // model can self-correct on the next turn without us spawning
-        // shells or touching the filesystem on `{}` args.
-        val preflightError = preflightValidateToolCall(name, args, ctx.agentTools)
-        if (preflightError != null) {
-            val chunkRing: List<String> = ctx.toolInputChunkRings.remove(id) ?: emptyList()
-            AppLogger.warning(
-                "ToolPreflight",
-                "BLOCKED tool=$name id=$id reason=\"$preflightError\" " +
-                    "argsKeys=[${args.keys().asSequence().toList().sorted().joinToString(",")}] " +
-                    "chunkCount=${chunkRing.size} " +
-                    "lastChunk=<<<${chunkRing.lastOrNull()?.take(500) ?: ""}>>>"
-            )
-            chunkRing.forEachIndexed { i, snap ->
-                AppLogger.warning(
-                    "ToolPreflight",
-                    "  chunk[$i] bytes=${snap.toByteArray(Charsets.UTF_8).size} raw=<<<${snap.take(500)}>>>"
-                )
-            }
-            // English literal — string resource lookup intentionally
-            // avoided to keep this commit independent of any in-flight
-            // strings.xml refactor in other sessions. Promote to a
-            // localized R.string entry in a follow-up if needed.
-            val uiMessage = "Blocked invalid tool call"
-            val modelMessage = "Error: Tool call rejected before execution. $preflightError The arguments your client sent were empty or missing required fields — re-issue the call with all required parameters filled in. Do not retry with the same empty arguments."
-            val blockIdxPre = ctx.allToolBlocks.indexOfFirst { it.id == id }
-            if (blockIdxPre >= 0) {
-                val elapsedPre = System.currentTimeMillis() - ctx.allToolBlocks[blockIdxPre].startTimeMs
-                ctx.allToolBlocks[blockIdxPre] = ctx.allToolBlocks[blockIdxPre].copy(
-                    toolStatus = ToolBlockStatus.FAILED,
-                    content = uiMessage,
-                    durationMs = elapsedPre,
-                )
-            }
-            toolLoopDetector.record(
-                toolName = name, params = paramsMap,
-                result = null, errorMessage = modelMessage, toolCallId = id
-            )
-            refusedParts[id] = AgentContentPart.ToolResult(
-                id = id, name = name,
-                content = modelMessage,
-                isError = true,
-            )
-            withContext(Dispatchers.Main) {
-                updateAssistantMessage(ctx.assistantId, ctx.accumulatedText, true, ctx.allToolBlocks)
-            }
-            continue
-        }
-
+        // [F3 GH#61] Empty / missing-required-field tool calls are refused by the
+        // SHARED preflight above ([ToolCallPreflight.finalize], called at the top
+        // of this loop): the old main-loop-only `preflightValidateToolCall` check
+        // that lived here never ran for sub-agents or group chat, so those entries
+        // executed a parsed-but-empty `{}`. One layer, three entry points.
         currentCoroutineContext().ensureActive()
         // [T-truncated-tool-call-reject] finish_reason=length/max_tokens 的整轮
         // 拒绝已在共享 preflight（ToolCallPreflight.finalize）里完成，三个执行

@@ -856,7 +856,7 @@ private suspend fun ChatViewModel.runOneSubAgentInner(
                         ),
                     ),
                     maxTokens = (entry.model.maxOutputTokens ?: 4096).coerceIn(256, 8192),
-                    executeTool = { name, json ->
+                    executeTool = { name, json, callId ->
                         if (SubAgentKind.blocks(effectiveKind, name)) {
                             ToolExecutionResult("Error: $effectiveKind sub-agent cannot use $name.", false)
                         } else if (com.openminis.app.tools.CollabRoles.toolsFor(context, role)?.let { name !in it } == true) {
@@ -871,10 +871,16 @@ private suspend fun ChatViewModel.runOneSubAgentInner(
                             ToolExecutionResult("Error: type $role cannot use $name.", false)
                         } else {
                             grepSourceToolResult(name, json)
-                                // [T-subagent-owner-sid] The lane must carry the parent's
-                                // session id into the gate: a blank caller degrades to ASK
-                                // and prompts on every write/execute even in YOLO sessions.
-                                ?: executeTool(name, json, parentSession)
+                                // [F1 GH#343] The third parameter is the TOOL CALL
+                                // ID, not a session id. This used to receive
+                                // `parentSession`, so every parallel lane wrote the
+                                // same `<parentSession>.txt` spill file and the last
+                                // writer silently won; readers could get another
+                                // call's output. A session id is NOT this parameter:
+                                // executeTool's gate/workspace identity comes from
+                                // ChatViewModel.activeSessionId, so passing
+                                // parentSession here only poisoned the spill key.
+                                ?: executeTool(name, json, callId)
                         }
                     },
                     onStep = { turn, toolName -> onStep(turn, toolName) },

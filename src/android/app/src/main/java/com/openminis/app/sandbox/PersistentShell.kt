@@ -65,8 +65,9 @@ class PersistentShell(
      * [GH#358] True when the LAST command was stopped by THIS shell's watchdog.
      *
      * 中文：`exit 124` 是 timeout 工具的通用退出码，用户命令自己 exit 124 并不是
-     * 工具超时；执行入口只认这个内部标志（或超时分支写出的首行标记）来丢弃
-     * 通道 / 标 TIMEOUT，而不是裸看 124。由 [executeCommand] 清理、
+     * 工具超时；执行入口只认这个内部标志来丢弃通道 / 标 TIMEOUT，而不是裸看
+     * 124，也不解析命令输出里的 `[Command timed out after …]` 文本（用户命令
+     * 可以自己 echo 它，见 [ShellChannelRecovery]）。由 [executeCommand] 清理、
      * [consumeTimedOut] 消费。
      */
     @Volatile

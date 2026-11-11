@@ -172,10 +172,25 @@ object TailscaleRouteCleanup {
      *
      * [OpenMinis#546] A failed/unreadable post-stop read keeps the existing
      * baseline so a later stop can retry; only a completed diff retires it.
+     *
+     * [OpenMinis#546] A missing baseline means there is NO cleanup obligation
+     * for this stop — and therefore no error to show. [lastError] is cleared on
+     * that path: NetworkHub appends [visibleError] to the settings status row on
+     * every apply, so leaving a previous run's message behind made a stale
+     * "route cleanup failed" reappear on applies that never even attempted a
+     * diff. A prior FAILURE always keeps its baseline (see below), so clearing
+     * here cannot hide a retryable deletion: the next stop still owns it.
      */
     @Synchronized
     fun cleanupAfterStop(reason: String): String? {
-        val base = baseline ?: return null
+        val base = baseline
+        if (base == null) {
+            // [OpenMinis#546] baseline 为空 = 本次没有可执行的 diff，上一轮的错误
+            // 不能继续被当成这次 apply 的失败（陈旧展示）。真失败一定会保留
+            // baseline，所以这里清空不会丢掉待重试项。
+            lastError = null
+            return null
+        }
         val after = runCatching { snapshot() }.getOrElse {
             val err = "Tailscale routes were not cleaned ($reason): cannot read ip state: ${it.message}"
             lastError = err
@@ -385,5 +400,14 @@ object TailscaleRouteCleanup {
         lastError = null
         snapshotReaderForTest = null
         deleteRunnerForTest = null
+    }
+
+    /**
+     * [OpenMinis#546] Test hook: seed a visible error without a real `ip` run,
+     * so a JVM test can pin that a baseline-less cleanup RETIRES it instead of
+     * leaving the settings row showing a stale failure.
+     */
+    internal fun seedLastErrorForTest(error: String?) {
+        lastError = error
     }
 }
