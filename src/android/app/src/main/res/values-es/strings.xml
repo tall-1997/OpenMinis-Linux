@@ -2063,4 +2063,8 @@
     <!-- [#38] Update dialog: release-notes expand/collapse toggle -->
     <string name="check_update_notes_expand">Mostrar todo</string>
     <string name="check_update_notes_collapse">Mostrar menos</string>
+    <!-- [#35] Session archive: row menu + collapsed footer section -->
+    <string name="sessionlist_archive">Archivar</string>
+    <string name="sessionlist_unarchive">Desarchivar</string>
+    <string name="sessionlist_section_archived">Archivadas (%1$d)</string>
 </resources>

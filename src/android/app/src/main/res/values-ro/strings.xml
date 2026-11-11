@@ -2077,4 +2077,8 @@
     <!-- [#38] Update dialog: release-notes expand/collapse toggle -->
     <string name="check_update_notes_expand">Afișează tot</string>
     <string name="check_update_notes_collapse">Afișează mai puțin</string>
+    <!-- [#35] Session archive: row menu + collapsed footer section -->
+    <string name="sessionlist_archive">Arhivează</string>
+    <string name="sessionlist_unarchive">Scoate din arhivă</string>
+    <string name="sessionlist_section_archived">Arhivate (%1$d)</string>
 </resources>

@@ -2870,4 +2870,8 @@
     <!-- [#38] Update dialog: release-notes expand/collapse toggle -->
     <string name="check_update_notes_expand">Show all</string>
     <string name="check_update_notes_collapse">Show less</string>
+    <!-- [#35] Session archive: row menu + collapsed footer section -->
+    <string name="sessionlist_archive">Archive</string>
+    <string name="sessionlist_unarchive">Unarchive</string>
+    <string name="sessionlist_section_archived">Archived (%1$d)</string>
 </resources>

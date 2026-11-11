@@ -2073,4 +2073,8 @@
     <!-- [#38] Update dialog: release-notes expand/collapse toggle -->
     <string name="check_update_notes_expand">แสดงทั้งหมด</string>
     <string name="check_update_notes_collapse">ย่อ</string>
+    <!-- [#35] Session archive: row menu + collapsed footer section -->
+    <string name="sessionlist_archive">เก็บถาวร</string>
+    <string name="sessionlist_unarchive">เลิกเก็บถาวร</string>
+    <string name="sessionlist_section_archived">เก็บถาวรแล้ว (%1$d)</string>
 </resources>

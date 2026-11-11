@@ -43,6 +43,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -60,6 +61,7 @@ import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Unarchive
 import androidx.compose.material.icons.outlined.AddComment
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
@@ -473,11 +475,11 @@ fun SessionListScreen(
         ),
     )
     val persistedSessions by viewModel.displayedSessions.collectAsStateWithLifecycle()
-    // [T-android-draft-placeholder-row] Prepend the synthetic draft row. Built
-    // here rather than in the ViewModel precisely because it must never reach
-    // the database or the repository's flows — it exists for exactly as long
-    // as the detail pane holds an unsaved draft, and vanishes on its own when
-    // the user switches away without sending. Mirrors iOS displaySessions.
+    // [#35] Footer "Archived" section — separate flow, hidden from displayedSessions.
+    val archivedSessions by viewModel.archivedSessions.collectAsStateWithLifecycle()
+    // [T-android-draft-placeholder-row] Prepend the synthetic draft row — built
+    // here because it must never reach the DB or repository flows; it lives only
+    // as long as the unsaved draft. Mirrors iOS displaySessions.
     val sessions = remember(persistedSessions, draftPlaceholderId) {
         val draftId = draftPlaceholderId
         if (draftId == null || persistedSessions.any { it.id == draftId }) {
@@ -568,6 +570,8 @@ fun SessionListScreen(
 
     var showDeleteDialog by remember { mutableStateOf(false) }
     var deleteTargetId by remember { mutableStateOf<String?>(null) }
+    // [#35] Archived footer expand state (session-scoped, not persisted).
+    var archivedExpanded by remember { mutableStateOf(false) }
     // [T-android-session-grouping] Group management dialogs.
     var folderToRename by remember { mutableStateOf<FolderEntity?>(null) }
     var folderToDissolve by remember { mutableStateOf<FolderEntity?>(null) }
@@ -588,8 +592,7 @@ fun SessionListScreen(
     val collapsedFolderIds by viewModel.collapsedFolderIds.collectAsStateWithLifecycle()
     val folderMemberCounts by viewModel.folderMemberCounts.collectAsStateWithLifecycle()
     val groupPickerRequest by viewModel.groupPickerRequest.collectAsStateWithLifecycle()
-    // While searching, group cards are suppressed: padding a result set with
-    // every non-matching group is noise, not structure.
+    // While searching, group cards are suppressed: padding a result set with every non-matching group is noise.
     val showFolderBlock = !isSearchActive || searchQuery.isBlank()
     // [T-android-group-pause-badge-restamp] Snapshot the fresh-badge set ONCE
     // per grouping pass (iOS does the same in computeGroupedSessionIDs). The
@@ -650,9 +653,8 @@ fun SessionListScreen(
 
     // [T-android-folder-accordion-anchor] Assembly order (Pinned → groups →
     // date buckets) hoisted OUT of the LazyColumn body so the scroll-anchor
-    // effect and the mini-bar can reconstruct each folder header's flat item
-    // index. MUST stay in lockstep with the item builder below — same data,
-    // same order, one item per header/row.
+    // effect and the mini-bar can reconstruct each header's flat item index.
+    // MUST stay in lockstep with the item builder below.
     val pinnedFirst = groupedSessions.firstOrNull()?.first == DatePeriod.PINNED
     val leadingDateGroups = if (pinnedFirst) groupedSessions.take(1) else emptyList()
     val trailingDateGroups = if (pinnedFirst) groupedSessions.drop(1) else groupedSessions
@@ -796,8 +798,7 @@ fun SessionListScreen(
                 .fillMaxSize()
                 .padding(padding),
         ) {
-            // Main content. `sessions.isEmpty()` reads true for the brief window
-            // before Room delivers — [T-android-sessionlist-snapshot-restore] snapshot reveals it.
+            // Main content; sessions.isEmpty() is true until Room delivers — [T-android-sessionlist-snapshot-restore] snapshot reveals it.
             var loadTimedOut by remember { mutableStateOf(false) }
             LaunchedEffect(Unit) {
                 delay(3_000L)
@@ -822,7 +823,8 @@ fun SessionListScreen(
                         }
                     }
                 } else
-                if (sessions.isEmpty()) {
+                // [#35] Archive-everything must not flash onboarding — the footer section still has content.
+                if (sessions.isEmpty() && archivedSessions.isEmpty()) {
                     if (isSearchActive && searchQuery.isNotBlank()) {
                         Box(
                             modifier = Modifier.fillMaxSize(),
@@ -835,18 +837,14 @@ fun SessionListScreen(
                             )
                         }
                     } else if (configLoaded) {
-                        // Show the 3-step onboarding whenever there are no sessions —
-                        // Step 3 (Start a Conversation) is the call-to-action after the
-                        // user finishes Steps 1 and 2, so we must keep the landing
-                        // visible even when hasProviders && hasGroups. Mirrors iOS
-                        // ContentView.emptyState.
+                        // 3-step onboarding when there are no sessions; Step 3
+                        // stays the call-to-action even with providers+groups
+                        // (iOS ContentView.emptyState).
                         // [T-android-startup-config-stall] Gated on configLoaded so
                         // hasProviders/hasGroups reflect the real persisted config —
                         // otherwise a returning user with providers but no sessions
-                        // would briefly see the "add a provider" step before the
-                        // async config load emits. The list branch (sessions present)
-                        // is intentionally NOT gated, so users with history still see
-                        // it immediately without waiting on the config decode.
+                        // would briefly see the "add a provider" step. The list
+                        // branch is intentionally NOT gated.
                         OnboardingLanding(
                             hasProviders = hasProviders,
                             hasGroups = hasGroups,
@@ -869,15 +867,10 @@ fun SessionListScreen(
                         // Leave space for bottom FAB row
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 96.dp),
                     ) {
-                        // T25: search-active reuses the grouped rendering —
-                        // `displayedSessions` is already VM-filtered, so the
-                        // same groupSessionsByDate computation buckets it.
+                        // T25: search reuses the grouped rendering —
+                        // displayedSessions is already VM-filtered.
                         // [T-android-session-grouping] Assembly: Pinned →
-                        // groups → date buckets — hoisted above the
-                        // LazyColumn; keep the builder and folderHeaderIndices
-                        // in lockstep.
-                        // [T-android-session-grouping] Membership is "points
-                        // at a group that exists", matching partitionByFolder.
+                        // groups → date buckets; keep in lockstep with folderHeaderIndices.
                         val existingFolderIds = folders.mapTo(HashSet()) { it.id }
 
                         fun androidx.compose.foundation.lazy.LazyListScope.renderSessionRows(
@@ -923,10 +916,8 @@ fun SessionListScreen(
                                 } else {
                                     Modifier
                                 }
-                                // animateItem gives the accordion its motion:
-                                // rows fade+slide over 250ms instead of
-                                // popping (monotonic tween on purpose — a
-                                // spring's oscillation read as jitter on iOS).
+                                // animateItem: rows fade+slide over 250ms
+                                // (monotonic tween — a spring read as jitter on iOS).
                                 Box(
                                     modifier = Modifier
                                         .animateItem(
@@ -947,6 +938,7 @@ fun SessionListScreen(
                                     onRegenerateTitle = { viewModel.regenerateTitle(it) },
                                     onDuplicate = { viewModel.duplicateSession(it) },
                                     onBranchTree = { branchTreeSession = it },
+                                    onArchiveToggle = { id, archive -> viewModel.archiveSession(id, archive) },
                                     onDeleteRequest = { id ->
                                         deleteTargetId = id
                                         showDeleteDialog = true
@@ -959,27 +951,19 @@ fun SessionListScreen(
                                     searchSnippet = searchSnippets[session.id],
                                     // [T-wave-e-group-visuals] Per-row unseen-reply dot.
                                     unread = session.id in unreadSessionIds,
-                                    // [T-android-sessionrow-hoisted-flows] Read
-                                    // from the lists' own collectors (hoisted
-                                    // above the LazyColumn) rather than letting
-                                    // each row subscribe to the two global
-                                    // flows itself.
+                                    // [T-android-sessionrow-hoisted-flows] From the lists' own hoisted collectors, not per-row flow subscriptions.
                                     isActive = session.id in activeSessionIds,
                                     badgeHead = sessionBadges[session.id]?.firstOrNull(),
-                                    // Transparent so the folder container's
-                                    // surface shows through member rows.
-                                    //
-                                    // [T-android-tablet-split] In two-pane mode
-                                    // the row backing the detail pane is tinted,
-                                    // giving the list the selected-row look iOS
-                                    // gets free from `List(selection:)`.
-                                    // primary@12% is the same treatment the
-                                    // mention picker uses for its highlighted
-                                    // row, so selection reads consistently.
-                                    // Ordering matters: the folder-member case
-                                    // stays transparent unless it is ALSO the
-                                    // selected row, or a selected row inside a
-                                    // group would show no highlight at all.
+                                    // Transparent for folder members so the
+                                    // container's surface shows through. In
+                                    // two-pane mode the row backing the detail
+                                    // pane gets the primary@12% selection tint
+                                    // (iOS List(selection:) parity; same shade
+                                    // the mention picker highlights with).
+                                    // Ordering matters: folder members stay
+                                    // transparent unless ALSO selected, or a
+                                    // selected grouped row would show no
+                                    // highlight at all.
                                     rowBackground = when {
                                         session.id == selectedSessionId ->
                                             MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
@@ -1064,6 +1048,19 @@ fun SessionListScreen(
                                 }))
                             }
                             renderSessionRows(periodSessions)
+                        }
+
+                        // [#35] 已归档 footer — always last, collapsed by default;
+                        // expand to browse and unarchive. Hidden while empty.
+                        if (archivedSessions.isNotEmpty()) {
+                            item(key = "header_archived") {
+                                ArchivedSectionHeader(
+                                    count = archivedSessions.size,
+                                    expanded = archivedExpanded,
+                                    onToggle = { archivedExpanded = !archivedExpanded },
+                                )
+                            }
+                            if (archivedExpanded) renderSessionRows(archivedSessions)
                         }
                     }
                 }
@@ -1687,17 +1684,16 @@ private fun SessionItemContent(
     onRegenerateTitle: (String) -> Unit,
     onDuplicate: (String) -> Unit,
     onBranchTree: (String) -> Unit,
+    /** [#35] (sessionId, archive) — stamp/clear archived_at, swapping the row in/out of the footer section. */
+    onArchiveToggle: (String, Boolean) -> Unit,
     onDeleteRequest: (String) -> Unit,
     /** [T-android-session-grouping] Opens the group picker for this session. */
     onMoveToGroup: (String) -> Unit,
     /**
-     * [T-android-session-grouping] True only when this session belongs to a group
-     * that ACTUALLY EXISTS locally — not merely `folderId != null`.
-     *
-     * A dangling folder_id renders as ungrouped (see partitionByFolder), so
-     * deciding the wording from the raw id alone made the row and its menu
-     * disagree: the session sat in the date buckets while its menu offered
-     * "更换分组". The caller resolves membership the same way the list does.
+     * [T-android-session-grouping] True only when the session's group ACTUALLY
+     * EXISTS locally — a dangling folder_id renders as ungrouped (see
+     * partitionByFolder), and wording from the raw id alone made the row and
+     * its menu disagree. The caller resolves membership the way the list does.
      */
     isFiled: Boolean,
     isRegenerating: Boolean = false,
@@ -1886,15 +1882,17 @@ private fun SessionItemContent(
                     Icon(m3Icon(Icons.Default.AccountTree), contentDescription = null)
                 },
             )
-            // Move to / Change Group
-            // [T-android-session-grouping] The wording follows membership:
-            // a session already in a group is being MOVED BETWEEN groups,
-            // not filed for the first time. Same idiom as Pin/Unpin.
-            //
-            // A single item opening a sheet, deliberately NOT an inline
-            // submenu of group names — the menu body would then cost
-            // O(groups) to compose on every open, and the group data would
-            // have to be captured into the menu closure.
+            // [#35] Archive / Unarchive (wording follows archivedAt, idiom of Pin/Unpin).
+            DropdownMenuItem(
+                text = { Text(stringResource(if (session.archivedAt != null) R.string.sessionlist_unarchive else R.string.sessionlist_archive)) },
+                onClick = { showContextMenu = false; onArchiveToggle(session.id, session.archivedAt == null) },
+                leadingIcon = { Icon(if (session.archivedAt != null) m3Icon(Icons.Default.Unarchive) else m3Icon(Icons.Default.Archive), contentDescription = null) },
+            )
+            // Move to / Change Group — [T-android-session-grouping] wording
+            // follows membership (already filed = moving BETWEEN groups, same
+            // idiom as Pin/Unpin). A single item opening a sheet, deliberately
+            // NOT an inline submenu: the menu body would cost O(groups) per
+            // open and capture the group data into the menu closure.
             DropdownMenuItem(
                 text = {
                     Text(

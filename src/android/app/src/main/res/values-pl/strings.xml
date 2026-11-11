@@ -2080,4 +2080,8 @@
     <!-- [#38] Update dialog: release-notes expand/collapse toggle -->
     <string name="check_update_notes_expand">Pokaż całość</string>
     <string name="check_update_notes_collapse">Pokaż mniej</string>
+    <!-- [#35] Session archive: row menu + collapsed footer section -->
+    <string name="sessionlist_archive">Archiwizuj</string>
+    <string name="sessionlist_unarchive">Cofnij archiwizację</string>
+    <string name="sessionlist_section_archived">Zarchiwizowane (%1$d)</string>
 </resources>

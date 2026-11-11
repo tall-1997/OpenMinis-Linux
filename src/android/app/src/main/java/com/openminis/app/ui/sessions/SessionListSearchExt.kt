@@ -39,11 +39,32 @@ internal data class ContentHits(
 /**
  * Sessions whose title already matches the query don't need a content
  * snippet — prune them before the DAO walk.
+ *
+ * [T-#26-session-search-and] "Matches" now follows the same predicate the DAO
+ * used to select the session: single-word queries keep the exact
+ * whole-string `contains` check; whitespace queries prune a title only when it
+ * contains EVERY word (mirroring `searchSessionsMulti`'s AND-of-words title
+ * conjunct), so a title hit for `词1 词2` isn't pushed through the snippet
+ * walk just because the words aren't adjacent in it. When no word survives
+ * tokenization (all 1-char tokens) the DAO itself fell back to the whole
+ * string, so the prune falls back with it.
  */
 internal fun pruneSessionsNeedingSnippet(
     sessions: List<SessionSearchRow>,
     queryLower: String,
-): List<SessionSearchRow> = sessions.filterNot { it.title.orEmpty().lowercase().contains(queryLower) }
+): List<SessionSearchRow> {
+    val words = queryLower
+        .split(Regex("\\s+"))
+        .map { it.trim() }
+        .filter { it.length >= 2 }
+    if (words.isEmpty()) {
+        return sessions.filterNot { it.title.orEmpty().lowercase().contains(queryLower) }
+    }
+    return sessions.filterNot { session ->
+        val title = session.title.orEmpty().lowercase()
+        words.all { title.contains(it) }
+    }
+}
 
 /** Pure rows → maps step of [ContentHits] building; no IO, JVM-testable. */
 internal fun buildSnippetMaps(rows: List<SessionSnippetRow>): ContentHits {

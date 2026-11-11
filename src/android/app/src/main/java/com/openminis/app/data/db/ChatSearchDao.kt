@@ -3,6 +3,8 @@ package com.openminis.app.data.db
 import androidx.room.ColumnInfo
 import androidx.room.Dao
 import androidx.room.Query
+import androidx.room.RawQuery
+import androidx.sqlite.db.SupportSQLiteQuery
 
 /**
  * Session/message search, kept out of [ChatDao] so the hot CRUD interface does
@@ -28,6 +30,43 @@ interface ChatSearchDao {
         LIMIT 200
     """)
     suspend fun searchSessions(pattern: String): List<ChatSessionEntity>
+
+    /**
+     * [T-#26-session-search-and] Multi-word AND variant of [searchSessions].
+     *
+     * Room `@Query` templates cannot express a variable number of ANDed
+     * predicates, so the multi-word path receives a fully composed
+     * [SupportSQLiteQuery] (built by
+     * `ChatRepositorySearchExt.buildSessionsMultiQuery`, bound through
+     * `SimpleSQLiteQuery` — the same shape `ChatDao.runSessionsMetaQuery`
+     * already uses). The SELECT/JOIN/ORDER/LIMIT head mirrors [searchSessions]
+     * exactly; the difference is the predicate: each space-separated word must
+     * be present via `instr(lower(col), lower(word)) > 0` on BOTH searchable
+     * columns, with OR between the columns — a session hits when its title
+     * contains EVERY word, or its message preview contains EVERY word.
+     *
+     * `instr()` is used instead of `LIKE` for the same reason the message-level
+     * query below uses it: it matches the word literally (a user word carrying
+     * `%` or `_` is no longer a wildcard) and keeps the CJK substring case
+     * working (`会话` inside `这是一个会话`).
+     */
+    @RawQuery(observedEntities = [ChatSessionEntity::class, MessageEntity::class])
+    suspend fun searchSessionsMulti(query: SupportSQLiteQuery): List<ChatSessionEntity>
+
+    /**
+     * [T-#26-session-search-and] Multi-word AND variant of
+     * [firstSnippetPerSession], for queries that took the
+     * [searchSessionsMulti] path. The predicate is the same AND-of-words over
+     * `m.preview` that selected the session, so every multi-word content match
+     * still gets a snippet + anchor instead of silently falling back to the
+     * session's lastMessage preview. The `substr` window centres on the FIRST
+     * word's match (a reasonable anchor when the words are spread across the
+     * message); projection, aliases and GROUP BY/HAVING shape are copied
+     * verbatim from [firstSnippetPerSession] so [MessageSnippetRow] binding is
+     * identical.
+     */
+    @RawQuery(observedEntities = [MessageEntity::class])
+    suspend fun firstSnippetPerSessionMulti(query: SupportSQLiteQuery): List<MessageSnippetRow>
 
     /**
      * First content hit per session, in ONE query, using the compact preview.

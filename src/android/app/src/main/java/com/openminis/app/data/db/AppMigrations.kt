@@ -4,16 +4,10 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 /**
- * [T-db-migrations-extracted] Every schema migration, out of [AppDatabase].
- *
- * AppDatabase had grown past the 800-line file cap purely because forty
- * migrations were inlined into its companion object. Keeping the database
- * class to registration plus the singleton keeps the thing that changes every
- * release (migrations) apart from the thing that never does (the Room build).
- *
- * The order of [ALL] mirrors the previous `.addMigrations(...)` call verbatim —
- * downgrade pairs sit next to their upgrade counterpart, which is why the list
- * is not sorted by version.
+ * [T-db-migrations-extracted] Every schema migration, out of [AppDatabase]
+ * (which had outgrown the 800-line cap with forty inlined migrations).
+ * [ALL] order mirrors the previous `.addMigrations(...)` call verbatim —
+ * downgrade pairs sit next to their upgrade counterpart, hence unsorted.
  */
 internal object AppMigrations {
     val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -334,14 +328,11 @@ internal object AppMigrations {
             db.beginTransaction()
             try {
                 db.execSQL("DROP INDEX IF EXISTS `index_messages_session_id_sort_order`")
-                // The old statement was a correlated `UPDATE … SET sort_order =
-                // (SELECT COUNT(*) FROM messages prior WHERE prior.session_id =
-                // messages.session_id AND …)` — one full per-session scan per
-                // row, i.e. O(N²). A 100k-message history spent minutes under
-                // the upgrade lock and ANR'd. SQLite window functions are not
-                // available on the older Android versions this app supports, so
-                // renumber with one prepared UPDATE per row inside this single
-                // transaction: O(N) statements, no repeated scans.
+                // The old correlated-subquery UPDATE scanned the session once
+                // per row (O(N²)) and ANR'd 100k-message histories under the
+                // upgrade lock; window functions are unavailable on older
+                // Androids, so renumber with one prepared UPDATE per row in
+                // this transaction: O(N) statements, no repeated scans.
                 val renumber = db.compileStatement(
                     "UPDATE messages SET sort_order = ? WHERE id = ?",
                 )
@@ -664,20 +655,16 @@ internal object AppMigrations {
 
     val MIGRATION_28_29 = object : Migration(28, 29) {
         override fun migrate(db: SupportSQLiteDatabase) {
-            // [T-goal-model-origin] Provenance decides whether a later task may
-            // replace the session Goal. Rows written before this column existed
-            // default to 'user': the conservative side — the model never
-            // overwrites an objective a human may have set.
+            // [T-goal-model-origin] Pre-column rows default to 'user' — the
+            // conservative side: the model never overwrites a human-set Goal.
             db.addColumnIfMissing("session_goals", "created_by", "TEXT NOT NULL DEFAULT 'user'")
         }
     }
 
     val MIGRATION_29_28 = object : Migration(29, 28) {
         override fun migrate(db: SupportSQLiteDatabase) {
-            // Rebuild without the column: ALTER TABLE DROP COLUMN needs SQLite
-            // 3.35+, which older supported Android releases do not ship.
-            // A previous partial attempt could have left the scratch table
-            // behind (its INSERT would then hit the primary key), so clear it.
+            // Rebuild without the column (DROP COLUMN needs SQLite 3.35+);
+            // clear any scratch table a partial earlier attempt left behind.
             db.execSQL("DROP TABLE IF EXISTS `session_goals_old`")
             db.execSQL(
                 """CREATE TABLE IF NOT EXISTS `session_goals_old` (
@@ -710,6 +697,23 @@ internal object AppMigrations {
 
     // MIGRATION_30_31 / 31_30 (audit_entries) live in AuditMigrations.kt —
     // this file hit the 800-line policy cap.
+
+    val MIGRATION_31_32 = object : Migration(31, 32) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // [#35 session archive] sessions.archived_at — nullable, no DEFAULT:
+            // existing rows read NULL (= not archived), the exact pre-migration
+            // state. Pure additive metadata; no data rewritten.
+            db.addColumnIfMissing("sessions", "archived_at", "INTEGER")
+        }
+    }
+
+    val MIGRATION_32_31 = object : Migration(32, 31) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // Downgrade 32 → 31. No-op: keep the column — the older build never
+            // selects it, so a version round-trip loses only the archive state.
+            // Downgrade backstop note: also covers the secondary `AppDatabase.getInstance` call sites that open Room without the [DatabaseVersionGuard] pre-check.
+        }
+    }
 
     val MIGRATION_16_17 = object : Migration(16, 17) {
         override fun migrate(db: SupportSQLiteDatabase) {
@@ -786,5 +790,8 @@ internal object AppMigrations {
     // [T-audit-room-persist] audit_entries chain — declared in AuditMigrations.kt.
     AuditMigrations.MIGRATION_30_31,
     AuditMigrations.MIGRATION_31_30,
+    // [#35 session archive] sessions.archived_at.
+    MIGRATION_31_32,
+    MIGRATION_32_31,
     )
 }

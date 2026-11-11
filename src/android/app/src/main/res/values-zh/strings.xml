@@ -2682,4 +2682,8 @@
     <!-- [#38] 更新对话框：更新说明展开/收起 -->
     <string name="check_update_notes_expand">展开全部</string>
     <string name="check_update_notes_collapse">收起</string>
+    <!-- [#35] Session archive: row menu + collapsed footer section -->
+    <string name="sessionlist_archive">归档</string>
+    <string name="sessionlist_unarchive">取消归档</string>
+    <string name="sessionlist_section_archived">已归档（%1$d）</string>
 </resources>

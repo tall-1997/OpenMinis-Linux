@@ -2073,4 +2073,8 @@
     <!-- [#38] Update dialog: release-notes expand/collapse toggle -->
     <string name="check_update_notes_expand">Tümünü göster</string>
     <string name="check_update_notes_collapse">Daha az göster</string>
+    <!-- [#35] Session archive: row menu + collapsed footer section -->
+    <string name="sessionlist_archive">Arşivle</string>
+    <string name="sessionlist_unarchive">Arşivden çıkar</string>
+    <string name="sessionlist_section_archived">Arşivlendi (%1$d)</string>
 </resources>

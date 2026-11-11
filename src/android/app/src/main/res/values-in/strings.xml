@@ -2078,4 +2078,8 @@
     <!-- [#38] Update dialog: release-notes expand/collapse toggle -->
     <string name="check_update_notes_expand">Tampilkan semua</string>
     <string name="check_update_notes_collapse">Tampilkan lebih sedikit</string>
+    <!-- [#35] Session archive: row menu + collapsed footer section -->
+    <string name="sessionlist_archive">Arsipkan</string>
+    <string name="sessionlist_unarchive">Batal Arsipkan</string>
+    <string name="sessionlist_section_archived">Diarsipkan (%1$d)</string>
 </resources>

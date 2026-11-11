@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Accessibility
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.AdminPanelSettings
+import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.AltRoute
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.ArrowDownward
@@ -145,6 +146,7 @@ import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.TrackChanges
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.TravelExplore
+import androidx.compose.material.icons.filled.Unarchive
 import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.ViewAgenda
@@ -158,6 +160,7 @@ import androidx.compose.material.icons.outlined.Accessibility
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AddPhotoAlternate
 import androidx.compose.material.icons.outlined.AdminPanelSettings
+import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.AltRoute
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.ArrowDownward
@@ -280,6 +283,7 @@ import androidx.compose.material.icons.outlined.TouchApp
 import androidx.compose.material.icons.outlined.TrackChanges
 import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material.icons.outlined.TravelExplore
+import androidx.compose.material.icons.outlined.Unarchive
 import androidx.compose.material.icons.outlined.UnfoldMore
 import androidx.compose.material.icons.outlined.Videocam
 import androidx.compose.material.icons.outlined.ViewAgenda
@@ -325,6 +329,7 @@ private val iconPairs: List<Pair<ImageVector, ImageVector>> = listOf(
     Icons.Filled.AdminPanelSettings to Icons.Outlined.AdminPanelSettings,
     Icons.Filled.AltRoute to Icons.Outlined.AltRoute,
     Icons.Filled.Apps to Icons.Outlined.Apps,
+    Icons.Filled.Archive to Icons.Outlined.Archive,
     Icons.Filled.ArrowDownward to Icons.Outlined.ArrowDownward,
     Icons.Filled.ArrowDropDown to Icons.Outlined.ArrowDropDown,
     Icons.Filled.ArrowUpward to Icons.Outlined.ArrowUpward,
@@ -445,6 +450,7 @@ private val iconPairs: List<Pair<ImageVector, ImageVector>> = listOf(
     Icons.Filled.TrackChanges to Icons.Outlined.TrackChanges,
     Icons.Filled.Translate to Icons.Outlined.Translate,
     Icons.Filled.TravelExplore to Icons.Outlined.TravelExplore,
+    Icons.Filled.Unarchive to Icons.Outlined.Unarchive,
     Icons.Filled.UnfoldMore to Icons.Outlined.UnfoldMore,
     Icons.Filled.Videocam to Icons.Outlined.Videocam,
     Icons.Filled.ViewAgenda to Icons.Outlined.ViewAgenda,
