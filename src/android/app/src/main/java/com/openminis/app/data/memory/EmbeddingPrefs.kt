@@ -20,8 +20,9 @@ import android.content.SharedPreferences
  * different vendor or a self-hosted service (ollama, xinference, OpenAI).
  * Independent keys let the user point the feature at ANY OpenAI-compatible
  * endpoint — including the same vendor they use for chat — by pasting the
- * base URL/key once. A Settings UI and "copy from provider X" affordance are
- * follow-up work; until then the keys are settable only via prefs.
+ * base URL/key once. The Settings UI lives in Settings → Memory
+ * (MemoryManagementScreen's semantic-recall section, [T-memory-embedding-settings]);
+ * a "copy from provider X" affordance remains follow-up work.
  *
  * Keys (prefs file `minis_embedding_prefs`):
  *  - `embedding.enabled`  boolean, default **false**
@@ -49,6 +50,31 @@ object EmbeddingPrefs {
         val apiKey: String,
         val model: String,
     )
+
+    /**
+     * [T-memory-embedding-settings] The RAW stored state for the Settings UI:
+     * unlike [snapshot] it does not filter on enabled/completeness, so the
+     * fields can be prefilled and edited while the switch is still off.
+     * [model] falls back to [DEFAULT_MODEL] for display, mirroring [snapshot]'s
+     * effective value.
+     */
+    data class Stored(
+        val enabled: Boolean,
+        val baseUrl: String,
+        val apiKey: String,
+        val model: String,
+    )
+
+    /** One read for the whole Settings section (each getter opens the prefs). */
+    fun stored(context: Context): Stored {
+        val p = prefs(context)
+        return Stored(
+            enabled = p.getBoolean(KEY_ENABLED, false),
+            baseUrl = p.getString(KEY_BASE_URL, null)?.trim().orEmpty(),
+            apiKey = p.getString(KEY_API_KEY, null)?.trim().orEmpty(),
+            model = p.getString(KEY_MODEL, null)?.trim().orEmpty().ifBlank { DEFAULT_MODEL },
+        )
+    }
 
     private fun prefs(context: Context): SharedPreferences =
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)

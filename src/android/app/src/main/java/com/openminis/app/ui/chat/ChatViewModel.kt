@@ -1963,8 +1963,8 @@ class ChatViewModel(
     internal val _supervisorArmed = MutableStateFlow(false)
     val supervisorArmed: StateFlow<Boolean> = _supervisorArmed.asStateFlow()
 
-    // [#31] Four-tier session gate (OFF/ASK/SAFE_AUTO/YOLO).
-    internal val _permissionMode = MutableStateFlow(com.openminis.app.security.SessionPermissionMode.ASK)
+    // [#31] Four-tier gate. New chats start at SAFE_AUTO (the two-tier "ASK" behaviour) — zero change for upgrades.
+    internal val _permissionMode = MutableStateFlow(com.openminis.app.security.SessionPermissionMode.SAFE_AUTO)
     val permissionMode: StateFlow<com.openminis.app.security.SessionPermissionMode> = _permissionMode.asStateFlow()
 
     /**

@@ -342,13 +342,13 @@
     <string name="context_block_system">Prompt systemowy i narzędzia</string>
     <string name="context_block_skills_mcps">Umiejętności i MCP</string>
     <string name="context_block_memory">Wstrzyknięcie pamięci</string>
-    <string name="context_block_runtime">Wstrzyknięcia na turę</string>
+<string name="context_block_runtime">Tymczasowy kontekst tej tury</string>
     <string name="context_block_goal_plan">Wstrzyknięcie celu i planu</string>
     <string name="context_block_history">Okno historii</string>
     <string name="context_block_attachments">Załączniki i obrazy</string>
     <string name="context_usage_note_estimate">Szacunki przybliżone (±10%); odświeżane po otwarciu arkusza</string>
     <!-- [#41] Gen UI card -->
-    <string name="gen_ui_card_label">Gen UI</string>
+<string name="gen_ui_card_label">Karta interaktywna</string>
     <string name="gen_ui_view_source">Pokaż źródło</string>
     <string name="gen_ui_view_render">Pokaż render</string>
     <string name="gen_ui_view_fullscreen">Pełny ekran</string>
@@ -633,12 +633,12 @@
     <string name="env_var_privacy_toggle">Tryb prywatności</string>
     <string name="env_var_privacy_footer">Gdy włączone, każda wartość zmiennej środowiskowej pojawiająca się w wyniku shell-execute jest zastępowana formą zamaskowaną (np. `sk-1********ajhks`), zanim trafi do modelu. Wartości krótsze niż 8 znaków stają się w całości `*`. Wynik widoczny dla użytkownika w czacie pozostaje bez zmian.</string>
     <string name="outbound_mask_toggle">Maskowanie prywatności wychodzącej</string>
-    <string name="outbound_mask_footer">Po włączeniu klucze API, adresy e-mail i numery telefonów są maskowane w żądaniach wysyłanych do dostawcy modelu. Historia czatu na tym urządzeniu pozostaje bez zmian. Domyślnie wyłączone.</string>
+<string name="outbound_mask_footer">Po włączeniu ciągi o kształcie klucza (w tym klucze API w kodzie, tokeny JWT/base64), adresy e-mail i liczby przypominające telefony są zastępowane placeholderami w żądaniach do dostawcy modelu. Identyfikatory kodu i linie diff są chronione granicami słów. Historia czatu na urządzeniu pozostaje bez zmian. Domyślnie wyłączone.</string>
     <string name="chat_menu_perm_yoyo">YOLO · pełna automatyka</string>
     <string name="chat_menu_perm_safe_auto">Bezpieczne auto · narzędzia tylko do odczytu działają swobodnie</string>
     <string name="chat_menu_perm_ask">Pytaj · potwierdź każde wywołanie</string>
     <string name="chat_menu_perm_off">Wyłączone · odmów wszystkich narzędzi</string>
-    <string name="gate_approval_allow_all">Zawsze zezwalaj w tej sesji</string>
+    <string name="gate_approval_allow_all">Zawsze zezwalaj w tej sesji (bieżący cel)</string>
     <string name="approval_action_allow_all_session">Zawsze zezwalaj w tej sesji</string>
     <string name="env_var_section_header">Zmienne</string>
     <string name="env_var_section_footer">Zmienne środowiskowe są wstrzykiwane do powłoki piaskownicy na początku sesji. Nazwy są zapisywane wielkimi literami i muszą być zgodne z regułami zmiennych powłoki POSIX.</string>
@@ -2043,6 +2043,12 @@
     <string name="token_usage_saver_folded">Zwinięte wyniki narzędzi</string>
     <string name="token_usage_saver_saved">Zaoszczędzono w tej turze</string>
     <string name="memory_center_overview">W skrócie</string>
+    <string name="memory_embedding_header">Wyszukiwanie semantyczne</string>
+    <string name="memory_embedding_toggle">Semantyczne przypominanie za pomocą embeddingów</string>
+    <string name="memory_embedding_base_url">Bazowy adres URL embeddingów</string>
+    <string name="memory_embedding_api_key">Klucz API embeddingów</string>
+    <string name="memory_embedding_model">Model embeddingów</string>
+    <string name="memory_embedding_footer">Domyślnie wyłączone. Po włączeniu przypominanie pamięci dodaje wyszukiwanie podobieństwa wektorowego przez punkt końcowy embeddingów zgodny z OpenAI, obok wyszukiwania słów kluczowych. Zmiany zaczynają obowiązywać dopiero po ponownym uruchomieniu procesu aplikacji.</string>
     <string name="memory_center_stat_memory">Pliki pamięci</string>
     <string name="memory_center_stat_recalls">Przywołane wpisy</string>
     <string name="memory_center_stat_failures">Zablokowane powtórzenia</string>
@@ -2150,6 +2156,7 @@
     <string name="provider_transfer_export_failed">Eksport nie powiódł się</string>
     <string name="provider_transfer_import_ok">Zaimportowano dostawców: %1$d</string>
     <string name="provider_transfer_import_partial">Zaimportowano dostawców: %1$d, niepowodzenia: %2$d</string>
+    <string name="provider_transfer_import_partial_detail">Zaimportowano %1$d, nie powiodło się %2$d: %3$s</string>
     <!-- [T-ssh-workspace] (#32) SSH workspace binding + host management -->
     <string name="ssh_workspace_menu_title">Obszar roboczy SSH</string>
     <string name="ssh_workspace_binding_title">Obszar roboczy SSH</string>

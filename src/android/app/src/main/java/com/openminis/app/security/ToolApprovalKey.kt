@@ -36,19 +36,24 @@ object ToolApprovalKey {
      * single identifying argument (falls back to the tool-name key). Mirrors
      * the extraction shape SecurityGateImpl uses for previews, kept separate
      * so the allowlist stays a pure, independently testable unit.
+     *
+     * Whitespace in the gist is collapsed: an agent re-issuing the same
+     * command with different alignment/indentation must still hit the
+     * "always allow" grant — requiring byte-identical spacing would make
+     * the third button a recurring ask for shell-heavy work.
      */
     fun gist(toolName: String, argsJson: String): String {
         if (argsJson.isBlank()) return ""
         return try {
             val a = JSONObject(argsJson)
             when {
-                toolName in COMMAND_TOOLS -> a.optString("command", "").trim()
+                toolName in COMMAND_TOOLS -> a.optString("command", "").collapseWs()
                 toolName in PATH_TOOLS -> a.optString("path", "").trim()
                 toolName == "ssh_exec" -> buildString {
                     append(a.optString("action", "").trim())
                     val host = a.optString("host", "").trim()
                     if (host.isNotBlank()) append(' ').append(host)
-                    val cmd = a.optString("command", "").trim()
+                    val cmd = a.optString("command", "").collapseWs()
                     if (cmd.isNotBlank()) append(' ').append(cmd)
                 }.trim()
                 toolName == "browser_use" -> a.optString("action", "").trim().lowercase()
@@ -60,6 +65,8 @@ object ToolApprovalKey {
             argsJson.trim()
         }
     }
+
+    private fun String.collapseWs(): String = trim().replace(Regex("\\s+"), " ")
 
     /**
      * Allowlist key: `tool` when the gist is blank (covers every call of the

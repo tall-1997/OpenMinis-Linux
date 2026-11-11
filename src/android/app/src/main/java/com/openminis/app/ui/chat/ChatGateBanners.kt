@@ -77,8 +77,13 @@ fun ChatGateBanners(
                         }
                         // [#36] Three-state approval: approve this request and
                         // allowlist its (tool, args-gist) key for the session.
-                        OutlinedButton(onClick = { onApproveAlways(req.id) }) {
-                            Text(stringResource(R.string.gate_approval_allow_all))
+                        // Hidden for fatal confirmations — the allowlist can
+                        // never skip those (mustPrompt short-circuits first),
+                        // so the button would only store a dead key.
+                        if (!req.fatalConfirm) {
+                            OutlinedButton(onClick = { onApproveAlways(req.id) }) {
+                                Text(stringResource(R.string.gate_approval_allow_all))
+                            }
                         }
                         OutlinedButton(onClick = { onDeny(req.id) }) {
                             Text(stringResource(R.string.gate_approval_deny))

@@ -130,6 +130,11 @@ internal fun SshHostsManagerSheet(onDismiss: () -> Unit) {
                     resultText = testResultText,
                     onTest = { runTest(host) },
                     onRemove = {
+                        // Sweep workspace bindings first: a binding left
+                        // pointing at a deleted host routes shells nowhere
+                        // while the binding sheet claims local execution.
+                        com.openminis.app.ssh.SshWorkspaceBindings
+                            .forContext(context).unbindAllForHost(host.id)
                         SshEngine.backend(context).removeHost(host.id)
                         refresh()
                     },

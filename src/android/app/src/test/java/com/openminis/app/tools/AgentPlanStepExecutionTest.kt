@@ -193,6 +193,7 @@ class AgentPlanStepExecutionTest {
             planId = "id-1",
             title = "wire the retries",
             position = 2,
+            sessionId = "sess-1",
         ).promptLine()
         assertTrue(line, line.contains("step 3"))
         assertTrue(line, line.contains("wire the retries"))

@@ -1,8 +1,11 @@
 package com.openminis.app.ui.chat
 
+import androidx.lifecycle.viewModelScope
 import com.openminis.app.data.model.LLMMessage
 import com.openminis.app.goal.withGoalContext
 import com.openminis.app.tools.AgentPlanStore
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 /**
  * [T-plan-board-live] Puts the plan board into every request.
@@ -61,32 +64,19 @@ internal fun ChatViewModel.planBoardPrompt(): String? = runCatching {
  */
 internal fun ChatViewModel.liveRecallPrompt(): String? {
     if (!_memoryEnabled.value) return null
-    val lastUser = _messages.value.lastOrNull { it.role == "user" && !it.isQueued }
-    val recentUser = lastUser?.content.orEmpty()
-    val recentAssistant = _messages.value
-        .lastOrNull { it.role == "assistant" }
-        ?.content
-        ?.takeLast(ASSISTANT_TAIL_CHARS)
-        .orEmpty()
-    val query = (recentUser + "\n" + recentAssistant).trim()
-    if (query.length < MIN_QUERY_CHARS) return null
-    val engine = com.openminis.app.data.repository.MemoryRecallEngineCache.forSession(
-        memoryDir = com.openminis.app.sandbox.SessionWorkspace.memoryDir(
-            context.filesDir,
-            com.openminis.app.sandbox.ExecutionCoordinator.ownerSessionId(
-                realSessionId.ifEmpty { sessionId },
-            ),
-        ),
-        // [T-memory-shared-recall] The app-wide directory joins recall, so a
-        // lesson recorded in another chat is reachable from this one.
-        sharedDir = com.openminis.app.data.repository.MemoryIndex.sharedDir(context.filesDir),
-    ) ?: return null
+    val input = liveRecallInput() ?: return null
+    val engine = recallEngineForLiveRecall() ?: return null
     // [T-memory-recall-anti-nag] recallForPrompt, not recall: the query-keyed
     // memo cannot dedupe across turns (the query changes every turn with the
     // assistant tail), so the same few memories were re-announced every turn.
     // The hit-keyed streak inside the engine stops a memory after three
     // consecutive announcements and re-arms it when it drops out of the hits.
-    val hits = engine.recallForPrompt(query)
+    // [T-memory-embedding-wiring] recallForPromptCached, not recallForPrompt:
+    // the send pipeline prefetched the hybrid (FTS + semantic) result for this
+    // exact query, so the render — which MUST stay synchronous and zero-network
+    // (PromptPart.render is a plain () -> String?) — reuses it. Cache miss (or
+    // the semantic feature off) degrades to the plain keyword path unchanged.
+    val hits = engine.recallForPromptCached(input.query)
     if (hits.isEmpty()) return null
     // [T-recall-turn-dedup] The same memories are announced once per topic.
     // Every request of one turn must carry the block (each request is a fresh
@@ -96,7 +86,7 @@ internal fun ChatViewModel.liveRecallPrompt(): String? {
     // when the recalled set drifts every round, each memory still stops being
     // re-injected after RECALL_REPEAT_CAP consecutive rounds and re-arms when
     // it drops out of the hits (task pivot).
-    val turnKey = lastUser?.id ?: ""
+    val turnKey = input.lastUserId
     val keys = hits.map { "${it.day}:${it.line}" }.toSet()
     // If the message that carried the previous block fell out of the window,
     // the memories are gone from context — announce again regardless.
@@ -110,6 +100,86 @@ internal fun ChatViewModel.liveRecallPrompt(): String? {
     // hit list on top used to count every injection twice, with the extra
     // keys never shown anywhere.
     return engine.formatAsPromptFragment(hits).takeIf { it.isNotBlank() }
+}
+
+/**
+ * [T-memory-embedding-wiring] The live-recall query plus its turn key, read in
+ * ONE snapshot. liveRecallPrompt and the send-path semantic prefetch
+ * ([prefetchSemanticRecall]) must build the SAME string, or the prefetch's
+ * cache key never matches the render's lookup and the hybrid result is wasted.
+ * Both callers evaluate this against the live message window: the prefetch
+ * calls it right after the new user row is appended and before any assistant
+ * message exists for the turn — exactly the state the first request's render
+ * sees — so a fresh send's first turn matches byte-for-byte. Later turns of a
+ * tool loop grow the assistant tail and miss the one-slot cache by design;
+ * they degrade to the keyword path.
+ *
+ * [lastUserId] is the id of the user row the query was built from — the
+ * turn-dedup carrier key, read from the same snapshot so the announce decision
+ * and the query can never disagree about which turn they describe.
+ *
+ * Null when the fold is too short to be worth a recall ([MIN_QUERY_CHARS]).
+ */
+internal class LiveRecallInput(
+    val query: String,
+    val lastUserId: String,
+)
+
+internal fun ChatViewModel.liveRecallInput(): LiveRecallInput? {
+    val lastUser = _messages.value.lastOrNull { it.role == "user" && !it.isQueued }
+    val recentUser = lastUser?.content.orEmpty()
+    val recentAssistant = _messages.value
+        .lastOrNull { it.role == "assistant" }
+        ?.content
+        ?.takeLast(ASSISTANT_TAIL_CHARS)
+        .orEmpty()
+    val query = (recentUser + "\n" + recentAssistant).trim()
+    if (query.length < MIN_QUERY_CHARS) return null
+    return LiveRecallInput(query, lastUser?.id.orEmpty())
+}
+
+/**
+ * [T-memory-embedding-wiring] The engine behind live recall, in ONE place.
+ * Same construction for render and prefetch ⇒ same [MemoryRecallEngineCache]
+ * key ⇒ the same instance holds the prefetch cache the render will consume.
+ */
+internal fun ChatViewModel.recallEngineForLiveRecall(): com.openminis.app.data.repository.MemoryRecallEngine? {
+    return com.openminis.app.data.repository.MemoryRecallEngineCache.forSession(
+        memoryDir = com.openminis.app.sandbox.SessionWorkspace.memoryDir(
+            context.filesDir,
+            com.openminis.app.sandbox.ExecutionCoordinator.ownerSessionId(
+                realSessionId.ifEmpty { sessionId },
+            ),
+        ),
+        // [T-memory-shared-recall] The app-wide directory joins recall, so a
+        // lesson recorded in another chat is reachable from this one.
+        sharedDir = com.openminis.app.data.repository.MemoryIndex.sharedDir(context.filesDir),
+    )
+}
+
+/**
+ * [T-memory-embedding-wiring] Fire-and-forget semantic-recall prefetch, called
+ * early in the send pipeline (right after the user row lands, before prompt
+ * assembly) so the embeddings request overlaps the DB/OAuth/prompt work and
+ * the first turn's render finds the hybrid result already cached.
+ *
+ * Zero-cost when the semantic feature is off (default): one volatile read
+ * returns before any engine lookup or file I/O. Otherwise the engine's own
+ * [MemoryRecallEngine.prefetchSemantic] launches onto its IO scope — this
+ * coroutine only keeps the engine's first-create sidecar read off the main
+ * thread — and every failure stays silent: the send pipeline must not notice
+ * the prefetch exists.
+ */
+internal fun ChatViewModel.prefetchSemanticRecall() {
+    if (!_memoryEnabled.value) return
+    if (com.openminis.app.data.memory.MemoryEmbeddingRuntime.recallSupportOrNull() == null) return
+    viewModelScope.launch(Dispatchers.IO) {
+        runCatching {
+            val input = liveRecallInput() ?: return@runCatching
+            val engine = recallEngineForLiveRecall() ?: return@runCatching
+            engine.prefetchSemantic(input.query)
+        }
+    }
 }
 
 /**

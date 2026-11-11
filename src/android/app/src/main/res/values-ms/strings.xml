@@ -340,13 +340,13 @@
     <string name="context_block_system">Prompt sistem &amp; alat</string>
     <string name="context_block_skills_mcps">Kemahiran &amp; MCP</string>
     <string name="context_block_memory">Suntikan memori</string>
-    <string name="context_block_runtime">Suntikan setiap giliran</string>
+<string name="context_block_runtime">Konteks sementara giliran ini</string>
     <string name="context_block_goal_plan">Suntikan matlamat &amp; pelan</string>
     <string name="context_block_history">Tetingkap sejarah</string>
     <string name="context_block_attachments">Lampiran &amp; imej</string>
     <string name="context_usage_note_estimate">Anggaran kasar (±10%); disegarkan semasa lembaran ini dibuka</string>
     <!-- [#41] Gen UI card -->
-    <string name="gen_ui_card_label">Gen UI</string>
+<string name="gen_ui_card_label">Kad interaktif</string>
     <string name="gen_ui_view_source">Lihat sumber</string>
     <string name="gen_ui_view_render">Tunjuk render</string>
     <string name="gen_ui_view_fullscreen">Skrin penuh</string>
@@ -631,12 +631,12 @@
     <string name="env_var_privacy_toggle">Mod Privasi</string>
     <string name="env_var_privacy_footer">Apabila didayakan, sebarang nilai pemboleh ubah persekitaran yang muncul dalam output shell-execute akan digantikan dengan bentuk bertopeng (cth. `sk-1********ajhks`) sebelum sampai kepada model. Nilai yang lebih pendek daripada 8 aksara menjadi `*` sepenuhnya. Output yang dilihat pengguna dalam sembang kekal tidak berubah.</string>
     <string name="outbound_mask_toggle">Topeng privasi data keluar</string>
-    <string name="outbound_mask_footer">Apabila diaktifkan, kunci API, alamat e-mel dan nombor telefon ditutup dalam permintaan yang dihantar kepada pembekal model. Sejarah sembang pada peranti ini tidak berubah. Dimatikan secara lalai.</string>
+<string name="outbound_mask_footer">Apabila diaktifkan, rentetan berbentuk kunci (termasuk kunci API dalam kod, token JWT/base64), e-mel dan nombor menyerupai telefon digantikan dengan pemegang tempat dalam permintaan kepada penyedia model. Pengecam kod dan baris dilindungi sempadan perkataan. Sejarah sembang pada peranti tidak berubah. Lalai dimatikan.</string>
     <string name="chat_menu_perm_yoyo">YOLO · automatik penuh</string>
     <string name="chat_menu_perm_safe_auto">Auto selamat · alat baca sahaja dibenarkan</string>
     <string name="chat_menu_perm_ask">Tanya · sahkan setiap panggilan</string>
     <string name="chat_menu_perm_off">Mati · tolak semua alat</string>
-    <string name="gate_approval_allow_all">Sentiasa benarkan dalam sesi ini</string>
+    <string name="gate_approval_allow_all">Sentiasa benarkan sesi ini (sasaran semasa)</string>
     <string name="approval_action_allow_all_session">Sentiasa benarkan dalam sesi ini</string>
     <string name="env_var_section_header">Pemboleh Ubah</string>
     <string name="env_var_section_footer">Pemboleh ubah persekitaran disuntik ke dalam shell sandbox pada permulaan sesi. Nama ditukar kepada huruf besar dan mesti mematuhi peraturan pemboleh ubah shell POSIX.</string>
@@ -2036,6 +2036,12 @@
     <string name="token_usage_saver_folded">Hasil alat terlipat</string>
     <string name="token_usage_saver_saved">Dijimat giliran ini</string>
     <string name="memory_center_overview">Sepintas lalu</string>
+    <string name="memory_embedding_header">Peringatan semantik</string>
+    <string name="memory_embedding_toggle">Peringatan memori semantik dengan embedding</string>
+    <string name="memory_embedding_base_url">URL asas embeddings</string>
+    <string name="memory_embedding_api_key">Kunci API embeddings</string>
+    <string name="memory_embedding_model">Model embedding</string>
+    <string name="memory_embedding_footer">Dimatikan secara lalai. Apabila diaktifkan, peringatan memori menambah carian keserupaan vektor melalui titik akhir embeddings yang serasi dengan OpenAI, selain carian kata kunci. Perubahan hanya berkuat kuasa selepas proses aplikasi dimulakan semula.</string>
     <string name="memory_center_stat_memory">Fail memori</string>
     <string name="memory_center_stat_recalls">Entri dipanggil</string>
     <string name="memory_center_stat_failures">Ulangan disekat</string>
@@ -2143,6 +2149,7 @@
     <string name="provider_transfer_export_failed">Eksport gagal</string>
     <string name="provider_transfer_import_ok">%1$d pembekal diimport</string>
     <string name="provider_transfer_import_partial">%1$d pembekal diimport, %2$d gagal</string>
+    <string name="provider_transfer_import_partial_detail">%1$d pembekal diimport, %2$d gagal: %3$s</string>
     <!-- [T-ssh-workspace] (#32) SSH workspace binding + host management -->
     <string name="ssh_workspace_menu_title">Ruang Kerja SSH</string>
     <string name="ssh_workspace_binding_title">Ruang Kerja SSH</string>

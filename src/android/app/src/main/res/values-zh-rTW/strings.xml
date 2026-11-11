@@ -388,13 +388,13 @@
     <string name="context_block_system">系統提示與工具</string>
     <string name="context_block_skills_mcps">技能與 MCP</string>
     <string name="context_block_memory">記憶注入</string>
-    <string name="context_block_runtime">每輪注入</string>
+<string name="context_block_runtime">本輪臨時上下文</string>
     <string name="context_block_goal_plan">目標與計畫注入</string>
     <string name="context_block_history">歷史視窗</string>
     <string name="context_block_attachments">附件與圖片</string>
     <string name="context_usage_note_estimate">粗略估計（±10%）；開啟此面板時重新整理</string>
     <!-- [#41] Gen UI card -->
-    <string name="gen_ui_card_label">Gen UI</string>
+<string name="gen_ui_card_label">互動卡片</string>
     <string name="gen_ui_view_source">檢視原始碼</string>
     <string name="gen_ui_view_render">顯示渲染</string>
     <string name="gen_ui_view_fullscreen">全螢幕</string>
@@ -681,7 +681,7 @@
     <string name="env_var_privacy_toggle">隱私模式</string>
     <string name="env_var_privacy_footer">開啟後，shell-execute 輸出中偵測到的環境變數值會在送達模型前被打碼（例如 `sk-1********ajhks`）。少於 8 個字元的值會被全部替換為 `*`。聊天中使用者可見的輸出維持不變。</string>
     <string name="outbound_mask_toggle">出站隱私遮蔽</string>
-    <string name="outbound_mask_footer">開啟後，傳送給模型供應商的請求中的 API 金鑰、電子郵件與手機號碼會被遮蔽。本機上的聊天記錄保持不變。預設關閉。</string>
+<string name="outbound_mask_footer">開啟後，傳送給模型服務商的請求中，金鑰形狀的字串（包括程式碼中的 API 金鑰、JWT/base64 權杖）、信箱與電話號碼形狀的數字會被替換為佔位符；程式識別碼與 diff 行由詞邊界保護。本機上的聊天記錄保持不變。預設關閉。</string>
     <string name="chat_menu_perm_yoyo">YOLO · 全授權</string>
     <string name="chat_menu_perm_safe_auto">安全自動 · 唯讀工具自動放行</string>
     <string name="chat_menu_perm_ask">詢問 · 每次呼叫都確認</string>
@@ -1821,7 +1821,7 @@
     <string name="selection_copy_as_rich_text">以格式化文字複製</string>
     <string name="selection_copy_as_plain_text">以純文字複製</string>
     <string name="chat_input_placeholder_hint_5">Minis Ultra 可以把 ↩︎ 鍵設為傳送或換行</string>
-    <string name="gate_approval_allow_all">本工作階段總是允許</string>
+    <string name="gate_approval_allow_all">本會話總是允許（當前目標）</string>
     <string name="db_quarantine_title">資料庫已自動修復</string>
     <string name="db_quarantine_body">本機資料庫在 %1$s 的啟動完整性檢查中未通過，無法安全開啟。你的聊天與設定並未刪除：損毀的檔案已被移出，應用以全新的空資料庫啟動。</string>
     <string name="db_quarantine_copy_at">損毀副本保留於：\n%1$s</string>
@@ -2117,6 +2117,12 @@
     <string name="token_usage_saver_folded">已折疊工具結果</string>
     <string name="token_usage_saver_saved">本輪節省</string>
     <string name="memory_center_overview">概覽</string>
+    <string name="memory_embedding_header">語意召回</string>
+    <string name="memory_embedding_toggle">Embedding 語意記憶召回</string>
+    <string name="memory_embedding_base_url">Embeddings Base URL</string>
+    <string name="memory_embedding_api_key">Embeddings API Key</string>
+    <string name="memory_embedding_model">Embedding 模型</string>
+    <string name="memory_embedding_footer">預設關閉。開啟後，記憶召回在關鍵字搜尋之外，會加入透過 OpenAI 相容 embeddings 端點的向量相似度搜尋。變更需重啟應用程式程序後才會生效。</string>
     <string name="memory_center_stat_memory">記憶檔案</string>
     <string name="memory_center_stat_recalls">被召回條目</string>
     <string name="memory_center_stat_failures">已攔截的重複</string>
@@ -2224,6 +2230,7 @@
     <string name="provider_transfer_export_failed">匯出失敗</string>
     <string name="provider_transfer_import_ok">已匯入 %1$d 個供應商</string>
     <string name="provider_transfer_import_partial">已匯入 %1$d 個供應商，%2$d 個失敗</string>
+    <string name="provider_transfer_import_partial_detail">已匯入 %1$d 個供應商，%2$d 個失敗：%3$s</string>
     <!-- [T-ssh-workspace] (#32) SSH workspace binding + host management -->
     <string name="ssh_workspace_menu_title">SSH 工作區</string>
     <string name="ssh_workspace_binding_title">SSH 工作區</string>

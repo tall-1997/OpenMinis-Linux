@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.BugReport
@@ -458,6 +459,15 @@ internal fun ChatTopBarActions(
                                     Icon(
                                         if (sessionPerm.isYolo()) Icons.Filled.Bolt else Icons.Filled.Shield,
                                         contentDescription = null,
+                                    )
+                                },
+                                // "Cycles on tap" must be visible or the row
+                                // reads as a static status line.
+                                trailingIcon = {
+                                    Icon(
+                                        m3Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
                                     )
                                 },
                             )

@@ -32,6 +32,12 @@ object ApprovalGate {
          * "always allow this session" allowlist key; blank = tool-level key.
          */
         val argsGist: String = "",
+        /**
+         * [#36] Fatal confirmation (mustPrompt): the allowlist can never
+         * skip this class of call, so an "always allow" button here would
+         * store a key that never matches — the UI hides it when set.
+         */
+        val fatalConfirm: Boolean = false,
     )
 
     private fun legacySession(): String? = legacyBoundSessionId
@@ -128,8 +134,13 @@ object ApprovalGate {
         if (!mustPrompt && isToolAllowedForSession(toolName, sid, argsGist)) return ""
         if (sessionAllowAllSkipsPrompt(isSessionAllowAll(sid), mustPrompt)) return ""
         val id = UUID.randomUUID().toString()
+        approvalDetails[id] = ApprovalRequest(
+            id, toolName, preview,
+            sessionId = sid,
+            argsGist = argsGist,
+            fatalConfirm = mustPrompt,
+        )
         pending[id] = MutableStateFlow(null)
-        approvalDetails[id] = ApprovalRequest(id, toolName, preview, sessionId = sid, argsGist = argsGist)
         refreshPendingBroadcast()
         return id
     }

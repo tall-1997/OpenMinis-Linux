@@ -138,9 +138,19 @@ internal fun ChatSheetsHost(
                     // [#36] Third action of the three-state approval: approve
                     // this request AND allowlist its (tool, args-gist) key for
                     // the rest of the session. Same-target re-calls skip the
-                    // dialog; different targets still ask.
-                    neutralText = stringResource(R.string.approval_action_allow_all_session),
-                    onNeutral = { viewModel.approveToolAlwaysForSession(approval.id) },
+                    // dialog; different targets still ask. Hidden for fatal
+                    // confirmations — the allowlist can never skip those, so
+                    // the button would only store a key that never matches.
+                    neutralText = if (approval.fatalConfirm) {
+                        null
+                    } else {
+                        stringResource(R.string.approval_action_allow_all_session)
+                    },
+                    onNeutral = if (approval.fatalConfirm) {
+                        null
+                    } else {
+                        { viewModel.approveToolAlwaysForSession(approval.id) }
+                    },
                 )
             }
 

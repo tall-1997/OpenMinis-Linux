@@ -526,7 +526,15 @@ class MemoryRepository(private val memoryDir: File) {
     fun deleteFile(name: String): Boolean {
         if (name == GLOBAL_FILE) return false // Cannot delete GLOBAL.md
         if (name == LearnedPrefsStore.FILE_NAME) return false
-        return File(memoryDir, name).delete()
+        val deleted = File(memoryDir, name).delete()
+        if (deleted) {
+            // [#27] Vectors outlive the file otherwise — a deleted diary
+            // would stay semantically recallable, and there is no file left
+            // for a re-index to drop the rows.
+            com.openminis.app.data.memory.MemoryEmbeddingRuntime.indexerOrNull()
+                ?.deleteSourceAsync(memoryDir, name)
+        }
+        return deleted
     }
 
     // -- Entry-level operations (used by Session Memory revoke/edit) --

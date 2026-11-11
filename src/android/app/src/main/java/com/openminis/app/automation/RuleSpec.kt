@@ -257,10 +257,12 @@ data class RuleSpec(
     /** Tools the unattended run may use; anything else would be refused. */
     val allowedTools: List<String> = emptyList(),
     /**
-     * Tool-gate mode for the freshly created session, same tokens as
-     * ScheduledTask.newSessionPermissionMode ("YOYO" | "ASK"); null = app
-     * default ASK. Normalized through PermissionMode.sessionDefault at fire
-     * time so an unknown token can never widen the gate.
+     * Tool-gate mode for the freshly created session, canonical four-tier
+     * tokens via SessionPermissionMode.toStoredToken ("YOLO" | "SAFE_AUTO" |
+     * "ASK_ALL" | "OFF"); null = headless default SAFE_AUTO. Legacy
+     * "YOYO"/"ASK" inputs normalize at fire time (ASK → SAFE_AUTO, the gate
+     * behaviour the two-tier era delivered), so an unknown token can never
+     * widen the gate.
      */
     val permissionMode: String? = null,
 ) {

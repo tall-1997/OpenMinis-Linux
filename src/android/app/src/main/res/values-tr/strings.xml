@@ -340,13 +340,13 @@
     <string name="context_block_system">Sistem istemi ve araçlar</string>
     <string name="context_block_skills_mcps">Beceriler ve MCP\'ler</string>
     <string name="context_block_memory">Bellek enjeksiyonu</string>
-    <string name="context_block_runtime">Tura özel enjeksiyonlar</string>
+<string name="context_block_runtime">Bu turun geçici bağlamı</string>
     <string name="context_block_goal_plan">Hedef ve plan enjeksiyonu</string>
     <string name="context_block_history">Geçmiş penceresi</string>
     <string name="context_block_attachments">Ekler ve görseller</string>
     <string name="context_usage_note_estimate">Kaba tahminler (±%10); bu panel açıldığında yenilenir</string>
     <!-- [#41] Gen UI card -->
-    <string name="gen_ui_card_label">Gen UI</string>
+<string name="gen_ui_card_label">Etkileşimli kart</string>
     <string name="gen_ui_view_source">Kaynağı gör</string>
     <string name="gen_ui_view_render">Görselleştirmeyi göster</string>
     <string name="gen_ui_view_fullscreen">Tam ekran</string>
@@ -631,12 +631,12 @@
     <string name="env_var_privacy_toggle">Gizlilik Modu</string>
     <string name="env_var_privacy_footer">Etkinleştirildiğinde, shell-execute çıktısında görünen her ortam değişkeni değeri, modele ulaşmadan önce maskelenmiş biçimiyle (örn. `sk-1********ajhks`) değiştirilir. 8 karakterden kısa değerler tümüyle `*` olur. Sohbette kullanıcının gördüğü çıktı değişmez.</string>
     <string name="outbound_mask_toggle">Giden gizlilik maskeleme</string>
-    <string name="outbound_mask_footer">Etkinleştirildiğinde, model sağlayıcısına gönderilen isteklerdeki API anahtarları, e-posta adresleri ve telefon numaraları maskelenir. Bu cihazdaki sohbet geçmişi değişmez. Varsayılan olarak kapalıdır.</string>
+<string name="outbound_mask_footer">Etkinleştirildiğinde anahtar biçimli dizeler (kod içindeki API anahtarları, JWT/base64 belirteçleri dahil), e-postalar ve telefon benzeri sayılar model sağlayıcısına giden isteklerde yer tutucularla değiştirilir. Kod tanımlayıcıları ve diff satırları kelime sınırlarıyla korunur. Bu cihazdaki sohbet geçmişi değişmez. Varsayılan olarak kapalı.</string>
     <string name="chat_menu_perm_yoyo">YOLO · tam otomatik</string>
     <string name="chat_menu_perm_safe_auto">Güvenli otomatik · salt okunur araçlar serbest çalışır</string>
     <string name="chat_menu_perm_ask">Sor · her çağrıyı onayla</string>
     <string name="chat_menu_perm_off">Kapalı · tüm araçları reddet</string>
-    <string name="gate_approval_allow_all">Bu oturumda her zaman izin ver</string>
+    <string name="gate_approval_allow_all">Bu oturumda her zaman izin ver (geçerli hedef)</string>
     <string name="approval_action_allow_all_session">Bu oturumda her zaman izin ver</string>
     <string name="env_var_section_header">Değişkenler</string>
     <string name="env_var_section_footer">Ortam değişkenleri, oturum başlangıcında sanal alan shell\'ine aktarılır. Adlar büyük harfe çevrilir ve POSIX shell değişken kurallarına uymalıdır.</string>
@@ -2036,6 +2036,12 @@
     <string name="token_usage_saver_folded">Katlanan araç sonuçları</string>
     <string name="token_usage_saver_saved">Bu turda tasarruf</string>
     <string name="memory_center_overview">Bir bakışta</string>
+    <string name="memory_embedding_header">Anlamsal geri çağırma</string>
+    <string name="memory_embedding_toggle">Embedding ile anlamsal bellek geri çağırma</string>
+    <string name="memory_embedding_base_url">Embeddings taban URL\'si</string>
+    <string name="memory_embedding_api_key">Embeddings API anahtarı</string>
+    <string name="memory_embedding_model">Embedding modeli</string>
+    <string name="memory_embedding_footer">Varsayılan olarak kapalıdır. Açık olduğunda, bellek geri çağırma anahtar kelime aramasına ek olarak OpenAI uyumlu bir embeddings uç noktası üzerinden vektör benzerliği araması ekler. Değişiklikler ancak uygulama süreci yeniden başlatıldığında geçerli olur.</string>
     <string name="memory_center_stat_memory">Bellek dosyaları</string>
     <string name="memory_center_stat_recalls">Geri çağrılan kayıtlar</string>
     <string name="memory_center_stat_failures">Engellenen tekrarlar</string>
@@ -2143,6 +2149,7 @@
     <string name="provider_transfer_export_failed">Dışa aktarma başarısız</string>
     <string name="provider_transfer_import_ok">%1$d sağlayıcı içe aktarıldı</string>
     <string name="provider_transfer_import_partial">%1$d sağlayıcı içe aktarıldı, %2$d başarısız</string>
+    <string name="provider_transfer_import_partial_detail">%1$d sağlayıcı içe aktarıldı, %2$d başarısız: %3$s</string>
     <!-- [T-ssh-workspace] (#32) SSH workspace binding + host management -->
     <string name="ssh_workspace_menu_title">SSH Çalışma Alanı</string>
     <string name="ssh_workspace_binding_title">SSH Çalışma Alanı</string>

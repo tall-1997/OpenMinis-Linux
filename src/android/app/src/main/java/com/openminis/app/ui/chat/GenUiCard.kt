@@ -247,6 +247,11 @@ private fun GenUiWebView(
                 loadDataWithBaseURL(GenUi.BASE_URL, wrapped, "text/html", "utf-8", null)
             }
         },
+        // A card leaving the viewport (LazyColumn reuse), a history reload or
+        // a source-toggle must tear the engine down — without destroy() the
+        // WebView keeps its renderer threads and JS timers alive, and a long
+        // chat accumulates one leaked WebView per closed gen-ui block.
+        onRelease = { it.destroy() },
     )
 }
 
@@ -272,8 +277,17 @@ private fun WebSettings.applyGenUiSandbox(spec: GenUi.Spec) {
  * frames, anything) is answered with an empty 404 without leaving the
  * process. Non-http schemes fall through — data:/blob: URIs are inline
  * content, minis:// style handlers are not registered on this WebView.
+ * Main-frame navigation is refused outright: the page lives at
+ * [GenUi.BASE_URL] and has no legitimate reason to navigate — letting a
+ * `location='http://…'` through would swap the card for a net::ERR error
+ * page. Returning true without loading keeps the current page.
  */
 private object GenUiNetworkBlocker : WebViewClient() {
+    override fun shouldOverrideUrlLoading(
+        view: WebView,
+        request: WebResourceRequest,
+    ): Boolean = request.isForMainFrame
+
     override fun shouldInterceptRequest(
         view: WebView,
         request: WebResourceRequest,

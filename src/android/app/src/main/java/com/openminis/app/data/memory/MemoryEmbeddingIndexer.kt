@@ -80,6 +80,22 @@ class MemoryEmbeddingIndexer(
         }
     }
 
+    /**
+     * Drop the vectors of one deleted memory file (scope = [dir], source =
+     * [fileName]). Without this a deleted diary stays semantically
+     * recallable — a privacy and correctness gap, since there is no file
+     * left to re-index the rows away.
+     */
+    fun deleteSourceAsync(dir: File, fileName: String) {
+        val scopeKey = runCatching { dir.canonicalPath }.getOrElse { dir.absolutePath }
+        scope.launch(Dispatchers.IO) {
+            runCatching {
+                val stale = dao.listIdsForSource(scopeKey, fileName)
+                deleteInChunks(stale)
+            }
+        }
+    }
+
     /** Core, blocking; callers run it on IO. */
     suspend fun indexFileNow(dir: File, file: File) {
         val text = runCatching { file.readText() }.getOrNull() ?: return
@@ -132,23 +148,38 @@ class MemoryEmbeddingIndexer(
     // ── lookup (recall side) ───────────────────────────────────────────────
 
     /**
-     * Cosine top-K over stored vectors for [query]. Empty (never throws,
-     * never blocks the caller beyond the suspend) when the query cannot be
-     * embedded or nothing usable is stored.
+     * Cosine top-K over stored vectors for [query] **restricted to
+     * [scopes]** — the caller passes only the memory directories this
+     * conversation may read (its private scope + the shared one). Without
+     * the filter the shared table would leak another session's private
+     * diary lines across conversations. Empty (never throws, never blocks
+     * the caller beyond the suspend) when the query cannot be embedded or
+     * nothing usable is stored.
      */
-    suspend fun semanticHits(query: String, limit: Int): List<MemoryEmbeddingSupport.SemanticHit> {
-        if (query.isBlank() || limit <= 0) return emptyList()
+    suspend fun semanticHits(
+        query: String,
+        limit: Int,
+        scopes: Collection<String>,
+    ): List<MemoryEmbeddingSupport.SemanticHit> {
+        if (query.isBlank() || limit <= 0 || scopes.isEmpty()) return emptyList()
         val queryVectors = provider.embed(listOf(query)) ?: return emptyList()
         if (queryVectors.isEmpty()) return emptyList()
         val queryVector = queryVectors[0]
-        val rows = dao.loadForModel(model, MAX_LOADED_ROWS)
+        val scopeSet = HashSet<String>(scopes.size)
+        for (s in scopes) scopeSet.add(runCatching { File(s).canonicalPath }.getOrElse { s })
+        val rows = dao.loadForModelInScopes(model, scopeSet, MAX_LOADED_ROWS)
         if (rows.isEmpty()) return emptyList()
         data class Scored(val hit: MemoryEmbeddingSupport.SemanticHit, val score: Float)
         val scored = ArrayList<Scored>(rows.size)
         for (row in rows) {
             val vector = FloatVectorBlob.decode(row.vector) ?: continue
             val score = VectorMath.cosine(queryVector, vector)
-            if (score <= 0f) continue
+            // MIN_SEMANTIC_SCORE: high-dim cosine for unrelated text is a
+            // small POSITIVE number — without a floor the semantic channel
+            // would fill the recall budget with weakly-related memories and
+            // reintroduce exactly the recall-noise class the cross-turn
+            // dedup work removed.
+            if (score < MIN_SEMANTIC_SCORE) continue
             scored.add(Scored(MemoryEmbeddingSupport.SemanticHit(row.source, row.line, score), score))
         }
         return scored.sortedByDescending { it.score }.take(limit).map { it.hit }
@@ -192,8 +223,14 @@ class MemoryEmbeddingIndexer(
         /** Recall is line-based; vectors for longer lines are poor signal anyway. */
         internal const val MAX_LINE_CHARS = 500
 
-        /** Row cap for a cosine scan — the table is expected to stay small. */
+        /** Row cap for a cosine scan — bounded so recall stays O(cap). */
         private const val MAX_LOADED_ROWS = 4000
+
+        /**
+         * Below this cosine a hit is noise, not signal (unrelated text in
+         * high-dim embedding space still scores ~0.05–0.25).
+         */
+        internal const val MIN_SEMANTIC_SCORE = 0.32f
 
         private const val BACKFILL_THROTTLE_MS = 30_000L
 

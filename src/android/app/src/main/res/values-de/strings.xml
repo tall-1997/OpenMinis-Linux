@@ -340,13 +340,13 @@
     <string name="context_block_system">Systemprompt &amp; Tools</string>
     <string name="context_block_skills_mcps">Skills &amp; MCPs</string>
     <string name="context_block_memory">Speicher-Injektion</string>
-    <string name="context_block_runtime">Turn-Injektionen</string>
+<string name="context_block_runtime">Temporärer Kontext dieses Zugs</string>
     <string name="context_block_goal_plan">Ziel- &amp; Plan-Injektion</string>
     <string name="context_block_history">Verlaufs-Fenster</string>
     <string name="context_block_attachments">Anhänge &amp; Bilder</string>
     <string name="context_usage_note_estimate">Grobe Schätzungen (±10 %); beim Öffnen dieses Sheets aktualisiert</string>
     <!-- [#41] Gen UI card -->
-    <string name="gen_ui_card_label">Gen UI</string>
+<string name="gen_ui_card_label">Interaktive Karte</string>
     <string name="gen_ui_view_source">Quelltext anzeigen</string>
     <string name="gen_ui_view_render">Darstellung anzeigen</string>
     <string name="gen_ui_view_fullscreen">Vollbild</string>
@@ -631,12 +631,12 @@
     <string name="env_var_privacy_toggle">Datenschutzmodus</string>
     <string name="env_var_privacy_footer">Wenn aktiviert, werden in der Ausgabe von shell-execute erkannte Werte von Umgebungsvariablen vor der Weitergabe an das Modell maskiert (z. B. `sk-1********ajhks`). Werte mit weniger als 8 Zeichen werden vollständig durch `*` ersetzt. Die für den Nutzer sichtbare Ausgabe im Chat bleibt unverändert.</string>
     <string name="outbound_mask_toggle">Ausgehende Datenschutz-Maskierung</string>
-    <string name="outbound_mask_footer">Bei Aktivierung werden API-Schlüssel, E-Mail-Adressen und Telefonnummern in an den Modellanbieter gesendeten Anfragen maskiert. Der Chatverlauf auf diesem Gerät bleibt unverändert. Standardmäßig aus.</string>
+<string name="outbound_mask_footer">Bei Aktivierung werden schlüsselförmige Zeichenketten (einschließlich API-Schlüssel in Code, JWT-/Base64-Tokens), E-Mail-Adressen und telefonnummernartige Ziffern in Anforderungen an den Modellanbieter durch Platzhalter ersetzt. Code-Bezeichner und Diff-Zeilen sind durch Wortgrenzen geschützt. Der Chatverlauf auf diesem Gerät bleibt unverändert. Standardmäßig aus.</string>
     <string name="chat_menu_perm_yoyo">YOLO · vollautomatisch</string>
     <string name="chat_menu_perm_safe_auto">Sicher automatisch · Lese-Tools laufen frei</string>
     <string name="chat_menu_perm_ask">Fragen · jeden Aufruf bestätigen</string>
     <string name="chat_menu_perm_off">Aus · alle Tools verweigern</string>
-    <string name="gate_approval_allow_all">In dieser Sitzung immer erlauben</string>
+    <string name="gate_approval_allow_all">Für diese Sitzung immer erlauben (aktuelles Ziel)</string>
     <string name="env_var_section_header">Variablen</string>
     <string name="env_var_section_footer">Umgebungsvariablen werden beim Sitzungsstart in die Sandbox-Shell eingespeist. Namen werden in Großbuchstaben umgewandelt und müssen den POSIX-Shell-Regeln entsprechen.</string>
     <string name="env_var_empty_title">Keine Umgebungsvariablen</string>
@@ -2035,6 +2035,12 @@
     <string name="token_usage_saver_folded">Gefaltete Tool-Ergebnisse</string>
     <string name="token_usage_saver_saved">Diese Runde gespart</string>
     <string name="memory_center_overview">Auf einen Blick</string>
+    <string name="memory_embedding_header">Semantischer Abruf</string>
+    <string name="memory_embedding_toggle">Embedding-Semantikabruf</string>
+    <string name="memory_embedding_base_url">Basis-URL für Embeddings</string>
+    <string name="memory_embedding_api_key">API-Schlüssel für Embeddings</string>
+    <string name="memory_embedding_model">Embedding-Modell</string>
+    <string name="memory_embedding_footer">Standardmäßig aus. Wenn aktiviert, ergänzt der Gedächtnisabruf die Stichwortsuche um eine Vektor-Ähnlichkeitssuche über einen OpenAI-kompatiblen Embeddings-Endpunkt. Änderungen werden erst nach einem Neustart des App-Prozesses wirksam.</string>
     <string name="memory_center_stat_memory">Speicherdateien</string>
     <string name="memory_center_stat_recalls">Abgerufene Einträge</string>
     <string name="memory_center_stat_failures">Blockierte Wiederholungen</string>
@@ -2132,6 +2138,7 @@
     <string name="provider_transfer_export_failed">Export fehlgeschlagen</string>
     <string name="provider_transfer_import_ok">%1$d Anbieter importiert</string>
     <string name="provider_transfer_import_partial">%1$d Anbieter importiert, %2$d fehlgeschlagen</string>
+    <string name="provider_transfer_import_partial_detail">%1$d Anbieter importiert, %2$d fehlgeschlagen: %3$s</string>
     <!-- [T-ssh-workspace] (#32) SSH workspace binding + host management -->
     <string name="ssh_workspace_menu_title">SSH-Arbeitsbereich</string>
     <string name="ssh_workspace_binding_title">SSH-Arbeitsbereich</string>

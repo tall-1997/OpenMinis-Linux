@@ -30,15 +30,24 @@ import com.openminis.app.data.model.LLMMessage
 object OutboundMasker {
 
     private val API_KEY_PATTERNS = listOf(
-        Regex("sk-[A-Za-z0-9_\\-]{8,}"),
-        Regex("Bearer\\s+[A-Za-z0-9._\\-]{8,}", RegexOption.IGNORE_CASE),
-        Regex("ghp_[A-Za-z0-9]{8,}"),
-        Regex("eyJ[A-Za-z0-9._\\-]{16,}"),
+        // Left boundary: "risk-assessment" / "task-list" must NOT mask — the
+        // suffix after "sk-" is a plain word, not a key. A key is a token the
+        // user (or a config file) wrote as its own unit.
+        Regex("(?<![A-Za-z0-9])sk-[A-Za-z0-9_\\-]{8,}"),
+        Regex("(?<![A-Za-z0-9])Bearer\\s+[A-Za-z0-9._\\-]{8,}", RegexOption.IGNORE_CASE),
+        Regex("(?<![A-Za-z0-9])ghp_[A-Za-z0-9]{8,}"),
+        Regex("(?<![A-Za-z0-9])eyJ[A-Za-z0-9._\\-]{16,}"),
     )
     private val EMAIL_PATTERN =
         Regex("[A-Za-z0-9._%+\\-]+@[A-Za-z0-9.\\-]+\\.[A-Za-z]{2,}")
     private val CN_MOBILE_PATTERN = Regex("(?<!\\d)1[3-9]\\d{9}(?!\\d)")
-    private val INTERNATIONAL_PHONE_PATTERN = Regex("(?<!\\d)\\+\\d{7,14}(?!\\d)")
+    // Right boundary: "+1234567890" at a diff line start or "UTC+1234567"
+    // offset text is not a phone — the '+' must start the token (no
+    // alphanumeric before it) and the run must be ≥11 digits: country code
+    // plus subscriber number. A 10-digit run is far more often a diff line
+    // id/timestamp than a phone, and mauling diffs is worse than missing an
+    // occasional short-format number.
+    private val INTERNATIONAL_PHONE_PATTERN = Regex("(?<![\\dA-Za-z])\\+\\d{11,14}(?!\\d)")
 
     const val KEY_PLACEHOLDER = "[masked-key]"
     const val EMAIL_PLACEHOLDER = "[masked-email]"
@@ -57,8 +66,12 @@ object OutboundMasker {
 
     /**
      * Mask one message: text content, structured text/tool-result parts and
-     * echoed reasoning content. ToolUse inputs are left intact — masking
-     * arguments would break historical tool-call replay semantics.
+     * echoed reasoning content. ToolUse inputs stay intact on purpose: the
+     * agent compares its own emitted tool calls against the history it sees
+     * back, and rewriting arguments mid-conversation reads to the model as
+     * its commands being corrupted. The command OUTPUT is masked above, so a
+     * pasted secret in a command string reaches the wire once (inside that
+     * tool_use block) rather than echoing through every later turn.
      */
     fun maskMessage(m: LLMMessage): LLMMessage {
         val content = mask(m.content)

@@ -52,7 +52,17 @@ class OpenAICompatibleEmbeddingProvider(
         if (texts.isEmpty()) return emptyList()
         return withContext(Dispatchers.IO) {
             val out = ArrayList<FloatArray>(texts.size)
-            for (batch in texts.chunked(BATCH_SIZE)) {
+            // Respect the outbound-masking opt-in (#28): memory lines can
+            // carry credentials the user pasted, and this endpoint is a
+            // model-provider call like any other. Query and corpus see the
+            // same transformation, so similarity is unaffected when the
+            // switch is on; the off path is a passthrough.
+            val masked = if (com.openminis.app.data.OutboundMaskPrefs.isEnabled) {
+                texts.map { com.openminis.app.security.OutboundMasker.mask(it) }
+            } else {
+                texts
+            }
+            for (batch in masked.chunked(BATCH_SIZE)) {
                 val parsed = embedBatch(batch) ?: return@withContext null
                 if (parsed.size != batch.size) return@withContext null
                 out += parsed

@@ -340,13 +340,13 @@
     <string name="context_block_system">시스템 프롬프트 및 도구</string>
     <string name="context_block_skills_mcps">스킬 및 MCP</string>
     <string name="context_block_memory">메모리 주입</string>
-    <string name="context_block_runtime">턴별 주입</string>
+<string name="context_block_runtime">이번 턴 임시 컨텍스트</string>
     <string name="context_block_goal_plan">목표 및 플랜 주입</string>
     <string name="context_block_history">기록 창</string>
     <string name="context_block_attachments">첨부 및 이미지</string>
     <string name="context_usage_note_estimate">대략적인 추정치(±10%); 시트를 열 때 새로 고칩니다</string>
     <!-- [#41] Gen UI card -->
-    <string name="gen_ui_card_label">Gen UI</string>
+<string name="gen_ui_card_label">인터랙티브 카드</string>
     <string name="gen_ui_view_source">소스 보기</string>
     <string name="gen_ui_view_render">렌더링 표시</string>
     <string name="gen_ui_view_fullscreen">전체 화면</string>
@@ -631,12 +631,12 @@
     <string name="env_var_privacy_toggle">프라이버시 모드</string>
     <string name="env_var_privacy_footer">활성화하면 shell-execute 출력에 나타난 환경 변수 값이 모델로 전달되기 전에 마스킹됩니다(예: `sk-1********ajhks`). 8자 미만의 값은 모두 `*` 로 바뀝니다. 채팅에 표시되는 출력은 그대로 유지됩니다.</string>
     <string name="outbound_mask_toggle">발신 프라이버시 마스킹</string>
-    <string name="outbound_mask_footer">사용하면 모델 공급자에게 보내는 요청의 API 키, 이메일 주소, 전화번호가 마스킹됩니다. 이 기기의 채팅 기록은 변경되지 않습니다. 기본값은 꺼짐입니다.</string>
+<string name="outbound_mask_footer">사용 시 모델 공급자에게 보내는 요청에서 키 형태의 문자열(코드 속 API 키, JWT/base64 토큰 포함), 이메일, 전화번호 형태의 숫자가 자리표시자로 바뀝니다. 코드 식별자와 diff 행은 단어 경계로 보호됩니다. 기기의 채팅 기록은 변경되지 않습니다. 기본값은 꺼짐입니다.</string>
     <string name="chat_menu_perm_yoyo">YOLO · 전체 자동</string>
     <string name="chat_menu_perm_safe_auto">안전 자동 · 읽기 전용 도구는 자동 실행</string>
     <string name="chat_menu_perm_ask">묻기 · 모든 호출 확인</string>
     <string name="chat_menu_perm_off">끔 · 모든 도구 거부</string>
-    <string name="gate_approval_allow_all">이 세션에서 항상 허용</string>
+    <string name="gate_approval_allow_all">이 세션에서 항상 허용(현재 대상)</string>
     <string name="approval_action_allow_all_session">이 세션에서 항상 허용</string>
     <string name="env_var_section_header">변수</string>
     <string name="env_var_section_footer">환경 변수는 세션 시작 시 샌드박스 셸에 주입됩니다. 이름은 대문자로 변환되며 POSIX 셸 변수 규칙을 따라야 합니다.</string>
@@ -2033,6 +2033,12 @@
     <string name="token_usage_saver_folded">접힌 도구 결과</string>
     <string name="token_usage_saver_saved">이번 턴 절약</string>
     <string name="memory_center_overview">한눈에 보기</string>
+    <string name="memory_embedding_header">의미 기반 검색</string>
+    <string name="memory_embedding_toggle">임베딩 의미 기반 기억 검색</string>
+    <string name="memory_embedding_base_url">임베딩 베이스 URL</string>
+    <string name="memory_embedding_api_key">임베딩 API 키</string>
+    <string name="memory_embedding_model">임베딩 모델</string>
+    <string name="memory_embedding_footer">기본값은 꺼짐입니다. 켜면 키워드 검색 외에 OpenAI 호환 임베딩 엔드포인트를 통한 벡터 유사도 검색이 기억 불러오기에 추가됩니다. 변경 사항은 앱 프로세스를 다시 시작한 후에 적용됩니다.</string>
     <string name="memory_center_stat_memory">메모리 파일</string>
     <string name="memory_center_stat_recalls">호출된 항목</string>
     <string name="memory_center_stat_failures">차단된 반복</string>
@@ -2140,6 +2146,7 @@
     <string name="provider_transfer_export_failed">내보내기 실패</string>
     <string name="provider_transfer_import_ok">공급자 %1$d개를 가져왔습니다</string>
     <string name="provider_transfer_import_partial">공급자 %1$d개를 가져왔으며 %2$d개 실패</string>
+    <string name="provider_transfer_import_partial_detail">공급자 %1$d개를 가져왔습니다, %2$d개 실패: %3$s</string>
     <!-- [T-ssh-workspace] (#32) SSH workspace binding + host management -->
     <string name="ssh_workspace_menu_title">SSH 워크스페이스</string>
     <string name="ssh_workspace_binding_title">SSH 워크스페이스</string>

@@ -22,11 +22,19 @@ interface MemoryEmbeddingSupport {
     )
 
     /**
-     * Cosine top-K of the stored memory vectors against [query]. Returns an
-     * empty list (never throws) when the provider is unavailable, the query
-     * cannot be embedded, or nothing is indexed yet.
+     * Cosine top-K of the stored memory vectors against [query], restricted
+     * to [scopes] — the canonical host paths of the memory directories this
+     * conversation may read (its private diary dir + the shared dir). The
+     * shared vector table must never surface another session's private
+     * lines. Returns an empty list (never throws) when the provider is
+     * unavailable, the query cannot be embedded, nothing is indexed yet, or
+     * nothing clears the similarity floor.
      */
-    suspend fun semanticHits(query: String, limit: Int): List<SemanticHit>
+    suspend fun semanticHits(
+        query: String,
+        limit: Int,
+        scopes: Collection<String>,
+    ): List<SemanticHit>
 
     /**
      * Fire-and-forget backfill: vectorize the memory lines under [dirs] that

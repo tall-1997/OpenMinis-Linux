@@ -26,6 +26,24 @@ interface MemoryEmbeddingDao {
     suspend fun loadForModel(model: String, limit: Int): List<MemoryEmbeddingEntity>
 
     /**
+     * Recall-side load, restricted to the [scopes] the calling conversation
+     * may read (its private memory dir + the shared one) — the shared table
+     * must never leak another session's private lines. Deterministic order
+     * (newest first) so hitting [limit] is reproducible instead of an
+     * arbitrary row subset.
+     */
+    @Query(
+        "SELECT * FROM memory_embeddings WHERE model = :model " +
+            "AND scope IN (:scopes) " +
+            "ORDER BY updated_at DESC LIMIT :limit",
+    )
+    suspend fun loadForModelInScopes(
+        model: String,
+        scopes: Collection<String>,
+        limit: Int,
+    ): List<MemoryEmbeddingEntity>
+
+    /**
      * Which of [ids] already carry a vector under [model] — everything else
      * is a backfill candidate ("失败静默，下次检索触发补算"). Chunk [ids].
      */

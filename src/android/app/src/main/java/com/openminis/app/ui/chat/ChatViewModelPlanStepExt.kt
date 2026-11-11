@@ -1,5 +1,6 @@
 package com.openminis.app.ui.chat
 
+import com.openminis.app.data.model.isPureVideoGenerator
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.tools.AgentPlanStore
 import kotlinx.coroutines.flow.StateFlow
@@ -34,13 +35,29 @@ data class PlanStepRetryRequest(
     val title: String,
     /** 0-based board position; the prompt prints it 1-based like the snapshot. */
     val position: Int,
+    /**
+     * Owner session at arm time. The ChatViewModel is a single instance
+     * shared across conversations, so the consumer MUST drop a request whose
+     * owner no longer matches the live session — an armed retry from chat A
+     * must never steer chat B's plan board.
+     */
+    val sessionId: String,
     val stamp: Long = System.currentTimeMillis(),
 ) {
+    /** "Retry now" steering is meaningless half an hour later. */
+    fun isExpired(now: Long = System.currentTimeMillis()): Boolean =
+        now - stamp > TTL_MS
+
     /** Line injected into the request when the retry fires (model-directed). */
     internal fun promptLine(): String =
         "RETRY REQUESTED by the user: plan step ${position + 1} \"$title\" failed earlier and was " +
             "reset to active. Work on exactly this step now; flip it to done when it lands, or to " +
             "failed with a short reason if it cannot be completed."
+
+    companion object {
+        /** Armed requests older than this are dropped, never injected. */
+        const val TTL_MS = 30 * 60 * 1000L
+    }
 }
 
 /** Read-only view of the pending retry request (UI/testing introspection). */
@@ -62,6 +79,18 @@ fun ChatViewModel.retryPlanStep(planId: String) {
     val plan = runCatching { AgentPlanStore.list(sid, context) }.getOrDefault(emptyList())
         .firstOrNull { it.id == planId } ?: return
     if (plan.status != "failed") return
+    // Pre-flight the kick BEFORE flipping the store: sendMessage has silent
+    // early-return paths. Arming over a dead kick used to leave the step
+    // showing "active" with no run coming AND a stale steering line that
+    // would ride the next unrelated request. The checks mirror the kick's
+    // actual gates: compaction, the provider guard (currentProvider — NOT
+    // currentModel, which can outlive a cleared provider), and the pure-video
+    // refusal for internal runs.
+    if (!_isStreaming.value) {
+        if (_isCompacting.value) return // mid-compaction: a kick now is a no-op
+        val provider = currentProvider ?: return
+        if (provider.model.isPureVideoGenerator) return
+    }
     val updated = runCatching { AgentPlanStore.retryStep(sid, context, planId) }
         .onFailure { AppLogger.warning(ChatViewModel.TAG_STREAM, "retryPlanStep: store flip failed: ${it.message}") }
         .getOrNull() ?: return
@@ -71,6 +100,7 @@ fun ChatViewModel.retryPlanStep(planId: String) {
         planId = updated.id,
         title = updated.title,
         position = updated.position,
+        sessionId = sid,
     )
     AppLogger.info(
         ChatViewModel.TAG_STREAM,
@@ -87,11 +117,23 @@ fun ChatViewModel.retryPlanStep(planId: String) {
  * One-shot steering for the armed retry; consumed on the first render that
  * can deliver it (the plan-board block exists — a failed step always leaves
  * open work, so the snapshot is present exactly when the retry is deliverable).
- * A request that fails after consumption loses the steering: the step is
- * already back to active, so the board still says what to work on.
+ *
+ * A request armed in another conversation is NOT delivered here — this VM
+ * instance is shared across sessions and the board being rendered belongs to
+ * the LIVE session — but it is also not discarded: switching back to the
+ * owner session delivers it (deferred delivery). Age is bounded anyway: a
+ * request older than [PlanStepRetryRequest.TTL_MS] is stale and dropped,
+ * because "retry now" steering a prompt half an hour later would surprise
+ * the user. A request that fails after consumption loses the steering: the
+ * step is already back to active, so the board still says what to work on.
  */
 internal fun ChatViewModel.consumePlanStepRetryPrompt(): String? {
     val request = _planStepRetry.value ?: return null
+    if (request.sessionId != activeSessionId) return null
+    if (request.isExpired()) {
+        _planStepRetry.value = null
+        return null
+    }
     _planStepRetry.value = null
     return request.promptLine()
 }

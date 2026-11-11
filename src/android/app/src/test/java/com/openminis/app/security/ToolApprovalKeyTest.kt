@@ -1,6 +1,7 @@
 package com.openminis.app.security
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Test
 
 /**
@@ -23,6 +24,32 @@ class ToolApprovalKeyTest {
         assertEquals(
             "echo hi",
             ToolApprovalKey.gist("env_exec", """{"command":"  echo hi  "}"""),
+        )
+    }
+
+    @Test
+    fun commandGistCollapsesInternalWhitespace() {
+        // An agent re-issuing the same command with different alignment or
+        // indentation must still hit the "always allow" grant — requiring
+        // byte-identical spacing would turn the third approval button into a
+        // recurring ask for shell-heavy work.
+        assertEquals(
+            ToolApprovalKey.gist("shell_exec", """{"command":"echo hi"}"""),
+            ToolApprovalKey.gist("shell_exec", """{"command":"echo\n    hi"}"""),
+        )
+        assertEquals(
+            ToolApprovalKey.gist("shell_exec", """{"command":"ls -la /tmp"}"""),
+            ToolApprovalKey.gist("shell_exec", """{"command":"ls  -la   /tmp"}"""),
+        )
+        // Collapse does not merge across argument boundaries in a way that
+        // fuses distinct commands: different commands still differ.
+        assertEquals(
+            ToolApprovalKey.gist("shell_exec", """{"command":"echo hi"}"""),
+            "echo hi",
+        )
+        assertNotEquals(
+            ToolApprovalKey.gist("shell_exec", """{"command":"echo hi"}"""),
+            ToolApprovalKey.gist("shell_exec", """{"command":"echo world"}"""),
         )
     }
 

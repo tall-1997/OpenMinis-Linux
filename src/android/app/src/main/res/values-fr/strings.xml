@@ -340,13 +340,13 @@
     <string name="context_block_system">Prompt système et outils</string>
     <string name="context_block_skills_mcps">Skills et MCPs</string>
     <string name="context_block_memory">Injection de mémoire</string>
-    <string name="context_block_runtime">Injections par tour</string>
+<string name="context_block_runtime">Contexte temporaire de ce tour</string>
     <string name="context_block_goal_plan">Injection d\'objectif et de plan</string>
     <string name="context_block_history">Fenêtre d\'historique</string>
     <string name="context_block_attachments">Pièces jointes et images</string>
     <string name="context_usage_note_estimate">Estimations approximatives (±10 %) ; actualisées à l\'ouverture de cette feuille</string>
     <!-- [#41] Gen UI card -->
-    <string name="gen_ui_card_label">Gen UI</string>
+<string name="gen_ui_card_label">Carte interactive</string>
     <string name="gen_ui_view_source">Voir la source</string>
     <string name="gen_ui_view_render">Afficher le rendu</string>
     <string name="gen_ui_view_fullscreen">Plein écran</string>
@@ -631,12 +631,12 @@
     <string name="env_var_privacy_toggle">Mode confidentiel</string>
     <string name="env_var_privacy_footer">Lorsque cette option est activée, toute valeur de variable d\'environnement détectée dans la sortie de shell-execute est masquée (p. ex. `sk-1********ajhks`) avant d\'être transmise au modèle. Les valeurs de moins de 8 caractères sont entièrement remplacées par des `*`. La sortie visible dans le chat reste inchangée.</string>
     <string name="outbound_mask_toggle">Masquage de confidentialité sortant</string>
-    <string name="outbound_mask_footer">Une fois activé, les clés API, adresses e-mail et numéros de téléphone sont masqués dans les requêtes envoyées au fournisseur du modèle. L\'historique des discussions sur cet appareil reste inchangé. Désactivé par défaut.</string>
+<string name="outbound_mask_footer">Une fois activé, les chaînes en forme de clé (y compris les clés API dans le code, jetons JWT/base64), les e-mails et les numéros évoquant un téléphone sont remplacés par des espaces réservés dans les requêtes envoyées au fournisseur du modèle. Les identifiants de code et les lignes de diff sont protégés par des limites de mots. L’historique sur cet appareil reste inchangé. Désactivé par défaut.</string>
     <string name="chat_menu_perm_yoyo">YOLO · tout automatique</string>
     <string name="chat_menu_perm_safe_auto">Auto sûr · les outils de lecture passent librement</string>
     <string name="chat_menu_perm_ask">Demander · confirmer chaque appel</string>
     <string name="chat_menu_perm_off">Désactivé · refuser tous les outils</string>
-    <string name="gate_approval_allow_all">Toujours autoriser dans cette session</string>
+    <string name="gate_approval_allow_all">Toujours autoriser pour cette session (cible actuelle)</string>
     <string name="approval_action_allow_all_session">Toujours autoriser dans cette session</string>
     <string name="env_var_section_header">Variables</string>
     <string name="env_var_section_footer">Les variables d\'environnement sont injectées dans le shell sandbox au démarrage de la session. Les noms sont en majuscules et doivent respecter les règles POSIX.</string>
@@ -2036,6 +2036,12 @@
     <string name="token_usage_saver_folded">Résultats regroupés</string>
     <string name="token_usage_saver_saved">Économisé ce tour</string>
     <string name="memory_center_overview">En un coup d\'œil</string>
+    <string name="memory_embedding_header">Rappel sémantique</string>
+    <string name="memory_embedding_toggle">Rappel sémantique par embeddings</string>
+    <string name="memory_embedding_base_url">URL de base des embeddings</string>
+    <string name="memory_embedding_api_key">Clé API des embeddings</string>
+    <string name="memory_embedding_model">Modèle d\'embeddings</string>
+    <string name="memory_embedding_footer">Désactivé par défaut. Une fois activé, le rappel de mémoire ajoute une recherche par similarité vectorielle via un endpoint d\'embeddings compatible OpenAI, en plus de la recherche par mots-clés. Les changements ne prennent effet qu\'après le redémarrage du processus de l\'application.</string>
     <string name="memory_center_stat_memory">Fichiers de mémoire</string>
     <string name="memory_center_stat_recalls">Entrées rappelées</string>
     <string name="memory_center_stat_failures">Répétitions bloquées</string>
@@ -2143,6 +2149,7 @@
     <string name="provider_transfer_export_failed">Échec de l\'exportation</string>
     <string name="provider_transfer_import_ok">%1$d fournisseurs importés</string>
     <string name="provider_transfer_import_partial">%1$d fournisseurs importés, %2$d en échec</string>
+    <string name="provider_transfer_import_partial_detail">%1$d fournisseurs importés, %2$d échecs : %3$s</string>
     <!-- [T-ssh-workspace] (#32) SSH workspace binding + host management -->
     <string name="ssh_workspace_menu_title">Espace de travail SSH</string>
     <string name="ssh_workspace_binding_title">Espace de travail SSH</string>

@@ -78,21 +78,6 @@ import com.openminis.app.ui.components.SwipeRowActions
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.R
 
-/**
- * Result of the file-picked provider import, computed on Dispatchers.IO and
- * turned into a toast back on the main thread — see [ProviderListScreen]'s
- * importLauncher for why the two halves are separated.
- */
-private sealed class ProviderImportOutcome {
-    data object ExtractFailed : ProviderImportOutcome()
-    data object NoSupported : ProviderImportOutcome()
-    data object Invalid : ProviderImportOutcome()
-    data object ReadFailed : ProviderImportOutcome()
-    data class Imported(val label: String) : ProviderImportOutcome()
-    data class ZipSummary(val ok: Int, val total: Int) : ProviderImportOutcome()
-    // [#24] A batch transfer document was imported.
-    data class BatchImported(val imported: Int, val failed: Int) : ProviderImportOutcome()
-}
 
 
 
@@ -252,6 +237,7 @@ fun ProviderListScreen(
                             ProviderImportOutcome.BatchImported(
                                 summary.importedLabels.size,
                                 summary.failed,
+                                summary.firstFailure,
                             )
                         } else {
                             val label = providerRepository.importInstanceJSON(jsonStr)
@@ -285,9 +271,16 @@ fun ProviderListScreen(
                         context.getString(R.string.provider_import_invalid)
                     outcome.failed == 0 ->
                         context.getString(R.string.provider_transfer_import_ok, outcome.imported)
-                    else -> context.getString(
-                        R.string.provider_transfer_import_partial, outcome.imported, outcome.failed,
-                    )
+                    else -> if (outcome.firstFailure != null) {
+                        context.getString(
+                            R.string.provider_transfer_import_partial_detail,
+                            outcome.imported, outcome.failed, outcome.firstFailure,
+                        )
+                    } else {
+                        context.getString(
+                            R.string.provider_transfer_import_partial, outcome.imported, outcome.failed,
+                        )
+                    }
                 }
             }
             Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()

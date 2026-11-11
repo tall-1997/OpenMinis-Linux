@@ -32,8 +32,18 @@ class MemoryRecallEngineHybridTest {
         var backfills = 0
             private set
 
-        override suspend fun semanticHits(query: String, limit: Int): List<MemoryEmbeddingSupport.SemanticHit> =
-            hits.take(limit)
+        /** Last scopes the engine asked for — the scope filter is load-bearing. */
+        var lastScopes: Collection<String> = emptyList()
+            private set
+
+        override suspend fun semanticHits(
+            query: String,
+            limit: Int,
+            scopes: Collection<String>,
+        ): List<MemoryEmbeddingSupport.SemanticHit> {
+            lastScopes = scopes
+            return hits.take(limit)
+        }
 
         override fun backfillAsync(dirs: List<File>) {
             backfills++
@@ -58,7 +68,7 @@ class MemoryRecallEngineHybridTest {
     fun `fusion keeps fts order and appends semantic below`() {
         val fts = listOf(ftsHit("2026-11-12.md", "用户偏好安静模式", 5.0))
         val semantic = listOf(hit("2026-11-12.md", "数据库用 Postgres", 0.83f))
-        val merged = MemoryRecallEngine.SemanticRecallFusion.merge(
+        val merged = SemanticRecallFusion.merge(
             fts, semantic, limit = 4, perFileCap = 2, archiveCutoff = null,
         ) { it.removeSuffix(".md") }
         assertEquals(2, merged.size)
@@ -77,7 +87,7 @@ class MemoryRecallEngineHybridTest {
             hit("2026-11-12.md", "用户偏好安静模式", 0.9f), // exact dup
             hit("2026-11-12.md", "用户偏好安静模式（已确认）", 0.8f), // head-prefix dup
         )
-        val merged = MemoryRecallEngine.SemanticRecallFusion.merge(
+        val merged = SemanticRecallFusion.merge(
             fts, semantic, limit = 4, perFileCap = 4, archiveCutoff = null,
         ) { it.removeSuffix(".md") }
         assertEquals(1, merged.size)
@@ -92,7 +102,7 @@ class MemoryRecallEngineHybridTest {
             hit("b.md", "four", 0.7f),
             hit("c.md", "five", 0.6f),
         )
-        val merged = MemoryRecallEngine.SemanticRecallFusion.merge(
+        val merged = SemanticRecallFusion.merge(
             fts, semantic, limit = 3, perFileCap = 1, archiveCutoff = null,
         ) { it.removeSuffix(".md") }
         assertEquals(3, merged.size)
@@ -102,7 +112,7 @@ class MemoryRecallEngineHybridTest {
     @Test
     fun `fusion keeps cosine score when keyword search found nothing`() {
         val semantic = listOf(hit("2026-11-12.md", "数据库用 Postgres", 0.83f))
-        val merged = MemoryRecallEngine.SemanticRecallFusion.merge(
+        val merged = SemanticRecallFusion.merge(
             emptyList(), semantic, limit = 4, perFileCap = 2, archiveCutoff = null,
         ) { it.removeSuffix(".md") }
         assertEquals(1, merged.size)
@@ -115,7 +125,7 @@ class MemoryRecallEngineHybridTest {
             hit("2026-01-01.md", "old note", 0.9f),
             hit("GLOBAL.md", "global text", 0.8f),
         )
-        val merged = MemoryRecallEngine.SemanticRecallFusion.merge(
+        val merged = SemanticRecallFusion.merge(
             emptyList(), semantic, limit = 4, perFileCap = 4,
             archiveCutoff = java.time.LocalDate.parse("2026-06-01"),
         ) { it.removeSuffix(".md") }

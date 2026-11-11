@@ -42,8 +42,12 @@ object MemoryEmbeddingRuntime {
      */
     fun recallSupportOrNull(): MemoryEmbeddingSupport? = indexer?.let { idx ->
         object : MemoryEmbeddingSupport {
-            override suspend fun semanticHits(query: String, limit: Int): List<MemoryEmbeddingSupport.SemanticHit> =
-                idx.semanticHits(query, limit)
+            override suspend fun semanticHits(
+                query: String,
+                limit: Int,
+                scopes: Collection<String>,
+            ): List<MemoryEmbeddingSupport.SemanticHit> =
+                idx.semanticHits(query, limit, scopes)
 
             override fun backfillAsync(dirs: List<File>) = idx.backfillAsync(dirs)
         }

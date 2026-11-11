@@ -279,7 +279,10 @@ object ProviderTransferCodec {
      * existing per-instance importer's ("$label ($suffix)") ladder.
      *
      * Non-conflicting labels pass through unchanged, so re-importing a
-     * document on a fresh install reproduces the original names exactly.
+     * document whose providers are all absent reproduces the original names
+     * exactly. (Built-in free lanes are excluded at export time — they are
+     * re-seeded by the build itself and would collide on every fresh
+     * install.)
      *
      * @param existingKeys set of lowercase ("label","type") pairs already stored.
      */

@@ -95,6 +95,22 @@ class SshWorkspaceBindings(private val store: SshWorkspaceStore) {
         store.remove(bindingKey(ownerSessionId))
     }
 
+    /**
+     * Drop every binding that points at [hostId] — called when the host is
+     * removed. A binding left dangling would route shells at a host the user
+     * has deleted (failing with a model-facing hint) while the binding sheet
+     * claimed the session was working locally; the class promise above says
+     * binding state is "reported, never silently ignored", and sweeping at
+     * removal is the only place that promise can be kept honestly.
+     */
+    fun unbindAllForHost(hostId: String) {
+        val target = hostId.trim()
+        if (target.isEmpty()) return
+        for ((owner, bound) in all()) {
+            if (bound == target) store.remove(bindingKey(owner))
+        }
+    }
+
     /** Every binding, oldest-first by key — for the management UI. */
     fun all(): Map<String, String> =
         store.all().filterKeys { it.startsWith(KEY_PREFIX) }
@@ -142,6 +158,15 @@ object SshWorkspaceRouter {
      */
     val HOST_ONLY_TOOLS: Set<String> = setOf("su_exec")
 
+    /**
+     * Terminal PTY sessions open on the LOCAL PRoot sandbox no matter where
+     * the shell tools route. Leaving it out of this table would let an
+     * agent (and the user watching its terminal) believe they are looking
+     * at the remote host while the PTY runs on the phone — the exact
+     * silent-environment-mismatch this router exists to prevent.
+     */
+    val LOCAL_TERMINAL_TOOLS: Set<String> = setOf("agent_terminal")
+
     sealed class Decision {
         /** No binding, or a tool that is meaningful locally. Run as usual. */
         object Local : Decision()
@@ -160,6 +185,7 @@ object SshWorkspaceRouter {
             canonicalTool in SHELL_TOOLS -> Decision.RouteRemote(host)
             canonicalTool in UNSUPPORTED_FILE_TOOLS -> Decision.Unsupported(canonicalTool)
             canonicalTool in HOST_ONLY_TOOLS -> Decision.Unsupported(canonicalTool)
+            canonicalTool in LOCAL_TERMINAL_TOOLS -> Decision.Unsupported(canonicalTool)
             else -> Decision.Local
         }
     }

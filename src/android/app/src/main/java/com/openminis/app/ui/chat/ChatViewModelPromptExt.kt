@@ -8,7 +8,33 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 
-internal fun ChatViewModel.buildSystemPrompt(): String? {
+/**
+ * The plain system prompt for every request-side caller (send / retry / resume /
+ * rerun-tail / queue-drain). Delegates to [buildSystemPromptWithSections] and
+ * keeps only the prompt — byte-identical behaviour for these callers, zero
+ * awareness of the sections payload.
+ */
+internal fun ChatViewModel.buildSystemPrompt(): String? = buildSystemPromptWithSections().first
+
+/**
+ * [#25][T-context-breakdown-race] System prompt build that carries the
+ * per-section texts of THIS build in its return value instead of publishing
+ * them into a process-global registry.
+ *
+ * The old side channel (the global ContextBreakdownRegistry.lastSystemSections,
+ * written
+ * mid-build and read by the context-usage sheet after the call) had a
+ * read-side race: `buildSystemPrompt` for session A and the sheet's
+ * `buildContextBreakdown` for session B could interleave, and B would measure
+ * A's sections; if the build threw, the sheet silently measured stale sections
+ * from an arbitrary earlier build. Returning the sections from the call that
+ * produced them removes both failure modes with no registry to keep coherent.
+ *
+ * The prompt itself and every side effect (stable-prefix length, persona
+ * steering, assembly snapshot) are unchanged — [buildSystemPrompt] callers see
+ * byte-identical behaviour.
+ */
+internal fun ChatViewModel.buildSystemPromptWithSections(): Pair<String, List<Pair<ContextBlockKey, String>>> {
     // Cache-friendly layout: keep `base` byte-stable by stripping out anything
     // that varies per request, then append the per-turn / per-day fragments at
     // the very end. OpenAI / DeepSeek prompt caching is prefix-based, so the
@@ -414,25 +440,24 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
         append(dynamicTail)
     }
     systemPromptStablePrefixLen = stablePrefixLen
-    // [#25] Publish the per-block sections of THIS build for the context
-    // breakdown sheet (ChatViewModelContextBreakdownExt.kt). Same strings,
-    // same order as the appends above — a size mirror the model never sees,
-    // swapped in as one list reference per request.
-    ContextBreakdownRegistry.publish(
-        listOfNotNull(
-            ContextBlockKey.SYSTEM_TOOLS to base,
-            listOfNotNull(skillFragment, mcpFragment)
-                .filter { it.isNotBlank() }
-                .takeIf { it.isNotEmpty() }
-                ?.joinToString("\n\n")
-                ?.let { ContextBlockKey.SKILLS_MCPS to it },
-            globalMemoryFragment
-                ?.takeIf { it.isNotBlank() }
-                ?.let { ContextBlockKey.MEMORY to it },
-            dynamicTail
-                .takeIf { it.isNotBlank() }
-                ?.let { ContextBlockKey.RUNTIME_TAIL to it },
-        ),
+    // [#25][T-context-breakdown-race] The per-block sections of THIS build are
+    // returned WITH the prompt instead of being published into a global
+    // registry. Same strings, same order as the appends above — a size mirror
+    // the model never sees; the sheet measures exactly what it asked to build,
+    // so a concurrent session's build can never bleed into its numbers.
+    val sections = listOfNotNull(
+        ContextBlockKey.SYSTEM_TOOLS to base,
+        listOfNotNull(skillFragment, mcpFragment)
+            .filter { it.isNotBlank() }
+            .takeIf { it.isNotEmpty() }
+            ?.joinToString("\n\n")
+            ?.let { ContextBlockKey.SKILLS_MCPS to it },
+        globalMemoryFragment
+            ?.takeIf { it.isNotBlank() }
+            ?.let { ContextBlockKey.MEMORY to it },
+        dynamicTail
+            .takeIf { it.isNotBlank() }
+            ?.let { ContextBlockKey.RUNTIME_TAIL to it },
     )
     // [T-context-assembly-preview] 每次组装落快照：构成明细+全文，
     // 调试"模型实际收到了什么"直接看 offloads/context-assembly/latest.md。
@@ -441,7 +466,7 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
         sessionId,
         context,
     )
-    return prompt
+    return prompt to sections
 }
 
 /**

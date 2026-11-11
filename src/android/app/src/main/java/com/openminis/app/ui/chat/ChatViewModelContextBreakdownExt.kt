@@ -132,31 +132,14 @@ internal object ContextBreakdownMath {
 }
 
 /**
- * Process-level holder for the per-section texts of the MOST RECENT system
- * prompt build. buildSystemPrompt runs on every request anyway; it publishes
- * the exact strings it just appended as a side channel (same pattern as
- * systemPromptStablePrefixLen) so the sheet can measure them without a
- * second assembly pass or any refactor of the ceiling-pinned files.
- *
- * Publishing swaps one immutable list reference, so a request building
- * concurrently with a sheet refresh can never surface a torn mix — readers
- * see either the old build or the new one.
- */
-internal object ContextBreakdownRegistry {
-    @Volatile
-    var lastSystemSections: List<Pair<ContextBlockKey, String>> = emptyList()
-
-    fun publish(sections: List<Pair<ContextBlockKey, String>>) {
-        lastSystemSections = sections
-    }
-}
-
-/**
  * Compute the full breakdown for the sheet. Runs the existing assembly once
  * on IO (buildSystemPrompt does disk reads — the request path runs the same
  * work per request), then estimates each block:
- *   - system sections come from [ContextBreakdownRegistry], published by
- *     the buildSystemPrompt call above;
+ *   - system sections come from [buildSystemPromptWithSections]'s RETURN
+ *     value — the sections of the exact build this call just ran
+ *     ([T-context-breakdown-race]; the old global lastSystemSections
+ *     registry let a concurrent session's build bleed into this session's
+ *     numbers, and served stale sections after a failed build);
  *   - goal/plan = the PromptParts registry render (work report, lanes,
  *     jobs, plan board, recall) + the active goal's <goal_context> prompt —
  *     exactly what withGoalAndPlanContext appends to the last user message,
@@ -168,8 +151,9 @@ internal object ContextBreakdownRegistry {
  *     start counting once they ride the history as text parts.
  */
 internal suspend fun ChatViewModel.buildContextBreakdown(): ContextBreakdown = withContext(Dispatchers.IO) {
-    // Side effect: refreshes ContextBreakdownRegistry.lastSystemSections.
-    buildSystemPrompt()
+    // One assembly pass; its sections ARE this breakdown's system blocks —
+    // no shared registry between build and read.
+    val systemSections = buildSystemPromptWithSections().second
 
     val goalPrompt = runCatching {
         val manager = com.openminis.app.goal.GoalManager(chatRepository)
@@ -189,7 +173,7 @@ internal suspend fun ChatViewModel.buildContextBreakdown(): ContextBreakdown = w
         ?: 0
 
     ContextBreakdownMath.build(
-        sections = ContextBreakdownRegistry.lastSystemSections +
+        sections = systemSections +
             listOf(ContextBlockKey.GOAL_PLAN to goalPlanText),
         historyTokens = estimateAgentHistoryTokens(),
         pendingAttachmentTokens = pendingAttachmentTokens(),

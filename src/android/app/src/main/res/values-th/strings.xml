@@ -340,13 +340,13 @@
     <string name="context_block_system">พรอมป์ระบบและเครื่องมือ</string>
     <string name="context_block_skills_mcps">สกิลและ MCP</string>
     <string name="context_block_memory">การฉีดความจำ</string>
-    <string name="context_block_runtime">การฉีดรายเทิร์น</string>
+<string name="context_block_runtime">บริบทชั่วคราวของรอบนี้</string>
     <string name="context_block_goal_plan">การฉีดเป้าหมายและแผน</string>
     <string name="context_block_history">หน้าต่างประวัติ</string>
     <string name="context_block_attachments">ไฟล์แนบและรูปภาพ</string>
     <string name="context_usage_note_estimate">ค่าประมาณคร่าว ๆ (±10%); รีเฟรชเมื่อเปิดชีตนี้</string>
     <!-- [#41] Gen UI card -->
-    <string name="gen_ui_card_label">Gen UI</string>
+<string name="gen_ui_card_label">การ์ดแบบโต้ตอบ</string>
     <string name="gen_ui_view_source">ดูซอร์ส</string>
     <string name="gen_ui_view_render">แสดงผล</string>
     <string name="gen_ui_view_fullscreen">เต็มหน้าจอ</string>
@@ -631,12 +631,12 @@
     <string name="env_var_privacy_toggle">โหมดความเป็นส่วนตัว</string>
     <string name="env_var_privacy_footer">เมื่อเปิดใช้ ค่าของตัวแปรสภาพแวดล้อมใดๆ ที่ปรากฏในผลลัพธ์ของ shell-execute จะถูกแทนที่ด้วยรูปแบบปกปิด (เช่น `sk-1********ajhks`) ก่อนส่งถึงโมเดล ค่าที่สั้นกว่า 8 อักขระจะกลายเป็น `*` ทั้งหมด ส่วนผลลัพธ์ที่ผู้ใช้เห็นในแชทจะไม่เปลี่ยนแปลง</string>
     <string name="outbound_mask_toggle">การปกปิดความเป็นส่วนตัวขาออก</string>
-    <string name="outbound_mask_footer">เมื่อเปิดใช้ คีย์ API ที่อยู่อีเมล และหมายเลขโทรศัพท์จะถูกปกปิดในคำขอที่ส่งไปยังผู้ให้บริการโมเดล ประวัติแชทบนอุปกรณ์นี้ไม่เปลี่ยนแปลง ปิดอยู่ตามค่าเริ่มต้น</string>
+<string name="outbound_mask_footer">เมื่อเปิดใช้ สตริงรูปแบบคีย์ (รวม API key ในโค้ด, โทเคน JWT/base64) อีเมล และตัวเลขที่คล้ายเบอร์โทรจะถูกแทนที่ด้วย placeholder ในคำขอที่ส่งไปผู้ให้บริการโมเดล ตัวระบุโค้ดและบรรทัด diff ได้รับการป้องกันด้วยขอบเขตคำ ประวัติแชทในเครื่องไม่เปลี่ยนแปลง ค่าเริ่มต้นปิด</string>
     <string name="chat_menu_perm_yoyo">YOLO · อัตโนมัติทั้งหมด</string>
     <string name="chat_menu_perm_safe_auto">อัตโนมัติปลอดภัย · เครื่องมืออ่านอย่างเดียวทำงานอิสระ</string>
     <string name="chat_menu_perm_ask">ถาม · ยืนยันทุกการเรียก</string>
     <string name="chat_menu_perm_off">ปิด · ปฏิเสธเครื่องมือทั้งหมด</string>
-    <string name="gate_approval_allow_all">อนุญาตเสมอในเซสชันนี้</string>
+    <string name="gate_approval_allow_all">อนุญาตเซสชันนี้ตลอด (เป้าหมายปัจจุบัน)</string>
     <string name="approval_action_allow_all_session">อนุญาตเสมอในเซสชันนี้</string>
     <string name="env_var_section_header">ตัวแปร</string>
     <string name="env_var_section_footer">ตัวแปรสภาพแวดล้อมจะถูกใส่เข้าไปใน shell ของแซนด์บ็อกซ์เมื่อเริ่มเซสชัน ชื่อจะถูกแปลงเป็นตัวพิมพ์ใหญ่ และต้องเป็นไปตามกฎของตัวแปร shell แบบ POSIX</string>
@@ -2036,6 +2036,12 @@
     <string name="token_usage_saver_folded">ผลลัพธ์ที่พับแล้ว</string>
     <string name="token_usage_saver_saved">ประหยัดในเทิร์นนี้</string>
     <string name="memory_center_overview">ภาพรวม</string>
+    <string name="memory_embedding_header">การเรียกคืนแบบความหมาย</string>
+    <string name="memory_embedding_toggle">การเรียกคืนความจำแบบความหมายด้วย embedding</string>
+    <string name="memory_embedding_base_url">Base URL ของ embeddings</string>
+    <string name="memory_embedding_api_key">API key ของ embeddings</string>
+    <string name="memory_embedding_model">โมเดล embedding</string>
+    <string name="memory_embedding_footer">ปิดอยู่ตามค่าเริ่มต้น เมื่อเปิดใช้ การเรียกคืนความจำจะเพิ่มการค้นหาด้วยความคล้ายคลึงของเวกเตอร์ผ่าน embeddings endpoint ที่รองรับ OpenAI นอกเหนือจากการค้นหาด้วยคำสำคัญ การเปลี่ยนแปลงจะมีผลหลังจากรีสตาร์ทโปรเซสของแอปเท่านั้น</string>
     <string name="memory_center_stat_memory">ไฟล์ความจำ</string>
     <string name="memory_center_stat_recalls">รายการที่ถูกเรียกคืน</string>
     <string name="memory_center_stat_failures">การทำซ้ำที่ถูกบล็อก</string>
@@ -2143,6 +2149,7 @@
     <string name="provider_transfer_export_failed">ส่งออกล้มเหลว</string>
     <string name="provider_transfer_import_ok">นำเข้าผู้ให้บริการแล้ว %1$d รายการ</string>
     <string name="provider_transfer_import_partial">นำเข้าแล้ว %1$d รายการ ล้มเหลว %2$d รายการ</string>
+    <string name="provider_transfer_import_partial_detail">นำเข้า %1$d ผู้ให้บริการแล้ว %2$d รายการล้มเหลว: %3$s</string>
     <!-- [T-ssh-workspace] (#32) SSH workspace binding + host management -->
     <string name="ssh_workspace_menu_title">พื้นที่ทำงาน SSH</string>
     <string name="ssh_workspace_binding_title">พื้นที่ทำงาน SSH</string>

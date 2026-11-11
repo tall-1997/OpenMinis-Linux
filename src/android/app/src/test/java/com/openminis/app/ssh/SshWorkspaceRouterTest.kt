@@ -72,6 +72,21 @@ class SshWorkspaceRouterTest {
     }
 
     @Test
+    fun `local terminal pty is refused in an ssh workspace`() {
+        // The PTY would open on the phone's sandbox while the agent believes
+        // it is on the remote host — the silent mismatch this router exists
+        // to prevent.
+        val d = SshWorkspaceRouter.decide("agent_terminal", "prod-box")
+        assertTrue(d is SshWorkspaceRouter.Decision.Unsupported)
+        assertEquals("agent_terminal", (d as SshWorkspaceRouter.Decision.Unsupported).tool)
+        // Unbound sessions keep the local terminal.
+        assertEquals(
+            SshWorkspaceRouter.Decision.Local,
+            SshWorkspaceRouter.decide("agent_terminal", null),
+        )
+    }
+
+    @Test
     fun `non-shell non-file tools stay local even when bound`() {
         for (tool in listOf("web_search", "memory_write", "browser_use", "find_tools")) {
             assertEquals(

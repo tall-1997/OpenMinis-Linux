@@ -178,6 +178,7 @@ internal class HandsFreeController(
         observeRecognitionState(s)
         observeRecognitionErrors(s)
         observeReplyBusy(s)
+        observeSendWatchdog(s)
         machine.start()
     }
 
@@ -254,9 +255,43 @@ internal class HandsFreeController(
         }
     }
 
+    /**
+     * SENDING watchdog. The settle detection above is change-driven: if the
+     * send is refused outright (no provider, mid-compaction, an ASK_USER
+     * turn) neither isStreaming nor speaking ever flips and the loop would
+     * sit in SENDING forever — mic closed, screen off, total silence. Poll:
+     * any sign of the run being alive (streaming) hands control back to the
+     * settle logic; a full window with neither streaming nor a state exit
+     * counts as a silent reply and re-opens the mic.
+     */
+    private var sendWatchdogJob: kotlinx.coroutines.Job? = null
+
+    private fun observeSendWatchdog(s: CoroutineScope) {
+        s.launch {
+            machine.state.collect { st ->
+                sendWatchdogJob?.cancel()
+                if (st != HandsFreeState.SENDING) return@collect
+                sendWatchdogJob = s.launch {
+                    repeat(SEND_WATCHDOG_POLLS) {
+                        kotlinx.coroutines.delay(SEND_WATCHDOG_POLL_MS)
+                        if (machine.state.value != HandsFreeState.SENDING) return@launch
+                        if (isStreaming.value) return@launch // run is alive; settle logic owns it now
+                    }
+                    if (machine.state.value == HandsFreeState.SENDING && !isStreaming.value) {
+                        machine.onReplySettledWithoutSpeech()
+                    }
+                }
+            }
+        }
+    }
+
     companion object {
         /** Gap before re-arming the mic after a send (see [ports]). */
         const val REARM_DELAY_MS = 300L
+
+        /** SENDING watchdog cadence: 6 × 5 s = 30 s of total silence gives up. */
+        const val SEND_WATCHDOG_POLLS = 6
+        const val SEND_WATCHDOG_POLL_MS = 5_000L
     }
 }
 

@@ -159,8 +159,12 @@ fun EnvironmentVariablesScreen(
             )
             // [#28] Outbound privacy masking. Default OFF (opt-in): masking is
             // pattern-based and can rewrite payloads a task needs verbatim.
+            // The subtitle is the honest disclosure of what shapes get masked
+            // (keys in code, JWT/base64, e-mail, phone) — R1 review: opt-in
+            // defenses the user cannot see are defenses that breed distrust.
             SettingsSwitchRow(
                 title = stringResource(R.string.outbound_mask_toggle),
+                subtitle = stringResource(R.string.outbound_mask_footer),
                 checked = outboundMaskEnabled,
                 onCheckedChange = { com.openminis.app.data.OutboundMaskPrefs.setEnabled(it) },
                 showDivider = false,

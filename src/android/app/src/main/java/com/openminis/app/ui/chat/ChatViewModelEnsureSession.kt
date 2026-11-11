@@ -14,7 +14,10 @@ internal suspend fun ChatViewModel.ensureSession(): String {
     val session = chatRepository.createSession(
         modelId = modelId,
         memoryEnabled = _memoryEnabled.value,
-        permissionMode = _permissionMode.value.name,
+        // Canonical token, NOT .name: the strict tier's enum name is the
+        // LEGACY "ASK" token on disk, and a write-read round trip through it
+        // would silently widen ASK to SAFE_AUTO after a restart.
+        permissionMode = _permissionMode.value.toStoredToken(),
     )
     realSessionId = session.id
     // [T-draft-approval-key-drift] Carry any session-scoped gate state the

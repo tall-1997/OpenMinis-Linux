@@ -345,13 +345,13 @@
     <string name="context_block_system">Prompt sistem &amp; alat</string>
     <string name="context_block_skills_mcps">Skill &amp; MCP</string>
     <string name="context_block_memory">Injeksi memori</string>
-    <string name="context_block_runtime">Injeksi per giliran</string>
+<string name="context_block_runtime">Konteks sementara giliran ini</string>
     <string name="context_block_goal_plan">Injeksi tujuan &amp; rencana</string>
     <string name="context_block_history">Jendela riwayat</string>
     <string name="context_block_attachments">Lampiran &amp; gambar</string>
     <string name="context_usage_note_estimate">Perkiraan kasar (±10%); disegarkan saat lembar ini dibuka</string>
     <!-- [#41] Gen UI card -->
-    <string name="gen_ui_card_label">Gen UI</string>
+<string name="gen_ui_card_label">Kartu interaktif</string>
     <string name="gen_ui_view_source">Lihat sumber</string>
     <string name="gen_ui_view_render">Tampilkan render</string>
     <string name="gen_ui_view_fullscreen">Layar penuh</string>
@@ -636,12 +636,12 @@
     <string name="env_var_privacy_toggle">Mode Privasi</string>
     <string name="env_var_privacy_footer">Jika aktif, setiap nilai variabel lingkungan yang muncul pada keluaran shell-execute akan diganti dengan bentuk tersamar (mis. `sk-1********ajhks`) sebelum sampai ke model. Nilai yang lebih pendek dari 8 karakter menjadi `*` seluruhnya. Keluaran yang terlihat oleh pengguna di obrolan tidak berubah.</string>
     <string name="outbound_mask_toggle">Penyamaran privasi keluar</string>
-    <string name="outbound_mask_footer">Saat aktif, kunci API, alamat email, dan nomor telepon disamarkan dalam permintaan yang dikirim ke penyedia model. Riwayat obrolan di perangkat ini tidak berubah. Mati secara bawaan.</string>
+<string name="outbound_mask_footer">Saat diaktifkan, string berbentuk kunci (termasuk kunci API dalam kode, token JWT/base64), email, dan angka menyerupai telepon diganti placeholder dalam permintaan ke penyedia model. Pengenal kode dan baris diff dilindungi batas kata. Riwayat obrolan di perangkat tidak berubah. Nonaktif secara bawaan.</string>
     <string name="chat_menu_perm_yoyo">YOLO · otomatis penuh</string>
     <string name="chat_menu_perm_safe_auto">Auto aman · alat read-only berjalan bebas</string>
     <string name="chat_menu_perm_ask">Tanya · konfirmasi setiap panggilan</string>
     <string name="chat_menu_perm_off">Mati · tolak semua alat</string>
-    <string name="gate_approval_allow_all">Selalu izinkan di sesi ini</string>
+    <string name="gate_approval_allow_all">Selalu izinkan sesi ini (target saat ini)</string>
     <string name="approval_action_allow_all_session">Selalu izinkan di sesi ini</string>
     <string name="env_var_section_header">Variabel</string>
     <string name="env_var_section_footer">Variabel lingkungan disuntikkan ke shell sandbox saat sesi dimulai. Nama diubah menjadi huruf kapital dan harus mengikuti aturan variabel shell POSIX.</string>
@@ -2041,6 +2041,12 @@
     <string name="token_usage_saver_folded">Hasil alat terlipat</string>
     <string name="token_usage_saver_saved">Dihemat giliran ini</string>
     <string name="memory_center_overview">Sekilas</string>
+    <string name="memory_embedding_header">Recall semantik</string>
+    <string name="memory_embedding_toggle">Recall memori semantik dengan embedding</string>
+    <string name="memory_embedding_base_url">URL dasar embeddings</string>
+    <string name="memory_embedding_api_key">Kunci API embeddings</string>
+    <string name="memory_embedding_model">Model embedding</string>
+    <string name="memory_embedding_footer">Nonaktif secara default. Saat aktif, recall memori menambahkan pencarian kemiripan vektor melalui endpoint embeddings yang kompatibel dengan OpenAI, di samping pencarian kata kunci. Perubahan hanya berlaku setelah proses aplikasi dimulai ulang.</string>
     <string name="memory_center_stat_memory">File memori</string>
     <string name="memory_center_stat_recalls">Entri yang dipanggil</string>
     <string name="memory_center_stat_failures">Pengulangan yang diblokir</string>
@@ -2148,6 +2154,7 @@
     <string name="provider_transfer_export_failed">Ekspor gagal</string>
     <string name="provider_transfer_import_ok">%1$d penyedia diimpor</string>
     <string name="provider_transfer_import_partial">%1$d penyedia diimpor, %2$d gagal</string>
+    <string name="provider_transfer_import_partial_detail">Mengimpor %1$d penyedia, %2$d gagal: %3$s</string>
     <!-- [T-ssh-workspace] (#32) SSH workspace binding + host management -->
     <string name="ssh_workspace_menu_title">Ruang Kerja SSH</string>
     <string name="ssh_workspace_binding_title">Ruang Kerja SSH</string>

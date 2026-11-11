@@ -340,13 +340,13 @@
     <string name="context_block_system">システムプロンプトとツール</string>
     <string name="context_block_skills_mcps">スキルとMCP</string>
     <string name="context_block_memory">メモリ注入</string>
-    <string name="context_block_runtime">ターンごとの注入</string>
+<string name="context_block_runtime">このターンの臨時コンテキスト</string>
     <string name="context_block_goal_plan">ゴールとプランの注入</string>
     <string name="context_block_history">履歴ウィンドウ</string>
     <string name="context_block_attachments">添付と画像</string>
     <string name="context_usage_note_estimate">概算値（±10%）。シートを開いたときに更新されます</string>
     <!-- [#41] Gen UI card -->
-    <string name="gen_ui_card_label">Gen UI</string>
+<string name="gen_ui_card_label">インタラクティブカード</string>
     <string name="gen_ui_view_source">ソースを表示</string>
     <string name="gen_ui_view_render">レンダリングを表示</string>
     <string name="gen_ui_view_fullscreen">フルスクリーン</string>
@@ -631,12 +631,12 @@
     <string name="env_var_privacy_toggle">プライバシーモード</string>
     <string name="env_var_privacy_footer">有効にすると、shell-execute の出力に含まれる環境変数の値はモデルに渡される前にマスクされます（例: `sk-1********ajhks`）。8 文字未満の値はすべて `*` に置き換えられます。チャットに表示される出力は変更されません。</string>
     <string name="outbound_mask_toggle">送信プライバシーマスキング</string>
-    <string name="outbound_mask_footer">有効にすると、モデルプロバイダーへ送信するリクエスト内の API キー・メールアドレス・電話番号をマスクします。この端末上のチャット履歴は変更されません。既定ではオフです。</string>
+<string name="outbound_mask_footer">有効にすると、モデルプロバイダーへ送信するリクエスト内の鍵型文字列（コード内の API キーや JWT/base64 トークンを含む）、メールアドレス、電話番号型の数字がプレースホルダーに置き換えられます。コード識別子や diff 行は語境界で保護されます。端末内のチャット履歴は変更されません。既定はオフ。</string>
     <string name="chat_menu_perm_yoyo">YOLO · 全自動</string>
     <string name="chat_menu_perm_safe_auto">安全自動 · 読み取り系ツールは自動実行</string>
     <string name="chat_menu_perm_ask">確認 · 毎回の呼び出しを確認</string>
     <string name="chat_menu_perm_off">オフ · すべてのツールを拒否</string>
-    <string name="gate_approval_allow_all">このセッションでは常に許可</string>
+    <string name="gate_approval_allow_all">このセッションで常に許可（現在の対象）</string>
     <string name="approval_action_allow_all_session">このセッションでは常に許可</string>
     <string name="env_var_section_header">変数</string>
     <string name="env_var_section_footer">環境変数はセッション開始時にサンドボックスシェルに注入されます。名前は大文字に変換され、POSIX シェル変数のルールに従う必要があります。</string>
@@ -2033,6 +2033,12 @@
     <string name="token_usage_saver_folded">畳んだツール結果</string>
     <string name="token_usage_saver_saved">今回の節約</string>
     <string name="memory_center_overview">概要</string>
+    <string name="memory_embedding_header">セマンティック検索</string>
+    <string name="memory_embedding_toggle">埋め込みによるセマンティックリコール</string>
+    <string name="memory_embedding_base_url">Embeddings のベース URL</string>
+    <string name="memory_embedding_api_key">Embeddings の API キー</string>
+    <string name="memory_embedding_model">Embedding モデル</string>
+    <string name="memory_embedding_footer">デフォルトはオフです。オンにすると、キーワード検索に加えて、OpenAI 互換の embeddings エンドポイントによるベクトル類似度検索が記憶の呼び出しに追加されます。変更はアプリプロセスの再起動後に有効になります。</string>
     <string name="memory_center_stat_memory">メモリファイル</string>
     <string name="memory_center_stat_recalls">呼び出された項目</string>
     <string name="memory_center_stat_failures">ブロックされた繰り返し</string>
@@ -2140,6 +2146,7 @@
     <string name="provider_transfer_export_failed">エクスポートに失敗しました</string>
     <string name="provider_transfer_import_ok">%1$d 件のプロバイダーをインポートしました</string>
     <string name="provider_transfer_import_partial">%1$d 件をインポート、%2$d 件失敗</string>
+    <string name="provider_transfer_import_partial_detail">%1$d 個のプロバイダーをインポートし、%2$d 件が失敗：%3$s</string>
     <!-- [T-ssh-workspace] (#32) SSH workspace binding + host management -->
     <string name="ssh_workspace_menu_title">SSHワークスペース</string>
     <string name="ssh_workspace_binding_title">SSHワークスペース</string>

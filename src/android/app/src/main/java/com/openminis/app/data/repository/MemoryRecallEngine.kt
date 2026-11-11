@@ -12,6 +12,10 @@ import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 /**
  * Lightweight memory recall engine (port of XINCODE `MemoryRecall.kt`).
@@ -163,6 +167,16 @@ class MemoryRecallEngine(
         /** "GLOBAL.md" ⇒ "global", "2026-09-18.md" ⇒ "2026-09-18". */
         private fun dayKeyOf(fileName: String): String =
             if (fileName == MemoryRepository.GLOBAL_FILE) "global" else fileName.removeSuffix(".md")
+
+        /**
+         * [T-memory-embedding-wiring] Process-lifetime scope for fire-and-forget
+         * semantic prefetches. One supervisor shared by every engine instance
+         * (the per-session engine cache holds a bounded LRU set), so an
+         * in-flight embedding call survives engine eviction without leaking a
+         * scope per engine. Jobs are short (one embeddings request + merge);
+         * failures inside them are caught and logged, never propagated.
+         */
+        private val prefetchScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     }
 
     /** recallCount — persisted to a JSON sidecar so the boost survives restarts. */
@@ -171,6 +185,27 @@ class MemoryRecallEngine(
     /** [T-memory-recall-memo] (query, hits) of the most recent recall, or null. */
     @Volatile
     private var memo: Pair<String, List<RecallHit>>? = null
+
+    // ── [T-memory-embedding-wiring] semantic prefetch cache ────────────────
+
+    /**
+     * Guards [prefetched] / [prefetchInFlight]. The cache is a single
+     * (query → hits) slot on purpose — the same O(1) trade-off as [memo]:
+     * a new turn's query naturally misses, nothing to evict.
+     */
+    private val prefetchLock = Any()
+
+    /**
+     * The prefetched hybrid result for the latest [prefetchSemantic] query.
+     * Consumed (read + cleared) by [recallForPromptCached] when the query
+     * matches, so each prefetch serves exactly one prompt render.
+     */
+    @Volatile
+    private var prefetched: Pair<String, List<RecallHit>>? = null
+
+    /** Query whose prefetch job is currently running; blocks duplicate launches. */
+    @Volatile
+    private var prefetchInFlight: String? = null
 
     data class RecallHit(
         val source: String,      // "GLOBAL.md" or "2026-09-18.md"
@@ -471,7 +506,7 @@ class MemoryRecallEngine(
         if (hits.isEmpty()) return ""
         val included = ArrayList<RecallHit>(hits.size)
         val body = buildString {
-            append("## Recalled relevant memories (keyword FTS, no embeddings)\n")
+            append("## Recalled relevant memories\n")
             for (hit in hits) {
                 // [T-memory-recall-caps] Budget the whole fragment, not just one
                 // hit: a single enormous diary line used to be able to fill the
@@ -576,14 +611,18 @@ class MemoryRecallEngine(
     suspend fun recallForPromptHybrid(query: String): List<RecallHit> {
         val fts = recall(query)
         val support = embeddingSupport ?: return applyStreakFilter(fts)
-        val semantic = runCatching { support.semanticHits(query, RECALL_LIMIT) }.getOrNull().orEmpty()
-        val scopes = buildList {
+        val fileScopes = buildList {
             add(memoryDirProvider())
             sharedDirProvider?.invoke()?.let { add(it) }
         }
+        // Scope-restricted: the shared vector table must never surface
+        // another session's private diary lines into this conversation.
+        val semantic = runCatching {
+            support.semanticHits(query, RECALL_LIMIT, fileScopes.map { it.absolutePath })
+        }.getOrNull().orEmpty()
         // Even with hits served, backfill catches up on lines whose embedding
         // failed earlier; when the provider is down both calls no-op silently.
-        runCatching { support.backfillAsync(scopes) }
+        runCatching { support.backfillAsync(fileScopes) }
         val merged = if (semantic.isEmpty()) {
             fts
         } else {
@@ -600,64 +639,118 @@ class MemoryRecallEngine(
     }
 
     /**
-     * [T-memory-embedding-recall] Pure keyword+semantic merge (#27): FTS hits
-     * keep their order and scores; semantic hits dedupe against them (exact
-     * recall key plus the pass-3 head-prefix guard) and fill only the slots
-     * left free under [limit] and [perFileCap]. Displayed semantic scores are
-     * clamped below half the weakest FTS score so the sort weight stays
-     * strictly below every keyword hit, exactly like the slot rule implies.
-     * Pure JVM — no Android, no Room — which is what makes the fusion
-     * unit-testable.
+     * The hybrid body WITHOUT the anti-nag bookkeeping: FTS + semantic fusion
+     * only. [recallForPromptHybrid] wraps this with [applyStreakFilter]; the
+     * PREFETCH path ([fillPrefetch]) must use this bare form instead — a
+     * prefetched result that loses the race against the synchronous render is
+     * never injected, and a streak counted for a turn that never saw the hit
+     * would silently shorten the REPEAT_CAP window (the double-counting bug).
+     * Bookkeeping happens exactly once, at consumption time, inside
+     * [recallForPromptCached].
      */
-    internal object SemanticRecallFusion {
-
-        fun merge(
-            fts: List<RecallHit>,
-            semantic: List<com.openminis.app.data.memory.MemoryEmbeddingSupport.SemanticHit>,
-            limit: Int,
-            perFileCap: Int,
-            archiveCutoff: LocalDate?,
-            dayKeyOf: (String) -> String,
-        ): List<RecallHit> {
-            if (semantic.isEmpty() || limit <= 0) return fts
-            // When keyword search found nothing, semantic hits are the only
-            // signal and keep their cosine score; otherwise every semantic
-            // score is clamped below half the weakest keyword score.
-            val scoreFloor = fts.minOfOrNull { it.score }?.let { it * 0.5 } ?: Double.MAX_VALUE
-            val perFile = HashMap<String, Int>()
-            val keys = HashSet<String>()
-            val heads = ArrayList<Pair<String, String>>() // (source, head) of accepted hits
-            for (hit in fts) {
-                keys.add("${dayKeyOf(hit.source)}:${hit.line.trim()}")
-                heads.add(hit.source to hit.line.take(30))
-                perFile.merge(hit.source, 1, Int::plus)
-            }
-            val out = ArrayList<RecallHit>(fts)
-            for (s in semantic) {
-                if (out.size >= limit) break
-                val key = "${dayKeyOf(s.source)}:${s.line.trim()}"
-                if (key in keys) continue
-                val head = s.line.take(30)
-                if (heads.any { (src, h) -> src == s.source && (h.startsWith(head) || head.startsWith(h)) }) continue
-                val used = perFile.merge(s.source, 1, Int::plus) ?: 1
-                if (used > perFileCap) continue
-                val entryDay = runCatching { LocalDate.parse(dayKeyOf(s.source), DateTimeFormatter.ISO_LOCAL_DATE) }.getOrNull()
-                out += RecallHit(
-                    source = s.source,
-                    line = s.line,
-                    day = dayKeyOf(s.source),
-                    score = minOf(s.score.toDouble(), scoreFloor),
-                    recallCount = 0,
-                    // Same aging flag as the keyword path: an old semantic hit
-                    // is surfaced faded, not hidden. Undated lines are never
-                    // archived.
-                    archived = entryDay != null && archiveCutoff != null && entryDay.isBefore(archiveCutoff),
-                    scoreDetail = "semantic=%.2f".format(s.score),
-                )
-                keys.add(key)
-                heads.add(s.source to head)
-            }
-            return out
+    private suspend fun recallHybridUnaccounted(query: String): List<RecallHit> {
+        val fts = recall(query)
+        val support = embeddingSupport ?: return fts
+        val fileScopes = buildList {
+            add(memoryDirProvider())
+            sharedDirProvider?.invoke()?.let { add(it) }
         }
+        val semantic = runCatching {
+            support.semanticHits(query, RECALL_LIMIT, fileScopes.map { it.absolutePath })
+        }.getOrNull().orEmpty()
+        runCatching { support.backfillAsync(fileScopes) }
+        return if (semantic.isEmpty()) {
+            fts
+        } else {
+            SemanticRecallFusion.merge(
+                fts = fts,
+                semantic = semantic,
+                limit = RECALL_LIMIT,
+                perFileCap = MAX_HITS_PER_FILE,
+                archiveCutoff = LocalDate.now().minusDays(ARCHIVE_AFTER_DAYS),
+                dayKeyOf = { dayKeyOf(it) },
+            )
+        }
+    }
+
+    /**
+     * [T-memory-embedding-wiring] Fire-and-forget semantic prefetch for the
+     * send pipeline. `liveRecallPrompt` renders synchronously (PromptPart.render
+     * is a plain lambda) and must never block on network, so the SEND path
+     * instead calls this as early as possible with the SAME query the render
+     * will build; the hybrid result lands in a one-slot cache that
+     * [recallForPromptCached] consumes. The render stays byte-for-byte
+     * synchronous and zero-network whether or not the prefetch won the race.
+     *
+     * Contract:
+     *  - Launches the work onto [prefetchScope]; returns immediately. Every
+     *    failure inside the job is swallowed (logged at debug) — a dead or
+     *    unconfigured embeddings endpoint must never surface through this path.
+     *  - No-op (zero cost, zero allocation on the hot path) when no embedding
+     *    support is wired — the default engine keeps its exact pre-#27 shape.
+     *  - Skips when the same query is already cached or already in flight, so
+     *    a duplicated send does not issue a second embeddings request.
+     *
+     * Query identity is load-bearing: the caller MUST build the query exactly
+     * like the render does (see [recallForPromptCached]).
+     */
+    fun prefetchSemantic(query: String) {
+        if (embeddingSupport == null) return
+        synchronized(prefetchLock) {
+            if (query.isBlank() || prefetched?.first == query || prefetchInFlight == query) return
+            prefetchInFlight = query
+        }
+        prefetchScope.launch {
+            fillPrefetch(query)
+        }
+    }
+
+    /**
+     * The prefetch body, shared by [prefetchSemantic]'s job and the test seam.
+     * Runs the full hybrid recall (FTS + semantic + anti-nag streak) and — on
+     * success only — parks the result in the one-slot cache. Silent on failure:
+     * the cache stays empty and [recallForPromptCached] degrades to the plain
+     * keyword path.
+     */
+    private suspend fun fillPrefetch(query: String) {
+        // BARE form (no streak accounting): the result may never be consumed
+        // — the render can win the race and degrade to keyword FTS, whose own
+        // applyStreakFilter call is the one that counts. Accounting at both
+        // ends would double-count and shorten the anti-nag window.
+        val hits = runCatching { recallHybridUnaccounted(query) }
+            .onFailure { Log.d(TAG, "semantic prefetch failed silently: ${it.message}") }
+            .getOrNull()
+        synchronized(prefetchLock) {
+            if (prefetchInFlight == query) prefetchInFlight = null
+            if (hits != null) prefetched = query to hits
+        }
+    }
+
+    /**
+     * [T-memory-embedding-wiring] The prompt-path entry point: return the
+     * prefetched hybrid result when [query] matches it exactly (and consume
+     * the slot), otherwise degrade synchronously to [recallForPrompt] — pure
+     * FTS, zero network, byte-identical to the pre-wiring path.
+     *
+     * Byte-equivalence red line: with no embedding support wired (the default)
+     * nothing ever fills the cache, so this function IS [recallForPrompt].
+     * With support wired but the prefetch not finished (or lost the race), the
+     * first render of a turn simply gets keyword hits — the same result the
+     * pre-#27 app produced.
+     */
+    fun recallForPromptCached(query: String): List<RecallHit> {
+        val hit = synchronized(prefetchLock) {
+            prefetched?.takeIf { it.first == query }?.also { prefetched = null }
+        }
+        // The cached result was computed WITHOUT streak accounting (see
+        // [fillPrefetch]) — apply it exactly once, here, where the hits are
+        // actually delivered. A cache miss degrades to [recallForPrompt],
+        // which does its own accounting.
+        return if (hit != null) applyStreakFilter(hit.second) else recallForPrompt(query)
+    }
+
+    /** [T-memory-embedding-wiring] Test seam: drive the prefetch body synchronously. */
+    internal suspend fun prefetchSemanticForTest(query: String) {
+        fillPrefetch(query)
     }
 }

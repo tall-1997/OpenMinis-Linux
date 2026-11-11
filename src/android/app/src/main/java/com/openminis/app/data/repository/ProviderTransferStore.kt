@@ -29,29 +29,36 @@ internal class ProviderTransferStore(
     data class ImportSummary(
         val importedLabels: List<String>,
         val failed: Int,
+        /** First failure as "label: reason" (null when none) — a bare count leaves the user guessing which entry to fix. */
+        val firstFailure: String? = null,
     )
 
     // ── Export ───────────────────────────────────────────────────────────
 
     /**
-     * Build the `{"version":1,"providers":[…]}` document for EVERY stored
-     * provider instance, in the user's list order. [includeApiKeys] = false
-     * (the dialog default) writes NO credential material at all; true embeds
-     * each instance's API key in PLAIN TEXT — the UI must have shown the
-     * plaintext-risk confirmation before choosing that.
+     * Build the `{"version":1,"providers":[…]}` document for every stored
+     * provider instance EXCEPT the built-in free lanes, in the user's list
+     * order. The built-ins are re-seeded by this very build on a fresh
+     * install — exporting them would collide with their stable identities
+     * on re-import and produce "(imported)" duplicates of the same endpoint.
+     * [includeApiKeys] = false (the dialog default) writes NO credential
+     * material at all; true embeds each instance's API key in PLAIN TEXT —
+     * the UI must have shown the plaintext-risk confirmation before
+     * choosing that.
      *
      * Returns null when the config is still unreadable (cold-start window).
      */
     fun exportProvidersJSON(includeApiKeys: Boolean): String? {
         if (!repo.ensureConfigLoaded()) return null
-        val instances = repo.instances
-        val providers = instances.map { instance ->
-            ProviderTransferCodec.toTransferable(
-                instance = instance,
-                entries = repo.entriesFor(instance.id),
-                apiKey = if (includeApiKeys) repo.loadApiKey(instance.id) else null,
-            )
-        }
+        val providers = repo.instances
+            .filter { !com.openminis.app.provider.BuiltinFreeLanes.isBuiltinFreeInstanceId(it.id) }
+            .map { instance ->
+                ProviderTransferCodec.toTransferable(
+                    instance = instance,
+                    entries = repo.entriesFor(instance.id),
+                    apiKey = if (includeApiKeys) repo.loadApiKey(instance.id) else null,
+                )
+            }
         return ProviderTransferCodec.buildExportDocument(providers)
     }
 
@@ -97,6 +104,7 @@ internal class ProviderTransferStore(
 
         val imported = mutableListOf<String>()
         var failed = 0
+        var firstFailure: String? = null
         for (p in resolved) {
             try {
                 validateImportedBaseURL(p.customBaseURL)
@@ -127,10 +135,13 @@ internal class ProviderTransferStore(
                     "ProviderTransfer",
                     "batch import skipped '${p.label}': ${e.message}",
                 )
+                if (firstFailure == null) {
+                    firstFailure = p.label + ": " + (e.message?.take(120) ?: "invalid entry")
+                }
                 failed++
             }
         }
-        return ImportSummary(imported, failed)
+        return ImportSummary(imported, failed, firstFailure)
     }
 
     /**

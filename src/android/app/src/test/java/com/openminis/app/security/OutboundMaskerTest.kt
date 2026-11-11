@@ -59,6 +59,43 @@ class OutboundMaskerTest {
     }
 
     @Test
+    fun hyphenatedWordsWithSkPrefixAreNotMistakenForKeys() {
+        // The "sk-" shape needs a left token boundary: risk-/task-/disk- plus
+        // a plain word is ordinary English, not a credential — and sending
+        // prose and code to the model is this feature's main scenario.
+        assertEquals("risk-assessment", OutboundMasker.mask("risk-assessment"))
+        assertEquals("task-management", OutboundMasker.mask("task-management"))
+        assertEquals("disk-utilities", OutboundMasker.mask("disk-utilities"))
+        assertEquals("mask-animation", OutboundMasker.mask("mask-animation"))
+        assertEquals("the risk-assessment passed", OutboundMasker.mask("the risk-assessment passed"))
+        // A real key right after a word boundary still masks.
+        assertEquals(
+            "key: ${OutboundMasker.KEY_PLACEHOLDER}",
+            OutboundMasker.mask("key: sk-abc123XYZ_def-456"),
+        )
+    }
+
+    @Test
+    fun plusPrefixedNumbersThatAreNotPhonesSurvive() {
+        // Diff line starts and UTC offsets carry a '+' followed by digits —
+        // none of these is a phone number.
+        assertEquals("+1234567890 added a line", OutboundMasker.mask("+1234567890 added a line"))
+        assertEquals("offset UTC+1234567", OutboundMasker.mask("offset UTC+1234567"))
+        // A standalone international number still masks.
+        assertEquals(
+            "call ${OutboundMasker.PHONE_PLACEHOLDER} now",
+            OutboundMasker.mask("call +8613812345678 now"),
+        )
+    }
+
+    @Test
+    fun maskingIsIdempotent() {
+        val once = OutboundMasker.mask("mail a@b.com or sk-abc123XYZ_def-456")
+        val twice = OutboundMasker.mask(once)
+        assertEquals(once, twice)
+    }
+
+    @Test
     fun maskMessageRewritesTextAndToolResultsButNotToolUse() {
         val m = LLMMessage(
             role = LLMMessage.Role.USER,
