@@ -27,7 +27,7 @@ internal object ToolPromptFragments {
         val bullet: String,
     )
 
-    val ALL: List<Fragment> = listOf(
+    val allFragments: List<Fragment> = listOf(
         Fragment(
             key = "ui_skill",
             bullet = "- ui_skill: Replay previously recorded device-operation skills (recorded via Settings → Accessibility → 录制场景). For REPEATED device flows, try ui_skill action=match then action=replay BEFORE manual ui_read+ui_action chains — replay is label-first, auto-dismisses popups, and waits out loading screens; only fall back to manual ui_action when replay fails or action=match finds nothing. action=list shows every stored skill with its ready/stale state.",
@@ -40,5 +40,5 @@ internal object ToolPromptFragments {
      * (mirror of the makeAgentTools gates) — default keeps everything.
      */
     fun render(excluded: Set<String> = emptySet()): String =
-        ALL.filter { it.key !in excluded }.joinToString("\n") { it.bullet }
+        allFragments.filter { it.key !in excluded }.joinToString("\n") { it.bullet }
 }

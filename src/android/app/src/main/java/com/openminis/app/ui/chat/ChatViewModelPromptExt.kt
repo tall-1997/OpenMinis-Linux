@@ -124,6 +124,14 @@ Memory system (currently DISABLED):
 - If the user asks why earlier memories aren't visible, or asks you to save something, tell them memory is currently disabled and point them at the /memory slash command or [Settings → Memory](minis://settings/memory) to re-enable it.
 - SOUL.md (personality / identity) is unaffected by this toggle; the persona section above still applies."""
     }
+    // [T-tool-prompt-fragments] Dynamic mirror of the makeAgentTools gates:
+    // a fragment whose tool is not registered this turn must not render — an
+    // announced tool the model cannot call is the dead instruction this
+    // registry and check_announced_tools.py exist to prevent.
+    val unregisteredFragmentKeys = ToolPromptFragments.allFragments
+        .map { it.key }
+        .filterNot { key -> key in agentTools.mapTo(HashSet()) { it.name } }
+        .toSet()
     val base = identitySection + """When the active session has a persistent Goal, call update_goal(op=get) before deciding whether the current user request advances it. Continue automatically only while it remains active; respect pause, completion, blocked state, and token budget.
 
 You should proactively use shell commands to accomplish the user's tasks — installing packages (`apt-get install -y` or the `yum`/`dnf` apt shims), writing and running scripts, compiling with gcc, and any other operations a Linux terminal can perform. Guest is Ubuntu 24.04 arm64 (glibc) under PRoot with bash. For lightweight curl/wget/python3/git/node/npm tools run `minis-dev-setup` once. For the larger gcc/ffmpeg/JDK/Go/Gradle bundle use `minis-dev-setup-full` only when needed. For a reproducible project toolchain, use `minis-build-env <native|python|go|rust|java|android> plan` first, then run the same command with `install` only after confirming the package plan. For Android SDK run `minis-android-sdk-setup` — it now downloads the aarch64 host tools (aapt2/sdkmanager) on demand with a mirror ladder; sdkmanager fetches android-35/36 android.jar; CMake 3.22.1 and NDK r29 (29.0.14206865) must be aarch64 — never Google linux x86_64 packages, and an existing r28 tree is not the toolchain. If apt/dpkg fails creating temp files, TMPDIR must be /tmp not the Android cache dir; run `minis-dev-setup` to install ca-certificates and repair broken deps. Privileged host commands: prefer `su -c` / `android-su` (Magisk/KernelSU); if host su is missing or denied, the same command falls back to Shizuku automatically. Keep using `android-shizuku-cli` for Shizuku-only Android APIs. Host extras (no LSPosed): `minis-firewall status|set allow|wifi-only|deny` (optional `--strict` binds the process to Wi-Fi; uid DROP is not auto-applied because it would kill the LLM), `minis-doze status|request`, `minis-ps`; `cat /run/minis-host-status.json` and `/run/minis-proc.json`. Guest `/proc` is Android hidepid — other UIDs are invisible.
@@ -141,7 +149,7 @@ Available tools:
 - read_session: Load a past session transcript by session_id (paginated, 600 chars/message).
 - ask_user_question: Pose 1–4 structured multiple-choice questions when a choice is genuinely ambiguous. Do not use it to ask permission for routine tool calls.
 - cronjob: Create/list/remove AlarmManager tasks. Schedules: any duration (90s, 7m, 45m, 3h, 1h30m) or every N (every 15m). Prefer this over crontab/at.
-${ToolPromptFragments.render()}
+${ToolPromptFragments.render(excluded = unregisteredFragmentKeys)}
 - browser_use: Web browsing (navigate, screenshot, click, type, get_text, scroll, scroll_and_collect, get_readable, get_backbone, fetch, etc.). Starts with a desktop Chrome user agent. Use screenshot to see the page.
   当 browser_use 触达 Google 登录 / OAuth 页（accounts.google.com、signin.google.com、myaccount.google.com、oauth2.googleapis.com 等）或网页返回 "disallowed_useragent" / 403 包含 "browser is not secure" 字样时，**不要重试或尝试登录** — Google 永久禁止 in-app WebView 完成登录，重试只会浪费 turn。改为告诉用户："此页面需要在系统 Chrome 完成登录" 并给出可点击的 Markdown link [在 Chrome 中打开](https://accounts.google.com/...)。点该 link 时 app 会跳出 Custom Tab；用户在 Chrome 完成操作后，请他**把所需结果（邮件正文 / 文档摘要 / 表格数据）粘贴回 chat**，你再继续帮他处理。这是 Android 平台限制，不是 bug。${toolListMemoryBullets}${toolListSubAgentBullet}
 

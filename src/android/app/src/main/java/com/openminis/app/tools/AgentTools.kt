@@ -179,7 +179,7 @@ object AgentTools {
                     "shell_execute", "file_read", "file_write", "file_edit", "multi_edit",
                     FileCheckpointTool.NAME,
                     "list_dir", "grep", "glob", "browser_use", "web_search", "web_fetch",
-                    "ui_read", "ui_action", "read_image", "ask_user_question", "update_goal",
+                    "ui_read", "ui_action", "ui_skill", "read_image", "ask_user_question", "update_goal",
                 ),
             )
             // [T-announced-tools-core] A prompt fragment that NAMES a tool is an
@@ -194,6 +194,9 @@ object AgentTools {
             // and the "Scheduled tasks" fragment. evolution: named by the memory
             // fragment AND the learned-rules fragment, and the latter is not
             // gated by memoryOn — hence unconditional, not under the memory flag.
+            // ui_skill: ToolPromptFragments announces the match/replay workflow
+            // unconditionally — an announced tool must be core, so it rides the
+            // unconditional list rather than long-tail find_tools.
             addAll(
                 listOf(
                     AgentPlanTool.NAME, CronJobTool.NAME, EvolutionTool.NAME,

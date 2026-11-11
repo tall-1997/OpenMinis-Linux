@@ -16,14 +16,14 @@ class ToolPromptFragmentsTest {
 
     @Test
     fun `keys are unique`() {
-        val keys = ToolPromptFragments.ALL.map { it.key }
+        val keys = ToolPromptFragments.allFragments.map { it.key }
         assertEquals(keys.size, keys.toSet().size)
     }
 
     @Test
     fun `every fragment renders as a bullet line naming its key`() {
         val rendered = ToolPromptFragments.render()
-        for (f in ToolPromptFragments.ALL) {
+        for (f in ToolPromptFragments.allFragments) {
             assertTrue(
                 "fragment ${f.key} must render as a bullet naming its tool",
                 rendered.contains("- ${f.key}:"),
@@ -33,7 +33,7 @@ class ToolPromptFragmentsTest {
 
     @Test
     fun `ui_skill guidance keeps the replay-before-manual order`() {
-        val uiSkill = ToolPromptFragments.ALL.first { it.key == "ui_skill" }
+        val uiSkill = ToolPromptFragments.allFragments.first { it.key == "ui_skill" }
         val matchIdx = uiSkill.bullet.indexOf("action=match")
         val manualIdx = uiSkill.bullet.indexOf("manual ui_read+ui_action")
         assertTrue(matchIdx in 0 until manualIdx)
